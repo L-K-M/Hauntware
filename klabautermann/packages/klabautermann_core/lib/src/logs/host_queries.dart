@@ -25,11 +25,14 @@ const kHostQueryMaxOutputBytes = 1024 * 1024;
 /// Owned by the engine isolate, which hands it each [HostQuery].
 final class HostQueries {
   /// [linkFor] gives a server's ready link, null while it has none;
-  /// [systemdVersionOf] the major systemd version its probe found.
+  /// [systemdVersionOf] the major systemd version its probe found;
+  /// [readDiagnostics] a sampled server's diagnostic bundle (CN-18),
+  /// which its samplers read, null while it is not sampled.
   HostQueries({
     required this._linkFor,
     required this._systemdVersionOf,
     required this._emit,
+    this._readDiagnostics,
     this._quote = quoteShellWord,
     this._timeout = kHostQueryTimeout,
   });
@@ -37,6 +40,7 @@ final class HostQueries {
   final SshLink? Function(String serverId) _linkFor;
   final int? Function(String serverId) _systemdVersionOf;
   final void Function(EngineEvent event) _emit;
+  final Future<DiagnosticBundle?> Function(String serverId)? _readDiagnostics;
   final ShellQuote _quote;
   final Duration _timeout;
 
@@ -63,6 +67,13 @@ final class HostQueries {
     // would be an uncaught error in its isolate.
     try {
       switch (request.query) {
+        case DiagnosticBundleQuery():
+          // Not sampled after all (the link just went, say), so nothing
+          // could read it.
+          answer(
+            await _readDiagnostics?.call(serverId) ??
+                const HostQueryFailed(HostQueryFailure.noLink),
+          );
         case VarLogQuery():
           switch (await _run(link, HostCommands.logFiles())) {
             case _Failed(:final payload):

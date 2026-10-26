@@ -16,6 +16,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert' show utf8;
 
 import 'package:klabautermann_host/klabautermann_host.dart'
     show Collector, HostProfile, HwsSection, SamplerKind;
@@ -59,6 +60,19 @@ Duration? samplingPeriod(SampleStream stream, CadenceProfile profile) {
 /// reply [E]: the `units` period, the shortest slow period every profile
 /// shares, so a lost reading costs no more than a missed `units` tick.
 const _owedReadRetry = Duration(seconds: 15);
+
+/// How long a diagnostic bundle waits for its samplers (CN-18) before it
+/// answers with what it has.
+const kDiagnosticsWait = Duration(seconds: 60);
+
+/// The collectors a diagnostic bundle reads on ticks (CN-18): every one
+/// that takes no arguments but the probe, which goes on demand, and
+/// `ops`, the app's own records rather than the host's state.
+final List<Collector> kDiagnosticCollectors = List.unmodifiable([
+  for (final c in Collector.values)
+    if (c.argValidators.isEmpty && c != Collector.probe && c != Collector.ops)
+      c,
+]);
 
 /// The longest wait before the next probe [E]. Each probe that brings no
 /// reply doubles the wait from [_owedReadRetry]: one that hangs holds the
@@ -215,6 +229,27 @@ final class SamplingScheduler {
 
     server.opsOwed = true;
     if (server.run case final run?) _schedule(server, run, run.slow);
+  }
+
+  /// Reads [serverId]'s diagnostic bundle (CN-18, 03 §6.5): the probe on
+  /// demand and one tick of [kDiagnosticCollectors] per sampler, each
+  /// once its sampler is free, which counts as busy meanwhile. A request
+  /// made while a bundle is owed shares its answer. Null when the server
+  /// is not sampled or stops before the bundle is read; a sampler that
+  /// has not answered after [kDiagnosticsWait] leaves its collectors out.
+  Future<DiagnosticBundle?> readDiagnostics(String serverId) {
+    final server = _servers[serverId];
+    final run = server?.run;
+    if (server == null || run == null) return Future.value();
+
+    final read = server.diagnostics ??= _Diagnostics(
+      _startTimer(kDiagnosticsWait, () => _finishDiagnostics(server)),
+    );
+    final answer = Completer<DiagnosticBundle?>();
+    read.answers.add(answer);
+    _schedule(server, run, run.fast);
+    _schedule(server, run, run.slow);
+    return answer.future;
   }
 
   /// The session channels [serverId]'s samplers hold now (03 §5.2): both
@@ -393,6 +428,13 @@ final class SamplingScheduler {
     if (run == null) return;
 
     server.run = null;
+    if (server.diagnostics case final read?) {
+      server.diagnostics = null;
+      read.deadline.cancel();
+      for (final answer in read.answers) {
+        answer.complete();
+      }
+    }
     // Nothing watches the link's samplers now, so its liveness goes back
     // to the link's own ping.
     if (run.hinted) _clearDeadPeerHint(server.pipeline.serverId, run.link);
@@ -543,6 +585,100 @@ final class SamplingScheduler {
     _schedule(server, run, sampler);
   }
 
+  /// Sends [read]'s next request on [sampler], free and owing one: the
+  /// slow sampler's probe before its tick. A request the session skips
+  /// stays owed; one that brings no reply leaves its collectors missing.
+  void _readDiagnostics(
+    _Server server,
+    _Run run,
+    _Sampler sampler,
+    _Diagnostics read,
+  ) {
+    final kind = sampler.kind;
+    final probe = kind == SamplerKind.slow && read.probe == null;
+    final collectors = [
+      for (final c in kDiagnosticCollectors)
+        if (c.sampler == kind) c,
+    ];
+    sampler.busy = true;
+    final request = probe
+        ? sampler.session.onDemand(Collector.probe, const [])
+        : sampler.session.tick(collectors);
+    unawaited(
+      request.then((outcome) {
+        sampler.busy = false;
+        if (!identical(server.run, run)) return;
+
+        if (outcome
+            case SamplerReplied() ||
+                SamplerGap(reason: SamplerGapReason.lost)) {
+          _answered(server, run);
+        }
+        if (identical(server.diagnostics, read) && outcome is! SamplerSkipped) {
+          final sections = outcome is SamplerReplied
+              ? outcome.reply.sections
+              : const <HwsSection>[];
+          if (outcome is! SamplerReplied) {
+            read.missing.addAll(
+              probe
+                  ? [Collector.probe.wireName]
+                  : [for (final c in collectors) c.wireName],
+            );
+          }
+          switch ((probe, kind)) {
+            case (true, _):
+              read.probe = sections;
+            case (false, SamplerKind.fast):
+              read.fast = sections;
+            case (false, SamplerKind.slow):
+              read.slow = sections;
+          }
+          if (!read.needs(SamplerKind.fast) && !read.needs(SamplerKind.slow)) {
+            _finishDiagnostics(server);
+          }
+        }
+        _schedule(server, run, sampler);
+      }),
+    );
+    _schedule(server, run, sampler);
+  }
+
+  /// Answers [server]'s owed bundle with what its samplers sent; the
+  /// collectors of a sampler that has not answered are missing.
+  void _finishDiagnostics(_Server server) {
+    final read = server.diagnostics;
+    if (read == null) return;
+
+    server.diagnostics = null;
+    read.deadline.cancel();
+    final missing = {
+      ...read.missing,
+      if (read.probe == null) Collector.probe.wireName,
+      for (final c in kDiagnosticCollectors)
+        if (read.needs(c.sampler)) c.wireName,
+    };
+    final bundle = DiagnosticBundle(
+      [
+        for (final section in [...?read.probe, ...?read.fast, ...?read.slow])
+          DiagnosticSection(
+            collector: section.collector,
+            status: section.status.name,
+            text: utf8.decode(section.payload, allowMalformed: true),
+          ),
+      ],
+      missing: [
+        for (final name in [
+          Collector.probe.wireName,
+          for (final c in kDiagnosticCollectors) c.wireName,
+        ])
+          if (missing.contains(name)) name,
+      ],
+    );
+    for (final answer in read.answers) {
+      answer.complete(bundle);
+    }
+  }
+
   // -- ticks ----------------------------------------------------------
 
   /// Arms [sampler]'s timer for its earliest due stream that drives
@@ -585,6 +721,12 @@ final class SamplingScheduler {
         : null;
     if (opsAt != null && opsAt <= _elapsed()) {
       _readOps(server, run);
+      return;
+    }
+    // A diagnostic bundle follows the probe too, and goes before ticks.
+    if (server.diagnostics case final read?
+        when !sampler.busy && run.probeAt == null && read.needs(sampler.kind)) {
+      _readDiagnostics(server, run, sampler, read);
       return;
     }
 
@@ -852,7 +994,29 @@ final class _Server {
   /// read on.
   bool opsOwed = false;
   SshLink? opsReadOn;
+
+  /// The diagnostic bundle being read (CN-18), while one is owed.
+  _Diagnostics? diagnostics;
   _Run? run;
+}
+
+/// A diagnostic bundle being read (CN-18): what each request has
+/// brought so far, null until it answers, and who waits for it.
+final class _Diagnostics {
+  _Diagnostics(this.deadline);
+
+  final Timer deadline;
+  final List<Completer<DiagnosticBundle?>> answers = [];
+  final Set<String> missing = {};
+  List<HwsSection>? probe;
+  List<HwsSection>? fast;
+  List<HwsSection>? slow;
+
+  /// Whether a request of [kind]'s sampler is still owed.
+  bool needs(SamplerKind kind) => switch (kind) {
+    SamplerKind.fast => fast == null,
+    SamplerKind.slow => probe == null || slow == null,
+  };
 }
 
 /// The samplers of one stretch of sampling on one link.

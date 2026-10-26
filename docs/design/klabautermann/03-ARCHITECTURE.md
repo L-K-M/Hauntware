@@ -3159,6 +3159,21 @@ timed-out channel or no READY, would hold the fast one until it does).
   wrapped `df` lines; Swarm task names (ServerBox #1226 [R]).
 - The diagnostic bundle (CN-18, v1) exports the same raw format, redacted
   by `SecretRedactor`, so a user report becomes a fixture.
+  As built (M6 N64a), the server header's Safety menu offers Diagnostic
+  bundle…, a `DiagnosticBundleQuery`. The sampling scheduler reads it on
+  the server's own samplers, so it costs no channel: once the regular
+  probe has answered and each sampler is free, the slow one sends the
+  probe on demand, then each sampler one tick of every collector that
+  takes no arguments but `ops` (`kDiagnosticCollectors`), ahead of its
+  due ticks. A request while one is owed shares its answer; a sampler
+  that has not answered within 60 s leaves its collectors listed as
+  giving no answer, and a server that stops sampling answers none. The
+  app writes each section under a `### <collector> <status>` line and
+  exports it through LOG-10's sheet, so the bundle passes the engine's
+  `SecretRedactor` unless the user includes secrets (SAF-07). The
+  capture redaction below stays the fixture tool's: the sheet says the
+  bundle names the server's processes, units, mounts and paths, to be
+  read before it is shared.
 - Capture redaction: the host's names (kernel, `/etc/hostname`,
   hostnamectl) that are no address and each FQDN's first label, the
   domains of those names and of resolv.conf's search list (each suffix

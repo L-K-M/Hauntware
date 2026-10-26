@@ -255,6 +255,36 @@ void main() {
     expect(payload.failure, HostQueryFailure.failed);
   });
 
+  test('a diagnostic bundle comes from the samplers, and reads as no '
+      'link where nothing samples the server', () async {
+    link = _RunLink((_) => fail('the bundle runs no command'));
+    const bundle = DiagnosticBundle([
+      DiagnosticSection(collector: 'core', status: 'ok', text: 'cpu 1'),
+    ]);
+    final asked = <String>[];
+    await HostQueries(
+      linkFor: (_) => link,
+      systemdVersionOf: (_) => null,
+      emit: events.add,
+      readDiagnostics: (serverId) async {
+        asked.add(serverId);
+        return bundle;
+      },
+    ).query(
+      const HostQuery(
+        serverId: 'srv-1',
+        queryId: 'q-1',
+        query: DiagnosticBundleQuery(),
+      ),
+    );
+    expect(asked, ['srv-1']);
+    expect((events.single as HostResult).payload, same(bundle));
+
+    events.clear();
+    final failed = (await ask(const DiagnosticBundleQuery())).payload;
+    expect((failed as HostQueryFailed).failure, HostQueryFailure.noLink);
+  });
+
   test('the processor read runs its command and parses', () async {
     link = _RunLink(
       (_) => _ok(

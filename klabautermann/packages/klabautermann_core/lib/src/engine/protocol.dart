@@ -780,6 +780,14 @@ final class MountsQuery extends HostQuerySpec {
   const MountsQuery();
 }
 
+/// A diagnostic bundle (CN-18, 03 §6.5), as [DiagnosticBundle]: the raw
+/// output of the probe and of every collector that takes no arguments
+/// but `ops`, each read once on its own sampler, for a parser bug report
+/// that can become a fixture. Read only while the server is sampled.
+final class DiagnosticBundleQuery extends HostQuerySpec {
+  const DiagnosticBundleQuery();
+}
+
 /// Redacts [lines] the app holds for an export (LOG-10, 03 §8.9) through
 /// the engine's secret redactor, which the app cannot import, answered
 /// by [RedactedLines] with [requestId].
@@ -2205,6 +2213,34 @@ final class Mounts extends HostPayload {
   const Mounts(this.read);
 
   final MountsRead read;
+}
+
+/// One collector's section of a [DiagnosticBundle], as the host sent it:
+/// [collector] is its wire name, [status] its section status, and [text]
+/// its payload, decoded leniently and not yet redacted.
+@immutable
+final class DiagnosticSection {
+  const DiagnosticSection({
+    required this.collector,
+    required this.status,
+    required this.text,
+  });
+
+  final String collector;
+  final String status;
+  final String text;
+}
+
+/// [DiagnosticBundleQuery]'s sections, the probe's first, then the fast
+/// sampler's and the slow one's in collector order. A sampler that
+/// answered nothing leaves its collectors out; [missing] names them.
+final class DiagnosticBundle extends HostPayload {
+  const DiagnosticBundle(this.sections, {this.missing = const []});
+
+  final List<DiagnosticSection> sections;
+
+  /// The wire names of the collectors whose sampler gave no answer.
+  final List<String> missing;
 }
 
 /// A [HostQuery] that read nothing; [detail] is the end of its stderr,

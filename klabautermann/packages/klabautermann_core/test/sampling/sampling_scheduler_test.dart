@@ -742,6 +742,66 @@ void main() {
     });
   });
 
+  group('diagnostic bundle (CN-18)', () {
+    List<String> wireNames(SamplerKind kind) => [
+      for (final c in kDiagnosticCollectors)
+        if (c.sampler == kind) c.wireName,
+    ];
+
+    test('a server not sampled has none', () async {
+      expect(await scheduler.readDiagnostics(_s1), isNull);
+    });
+
+    test('reads the probe on demand and one tick per sampler after the '
+        "regular probe; a request meanwhile shares the answer", () async {
+      link.probeClock = 'epoch=1';
+      subscribe({SampleStream.fs});
+      await settle();
+      final first = scheduler.readDiagnostics(_s1);
+      final second = scheduler.readDiagnostics(_s1);
+      await settle();
+
+      final bundle = (await first)!;
+      expect(await second, same(bundle));
+      expect(
+        link.linesOf(_fast),
+        contains('hw_t ${wireNames(_fast).join(' ')}'),
+      );
+      expect(link.linesOf(_slow).where((l) => l == 'hw_o probe'), hasLength(2));
+      expect(
+        link.linesOf(_slow),
+        contains('hw_t ${wireNames(_slow).join(' ')}'),
+      );
+      expect(wireNames(_slow), isNot(contains('ops')));
+      expect(
+        [for (final s in bundle.sections) s.collector],
+        ['probe_clock', ...wireNames(_fast), ...wireNames(_slow)],
+      );
+      expect(bundle.sections.first.text, 'epoch=1');
+      expect(bundle.sections.first.status, 'ok');
+      expect(bundle.missing, isEmpty);
+    });
+
+    test('a sampler that does not answer leaves its collectors missing '
+        'after the wait; a server that stops answers none', () async {
+      subscribe({SampleStream.fs});
+      await settle();
+      link.stalled.add(_slow);
+      final waited = scheduler.readDiagnostics(_s1);
+      await settle();
+      await clock.elapse(kDiagnosticsWait);
+      final bundle = (await waited)!;
+      expect([for (final s in bundle.sections) s.collector], wireNames(_fast));
+      expect(bundle.missing, ['probe', ...wireNames(_slow)]);
+
+      final stopped = scheduler.readDiagnostics(_s1);
+      await settle();
+      subscriptions.fleet = {};
+      scheduler.retain({});
+      expect(await stopped, isNull);
+    });
+  });
+
   group('lending the slow sampler (M4 E13, plan M6)', () {
     test('a server not sampled has nothing to lend', () async {
       expect(scheduler.samplerSessions(_s1), 0);

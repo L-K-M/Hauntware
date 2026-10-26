@@ -711,6 +711,8 @@ void engineMain(
       linkFor: links.link,
       systemdVersionOf: (serverId) => profiles[serverId]?.systemdVersion,
       emit: uiPort.send,
+      readDiagnostics: (serverId) =>
+          scheduler?.readDiagnostics(serverId) ?? Future.value(),
     );
     logs = LogStreamRouter(
       linkFor: links.link,

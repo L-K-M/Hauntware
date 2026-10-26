@@ -735,6 +735,20 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"""r'|\b(?:[Ss]tatus|STATUS|[Cc]ode|CODE)(?:_code)?["\x27]?\s*[=:]\s*"?)'""",
     r"""r'([1-5]\d\d)\b'""",
   },
+  'lib/ui/diagnostic_bundle.dart': {
+    // CN-18's bundle is a fixture-format text file for maintainers, not
+    // UI copy: its header, each section's `###` line and the closing
+    // list of collectors that gave no answer, with the line break its
+    // payloads split on and the space between wire names; then the
+    // separators between the sheet's ARB texts and wire names.
+    r"'# Klabautermann diagnostic bundle (HWS/1), read ${at.toUtc().toIso8601String()}'",
+    r"'### ${section.collector} ${section.status}'",
+    r"'\n'",
+    r"'# no answer: ${bundle.missing.join(' ')}'",
+    "' '",
+    "', '",
+    r"'\n\n'",
+  },
   'lib/ui/logs/log_export.dart': {
     // LOG-10's export: the lines joined as a text file, ending in a
     // newline, and the file's media type for the save dialog and the

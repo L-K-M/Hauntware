@@ -105,6 +105,8 @@ class LogExportSheet extends StatefulWidget {
     required this.host,
     required this.lines,
     required this.fileName,
+    this.title,
+    this.note,
   });
 
   final MonitoringController monitoring;
@@ -115,6 +117,12 @@ class LogExportSheet extends StatefulWidget {
   final LogExportHost host;
   final List<String> lines;
   final String fileName;
+
+  /// The sheet's title; a log export's line count by default.
+  final String? title;
+
+  /// A paragraph under the title, if any.
+  final String? note;
 
   @override
   State<LogExportSheet> createState() => _LogExportSheetState();
@@ -195,9 +203,13 @@ class _LogExportSheetState extends State<LogExportSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          l10n.logsExportTitle(widget.lines.length),
+          widget.title ?? l10n.logsExportTitle(widget.lines.length),
           style: Theme.of(context).textTheme.titleMedium,
         ),
+        if (widget.note case final note?) ...[
+          const SizedBox(height: 8),
+          Text(note),
+        ],
         const SizedBox(height: 8),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,

@@ -173,6 +173,11 @@ void main() {
         ),
         const HostQuery(
           serverId: 'srv-1',
+          queryId: 'h-diag',
+          query: DiagnosticBundleQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
           queryId: 'h-5',
           query: MountsQuery(),
         ),
@@ -473,6 +478,14 @@ void main() {
               installed: ['6.1.0-13-amd64'],
               state: KernelCheckState.current,
             ),
+          ),
+        ),
+        const HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-diag',
+          payload: DiagnosticBundle(
+            [DiagnosticSection(collector: 'core', status: 'ok', text: 'cpu 1')],
+            missing: ['probe'],
           ),
         ),
         HostResult(
