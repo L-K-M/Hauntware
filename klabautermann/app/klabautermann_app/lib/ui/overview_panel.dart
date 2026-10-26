@@ -9,6 +9,7 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart';
+import 'cpu_hints.dart';
 import 'docker/containers_view.dart' show containerNameOf;
 import 'failed_units_summary.dart';
 import 'fleet_row_state.dart' show kFleetRowStaleAfter, kFleetRowThresholds;
@@ -262,7 +263,11 @@ class OverviewPanel extends StatelessWidget {
               ),
             if (cards != null && wide) ...[
               row(
-                column([cards.cpu(context), cards.load(context)]),
+                column([
+                  cards.cpu(context),
+                  cards.load(context),
+                  cards.pressure(context),
+                ]),
                 column([cards.memory(context), cards.swap(context)]),
               ),
               row(disks, column([cards.network(context), host, ?dockerCard])),
@@ -274,6 +279,7 @@ class OverviewPanel extends StatelessWidget {
                 cards.load(context),
                 cards.memory(context),
                 cards.swap(context),
+                cards.pressure(context),
               ],
               disks,
               ?cards?.network(context),
@@ -1180,8 +1186,20 @@ final class _Cards {
             (l10n.overviewCpuUser, percent(cpu?.user)),
             (l10n.overviewCpuSystem, percent(cpu?.system)),
             (l10n.overviewCpuIdle, percent(cpu?.idle)),
+            (l10n.overviewCpuIowait, percent(cpu?.iowait)),
+            (l10n.overviewCpuSteal, percent(cpu?.steal)),
+            (l10n.overviewCpuIrq, percent(cpu?.irq)),
+            (l10n.overviewCpuSoftirq, percent(cpu?.softirq)),
           ],
         ),
+        // CPU-04's hints explain what the figures above mean for the
+        // host; a stale reading keeps them beside the greyed figures.
+        if (cpu != null)
+          for (final hint in cpuHints(cpu))
+            PanelNotice(
+              icon: Icons.lightbulb_outline,
+              text: _hintText(l10n, hint, percent(hint.percent)!),
+            ),
         Semantics(
           header: true,
           child: Text(
@@ -1196,6 +1214,67 @@ final class _Cards {
         // One note for the card: a container withholds both from the same
         // /proc/stat, so two would repeat each other.
         ?_withheld(l10n, const [MetricField.cpu, MetricField.perCpu]),
+      ],
+    );
+  }
+
+  static String _hintText(
+    AppLocalizations l10n,
+    CpuHint hint,
+    String percent,
+  ) => switch (hint.kind) {
+    CpuHintKind.steal => l10n.overviewCpuHintSteal(percent),
+    CpuHintKind.iowait => l10n.overviewCpuHintIowait(percent),
+    CpuHintKind.interrupts => l10n.overviewCpuHintInterrupts(percent),
+  };
+
+  /// CPU-05 and MEM-04: how much of the time tasks stalled for CPU,
+  /// memory and I/O. A kernel without PSI is normal (7.1), so its absence
+  /// is said plainly rather than as a failure.
+  Widget pressure(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    // Two decimals as the kernel prints them: stalls of a fraction of a
+    // percent are the usual reading, which whole percents would zero.
+    String? averages(StallAverages? line) => line == null
+        ? null
+        : l10n.overviewPressureValue(line.avg10, line.avg60, line.avg300);
+
+    const fields = [
+      MetricField.cpuPressure,
+      MetricField.memoryPressure,
+      MetricField.ioPressure,
+    ];
+    final files = [
+      (l10n.overviewPressureCpu, core.cpuPressure),
+      (l10n.overviewPressureMemory, core.memoryPressure),
+      (l10n.overviewPressureIo, core.ioPressure),
+    ];
+    final withheld = _withheld(l10n, fields);
+    final figures = [
+      for (final (name, file) in files)
+        if (file != null) ...[
+          if (file.some != null)
+            (l10n.overviewPressureSome(name), averages(file.some)),
+          if (file.full != null)
+            (l10n.overviewPressureFull(name), averages(file.full)),
+        ],
+    ];
+    return PanelSection(
+      title: l10n.overviewPressureTitle,
+      children: [
+        // A container without its own pressure files withholds them all:
+        // the reason then stands alone, without a caption over nothing.
+        if (figures.isNotEmpty) ...[
+          Text(
+            l10n.overviewPressureCaption,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          _Facts(stale: stale, facts: figures),
+        ] else if (withheld == null)
+          Text(l10n.overviewPressureNone, style: _valueStyle(context, stale)),
+        ?withheld,
       ],
     );
   }

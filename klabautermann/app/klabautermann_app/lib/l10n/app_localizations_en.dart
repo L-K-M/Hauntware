@@ -2763,6 +2763,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get overviewCpuIdle => 'Idle';
 
   @override
+  String get overviewCpuIowait => 'I/O wait';
+
+  @override
+  String get overviewCpuSteal => 'Steal';
+
+  @override
+  String get overviewCpuIrq => 'IRQ';
+
+  @override
+  String get overviewCpuSoftirq => 'Soft IRQ';
+
+  @override
+  String overviewCpuHintSteal(String percent) {
+    return 'Steal $percent: the host running this virtual machine gives its CPU time to other guests, often a noisy neighbour on a VPS. Programs here run slower than the busy figure suggests.';
+  }
+
+  @override
+  String overviewCpuHintIowait(String percent) {
+    return 'I/O wait $percent: cores sat idle while tasks waited for storage. The kernel calls this figure unreliable, so check disk latency before blaming the disks.';
+  }
+
+  @override
+  String overviewCpuHintInterrupts(String percent) {
+    return 'Interrupts $percent: the CPUs spend this much handling devices, often heavy network traffic.';
+  }
+
+  @override
   String get overviewPerCoreTitle => 'Per core';
 
   @override
@@ -2821,6 +2848,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get overviewSwapNone => 'No swap is set up.';
+
+  @override
+  String get overviewPressureTitle => 'Pressure';
+
+  @override
+  String get overviewPressureCaption =>
+      'Share of time tasks stalled, over the last 10 s, 1 min and 5 min. \"Some\" counts time at least one task waited, \"full\" time all of them did.';
+
+  @override
+  String get overviewPressureNone =>
+      'This kernel reports no pressure figures. That is normal before Linux 4.20 or with PSI turned off.';
+
+  @override
+  String get overviewPressureCpu => 'CPU';
+
+  @override
+  String get overviewPressureMemory => 'Memory';
+
+  @override
+  String get overviewPressureIo => 'I/O';
+
+  @override
+  String overviewPressureSome(String resource) {
+    return '$resource, some';
+  }
+
+  @override
+  String overviewPressureFull(String resource) {
+    return '$resource, full';
+  }
+
+  @override
+  String overviewPressureValue(double avg10, double avg60, double avg300) {
+    final intl.NumberFormat avg10NumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 2,
+        );
+    final String avg10String = avg10NumberFormat.format(avg10);
+    final intl.NumberFormat avg60NumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 2,
+        );
+    final String avg60String = avg60NumberFormat.format(avg60);
+    final intl.NumberFormat avg300NumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 2,
+        );
+    final String avg300String = avg300NumberFormat.format(avg300);
+
+    return '$avg10String% · $avg60String% · $avg300String%';
+  }
 
   @override
   String get jobsWaiting => 'Waiting for the first reading.';
