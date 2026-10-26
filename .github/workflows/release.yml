@@ -209,7 +209,7 @@ jobs:
         run: |
           grep -q '^## License$' README.md
           grep -q 'Third-Party-Notices.txt' README.md
-          if grep -n 'All rights reserved' */app/*/macos/Runner/Configs/AppInfo.xcconfig; then
+          if grep -n 'All rights reserved' -- */app/*/macos/Runner/Configs/AppInfo.xcconfig; then
             exit 1
           fi
       # Tag ordering: monotonic releases only. The tool owns the
