@@ -2142,3 +2142,68 @@ jobs:
       # resolves (same contract as the Dockerfile header).
       - name: Build image
         run: docker build -f seance/packages/seance_sync_server/Dockerfile -t seance-sync:ci seance/
+      # The image carries the binary's and the OS packages' notices, and its
+      # license label names every license they list. libsqlite3-0 is
+      # SQLite's blessing; ca-certificates is GPL-2.0-or-later with MPL-2.0
+      # certificate data (its Debian copyright file).
+      - name: Verify notices in the image
+        run: |
+          sh seance/scripts/licenses/check-image-notices.sh seance-sync:ci \
+            /usr/share/doc/seance-sync Third-Party-Notices.txt OS-Packages.txt LICENSE \
+            -- --own Unlicense --package libsqlite3-0=blessing \
+            --package 'ca-certificates=GPL-2.0-or-later AND MPL-2.0'
+          docker run --rm --entrypoint grep seance-sync:ci -q \
+            '^Dart SDK (runtime and core libraries) ' /usr/share/doc/seance-sync/Third-Party-Notices.txt
+
+  # The sync-server tarballs as release.yml's `server` job builds them, so
+  # a tag is never the first run of the notice generator on any platform:
+  # the archive must carry LICENSE and Third-Party-Notices.txt.
+  seance_server:
+    name: Sync server binary (${{ matrix.os }})
+    needs: affected
+    if: needs.affected.outputs.seance == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve workspace
+        working-directory: seance
+        run: dart pub get
+      - name: Compile
+        working-directory: seance
+        run: |
+          mkdir -p dist
+          exe=seance-sync
+          if [ "$RUNNER_OS" = Windows ]; then exe=seance-sync.exe; fi
+          dart compile exe packages/seance_sync_server/bin/seance_sync_server.dart -o "dist/$exe"
+      - name: Third-party notices
+        working-directory: seance
+        run: |
+          py=python3
+          if [ "$RUNNER_OS" = Windows ]; then py=python; fi
+          "$py" scripts/licenses/dart-runtime-licenses.py --out "$RUNNER_TEMP/dart-runtime"
+          "$py" scripts/licenses/go-dart-notices.py dart --workspace . \
+            --package seance_sync_server --runtime-licenses "$RUNNER_TEMP/dart-runtime" \
+            --title seance-sync -o dist/Third-Party-Notices.txt
+          cp LICENSE dist/LICENSE
+      - name: Package
+        run: tar -czf seance-sync.tar.gz -C seance/dist .
+      - name: Verify notices in the archive
+        run: |
+          mkdir notices-check
+          tar -xzf seance-sync.tar.gz -C notices-check
+          test -s notices-check/LICENSE
+          test -s notices-check/Third-Party-Notices.txt
+          grep -q '^Dart SDK (runtime and core libraries) ' notices-check/Third-Party-Notices.txt
+          grep -q '^BoringSSL ' notices-check/Third-Party-Notices.txt
+          grep -q '^shelf ' notices-check/Third-Party-Notices.txt

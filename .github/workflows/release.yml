@@ -456,9 +456,36 @@ jobs:
           exe=seance-sync
           if [ "${{ runner.os }}" = "Windows" ]; then exe=seance-sync.exe; fi
           dart compile exe packages/seance_sync_server/bin/seance_sync_server.dart -o "dist/$exe"
+      # Third-party notices beside the binary: the pub packages it compiles
+      # in, the Dart SDK and the third-party code its AOT runtime embeds,
+      # fetched at this SDK's exact revision (the SDK floats). The
+      # generator fails on a package without license text.
+      - name: Third-party notices
+        working-directory: seance
+        shell: bash
+        run: |
+          py=python3
+          if [ "$RUNNER_OS" = Windows ]; then py=python; fi
+          "$py" scripts/licenses/dart-runtime-licenses.py --out "$RUNNER_TEMP/dart-runtime"
+          "$py" scripts/licenses/go-dart-notices.py dart --workspace . \
+            --package seance_sync_server --runtime-licenses "$RUNNER_TEMP/dart-runtime" \
+            --title seance-sync -o dist/Third-Party-Notices.txt
+          cp LICENSE dist/LICENSE
       - name: Package
         shell: bash
         run: tar -czf seance-sync-${{ matrix.platform }}.tar.gz -C seance/dist .
+      # What users download must carry the notices (a relative -C: Git
+      # Bash's tar reads "D:" as a remote host).
+      - name: Verify notices in the archive
+        shell: bash
+        run: |
+          mkdir notices-check
+          tar -xzf seance-sync-${{ matrix.platform }}.tar.gz -C notices-check
+          test -s notices-check/LICENSE
+          test -s notices-check/Third-Party-Notices.txt
+          grep -q '^Dart SDK (runtime and core libraries) ' notices-check/Third-Party-Notices.txt
+          grep -q '^BoringSSL ' notices-check/Third-Party-Notices.txt
+          grep -q '^shelf ' notices-check/Third-Party-Notices.txt
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned: a retargeted tag would be arbitrary code with contents: write)
         with:
           # On a tag push these two resolve to the pushed tag (and the
@@ -1656,6 +1683,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # The Dockerfile's license label names the image's contents; without
+      # passing it through, metadata-action would claim only the
+      # repository's license for the whole image.
+      - name: Read the image license label
+        id: oci
+        run: echo "licenses=$(python3 seance/scripts/licenses/oci-licenses.py dockerfile seance/packages/seance_sync_server/Dockerfile)" >> "$GITHUB_OUTPUT"
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6 (SHA-pinned)
         with:
@@ -1670,6 +1703,31 @@ jobs:
             type=semver,pattern={{version}},value=${{ inputs.tag || github.ref_name }}
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag || github.ref_name }}
             type=raw,value=latest
+          labels: |
+            org.opencontainers.image.licenses=${{ steps.oci.outputs.licenses }}
+      # Check the image before anything is pushed: a local build (the cache
+      # makes the push build below reuse it) whose notices and label
+      # scripts/licenses/check-image-notices.sh verifies.
+      - name: Build image for checks
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7 (SHA-pinned)
+        with:
+          context: seance/
+          file: seance/packages/seance_sync_server/Dockerfile
+          load: true
+          tags: seance-sync:check
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # libsqlite3-0 is SQLite's blessing; ca-certificates is GPL-2.0-or-later
+      # with MPL-2.0 certificate data (its Debian copyright file).
+      - name: Verify notices in the image
+        run: |
+          sh seance/scripts/licenses/check-image-notices.sh seance-sync:check \
+            /usr/share/doc/seance-sync Third-Party-Notices.txt OS-Packages.txt LICENSE \
+            -- --own Unlicense --package libsqlite3-0=blessing \
+            --package 'ca-certificates=GPL-2.0-or-later AND MPL-2.0'
+          docker run --rm --entrypoint grep seance-sync:check -q \
+            '^Dart SDK (runtime and core libraries) ' /usr/share/doc/seance-sync/Third-Party-Notices.txt
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7 (SHA-pinned)
         with:
           # Build context is the seance subtree root so its pub
