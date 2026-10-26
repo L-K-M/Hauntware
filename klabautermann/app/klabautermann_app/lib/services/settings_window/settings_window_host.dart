@@ -9,6 +9,7 @@ import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 
 import '../../controllers/announcement_controller.dart';
+import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/device_name.dart';
 import '../../controllers/monitor_set.dart';
@@ -31,6 +32,7 @@ SettingsWindowHost? settingsWindowHostFor(
   required SafetySettings safety,
   required SyncSecretsSettings syncSecrets,
   PinPublicationSettings? pinPublication,
+  AppLockSettings? appLock,
 }) => switch (platform) {
   TargetPlatform.macOS ||
   TargetPlatform.linux ||
@@ -43,6 +45,7 @@ SettingsWindowHost? settingsWindowHostFor(
     safety: safety,
     syncSecrets: syncSecrets,
     pinPublication: pinPublication,
+    appLock: appLock,
   ),
   TargetPlatform.android ||
   TargetPlatform.iOS ||
@@ -69,6 +72,7 @@ final class SettingsWindowHost {
     required SafetySettings safety,
     required SyncSecretsSettings syncSecrets,
     PinPublicationSettings? pinPublication,
+    AppLockSettings? appLock,
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
@@ -78,7 +82,8 @@ final class SettingsWindowHost {
        _monitorSet = monitorSet,
        _safety = safety,
        _syncSecrets = syncSecrets,
-       _pinPublication = pinPublication {
+       _pinPublication = pinPublication,
+       _appLock = appLock {
     _engine = GhostSettingsWindowHost(
       control: control,
       link: link,
@@ -94,6 +99,7 @@ final class SettingsWindowHost {
           safety,
           syncSecrets,
           ?pinPublication,
+          ?appLock,
         ],
       ),
       encodeError: encodeLinkError,
@@ -109,6 +115,7 @@ final class SettingsWindowHost {
   final SafetySettings _safety;
   final SyncSecretsSettings _syncSecrets;
   final PinPublicationSettings? _pinPublication;
+  final AppLockSettings? _appLock;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
 
   @visibleForTesting
@@ -140,9 +147,17 @@ final class SettingsWindowHost {
     SettingsLinkKey.labels.name: {
       for (final id in _safety.value.servers.keys) id: _safety.labelOf(id),
     },
+    SettingsLinkKey.appLock.name: switch (_appLock) {
+      final lock? => encodeAppLock(lock),
+      null => null,
+    },
   };
 
   Future<Object?> _handleCall(String name, Object? argument) async {
+    // A locked app changes nothing from the settings window, which covers
+    // itself then; a call already on its way when the lock engaged is
+    // refused here.
+    if (_appLock?.locked ?? false) throw const AppLockedException();
     switch (SettingsLinkMethod.values.asNameMap()[name]) {
       case null:
         throw MissingPluginException('No settings window method $name');
@@ -177,6 +192,11 @@ final class SettingsWindowHost {
         await _safety.setGlobalReadOnly(argument! as bool);
       case SettingsLinkMethod.setAdminExpiry:
         await _safety.setAdminExpiry(Duration(minutes: argument! as int));
+      case SettingsLinkMethod.setAppLock:
+        final appLock = _appLock;
+        if (appLock == null) throw StateError('No app lock settings');
+        // The device authentication runs here, in the app's window.
+        return (await appLock.setEnabled(argument! as bool)).name;
       case SettingsLinkMethod.setServerSafety:
         final change = (argument! as Map).cast<String, Object?>();
         await _safety.setServerSafety(

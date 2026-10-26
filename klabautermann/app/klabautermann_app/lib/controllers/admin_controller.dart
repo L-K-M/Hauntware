@@ -53,6 +53,14 @@ final class AdminController extends ChangeNotifier {
     }
   }
 
+  /// Turns admin mode off on every server where it is on or on its way
+  /// there: it expires at once when the app locks (03 §8.2, SAF-20).
+  void turnOffAll() {
+    for (final serverId in _states.keys.where(isActive).toList()) {
+      setEnabled(serverId, enabled: false);
+    }
+  }
+
   /// Reads every user's crontab on [serverId] (JOB-03), which needs
   /// admin mode; the engine answers with [UserCrontabs], a failure
   /// included. A stopped engine answers no link.

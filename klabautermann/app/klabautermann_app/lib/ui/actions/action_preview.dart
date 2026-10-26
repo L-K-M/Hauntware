@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
+import 'package:ghost_ui/ghost_ui.dart'
+    show ghostFormatBinarySize, showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/operations_controller.dart';
@@ -231,6 +232,36 @@ class ActionPreviewView extends StatelessWidget {
                       : null,
                 ),
               ),
+          ],
+          if (preview.prune case final prune?) ...[
+            Semantics(
+              header: true,
+              child: Text(
+                l10n.actionPreviewPruneRemoves(prune.count),
+                style: textTheme.titleSmall,
+              ),
+            ),
+            if (prune.freed case final bytes?)
+              Text(l10n.actionPreviewPruneFrees(ghostFormatBinarySize(bytes))),
+            for (final item in prune.removes)
+              Text(switch (item.size) {
+                final bytes? => l10n.actionPreviewPruneItem(
+                  item.name,
+                  ghostFormatBinarySize(bytes),
+                ),
+                null => item.name,
+              }, style: mono),
+            if (prune.kept.isNotEmpty) ...[
+              Semantics(
+                header: true,
+                child: Text(
+                  l10n.actionPreviewPruneKeeps,
+                  style: textTheme.titleSmall,
+                ),
+              ),
+              for (final kept in prune.kept)
+                Text(l10n.actionPreviewPruneKept(kept.name, kept.reason.name)),
+            ],
           ],
           if (preview.orphans.isNotEmpty) ...[
             Semantics(

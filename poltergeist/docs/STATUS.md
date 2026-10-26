@@ -4,6 +4,23 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## D12 baseline refresh tool (2026-10-25)
+
+`test/benchmarks/refresh.dart` automates the measurement steps of a
+baseline refresh:
+- `collect` downloads main-branch artifacts.
+- `sample` dispatches CI on side branches at main's tip when main CI is
+  held up. It dispatches only on `bench/*` branches, cancels only its own
+  runs, and cancels each one once the D12 job uploads results.
+- `pool` pools exact-fingerprint runs through the checker's parser and
+  median, and `--write` updates the baseline and the tier-A machine axes.
+
+Run on the Oct 16 and Oct 25 artifacts, it reproduces both committed
+refreshes byte for byte, including their excluded-run lists. The README
+procedure now allows side-branch dispatches and names the Hauntware
+repository instead of the pre-monorepo one. Measurements, thresholds and
+enforcement are unchanged.
+
 ## D12 runner-image baseline refresh (2026-10-25)
 
 Main run 40135900306 exposed `ubuntu-latest` rotating from

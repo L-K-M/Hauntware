@@ -152,5 +152,15 @@ void main() {
       ),
       'Off',
     );
+    // A clock the kernel still calls synchronized reads so even with
+    // timedated's NTP unit off: another daemon may keep it, and the flag
+    // lapses within hours once nothing does.
+    expect(
+      timeSyncText(
+        _l10n,
+        HostProfile(ntpEnabled: false, ntpSynchronized: true),
+      ),
+      'Synchronized',
+    );
   });
 }

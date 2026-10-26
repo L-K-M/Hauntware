@@ -1397,233 +1397,6 @@
       }
     }
   },
-  "systemUpdatesTitle": "Updates",
-  "@systemUpdatesTitle": {
-    "description": "System tab: title of the section listing the server's pending package updates."
-  },
-  "systemUpdatesNone": "Up to date",
-  "@systemUpdatesNone": {
-    "description": "System tab, Updates: the package manager lists no pending update."
-  },
-  "systemUpdatesCount": "{count, plural, =1{1 update available} other{{count} updates available}}",
-  "@systemUpdatesCount": {
-    "description": "System tab, Updates: how many package updates the package manager lists.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "systemUpdatesSecurityCount": "{count, plural, =1{1 is a security update} other{{count} are security updates}}",
-  "@systemUpdatesSecurityCount": {
-    "description": "System tab, Updates: how many of the pending updates fix security issues.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "systemUpdatesSecurityPatches": "{count, plural, =1{1 security patch is needed} other{{count} security patches are needed}}",
-  "@systemUpdatesSecurityPatches": {
-    "description": "System tab, Updates: on SUSE, how many security patches zypper says are needed; zypper lists patches rather than packages.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "systemUpdatesRestart": "The server asks for a restart.",
-  "@systemUpdatesRestart": {
-    "description": "System tab, Updates: the server reports that a reboot is required, without naming the packages that asked."
-  },
-  "systemUpdatesRestartFor": "The server asks for a restart, for {packages}.",
-  "@systemUpdatesRestartFor": {
-    "description": "System tab, Updates: the server reports that a reboot is required, with the packages that asked for it.",
-    "placeholders": {
-      "packages": {
-        "type": "String",
-        "example": "libc6, linux-image-6.1.0-26-amd64"
-      }
-    }
-  },
-  "systemUpdatesNoRestart": "No restart required",
-  "@systemUpdatesNoRestart": {
-    "description": "System tab, Updates: the server reports that no reboot is required."
-  },
-  "systemUpdatesFailed": "{reason, select, noLink{The server is not connected, so updates could not be checked.} transport{The connection failed while updates were checked.} other{Updates could not be checked.}}",
-  "@systemUpdatesFailed": {
-    "description": "System tab, Updates: why the check did not run, by reason.",
-    "placeholders": {
-      "reason": {
-        "type": "String"
-      }
-    }
-  },
-  "systemUpdatesNoManager": "No package manager Klabautermann reads was found (apt, dnf, zypper, pacman or apk).",
-  "@systemUpdatesNoManager": {
-    "description": "System tab, Updates: the server has none of the package managers the check knows."
-  },
-  "systemUpdatesNoCache": "The package lists have not been downloaded on this server yet, and the check never downloads them.",
-  "@systemUpdatesNoCache": {
-    "description": "System tab, Updates: dnf has no cached metadata; the check only reads cached metadata and never refreshes it."
-  },
-  "systemUpdatesManagerFailed": "The package manager failed: {detail}",
-  "@systemUpdatesManagerFailed": {
-    "description": "System tab, Updates: the package manager reported an error; detail is its own error text.",
-    "placeholders": {
-      "detail": {
-        "type": "String",
-        "example": "E: Could not open lock file"
-      }
-    }
-  },
-  "systemUpdatesPackage": "Package",
-  "@systemUpdatesPackage": {
-    "description": "System tab, Updates: column header of the package name."
-  },
-  "systemUpdatesInstalled": "Installed",
-  "@systemUpdatesInstalled": {
-    "description": "System tab, Updates: column header of the installed version."
-  },
-  "systemUpdatesAvailable": "Available",
-  "@systemUpdatesAvailable": {
-    "description": "System tab, Updates: column header of the version the update installs."
-  },
-  "systemUpdatesSecurity": "Security",
-  "@systemUpdatesSecurity": {
-    "description": "System tab, Updates: column header marking security updates."
-  },
-  "systemUpdatesSecurityYes": "Security",
-  "@systemUpdatesSecurityYes": {
-    "description": "System tab, Updates: the cell of an update that fixes a security issue."
-  },
-  "systemUpdatesCut": "{count, plural, other{Only the first {count} updates are listed.}}",
-  "@systemUpdatesCut": {
-    "description": "System tab, Updates: the list stops at its limit.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "systemUpdatesListsFrom": "Package lists last downloaded {time}",
-  "@systemUpdatesListsFrom": {
-    "description": "System tab, Updates: when the server last refreshed its package lists, in the UI locale and this device's time zone.",
-    "placeholders": {
-      "time": {
-        "type": "DateTime",
-        "format": "yMMMd+jm"
-      }
-    }
-  },
-  "systemUpdatesChecking": "Checking for updates…",
-  "@systemUpdatesChecking": {
-    "description": "System tab, Updates: a check is running."
-  },
-  "systemUpdatesCheckAgain": "Check again",
-  "@systemUpdatesCheckAgain": {
-    "description": "System tab, Updates: button that runs a new check instead of using the one from the last hour."
-  },
-  "systemUpdatesRefresh": "Refresh package lists",
-  "@systemUpdatesRefresh": {
-    "description": "System tab, Updates: button that downloads the server's package lists as root, in admin mode, so the next check reads current metadata."
-  },
-  "systemUpdatesRefreshAdminNeeded": "Turn on admin mode to download them.",
-  "@systemUpdatesRefreshAdminNeeded": {
-    "description": "System tab, Updates: after the note that the package lists were never downloaded, says that refreshing them needs admin mode."
-  },
-  "systemUpdatesRefreshStarted": "When the refresh has finished, check again to read the new lists.",
-  "@systemUpdatesRefreshStarted": {
-    "description": "System tab, Updates: shown after the refresh starts, until the next check."
-  },
-  "systemUpdatesRestartsTitle": "Services to restart",
-  "@systemUpdatesRestartsTitle": {
-    "description": "System tab, Updates: heading of the services still running libraries an update replaced."
-  },
-  "systemUpdatesRestartsRead": "Find services to restart",
-  "@systemUpdatesRestartsRead": {
-    "description": "System tab, Updates: button that reads, in admin mode, which services still run replaced libraries."
-  },
-  "systemUpdatesRestartsReadAgain": "Look again",
-  "@systemUpdatesRestartsReadAgain": {
-    "description": "System tab, Updates: button that reads the services to restart again."
-  },
-  "systemUpdatesRestartsReading": "Looking for services to restart…",
-  "@systemUpdatesRestartsReading": {
-    "description": "System tab, Updates: the services-to-restart read is running."
-  },
-  "systemUpdatesRestartsAdminNeeded": "Finding services that still run replaced libraries needs admin mode.",
-  "@systemUpdatesRestartsAdminNeeded": {
-    "description": "System tab, Updates: the services-to-restart read needs admin mode, since it reads every process."
-  },
-  "systemUpdatesRestartsNone": "No service runs a replaced library.",
-  "@systemUpdatesRestartsNone": {
-    "description": "System tab, Updates: the read found no service to restart."
-  },
-  "systemUpdatesRestartsList": "Restart to load the updated libraries: {services}",
-  "@systemUpdatesRestartsList": {
-    "description": "System tab, Updates: the services still running replaced libraries; services is a comma-separated list of systemd unit names (server data).",
-    "placeholders": {
-      "services": {
-        "type": "String",
-        "example": "ssh.service, cron.service"
-      }
-    }
-  },
-  "systemUpdatesKernelWaiting": "A newer kernel is installed and waits for a reboot.",
-  "@systemUpdatesKernelWaiting": {
-    "description": "System tab, Updates: needrestart reports a newer kernel than the running one."
-  },
-  "systemUpdatesRestartsFailed": "{reason, select, noLink{The server is not connected, so services to restart could not be read.} adminRequired{Admin mode ended before services to restart were read.} elevationRefused{Elevation was refused, so services to restart were not read.} missing{None of needrestart, needs-restarting or zypper is installed on this server.} transport{The connection failed while services to restart were read.} other{Services to restart could not be read.}}",
-  "@systemUpdatesRestartsFailed": {
-    "description": "System tab, Updates: why the services-to-restart read read nothing, by reason.",
-    "placeholders": {
-      "reason": {
-        "type": "String"
-      }
-    }
-  },
-  "fleetUpdatesTitle": "Updates on all servers",
-  "@fleetUpdatesTitle": {
-    "description": "Title of PKG-06's fleet update center, listing every server's pending updates."
-  },
-  "fleetUpdatesOpen": "All servers",
-  "@fleetUpdatesOpen": {
-    "description": "System tab, Updates: button that opens the fleet update center."
-  },
-  "fleetUpdatesCheckAll": "Check every server again",
-  "@fleetUpdatesCheckAll": {
-    "description": "Fleet update center: button that runs a new package check on every server instead of using the ones from the last hour."
-  },
-  "fleetUpdatesNoServers": "No servers yet.",
-  "@fleetUpdatesNoServers": {
-    "description": "Fleet update center: the fleet is empty."
-  },
-  "fleetUpdatesSummary": "{updates, plural, =0{Up to date} =1{1 update} other{{updates} updates}}{security, plural, =0{} other{, {security} security}}{restart, select, true{ · restart required} other{}}",
-  "@fleetUpdatesSummary": {
-    "description": "Fleet update center: one server's line: pending updates, security updates (omitted at zero) and whether it asks for a restart.",
-    "placeholders": {
-      "updates": {
-        "type": "int"
-      },
-      "security": {
-        "type": "int"
-      },
-      "restart": {
-        "type": "String"
-      }
-    }
-  },
-  "systemUpdatesCheckedAt": "Checked {time}",
-  "@systemUpdatesCheckedAt": {
-    "description": "System tab, Updates: when the shown check ran, in the UI locale and this device's time zone.",
-    "placeholders": {
-      "time": {
-        "type": "DateTime",
-        "format": "yMMMd+jm"
-      }
-    }
-  },
   "systemDriveHealthNone": "No drive answered smartctl's scan.",
   "@systemDriveHealthNone": {
     "description": "System tab, Drive health: the read found no drive, as in a VM without passed-through disks."
@@ -1665,6 +1438,16 @@
   "systemDriveBadSectors": "Bad sectors",
   "@systemDriveBadSectors": {
     "description": "Drive health table: column of an ATA drive's reallocated, pending and uncorrectable sectors, summed."
+  },
+  "systemDriveBadSectorCount": "{count}",
+  "@systemDriveBadSectorCount": {
+    "description": "Drive health table: a drive's bad sectors, a whole number in the UI locale.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
   },
   "systemDrivePowerOn": "Powered on",
   "@systemDrivePowerOn": {
@@ -3993,6 +3776,68 @@
   "@settingsAnnounceNotChanged": {
     "description": "Toast when the app did not take a change of the threshold announcement switch."
   },
+  "appLockTitle": "Klabautermann is locked",
+  "@appLockTitle": {
+    "description": "App lock screen (SAF-20): its heading, shown over the whole app while the app lock is engaged."
+  },
+  "appLockDetail": "Unlock with this device's passcode, PIN or biometrics. Connections already open keep running.",
+  "@appLockDetail": {
+    "description": "App lock screen: what unlocking asks for, and that open links are not closed by the lock."
+  },
+  "settingsWindowLocked": "Unlock it in its main window to change settings.",
+  "@settingsWindowLocked": {
+    "description": "The desktop settings window while the app is locked, under the title that it is locked."
+  },
+  "appLockUnlock": "Unlock",
+  "@appLockUnlock": {
+    "description": "App lock screen: the button that asks for device authentication again."
+  },
+  "appLockFailed": "Authentication failed or was cancelled. Try again.",
+  "@appLockFailed": {
+    "description": "App lock screen: the last device authentication was rejected or dismissed."
+  },
+  "appLockUnavailable": "This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.",
+  "@appLockUnavailable": {
+    "description": "App lock screen: device authentication is not set up or not available, so the lock cannot be opened yet."
+  },
+  "appLockReason": "Unlock Klabautermann",
+  "@appLockReason": {
+    "description": "The reason line the operating system's authentication prompt shows when the app lock asks for it."
+  },
+  "settingsAppLockTitle": "App lock",
+  "@settingsAppLockTitle": {
+    "description": "Settings > Safety: the heading over the app lock switch (SAF-20)."
+  },
+  "settingsAppLock": "Require device authentication",
+  "@settingsAppLock": {
+    "description": "Settings > Safety: the app lock switch."
+  },
+  "settingsAppLockDetail": "Ask for this device's passcode, PIN or biometrics when Klabautermann opens and after {minutes, plural, =1{1 minute} other{{minutes} minutes}} in the background. Locking turns admin mode off on every server.",
+  "@settingsAppLockDetail": {
+    "description": "Settings > Safety: what the app lock switch does.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsAppLockUnsupported": "This platform has no device authentication Klabautermann can ask for.",
+  "@settingsAppLockUnsupported": {
+    "description": "Settings > Safety: why the app lock switch is off and disabled on Linux."
+  },
+  "settingsAppLockUnavailable": "Set up a passcode, PIN or biometrics on this device to use the app lock.",
+  "@settingsAppLockUnavailable": {
+    "description": "Settings > Safety: why the app lock switch cannot be turned on right now."
+  },
+  "settingsAppLockNotChanged": "{reason, select, notAuthenticated{The app lock did not change: authentication failed or was cancelled.} unavailable{The app lock did not change: this device has no authentication to ask for.} notSaved{The app lock did not change: the setting could not be saved.} other{The app lock did not change.}}",
+  "@settingsAppLockNotChanged": {
+    "description": "Settings > Safety: a toast after turning the app lock on or off did not take effect, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "settingsSyncSecretsTitle": "Passwords and keys",
   "@settingsSyncSecretsTitle": {
     "description": "Section heading on the Sync settings tab over the sync passwords switch (SYN-02)."
@@ -4822,6 +4667,56 @@
   "@actionPreviewDetachedIos": {
     "description": "Preview note for a detached operation on iOS, where the app does not run in the background (03 §7.17)."
   },
+  "actionPreviewPruneRemoves": "{count, plural, =1{Removes 1 object} other{Removes {count} objects}}",
+  "@actionPreviewPruneRemoves": {
+    "description": "Heading above what a prune removes (DKE-05).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "actionPreviewPruneFrees": "Frees {size}",
+  "@actionPreviewPruneFrees": {
+    "description": "Under a prune's heading: the disk space it frees, as the engine reports it (DKE-05).",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "1.2 GiB"
+      }
+    }
+  },
+  "actionPreviewPruneItem": "{name} ({size})",
+  "@actionPreviewPruneItem": {
+    "description": "One object a prune removes, with its size (DKE-05).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "app:old"
+      },
+      "size": {
+        "type": "String",
+        "example": "12 MiB"
+      }
+    }
+  },
+  "actionPreviewPruneKeeps": "Kept",
+  "@actionPreviewPruneKeeps": {
+    "description": "Heading above what a prune leaves, each with why (DKE-05's exemption labels)."
+  },
+  "actionPreviewPruneKept": "{name}: {reason, select, inUse{in use} builtin{the engine's own} other{kept}}",
+  "@actionPreviewPruneKept": {
+    "description": "One object a prune leaves and why (DKE-05).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "pgdata"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "actionPreviewOrphans": "Containers the stack's files no longer name",
   "@actionPreviewOrphans": {
     "description": "Heading above a redeploy's orphan containers (STK-06)."
@@ -4938,7 +4833,7 @@
       }
     }
   },
-  "actionRefused": "{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server's container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} dependencyCycle{The stack's services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack's files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}",
+  "actionRefused": "{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server's container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine's own networks, which stay.} nothingToPrune{There is nothing to prune.} dependencyCycle{The stack's services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack's files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}",
   "@actionRefused": {
     "description": "Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.",
     "placeholders": {
@@ -5296,7 +5191,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {
@@ -5690,6 +5585,10 @@
   "dockerTabVolumes": "Volumes",
   "@dockerTabVolumes": {
     "description": "Docker tab: the sub-tab listing volumes."
+  },
+  "dockerTabNetworks": "Networks",
+  "@dockerTabNetworks": {
+    "description": "Docker tab: the sub-tab listing networks."
   },
   "dockerTabStacks": "Stacks",
   "@dockerTabStacks": {
@@ -6540,6 +6439,65 @@
   "@dockerVolumesUseUnknown": {
     "description": "Volumes list: the volume list carries no use count, and the container list it is computed from failed."
   },
+  "dockerPullOpen": "Pull image…",
+  "@dockerPullOpen": {
+    "description": "Images list: the button over the list that opens the pull sheet (IMG-03)."
+  },
+  "dockerPullTitle": "Pull an image",
+  "@dockerPullTitle": {
+    "description": "Pull sheet: its title (IMG-03)."
+  },
+  "dockerPullReference": "Image",
+  "@dockerPullReference": {
+    "description": "Pull sheet: the label of the image reference field."
+  },
+  "dockerPullReferenceHint": "nginx:1.27 or registry.example.com/app:2",
+  "@dockerPullReferenceHint": {
+    "description": "Pull sheet: example references in the empty field. A name without a tag pulls latest."
+  },
+  "dockerPullStart": "Pull",
+  "@dockerPullStart": {
+    "description": "Pull sheet: the button that plans the pull and shows its preview."
+  },
+  "dockerPullCancel": "Stop pull",
+  "@dockerPullCancel": {
+    "description": "Pull sheet: the button that stops a running pull."
+  },
+  "dockerPullForeground": "Pulling. Closing this sheet stops the pull.",
+  "@dockerPullForeground": {
+    "description": "Pull sheet: while a pull runs. The pull runs over this connection and the daemon stops it when the sheet closes (03 §7.14)."
+  },
+  "dockerPullLayerBytes": "{status}: {current} of {total}",
+  "@dockerPullLayerBytes": {
+    "description": "Pull sheet: one layer's status with the bytes done of its total.",
+    "placeholders": {
+      "status": {
+        "type": "String",
+        "example": "Downloading"
+      },
+      "current": {
+        "type": "String",
+        "example": "12 MiB"
+      },
+      "total": {
+        "type": "String",
+        "example": "40 MiB"
+      }
+    }
+  },
+  "dockerPrune": "Prune…",
+  "@dockerPrune": {
+    "description": "Images list: the button over the list that opens the menu of prunes (DKE-05, IMG-06)."
+  },
+  "dockerPruneChoice": "{kind, select, containers{Prune stopped containers…} images{Prune dangling images…} imagesAll{Prune all unused images…} volumes{Prune unused volumes…} networks{Prune unused networks…} buildCache{Prune the build cache…} other{Prune…}}",
+  "@dockerPruneChoice": {
+    "description": "A prune's button or menu row, which opens its preview (DKE-05, IMG-06).",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
   "dockerVolumeCreate": "Create volume…",
   "@dockerVolumeCreate": {
     "description": "Volumes list: the button over the list that opens the create dialog (VOL-02)."
@@ -6567,6 +6525,81 @@
   "dockerVolumeRemove": "Remove",
   "@dockerVolumeRemove": {
     "description": "Volumes list: the row action that removes a volume and its data, behind a typed confirmation."
+  },
+  "dockerNetworksColumnScope": "Scope",
+  "@dockerNetworksColumnScope": {
+    "description": "Networks list: the column of network scopes, such as local or swarm."
+  },
+  "dockerNetworksColumnSubnet": "Subnet",
+  "@dockerNetworksColumnSubnet": {
+    "description": "Networks list: the column of each network's first configured subnet."
+  },
+  "dockerNetworksColumnGateway": "Gateway",
+  "@dockerNetworksColumnGateway": {
+    "description": "Networks list: the column of the gateway of each network's first configured subnet."
+  },
+  "dockerNetworksNoSubnet": "None",
+  "@dockerNetworksNoSubnet": {
+    "description": "Networks list: a network with no subnet or gateway configured, such as host or none."
+  },
+  "dockerNetworksBuiltin": "Built-in",
+  "@dockerNetworksBuiltin": {
+    "description": "Networks list: the badge on the engine's own networks (bridge, host, none), which cannot be removed."
+  },
+  "dockerNetworksBuiltinName": "{name}, built-in",
+  "@dockerNetworksBuiltinName": {
+    "description": "Networks list: what a screen reader hears for a built-in network's name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerNetworksInUse": "{count, plural, =1{1 container on it} other{{count} containers on it}}",
+  "@dockerNetworksInUse": {
+    "description": "Networks list: what a screen reader hears, and a phone row shows, for a network running containers are on.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerNetworksSearchHint": "Search by name, driver or subnet",
+  "@dockerNetworksSearchHint": {
+    "description": "Networks list: the search field's hint."
+  },
+  "dockerNetworksReading": "Reading the networks…",
+  "@dockerNetworksReading": {
+    "description": "Networks list: shown until the first list arrives."
+  },
+  "dockerNetworksEmpty": "This engine has no networks.",
+  "@dockerNetworksEmpty": {
+    "description": "Networks list: the engine listed none."
+  },
+  "dockerNetworksNoMatch": "No network matches the search.",
+  "@dockerNetworksNoMatch": {
+    "description": "Networks list: the search hides every network."
+  },
+  "dockerNetworksNoneUnused": "Every network you made has a container on it.",
+  "@dockerNetworksNoneUnused": {
+    "description": "Networks list: the Unused filter hides every network; built-in networks never count as unused."
+  },
+  "dockerNetworksFailed": "{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the networks.} connectionFailed{The connection to the engine failed while listing the networks.} other{The networks could not be listed.}}",
+  "@dockerNetworksFailed": {
+    "description": "Networks list: why the list could not be read. reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerNetworksUseUnknown": "Which networks are in use is unknown: the containers, which name their networks, could not be listed.",
+  "@dockerNetworksUseUnknown": {
+    "description": "Networks list: the network list names no containers, and the container list it is computed from failed."
+  },
+  "dockerNetworkRemove": "Remove",
+  "@dockerNetworkRemove": {
+    "description": "Networks list: the row action that removes a network no container is on."
   },
   "dockerDetailsClose": "Close the container details",
   "@dockerDetailsClose": {
@@ -8515,5 +8548,698 @@
   "serverEditorKeyFileImportFailed": "Could not read that file as a key.",
   "@serverEditorKeyFileImportFailed": {
     "description": "Toast when a picked key file is too large or not text."
+  },
+  "alertsTitle": "Alerts",
+  "@alertsTitle": {
+    "description": "Title of the in-app alert center (ALR-01), which lists the alerts the user's rules raised."
+  },
+  "alertsCoverage": "Evaluated on this device while Klabautermann is open.",
+  "@alertsCoverage": {
+    "description": "The coverage limit (Y3) the alert notice and the alert center state: rules are evaluated only on this device and only while the app runs."
+  },
+  "alertsNoticeActive": "{count, plural, =1{1 alert is active} other{{count} alerts are active}}",
+  "@alertsNoticeActive": {
+    "description": "The fleet list's alert notice while rules have raised alerts; count is how many are raised.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertsNoticeCleared": "Every alert has cleared since you last looked.",
+  "@alertsNoticeCleared": {
+    "description": "The fleet list's alert notice when alerts were raised and cleared since the user last opened the alert center, and none is raised now."
+  },
+  "alertsShow": "Show alerts",
+  "@alertsShow": {
+    "description": "Button on the fleet list's alert notice that opens the alert center."
+  },
+  "alertsActiveHeading": "Active",
+  "@alertsActiveHeading": {
+    "description": "Alert center heading over the alerts raised now."
+  },
+  "alertsNoneActive": "No alert is active.",
+  "@alertsNoneActive": {
+    "description": "Alert center line under the Active heading when no alert is raised."
+  },
+  "alertsHistoryHeading": "Earlier",
+  "@alertsHistoryHeading": {
+    "description": "Alert center heading over the latest raises and clears since the app started."
+  },
+  "alertsRowCount": "{count, plural, =1{1 alert} other{{count} alerts}}",
+  "@alertsRowCount": {
+    "description": "A fleet row's alert count (ALR-02), in its tooltip and screen-reader label; count is how many alerts are raised for that server.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertsBadgeCount": "{count}",
+  "@alertsBadgeCount": {
+    "description": "The number on a fleet row's alert badge (ALR-02), in the UI locale's number format.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "alertRowTitle": "{server}: {metric}",
+  "@alertRowTitle": {
+    "description": "An alert center row's title; server is the server's name (server data) and metric the alert's metric, such as CPU busy.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      },
+      "metric": {
+        "type": "String"
+      }
+    }
+  },
+  "alertSeverity": "{severity, select, critical{Critical} warning{Warning} other{Info}}",
+  "@alertSeverity": {
+    "description": "An alert's severity word in the alert center.",
+    "placeholders": {
+      "severity": {
+        "type": "String"
+      }
+    }
+  },
+  "alertDateTime": "{time}",
+  "@alertDateTime": {
+    "description": "An alert center time from before today: a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "alertSince": "since {time}",
+  "@alertSince": {
+    "description": "When a raised alert's breach began, in the alert center; time is a time of day when the breach began today, else a date and time, in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRaisedAt": "Raised at {time}",
+  "@alertRaisedAt": {
+    "description": "An alert center history row for a raise; time is a time of day in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "alertClearedAt": "Cleared at {time}",
+  "@alertClearedAt": {
+    "description": "An alert center history row for a clear; time is a time of day in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "alertMetricCpuBusy": "CPU busy",
+  "@alertMetricCpuBusy": {
+    "description": "The alert metric cpu.busy: the share of CPU time spent busy."
+  },
+  "alertMetricMemoryUsed": "Memory used",
+  "@alertMetricMemoryUsed": {
+    "description": "The alert metric memory.used: used memory as a share of the total."
+  },
+  "alertMetricLoadPerCore": "Load per core",
+  "@alertMetricLoadPerCore": {
+    "description": "The alert metric load.perCore: the 1-minute load average divided by the number of cores."
+  },
+  "alertMetricDiskUsed": "Disk space used",
+  "@alertMetricDiskUsed": {
+    "description": "The alert metric disk.used: the fullest filesystem's used space."
+  },
+  "alertMetricDiskInodes": "Inodes used",
+  "@alertMetricDiskInodes": {
+    "description": "The alert metric disk.inodes: the fullest filesystem's used inodes."
+  },
+  "historyTitle": "History",
+  "@historyTitle": {
+    "description": "The Overview card that charts a server's on-device history (HIS-01)."
+  },
+  "historyLastHours": "{count, plural, =1{Last hour} other{Last {count} hours}}",
+  "@historyLastHours": {
+    "description": "The History card's range choice of the 1-minute tier; count is 48.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyLastDays": "{count, plural, =1{Last day} other{Last {count} days}}",
+  "@historyLastDays": {
+    "description": "The History card's range choice of the 10-minute tier; count is 30.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyRefresh": "Refresh",
+  "@historyRefresh": {
+    "description": "Tooltip of the History card's button that reads the history again."
+  },
+  "historyEmpty": "No history yet. Klabautermann keeps 48 hours and 30 days of this server's readings while it is open.",
+  "@historyEmpty": {
+    "description": "The History card when this device recorded nothing for the server in the chosen range."
+  },
+  "historyLaneMean": "Average",
+  "@historyLaneMean": {
+    "description": "The History chart's series of each bucket's mean."
+  },
+  "historyLanePeak": "Peak",
+  "@historyLanePeak": {
+    "description": "The History chart's series of each bucket's highest reading."
+  },
+  "historySource": "Recorded on this device while Klabautermann was open",
+  "@historySource": {
+    "description": "Where the History chart's data comes from, as its legend says."
+  },
+  "historyMetricCpu": "CPU busy",
+  "@historyMetricCpu": {
+    "description": "A History metric: the share of CPU time spent busy."
+  },
+  "historyMetricMemory": "Memory used",
+  "@historyMetricMemory": {
+    "description": "A History metric: used memory as a share of the total."
+  },
+  "historyMetricDisk": "Disk space used",
+  "@historyMetricDisk": {
+    "description": "A History metric: the fullest filesystem's used space."
+  },
+  "historyMetricInodes": "Inodes used",
+  "@historyMetricInodes": {
+    "description": "A History metric: the fullest filesystem's used inodes."
+  },
+  "historyMetricLoad": "Load per core",
+  "@historyMetricLoad": {
+    "description": "A History metric: the 1-minute load average per core."
+  },
+  "alertRulesTitle": "Alert rules",
+  "@alertRulesTitle": {
+    "description": "Title of the alert rules page (ALR-01), and the tooltip and button that open it."
+  },
+  "alertRulesEmpty": "No alert rules yet.",
+  "@alertRulesEmpty": {
+    "description": "The alert rules page with no rule in the account."
+  },
+  "alertRulesEmptyServer": "No rule applies to this server yet.",
+  "@alertRulesEmptyServer": {
+    "description": "The alert rules page opened from a server, when no rule applies to it."
+  },
+  "alertRulesNeedSync": "Alert rules sync through your sync account, so adding or changing one needs you signed in.",
+  "@alertRulesNeedSync": {
+    "description": "Note on the alert rules page while no sync account is enrolled; rules are rule records in the account (03 §4.8)."
+  },
+  "alertRuleAdd": "Add rule",
+  "@alertRuleAdd": {
+    "description": "Button on the alert rules page that opens the editor on a new rule."
+  },
+  "alertRuleNew": "New rule",
+  "@alertRuleNew": {
+    "description": "Title of the rule editor for a new rule."
+  },
+  "alertRuleEdit": "Edit rule",
+  "@alertRuleEdit": {
+    "description": "Title of the rule editor for an existing rule."
+  },
+  "alertRuleSave": "Save",
+  "@alertRuleSave": {
+    "description": "The rule editor's save button."
+  },
+  "alertRuleDelete": "Delete rule",
+  "@alertRuleDelete": {
+    "description": "Tooltip of a rule row's delete button."
+  },
+  "alertRuleDeleteConfirm": "Delete this rule? It is removed on every device that syncs your account.",
+  "@alertRuleDeleteConfirm": {
+    "description": "Confirmation before a rule is deleted."
+  },
+  "alertRuleDeleteAction": "Delete",
+  "@alertRuleDeleteAction": {
+    "description": "The confirmation's delete button."
+  },
+  "alertRuleCondition": "{op, select, greaterThan{{metric} above {value}} greaterOrEqual{{metric} at or above {value}} lessThan{{metric} below {value}} other{{metric} at or below {value}}}",
+  "@alertRuleCondition": {
+    "description": "A rule row's title: when the rule raises. op is the comparison, metric the metric's name, such as CPU busy, and value the threshold, such as 90%.",
+    "placeholders": {
+      "op": {
+        "type": "String"
+      },
+      "metric": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleClears": "{op, select, greaterThan{Clears at or below {value}} greaterOrEqual{Clears below {value}} lessThan{Clears at or above {value}} other{Clears above {value}}}",
+  "@alertRuleClears": {
+    "description": "When a rule clears: op is the rule's comparison, and value the clear threshold, such as 80%.",
+    "placeholders": {
+      "op": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleFor": "after {duration}",
+  "@alertRuleFor": {
+    "description": "How long a rule's condition must hold before it raises or clears, at the end of a rule row's line; duration is a number of minutes or seconds.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleMinutes": "{count, plural, =1{1 minute} other{{count} minutes}}",
+  "@alertRuleMinutes": {
+    "description": "A rule duration in whole minutes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertRuleSeconds": "{count, plural, =1{1 second} other{{count} seconds}}",
+  "@alertRuleSeconds": {
+    "description": "A rule duration that is not whole minutes, in seconds.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertRuleScopeServer": "On {server}",
+  "@alertRuleScopeServer": {
+    "description": "Which servers a rule applies to: one server; server is its name (server data).",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleScopeGroup": "On the {group} group",
+  "@alertRuleScopeGroup": {
+    "description": "Which servers a rule applies to: one group; group is its name (server data).",
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleScopeAll": "On every server",
+  "@alertRuleScopeAll": {
+    "description": "Which servers a rule applies to: all of them."
+  },
+  "alertRuleMetricLabel": "Metric",
+  "@alertRuleMetricLabel": {
+    "description": "The rule editor's metric field."
+  },
+  "alertRuleOpLabel": "Raise when the value is",
+  "@alertRuleOpLabel": {
+    "description": "The rule editor's comparison field."
+  },
+  "alertRuleOp": "{op, select, greaterThan{Above} greaterOrEqual{At or above} lessThan{Below} other{At or below}}",
+  "@alertRuleOp": {
+    "description": "A comparison in the rule editor's comparison field.",
+    "placeholders": {
+      "op": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleRaiseValueLabel": "Raise at",
+  "@alertRuleRaiseValueLabel": {
+    "description": "The rule editor's raise threshold field."
+  },
+  "alertRuleClearValueLabel": "Clear at",
+  "@alertRuleClearValueLabel": {
+    "description": "The rule editor's clear threshold field."
+  },
+  "alertRuleForLabel": "Held for (minutes)",
+  "@alertRuleForLabel": {
+    "description": "The rule editor's duration fields: how long the value must stay past its threshold."
+  },
+  "alertRuleSeverityLabel": "Severity",
+  "@alertRuleSeverityLabel": {
+    "description": "The rule editor's severity field."
+  },
+  "alertRuleScopeLabel": "Applies to",
+  "@alertRuleScopeLabel": {
+    "description": "The rule editor's scope field."
+  },
+  "alertRulePercentSuffix": "%",
+  "@alertRulePercentSuffix": {
+    "description": "The unit after a percentage threshold in the rule editor."
+  },
+  "alertRuleNumberInvalid": "Enter a number.",
+  "@alertRuleNumberInvalid": {
+    "description": "Rule editor error: a threshold is not a number."
+  },
+  "alertRulePercentInvalid": "Enter a value from 0 to 100.",
+  "@alertRulePercentInvalid": {
+    "description": "Rule editor error: a percentage threshold is out of range."
+  },
+  "alertRuleMinutesInvalid": "Enter 0 or more minutes.",
+  "@alertRuleMinutesInvalid": {
+    "description": "Rule editor error: a duration is not a number of minutes, 0 or more."
+  },
+  "alertRuleClearAboveRaise": "The clear value must not be above the raise value.",
+  "@alertRuleClearAboveRaise": {
+    "description": "Rule editor error: an above or at-or-above rule whose clear threshold is higher than its raise threshold."
+  },
+  "alertRuleClearBelowRaise": "The clear value must not be below the raise value.",
+  "@alertRuleClearBelowRaise": {
+    "description": "Rule editor error: a below or at-or-below rule whose clear threshold is lower than its raise threshold."
+  },
+  "alertRuleRefused": "{reason, select, directoryShared{Another Klabautermann may be using this device's data folder, so nothing was saved.} notEnrolled{Sign in to your sync account to change alert rules.} keystoreUnavailable{Your account key could not be read from the system keystore, so nothing was saved.} unknownTarget{This rule is no longer in your account.} invalidDraft{A field is missing or out of range.} tooMany{Your account holds as many rules as it can.} tooLarge{This rule is too large to save.} storeUnavailable{Klabautermann's sync files could not be written this session, so nothing was saved.} other{Nothing was saved: {detail}}}",
+  "@alertRuleRefused": {
+    "description": "Why the engine refused to save or delete an alert rule, as a toast. reason is the engine's CatalogWriteFailure; detail is its own words, used for other only.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String",
+        "example": "pull-only"
+      }
+    }
+  },
+  "alertRuleEngineStopped": "Klabautermann's engine stopped before the rule was saved.",
+  "@alertRuleEngineStopped": {
+    "description": "Toast when the engine stopped before it answered a rule write."
+  },
+  "alertNotificationsSwitch": "Notify me when an alert is raised",
+  "@alertNotificationsSwitch": {
+    "description": "The switch for raised alerts' system notifications (ALR-01), on the alert rules page and in the alert center."
+  },
+  "alertNotificationsSwitchDetail": "A system notification, posted only while Klabautermann is open.",
+  "@alertNotificationsSwitchDetail": {
+    "description": "Under the notification switch: the coverage limit (Y3)."
+  },
+  "alertNotificationsPromptTitle": "Get notified of raised alerts?",
+  "@alertNotificationsPromptTitle": {
+    "description": "Title of the app's prompt before the system asks to allow notifications."
+  },
+  "alertNotificationsPromptBody": "Klabautermann evaluates your rules on this device while it is open, and posts a notification when one raises. It cannot notify you while it is closed.",
+  "@alertNotificationsPromptBody": {
+    "description": "The notification prompt: the coverage limit (Y3), stated before the system asks."
+  },
+  "alertNotificationsPromptAllow": "Allow notifications",
+  "@alertNotificationsPromptAllow": {
+    "description": "The notification prompt's button that goes on to the system's request."
+  },
+  "alertNotificationsPromptLater": "Not now",
+  "@alertNotificationsPromptLater": {
+    "description": "The notification prompt's button that leaves notifications off."
+  },
+  "alertNotificationsDenied": "Notifications are turned off for Klabautermann in your system settings.",
+  "@alertNotificationsDenied": {
+    "description": "Toast when the system refused the app notifications; they stay off."
+  },
+  "alertNotificationsUnavailable": "This device has no system notifications Klabautermann can post.",
+  "@alertNotificationsUnavailable": {
+    "description": "Toast when the device offers no notifications to the app."
+  },
+  "alertNotificationsNotSaved": "The notification setting applies until Klabautermann restarts; it could not be saved.",
+  "@alertNotificationsNotSaved": {
+    "description": "Toast when the notification switch changed but settings.json could not be written."
+  },
+  "alertNotificationTitle": "{server}: {metric} at {value}",
+  "@alertNotificationTitle": {
+    "description": "A raised alert's system notification title; server is the server's name (server data), metric the metric's name, such as CPU busy, and value the reading, such as 93%.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      },
+      "metric": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "alertNotificationBody": "{severity}. Evaluated on this device while Klabautermann is open.",
+  "@alertNotificationBody": {
+    "description": "A raised alert's system notification text: its severity word, then the coverage limit (Y3).",
+    "placeholders": {
+      "severity": {
+        "type": "String"
+      }
+    }
+  },
+  "alertNotificationChannel": "Raised alerts",
+  "@alertNotificationChannel": {
+    "description": "The Android notification channel's name, shown in the system's notification settings."
+  },
+  "alertNotificationChannelDetail": "Alerts your rules raise while Klabautermann is open.",
+  "@alertNotificationChannelDetail": {
+    "description": "The Android notification channel's description, shown in the system's notification settings."
+  },
+  "alertNotificationOpen": "Open",
+  "@alertNotificationOpen": {
+    "description": "The default action of a desktop notification on Linux: brings the app forward."
+  },
+  "systemUpdatesTitle": "Updates",
+  "@systemUpdatesTitle": {
+    "description": "System tab: title of the section listing the server's pending package updates."
+  },
+  "systemUpdatesNone": "Up to date",
+  "@systemUpdatesNone": {
+    "description": "System tab, Updates: the package manager lists no pending update."
+  },
+  "systemUpdatesCount": "{count, plural, =1{1 update available} other{{count} updates available}}",
+  "@systemUpdatesCount": {
+    "description": "System tab, Updates: how many package updates the package manager lists.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemUpdatesSecurityCount": "{count, plural, =1{1 is a security update} other{{count} are security updates}}",
+  "@systemUpdatesSecurityCount": {
+    "description": "System tab, Updates: how many of the pending updates fix security issues.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemUpdatesSecurityPatches": "{count, plural, =1{1 security patch is needed} other{{count} security patches are needed}}",
+  "@systemUpdatesSecurityPatches": {
+    "description": "System tab, Updates: on SUSE, how many security patches zypper says are needed; zypper lists patches rather than packages.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemUpdatesRestart": "The server asks for a restart.",
+  "@systemUpdatesRestart": {
+    "description": "System tab, Updates: the server reports that a reboot is required, without naming the packages that asked."
+  },
+  "systemUpdatesRestartFor": "The server asks for a restart, for {packages}.",
+  "@systemUpdatesRestartFor": {
+    "description": "System tab, Updates: the server reports that a reboot is required, with the packages that asked for it.",
+    "placeholders": {
+      "packages": {
+        "type": "String",
+        "example": "libc6, linux-image-6.1.0-26-amd64"
+      }
+    }
+  },
+  "systemUpdatesNoRestart": "No restart required",
+  "@systemUpdatesNoRestart": {
+    "description": "System tab, Updates: the server reports that no reboot is required."
+  },
+  "systemUpdatesFailed": "{reason, select, noLink{The server is not connected, so updates could not be checked.} transport{The connection failed while updates were checked.} other{Updates could not be checked.}}",
+  "@systemUpdatesFailed": {
+    "description": "System tab, Updates: why the check did not run, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "systemUpdatesNoManager": "No package manager Klabautermann reads was found (apt, dnf, zypper, pacman or apk).",
+  "@systemUpdatesNoManager": {
+    "description": "System tab, Updates: the server has none of the package managers the check knows."
+  },
+  "systemUpdatesNoCache": "The package lists have not been downloaded on this server yet, and the check never downloads them.",
+  "@systemUpdatesNoCache": {
+    "description": "System tab, Updates: dnf has no cached metadata; the check only reads cached metadata and never refreshes it."
+  },
+  "systemUpdatesManagerFailed": "The package manager failed: {detail}",
+  "@systemUpdatesManagerFailed": {
+    "description": "System tab, Updates: the package manager reported an error; detail is its own error text.",
+    "placeholders": {
+      "detail": {
+        "type": "String",
+        "example": "E: Could not open lock file"
+      }
+    }
+  },
+  "systemUpdatesPackage": "Package",
+  "@systemUpdatesPackage": {
+    "description": "System tab, Updates: column header of the package name."
+  },
+  "systemUpdatesInstalled": "Installed",
+  "@systemUpdatesInstalled": {
+    "description": "System tab, Updates: column header of the installed version."
+  },
+  "systemUpdatesAvailable": "Available",
+  "@systemUpdatesAvailable": {
+    "description": "System tab, Updates: column header of the version the update installs."
+  },
+  "systemUpdatesSecurity": "Security",
+  "@systemUpdatesSecurity": {
+    "description": "System tab, Updates: column header marking security updates."
+  },
+  "systemUpdatesSecurityYes": "Security",
+  "@systemUpdatesSecurityYes": {
+    "description": "System tab, Updates: the cell of an update that fixes a security issue."
+  },
+  "systemUpdatesCut": "{count, plural, other{Only the first {count} updates are listed.}}",
+  "@systemUpdatesCut": {
+    "description": "System tab, Updates: the list stops at its limit.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemUpdatesListsFrom": "Package lists last downloaded {time}",
+  "@systemUpdatesListsFrom": {
+    "description": "System tab, Updates: when the server last refreshed its package lists, in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemUpdatesChecking": "Checking for updates…",
+  "@systemUpdatesChecking": {
+    "description": "System tab, Updates: a check is running."
+  },
+  "systemUpdatesCheckAgain": "Check again",
+  "@systemUpdatesCheckAgain": {
+    "description": "System tab, Updates: button that runs a new check instead of using the one from the last hour."
+  },
+  "systemUpdatesRefresh": "Refresh package lists",
+  "@systemUpdatesRefresh": {
+    "description": "System tab, Updates: button that downloads the server's package lists as root, in admin mode, so the next check reads current metadata."
+  },
+  "systemUpdatesRefreshAdminNeeded": "Turn on admin mode to download them.",
+  "@systemUpdatesRefreshAdminNeeded": {
+    "description": "System tab, Updates: after the note that the package lists were never downloaded, says that refreshing them needs admin mode."
+  },
+  "systemUpdatesRefreshStarted": "When the refresh has finished, check again to read the new lists.",
+  "@systemUpdatesRefreshStarted": {
+    "description": "System tab, Updates: shown after the refresh starts, until the next check."
+  },
+  "systemUpdatesRestartsTitle": "Services to restart",
+  "@systemUpdatesRestartsTitle": {
+    "description": "System tab, Updates: heading of the services still running libraries an update replaced."
+  },
+  "systemUpdatesRestartsRead": "Find services to restart",
+  "@systemUpdatesRestartsRead": {
+    "description": "System tab, Updates: button that reads, in admin mode, which services still run replaced libraries."
+  },
+  "systemUpdatesRestartsReadAgain": "Look again",
+  "@systemUpdatesRestartsReadAgain": {
+    "description": "System tab, Updates: button that reads the services to restart again."
+  },
+  "systemUpdatesRestartsReading": "Looking for services to restart…",
+  "@systemUpdatesRestartsReading": {
+    "description": "System tab, Updates: the services-to-restart read is running."
+  },
+  "systemUpdatesRestartsAdminNeeded": "Finding services that still run replaced libraries needs admin mode.",
+  "@systemUpdatesRestartsAdminNeeded": {
+    "description": "System tab, Updates: the services-to-restart read needs admin mode, since it reads every process."
+  },
+  "systemUpdatesRestartsNone": "No service runs a replaced library.",
+  "@systemUpdatesRestartsNone": {
+    "description": "System tab, Updates: the read found no service to restart."
+  },
+  "systemUpdatesRestartsList": "Restart to load the updated libraries: {services}",
+  "@systemUpdatesRestartsList": {
+    "description": "System tab, Updates: the services still running replaced libraries; services is a comma-separated list of systemd unit names (server data).",
+    "placeholders": {
+      "services": {
+        "type": "String",
+        "example": "ssh.service, cron.service"
+      }
+    }
+  },
+  "systemUpdatesKernelWaiting": "A newer kernel is installed and waits for a reboot.",
+  "@systemUpdatesKernelWaiting": {
+    "description": "System tab, Updates: needrestart reports a newer kernel than the running one."
+  },
+  "systemUpdatesRestartsFailed": "{reason, select, noLink{The server is not connected, so services to restart could not be read.} adminRequired{Admin mode ended before services to restart were read.} elevationRefused{Elevation was refused, so services to restart were not read.} missing{None of needrestart, needs-restarting or zypper is installed on this server.} transport{The connection failed while services to restart were read.} other{Services to restart could not be read.}}",
+  "@systemUpdatesRestartsFailed": {
+    "description": "System tab, Updates: why the services-to-restart read read nothing, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetUpdatesTitle": "Updates on all servers",
+  "@fleetUpdatesTitle": {
+    "description": "Title of PKG-06's fleet update center, listing every server's pending updates."
+  },
+  "fleetUpdatesOpen": "All servers",
+  "@fleetUpdatesOpen": {
+    "description": "System tab, Updates: button that opens the fleet update center."
+  },
+  "fleetUpdatesCheckAll": "Check every server again",
+  "@fleetUpdatesCheckAll": {
+    "description": "Fleet update center: button that runs a new package check on every server instead of using the ones from the last hour."
+  },
+  "fleetUpdatesNoServers": "No servers yet.",
+  "@fleetUpdatesNoServers": {
+    "description": "Fleet update center: the fleet is empty."
+  },
+  "fleetUpdatesSummary": "{updates, plural, =0{Up to date} =1{1 update} other{{updates} updates}}{security, plural, =0{} other{, {security} security}}{restart, select, true{ · restart required} other{}}",
+  "@fleetUpdatesSummary": {
+    "description": "Fleet update center: one server's line: pending updates, security updates (omitted at zero) and whether it asks for a restart.",
+    "placeholders": {
+      "updates": {
+        "type": "int"
+      },
+      "security": {
+        "type": "int"
+      },
+      "restart": {
+        "type": "String"
+      }
+    }
+  },
+  "systemUpdatesCheckedAt": "Checked {time}",
+  "@systemUpdatesCheckedAt": {
+    "description": "System tab, Updates: when the shown check ran, in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
   }
 }

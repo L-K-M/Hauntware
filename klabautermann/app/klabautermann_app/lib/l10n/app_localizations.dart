@@ -1804,240 +1804,6 @@ abstract class AppLocalizations {
   /// **'{reason, select, noLink{The server is not connected, so drive health could not be read.} adminRequired{Admin mode ended before drive health was read.} elevationRefused{Elevation was refused, so drive health was not read.} missing{smartmontools is not installed on this server.} unreadable{smartctl did not answer as smartmontools 7.0 or later does.} transport{The connection failed while drive health was read.} other{Drive health could not be read.}}'**
   String systemDriveHealthFailed(String reason);
 
-  /// System tab: title of the section listing the server's pending package updates.
-  ///
-  /// In en, this message translates to:
-  /// **'Updates'**
-  String get systemUpdatesTitle;
-
-  /// System tab, Updates: the package manager lists no pending update.
-  ///
-  /// In en, this message translates to:
-  /// **'Up to date'**
-  String get systemUpdatesNone;
-
-  /// System tab, Updates: how many package updates the package manager lists.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 update available} other{{count} updates available}}'**
-  String systemUpdatesCount(int count);
-
-  /// System tab, Updates: how many of the pending updates fix security issues.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 is a security update} other{{count} are security updates}}'**
-  String systemUpdatesSecurityCount(int count);
-
-  /// System tab, Updates: on SUSE, how many security patches zypper says are needed; zypper lists patches rather than packages.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 security patch is needed} other{{count} security patches are needed}}'**
-  String systemUpdatesSecurityPatches(int count);
-
-  /// System tab, Updates: the server reports that a reboot is required, without naming the packages that asked.
-  ///
-  /// In en, this message translates to:
-  /// **'The server asks for a restart.'**
-  String get systemUpdatesRestart;
-
-  /// System tab, Updates: the server reports that a reboot is required, with the packages that asked for it.
-  ///
-  /// In en, this message translates to:
-  /// **'The server asks for a restart, for {packages}.'**
-  String systemUpdatesRestartFor(String packages);
-
-  /// System tab, Updates: the server reports that no reboot is required.
-  ///
-  /// In en, this message translates to:
-  /// **'No restart required'**
-  String get systemUpdatesNoRestart;
-
-  /// System tab, Updates: why the check did not run, by reason.
-  ///
-  /// In en, this message translates to:
-  /// **'{reason, select, noLink{The server is not connected, so updates could not be checked.} transport{The connection failed while updates were checked.} other{Updates could not be checked.}}'**
-  String systemUpdatesFailed(String reason);
-
-  /// System tab, Updates: the server has none of the package managers the check knows.
-  ///
-  /// In en, this message translates to:
-  /// **'No package manager Klabautermann reads was found (apt, dnf, zypper, pacman or apk).'**
-  String get systemUpdatesNoManager;
-
-  /// System tab, Updates: dnf has no cached metadata; the check only reads cached metadata and never refreshes it.
-  ///
-  /// In en, this message translates to:
-  /// **'The package lists have not been downloaded on this server yet, and the check never downloads them.'**
-  String get systemUpdatesNoCache;
-
-  /// System tab, Updates: the package manager reported an error; detail is its own error text.
-  ///
-  /// In en, this message translates to:
-  /// **'The package manager failed: {detail}'**
-  String systemUpdatesManagerFailed(String detail);
-
-  /// System tab, Updates: column header of the package name.
-  ///
-  /// In en, this message translates to:
-  /// **'Package'**
-  String get systemUpdatesPackage;
-
-  /// System tab, Updates: column header of the installed version.
-  ///
-  /// In en, this message translates to:
-  /// **'Installed'**
-  String get systemUpdatesInstalled;
-
-  /// System tab, Updates: column header of the version the update installs.
-  ///
-  /// In en, this message translates to:
-  /// **'Available'**
-  String get systemUpdatesAvailable;
-
-  /// System tab, Updates: column header marking security updates.
-  ///
-  /// In en, this message translates to:
-  /// **'Security'**
-  String get systemUpdatesSecurity;
-
-  /// System tab, Updates: the cell of an update that fixes a security issue.
-  ///
-  /// In en, this message translates to:
-  /// **'Security'**
-  String get systemUpdatesSecurityYes;
-
-  /// System tab, Updates: the list stops at its limit.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, other{Only the first {count} updates are listed.}}'**
-  String systemUpdatesCut(int count);
-
-  /// System tab, Updates: when the server last refreshed its package lists, in the UI locale and this device's time zone.
-  ///
-  /// In en, this message translates to:
-  /// **'Package lists last downloaded {time}'**
-  String systemUpdatesListsFrom(DateTime time);
-
-  /// System tab, Updates: a check is running.
-  ///
-  /// In en, this message translates to:
-  /// **'Checking for updates…'**
-  String get systemUpdatesChecking;
-
-  /// System tab, Updates: button that runs a new check instead of using the one from the last hour.
-  ///
-  /// In en, this message translates to:
-  /// **'Check again'**
-  String get systemUpdatesCheckAgain;
-
-  /// System tab, Updates: button that downloads the server's package lists as root, in admin mode, so the next check reads current metadata.
-  ///
-  /// In en, this message translates to:
-  /// **'Refresh package lists'**
-  String get systemUpdatesRefresh;
-
-  /// System tab, Updates: after the note that the package lists were never downloaded, says that refreshing them needs admin mode.
-  ///
-  /// In en, this message translates to:
-  /// **'Turn on admin mode to download them.'**
-  String get systemUpdatesRefreshAdminNeeded;
-
-  /// System tab, Updates: shown after the refresh starts, until the next check.
-  ///
-  /// In en, this message translates to:
-  /// **'When the refresh has finished, check again to read the new lists.'**
-  String get systemUpdatesRefreshStarted;
-
-  /// System tab, Updates: heading of the services still running libraries an update replaced.
-  ///
-  /// In en, this message translates to:
-  /// **'Services to restart'**
-  String get systemUpdatesRestartsTitle;
-
-  /// System tab, Updates: button that reads, in admin mode, which services still run replaced libraries.
-  ///
-  /// In en, this message translates to:
-  /// **'Find services to restart'**
-  String get systemUpdatesRestartsRead;
-
-  /// System tab, Updates: button that reads the services to restart again.
-  ///
-  /// In en, this message translates to:
-  /// **'Look again'**
-  String get systemUpdatesRestartsReadAgain;
-
-  /// System tab, Updates: the services-to-restart read is running.
-  ///
-  /// In en, this message translates to:
-  /// **'Looking for services to restart…'**
-  String get systemUpdatesRestartsReading;
-
-  /// System tab, Updates: the services-to-restart read needs admin mode, since it reads every process.
-  ///
-  /// In en, this message translates to:
-  /// **'Finding services that still run replaced libraries needs admin mode.'**
-  String get systemUpdatesRestartsAdminNeeded;
-
-  /// System tab, Updates: the read found no service to restart.
-  ///
-  /// In en, this message translates to:
-  /// **'No service runs a replaced library.'**
-  String get systemUpdatesRestartsNone;
-
-  /// System tab, Updates: the services still running replaced libraries; services is a comma-separated list of systemd unit names (server data).
-  ///
-  /// In en, this message translates to:
-  /// **'Restart to load the updated libraries: {services}'**
-  String systemUpdatesRestartsList(String services);
-
-  /// System tab, Updates: needrestart reports a newer kernel than the running one.
-  ///
-  /// In en, this message translates to:
-  /// **'A newer kernel is installed and waits for a reboot.'**
-  String get systemUpdatesKernelWaiting;
-
-  /// System tab, Updates: why the services-to-restart read read nothing, by reason.
-  ///
-  /// In en, this message translates to:
-  /// **'{reason, select, noLink{The server is not connected, so services to restart could not be read.} adminRequired{Admin mode ended before services to restart were read.} elevationRefused{Elevation was refused, so services to restart were not read.} missing{None of needrestart, needs-restarting or zypper is installed on this server.} transport{The connection failed while services to restart were read.} other{Services to restart could not be read.}}'**
-  String systemUpdatesRestartsFailed(String reason);
-
-  /// Title of PKG-06's fleet update center, listing every server's pending updates.
-  ///
-  /// In en, this message translates to:
-  /// **'Updates on all servers'**
-  String get fleetUpdatesTitle;
-
-  /// System tab, Updates: button that opens the fleet update center.
-  ///
-  /// In en, this message translates to:
-  /// **'All servers'**
-  String get fleetUpdatesOpen;
-
-  /// Fleet update center: button that runs a new package check on every server instead of using the ones from the last hour.
-  ///
-  /// In en, this message translates to:
-  /// **'Check every server again'**
-  String get fleetUpdatesCheckAll;
-
-  /// Fleet update center: the fleet is empty.
-  ///
-  /// In en, this message translates to:
-  /// **'No servers yet.'**
-  String get fleetUpdatesNoServers;
-
-  /// Fleet update center: one server's line: pending updates, security updates (omitted at zero) and whether it asks for a restart.
-  ///
-  /// In en, this message translates to:
-  /// **'{updates, plural, =0{Up to date} =1{1 update} other{{updates} updates}}{security, plural, =0{} other{, {security} security}}{restart, select, true{ · restart required} other{}}'**
-  String fleetUpdatesSummary(int updates, int security, String restart);
-
-  /// System tab, Updates: when the shown check ran, in the UI locale and this device's time zone.
-  ///
-  /// In en, this message translates to:
-  /// **'Checked {time}'**
-  String systemUpdatesCheckedAt(DateTime time);
-
   /// System tab, Drive health: the read found no drive, as in a VM without passed-through disks.
   ///
   /// In en, this message translates to:
@@ -2085,6 +1851,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Bad sectors'**
   String get systemDriveBadSectors;
+
+  /// Drive health table: a drive's bad sectors, a whole number in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String systemDriveBadSectorCount(int count);
 
   /// Drive health table: column of how long the drive has been powered on over its life.
   ///
@@ -4330,6 +4102,84 @@ abstract class AppLocalizations {
   /// **'The setting could not be changed.'**
   String get settingsAnnounceNotChanged;
 
+  /// App lock screen (SAF-20): its heading, shown over the whole app while the app lock is engaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is locked'**
+  String get appLockTitle;
+
+  /// App lock screen: what unlocking asks for, and that open links are not closed by the lock.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock with this device\'s passcode, PIN or biometrics. Connections already open keep running.'**
+  String get appLockDetail;
+
+  /// The desktop settings window while the app is locked, under the title that it is locked.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock it in its main window to change settings.'**
+  String get settingsWindowLocked;
+
+  /// App lock screen: the button that asks for device authentication again.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get appLockUnlock;
+
+  /// App lock screen: the last device authentication was rejected or dismissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication failed or was cancelled. Try again.'**
+  String get appLockFailed;
+
+  /// App lock screen: device authentication is not set up or not available, so the lock cannot be opened yet.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.'**
+  String get appLockUnavailable;
+
+  /// The reason line the operating system's authentication prompt shows when the app lock asks for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock Klabautermann'**
+  String get appLockReason;
+
+  /// Settings > Safety: the heading over the app lock switch (SAF-20).
+  ///
+  /// In en, this message translates to:
+  /// **'App lock'**
+  String get settingsAppLockTitle;
+
+  /// Settings > Safety: the app lock switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Require device authentication'**
+  String get settingsAppLock;
+
+  /// Settings > Safety: what the app lock switch does.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for this device\'s passcode, PIN or biometrics when Klabautermann opens and after {minutes, plural, =1{1 minute} other{{minutes} minutes}} in the background. Locking turns admin mode off on every server.'**
+  String settingsAppLockDetail(int minutes);
+
+  /// Settings > Safety: why the app lock switch is off and disabled on Linux.
+  ///
+  /// In en, this message translates to:
+  /// **'This platform has no device authentication Klabautermann can ask for.'**
+  String get settingsAppLockUnsupported;
+
+  /// Settings > Safety: why the app lock switch cannot be turned on right now.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up a passcode, PIN or biometrics on this device to use the app lock.'**
+  String get settingsAppLockUnavailable;
+
+  /// Settings > Safety: a toast after turning the app lock on or off did not take effect, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notAuthenticated{The app lock did not change: authentication failed or was cancelled.} unavailable{The app lock did not change: this device has no authentication to ask for.} notSaved{The app lock did not change: the setting could not be saved.} other{The app lock did not change.}}'**
+  String settingsAppLockNotChanged(String reason);
+
   /// Section heading on the Sync settings tab over the sync passwords switch (SYN-02).
   ///
   /// In en, this message translates to:
@@ -5188,6 +5038,36 @@ abstract class AppLocalizations {
   /// **'Runs on the server and continues if you leave the app or the connection drops. Its result shows under Operations when you come back.'**
   String get actionPreviewDetachedIos;
 
+  /// Heading above what a prune removes (DKE-05).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Removes 1 object} other{Removes {count} objects}}'**
+  String actionPreviewPruneRemoves(int count);
+
+  /// Under a prune's heading: the disk space it frees, as the engine reports it (DKE-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Frees {size}'**
+  String actionPreviewPruneFrees(String size);
+
+  /// One object a prune removes, with its size (DKE-05).
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ({size})'**
+  String actionPreviewPruneItem(String name, String size);
+
+  /// Heading above what a prune leaves, each with why (DKE-05's exemption labels).
+  ///
+  /// In en, this message translates to:
+  /// **'Kept'**
+  String get actionPreviewPruneKeeps;
+
+  /// One object a prune leaves and why (DKE-05).
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {reason, select, inUse{in use} builtin{the engine\'s own} other{kept}}'**
+  String actionPreviewPruneKept(String name, String reason);
+
   /// Heading above a redeploy's orphan containers (STK-06).
   ///
   /// In en, this message translates to:
@@ -5281,7 +5161,7 @@ abstract class AppLocalizations {
   /// Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}'**
+  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine\'s own networks, which stay.} nothingToPrune{There is nothing to prune.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}'**
   String actionRefused(String reason);
 
   /// Process action (PRC-02): sends SIGTERM, asking the process to end.
@@ -5689,7 +5569,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -6147,6 +6027,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Volumes'**
   String get dockerTabVolumes;
+
+  /// Docker tab: the sub-tab listing networks.
+  ///
+  /// In en, this message translates to:
+  /// **'Networks'**
+  String get dockerTabNetworks;
 
   /// Docker tab: the sub-tab listing compose stacks.
   ///
@@ -7066,6 +6952,66 @@ abstract class AppLocalizations {
   /// **'Which volumes are in use is unknown: the containers, whose mounts tell, could not be listed.'**
   String get dockerVolumesUseUnknown;
 
+  /// Images list: the button over the list that opens the pull sheet (IMG-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Pull image…'**
+  String get dockerPullOpen;
+
+  /// Pull sheet: its title (IMG-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Pull an image'**
+  String get dockerPullTitle;
+
+  /// Pull sheet: the label of the image reference field.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get dockerPullReference;
+
+  /// Pull sheet: example references in the empty field. A name without a tag pulls latest.
+  ///
+  /// In en, this message translates to:
+  /// **'nginx:1.27 or registry.example.com/app:2'**
+  String get dockerPullReferenceHint;
+
+  /// Pull sheet: the button that plans the pull and shows its preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Pull'**
+  String get dockerPullStart;
+
+  /// Pull sheet: the button that stops a running pull.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop pull'**
+  String get dockerPullCancel;
+
+  /// Pull sheet: while a pull runs. The pull runs over this connection and the daemon stops it when the sheet closes (03 §7.14).
+  ///
+  /// In en, this message translates to:
+  /// **'Pulling. Closing this sheet stops the pull.'**
+  String get dockerPullForeground;
+
+  /// Pull sheet: one layer's status with the bytes done of its total.
+  ///
+  /// In en, this message translates to:
+  /// **'{status}: {current} of {total}'**
+  String dockerPullLayerBytes(String status, String current, String total);
+
+  /// Images list: the button over the list that opens the menu of prunes (DKE-05, IMG-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Prune…'**
+  String get dockerPrune;
+
+  /// A prune's button or menu row, which opens its preview (DKE-05, IMG-06).
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, containers{Prune stopped containers…} images{Prune dangling images…} imagesAll{Prune all unused images…} volumes{Prune unused volumes…} networks{Prune unused networks…} buildCache{Prune the build cache…} other{Prune…}}'**
+  String dockerPruneChoice(String kind);
+
   /// Volumes list: the button over the list that opens the create dialog (VOL-02).
   ///
   /// In en, this message translates to:
@@ -7107,6 +7053,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remove'**
   String get dockerVolumeRemove;
+
+  /// Networks list: the column of network scopes, such as local or swarm.
+  ///
+  /// In en, this message translates to:
+  /// **'Scope'**
+  String get dockerNetworksColumnScope;
+
+  /// Networks list: the column of each network's first configured subnet.
+  ///
+  /// In en, this message translates to:
+  /// **'Subnet'**
+  String get dockerNetworksColumnSubnet;
+
+  /// Networks list: the column of the gateway of each network's first configured subnet.
+  ///
+  /// In en, this message translates to:
+  /// **'Gateway'**
+  String get dockerNetworksColumnGateway;
+
+  /// Networks list: a network with no subnet or gateway configured, such as host or none.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get dockerNetworksNoSubnet;
+
+  /// Networks list: the badge on the engine's own networks (bridge, host, none), which cannot be removed.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in'**
+  String get dockerNetworksBuiltin;
+
+  /// Networks list: what a screen reader hears for a built-in network's name.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, built-in'**
+  String dockerNetworksBuiltinName(String name);
+
+  /// Networks list: what a screen reader hears, and a phone row shows, for a network running containers are on.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 container on it} other{{count} containers on it}}'**
+  String dockerNetworksInUse(int count);
+
+  /// Networks list: the search field's hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by name, driver or subnet'**
+  String get dockerNetworksSearchHint;
+
+  /// Networks list: shown until the first list arrives.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the networks…'**
+  String get dockerNetworksReading;
+
+  /// Networks list: the engine listed none.
+  ///
+  /// In en, this message translates to:
+  /// **'This engine has no networks.'**
+  String get dockerNetworksEmpty;
+
+  /// Networks list: the search hides every network.
+  ///
+  /// In en, this message translates to:
+  /// **'No network matches the search.'**
+  String get dockerNetworksNoMatch;
+
+  /// Networks list: the Unused filter hides every network; built-in networks never count as unused.
+  ///
+  /// In en, this message translates to:
+  /// **'Every network you made has a container on it.'**
+  String get dockerNetworksNoneUnused;
+
+  /// Networks list: why the list could not be read. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the networks.} connectionFailed{The connection to the engine failed while listing the networks.} other{The networks could not be listed.}}'**
+  String dockerNetworksFailed(String reason);
+
+  /// Networks list: the network list names no containers, and the container list it is computed from failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Which networks are in use is unknown: the containers, which name their networks, could not be listed.'**
+  String get dockerNetworksUseUnknown;
+
+  /// Networks list: the row action that removes a network no container is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get dockerNetworkRemove;
 
   /// Tooltip of the button that closes a container's details in the desktop inspector (03 §10.2).
   ///
@@ -9291,6 +9327,738 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not read that file as a key.'**
   String get serverEditorKeyFileImportFailed;
+
+  /// Title of the in-app alert center (ALR-01), which lists the alerts the user's rules raised.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts'**
+  String get alertsTitle;
+
+  /// The coverage limit (Y3) the alert notice and the alert center state: rules are evaluated only on this device and only while the app runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Evaluated on this device while Klabautermann is open.'**
+  String get alertsCoverage;
+
+  /// The fleet list's alert notice while rules have raised alerts; count is how many are raised.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 alert is active} other{{count} alerts are active}}'**
+  String alertsNoticeActive(int count);
+
+  /// The fleet list's alert notice when alerts were raised and cleared since the user last opened the alert center, and none is raised now.
+  ///
+  /// In en, this message translates to:
+  /// **'Every alert has cleared since you last looked.'**
+  String get alertsNoticeCleared;
+
+  /// Button on the fleet list's alert notice that opens the alert center.
+  ///
+  /// In en, this message translates to:
+  /// **'Show alerts'**
+  String get alertsShow;
+
+  /// Alert center heading over the alerts raised now.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get alertsActiveHeading;
+
+  /// Alert center line under the Active heading when no alert is raised.
+  ///
+  /// In en, this message translates to:
+  /// **'No alert is active.'**
+  String get alertsNoneActive;
+
+  /// Alert center heading over the latest raises and clears since the app started.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier'**
+  String get alertsHistoryHeading;
+
+  /// A fleet row's alert count (ALR-02), in its tooltip and screen-reader label; count is how many alerts are raised for that server.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 alert} other{{count} alerts}}'**
+  String alertsRowCount(int count);
+
+  /// The number on a fleet row's alert badge (ALR-02), in the UI locale's number format.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String alertsBadgeCount(int count);
+
+  /// An alert center row's title; server is the server's name (server data) and metric the alert's metric, such as CPU busy.
+  ///
+  /// In en, this message translates to:
+  /// **'{server}: {metric}'**
+  String alertRowTitle(String server, String metric);
+
+  /// An alert's severity word in the alert center.
+  ///
+  /// In en, this message translates to:
+  /// **'{severity, select, critical{Critical} warning{Warning} other{Info}}'**
+  String alertSeverity(String severity);
+
+  /// An alert center time from before today: a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String alertDateTime(DateTime time);
+
+  /// When a raised alert's breach began, in the alert center; time is a time of day when the breach began today, else a date and time, in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'since {time}'**
+  String alertSince(String time);
+
+  /// An alert center history row for a raise; time is a time of day in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Raised at {time}'**
+  String alertRaisedAt(String time);
+
+  /// An alert center history row for a clear; time is a time of day in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleared at {time}'**
+  String alertClearedAt(String time);
+
+  /// The alert metric cpu.busy: the share of CPU time spent busy.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU busy'**
+  String get alertMetricCpuBusy;
+
+  /// The alert metric memory.used: used memory as a share of the total.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory used'**
+  String get alertMetricMemoryUsed;
+
+  /// The alert metric load.perCore: the 1-minute load average divided by the number of cores.
+  ///
+  /// In en, this message translates to:
+  /// **'Load per core'**
+  String get alertMetricLoadPerCore;
+
+  /// The alert metric disk.used: the fullest filesystem's used space.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk space used'**
+  String get alertMetricDiskUsed;
+
+  /// The alert metric disk.inodes: the fullest filesystem's used inodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Inodes used'**
+  String get alertMetricDiskInodes;
+
+  /// The Overview card that charts a server's on-device history (HIS-01).
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get historyTitle;
+
+  /// The History card's range choice of the 1-minute tier; count is 48.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Last hour} other{Last {count} hours}}'**
+  String historyLastHours(int count);
+
+  /// The History card's range choice of the 10-minute tier; count is 30.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Last day} other{Last {count} days}}'**
+  String historyLastDays(int count);
+
+  /// Tooltip of the History card's button that reads the history again.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get historyRefresh;
+
+  /// The History card when this device recorded nothing for the server in the chosen range.
+  ///
+  /// In en, this message translates to:
+  /// **'No history yet. Klabautermann keeps 48 hours and 30 days of this server\'s readings while it is open.'**
+  String get historyEmpty;
+
+  /// The History chart's series of each bucket's mean.
+  ///
+  /// In en, this message translates to:
+  /// **'Average'**
+  String get historyLaneMean;
+
+  /// The History chart's series of each bucket's highest reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Peak'**
+  String get historyLanePeak;
+
+  /// Where the History chart's data comes from, as its legend says.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded on this device while Klabautermann was open'**
+  String get historySource;
+
+  /// A History metric: the share of CPU time spent busy.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU busy'**
+  String get historyMetricCpu;
+
+  /// A History metric: used memory as a share of the total.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory used'**
+  String get historyMetricMemory;
+
+  /// A History metric: the fullest filesystem's used space.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk space used'**
+  String get historyMetricDisk;
+
+  /// A History metric: the fullest filesystem's used inodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Inodes used'**
+  String get historyMetricInodes;
+
+  /// A History metric: the 1-minute load average per core.
+  ///
+  /// In en, this message translates to:
+  /// **'Load per core'**
+  String get historyMetricLoad;
+
+  /// Title of the alert rules page (ALR-01), and the tooltip and button that open it.
+  ///
+  /// In en, this message translates to:
+  /// **'Alert rules'**
+  String get alertRulesTitle;
+
+  /// The alert rules page with no rule in the account.
+  ///
+  /// In en, this message translates to:
+  /// **'No alert rules yet.'**
+  String get alertRulesEmpty;
+
+  /// The alert rules page opened from a server, when no rule applies to it.
+  ///
+  /// In en, this message translates to:
+  /// **'No rule applies to this server yet.'**
+  String get alertRulesEmptyServer;
+
+  /// Note on the alert rules page while no sync account is enrolled; rules are rule records in the account (03 §4.8).
+  ///
+  /// In en, this message translates to:
+  /// **'Alert rules sync through your sync account, so adding or changing one needs you signed in.'**
+  String get alertRulesNeedSync;
+
+  /// Button on the alert rules page that opens the editor on a new rule.
+  ///
+  /// In en, this message translates to:
+  /// **'Add rule'**
+  String get alertRuleAdd;
+
+  /// Title of the rule editor for a new rule.
+  ///
+  /// In en, this message translates to:
+  /// **'New rule'**
+  String get alertRuleNew;
+
+  /// Title of the rule editor for an existing rule.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit rule'**
+  String get alertRuleEdit;
+
+  /// The rule editor's save button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get alertRuleSave;
+
+  /// Tooltip of a rule row's delete button.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete rule'**
+  String get alertRuleDelete;
+
+  /// Confirmation before a rule is deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this rule? It is removed on every device that syncs your account.'**
+  String get alertRuleDeleteConfirm;
+
+  /// The confirmation's delete button.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get alertRuleDeleteAction;
+
+  /// A rule row's title: when the rule raises. op is the comparison, metric the metric's name, such as CPU busy, and value the threshold, such as 90%.
+  ///
+  /// In en, this message translates to:
+  /// **'{op, select, greaterThan{{metric} above {value}} greaterOrEqual{{metric} at or above {value}} lessThan{{metric} below {value}} other{{metric} at or below {value}}}'**
+  String alertRuleCondition(String op, String metric, String value);
+
+  /// When a rule clears: op is the rule's comparison, and value the clear threshold, such as 80%.
+  ///
+  /// In en, this message translates to:
+  /// **'{op, select, greaterThan{Clears at or below {value}} greaterOrEqual{Clears below {value}} lessThan{Clears at or above {value}} other{Clears above {value}}}'**
+  String alertRuleClears(String op, String value);
+
+  /// How long a rule's condition must hold before it raises or clears, at the end of a rule row's line; duration is a number of minutes or seconds.
+  ///
+  /// In en, this message translates to:
+  /// **'after {duration}'**
+  String alertRuleFor(String duration);
+
+  /// A rule duration in whole minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 minute} other{{count} minutes}}'**
+  String alertRuleMinutes(int count);
+
+  /// A rule duration that is not whole minutes, in seconds.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 second} other{{count} seconds}}'**
+  String alertRuleSeconds(int count);
+
+  /// Which servers a rule applies to: one server; server is its name (server data).
+  ///
+  /// In en, this message translates to:
+  /// **'On {server}'**
+  String alertRuleScopeServer(String server);
+
+  /// Which servers a rule applies to: one group; group is its name (server data).
+  ///
+  /// In en, this message translates to:
+  /// **'On the {group} group'**
+  String alertRuleScopeGroup(String group);
+
+  /// Which servers a rule applies to: all of them.
+  ///
+  /// In en, this message translates to:
+  /// **'On every server'**
+  String get alertRuleScopeAll;
+
+  /// The rule editor's metric field.
+  ///
+  /// In en, this message translates to:
+  /// **'Metric'**
+  String get alertRuleMetricLabel;
+
+  /// The rule editor's comparison field.
+  ///
+  /// In en, this message translates to:
+  /// **'Raise when the value is'**
+  String get alertRuleOpLabel;
+
+  /// A comparison in the rule editor's comparison field.
+  ///
+  /// In en, this message translates to:
+  /// **'{op, select, greaterThan{Above} greaterOrEqual{At or above} lessThan{Below} other{At or below}}'**
+  String alertRuleOp(String op);
+
+  /// The rule editor's raise threshold field.
+  ///
+  /// In en, this message translates to:
+  /// **'Raise at'**
+  String get alertRuleRaiseValueLabel;
+
+  /// The rule editor's clear threshold field.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear at'**
+  String get alertRuleClearValueLabel;
+
+  /// The rule editor's duration fields: how long the value must stay past its threshold.
+  ///
+  /// In en, this message translates to:
+  /// **'Held for (minutes)'**
+  String get alertRuleForLabel;
+
+  /// The rule editor's severity field.
+  ///
+  /// In en, this message translates to:
+  /// **'Severity'**
+  String get alertRuleSeverityLabel;
+
+  /// The rule editor's scope field.
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to'**
+  String get alertRuleScopeLabel;
+
+  /// The unit after a percentage threshold in the rule editor.
+  ///
+  /// In en, this message translates to:
+  /// **'%'**
+  String get alertRulePercentSuffix;
+
+  /// Rule editor error: a threshold is not a number.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number.'**
+  String get alertRuleNumberInvalid;
+
+  /// Rule editor error: a percentage threshold is out of range.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a value from 0 to 100.'**
+  String get alertRulePercentInvalid;
+
+  /// Rule editor error: a duration is not a number of minutes, 0 or more.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter 0 or more minutes.'**
+  String get alertRuleMinutesInvalid;
+
+  /// Rule editor error: an above or at-or-above rule whose clear threshold is higher than its raise threshold.
+  ///
+  /// In en, this message translates to:
+  /// **'The clear value must not be above the raise value.'**
+  String get alertRuleClearAboveRaise;
+
+  /// Rule editor error: a below or at-or-below rule whose clear threshold is lower than its raise threshold.
+  ///
+  /// In en, this message translates to:
+  /// **'The clear value must not be below the raise value.'**
+  String get alertRuleClearBelowRaise;
+
+  /// Why the engine refused to save or delete an alert rule, as a toast. reason is the engine's CatalogWriteFailure; detail is its own words, used for other only.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, directoryShared{Another Klabautermann may be using this device\'s data folder, so nothing was saved.} notEnrolled{Sign in to your sync account to change alert rules.} keystoreUnavailable{Your account key could not be read from the system keystore, so nothing was saved.} unknownTarget{This rule is no longer in your account.} invalidDraft{A field is missing or out of range.} tooMany{Your account holds as many rules as it can.} tooLarge{This rule is too large to save.} storeUnavailable{Klabautermann\'s sync files could not be written this session, so nothing was saved.} other{Nothing was saved: {detail}}}'**
+  String alertRuleRefused(String reason, String detail);
+
+  /// Toast when the engine stopped before it answered a rule write.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann\'s engine stopped before the rule was saved.'**
+  String get alertRuleEngineStopped;
+
+  /// The switch for raised alerts' system notifications (ALR-01), on the alert rules page and in the alert center.
+  ///
+  /// In en, this message translates to:
+  /// **'Notify me when an alert is raised'**
+  String get alertNotificationsSwitch;
+
+  /// Under the notification switch: the coverage limit (Y3).
+  ///
+  /// In en, this message translates to:
+  /// **'A system notification, posted only while Klabautermann is open.'**
+  String get alertNotificationsSwitchDetail;
+
+  /// Title of the app's prompt before the system asks to allow notifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Get notified of raised alerts?'**
+  String get alertNotificationsPromptTitle;
+
+  /// The notification prompt: the coverage limit (Y3), stated before the system asks.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann evaluates your rules on this device while it is open, and posts a notification when one raises. It cannot notify you while it is closed.'**
+  String get alertNotificationsPromptBody;
+
+  /// The notification prompt's button that goes on to the system's request.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow notifications'**
+  String get alertNotificationsPromptAllow;
+
+  /// The notification prompt's button that leaves notifications off.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get alertNotificationsPromptLater;
+
+  /// Toast when the system refused the app notifications; they stay off.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications are turned off for Klabautermann in your system settings.'**
+  String get alertNotificationsDenied;
+
+  /// Toast when the device offers no notifications to the app.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no system notifications Klabautermann can post.'**
+  String get alertNotificationsUnavailable;
+
+  /// Toast when the notification switch changed but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The notification setting applies until Klabautermann restarts; it could not be saved.'**
+  String get alertNotificationsNotSaved;
+
+  /// A raised alert's system notification title; server is the server's name (server data), metric the metric's name, such as CPU busy, and value the reading, such as 93%.
+  ///
+  /// In en, this message translates to:
+  /// **'{server}: {metric} at {value}'**
+  String alertNotificationTitle(String server, String metric, String value);
+
+  /// A raised alert's system notification text: its severity word, then the coverage limit (Y3).
+  ///
+  /// In en, this message translates to:
+  /// **'{severity}. Evaluated on this device while Klabautermann is open.'**
+  String alertNotificationBody(String severity);
+
+  /// The Android notification channel's name, shown in the system's notification settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Raised alerts'**
+  String get alertNotificationChannel;
+
+  /// The Android notification channel's description, shown in the system's notification settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts your rules raise while Klabautermann is open.'**
+  String get alertNotificationChannelDetail;
+
+  /// The default action of a desktop notification on Linux: brings the app forward.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get alertNotificationOpen;
+
+  /// System tab: title of the section listing the server's pending package updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates'**
+  String get systemUpdatesTitle;
+
+  /// System tab, Updates: the package manager lists no pending update.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to date'**
+  String get systemUpdatesNone;
+
+  /// System tab, Updates: how many package updates the package manager lists.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 update available} other{{count} updates available}}'**
+  String systemUpdatesCount(int count);
+
+  /// System tab, Updates: how many of the pending updates fix security issues.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 is a security update} other{{count} are security updates}}'**
+  String systemUpdatesSecurityCount(int count);
+
+  /// System tab, Updates: on SUSE, how many security patches zypper says are needed; zypper lists patches rather than packages.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 security patch is needed} other{{count} security patches are needed}}'**
+  String systemUpdatesSecurityPatches(int count);
+
+  /// System tab, Updates: the server reports that a reboot is required, without naming the packages that asked.
+  ///
+  /// In en, this message translates to:
+  /// **'The server asks for a restart.'**
+  String get systemUpdatesRestart;
+
+  /// System tab, Updates: the server reports that a reboot is required, with the packages that asked for it.
+  ///
+  /// In en, this message translates to:
+  /// **'The server asks for a restart, for {packages}.'**
+  String systemUpdatesRestartFor(String packages);
+
+  /// System tab, Updates: the server reports that no reboot is required.
+  ///
+  /// In en, this message translates to:
+  /// **'No restart required'**
+  String get systemUpdatesNoRestart;
+
+  /// System tab, Updates: why the check did not run, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so updates could not be checked.} transport{The connection failed while updates were checked.} other{Updates could not be checked.}}'**
+  String systemUpdatesFailed(String reason);
+
+  /// System tab, Updates: the server has none of the package managers the check knows.
+  ///
+  /// In en, this message translates to:
+  /// **'No package manager Klabautermann reads was found (apt, dnf, zypper, pacman or apk).'**
+  String get systemUpdatesNoManager;
+
+  /// System tab, Updates: dnf has no cached metadata; the check only reads cached metadata and never refreshes it.
+  ///
+  /// In en, this message translates to:
+  /// **'The package lists have not been downloaded on this server yet, and the check never downloads them.'**
+  String get systemUpdatesNoCache;
+
+  /// System tab, Updates: the package manager reported an error; detail is its own error text.
+  ///
+  /// In en, this message translates to:
+  /// **'The package manager failed: {detail}'**
+  String systemUpdatesManagerFailed(String detail);
+
+  /// System tab, Updates: column header of the package name.
+  ///
+  /// In en, this message translates to:
+  /// **'Package'**
+  String get systemUpdatesPackage;
+
+  /// System tab, Updates: column header of the installed version.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get systemUpdatesInstalled;
+
+  /// System tab, Updates: column header of the version the update installs.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get systemUpdatesAvailable;
+
+  /// System tab, Updates: column header marking security updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Security'**
+  String get systemUpdatesSecurity;
+
+  /// System tab, Updates: the cell of an update that fixes a security issue.
+  ///
+  /// In en, this message translates to:
+  /// **'Security'**
+  String get systemUpdatesSecurityYes;
+
+  /// System tab, Updates: the list stops at its limit.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, other{Only the first {count} updates are listed.}}'**
+  String systemUpdatesCut(int count);
+
+  /// System tab, Updates: when the server last refreshed its package lists, in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Package lists last downloaded {time}'**
+  String systemUpdatesListsFrom(DateTime time);
+
+  /// System tab, Updates: a check is running.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for updates…'**
+  String get systemUpdatesChecking;
+
+  /// System tab, Updates: button that runs a new check instead of using the one from the last hour.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get systemUpdatesCheckAgain;
+
+  /// System tab, Updates: button that downloads the server's package lists as root, in admin mode, so the next check reads current metadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh package lists'**
+  String get systemUpdatesRefresh;
+
+  /// System tab, Updates: after the note that the package lists were never downloaded, says that refreshing them needs admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on admin mode to download them.'**
+  String get systemUpdatesRefreshAdminNeeded;
+
+  /// System tab, Updates: shown after the refresh starts, until the next check.
+  ///
+  /// In en, this message translates to:
+  /// **'When the refresh has finished, check again to read the new lists.'**
+  String get systemUpdatesRefreshStarted;
+
+  /// System tab, Updates: heading of the services still running libraries an update replaced.
+  ///
+  /// In en, this message translates to:
+  /// **'Services to restart'**
+  String get systemUpdatesRestartsTitle;
+
+  /// System tab, Updates: button that reads, in admin mode, which services still run replaced libraries.
+  ///
+  /// In en, this message translates to:
+  /// **'Find services to restart'**
+  String get systemUpdatesRestartsRead;
+
+  /// System tab, Updates: button that reads the services to restart again.
+  ///
+  /// In en, this message translates to:
+  /// **'Look again'**
+  String get systemUpdatesRestartsReadAgain;
+
+  /// System tab, Updates: the services-to-restart read is running.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for services to restart…'**
+  String get systemUpdatesRestartsReading;
+
+  /// System tab, Updates: the services-to-restart read needs admin mode, since it reads every process.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding services that still run replaced libraries needs admin mode.'**
+  String get systemUpdatesRestartsAdminNeeded;
+
+  /// System tab, Updates: the read found no service to restart.
+  ///
+  /// In en, this message translates to:
+  /// **'No service runs a replaced library.'**
+  String get systemUpdatesRestartsNone;
+
+  /// System tab, Updates: the services still running replaced libraries; services is a comma-separated list of systemd unit names (server data).
+  ///
+  /// In en, this message translates to:
+  /// **'Restart to load the updated libraries: {services}'**
+  String systemUpdatesRestartsList(String services);
+
+  /// System tab, Updates: needrestart reports a newer kernel than the running one.
+  ///
+  /// In en, this message translates to:
+  /// **'A newer kernel is installed and waits for a reboot.'**
+  String get systemUpdatesKernelWaiting;
+
+  /// System tab, Updates: why the services-to-restart read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so services to restart could not be read.} adminRequired{Admin mode ended before services to restart were read.} elevationRefused{Elevation was refused, so services to restart were not read.} missing{None of needrestart, needs-restarting or zypper is installed on this server.} transport{The connection failed while services to restart were read.} other{Services to restart could not be read.}}'**
+  String systemUpdatesRestartsFailed(String reason);
+
+  /// Title of PKG-06's fleet update center, listing every server's pending updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates on all servers'**
+  String get fleetUpdatesTitle;
+
+  /// System tab, Updates: button that opens the fleet update center.
+  ///
+  /// In en, this message translates to:
+  /// **'All servers'**
+  String get fleetUpdatesOpen;
+
+  /// Fleet update center: button that runs a new package check on every server instead of using the ones from the last hour.
+  ///
+  /// In en, this message translates to:
+  /// **'Check every server again'**
+  String get fleetUpdatesCheckAll;
+
+  /// Fleet update center: the fleet is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers yet.'**
+  String get fleetUpdatesNoServers;
+
+  /// Fleet update center: one server's line: pending updates, security updates (omitted at zero) and whether it asks for a restart.
+  ///
+  /// In en, this message translates to:
+  /// **'{updates, plural, =0{Up to date} =1{1 update} other{{updates} updates}}{security, plural, =0{} other{, {security} security}}{restart, select, true{ · restart required} other{}}'**
+  String fleetUpdatesSummary(int updates, int security, String restart);
+
+  /// System tab, Updates: when the shown check ran, in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked {time}'**
+  String systemUpdatesCheckedAt(DateTime time);
 }
 
 class _AppLocalizationsDelegate

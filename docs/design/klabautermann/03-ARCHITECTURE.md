@@ -2391,7 +2391,7 @@ platform identities in 04, section 12.3):
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
 | `klabautermann_records.json` [E] | The `klabautermann:` records the coordinator applied (4.8, M5, M04): per record id, the `(updatedAt, deviceId)` it won with and its sealed payload, sealed removals, unknown types and newer versions included, so the tuple guard holds across restarts and §3.1's recovery re-seals them verbatim. A `pref` whose server is absent waits here. Kept like the sync state files. Never pushed while sync is pull-only | `klabautermann_core` | v1 |
 | `operations_shown.json` [E] | Detached operations this device remembers (M4, E17b, 7.17): per server and operation id, the operation's directory, whether its result was shown and audited here, and, for one this device launched, the audit record's facts (action, target, redacted steps, tier, start). An entry goes once the operation's files are gone. Kept like the sync state files: written only with exclusive access, a damaged file set aside; losing it costs a result's launch facts and the reminder of a root cleanup, which the 7-day prune covers. Never synced | `klabautermann_core` | MVP |
-| `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
+| `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample). Built in M6 N52a: `minute.ring` (2,880 slots) and `tenMinutes.ring` (4,320 slots) of 92 bytes, a slot per bucket with its start, provenance and per metric the count and the min, max and mean as 32-bit floats (about 0.66 MB per server), and `gaps.ring`, the last 256 gaps. The directory is the server's file stem; a file of another layout starts over | `klabautermann_core` | v1 |
 | `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |
 | `alert_inbox.json` | Inbox cursor, sender metadata (app id, allowed server), per-sender failure counts, pending item deletions; keys stay in `vault.json` | `klabautermann_core` | v1.x |
 
@@ -4477,6 +4477,59 @@ arrives with E22's Docker actions.
   owner on 2026-10-10, D10; no notification plugin resolves in any lockfile
   today [R: c3 §5.4]). Every rule row and the notification permission prompt say
   "evaluated on this device while Klabautermann is open".
+- **As built (M6 N50a).** The engine's `AlertEvaluator` takes the live
+  `rule` records after every sync round and the fleet with its groups
+  whenever it changes, and evaluates each `client` rule on every sample
+  of the servers its scope names (a `server` rule its target, a `group`
+  rule the servers of that group, `all` every fleet server). The metric
+  vocabulary is what the samples carry: `cpu.busy`, `memory.used` and
+  `load.perCore` from `overview` and `core`, and `disk.used` and
+  `disk.inodes`, the fullest real filesystem, from `fs`; a rule naming
+  another metric stays idle. An unknown value holds the rule's phase. A
+  raise and a clear each send `LocalAlertChanged`; a rule removed or
+  changed, or a server leaving its scope, clears a raised alert at once.
+- **As built (M6 N50b).** The app's `AlertCenter` follows those events
+  for one engine run: the raised alerts, critical first, and the latest
+  100 raises and clears. The fleet list's notice shows while an alert is
+  raised, or while raises and clears the user has not looked at remain,
+  states the coverage limit and opens the alert center, a dialog whose
+  rows open their server. Each fleet row badges its raised alerts
+  (ALR-02) with the highest severity's icon, a shape per severity, and
+  the count, which its label and tooltip say too. An engine that stops
+  ends its raised alerts. Notifications and the app icon's badge (N51)
+  follow.
+- **As built (M6 N50c).** The engine sends `AlertRulesChanged` with
+  every live rule whenever the rules change: after a round that pulled
+  one, and after a rule write, before its answer. The server header's
+  bell opens the rules that apply to that server, and the alert center
+  opens every rule. Each rule row gives the condition, the servers it
+  applies to, the severity, the clear threshold and how long each must
+  hold, and says it is evaluated on this device while Klabautermann is
+  open. While an account is enrolled (P16) the page adds, changes and
+  deletes rules with `PutRule` and `RemoveRule`: the editor takes a
+  metric, one of the four comparisons, the raise and clear thresholds
+  (percentages from 0 to 100, the clear one on the recovered side of the
+  raise one) with their durations in minutes, a severity, and the
+  server, its group or every server. A new rule from a server starts on
+  that server.
+- **As built (M6 N51).** Raised alerts post system notifications
+  through `flutter_local_notifications` 22.3.3 once the user turns the
+  switch on, on the alert rules page or in the alert center. The app's
+  prompt says first that rules are evaluated on this device while
+  Klabautermann is open and that nothing notifies while it is closed;
+  the system's request follows (Android 13 and later, iOS, macOS), and a
+  refusal leaves the switch off. The switch is device-local, in
+  settings.json (`klabautermann.alerts.notifications`, off unless
+  `true`). Each raise posts one notification per rule and server, its
+  title the server, metric and reading and its text the severity and
+  the coverage limit (Y3); the clear withdraws it. Android posts on a
+  "Raised alerts" channel with library desugaring enabled, iOS presents
+  in the foreground with the app as the notification center's delegate,
+  Windows names the app with its application id and a fixed GUID, and
+  the Flatpak talks to `org.freedesktop.Notifications`. Notifications
+  are not scheduled and a tap only brings the app forward. The app
+  icon's badge (ALR-02) stays open; delivery on real devices is a manual
+  check per OS.
 - **v1.x.** Flap damping (the rest of ALR-16), desktop tray monitoring
   (ALR-03, PLT-10), Android watch mode for a session (PLT-11, D34), Android
   credential-free reachability checks every 15 minutes or more (PLT-15), and T1
@@ -4585,6 +4638,30 @@ arrives with E22's Docker actions.
   provenance (`liveSampler`, `sessionRollup`; later `hostRecorder`,
   `hostRing`, `companion`) and gaps are explicit records, so charts can draw
   "app closed" bands. Purged on removal, exclusion or endpoint change.
+- **As built (M6 N52a).** The engine rolls every `overview`, `core`
+  and `fs` reading into the current 1-minute bucket of the alert
+  metrics (`cpu.busy`, `memory.used`, `load.perCore`, `disk.used`,
+  `disk.inodes`), writes it once a reading of a later minute arrives,
+  and folds written minutes into the current 10-minute bucket
+  (`sessionRollup`) the same way; the buckets still filling are written
+  at shutdown and answered with every read. Each `Gap` of those streams
+  is kept as a gap record with its cause. Rings are written only while
+  the process holds the support directory alone, one write at a time,
+  and kept in memory otherwise; they are purged with the capability
+  cache's rule: at open for servers outside the fleet, and when a
+  server leaves it or changes endpoint. `ReadHistory` answers a tier's
+  buckets and gaps.
+- **As built (M6 N52b).** The Overview's History card reads a server's
+  rollups when it shows, on refresh, and when the user picks "Last 48
+  hours" (1-minute buckets) or "Last 30 days" (10-minute buckets). It
+  charts one of the percentage metrics (CPU busy, memory, disk space,
+  inodes; load per core has no fixed ceiling) as the mean and the peak
+  per bucket, each at its bucket's middle. Wherever buckets stop, the
+  chart draws a labelled band with the cause of the recorded gap that
+  covers most of it (disconnected, in background, reading failed), or
+  "app closed" when none was recorded; a run that ends before the read
+  leaves its band open to the chart's edge (Y4). Time before the first
+  bucket has no band. A read with no buckets shows a notice instead.
 - **v1.x.** Existing recorders read over SSH (sysstat `sadf -j`,
   node_exporter on `localhost:9100`, Netdata, Glances), the T1 ring file,
   forecasts. When sysstat is missing, an "Enable sysstat" action (HIS-03)
@@ -4918,7 +4995,7 @@ entry point. The text lives only in the editor's state.
 | Tier | Examples | Confirmation |
 |---|---|---|
 | 0 | Refresh, open logs, inspect, follow, view files | None |
-| 1 | Start, stop, restart, reload, pause, kill or signal a non-protected target; run a timer now; stack start, stop, restart; pull and redeploy without orphan removal; remove a container without volumes; remove an unused image; create a volume | Dialog naming the target and the impact; on touch a confirmation sheet; single-key bindings open the dialog and never act directly |
+| 1 | Start, stop, restart, reload, pause, kill or signal a non-protected target; run a timer now; stack start, stop, restart; pull and redeploy without orphan removal; remove a container without volumes; remove an unused image; create a volume; remove a network no container is on; pull an image | Dialog naming the target and the impact; on touch a confirmation sheet; single-key bindings open the dialog and never act directly |
 | 2 | Remove with volumes; remove a volume; force-remove an image in use; prune; `compose down`; orphan removal; crontab overwrite; reboot; package upgrade; "act anyway" on an owned target; any protected target; any fleet-wide action | Typed name of the target, plus the dry-run list where one exists |
 
 Protected targets: a built-in list (`ssh.service`, `sshd.service`,
@@ -5212,6 +5289,37 @@ unchanged backup restores.
 
 Out of scope: enforced RBAC and tamper-proof audit; a client cannot restrict
 the holder of a root-equivalent socket (NG-08).
+
+### 8.13 App lock (SAF-20)
+
+Off by default, per device in `settings.json` (`klabautermann.appLock`),
+on Android, iOS, macOS and Windows; Linux has no system prompt
+`local_auth` can call, so the switch stays off there. The lock is
+ghost_keystore's `AppLock` (F5f), Séance's own, behind a lock screen:
+
+- With the lock on, the app opens behind the screen, which asks for
+  device authentication (biometrics, the passcode or PIN as fallback) at
+  once and on "Unlock". After `appLockBackgroundTimeout` (5 minutes) in
+  the background or hidden, by wall and monotonic time, it locks again.
+  The covered app stays mounted but takes no pointer, focus or semantics.
+- The engine's keystore reads (the master key, API keys such as the sync
+  token) wait for it: the app answers a read while locked with a refusal,
+  so a locked app hands the engine no new credential. Writes and deletes
+  are not held back, so a sign-out finishes. Links already open keep
+  running, as in Séance.
+- Admin mode ends on every server when the lock engages (8.2).
+- Turning the lock on or off asks for authentication first and takes
+  effect only once saved; the desktop settings window asks the app's
+  window to run it.
+- While the app is locked, the desktop settings window covers its tabs
+  with a notice to unlock the app's window, and the app refuses every
+  call from it, so a change cannot slip past the lock screen. Like the
+  app's own covered window, it keeps the settings it last received
+  behind the notice.
+- The lock fails closed: a device whose passcode, PIN and biometrics are
+  removed while it is on keeps the app behind the screen, which says to
+  set one up again, since unlocking and turning the lock off both need
+  that authentication.
 
 ---
 
@@ -5721,11 +5829,16 @@ shows there.
 | Requests (UI to engine) | Events (engine to UI) |
 |---|---|
 | `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus(phase, operation, account, failure, passphraseUnverified)` |
-| `ReadServerDraft(requestId, serverId)`; `SaveServer(requestId, draft, credential?)`, `DeleteServer(requestId, serverId)`, `SetServerPrefs(requestId, serverId, prefs?)`, `PutRule(requestId, ruleId, rule, target?)`, `RemoveRule(requestId, ruleId)` (M05) | `ServerDraftRead(requestId, draft?)`; `CatalogReplaced`, then `CatalogWritten(requestId, serverId?, credentialWritten)` or `CatalogWriteRefused(requestId, failure, detail?)`, then the round's `SyncStatus` |
+| `ReadServerDraft(requestId, serverId)`; `SaveServer(requestId, draft, credential?)`, `DeleteServer(requestId, serverId)`, `SetServerPrefs(requestId, serverId, prefs?)`, `PutRule(requestId, ruleId, rule, target?)`, `RemoveRule(requestId, ruleId)` (M05) | `ServerDraftRead(requestId, draft?)`; `CatalogReplaced`, then `AlertRulesChanged(rules)` when a rule write changed the rules (M6 N50c), then `CatalogWritten(requestId, serverId?, credentialWritten)` or `CatalogWriteRefused(requestId, failure, detail?)`, then the round's `SyncStatus` |
 | `DuplicateServer(requestId, serverId)` (M09b): a new server from a synced one, its own id, timestamps and "copy" label, and its own copy of the credential, never a shared vault entry; a copy of a confirmed endpoint is confirmed | As `SaveServer`, with the copy's id in `CatalogWritten.serverId` |
 | `TestServerConnection(requestId, draft, credential)` (M09b): the editor's Test connection over the links' credentials, pins and prompts; a host key trusted during it holds for that attempt only; rejected while links are off | `Prompt`s as a connect sends them, then `ServerConnectionTested(requestId, ok, summary, notes, log)`, the summary, notes and redacted transcript as seance_core's `runConnectionTest` words them |
 | `DockerWatch` naming `volumes` (M6 N10a, VOL-01): the volume list, re-read on a `volume` event; a Volumes view watches it with the containers, whose mounts tell which volumes are in use | `DockerListChanged` with `DockerVolumesPayload(volumes)`, labels masked by key |
 | `PlanAction` with `CreateVolume(serverId, name, driver)` or `RemoveVolume(serverId, name)` (M6 N10b, VOL-02): a create is one `POST /volumes/create` behind a plain confirmation, refused for a taken name; a removal deletes the data behind the typed confirmation and is refused while a container mounts the volume | As every action: `ActionPlanned`, then `ActionFinished`; refusals `volumeExists` and `volumeInUse`; the volume watch reads its list again |
+| `DockerWatch` naming `networks` (M6 N11, DNW-01): the network list, re-read on a `network` event; a Networks view watches it with the containers, whose endpoints tell which networks are in use | `DockerListChanged` with `DockerNetworksPayload(networks)`, labels masked by key |
+| `PlanAction` with `RemoveNetwork(serverId, networkId)` (M6 N11, DNW-02): one `DELETE /networks/{id}` behind a plain confirmation, refused for a built-in network (`bridge`, `host`, `none`) and while a container is on it | As every action: `ActionPlanned`, then `ActionFinished`; refusals `builtinNetwork` and `networkInUse`; the network watch reads its list again |
+| `PlanAction` with `PruneDocker(serverId, kind, all)` (M6 N12, DKE-05, IMG-06): one `POST /<kind>/prune` behind the typed confirmation, previewed by reading what the same filters match now; `all` removes every unused image rather than the dangling ones | `ActionPlanned` whose preview carries a `PrunePreview` (what is removed with sizes, what is kept and why, the bytes freed), then `ActionFinished`; refusal `nothingToPrune`; the runner refuses a prune whose matches changed since the preview; the pruned lists are read again |
+| `PlanAction` with `PullImage(serverId, reference)` (M6 N13, IMG-03): one `POST /images/create` behind a plain confirmation; a name without a tag pulls `latest`; a reference Docker would reject is refused as `invalidTarget` | `ActionPlanned`, then `ImagePullProgress(planId, layers, status)` a few times a second while it runs (each layer's status and bytes, the image's own last message), then `ActionFinished`; an `errorDetail` fails the step with the daemon's words as its output; the image watch reads its list again |
+| `CancelAction(planId)` (M6 N13, IMG-03): stops a running plan where its step can stop, today an image pull, whose request the engine closes so the daemon stops the pull | The plan's `ActionFinished` with `cancelled`; a step that cannot stop runs to its end |
 | `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)` (K41, 4.7) | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |
@@ -5737,6 +5850,7 @@ shows there.
 | `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)`, `SetDockerEndpoint(serverId, choice)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason, choice)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(planId, preview)`, `ActionProgress`, `ActionFinished`, `ActionRefused(reason, intent or planId)` |
 | `AuditQuery(serverId, before, limit)` (8.10, M4) | `AuditRecords(serverId, records, more)` |
+| `ReadHistory(serverId, tier, requestId)` (7.20, M6 N52a) | `HistoryRead(requestId, serverId, tier, range)`: the tier's buckets and gaps within its span, the filling bucket included |
 | `SetSafetyPolicy(policy)`, `SetAdminMode(serverId, enabled)` (8.2, M4) | `AdminModeState(serverId, phase, expiresAt, retry, failure, ended)`; a refused plan's `ActionRefused` names `observeOnly` or `readOnly` |
 | `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |

@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert' show jsonEncode;
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:klabautermann_docker/klabautermann_docker.dart'
+    show DockerCancelToken;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show HostProfile, OpDirectoryKind;
 import 'package:meta/meta.dart';
@@ -25,10 +28,13 @@ import '../admin/restarts.dart';
 import '../admin/safety_policy.dart';
 import '../admin/smart.dart';
 import '../admin/user_crontabs.dart';
+import '../alerts/alert_evaluator.dart';
+import '../history/history_store.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/engine_vault.dart';
-import '../catalog/klabautermann_records.dart' show diffServerPrefs;
+import '../catalog/klabautermann_records.dart'
+    show diffServerPrefs, encodeSyncedRule;
 import '../catalog/server_drafts.dart'
     show serverConfigOfDraft, serverDraftProblem;
 import '../catalog/keystore_channel.dart';
@@ -83,6 +89,13 @@ final _exportRedactor = SecretRedactor();
 /// How long a shutdown waits for open shells to end and write their
 /// audit records; a link that went silent cannot hold the quit longer.
 const Duration _shutdownGrace = Duration(seconds: 2);
+
+/// The streams whose readings history rolls up, and whose gaps it keeps.
+const Set<SampleStream> _historyStreams = {
+  SampleStream.overview,
+  SampleStream.core,
+  SampleStream.fs,
+};
 
 /// What the engine isolate starts with, sent once by `Isolate.spawn`
 /// (D18): the port it answers on and the app's support directory, where it
@@ -266,6 +279,10 @@ void engineMain(
   final packageReports = PackageReports(now: () => DateTime.now().toUtc());
   OperationRunner? runner;
 
+  // The running image pulls by plan id, which [CancelAction] stops
+  // (IMG-03).
+  final pullCancels = PullCancels();
+
   // Each server's channel slots, one quota for both routers, so the host
   // log reads and the Docker session's channels count against the same
   // shares (M9).
@@ -281,6 +298,9 @@ void engineMain(
   // Each fleet server's last probed profile (03 §6.1, D59), opened with
   // the import store.
   CapabilityCache? capabilities;
+  // On-device history (HIS-01): every reading rolled into buckets, opened
+  // beside the capability cache with the same purge rule.
+  HistoryStore? history;
 
   // The login name for imported hosts and hops that name no user.
   final localUser = localUserName(Platform.environment);
@@ -329,6 +349,8 @@ void engineMain(
   // What the engine asks the user while it connects, keyed by prompt id
   // (03 §10.1).
   final prompts = PromptBroker(emit: uiPort.send);
+  // In-app alerts (ALR-01): every synced rule, on every sample.
+  final alerts = AlertEvaluator();
 
   // The host-key pins (03 §4.6, D61): `host_keys.json` while the process
   // holds the support directory alone, otherwise that file's pins read
@@ -524,22 +546,45 @@ void engineMain(
       linkFor: links.link,
       emit: uiPort.send,
       lend: lendSession,
-      api: (serverId, step) async {
+      api: (serverId, planId, step) async {
         final router = docker;
         if (router == null) {
           throw const DockerEndpointUnavailable(DockerQueryFailure.cancelled);
         }
-        final status = await router.useEndpoint(
-          serverId,
-          (client, _) => runApiStep(client, step),
-        );
+        final pull = isPullStep(step);
+        final cancel = pull ? pullCancels.start(planId) : DockerCancelToken();
+        final int status;
+        try {
+          status = await router.useEndpoint(
+            serverId,
+            (client, _) => pull
+                ? runPullStep(
+                    client,
+                    step,
+                    cancel: cancel,
+                    onProgress: (layers, status) => uiPort.send(
+                      ImagePullProgress(
+                        planId: planId,
+                        layers: layers,
+                        status: status,
+                      ),
+                    ),
+                  )
+                : runApiStep(client, step),
+          );
+        } finally {
+          if (pull) pullCancels.finish(planId);
+        }
         if (status >= 200 && status < 300) {
-          final (:container, :images, :volumes) = apiStepChanges(step);
+          final (:container, :containers, :images, :volumes, :networks) =
+              apiStepChanges(step);
           router.actionRan(
             serverId,
             containers: {?container},
+            everyContainer: containers,
             images: images,
             volumes: volumes,
+            networks: networks,
           );
         }
         return status;
@@ -634,7 +679,18 @@ void engineMain(
     scheduler = SamplingScheduler(
       subscriptions: sampling,
       linkFor: links.link,
-      emit: uiPort.send,
+      emit: (event) {
+        uiPort.send(event);
+        if (event is Sample) {
+          alerts
+              .observe(event.serverId, event.result, event.at)
+              .forEach(uiPort.send);
+          history?.observe(event.serverId, event.result, event.at);
+        }
+        if (event is Gap && event.streams.any(_historyStreams.contains)) {
+          history?.gap(event.serverId, event.from, event.until, event.cause);
+        }
+      },
       deadPeerHint: links.deadPeerHint,
       clearDeadPeerHint: links.clearDeadPeerHint,
       probed: (serverId, profile) {
@@ -693,6 +749,8 @@ void engineMain(
   // The synced preferences the app last heard, so a round sends only
   // what changed.
   var prefsSent = <String, String>{};
+  // The alert rules the app last heard, encoded; none to start with.
+  var rulesSent = '[]';
   Future<void> sendServerPrefs() async {
     final (changes, sent) = diffServerPrefs(
       prefsSent,
@@ -700,6 +758,17 @@ void engineMain(
     );
     changes.forEach(uiPort.send);
     prefsSent = sent;
+    // By id, so a reload that lists the same rules in another order
+    // sends nothing.
+    final rules = [...await sync.rules()]..sort((a, b) => a.id.compareTo(b.id));
+    final encoded = jsonEncode([
+      for (final rule in rules) encodeSyncedRule(rule),
+    ]);
+    if (encoded != rulesSent) {
+      uiPort.send(AlertRulesChanged(List.unmodifiable(rules)));
+      rulesSent = encoded;
+    }
+    alerts.setRules(rules, DateTime.now().toUtc()).forEach(uiPort.send);
   }
 
   void probeFleet() {
@@ -758,8 +827,14 @@ void engineMain(
       detail: imports.detail,
     );
     final before = fleetIds;
-    fleetIds = {for (final entry in fleetEntries()) entry.serverId};
+    final entries = fleetEntries();
+    fleetIds = {for (final entry in entries) entry.serverId};
     sampling.fleet = fleetIds;
+    alerts
+        .setFleet({
+          for (final entry in entries) entry.serverId: entry.group,
+        }, DateTime.now().toUtc())
+        .forEach(uiPort.send);
     scheduler?.retain(fleetIds);
     logs?.retain(fleetIds);
     operations?.retain(fleetIds);
@@ -791,6 +866,7 @@ void engineMain(
     // app hears it left or lost its pin.
     probeFleet();
     unawaited(capabilities?.forget(forgotten));
+    unawaited(history?.forget(forgotten));
   }
 
   // Lists [servers] against this device's pins. A pin the store cannot
@@ -852,7 +928,10 @@ void engineMain(
       logs?.disconnect(id);
       links?.disconnect(id);
     }
-    if (changed.isNotEmpty) unawaited(capabilities?.forget(changed));
+    if (changed.isNotEmpty) {
+      unawaited(capabilities?.forget(changed));
+      unawaited(history?.forget(changed));
+    }
   }
 
   // Lists the synced servers again with the pins as they stand. A
@@ -1383,6 +1462,9 @@ void engineMain(
               RemoveImage() ||
               CreateVolume() ||
               RemoveVolume() ||
+              RemoveNetwork() ||
+              PruneDocker() ||
+              PullImage() ||
               StackAction() ||
               ContainerExec():
             final router = docker;
@@ -1561,6 +1643,22 @@ void engineMain(
                 reject(message, 'acknowledgement: $error'),
           ),
         );
+      case ReadHistory(:final serverId, :final tier, :final requestId):
+        const nothing = HistoryRange(buckets: [], gaps: []);
+        // The app waits on the answer, so a read that fails answers
+        // nothing recorded rather than nothing at all.
+        final range =
+            await (history?.read(serverId, tier, now: DateTime.now().toUtc()) ??
+                    Future.value(nothing))
+                .catchError((Object _) => nothing);
+        uiPort.send(
+          HistoryRead(
+            requestId: requestId,
+            serverId: serverId,
+            tier: tier,
+            range: range,
+          ),
+        );
       case ReadUserCrontabs(:final serverId, :final requestId):
         void fail(UserCrontabsFailure failure) => uiPort.send(
           UserCrontabs(
@@ -1611,7 +1709,9 @@ void engineMain(
           return;
         }
         admin?.touch(serverId);
-        // Not awaited, as the crontab read above.
+        // Not awaited, as the crontab read above. readSmart answers
+        // rather than throws; a lend that fails still answers, so the
+        // section never waits on nothing.
         unawaited(
           lendSession(
             serverId,
@@ -1621,7 +1721,10 @@ void engineMain(
               session: session,
               profile: profiles[serverId],
             ),
-          ).then(uiPort.send),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => fail(SmartReportFailure.transport),
+          ),
         );
       case ReadRestarts(:final serverId, :final requestId):
         void fail(RestartReportFailure failure) => uiPort.send(
@@ -1788,6 +1891,8 @@ void engineMain(
         // Not awaited: the password prompt's answer comes through this
         // queue.
         unawaited(admin!.enable(serverId));
+      case CancelAction(:final planId):
+        pullCancels.cancel(planId);
       case RunAction(:final planId, :final confirmation):
         // A plan is taken once: a refused run needs a new preview.
         final (:plan, :missing) = plans.take(
@@ -1837,11 +1942,15 @@ void engineMain(
           }),
         );
       case Shutdown():
-        // Open shells end first, so their TerminalClosed and audit
+        // The buckets still filling are written and open shells end,
+        // side by side within one grace, so their TerminalClosed and audit
         // records are not cut off by Isolate.exit. Each stream's end goes
         // out before the isolate does, and its process goes with the
         // isolate.
-        await terminals?.dispose().timeout(_shutdownGrace, onTimeout: () {});
+        await Future.wait([
+          ?history?.flush().timeout(_shutdownGrace, onTimeout: () {}),
+          ?terminals?.dispose().timeout(_shutdownGrace, onTimeout: () {}),
+        ]);
         unawaited(logs?.close());
         unawaited(docker?.close());
         commands.close();
@@ -1919,6 +2028,16 @@ void engineMain(
             ImportStoreIssueKind.recovered || null => CachePurge.removedServers,
           },
         );
+        history = await HistoryStore.open(
+          Directory(start.supportDirectory),
+          access: start.supportDirectoryAccess,
+          fleet: fleetIds,
+          purge: switch (store.issue?.kind) {
+            ImportStoreIssueKind.leftAsIs ||
+            ImportStoreIssueKind.newerVersion => CachePurge.never,
+            ImportStoreIssueKind.recovered || null => CachePurge.removedServers,
+          },
+        );
         // Only a confirmed endpoint is dialed, so a profile cached for a
         // synced server not confirmed now describes another machine. One
         // whose pins could not be read keeps it until they read.
@@ -1930,6 +2049,7 @@ void engineMain(
         };
         if (unconfirmed.isNotEmpty) {
           unawaited(capabilities!.forget(unconfirmed));
+          unawaited(history!.forget(unconfirmed));
         }
       });
   commands.listen((message) {

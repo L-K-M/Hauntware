@@ -8,6 +8,7 @@ import '../ui/charts/time_series.dart';
 import 'container_terminals.dart';
 import 'docker_controller.dart';
 import 'docker_endpoint_choices.dart';
+import 'history_reads.dart';
 import 'job_history_reads.dart';
 import 'log_reads.dart';
 import 'log_streams.dart';
@@ -160,6 +161,7 @@ final class MonitoringController extends ChangeNotifier {
     terminals = ContainerTerminals(_engine);
     jobHistory = JobHistoryReads(_engine);
     packages = PackageReads(_engine);
+    rollups = HistoryReads(_engine);
     docker = DockerController(
       _engine,
       endpointChoices: dockerEndpointChoices,
@@ -189,6 +191,9 @@ final class MonitoringController extends ChangeNotifier {
   /// The System tab's package checks (PKG-01 to PKG-03), a concern of its
   /// own beside [logs].
   late final PackageReads packages;
+  /// The on-device history the History card charts (HIS-01), a concern of
+  /// its own beside [logs].
+  late final HistoryReads rollups;
 
   /// Each server's Docker endpoint, which the server header names, and
   /// the engine details the Docker tab shows (03 §5.9, §10.2): a concern
@@ -766,6 +771,7 @@ final class MonitoringController extends ChangeNotifier {
     terminals.dispose();
     jobHistory.dispose();
     packages.dispose();
+    rollups.dispose();
     docker.dispose();
     _onEngineDone();
     for (final refresh in _refreshes.toList()) {

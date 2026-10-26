@@ -35,6 +35,7 @@ const _flatpakFinishArgs = {
   '--socket=ssh-auth',
   '--filesystem=~/.ssh/config:ro',
   '--talk-name=org.freedesktop.secrets',
+  '--talk-name=org.freedesktop.Notifications',
 };
 
 const _iconSizes = [16, 24, 32, 48, 64, 96, 128, 256, 512];

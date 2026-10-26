@@ -11,7 +11,11 @@ import 'package:klabautermann_core/klabautermann_core.dart'
         SyncStoreIssue;
 
 import 'controllers/admin_controller.dart';
+import 'controllers/alert_center.dart';
+import 'controllers/alert_notifications.dart';
+import 'controllers/alert_rules_controller.dart';
 import 'controllers/announcement_controller.dart';
+import 'controllers/app_lock_controller.dart';
 import 'controllers/pin_publication_controller.dart';
 import 'controllers/safety_controller.dart';
 import 'controllers/appearance_controller.dart';
@@ -33,6 +37,10 @@ import 'ui/actions/action_entry.dart' show OperationsScope;
 import 'ui/actions/action_preview.dart' show ActionResultToasts;
 import 'ui/adaptive_shell.dart';
 import 'ui/admin_mode_chip.dart' show AdminScope;
+import 'ui/alert_notifications.dart' show AlertNotificationsScope;
+import 'ui/alert_rules.dart' show AlertRulesScope;
+import 'ui/alerts.dart' show AlertScope;
+import 'ui/app_lock_gate.dart';
 import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
 import 'ui/hand_off_actions.dart' show HandOffScope;
 import 'ui/macos_toolbar_band.dart';
@@ -64,9 +72,13 @@ class KlabautermannApp extends StatelessWidget {
     required this.announcements,
     this.deviceName,
     this.safety,
+    this.appLock,
     this.syncSecrets,
     this.pinPublication,
     this.admin,
+    this.alerts,
+    this.alertRules,
+    this.alertNotifications,
     this.operations,
     required this.dockerNotice,
     this.sync,
@@ -102,6 +114,10 @@ class KlabautermannApp extends StatelessWidget {
   /// neither the Safety menu nor its notices.
   final SafetyController? safety;
 
+  /// The app lock (SAF-20), whose screen covers every route while locked;
+  /// null in tests that leave it out.
+  final AppLockController? appLock;
+
   /// The device name the host syslog line gives (M5 plan Q6); like
   /// [appearance], it outlives an engine run. Null in tests that leave it
   /// out, where General settings show no device name.
@@ -119,6 +135,21 @@ class KlabautermannApp extends StatelessWidget {
   /// Admin mode per server (03 §8.2), one engine run's like [fleet]. Null
   /// in tests that leave it out, where the header shows no admin chip.
   final AdminController? admin;
+
+  /// The in-app alerts the engine's rules raise (ALR-01), one engine run's
+  /// like [fleet]. Null in tests that leave it out, where the fleet shows
+  /// no alert notice or badges.
+  final AlertCenter? alerts;
+
+  /// The account's alert rules and their editor (ALR-01), one engine
+  /// run's like [fleet]. Null in tests that leave it out, where no surface
+  /// offers the rules page.
+  final AlertRulesController? alertRules;
+
+  /// Raised alerts' system notifications (ALR-01), one engine run's like
+  /// [fleet]. Null in tests that leave it out, where no surface offers
+  /// the switch.
+  final AlertNotificationsController? alertNotifications;
 
   /// Previews and runs of actions (03 §8.5), one engine run's like
   /// [fleet]. Null in tests that leave it out, where no action can run.
@@ -280,12 +311,34 @@ class KlabautermannApp extends StatelessWidget {
               ),
               null => withSafety,
             };
-            return switch (handOff) {
+            final withRules = switch (alertRules) {
+              final rules? => AlertRulesScope(rules: rules, child: withEditing),
+              null => withEditing,
+            };
+            final withNotifications = switch (alertNotifications) {
+              final notifications? => AlertNotificationsScope(
+                notifications: notifications,
+                child: withRules,
+              ),
+              null => withRules,
+            };
+            final withAlerts = switch (alerts) {
+              final alerts? => AlertScope(
+                alerts: alerts,
+                child: withNotifications,
+              ),
+              null => withNotifications,
+            };
+            final withHandOff = switch (handOff) {
               final handOff? => HandOffScope(
                 launcher: handOff,
-                child: withEditing,
+                child: withAlerts,
               ),
-              null => withEditing,
+              null => withAlerts,
+            };
+            return switch (appLock) {
+              final appLock? => AppLockGate(lock: appLock, child: withHandOff),
+              null => withHandOff,
             };
           },
           // The shell's settings callback and the menus' commands need a
@@ -351,6 +404,7 @@ class KlabautermannApp extends StatelessWidget {
               appVersion: appVersion,
               monitorSet: fleet.monitorSettings,
               safety: safety,
+              appLock: appLock,
               syncSecrets: syncSecrets,
               pinPublication: pinPublication,
             ),

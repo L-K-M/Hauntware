@@ -18,6 +18,10 @@ MasterKeyManager klabautermannMasterKeyManager([
   storage: storage,
 );
 
+/// Runs a keystore read once the app lock lets it (SAF-20); throws when
+/// the app stays locked.
+typedef KeystoreReadGuard = Future<T> Function<T>(Future<T> Function() read);
+
 /// Answers the engine's keystore requests (03 §10.1, D62). The keystore
 /// plugin's channels answer only this isolate, so the engine's sync asks
 /// here with a [KeystoreRequest] and waits for the [AnswerKeystore].
@@ -25,8 +29,12 @@ MasterKeyManager klabautermannMasterKeyManager([
 /// The master key is only ever read through
 /// `probeKeystore(hasExistingVault: true)`, which never mints: a key
 /// minted for a read would open nothing the vault or the account holds.
+///
+/// With the app lock (SAF-20), [guard] runs every read: a read while the
+/// app stays locked throws, and the engine hears a refusal. Writes and
+/// deletes are not held back, so a sign-out finishes while locked.
 final class EngineKeystoreResponder {
-  EngineKeystoreResponder(this._engine, this._keys) {
+  EngineKeystoreResponder(this._engine, this._keys, {this._guard}) {
     _events = _engine.events.listen((event) {
       if (event is KeystoreRequest) unawaited(_answer(event));
     });
@@ -34,7 +42,11 @@ final class EngineKeystoreResponder {
 
   final EngineClient _engine;
   final MasterKeyManager _keys;
+  final KeystoreReadGuard? _guard;
   late final StreamSubscription<EngineEvent> _events;
+
+  Future<T> _read<T>(Future<T> Function() read) =>
+      _guard == null ? read() : _guard(read);
 
   Future<void> _answer(KeystoreRequest request) async {
     KeystoreResult result;
@@ -56,13 +68,15 @@ final class EngineKeystoreResponder {
         await _keys.putApiKey(name, value);
         return const KeystoreDone();
       case KeystoreGetApiKey(:final name):
-        return KeystoreApiKey(await _keys.getApiKey(name));
+        return KeystoreApiKey(await _read(() => _keys.getApiKey(name)));
       case KeystoreDeleteApiKey(:final name):
         await _keys.deleteApiKey(name);
         return const KeystoreDone();
       case KeystoreReadMasterKey():
         try {
-          final key = await _keys.probeKeystore(hasExistingVault: true);
+          final key = await _read(
+            () => _keys.probeKeystore(hasExistingVault: true),
+          );
           return KeystoreMasterKey(
             key == null ? null : Uint8List.fromList(key),
           );

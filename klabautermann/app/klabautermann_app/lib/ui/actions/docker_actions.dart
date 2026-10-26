@@ -8,6 +8,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../l10n/app_localizations.dart';
 import '../docker/containers_view.dart' show EngineContainerState;
 import '../docker/images_view.dart' show ImageEntry;
+import '../docker/networks_view.dart' show NetworkEntry;
 import '../docker/volumes_view.dart' show VolumeEntry, validVolumeName;
 import 'action_entry.dart';
 import 'action_preview.dart';
@@ -626,6 +627,61 @@ class VolumeActionsButton extends StatelessWidget {
   }
 }
 
+/// The prune [intent] names, as its button or menu row reads.
+String pruneLabel(AppLocalizations l10n, PruneDocker intent) =>
+    l10n.dockerPruneChoice(switch (intent.kind) {
+      DockerPruneKind.images when intent.all => 'imagesAll',
+      final kind => kind.name,
+    });
+
+/// A sub-tab's prune (DKE-05, IMG-06): one button for one [choices]
+/// entry, or a menu of them. Each opens the preview of what the prune
+/// removes and what it keeps.
+class PruneButton extends StatelessWidget {
+  const PruneButton({super.key, required this.choices});
+
+  /// The prunes offered, one or more, all on one server.
+  final List<PruneDocker> choices;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    const icon = Icon(Icons.cleaning_services_outlined);
+    assert(choices.isNotEmpty);
+    final serverId = choices.first.serverId;
+    if (choices case [final only]) {
+      return ActionEntry(
+        serverId: serverId,
+        point: ActionEntryPoint.prune,
+        child: OutlinedButton.icon(
+          onPressed: () => startAction(context, only),
+          icon: icon,
+          label: Text(pruneLabel(l10n, only)),
+        ),
+      );
+    }
+
+    return ActionEntry(
+      serverId: serverId,
+      point: ActionEntryPoint.prune,
+      child: MenuAnchor(
+        menuChildren: [
+          for (final choice in choices)
+            MenuItemButton(
+              onPressed: () => startAction(context, choice),
+              child: Text(pruneLabel(l10n, choice)),
+            ),
+        ],
+        builder: (context, menu, _) => OutlinedButton.icon(
+          onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+          icon: icon,
+          label: Text(l10n.dockerPrune),
+        ),
+      ),
+    );
+  }
+}
+
 /// "Create volume…" over the Volumes list (VOL-02): asks for a name and
 /// an optional driver, then plans the create.
 class CreateVolumeButton extends StatelessWidget {
@@ -743,6 +799,70 @@ class _CreateVolumeDialogState extends State<_CreateVolumeDialog> {
           child: Text(l10n.dockerVolumeCreateSubmit),
         ),
       ],
+    );
+  }
+}
+
+/// [entry]'s actions for the Networks table's row menu, where actions on
+/// [serverId] are allowed (DNW-02): Remove for a user-defined network,
+/// none for a built-in one, which stays.
+List<SidebarMenuEntry> networkActionEntries(
+  BuildContext context, {
+  required String serverId,
+  required NetworkEntry entry,
+}) {
+  if (entry.builtin ||
+      !actionsAllowedAt(context, serverId, ActionEntryPoint.networkRemove)) {
+    return const [];
+  }
+  return [
+    SidebarMenuAction(
+      label: AppLocalizations.of(context).dockerNetworkRemove,
+      onSelected: () => startAction(
+        context,
+        RemoveNetwork(serverId, networkId: entry.network.id),
+      ),
+    ),
+  ];
+}
+
+/// The same action behind a button on the Networks phone row, which has
+/// no row menu; a built-in network shows none.
+class NetworkActionsButton extends StatelessWidget {
+  const NetworkActionsButton({
+    super.key,
+    required this.serverId,
+    required this.entry,
+  });
+
+  final String serverId;
+  final NetworkEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    if (entry.builtin) return const SizedBox.shrink();
+
+    final l10n = AppLocalizations.of(context);
+    return ActionEntry(
+      serverId: serverId,
+      point: ActionEntryPoint.networkRemove,
+      child: MenuAnchor(
+        menuChildren: [
+          MenuItemButton(
+            onPressed: () => startAction(
+              context,
+              RemoveNetwork(serverId, networkId: entry.network.id),
+            ),
+            child: Text(l10n.dockerNetworkRemove),
+          ),
+        ],
+        builder: (context, controller, _) => IconButton(
+          tooltip: l10n.dockerActions,
+          icon: const Icon(Icons.more_vert),
+          onPressed: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+        ),
+      ),
     );
   }
 }

@@ -10,6 +10,8 @@ const _appearanceKey = 'klabautermann.appearance';
 const _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 const _rootNoticeKey = 'klabautermann.docker.rootEquivalenceNoticeDismissed';
 const _announceBandsKey = 'klabautermann.accessibility.announceThresholdBands';
+const _alertNotificationsKey = 'klabautermann.alerts.notifications';
+const _appLockKey = 'klabautermann.appLock';
 const _syncSecretsKey = 'klabautermann.sync.secrets';
 const _deviceNameKey = 'klabautermann.audit.deviceName';
 const _overridesKey = 'klabautermann.docker.endpointOverrides';
@@ -468,6 +470,34 @@ void main() {
       }
     });
 
+    test('posts no alert notification until turned on, keeps it off once '
+        'turned off, and reads a damaged value as off', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.alertNotifications, isFalse);
+      await store.setAlertNotifications(true);
+      expect((await DeviceSettingsStore.open(file)).alertNotifications, isTrue);
+      expect(document()[_alertNotificationsKey], isTrue);
+      await store.setAlertNotifications(false);
+      expect(
+        (await DeviceSettingsStore.open(file)).alertNotifications,
+        isFalse,
+      );
+
+      for (final damaged in <Object>['true', 1, <String>[]]) {
+        writeDocument({
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          _alertNotificationsKey: damaged,
+        });
+        expect(
+          (await DeviceSettingsStore.open(file)).alertNotifications,
+          isFalse,
+        );
+      }
+    });
+
     test(
       'announces threshold bands until turned off, across reloads',
       () async {
@@ -492,6 +522,35 @@ void main() {
         );
       },
     );
+
+    test('keeps the app lock off until turned on, across reloads, and a '
+        'damaged value never drops it (SAF-20)', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.appLock, isFalse);
+      await store.setAppLock(true);
+      final reopened = await DeviceSettingsStore.open(file);
+
+      expect(reopened.appLock, isTrue);
+      expect(document(), {
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _appLockKey: true,
+      });
+
+      await reopened.setAppLock(false);
+      expect((await DeviceSettingsStore.open(file)).appLock, isFalse);
+
+      for (final damaged in <Object>['off', 0, <String>[]]) {
+        writeDocument({
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          _appLockKey: damaged,
+        });
+        expect((await DeviceSettingsStore.open(file)).appLock, isTrue);
+      }
+    });
 
     test('keeps pinned servers across reloads, sorted on disk', () async {
       writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});

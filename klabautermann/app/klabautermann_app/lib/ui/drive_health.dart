@@ -106,7 +106,7 @@ List<SortableTableColumn<SmartDisk>> driveColumns(
       figure(
         DriveColumn.badSectors,
         l10n.systemDriveBadSectors,
-        (count) => l10n.systemDiskOperations(count),
+        l10n.systemDriveBadSectorCount,
         (disk) => disk.badSectors,
       ),
       figure(
@@ -153,6 +153,8 @@ class _DriveHealthSectionState extends State<DriveHealthSection> {
   }
 
   Future<void> _read(AdminController admin) async {
+    // A second tap before the button gives way would run smartctl twice.
+    if (_reading) return;
     final serverId = widget.serverId;
     setState(() => _reading = true);
     final report = await admin.readSmart(serverId);

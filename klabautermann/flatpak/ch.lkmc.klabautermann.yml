@@ -23,6 +23,8 @@ finish-args:
   - --filesystem=~/.ssh/config:ro
   # Secrets live in the host keyring (Secret Service API).
   - --talk-name=org.freedesktop.secrets
+  # Raised alerts as desktop notifications (ALR-01).
+  - --talk-name=org.freedesktop.Notifications
 modules:
   - name: klabautermann
     buildsystem: simple

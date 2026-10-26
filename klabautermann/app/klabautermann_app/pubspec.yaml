@@ -1,7 +1,7 @@
 name: klabautermann_app
 description: Klabautermann fleet manager for servers and Docker.
 publish_to: none
-version: 1.9.2+1090299
+version: 1.9.3+1090399
 
 environment:
   sdk: ^3.12.0
@@ -16,6 +16,10 @@ dependencies:
   # to Poltergeist's version so the plugin's native code and default
   # options match the sibling's.
   flutter_secure_storage: 10.3.1
+  # The app lock's device authentication (SAF-20): the system prompt,
+  # biometrics with the passcode or PIN as fallback. Pinned to Séance's
+  # version, whose app lock this one shares (ghost_keystore's AppLock).
+  local_auth: 3.0.2
   # LOG-10's export (M5 plan P15): the save dialog and the share sheet.
   # Not the siblings' file_picker 11.0.3 and share_plus 12.0.2: both need
   # win32 5, which package_info_plus 10.2.2 above rules out for the same
@@ -23,6 +27,9 @@ dependencies:
   # on win32 6.
   file_picker: 13.1.0
   share_plus: 13.3.1
+  # ALR-01's system notifications for raised alerts (03 §7.19; BSD-3,
+  # approved by the owner on 2026-10-10, D10).
+  flutter_local_notifications: 22.3.3
   # gen-l10n's generated localizations use intl primitives.
   intl: 0.20.3
   # The engine-isolate protocol and client the app composes over (03 D18).

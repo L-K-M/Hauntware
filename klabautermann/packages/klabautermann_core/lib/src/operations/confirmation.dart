@@ -50,6 +50,12 @@ enum OperationKind {
 
   /// Removing a volume deletes its data (03 §7.15).
   removeVolume(ConfirmationTier.typedPhrase),
+
+  /// Removing a user-defined network no container is on (DNW-02).
+  removeNetwork(ConfirmationTier.acknowledge),
+
+  /// Pulling an image (IMG-03): it adds or retags an image, nothing runs.
+  pullImage(ConfirmationTier.acknowledge),
   prune(ConfirmationTier.typedPhrase),
   composeDown(ConfirmationTier.typedPhrase),
 

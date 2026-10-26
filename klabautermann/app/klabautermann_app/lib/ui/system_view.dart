@@ -108,7 +108,8 @@ String? clockSkewText(AppLocalizations l10n, Duration? skew) {
 }
 
 /// SYS-02's words for [profile]'s time sync; null where timedatectl did
-/// not say.
+/// not say. The kernel's synchronized flag wins over timedated's NTP
+/// switch, which only knows the NTP units timedated manages.
 String? timeSyncText(AppLocalizations l10n, HostProfile? profile) =>
     switch ((profile?.ntpEnabled, profile?.ntpSynchronized)) {
       (_, true) => l10n.systemTimeSynced,
