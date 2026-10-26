@@ -674,11 +674,17 @@ jobs:
               bundles=(planchette/app/planchette_app/build/linux/*/release/bundle)
               [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
               mv "${bundles[0]}" "planchette-linux-${{ matrix.flavor }}"
-              tar -czf "planchette-linux-${{ matrix.flavor }}.tar.gz" "planchette-linux-${{ matrix.flavor }}"
               # The mv above renamed the bundle out of Flutter's layout, so
               # point the packager at it explicitly (--bundle asks the ELF for
               # its arch).
               planchette/scripts/package-linux.sh --bundle "planchette-linux-${{ matrix.flavor }}" --output-dir .
+              # The tarball also carries the notices readable at its top, beside
+              # the license; added after packaging, so the .deb keeps them in
+              # its doc directory only.
+              gzip -dc "planchette-linux-${{ matrix.flavor }}/data/flutter_assets/NOTICES.Z" \
+                > "planchette-linux-${{ matrix.flavor }}/Third-Party-Notices.txt"
+              cp LICENSE "planchette-linux-${{ matrix.flavor }}/LICENSE"
+              tar -czf "planchette-linux-${{ matrix.flavor }}.tar.gz" "planchette-linux-${{ matrix.flavor }}"
               ;;
             macos)
               # ditto keeps the bundle's symlinks and metadata intact inside
@@ -693,9 +699,17 @@ jobs:
               runners=(planchette/app/planchette_app/build/windows/*/runner/Release)
               [[ ${#runners[@]} -eq 1 ]] || { echo "expected one windows runner dir, found ${#runners[@]}" >&2; exit 1; }
               mv "${runners[0]}" planchette-windows-x64
+              # The notices readable at the zip's top, beside the license.
+              gzip -dc planchette-windows-x64/data/flutter_assets/NOTICES.Z \
+                > planchette-windows-x64/Third-Party-Notices.txt
+              cp LICENSE planchette-windows-x64/LICENSE
               7z a -bd planchette-windows-x64.zip planchette-windows-x64
               ;;
           esac
+      # What users download must carry its third-party notices.
+      - name: Verify bundled notices
+        shell: bash
+        run: bash scripts/check-release-notices.sh planchette planchette "${{ matrix.target }}"
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned: a retargeted tag would be arbitrary code with contents: write)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
@@ -1130,11 +1144,17 @@ jobs:
               bundles=(seance/app/seance_app/build/linux/*/release/bundle)
               [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
               mv "${bundles[0]}" "seance-linux-${{ matrix.flavor }}"
-              tar -czf "seance-linux-${{ matrix.flavor }}.tar.gz" "seance-linux-${{ matrix.flavor }}"
               # The mv above renamed the bundle out of Flutter's layout, so
               # point the packager at it explicitly (--bundle asks the ELF for
               # its arch).
               seance/scripts/package-linux.sh --bundle "seance-linux-${{ matrix.flavor }}" --output-dir .
+              # The tarball also carries the notices readable at its top, beside
+              # the license; added after packaging, so the .deb keeps them in
+              # its doc directory only.
+              gzip -dc "seance-linux-${{ matrix.flavor }}/data/flutter_assets/NOTICES.Z" \
+                > "seance-linux-${{ matrix.flavor }}/Third-Party-Notices.txt"
+              cp LICENSE "seance-linux-${{ matrix.flavor }}/LICENSE"
+              tar -czf "seance-linux-${{ matrix.flavor }}.tar.gz" "seance-linux-${{ matrix.flavor }}"
               # The .flatpak rides in its own leg (flatpak_seance): the
               # repack needs its own toolchain and a Flathub fill of its
               # runtimes, and a slow one must not take this leg's other
@@ -1164,9 +1184,17 @@ jobs:
               runners=(seance/app/seance_app/build/windows/*/runner/Release)
               [[ ${#runners[@]} -eq 1 ]] || { echo "expected one windows runner dir, found ${#runners[@]}" >&2; exit 1; }
               mv "${runners[0]}" seance-windows-x64
+              # The notices readable at the zip's top, beside the license.
+              gzip -dc seance-windows-x64/data/flutter_assets/NOTICES.Z \
+                > seance-windows-x64/Third-Party-Notices.txt
+              cp LICENSE seance-windows-x64/LICENSE
               7z a -bd seance-windows-x64.zip seance-windows-x64
               ;;
           esac
+      # What users download must carry its third-party notices.
+      - name: Verify bundled notices
+        shell: bash
+        run: bash scripts/check-release-notices.sh seance seance "${{ matrix.target }}"
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
@@ -1361,11 +1389,17 @@ jobs:
               bundles=(poltergeist/app/poltergeist_app/build/linux/*/release/bundle)
               [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
               mv "${bundles[0]}" "poltergeist-linux-${{ matrix.flavor }}"
-              tar -czf "poltergeist-linux-${{ matrix.flavor }}.tar.gz" "poltergeist-linux-${{ matrix.flavor }}"
               # The mv above renamed the bundle out of Flutter's layout, so
               # point the packager at it explicitly (--bundle asks the ELF for
               # its arch).
               poltergeist/scripts/package-linux.sh --bundle "poltergeist-linux-${{ matrix.flavor }}" --output-dir .
+              # The tarball also carries the notices readable at its top, beside
+              # the license; added after packaging, so the .deb keeps them in
+              # its doc directory only.
+              gzip -dc "poltergeist-linux-${{ matrix.flavor }}/data/flutter_assets/NOTICES.Z" \
+                > "poltergeist-linux-${{ matrix.flavor }}/Third-Party-Notices.txt"
+              cp LICENSE "poltergeist-linux-${{ matrix.flavor }}/LICENSE"
+              tar -czf "poltergeist-linux-${{ matrix.flavor }}.tar.gz" "poltergeist-linux-${{ matrix.flavor }}"
               # The .flatpak rides in its own leg (flatpak_poltergeist):
               # the repack needs its own toolchain and a Flathub fill of
               # its runtimes, and a slow one must not take this leg's
@@ -1397,9 +1431,17 @@ jobs:
               runners=(poltergeist/app/poltergeist_app/build/windows/*/runner/Release)
               [[ ${#runners[@]} -eq 1 ]] || { echo "expected one windows runner dir, found ${#runners[@]}" >&2; exit 1; }
               mv "${runners[0]}" poltergeist-windows-x64
+              # The notices readable at the zip's top, beside the license.
+              gzip -dc poltergeist-windows-x64/data/flutter_assets/NOTICES.Z \
+                > poltergeist-windows-x64/Third-Party-Notices.txt
+              cp LICENSE poltergeist-windows-x64/LICENSE
               7z a -bd poltergeist-windows-x64.zip poltergeist-windows-x64
               ;;
           esac
+      # What users download must carry its third-party notices.
+      - name: Verify bundled notices
+        shell: bash
+        run: bash scripts/check-release-notices.sh poltergeist poltergeist "${{ matrix.target }}"
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
@@ -1585,10 +1627,16 @@ jobs:
               bundles=(klabautermann/app/klabautermann_app/build/linux/*/release/bundle)
               [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
               mv "${bundles[0]}" "klabautermann-preview-linux-${{ matrix.flavor }}"
-              tar -czf "klabautermann-preview-linux-${{ matrix.flavor }}.tar.gz" "klabautermann-preview-linux-${{ matrix.flavor }}"
               # The mv above renamed the bundle out of Flutter's layout, so
               # point the packager at it explicitly.
               klabautermann/scripts/package-linux.sh --bundle "klabautermann-preview-linux-${{ matrix.flavor }}" --output-dir .
+              # The tarball also carries the notices readable at its top, beside
+              # the license; added after packaging, so the .deb keeps them in
+              # its doc directory only.
+              gzip -dc "klabautermann-preview-linux-${{ matrix.flavor }}/data/flutter_assets/NOTICES.Z" \
+                > "klabautermann-preview-linux-${{ matrix.flavor }}/Third-Party-Notices.txt"
+              cp LICENSE "klabautermann-preview-linux-${{ matrix.flavor }}/LICENSE"
+              tar -czf "klabautermann-preview-linux-${{ matrix.flavor }}.tar.gz" "klabautermann-preview-linux-${{ matrix.flavor }}"
               # The .flatpak repacks the same .deb under /app.
               sudo apt-get update && sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
               # Ubuntu 24.04 denies the unprivileged user namespaces
@@ -1616,9 +1664,17 @@ jobs:
               runners=(klabautermann/app/klabautermann_app/build/windows/*/runner/Release)
               [[ ${#runners[@]} -eq 1 ]] || { echo "expected one windows runner dir, found ${#runners[@]}" >&2; exit 1; }
               mv "${runners[0]}" klabautermann-preview-windows-x64
+              # The notices readable at the zip's top, beside the license.
+              gzip -dc klabautermann-preview-windows-x64/data/flutter_assets/NOTICES.Z \
+                > klabautermann-preview-windows-x64/Third-Party-Notices.txt
+              cp LICENSE klabautermann-preview-windows-x64/LICENSE
               7z a -bd klabautermann-preview-windows-x64.zip klabautermann-preview-windows-x64
               ;;
           esac
+      # What users download must carry its third-party notices.
+      - name: Verify bundled notices
+        shell: bash
+        run: bash scripts/check-release-notices.sh klabautermann klabautermann-preview "${{ matrix.target }}"
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}

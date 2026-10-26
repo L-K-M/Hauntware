@@ -27,6 +27,12 @@ void main() {
 
     setUp(() {
       prefix = Directory(p.join(sandbox.path, 'app'))..createSync();
+      // The doc directory the .deb ships, named after the command.
+      for (final notice in ['copyright', 'Third-Party-Notices.txt']) {
+        File(p.join(prefix.path, 'share/doc/demo', notice))
+          ..createSync(recursive: true)
+          ..writeAsStringSync('text\n');
+      }
     });
 
     void writeExecutable(String relative, String contents) {
@@ -113,6 +119,24 @@ void main() {
       final result = await _smokeCheck(prefix, 'demo');
 
       expect(result.exitCode, 0, reason: result.stderr as String);
+    });
+
+    test('fails when the doc directory lacks the notices', () async {
+      copyRealBinary();
+      writeWrapper(p.join(prefix.path, 'lib/demo/demo_app'));
+      File(
+        p.join(prefix.path, 'share/doc/demo/Third-Party-Notices.txt'),
+      ).deleteSync();
+
+      final result = await _smokeCheck(prefix, 'demo');
+
+      expect(result.exitCode, isNot(0));
+      expect(
+        result.stderr,
+        contains(
+          'missing ${prefix.path}/share/doc/demo/Third-Party-Notices.txt',
+        ),
+      );
     });
 
     test('fails when the command is missing', () async {

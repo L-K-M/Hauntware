@@ -1597,6 +1597,25 @@ jobs:
         if: matrix.target == 'linux'
         working-directory: planchette
         run: scripts/package-linux.sh --appimage=required
+      # The built artifacts carry their third-party notices: each
+      # NOTICES, the readable copy in the Apple apps, and the .deb's
+      # copyright file and Third-Party-Notices.txt.
+      - name: Verify bundled notices
+        shell: bash
+        run: |
+          check() { bash scripts/check-flutter-notices.sh planchette "$@"; }
+          build=planchette/app/planchette_app/build
+          case "${{ matrix.target }}" in
+            android) check "$build/app/outputs/flutter-apk/app-release.apk" ;;
+            linux)
+              check "$build/linux/x64/release/bundle/data/flutter_assets/NOTICES.Z"
+              dpkg-deb -x planchette/dist/planchette_*.deb "$RUNNER_TEMP/notices-deb"
+              test -s "$RUNNER_TEMP/notices-deb/usr/share/doc/planchette/copyright"
+              check "$RUNNER_TEMP/notices-deb/usr/share/doc/planchette/Third-Party-Notices.txt"
+              ;;
+            macos) check "$build"/macos/Build/Products/Release/*.app/Contents/Resources/Third-Party-Notices.txt ;;
+            windows) check "$build/windows/x64/runner/Release/data/flutter_assets/NOTICES.Z" ;;
+          esac
       - name: Native keyboard modifiers
         if: matrix.target == 'macos'
         working-directory: planchette
@@ -1781,6 +1800,26 @@ jobs:
         if: startsWith(matrix.target, 'linux')
         working-directory: seance
         run: scripts/package-linux.sh --output-dir dist-packages
+      # The built artifacts carry their third-party notices: each
+      # NOTICES, the readable copy in the Apple apps, and the .deb's
+      # copyright file and Third-Party-Notices.txt.
+      - name: Verify bundled notices
+        shell: bash
+        run: |
+          check() { bash scripts/check-flutter-notices.sh seance "$@"; }
+          build=seance/app/seance_app/build
+          case "${{ matrix.target }}" in
+            android) check "$build/app/outputs/flutter-apk/app-release.apk" ;;
+            linux)
+              check "$build/linux/x64/release/bundle/data/flutter_assets/NOTICES.Z"
+              dpkg-deb -x seance/dist-packages/seance_*.deb "$RUNNER_TEMP/notices-deb"
+              test -s "$RUNNER_TEMP/notices-deb/usr/share/doc/seance/copyright"
+              check "$RUNNER_TEMP/notices-deb/usr/share/doc/seance/Third-Party-Notices.txt"
+              ;;
+            macos) check "$build"/macos/Build/Products/Release/*.app/Contents/Resources/Third-Party-Notices.txt ;;
+            ios) check "$build"/ios/iphoneos/Runner.app/Third-Party-Notices.txt "$build"/ios/iphoneos/Runner.app/Frameworks/App.framework/flutter_assets/NOTICES.Z ;;
+            windows) check "$build/windows/x64/runner/Release/data/flutter_assets/NOTICES.Z" ;;
+          esac
       - name: Upload Linux packages
         if: startsWith(matrix.target, 'linux')
         uses: actions/upload-artifact@v7
@@ -1940,6 +1979,26 @@ jobs:
         if: startsWith(matrix.target, 'linux')
         working-directory: poltergeist
         run: scripts/package-linux.sh --output-dir dist-packages
+      # The built artifacts carry their third-party notices: each
+      # NOTICES, the readable copy in the Apple apps, and the .deb's
+      # copyright file and Third-Party-Notices.txt.
+      - name: Verify bundled notices
+        shell: bash
+        run: |
+          check() { bash scripts/check-flutter-notices.sh poltergeist "$@"; }
+          build=poltergeist/app/poltergeist_app/build
+          case "${{ matrix.target }}" in
+            android) check "$build/app/outputs/flutter-apk/app-release.apk" ;;
+            linux)
+              check "$build/linux/x64/release/bundle/data/flutter_assets/NOTICES.Z"
+              dpkg-deb -x poltergeist/dist-packages/poltergeist_*.deb "$RUNNER_TEMP/notices-deb"
+              test -s "$RUNNER_TEMP/notices-deb/usr/share/doc/poltergeist/copyright"
+              check "$RUNNER_TEMP/notices-deb/usr/share/doc/poltergeist/Third-Party-Notices.txt"
+              ;;
+            macos) check "$build"/macos/Build/Products/Release/*.app/Contents/Resources/Third-Party-Notices.txt ;;
+            ios) check "$build"/ios/archive/Runner.xcarchive/Products/Applications/*.app/Third-Party-Notices.txt "$build"/ios/archive/Runner.xcarchive/Products/Applications/*.app/Frameworks/App.framework/flutter_assets/NOTICES.Z ;;
+            windows) check "$build/windows/x64/runner/Release/data/flutter_assets/NOTICES.Z" ;;
+          esac
 
   # The Poltergeist Flatpak repack; see planchette_flatpak.
   poltergeist_flatpak:
@@ -2097,6 +2156,26 @@ jobs:
         if: startsWith(matrix.target, 'linux')
         working-directory: klabautermann
         run: scripts/package-linux.sh --output-dir dist-packages
+      # The built artifacts carry their third-party notices: each
+      # NOTICES, the readable copy in the Apple apps, and the .deb's
+      # copyright file and Third-Party-Notices.txt.
+      - name: Verify bundled notices
+        shell: bash
+        run: |
+          check() { bash scripts/check-flutter-notices.sh klabautermann "$@"; }
+          build=klabautermann/app/klabautermann_app/build
+          case "${{ matrix.target }}" in
+            android) check "$build/app/outputs/flutter-apk/app-release.apk" ;;
+            linux)
+              check "$build/linux/x64/release/bundle/data/flutter_assets/NOTICES.Z"
+              dpkg-deb -x klabautermann/dist-packages/klabautermann_*.deb "$RUNNER_TEMP/notices-deb"
+              test -s "$RUNNER_TEMP/notices-deb/usr/share/doc/klabautermann/copyright"
+              check "$RUNNER_TEMP/notices-deb/usr/share/doc/klabautermann/Third-Party-Notices.txt"
+              ;;
+            macos) check "$build"/macos/Build/Products/Release/*.app/Contents/Resources/Third-Party-Notices.txt ;;
+            ios) check "$build"/ios/archive/Runner.xcarchive/Products/Applications/*.app/Third-Party-Notices.txt "$build"/ios/archive/Runner.xcarchive/Products/Applications/*.app/Frameworks/App.framework/flutter_assets/NOTICES.Z ;;
+            windows) check "$build/windows/x64/runner/Release/data/flutter_assets/NOTICES.Z" ;;
+          esac
 
   # The Klabautermann Flatpak repack; see planchette_flatpak.
   klabautermann_flatpak:
