@@ -29,7 +29,8 @@ bool isLaterBoot(
   required Duration? uptime,
   required Duration sinceStart,
 }) => before == null
-    ? uptime != null && uptime < sinceStart
+    // The same margin as btime's, for a reading a little older than now.
+    ? uptime != null && uptime < sinceStart - _sameBoot
     : bootedAt.difference(before).abs() > _sameBoot;
 
 /// SYS-03's words for how long the wait has lasted: seconds for the

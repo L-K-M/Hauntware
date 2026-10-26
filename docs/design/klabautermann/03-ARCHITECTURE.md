@@ -4017,8 +4017,10 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   as the host having taken it, and the host syslog line (SAF-13) goes
   before it. After a reboot the System tab's Power section waits for a
   `core` reading whose `btime` differs from the old boot's by more than
-  two seconds (or, with the old boot unread, lies after the request),
-  and says how long the server took to answer again.
+  two seconds (or, with the old boot unread, reports an uptime shorter
+  than the time the request has been pending, so a server clock running
+  ahead cannot pass the old boot as a new one), and says how long the
+  server took to answer again.
 - **v1.x.** Fans, battery, inventory, crash markers, boot performance,
   incident snapshot (redacted by default), deploy pre-flight checks.
 

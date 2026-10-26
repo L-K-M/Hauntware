@@ -264,6 +264,17 @@ void main() {
       ),
       isTrue,
     );
+    // Within btime's margin of the wait, as a reading of a boot made just
+    // before the reboot was asked for can be.
+    expect(
+      isLaterBoot(
+        _bootBefore,
+        before: null,
+        uptime: const Duration(minutes: 1, seconds: 59),
+        sinceStart: sinceStart,
+      ),
+      isFalse,
+    );
     // The old boot, read from a server whose clock runs ten minutes
     // ahead: its btime is after the start on this device's clock, but it
     // has been up for days.
