@@ -143,6 +143,11 @@ void main() {
         const HostQuery(serverId: 'srv-1', queryId: 'h-1', query: BootsQuery()),
         const HostQuery(
           serverId: 'srv-1',
+          queryId: 'h-6',
+          query: OomKillsQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
           queryId: 'h-3',
           query: BootEndsQuery(),
         ),
@@ -387,6 +392,27 @@ void main() {
           serverId: 'srv-1',
           queryId: 'h-2',
           payload: HostQueryFailed(HostQueryFailure.noLink),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-6',
+          payload: OomKills(
+            OomKillsRead(
+              killsSinceBoot: 1,
+              source: OomLogSource.journal,
+              logRead: true,
+              kills: [
+                OomKill(
+                  pid: 4321,
+                  command: 'stress',
+                  at: DateTime.utc(2026, 10, 26, 3),
+                  anonRssKb: 1024,
+                  cgroupLimit: true,
+                  cgroup: '/system.slice/docker-0123.scope',
+                ),
+              ],
+            ),
+          ),
         ),
         HostResult(
           serverId: 'srv-1',
