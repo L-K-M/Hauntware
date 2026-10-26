@@ -40,9 +40,11 @@ case "$target" in
     check "$stem-android.apk"
     # The Maven libraries: AboutLibraries' definitions in the APK, and the
     # NOTICE files of the resolved jars and aars (from this job's Gradle
-    # cache).
+    # cache, or fetched from the apps' repositories when it lacks them).
     python3 -I "$here/android_notices.py" check "$stem-android.apk" --config "$here/android-notices.toml"
-    python3 -I "$here/android_notices.py" scan "$stem-android.apk" --config "$here/android-notices.toml"
+    python3 -I "$here/android_notices.py" scan "$stem-android.apk" --config "$here/android-notices.toml" \
+      --fetch-from https://dl.google.com/dl/android/maven2 \
+      --fetch-from https://repo.maven.apache.org/maven2
     ;;
   linux)
     tar -xzf "$stem-linux-x64.tar.gz" -C "$work"

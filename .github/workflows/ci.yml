@@ -1618,9 +1618,12 @@ jobs:
               apk="$build/app/outputs/flutter-apk/app-release.apk"
               check "$apk"
               # The Maven libraries: AboutLibraries' definitions in the APK,
-              # and the NOTICE files of the resolved jars and aars.
+              # and the NOTICE files of the resolved jars and aars (fetched
+              # from the apps' repositories when the Gradle cache lacks them).
               python3 -I scripts/android_notices.py check "$apk" --config scripts/android-notices.toml
-              python3 -I scripts/android_notices.py scan "$apk" --config scripts/android-notices.toml
+              python3 -I scripts/android_notices.py scan "$apk" --config scripts/android-notices.toml \
+                --fetch-from https://dl.google.com/dl/android/maven2 \
+                --fetch-from https://repo.maven.apache.org/maven2
               ;;
             linux)
               check "$build/linux/x64/release/bundle/data/flutter_assets/NOTICES.Z"
@@ -1829,9 +1832,12 @@ jobs:
               apk="$build/app/outputs/flutter-apk/app-release.apk"
               check "$apk"
               # The Maven libraries: AboutLibraries' definitions in the APK,
-              # and the NOTICE files of the resolved jars and aars.
+              # and the NOTICE files of the resolved jars and aars (fetched
+              # from the apps' repositories when the Gradle cache lacks them).
               python3 -I scripts/android_notices.py check "$apk" --config scripts/android-notices.toml
-              python3 -I scripts/android_notices.py scan "$apk" --config scripts/android-notices.toml
+              python3 -I scripts/android_notices.py scan "$apk" --config scripts/android-notices.toml \
+                --fetch-from https://dl.google.com/dl/android/maven2 \
+                --fetch-from https://repo.maven.apache.org/maven2
               ;;
             linux)
               check "$build/linux/x64/release/bundle/data/flutter_assets/NOTICES.Z"
@@ -2016,9 +2022,12 @@ jobs:
               apk="$build/app/outputs/flutter-apk/app-release.apk"
               check "$apk"
               # The Maven libraries: AboutLibraries' definitions in the APK,
-              # and the NOTICE files of the resolved jars and aars.
+              # and the NOTICE files of the resolved jars and aars (fetched
+              # from the apps' repositories when the Gradle cache lacks them).
               python3 -I scripts/android_notices.py check "$apk" --config scripts/android-notices.toml
-              python3 -I scripts/android_notices.py scan "$apk" --config scripts/android-notices.toml
+              python3 -I scripts/android_notices.py scan "$apk" --config scripts/android-notices.toml \
+                --fetch-from https://dl.google.com/dl/android/maven2 \
+                --fetch-from https://repo.maven.apache.org/maven2
               ;;
             linux)
               check "$build/linux/x64/release/bundle/data/flutter_assets/NOTICES.Z"
@@ -2201,9 +2210,12 @@ jobs:
               apk="$build/app/outputs/flutter-apk/app-release.apk"
               check "$apk"
               # The Maven libraries: AboutLibraries' definitions in the APK,
-              # and the NOTICE files of the resolved jars and aars.
+              # and the NOTICE files of the resolved jars and aars (fetched
+              # from the apps' repositories when the Gradle cache lacks them).
               python3 -I scripts/android_notices.py check "$apk" --config scripts/android-notices.toml
-              python3 -I scripts/android_notices.py scan "$apk" --config scripts/android-notices.toml
+              python3 -I scripts/android_notices.py scan "$apk" --config scripts/android-notices.toml \
+                --fetch-from https://dl.google.com/dl/android/maven2 \
+                --fetch-from https://repo.maven.apache.org/maven2
               ;;
             linux)
               check "$build/linux/x64/release/bundle/data/flutter_assets/NOTICES.Z"
