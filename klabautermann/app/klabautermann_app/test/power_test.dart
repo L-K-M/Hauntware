@@ -151,8 +151,11 @@ void main() {
     await tester.pumpAndSettle();
     await confirm(tester, 'Reboot', PowerVerb.reboot);
 
-    // The run is still going: nothing waits yet.
+    // The run is still going: nothing waits yet, and no second power
+    // action can start.
     expect(find.textContaining('Waiting for the server'), findsNothing);
+    expect(find.text('Reboot'), findsNothing);
+    expect(find.text('Shut down'), findsNothing);
 
     engine.emit(
       const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
@@ -211,6 +214,20 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Shut down'), findsNothing);
+
+    // The old boot's reading is not the server being back.
+    now = now.add(const Duration(minutes: 5));
+    core.value = _core(_bootBefore, seq: 2);
+    await tester.pump();
+    expect(find.textContaining('shutting down'), findsOneWidget);
+    expect(find.text('Shut down'), findsNothing);
+
+    // Started again, on a later boot: the buttons are back.
+    core.value = _core(now.subtract(const Duration(seconds: 30)), seq: 3);
+    await tester.pump();
+    expect(find.textContaining('shutting down'), findsNothing);
+    expect(find.text('Shut down'), findsOneWidget);
+    expect(find.text('Reboot'), findsOneWidget);
     await tester.pump(const Duration(seconds: 10));
   });
 

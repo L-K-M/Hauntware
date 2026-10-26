@@ -150,9 +150,8 @@ class _PowerSectionState extends State<PowerSection> {
 
   void _onCore() {
     final startedAt = _startedAt;
-    if (_verb != PowerVerb.reboot || startedAt == null || _backAfter != null) {
-      return;
-    }
+    final verb = _verb;
+    if (verb == null || startedAt == null || _backAfter != null) return;
     final booted = _bootedAt(widget.core.value);
     if (booted == null ||
         !isLaterBoot(
@@ -161,6 +160,12 @@ class _PowerSectionState extends State<PowerSection> {
           uptime: _uptime(widget.core.value),
           sinceStart: widget.now().difference(startedAt),
         )) {
+      return;
+    }
+    // A server that was shut down and is up again on a later boot has
+    // nothing left to say about it: back to the buttons.
+    if (verb == PowerVerb.poweroff) {
+      setState(_reset);
       return;
     }
     _ticker?.cancel();
@@ -205,7 +210,8 @@ class _PowerSectionState extends State<PowerSection> {
         if (taken) ?_progress(l10n),
         if (!adminOn)
           Text(l10n.systemPowerAdminNeeded)
-        else if (!taken || _backAfter != null)
+        // While the run goes, a second power action would race it.
+        else if (run is! RunInProgress && (!taken || _backAfter != null))
           ActionEntry(
             serverId: widget.serverId,
             point: ActionEntryPoint.power,
