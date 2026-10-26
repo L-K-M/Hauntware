@@ -176,7 +176,7 @@ Iterable<String> _traefikHosts(String rule) sync* {
 
 /// caddy-docker-proxy's site addresses: comma- or space-separated, each
 /// a host with an optional port (served over HTTPS, as Caddy does by
-/// default) or a URL; wildcards, placeholders and paths beyond a URL's
+/// default, but over HTTP on port 80) or a URL; wildcards, placeholders and paths beyond a URL's
 /// own are skipped.
 Iterable<Uri> _caddySites(String value) sync* {
   for (final address in value.split(RegExp(r'[,\s]+'))) {
@@ -191,6 +191,12 @@ Iterable<Uri> _caddySites(String value) sync* {
     if (rest.isNotEmpty && (port == null || port < 1 || port > 65535)) {
       continue;
     }
-    yield Uri(scheme: 'https', host: host.toLowerCase(), port: port);
+    // Caddy serves an explicit port 80 over plain HTTP, any other over
+    // HTTPS.
+    yield Uri(
+      scheme: port == 80 ? 'http' : 'https',
+      host: host.toLowerCase(),
+      port: port,
+    );
   }
 }

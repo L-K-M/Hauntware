@@ -77,7 +77,7 @@ void main() {
       'wildcards, placeholders and bare ports are skipped', () {
     final links = labelLinks(
       _labels({
-        'caddy': 'example.com, www.example.com:8443',
+        'caddy': 'example.com, www.example.com:8443, a.example:80',
         'caddy_1':
             'http://intranet.lan *.example.com {\$HOST} :8080 a.example:99999',
       }),
@@ -85,6 +85,7 @@ void main() {
     expect(links.map((l) => '${l.uri}'), [
       'https://example.com',
       'https://www.example.com:8443',
+      'http://a.example',
       'http://intranet.lan',
     ]);
   });
