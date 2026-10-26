@@ -82,3 +82,60 @@ Séance 0.9.2, Poltergeist 1.0.1 and earlier used `com.lkm.*` application
 IDs; suite builds use `ch.lkmc.*`, install as new apps and start without
 the old apps' data. Séance's macOS sandbox migration covers only sandboxed
 builds with the current bundle ID; see its [status](seance/docs/STATUS.md).
+
+## License
+
+Hauntware's own code is released under the [Unlicense](LICENSE). The builds
+bundle third-party code that keeps its own licenses:
+
+- Every client bundles the Flutter engine and Dart runtime, its pub packages
+  (among them Séance's vendored xterm and flutter_pty and Poltergeist's
+  vendored pdfium_dart, all under the MIT License) and 23 monospace fonts,
+  under the SIL Open Font License 1.1 except 3270 (BSD-3-Clause, with a
+  Debian logo glyph under CC BY-SA 3.0 or LGPL-3.0-or-later).
+- Poltergeist also bundles the PDFium library and the code compiled into it
+  (FreeType, libjpeg-turbo, OpenJPEG, Little CMS, libpng, zlib, ICU and
+  others).
+- The Android apps also bundle AndroidX, Kotlin and other Maven libraries;
+  Klabautermann's also bundles desugar_jdk_libs (GPL-2.0 with the Classpath
+  Exception). Séance and Klabautermann for Windows also bundle Microsoft's
+  WIL and C++/WinRT. Séance and Poltergeist for iOS also bundle
+  DKImagePickerController, DKCamera, DKPhotoGallery, TOCropViewController,
+  SwiftyGif and SDWebImage, which file_picker pulls in.
+- The Linux AppImages also carry the AppImage runtime, which statically
+  links libfuse (LGPL-2.1), squashfuse, musl, zstd and zlib.
+- The sync server bundles the Dart runtime (with BoringSSL, ICU, zlib and
+  other code it embeds) and its pub packages; its Docker image adds Debian
+  packages.
+
+Their notices ship inside each artifact:
+
+- In every app: Settings > Open-source licenses (Klabautermann: About >
+  View licenses).
+- Linux tarballs and Windows zips: `Third-Party-Notices.txt` and `LICENSE`
+  at the top.
+- macOS apps: `<App>.app/Contents/Resources/Third-Party-Notices.txt`; iOS
+  apps: `Third-Party-Notices.txt` in the app bundle.
+- Linux packages: `copyright` and `Third-Party-Notices.txt` in
+  `/usr/share/doc/<package>/` (Flatpak: `/app/share/doc/<package>/`). The
+  AppImage's notices also cover its runtime, with source links in
+  `SOURCES.txt` beside them.
+- Sync-server tarballs: `Third-Party-Notices.txt` and `LICENSE` beside the
+  binary. Docker image: `Third-Party-Notices.txt`, `OS-Packages.txt` and
+  `LICENSE` in `/usr/share/doc/seance-sync/`; system packages from the base
+  image keep their notices in `/usr/share/doc/*/copyright`.
+
+The Unlicense covers Hauntware's own code only, which `planchette/LICENSE`,
+`seance/LICENSE`, `poltergeist/LICENSE` and `klabautermann/LICENSE` repeat
+per product. These files hold third-party texts, not the project's license:
+the `LICENSE` files under `*/third_party/` (with PDFium's notices appended
+to pdfium_dart's), `planchette/packages/ghost_fonts/LICENSE` (the fonts'
+licenses), `seance/app/seance_app/LICENSE`,
+`poltergeist/app/poltergeist_app/LICENSE` and
+`klabautermann/app/klabautermann_app/LICENSE` (the NuGet and Swift packages
+above, after the app's own Unlicense), the Unicode License V3 for the
+generated Unicode tables in `poltergeist/packages/poltergeist_core/LICENSE`,
+`poltergeist/packages/poltergeist_core/tool/unicode/LICENSE.txt` and
+`poltergeist/app/poltergeist_app/tool/unicode/LICENSE.txt`, and the license
+texts under `*/app/*/android/app/config/licenses/` and
+`scripts/licenses/`.

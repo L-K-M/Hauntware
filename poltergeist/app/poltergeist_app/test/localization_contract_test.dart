@@ -406,12 +406,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The save dialog's name-field widget key — plumbing, not copy.
   'lib/ui/workspace/save_workspace_dialog.dart': {"'workspaceSave.name'"},
-  // The General dialog's keys/toggle key — plumbing for tests, never
-  // rendered.
+  // The General dialog's keys/toggle key and the licenses row's key —
+  // plumbing for tests, never rendered.
   'lib/ui/settings/general_settings.dart': {
     "'general.settings.dialog'",
     "'general.settings.close'",
     "'updates.checkEnabled'",
+    "'settings.licenses'",
   },
   // The editor text size slider's key — plumbing for tests, never rendered.
   'lib/ui/settings/editor_text_size_settings.dart': {"'editor.textSize'"},

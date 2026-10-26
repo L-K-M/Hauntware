@@ -171,9 +171,9 @@
   "@aboutVersionUnknown": {
     "description": "In place of aboutVersion when the platform could not tell the app's version."
   },
-  "aboutLicence": "Klabautermann is free and unencumbered software released into the public domain under the Unlicense.",
+  "aboutLicence": "Klabautermann's own code is public domain (Unlicense). It includes third-party components that keep their own licenses, listed under View licenses.",
   "@aboutLicence": {
-    "description": "The app's licence line in the About dialog. Klabautermann and Unlicense are names: never translated."
+    "description": "The app's licence line in the About dialog: the Unlicense covers only the app's own code, and View licenses is the dialog's button. Klabautermann and Unlicense are names: never translated."
   },
   "statusConnected": "Connected",
   "statusConnecting": "Connecting",
@@ -1017,6 +1017,153 @@
   "processesCommandLineTitle": "Command line",
   "@processesCommandLineTitle": {
     "description": "Heading of a process's arguments in its details."
+  },
+  "processesDetailTitle": "Details",
+  "@processesDetailTitle": {
+    "description": "Heading of the facts a process's details read from the server (PRC-04, PRC-05)."
+  },
+  "processesDetailReading": "Reading details…",
+  "@processesDetailReading": {
+    "description": "Shown while a process's details are read from the server."
+  },
+  "processesDetailReadAgain": "Read again",
+  "@processesDetailReadAgain": {
+    "description": "Button that reads a process's details from the server again."
+  },
+  "processesDetailFailed": "{failure, select, noLink{Not connected to the server.} denied{The server denied reading this process.} missing{The server lacks a tool this read needs.} other{Reading this process's details failed.}}",
+  "@processesDetailFailed": {
+    "description": "Shown when a process's details could not be read.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "processesDetailEnded": "{end, select, gone{This process has exited.} reused{Its process ID now belongs to another process, so nothing was read.} other{This process has ended.}}",
+  "@processesDetailEnded": {
+    "description": "Shown when a process ended before its details were read: it exited, or its PID was reused by another process.",
+    "placeholders": {
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "processesDetailNoStart": "The server did not report when this process started, so its details are not read.",
+  "@processesDetailNoStart": {
+    "description": "Shown in a process's details when the reading has no start time, which the read needs to make sure it reads the same process."
+  },
+  "processesDetailUnit": "Unit",
+  "@processesDetailUnit": {
+    "description": "Label of the systemd unit a process runs in."
+  },
+  "processesDetailNoUnit": "None",
+  "@processesDetailNoUnit": {
+    "description": "Value of a process's unit when it runs outside any systemd unit."
+  },
+  "processesDetailContainer": "Container",
+  "@processesDetailContainer": {
+    "description": "Label of the container a process runs in."
+  },
+  "processesDetailContainerValue": "{runtime, select, docker{Docker} podman{Podman} containerd{containerd} crio{CRI-O} other{Container}} {id}",
+  "@processesDetailContainerValue": {
+    "description": "The container a process runs in: its runtime and short ID.",
+    "placeholders": {
+      "runtime": {
+        "type": "String"
+      },
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "processesDetailCwd": "Working directory",
+  "@processesDetailCwd": {
+    "description": "Label of a process's working directory."
+  },
+  "processesDetailNotReadable": "Not readable as this user",
+  "@processesDetailNotReadable": {
+    "description": "Value of a process fact the login user may not read."
+  },
+  "processesDetailThreads": "Threads",
+  "@processesDetailThreads": {
+    "description": "Label of a process's thread count."
+  },
+  "processesDetailSwap": "Swap",
+  "@processesDetailSwap": {
+    "description": "Label of how much of a process's memory is swapped out."
+  },
+  "processesDetailSwitches": "Context switches",
+  "@processesDetailSwitches": {
+    "description": "Label of a process's context switch counts."
+  },
+  "processesDetailSwitchesValue": "{voluntary} voluntary, {involuntary} involuntary",
+  "@processesDetailSwitchesValue": {
+    "description": "A process's voluntary and involuntary context switches.",
+    "placeholders": {
+      "voluntary": {
+        "type": "int"
+      },
+      "involuntary": {
+        "type": "int"
+      }
+    }
+  },
+  "processesDetailOpenFiles": "Open files",
+  "@processesDetailOpenFiles": {
+    "description": "Label of how many files a process holds open."
+  },
+  "processesDetailOpenFilesOf": "{count} of {limit}",
+  "@processesDetailOpenFilesOf": {
+    "description": "How many files a process holds open, out of its soft limit.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "processesDetailProcessLimit": "Process limit",
+  "@processesDetailProcessLimit": {
+    "description": "Label of the most processes the process's user may run (its soft limit)."
+  },
+  "processesDetailUnlimited": "Unlimited",
+  "@processesDetailUnlimited": {
+    "description": "Value of a limit the process does not have."
+  },
+  "processesEnvironmentTitle": "Environment",
+  "@processesEnvironmentTitle": {
+    "description": "Heading of a process's environment variables in its details."
+  },
+  "processesEnvironmentNone": "No environment variables.",
+  "@processesEnvironmentNone": {
+    "description": "Shown when a process has no environment variables."
+  },
+  "processesEnvironmentDenied": "The environment is not readable as this user.",
+  "@processesEnvironmentDenied": {
+    "description": "Shown when the login user may not read a process's environment."
+  },
+  "processesEnvironmentCapped": "Only the first {count} variables were read.",
+  "@processesEnvironmentCapped": {
+    "description": "Shown under a process's environment when it was cut at the read's limit.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "processesEnvironmentEntry": "{name}: {value}",
+  "@processesEnvironmentEntry": {
+    "description": "Screen-reader label of one of a process's environment variables: its name and its value, or the value's mask in words.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
   },
   "processesRevealNote": "Select a masked argument to show it for {seconds} seconds.",
   "@processesRevealNote": {
@@ -1909,6 +2056,143 @@
         "type": "int"
       }
     }
+  },
+  "systemSshdTitle": "SSH server",
+  "@systemSshdTitle": {
+    "description": "System tab: the heading of the SSH server section (SEC-01)."
+  },
+  "systemSshdAdminNeeded": "Turn on admin mode to read the SSH server's settings: sshd needs root to print them.",
+  "@systemSshdAdminNeeded": {
+    "description": "System tab, SSH server: why the read waits for admin mode."
+  },
+  "systemSshdRead": "Read SSH server settings",
+  "@systemSshdRead": {
+    "description": "System tab, SSH server: the button that reads the settings."
+  },
+  "systemSshdReadAgain": "Read again",
+  "@systemSshdReadAgain": {
+    "description": "System tab, SSH server: the button that reads the settings again."
+  },
+  "systemSshdReading": "Reading the SSH server's settings…",
+  "@systemSshdReading": {
+    "description": "System tab, SSH server: shown while the settings are read."
+  },
+  "systemSshdFailed": "{reason, select, noLink{The server is not connected, so the SSH server's settings could not be read.} adminRequired{Admin mode ended before the SSH server's settings were read.} elevationRefused{Elevation was refused, so the SSH server's settings were not read.} missing{No sshd was found on this server.} refused{sshd refused to print its settings, as for an error in its configuration.} unreadable{sshd's settings could not be read.} transport{The connection failed while the SSH server's settings were read.} other{The SSH server's settings could not be read.}}",
+  "@systemSshdFailed": {
+    "description": "System tab, SSH server: why a read read nothing, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSshdMatchRemote": "Match blocks for the server's own address or port are not applied: this sshd is too old to be told them.",
+  "@systemSshdMatchRemote": {
+    "description": "System tab, SSH server: the settings apply the Match blocks for the user and the device's address, but not those for the server's local address and port."
+  },
+  "systemSshdMatchNone": "No Match blocks are applied: these are sshd's settings before any Match block, as the read could not name this connection.",
+  "@systemSshdMatchNone": {
+    "description": "System tab, SSH server: the settings ignore every Match block in the configuration."
+  },
+  "systemSshdPorts": "Ports",
+  "@systemSshdPorts": {
+    "description": "System tab, SSH server: the label of the ports sshd listens on."
+  },
+  "systemSshdListen": "Listens on",
+  "@systemSshdListen": {
+    "description": "System tab, SSH server: the label of the addresses and ports sshd listens on."
+  },
+  "systemSshdRootLogin": "Root login",
+  "@systemSshdRootLogin": {
+    "description": "System tab, SSH server: the label of whether root may log in (PermitRootLogin)."
+  },
+  "systemSshdRoot": "{value, select, yes{Allowed} no{Not allowed} keysOnly{With a key only} forcedCommandsOnly{Forced commands only} other{Unknown}}",
+  "@systemSshdRoot": {
+    "description": "System tab, SSH server: whether root may log in.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSshdPassword": "Password login",
+  "@systemSshdPassword": {
+    "description": "System tab, SSH server: the label of whether passwords are accepted (PasswordAuthentication)."
+  },
+  "systemSshdKeyboard": "Keyboard-interactive login",
+  "@systemSshdKeyboard": {
+    "description": "System tab, SSH server: the label of whether keyboard-interactive login is accepted, as for one-time codes (KbdInteractiveAuthentication)."
+  },
+  "systemSshdPubkey": "Key login",
+  "@systemSshdPubkey": {
+    "description": "System tab, SSH server: the label of whether public keys are accepted (PubkeyAuthentication)."
+  },
+  "systemSshdEnabled": "{state, select, true{On} false{Off} other{Unknown}}",
+  "@systemSshdEnabled": {
+    "description": "System tab, SSH server: whether a login method is accepted.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSshdMethods": "Required login methods",
+  "@systemSshdMethods": {
+    "description": "System tab, SSH server: the label of the login methods every login must pass, in sshd's notation (AuthenticationMethods)."
+  },
+  "systemSshdHostKeys": "Host keys",
+  "@systemSshdHostKeys": {
+    "description": "System tab, SSH server: the label of the server's host key types."
+  },
+  "systemSshdUserKeys": "Accepted user key types",
+  "@systemSshdUserKeys": {
+    "description": "System tab, SSH server: the label of the user key types sshd accepts (PubkeyAcceptedAlgorithms)."
+  },
+  "systemSshdMaxSessions": "Sessions per connection",
+  "@systemSshdMaxSessions": {
+    "description": "System tab, SSH server: the label of how many sessions one connection may open at once (MaxSessions); the app needs several."
+  },
+  "systemSshdTcpForwarding": "TCP forwarding",
+  "@systemSshdTcpForwarding": {
+    "description": "System tab, SSH server: the label of whether ports may be forwarded (AllowTcpForwarding)."
+  },
+  "systemSshdSocketForwarding": "Socket forwarding",
+  "@systemSshdSocketForwarding": {
+    "description": "System tab, SSH server: the label of whether Unix sockets may be forwarded (AllowStreamLocalForwarding)."
+  },
+  "systemSshdForwarding": "{value, select, all{Allowed} local{Local only} remote{Remote only} no{Off} other{Unknown}}",
+  "@systemSshdForwarding": {
+    "description": "System tab, SSH server: whether forwarding is allowed, and in which direction.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSshdPermitOpen": "Forwarding targets",
+  "@systemSshdPermitOpen": {
+    "description": "System tab, SSH server: the label of where forwarded connections may go, in sshd's notation (PermitOpen); any means anywhere."
+  },
+  "systemSshdDocker": "Docker over SSH",
+  "@systemSshdDocker": {
+    "description": "System tab, SSH server: the label of whether sshd lets the app reach Docker's socket by forwarding it."
+  },
+  "systemSshdDockerAllowed": "Not blocked by sshd's settings",
+  "@systemSshdDockerAllowed": {
+    "description": "System tab, SSH server: no sshd setting blocks the forwarding of Docker's socket."
+  },
+  "systemSshdDockerBlocked": "Blocked by {settings}",
+  "@systemSshdDockerBlocked": {
+    "description": "System tab, SSH server: the sshd settings that block the forwarding of Docker's socket; settings lists their names as in sshd_config.",
+    "placeholders": {
+      "settings": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSshdDockerNote": "A key's options in authorized_keys, such as restrict, can block it too; sshd does not show those.",
+  "@systemSshdDockerNote": {
+    "description": "System tab, SSH server: why Docker may still be blocked when no setting blocks it."
   },
   "systemCertificatesTitle": "Certificates",
   "@systemCertificatesTitle": {

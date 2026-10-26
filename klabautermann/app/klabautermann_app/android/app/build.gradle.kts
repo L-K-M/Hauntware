@@ -6,6 +6,8 @@ plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // Third-party notices for the Maven libraries; see aboutLibraries below.
+    id("com.mikepenz.aboutlibraries.plugin.android")
 }
 
 val ciSigningPropertiesPath = "key.properties"
@@ -104,10 +106,40 @@ kotlin {
     }
 }
 
+// Third-party notices for the Maven libraries the APK compiles in (AndroidX,
+// Kotlin, Tink and the rest): res/raw/aboutlibraries.json, from the resolved
+// release graph plus config/, offline and reproducible. ghost_licenses shows
+// them on the licenses page; Flutter's NOTICES covers the engine and the pub
+// packages. The build fails on a library without a license or with one
+// outside the allow-list; give a new license its text in config/licenses/.
+aboutLibraries {
+    offlineMode.set(true)
+    collect {
+        configPath.set(layout.projectDirectory.dir("config"))
+        fetchRemoteLicense.set(false)
+        fetchRemoteFunding.set(false)
+    }
+    library {
+        requireLicense.set(true)
+        // The Flutter engine's own artifacts carry no POM license; Flutter's
+        // NOTICES holds the engine's notices.
+        exclusionPatterns.add(Regex("io\\.flutter:.*").toPattern())
+    }
+    license {
+        strictMode.set(com.mikepenz.aboutlibraries.plugin.StrictMode.FAIL)
+        // BSD-3-Clause: the Protocol Buffers runtime tink-android shades,
+        // a bundled entry in config/libraries/.
+        allowedLicenses.addAll("Apache-2.0", "BSD-3-Clause", "GPL-2.0-only WITH Classpath-exception-2.0")
+    }
+}
+
 flutter {
     source = "../.."
 }
 
 dependencies {
+    // No runtime classpath lists it, so its notice is the bundled entry
+    // config/libraries/com.android.tools__desugar_jdk_libs.json: keep
+    // that version in step.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
