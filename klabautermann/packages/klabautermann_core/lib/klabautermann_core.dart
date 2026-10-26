@@ -125,7 +125,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // The System tab's boots section (BOOT-02, BOOT-03): how earlier boots
 // ended and the kernels a HostResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart'
-    show BootEnd, KernelCheck, KernelState, kBootEndsRead;
+    show BootEnd, KernelCheck, KernelCheckState, kBootEndsRead;
 // The Disks section's mount details and the Swap section (DSK-05,
 // DSK-14): the mounts and swap devices a HostResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart'

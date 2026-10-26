@@ -128,8 +128,9 @@ class _BootsSectionState extends State<BootsSection> {
         return [Text(l10n.systemKernelFailed(failure.name))];
       case Kernels(:final check):
         final pending = switch (check.state) {
-          KernelState.newerInstalled || KernelState.runningRemoved => true,
-          KernelState.current || KernelState.unknown => false,
+          KernelCheckState.newerInstalled ||
+          KernelCheckState.runningRemoved => true,
+          KernelCheckState.current || KernelCheckState.unknown => false,
         };
         return [
           Text(l10n.systemKernelRunning(check.running)),

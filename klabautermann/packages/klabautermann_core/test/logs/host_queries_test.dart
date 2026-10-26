@@ -130,7 +130,7 @@ void main() {
 
     events.clear();
     final kernels = (await ask(const KernelsQuery())).payload as Kernels;
-    expect(kernels.check.state, KernelState.newerInstalled);
+    expect(kernels.check.state, KernelCheckState.newerInstalled);
     expect(kernels.check.newest, '6.1.0-13-amd64');
   });
 
