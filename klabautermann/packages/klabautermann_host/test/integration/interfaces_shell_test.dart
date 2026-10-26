@@ -55,7 +55,9 @@ void main() {
           environment: {'PATH': '${bin.path}:${Platform.environment['PATH']}'},
         );
         expect(r.exitCode, 0, reason: '${r.stderr}');
-        return parseInterfaces(r.stdout as String)!;
+        final read = parseInterfaces(r.stdout as String);
+        expect(read, isNotNull, reason: '${r.stdout}');
+        return read!;
       }
 
       test('this host\'s interfaces and sockets, with iproute2', () async {

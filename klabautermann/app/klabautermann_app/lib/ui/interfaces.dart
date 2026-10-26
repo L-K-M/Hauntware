@@ -9,14 +9,14 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 
+/// The loopback interface's name on Linux.
+const _loopback = 'lo';
+
 /// The interfaces NET-02 lists first, and how many it folds away until
 /// asked: the loopback, and software interfaces with no address beyond
 /// their link, as the veth pairs of containers. Bridges, bonds, VLANs
 /// and tunnels with a routable address stay. Without `ip`'s addresses
 /// only the loopback folds, since nothing tells a veth from a bond.
-/// The loopback interface's name on Linux.
-const _loopback = 'lo';
-
 ({List<NetInterface> shown, int folded}) shownInterfaces(
   InterfacesRead read, {
   required bool showAll,

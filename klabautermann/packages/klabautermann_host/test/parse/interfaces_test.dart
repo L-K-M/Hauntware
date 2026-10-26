@@ -148,6 +148,17 @@ void main() {
     );
   });
 
+  test('ip -j addr cut off mid-write reads as no addresses', () {
+    final read = parseInterfaces(
+      _read(
+        links: _link('eth0'),
+        addr: '[{"ifindex":2,"ifname":"eth0","addr_info":[',
+      ),
+    )!;
+    expect(read.addressesRead, isFalse);
+    expect(read.interfaces.single.addresses, isEmpty);
+  });
+
   test('BusyBox ip -o addr is read line by line', () {
     final read = parseInterfaces(
       _read(

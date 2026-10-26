@@ -82,8 +82,8 @@ final class NetInterface {
   final String name;
   final NetLinkState state;
 
-  /// Whether a device backs it, rather than software: a bridge, a bond,
-  /// a VLAN, a tunnel, a veth pair or the loopback.
+  /// Whether a device backs it. Software interfaces have none: bridges,
+  /// bonds, VLANs, tunnels, veth pairs and the loopback.
   final bool physical;
 
   final List<NetAddress> addresses;
@@ -254,7 +254,8 @@ Map<String, List<NetAddress>>? _addresses(String text) {
         ),
       );
     }
-    return out;
+    // Neither JSON nor `ip -o` lines, as `ip -j` cut off mid-write.
+    return out.isEmpty ? null : out;
   }
 
   if (json is! List) return null;

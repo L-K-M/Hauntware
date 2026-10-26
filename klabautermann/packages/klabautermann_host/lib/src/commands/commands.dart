@@ -832,7 +832,7 @@ abstract final class HostCommands {
 
   static const _kInterfacesScript =
       'echo "$kNetLinksMarker"; '
-      "cd /sys/class/net 2>/dev/null && grep -s -H '' "
+      "cd /sys/class/net 2>/dev/null && grep -s -H '' -- "
       '*/operstate */mtu */address */speed '
       '*/statistics/rx_bytes */statistics/tx_bytes '
       '*/statistics/rx_errors */statistics/tx_errors '
