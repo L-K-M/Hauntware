@@ -1941,6 +1941,12 @@ is on main:
   created again under its name is not removed. An API step can now
   carry a JSON body, which the preview shows as sent. The Docker
   actions suite creates, refuses and removes a volume on the fixture.
+- Boots (M6 N39, BOOT-02, BOOT-03): the System tab's Boots section says
+  whether the running kernel is the newest installed, or a reboot loads
+  a newer one, and lists the current boot and the ten before it with
+  when each started, how long it ran and whether it shut down cleanly,
+  from the journal. A user outside the journal's groups sees the ends as
+  unknown.
 - Time (M6 N38a, SYS-02, CN-17): collector-set version 13's probe reads
   timedatectl's NTP state, and each probe answer measures the server's
   clock against this device's. The System tab's Time section shows the

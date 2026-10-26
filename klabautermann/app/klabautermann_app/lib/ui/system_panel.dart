@@ -8,6 +8,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'boots.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
 import 'disk_activity.dart';
@@ -28,6 +29,7 @@ enum SystemSection {
   diskActivity,
   temperatures,
   gpus,
+  boots,
   driveHealth,
 }
 
@@ -202,6 +204,11 @@ class _SystemPanelState extends State<SystemPanel> {
               ),
               ?temperatures,
               ?gpus,
+              BootsSection(
+                key: const ValueKey(SystemSection.boots),
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
+              ),
               DriveHealthSection(
                 key: const ValueKey(SystemSection.driveHealth),
                 serverId: widget.serverId,

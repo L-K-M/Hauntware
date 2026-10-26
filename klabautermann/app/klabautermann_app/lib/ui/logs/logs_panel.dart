@@ -964,8 +964,8 @@ class LogBootPicker extends StatelessWidget {
     final first = boot.firstEntry, last = boot.lastEntry;
     if (first == null || last == null) return null;
     return l10n.logsPanelBootSpan(
-      _localTime(context, l10n, first),
-      _localTime(context, l10n, last),
+      localTimeText(context, l10n, first),
+      localTimeText(context, l10n, last),
     );
   }
 }
@@ -1089,7 +1089,7 @@ class _LogFilePickerState extends State<LogFilePicker> {
           Text(
             l10n.logsPanelFileDetails(
               ghostFormatBinarySize(file.bytes),
-              _localTime(context, l10n, file.modified),
+              localTimeText(context, l10n, file.modified),
             ),
           ),
           if (compressed) Text(l10n.logsPanelFileCompressed),
@@ -1119,7 +1119,11 @@ Widget _sheetNote(BuildContext context, String text) => Padding(
 );
 
 /// [time] as a short date and a time of day, in local time.
-String _localTime(BuildContext context, AppLocalizations l10n, DateTime time) {
+String localTimeText(
+  BuildContext context,
+  AppLocalizations l10n,
+  DateTime time,
+) {
   final localizations = MaterialLocalizations.of(context);
   final local = time.toLocal();
   return l10n.activityTime(

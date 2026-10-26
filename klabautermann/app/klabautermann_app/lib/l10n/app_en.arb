@@ -1368,6 +1368,99 @@
       }
     }
   },
+  "systemBootsTitle": "Boots",
+  "@systemBootsTitle": {
+    "description": "System tab: the section of the running kernel against the installed ones (BOOT-03) and the boot timeline (BOOT-02)."
+  },
+  "systemBootsReading": "Reading kernels and boots…",
+  "@systemBootsReading": {
+    "description": "System tab, Boots: shown while the first read runs."
+  },
+  "systemBootsReadAgain": "Read again",
+  "@systemBootsReadAgain": {
+    "description": "System tab, Boots: the button that reads the kernels and boots again."
+  },
+  "systemKernelRunning": "Running kernel {release}",
+  "@systemKernelRunning": {
+    "description": "System tab, Boots: the release of the kernel the server runs, as uname -r prints it.",
+    "placeholders": {
+      "release": {
+        "type": "String",
+        "example": "6.1.0-13-amd64"
+      }
+    }
+  },
+  "systemKernelState": "{state, select, current{This is the newest kernel installed.} newerInstalled{Kernel {newest} is installed. A reboot loads it.} runningRemoved{The running kernel's modules were removed, as an upgrade does. A reboot loads {newest}.} other{Whether a newer kernel is installed is unknown: no module directory was found, as in a container.}}",
+  "@systemKernelState": {
+    "description": "System tab, Boots: whether a reboot would load a newer kernel (BOOT-03), by state.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      },
+      "newest": {
+        "type": "String",
+        "example": "6.1.0-13-amd64"
+      }
+    }
+  },
+  "systemKernelFailed": "{failure, select, noLink{Not connected to the server.} denied{The server refused the kernel check.} missing{The server lacks the tools the kernel check runs.} other{The kernel check failed.}}",
+  "@systemKernelFailed": {
+    "description": "System tab, Boots: why the kernel check read nothing, by reason.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "systemBootsTimelineTitle": "Boot timeline",
+  "@systemBootsTimelineTitle": {
+    "description": "System tab, Boots: the heading over the list of boots, newest first (BOOT-02)."
+  },
+  "systemBootsCurrent": "This boot",
+  "@systemBootsCurrent": {
+    "description": "System tab, Boots: the current boot in the timeline."
+  },
+  "systemBootsSpan": "Started {start}, ran {duration}",
+  "@systemBootsSpan": {
+    "description": "System tab, Boots: when a boot's journal starts and how long it ran until its last entry, under its name.",
+    "placeholders": {
+      "start": {
+        "type": "String",
+        "example": "12 Oct, 08:14"
+      },
+      "duration": {
+        "type": "String",
+        "example": "2 days, 3 hours"
+      }
+    }
+  },
+  "systemBootEnd": "{end, select, clean{Shut down cleanly} unclean{Ended without a shutdown: a crash, power loss or hard reset} other{How it ended is unknown: its journal is not readable as this user}}",
+  "@systemBootEnd": {
+    "description": "System tab, Boots: how an earlier boot ended (BOOT-02), by kind.",
+    "placeholders": {
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "systemBootsNone": "The journal lists no boots.",
+  "@systemBootsNone": {
+    "description": "System tab, Boots: shown when journalctl lists no boots."
+  },
+  "systemBootsNotListed": "{count, plural, =1{1 earlier boot is not listed.} other{{count} earlier boots are not listed.}}",
+  "@systemBootsNotListed": {
+    "description": "System tab, Boots: how many older boots the timeline leaves out; the Logs panel's boot picker lists every boot.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemBootEndsUnknown": "How the earlier boots ended could not be read.",
+  "@systemBootEndsUnknown": {
+    "description": "System tab, Boots: shown under the timeline when reading the boots' ends failed."
+  },
   "systemDriveHealthTitle": "Drive health",
   "@systemDriveHealthTitle": {
     "description": "System tab: the section of each drive's SMART health (HW-04), read on request in admin mode."
