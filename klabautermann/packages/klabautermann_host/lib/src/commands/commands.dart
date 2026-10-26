@@ -329,6 +329,12 @@ const kBootEndsRead = 10;
 /// [HostCommands.kernels]' output.
 const kKernelsMarker = '== modules';
 
+/// The markers before the usable CPU count, `lscpu`'s JSON and the
+/// `/proc/cpuinfo` lines in [HostCommands.cpuTopology]' output.
+const kCpuNprocMarker = '== nproc';
+const kCpuLscpuMarker = '== lscpu';
+const kCpuInfoMarker = '== cpuinfo';
+
 /// How [HostCommands.journalBoots] asks for the boot list: JSON on
 /// systemd [kListBootsJsonSystemd] and later, the text table below.
 enum JournalBootsFormat { json, text }
@@ -809,6 +815,22 @@ abstract final class HostCommands {
   static const _kKernelsScript =
       'uname -r; echo "$kKernelsMarker"; '
       'ls -1 /lib/modules 2>/dev/null || ls -1 /usr/lib/modules 2>/dev/null; '
+      'exit 0';
+
+  /// CPU-07's read: the CPUs this login may run on, `lscpu`'s fields in
+  /// the C locale, whose names it translates otherwise, and the
+  /// `/proc/cpuinfo` lines that name the model and place each CPU, for a
+  /// host without `lscpu` (BusyBox). `parseCpuTopology` reads it. Only
+  /// those lines are kept: the flags make the file about 1.5 KiB a CPU.
+  static List<String> cpuTopology() => const ['sh', '-c', _kCpuTopologyScript];
+
+  static const _kCpuTopologyScript =
+      'echo "$kCpuNprocMarker"; '
+      'nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null; '
+      'echo "$kCpuLscpuMarker"; LC_ALL=C lscpu -J 2>/dev/null; '
+      'echo "$kCpuInfoMarker"; '
+      "grep -E '^(processor|model name|cpu model|cpu|physical id|core id)"
+      "[[:space:]]*:' /proc/cpuinfo 2>/dev/null; "
       'exit 0';
 
   /// The files under `/var/log` (LOG-08, 03 §7.6); `parseLogFiles`

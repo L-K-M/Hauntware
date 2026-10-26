@@ -127,6 +127,9 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // ended and the kernels a HostResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show BootEnd, KernelCheck, KernelCheckState, kBootEndsRead;
+// The System tab's processor section (CPU-07): the model and topology a
+// HostResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart' show CpuTopology;
 // The Jobs panel (JOB-01, JOB-02): the jobs rows a CronResult carries, the
 // timer rows the app builds from a TimersResult, their schedule
 // descriptions and their runs as plain CronRun values (D52), and the

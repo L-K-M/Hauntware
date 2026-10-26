@@ -785,6 +785,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${SampleStream.procs.name}.row.${row.pid}'",
     r"'\n'",
   },
+  'lib/ui/processor.dart': {r"'\n'"},
   'lib/ui/processes_view.dart': {
     // The ellipsis ending a cut command line, the space between its
     // arguments, and the filter's term separator and the line break

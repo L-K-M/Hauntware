@@ -2024,6 +2024,12 @@ is on main:
   zones, every 10 s. The System tab's Temperatures section lists each
   sensor with its high and critical limits, and does not show where the
   host has no sensor, as VMs, or inside a container.
+- Processor (M6 N42c, CPU-07): the System tab's new section beside the
+  identity shows the processor's model (or its vendor where it names
+  none), sockets, cores, threads per core, the CPUs the kernel counts
+  and those the login may use, from `lscpu`, or `/proc/cpuinfo` where
+  `lscpu` is missing. A big.LITTLE board lists both models. Inside a
+  container the counts that would be the host machine's read as unknown.
 - CPU breakdown and pressure (M6 N42a, CPU-04, CPU-05, MEM-04): the
   Overview's CPU card adds I/O wait, steal, IRQ and soft IRQ beside
   user, system and idle, with a plain-language hint once steal, iowait

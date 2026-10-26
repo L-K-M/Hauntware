@@ -102,6 +102,19 @@ final class HostQueries {
                 ),
               });
           }
+        case CpuTopologyQuery():
+          switch (await _run(link, HostCommands.cpuTopology())) {
+            case _Failed(:final payload):
+              answer(payload);
+            case _Ran(:final stdout):
+              answer(switch (parseCpuTopology(stdout)) {
+                final topology? => CpuTopologyRead(topology),
+                null => const HostQueryFailed(
+                  HostQueryFailure.failed,
+                  detail: 'The processor read printed something else.',
+                ),
+              });
+          }
       }
     } on Object catch (error) {
       answer(HostQueryFailed(HostQueryFailure.failed, detail: '$error'));

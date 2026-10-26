@@ -17,6 +17,7 @@ import 'disk_activity.dart';
 import 'drive_health.dart';
 import 'gpus.dart';
 import 'power.dart';
+import 'processor.dart';
 import 'sortable_table.dart';
 import 'system_view.dart';
 import 'temperatures.dart';
@@ -26,6 +27,7 @@ import 'updates.dart';
 /// prefixes its table's keys.
 enum SystemSection {
   identity,
+  processor,
   uptime,
   time,
   network,
@@ -171,6 +173,14 @@ class _SystemPanelState extends State<SystemPanel> {
             constraints.maxWidth >=
             MediaQuery.textScalerOf(context).scale(_wideWidth);
         final identity = _identitySection(l10n, profile);
+        final processor = ProcessorSection(
+          key: const ValueKey(SystemSection.processor),
+          monitoring: widget.monitoring,
+          serverId: widget.serverId,
+          inContainer: inContainer(profile),
+          fact: (label, value, {note}) =>
+              _Fact(label: label, value: value, note: note),
+        );
         final uptime = ListenableBuilder(
           listenable: _core,
           builder: (context, _) => _uptimeSection(l10n, profile),
@@ -193,7 +203,13 @@ class _SystemPanelState extends State<SystemPanel> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   spacing: _gap,
                   children: [
-                    Expanded(child: identity),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        spacing: _gap,
+                        children: [identity, processor],
+                      ),
+                    ),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -205,6 +221,7 @@ class _SystemPanelState extends State<SystemPanel> {
                 )
               else ...[
                 identity,
+                processor,
                 uptime,
                 time,
                 network,

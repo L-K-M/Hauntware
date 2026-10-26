@@ -201,6 +201,32 @@ final class _Panel {
     await sample(tester, SampleStream.fs, FsResult(_fs));
     await sample(tester, SampleStream.temps, const TempsResult(_temps));
     await sample(tester, SampleStream.gpu, const GpuResult(_gpus));
+    await processor(tester);
+  }
+
+  /// Answers the processor section's read (CPU-07).
+  Future<void> processor(WidgetTester tester) async {
+    final query = engine.sentOfType<HostQuery>().cast<HostQuery>().lastWhere(
+      (query) => query.query is CpuTopologyQuery,
+    );
+    engine.emit(
+      HostResult(
+        serverId: query.serverId,
+        queryId: query.queryId,
+        payload: CpuTopologyRead(
+          CpuTopology(
+            models: const ['AMD EPYC 7763 64-Core Processor'],
+            vendor: 'AuthenticAMD',
+            logicalCpus: 8,
+            usableCpus: 8,
+            sockets: 1,
+            cores: 4,
+            threadsPerCore: 2,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
   }
 }
 

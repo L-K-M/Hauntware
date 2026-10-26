@@ -1286,6 +1286,48 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemProcessorTitle => 'Processor';
+
+  @override
+  String get systemProcessorReading => 'Reading the processor…';
+
+  @override
+  String get systemProcessorReadAgain => 'Read again';
+
+  @override
+  String get systemProcessorModel => 'Model';
+
+  @override
+  String get systemProcessorNoModel =>
+      'This processor does not report a model name, as is common on ARM boards.';
+
+  @override
+  String get systemProcessorSockets => 'Sockets';
+
+  @override
+  String get systemProcessorCores => 'Cores';
+
+  @override
+  String get systemProcessorThreadsPerCore => 'Threads per core';
+
+  @override
+  String get systemProcessorLogical => 'Logical CPUs';
+
+  @override
+  String get systemProcessorUsable => 'Usable CPUs';
+
+  @override
+  String systemProcessorFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server refused the processor read.',
+      'missing': 'The server lacks the tools the processor read runs.',
+      'other': 'The processor read failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get systemBootsTimelineTitle => 'Boot timeline';
 
   @override
