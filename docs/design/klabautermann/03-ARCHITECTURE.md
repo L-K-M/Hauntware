@@ -3371,6 +3371,16 @@ the guarded kill needs it.
   (util-linux 2.27+); swap devices; the disk space explorer (DSK-07), which
   streams `ncdu -x -o -` or `gdu -o-` when installed, else incremental `du -x
   -B1 -d1` per opened directory, read-only, sudo for a complete tree.
+- **As built (M6 N31).** DSK-05 and DSK-14 are one host query,
+  `MountsQuery`: `findmnt -J -l -o TARGET,SOURCE,FSTYPE,OPTIONS` where
+  findmnt is installed and takes `-J`, else `/proc/self/mounts` with its
+  octal escapes read back, then `/proc/swaps`. A mount's details in the
+  Disks section read it when they open and add the mount's source and
+  options, saying when it is mounted read-only; the last mount over a
+  point is the one in effect. The System tab's Swap section reads it
+  when it shows and on request, and lists each swap partition or file
+  with how much is used of its size and its priority, the device used
+  first at the top.
 - **v1.x.** "Open in Poltergeist" for deletion (DSK-08), layout (`lsblk -J
   -b`, LVM JSON reports with sudo), ZFS, mdraid, network mounts with
   stale-mount detection, cleanup suggestions with sizes and previews, fill
@@ -3397,6 +3407,22 @@ the guarded kill needs it.
   IPv6 listeners, share a row. Merging in Docker's published ports,
   which with `userland-proxy: false` have no listening socket, and
   reading other users' owners in admin mode follow in N34b.
+- **As built (M6 N33).** NET-02 and NET-03 are one host query,
+  `InterfacesQuery`, which the System tab's Interfaces section runs when
+  it shows and on request. One `grep -H` prints each interface's sysfs
+  `operstate`, `mtu`, `address`, `speed` and error, drop and byte
+  counters; interfaces with a `device` link are physical. Addresses come
+  from `ip -j addr`, or `ip -o addr` where `ip` has no JSON (BusyBox),
+  and are left out, with a note, without `ip`. TCP sockets are counted
+  per state from `/proc/net/tcp` and `tcp6` by `awk` on the server, so a
+  busy host sends a dozen lines, and `/proc/net/sockstat` gives the UDP
+  and total counts; both are the reader's network namespace's (D50). The
+  section lists physical interfaces first, folds the loopback and
+  software interfaces without a routable address (containers' veth
+  pairs) behind a checkbox, keeps bridges, bonds, VLANs and tunnels that
+  have one, and shows each interface's current rates from the `core`
+  stream's per-interface rates. 02's `ss -s` is not read: the files
+  answer without `iproute2`.
 - **v1.x.** Exposure map (the device probe is the ground truth and is
   labelled with its vantage point; Docker-published ports bypass ufw INPUT
   rules unless `DOCKER-USER` restricts them [U: current wording]); routes and

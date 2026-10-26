@@ -1329,6 +1329,70 @@ class AppLocalizationsEn extends AppLocalizations {
   String get systemBootsTitle => 'Boots';
 
   @override
+  String get systemMountReading => 'Reading mount options…';
+
+  @override
+  String systemMountFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server denied the read.',
+      'missing': 'The server lacks a tool this read needs.',
+      'other': 'The read failed.',
+    });
+    return 'Mount options could not be read. $_temp0';
+  }
+
+  @override
+  String get systemMountGone => 'Nothing is mounted here any more.';
+
+  @override
+  String get systemMountSource => 'Source';
+
+  @override
+  String get systemMountOptions => 'Options';
+
+  @override
+  String get systemMountReadOnly => 'Mounted read-only';
+
+  @override
+  String get systemSwapTitle => 'Swap';
+
+  @override
+  String get systemSwapReading => 'Reading swap devices…';
+
+  @override
+  String get systemSwapNone => 'No swap devices are in use.';
+
+  @override
+  String systemSwapFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server denied the read.',
+      'missing': 'The server lacks a tool this read needs.',
+      'other': 'The read failed.',
+    });
+    return 'Swap devices could not be read. $_temp0';
+  }
+
+  @override
+  String systemSwapUsage(String used, String size) {
+    return '$used used of $size';
+  }
+
+  @override
+  String systemSwapDetail(String kind, int priority) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'partition': 'Partition',
+      'file': 'File',
+      'other': 'Swap device',
+    });
+    return '$_temp0, priority $priority';
+  }
+
+  @override
+  String get systemSwapReadAgain => 'Read again';
+
+  @override
   String get systemBootsReading => 'Reading kernels and boots…';
 
   @override
@@ -1431,6 +1495,119 @@ class AppLocalizationsEn extends AppLocalizations {
   String systemPortsContainer(String id) {
     return 'Container $id';
   }
+
+  @override
+  String get systemNetInterfacesTitle => 'Interfaces';
+
+  @override
+  String get systemNetReading => 'Reading the network interfaces…';
+
+  @override
+  String get systemNetReadAgain => 'Read again';
+
+  @override
+  String systemNetFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server refused the interface read.',
+      'missing': 'The server lacks the tools the interface read runs.',
+      'other': 'The interface read failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemNetNoAddresses =>
+      'The server has no ip command that lists addresses, so none are shown.';
+
+  @override
+  String systemNetShowAll(int count) {
+    return 'Show loopback and virtual interfaces ($count)';
+  }
+
+  @override
+  String get systemNetNone => 'The server lists no network interfaces.';
+
+  @override
+  String systemNetInterface(String name, String state) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'up': 'up',
+      'down': 'down',
+      'dormant': 'dormant',
+      'lowerLayerDown': 'lower layer down',
+      'notPresent': 'not present',
+      'testing': 'testing',
+      'other': 'state not reported',
+    });
+    return '$name: $_temp0';
+  }
+
+  @override
+  String systemNetAddress(String address, int prefix) {
+    return '$address/$prefix';
+  }
+
+  @override
+  String systemNetMtu(int mtu) {
+    return 'MTU $mtu';
+  }
+
+  @override
+  String systemNetSpeedMbps(int speed) {
+    return 'Link speed $speed Mb/s';
+  }
+
+  @override
+  String systemNetSpeedGbps(double speed) {
+    final intl.NumberFormat speedNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String speedString = speedNumberFormat.format(speed);
+
+    return 'Link speed $speedString Gb/s';
+  }
+
+  @override
+  String systemNetRates(String rx, String tx) {
+    return 'Receiving $rx, sending $tx';
+  }
+
+  @override
+  String systemNetErrors(
+    int rxErrors,
+    int txErrors,
+    int rxDropped,
+    int txDropped,
+  ) {
+    return 'Errors: $rxErrors in, $txErrors out. Dropped: $rxDropped in, $txDropped out.';
+  }
+
+  @override
+  String get systemNetConnectionsTitle => 'Connections';
+
+  @override
+  String get systemNetConnectionsUnknown =>
+      'The server\'s socket counts could not be read.';
+
+  @override
+  String get systemNetTcpEstablished => 'TCP established';
+
+  @override
+  String get systemNetTcpListening => 'TCP listening';
+
+  @override
+  String get systemNetTcpTimeWait => 'TCP time wait';
+
+  @override
+  String get systemNetTcpCloseWait => 'TCP close wait';
+
+  @override
+  String get systemNetTcpOther => 'TCP in other states';
+
+  @override
+  String get systemNetUdp => 'UDP sockets';
+
+  @override
+  String get systemNetSocketsUsed => 'All sockets';
 
   @override
   String get systemBootsTimelineTitle => 'Boot timeline';

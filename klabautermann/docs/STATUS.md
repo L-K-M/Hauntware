@@ -1955,6 +1955,11 @@ is on main:
   created again under its name is not removed. An API step can now
   carry a JSON body, which the preview shows as sent. The Docker
   actions suite creates, refuses and removes a volume on the fixture.
+- Mounts and swap (M6 N31, DSK-05, DSK-14): a mount's details in the
+  Disks section add its source and options, flagging a read-only mount,
+  and the System tab's Swap section lists the swap partitions and files
+  with their use and priority. Hosts without findmnt read
+  /proc/self/mounts.
 - Boots (M6 N39, BOOT-02, BOOT-03): the System tab's Boots section says
   whether the running kernel is the newest installed, or a reboot loads
   a newer one, and lists the current boot and the ten before it with
@@ -2032,6 +2037,14 @@ is on main:
   zones, every 10 s. The System tab's Temperatures section lists each
   sensor with its high and critical limits, and does not show where the
   host has no sensor, as VMs, or inside a container.
+- Interfaces and connections (M6 N33, NET-02, NET-03): the System tab's
+  new Interfaces section lists each interface with its state,
+  addresses, MTU, link speed, current receive and send rates, and
+  errors and drops since it came up, physical interfaces first. The
+  loopback and containers' unaddressed veth pairs fold behind a
+  checkbox. Below, Connections counts the TCP sockets by state
+  (established, listening, time wait, close wait, others) and the UDP
+  and total sockets.
 - Out-of-memory kills (M6 N42b, MEM-03): the System tab's new section
   counts the kills since boot from `/proc/vmstat`'s `oom_kill` (Linux
   4.13+) and names the current boot's victims, newest first, from the

@@ -1888,6 +1888,84 @@ abstract class AppLocalizations {
   /// **'Boots'**
   String get systemBootsTitle;
 
+  /// A mount's details sheet, while it reads the mount's source and options (DSK-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Reading mount options…'**
+  String get systemMountReading;
+
+  /// A mount's details sheet when its source and options could not be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Mount options could not be read. {failure, select, noLink{Not connected to the server.} denied{The server denied the read.} missing{The server lacks a tool this read needs.} other{The read failed.}}'**
+  String systemMountFailed(String failure);
+
+  /// A mount's details sheet when the mount read no longer lists the mount point.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is mounted here any more.'**
+  String get systemMountGone;
+
+  /// Label of the device, share or image a filesystem is mounted from.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get systemMountSource;
+
+  /// Label of a mount's options, such as rw and relatime.
+  ///
+  /// In en, this message translates to:
+  /// **'Options'**
+  String get systemMountOptions;
+
+  /// A mount's details sheet when the filesystem is mounted read-only.
+  ///
+  /// In en, this message translates to:
+  /// **'Mounted read-only'**
+  String get systemMountReadOnly;
+
+  /// Heading of the System tab's swap devices section (DSK-14).
+  ///
+  /// In en, this message translates to:
+  /// **'Swap'**
+  String get systemSwapTitle;
+
+  /// The swap section while it reads the swap devices.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading swap devices…'**
+  String get systemSwapReading;
+
+  /// The swap section when the server uses no swap.
+  ///
+  /// In en, this message translates to:
+  /// **'No swap devices are in use.'**
+  String get systemSwapNone;
+
+  /// The swap section when the swap devices could not be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Swap devices could not be read. {failure, select, noLink{Not connected to the server.} denied{The server denied the read.} missing{The server lacks a tool this read needs.} other{The read failed.}}'**
+  String systemSwapFailed(String failure);
+
+  /// How much of a swap device is used, out of its size.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} used of {size}'**
+  String systemSwapUsage(String used, String size);
+
+  /// What a swap device is (a disk partition or a file) and its priority; higher is used first.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, partition{Partition} file{File} other{Swap device}}, priority {priority}'**
+  String systemSwapDetail(String kind, int priority);
+
+  /// Button that reads the swap devices again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemSwapReadAgain;
+
   /// System tab, Boots: shown while the first read runs.
   ///
   /// In en, this message translates to:
@@ -1995,6 +2073,149 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Container {id}'**
   String systemPortsContainer(String id);
+
+  /// System tab: the heading of the network interfaces section (NET-02, NET-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Interfaces'**
+  String get systemNetInterfacesTitle;
+
+  /// System tab, Interfaces: shown while the interfaces are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the network interfaces…'**
+  String get systemNetReading;
+
+  /// System tab, Interfaces: the button that reads the interfaces again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemNetReadAgain;
+
+  /// System tab, Interfaces: why the interface read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the interface read.} missing{The server lacks the tools the interface read runs.} other{The interface read failed.}}'**
+  String systemNetFailed(String failure);
+
+  /// System tab, Interfaces: shown when the server could not list the interfaces' IP addresses.
+  ///
+  /// In en, this message translates to:
+  /// **'The server has no ip command that lists addresses, so none are shown.'**
+  String get systemNetNoAddresses;
+
+  /// System tab, Interfaces: the checkbox that also lists the loopback and software interfaces without a routable address, such as containers' veth pairs; count is how many it adds.
+  ///
+  /// In en, this message translates to:
+  /// **'Show loopback and virtual interfaces ({count})'**
+  String systemNetShowAll(int count);
+
+  /// System tab, Interfaces: shown when the read found no interface.
+  ///
+  /// In en, this message translates to:
+  /// **'The server lists no network interfaces.'**
+  String get systemNetNone;
+
+  /// System tab, Interfaces: an interface's name and its operational state. name is the interface's name on the server, never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {state, select, up{up} down{down} dormant{dormant} lowerLayerDown{lower layer down} notPresent{not present} testing{testing} other{state not reported}}'**
+  String systemNetInterface(String name, String state);
+
+  /// System tab, Interfaces: an IP address with its prefix length in CIDR notation.
+  ///
+  /// In en, this message translates to:
+  /// **'{address}/{prefix}'**
+  String systemNetAddress(String address, int prefix);
+
+  /// System tab, Interfaces: the interface's maximum transmission unit in bytes.
+  ///
+  /// In en, this message translates to:
+  /// **'MTU {mtu}'**
+  String systemNetMtu(int mtu);
+
+  /// System tab, Interfaces: the negotiated link speed in megabits per second.
+  ///
+  /// In en, this message translates to:
+  /// **'Link speed {speed} Mb/s'**
+  String systemNetSpeedMbps(int speed);
+
+  /// System tab, Interfaces: the negotiated link speed in gigabits per second, such as 2.5.
+  ///
+  /// In en, this message translates to:
+  /// **'Link speed {speed} Gb/s'**
+  String systemNetSpeedGbps(double speed);
+
+  /// System tab, Interfaces: the interface's current receive and transmit rates, already formatted.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiving {rx}, sending {tx}'**
+  String systemNetRates(String rx, String tx);
+
+  /// System tab, Interfaces: the interface's receive and transmit errors and dropped packets, counted since it came up.
+  ///
+  /// In en, this message translates to:
+  /// **'Errors: {rxErrors} in, {txErrors} out. Dropped: {rxDropped} in, {txDropped} out.'**
+  String systemNetErrors(
+    int rxErrors,
+    int txErrors,
+    int rxDropped,
+    int txDropped,
+  );
+
+  /// System tab, Interfaces: the heading over the socket counts (NET-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Connections'**
+  String get systemNetConnectionsTitle;
+
+  /// System tab, Interfaces: shown when /proc/net gave no socket counts.
+  ///
+  /// In en, this message translates to:
+  /// **'The server\'s socket counts could not be read.'**
+  String get systemNetConnectionsUnknown;
+
+  /// System tab, Interfaces: the label of the number of established TCP connections.
+  ///
+  /// In en, this message translates to:
+  /// **'TCP established'**
+  String get systemNetTcpEstablished;
+
+  /// System tab, Interfaces: the label of the number of TCP sockets listening for connections.
+  ///
+  /// In en, this message translates to:
+  /// **'TCP listening'**
+  String get systemNetTcpListening;
+
+  /// System tab, Interfaces: the label of the number of closed TCP connections the kernel still holds in TIME-WAIT.
+  ///
+  /// In en, this message translates to:
+  /// **'TCP time wait'**
+  String get systemNetTcpTimeWait;
+
+  /// System tab, Interfaces: the label of the number of TCP connections the peer closed and the local program has not; many point to a program leaking connections.
+  ///
+  /// In en, this message translates to:
+  /// **'TCP close wait'**
+  String get systemNetTcpCloseWait;
+
+  /// System tab, Interfaces: the label of the number of TCP sockets opening or closing.
+  ///
+  /// In en, this message translates to:
+  /// **'TCP in other states'**
+  String get systemNetTcpOther;
+
+  /// System tab, Interfaces: the label of the number of UDP sockets in use.
+  ///
+  /// In en, this message translates to:
+  /// **'UDP sockets'**
+  String get systemNetUdp;
+
+  /// System tab, Interfaces: the label of the number of sockets of every kind in use.
+  ///
+  /// In en, this message translates to:
+  /// **'All sockets'**
+  String get systemNetSocketsUsed;
 
   /// System tab, Boots: the heading over the list of boots, newest first (BOOT-02).
   ///

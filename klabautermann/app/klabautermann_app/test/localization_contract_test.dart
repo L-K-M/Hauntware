@@ -675,6 +675,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "','",
     "', '",
   },
+  'lib/ui/interfaces.dart': {"'lo'"},
   'lib/ui/logs/logs_panel.dart': {
     // The empty server pattern, which reads the whole journal again.
     "''",
@@ -783,6 +784,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'commands reach the macOS application menu through appMenuOnMac'",
     r"'${placement.group}:${placement.order}'",
     r"'${command.id} shares menu slot ${placement.group}:${placement.order}'",
+  },
+  'lib/ui/mounts.dart': {
+    // The separator between a mount's options, machine data as the kernel
+    // lists them.
+    "', '",
   },
   'lib/ui/oom_kills.dart': {
     // The journal pattern of an OOM report's kernel lines and the syslog

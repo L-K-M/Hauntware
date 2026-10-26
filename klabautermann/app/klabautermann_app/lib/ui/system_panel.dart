@@ -16,7 +16,9 @@ import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
 import 'disk_activity.dart';
 import 'drive_health.dart';
 import 'gpus.dart';
+import 'interfaces.dart';
 import 'listening_ports.dart';
+import 'mounts.dart';
 import 'oom_kills.dart';
 import 'power.dart';
 import 'sortable_table.dart';
@@ -31,8 +33,10 @@ enum SystemSection {
   uptime,
   time,
   network,
+  interfaces,
   disks,
   diskActivity,
+  swap,
   temperatures,
   gpus,
   oomKills,
@@ -217,6 +221,17 @@ class _SystemPanelState extends State<SystemPanel> {
               ListenableBuilder(
                 listenable: _core,
                 builder: (context, _) => _diskActivitySection(l10n, profile),
+              ),
+              InterfacesSection(
+                key: const ValueKey(SystemSection.interfaces),
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
+                core: _core,
+                fact: (label, value) => _Fact(label: label, value: value),
+              ),
+              SwapSection(
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
               ),
               ?temperatures,
               ?gpus,
@@ -527,8 +542,14 @@ class _SystemPanelState extends State<SystemPanel> {
             sort: _sort,
             onSort: (sort) => setState(() => _sort = sort),
             // The mount column may cut a mount point short (A11Y-09).
-            onRowActivated: (mount) =>
-                _showMountDetails(context, l10n, mount, timedOut: timedOut),
+            onRowActivated: (mount) => _showMountDetails(
+              context,
+              l10n,
+              mount,
+              timedOut: timedOut,
+              monitoring: widget.monitoring,
+              serverId: widget.serverId,
+            ),
           ),
         ),
     ];
@@ -664,6 +685,8 @@ void _showMountDetails(
   AppLocalizations l10n,
   FsMount mount, {
   required bool timedOut,
+  required MonitoringController monitoring,
+  required String serverId,
 }) {
   final theme = Theme.of(context);
   unawaited(
@@ -703,6 +726,12 @@ void _showMountDetails(
                   value: _percent(l10n, mount.inodeUsePercent),
                 ),
               ],
+              MountOptions(
+                monitoring: monitoring,
+                serverId: serverId,
+                mountPoint: mount.mountPoint,
+                fact: (label, value) => _Fact(label: label, value: value),
+              ),
             ],
           ),
         ),

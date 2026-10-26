@@ -211,6 +211,43 @@ void main() {
     expect(kernels.check.newest, '6.1.0-13-amd64');
   });
 
+  test('the mounts read answers findmnt\'s JSON too', () async {
+    link = _RunLink(
+      (_) => _ok(
+        '$kMountsFindmntMarker\n'
+        '{"filesystems": [{"target": "/", "source": "/dev/sda1", '
+        '"fstype": "ext4", "options": "ro,relatime"}]}\n'
+        '$kMountsSwapsMarker\nFilename Type Size Used Priority\n'
+        '/dev/sda3 partition 4096 0 -2\n',
+      ),
+    );
+    final read = ((await ask(const MountsQuery())).payload as Mounts).read;
+    expect(read.mountAt('/')!.readOnly, isTrue);
+    expect(read.swaps.single.kind, SwapKind.partition);
+  });
+
+  test('the mounts read answers each mount and swap device', () async {
+    link = _RunLink(
+      (_) => _ok(
+        '$kMountsProcMarker\n/dev/sda1 / ext4 ro,relatime 0 0\n'
+        '$kMountsSwapsMarker\nFilename Type Size Used Priority\n'
+        '/swapfile file 1024 0 -2\n',
+      ),
+    );
+    final read = ((await ask(const MountsQuery())).payload as Mounts).read;
+    expect(read.mountAt('/')!.readOnly, isTrue);
+    expect(read.swaps.single.sizeBytes, 1024 * 1024);
+    expect(
+      link!.commands.single,
+      HostCommands.commandLine(HostCommands.mounts(), quote: quoteShellWord),
+    );
+
+    events.clear();
+    link = _RunLink((_) => _ok('sh: cat: not found\n'));
+    final failed = (await ask(const MountsQuery())).payload as HostQueryFailed;
+    expect(failed.failure, HostQueryFailure.failed);
+  });
+
   test('a kernel read that printed something else fails', () async {
     link = _RunLink((_) => _ok('sh: uname: not found\n'));
     final payload =
@@ -244,6 +281,35 @@ void main() {
     final failed =
         (await ask(const ListeningPortsQuery())).payload as HostQueryFailed;
     expect(failed.failure, HostQueryFailure.failed);
+  });
+
+  test('the interface read runs its command and parses', () async {
+    link = _RunLink(
+      (_) => _ok(
+        '$kNetLinksMarker\neth0/operstate:up\neth0/mtu:1500\n'
+        '$kNetPhysicalMarker\neth0\n$kNetAddrMarker\n'
+        '$kNetTcpMarker\n01 4\n$kNetSockstatMarker\nsockets: used 9\n',
+      ),
+    );
+    final read =
+        ((await ask(const InterfacesQuery())).payload as NetInterfaces).read;
+    expect(read.interfaces.single.name, 'eth0');
+    expect(read.interfaces.single.physical, isTrue);
+    expect(read.sockets.tcp, {TcpState.established: 4});
+    expect(
+      link!.commands.single,
+      HostCommands.commandLine(
+        HostCommands.interfaces(),
+        quote: quoteShellWord,
+      ),
+    );
+  });
+
+  test('an interface read that printed something else fails', () async {
+    link = _RunLink((_) => _ok('sh: grep: not found\n'));
+    final payload =
+        (await ask(const InterfacesQuery())).payload as HostQueryFailed;
+    expect(payload.failure, HostQueryFailure.failed);
   });
 
   test('a server without a ready link is answered at once', () async {
