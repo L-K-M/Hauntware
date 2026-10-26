@@ -5322,6 +5322,44 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerImageHistoryComment => 'Comment';
 
   @override
+  String get dockerLinksTitle => 'Links';
+
+  @override
+  String dockerLinksFrom(String source) {
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'dockhand': 'From a Dockhand label',
+      'dozzle': 'From a Dozzle label',
+      'traefik': 'A Traefik route',
+      'caddy': 'A Caddy site',
+      'other': 'From a label',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerLinksFromPort(String source, int port) {
+    final intl.NumberFormat portNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String portString = portNumberFormat.format(port);
+
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'dockhand': 'From a Dockhand label, port $portString',
+      'other': 'From a label, port $portString',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerLinksOpen(String name) {
+    return 'Open $name in the browser';
+  }
+
+  @override
+  String get dockerLinksNotOpened =>
+      'The link could not be opened in a browser.';
+
+  @override
   String get dockerProcessesTitle => 'Processes';
 
   @override

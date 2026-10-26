@@ -6423,6 +6423,47 @@
   "@dockerImageHistoryComment": {
     "description": "Image history sheet: the label before a layer's comment, such as the builder that made it."
   },
+  "dockerLinksTitle": "Links",
+  "@dockerLinksTitle": {
+    "description": "Container details: the section of web pages the container's labels point at (CTR-11)."
+  },
+  "dockerLinksFrom": "{source, select, dockhand{From a Dockhand label} dozzle{From a Dozzle label} traefik{A Traefik route} caddy{A Caddy site} other{From a label}}",
+  "@dockerLinksFrom": {
+    "description": "Container details, Links: where a link came from, under its address.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerLinksFromPort": "{source, select, dockhand{From a Dockhand label, port {port}} other{From a label, port {port}}}",
+  "@dockerLinksFromPort": {
+    "description": "Container details, Links: where a link came from, for one container port.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "8080"
+      }
+    }
+  },
+  "dockerLinksOpen": "Open {name} in the browser",
+  "@dockerLinksOpen": {
+    "description": "Container details, Links: the tooltip and screen-reader label of the button that opens a link.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "https://app.example.com"
+      }
+    }
+  },
+  "dockerLinksNotOpened": "The link could not be opened in a browser.",
+  "@dockerLinksNotOpened": {
+    "description": "Container details, Links: shown when the system refused to open a link."
+  },
   "dockerProcessesTitle": "Processes",
   "@dockerProcessesTitle": {
     "description": "Container details: the section listing the processes running inside the container (CTR-10)."

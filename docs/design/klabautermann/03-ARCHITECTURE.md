@@ -3998,6 +3998,20 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   through one `docker compose logs -f` in low-session mode); JSON and level
   parsing; redacted log export; stats detail charts, sorting, memory limit
   risk, top table.
+  Label links (M6 N17b, CTR-11) are read in the app from the inspected
+  labels, already masked by key (8.9), by `labelLinks` in
+  `klabautermann_docker`: `dockhand.url` (plain or `[Name](url)`),
+  `dockhand.port.<port>.url`, `dev.dozzle.url`, each Traefik router's
+  `Host(...)` names (scheme `https` with `tls=true`, a
+  `tls.certresolver` or a `websecure`/`https` entry point, else `http`;
+  skipped while `traefik.enable=false`, and `HostRegexp` never yields
+  one), and caddy-docker-proxy's `caddy` and `caddy_<n>` addresses
+  (a bare host is HTTPS, as Caddy serves it). A masked value, another
+  scheme, credentials, a wildcard or a placeholder yields no link. The
+  links open through the hand-off launcher in the system browser, or
+  show as text where the app has none. CTR-11's mute labels
+  (`dockhand.notify`) wait for per-container notifications, which v1
+  does not send.
 - **v1.x.** Daemon config view, topology graph, interop labels, copy as
   `docker run`, generate compose service, rename, in-place limit updates,
   create from form, filesystem changes, container file browser, cgroup
