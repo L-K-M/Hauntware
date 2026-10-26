@@ -110,6 +110,29 @@ void main() {
     ]);
   });
 
+  test('the out-of-memory read answers the kills', () async {
+    link = _RunLink(
+      (_) => _ok(
+        '$kOomVmstatMarker 1\n$kOomSourceMarker journal\n'
+        '1729912345.123460 h kernel: Out of memory: Killed process 4321 '
+        '(stress) total-vm:2kB, anon-rss:1kB\n$kOomReadMarker 800\n',
+      ),
+    );
+    final read = ((await ask(const OomKillsQuery())).payload as OomKills).read;
+    expect(read.killsSinceBoot, 1);
+    expect(read.kills.single.command, 'stress');
+    expect(
+      link!.commands.single,
+      HostCommands.commandLine(HostCommands.oomKills(), quote: quoteShellWord),
+    );
+
+    events.clear();
+    link = _RunLink((_) => _ok('sh: awk: not found\n'));
+    final failed =
+        (await ask(const OomKillsQuery())).payload as HostQueryFailed;
+    expect(failed.failure, HostQueryFailure.failed);
+  });
+
   test('boot ends key by boot ID, and the kernels say whether a reboot '
       'loads a newer one', () async {
     link = _RunLink(
