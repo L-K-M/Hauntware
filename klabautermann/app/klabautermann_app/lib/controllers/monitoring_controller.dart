@@ -15,6 +15,7 @@ import 'log_reads.dart';
 import 'log_streams.dart';
 import 'package_reads.dart';
 import 'stack_folders.dart';
+import 'tls_endpoints.dart';
 
 /// How long a server's link outlives the last view that opened it, as long
 /// as the grace 03 §5.1 and D34 give a backgrounded phone's link: stepping
@@ -147,16 +148,18 @@ final class MonitoringController extends ChangeNotifier {
   /// once. [now] is what [clock] reads. [dockerEndpointChoices], the
   /// Docker sockets chosen on this device (CN-09), outlives this run and
   /// goes to [docker]; without it the choices last this run.
-  /// [stackFolders], the folders STK-08 scans on each server, outlives it
-  /// the same way.
+  /// [stackFolders], the folders STK-08 scans on each server, and
+  /// [tlsEndpoints], the endpoints CRT-01 checks, outlive it the same way.
   MonitoringController(
     this._engine, {
     this._linkGrace = kLinkLeaveGrace,
     DateTime Function() now = DateTime.now,
     DockerEndpointChoices? dockerEndpointChoices,
     StackFolders? stackFolders,
+    TlsEndpoints? tlsEndpoints,
   }) : _clock = _FreshnessClock(now),
-       stackFolders = stackFolders ?? StackFolders() {
+       stackFolders = stackFolders ?? StackFolders(),
+       tlsEndpoints = tlsEndpoints ?? TlsEndpoints() {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     logs = LogStreams(_engine);
     terminals = ContainerTerminals(_engine);
@@ -174,6 +177,10 @@ final class MonitoringController extends ChangeNotifier {
   /// The folders the Stacks sub-tab scans for stacks without containers
   /// (STK-08), chosen on this device.
   final StackFolders stackFolders;
+
+  /// The endpoints the System tab's Certificates section checks from this
+  /// device (CRT-01), chosen on this device.
+  final TlsEndpoints tlsEndpoints;
 
   /// The log streams panels open, and each server's journal access for
   /// LOG-04's notice (03 §10.1, §10.8): a concern of its own that lasts
@@ -224,6 +231,8 @@ final class MonitoringController extends ChangeNotifier {
 
   /// The [redactLines] requests waiting for the engine, by request id.
   final Map<String, Completer<String?>> _redactions = {};
+  final Map<String, Completer<List<TlsEndpointCheck>?>> _tlsChecks = {};
+  var _nextTlsCheck = 0;
   int _nextRedaction = 0;
 
   /// The refreshes waiting for their readings.
@@ -410,6 +419,19 @@ final class MonitoringController extends ChangeNotifier {
     final answer = Completer<String?>();
     _redactions[requestId] = answer;
     _send(RedactLines(requestId, lines));
+    return answer.future;
+  }
+
+  /// Checks [endpoints]' certificates from this device through the engine
+  /// (CRT-01), which owns the sockets; null when the engine has stopped.
+  Future<List<TlsEndpointCheck>?> checkTlsEndpoints(
+    List<TlsEndpoint> endpoints,
+  ) {
+    if (_engineStopped) return Future.value();
+    final requestId = 'tls-${_nextTlsCheck++}';
+    final answer = Completer<List<TlsEndpointCheck>?>();
+    _tlsChecks[requestId] = answer;
+    _send(CheckTlsEndpoints(requestId, endpoints));
     return answer.future;
   }
 
@@ -637,6 +659,8 @@ final class MonitoringController extends ChangeNotifier {
         _hostQueries.remove(queryId)?.$2.complete(event);
       case RedactedLines(:final requestId, :final text):
         _redactions.remove(requestId)?.complete(text);
+      case TlsEndpointsChecked(:final requestId, :final checks):
+        _tlsChecks.remove(requestId)?.complete(checks);
       case Sample(:final serverId):
         // One still in flight when its server left the fleet would bring
         // back what the purge dropped.
@@ -762,6 +786,10 @@ final class MonitoringController extends ChangeNotifier {
       answer.complete(null);
     }
     _redactions.clear();
+    for (final answer in _tlsChecks.values) {
+      answer.complete(null);
+    }
+    _tlsChecks.clear();
     for (final timer in _leaving.values) {
       timer.cancel();
     }

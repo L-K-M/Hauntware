@@ -238,6 +238,45 @@ void main() {
       );
     });
 
+    test('keeps TLS endpoints per server across reloads; malformed '
+        'entries are skipped, and none removes one (CRT-01)', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.certificates.endpoints': {
+          'srv-9': 'not-a-list',
+          'srv-8': ['https://example.com', 7],
+        },
+      });
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.tlsEndpoints, isEmpty);
+      await store.setTlsEndpoints('srv-1', const [
+        TlsEndpoint('example.com', 443),
+        TlsEndpoint('2001:db8::1', 8443),
+      ]);
+      expect(
+        (document()['klabautermann.certificates.endpoints'] as Map)['srv-1'],
+        ['example.com:443', '[2001:db8::1]:8443'],
+      );
+      final reopened = await DeviceSettingsStore.open(file);
+      expect(reopened.tlsEndpoints, {
+        'srv-1': const [
+          TlsEndpoint('example.com', 443),
+          TlsEndpoint('2001:db8::1', 8443),
+        ],
+      });
+
+      await reopened.setTlsEndpoints('srv-1', const []);
+      final cleared = await DeviceSettingsStore.open(file);
+      expect(cleared.tlsEndpoints, isEmpty);
+      expect(
+        (document()['klabautermann.certificates.endpoints'] as Map).keys,
+        containsAll(['srv-9', 'srv-8']),
+        reason: "other servers' entries stay as read",
+      );
+    });
+
     group('endpoint overrides (CN-09, D54)', () {
       const podman = DockerEndpointOverride(
         DockerEndpointDetected('/run/podman/podman.sock'),
