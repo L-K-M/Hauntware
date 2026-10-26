@@ -2088,6 +2088,16 @@ is on main:
   in settings.json. Each notification states the same limit (Y3). The
   app icon's badge is not built, and whether the notifications show on
   real Android, iOS, macOS, Windows and Linux desktops is a manual check.
+- Container processes (M6 N17a, CTR-10): a running container's details
+  end with a Processes section, read through `GET /containers/{id}/top`
+  when the details show, when the container starts and on "Read again".
+  Each process shows its command line over its PID, user, CPU share,
+  memory and age. The engine masks each command line as Processes masks
+  one, and "Reveal values" shows them for 30 seconds. Where `ps` rejects
+  those columns (BusyBox, a Windows daemon) the engine asks again with
+  the daemon's default. A stopped container says it has no processes.
+  Tested in the docker package, the router and the details view; no
+  Docker fixture runs it yet.
 - Image history (M6 N14, IMG-04): a click or tap on an Images row opens
   a sheet with the image's layers, newest first, read by id through
   `GET /images/{name}/history`. Each layer shows the instruction that

@@ -288,6 +288,10 @@ import '../operations/plan_types.dart';
 /// An image's history then joined v3 the same way (03 §7.14 IMG-04, M6
 /// plan N14): [DockerImageHistoryQuery], answered by
 /// [DockerImageHistoryPayload] with each layer's instruction masked.
+///
+/// A container's processes then joined v3 the same way (03 §7.12 CTR-10,
+/// M6 plan N17): [DockerContainerTopQuery], answered by
+/// [DockerContainerTopPayload] with each command line masked.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -3796,6 +3800,17 @@ final class DockerContainerQuery extends DockerQuerySpec {
   final String containerId;
 }
 
+/// One running container's processes (CTR-10). Answered by
+/// [DockerContainerTopPayload]; the daemon refuses a container that is
+/// not running (409), which answers [DockerQueryFailed] with
+/// `daemonError`.
+final class DockerContainerTopQuery extends DockerQuerySpec {
+  const DockerContainerTopQuery(this.containerId);
+
+  /// The container's id or name.
+  final String containerId;
+}
+
 /// The image list (IMG-01). Answered by [DockerImagesPayload].
 final class DockerImagesQuery extends DockerQuerySpec {
   const DockerImagesQuery();
@@ -3934,6 +3949,29 @@ final class DockerImageHistoryPayload extends DockerPayload {
     : layers = List.unmodifiable(layers);
 
   final List<ImageLayer> layers;
+}
+
+/// A container's processes (CTR-10): the columns `ps` named and a row
+/// per process, the command line column masked as Processes masks one
+/// (03 §8.9).
+final class DockerContainerTopPayload extends DockerPayload {
+  DockerContainerTopPayload({
+    required Iterable<String> titles,
+    required Iterable<List<MaskedValue>> processes,
+    this.commandColumn,
+  }) : titles = List.unmodifiable(titles),
+       processes = List.unmodifiable([
+         for (final row in processes) List<MaskedValue>.unmodifiable(row),
+       ]);
+
+  final List<String> titles;
+
+  /// One cell per title; only the command line's can be masked.
+  final List<List<MaskedValue>> processes;
+
+  /// The index of the command line's title, or null where `ps` named
+  /// none (a Windows daemon lists the image name instead).
+  final int? commandColumn;
 }
 
 /// One layer of an image's history (IMG-04).

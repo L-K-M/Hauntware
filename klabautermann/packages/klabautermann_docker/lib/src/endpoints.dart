@@ -12,6 +12,7 @@ import 'json_reader.dart';
 import 'log_resume.dart';
 import 'log_time.dart';
 import 'models/container.dart';
+import 'models/container_top.dart';
 import 'models/engine_info.dart';
 import 'models/events.dart';
 import 'models/exec.dart';
@@ -78,6 +79,26 @@ extension DockerEndpoints on DockerClient {
       cancelToken: cancelToken,
     );
     return parseContainerInspect(_decodeBuffered(res.body, 'inspect').value);
+  }
+
+  /// `GET /containers/{id}/top` (03 §7.12 CTR-10): the container's
+  /// processes as `ps` lists them with [psArgs], or with the daemon's
+  /// default `-ef` when null. A container that is not running answers
+  /// 409.
+  Future<DockerParseResult<ContainerTop>> containerTop(
+    String id, {
+    String? psArgs,
+    Duration? timeout,
+    DockerCancelToken? cancelToken,
+  }) async {
+    final res = await request(
+      'GET',
+      '/containers/${_seg(id)}/top',
+      query: {'ps_args': ?psArgs},
+      timeout: timeout,
+      cancelToken: cancelToken,
+    );
+    return parseContainerTop(_decodeBuffered(res.body, 'container top').value);
   }
 
   /// `GET /containers/{id}/stats?stream=false&one-shot=true` (03 §5.6,

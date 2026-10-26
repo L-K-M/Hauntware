@@ -18,6 +18,7 @@ import '../processes_view.dart' show argumentText, clipProcessText;
 import 'container_details_view.dart';
 import 'container_command.dart';
 import 'container_logs.dart';
+import 'container_processes.dart';
 import 'container_terminal.dart';
 import 'containers_panel.dart' show ContainerHealthBadge;
 import 'containers_view.dart';
@@ -441,7 +442,13 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
         _Notice(icon: Icons.hourglass_empty, text: l10n.dockerDetailsReading),
       if (container != null && (read.removed || failure != null))
         _Notice(icon: Icons.history, text: l10n.dockerDetailsKept),
-      if (container != null) ..._sections(context, container, row),
+      if (container != null)
+        ..._sections(
+          context,
+          container,
+          row,
+          live: !read.removed && failure == null,
+        ),
     ];
     return ListView(
       padding: widget.padding,
@@ -455,8 +462,9 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
   List<Widget> _sections(
     BuildContext context,
     ContainerDetails container,
-    ContainerSummary row,
-  ) {
+    ContainerSummary row, {
+    required bool live,
+  }) {
     final l10n = AppLocalizations.of(context);
     final config = container.config;
     final env = config?.env ?? const <EnvVar>[];
@@ -554,6 +562,15 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
         title: l10n.dockerDetailsNetworksTitle,
         children: _networks(context, container),
       ),
+      // Only over a live read: a container that is gone, or a server
+      // the details cannot reach, says so once above.
+      if (live)
+        ContainerProcessesSection(
+          docker: _docker,
+          serverId: widget.serverId,
+          containerId: widget.container.id,
+          up: containerIsUp(row),
+        ),
       _RawJson(container: container),
     ];
   }

@@ -923,6 +923,9 @@ final class DockerRouter {
             DockerContainerPayload(maskContainerInspect(inspect.value)),
             inspect.warnings,
           );
+        case DockerContainerTopQuery(:final containerId):
+          final top = await _containerTop(client, containerId);
+          return read(maskContainerTop(top.value), top.warnings);
         case DockerImagesQuery():
           final images = await client.listImages();
           return read(DockerImagesPayload(images.value), images.warnings);
@@ -968,9 +971,29 @@ final class DockerRouter {
     }
   }
 
+  /// [containerId]'s processes with CTR-10's columns, or with the
+  /// daemon's default `ps -ef` where `ps` rejects those columns, as a
+  /// minimal `ps` (BusyBox's) or a Windows daemon, which takes no
+  /// arguments, does. Either answers 500, so any 500 costs one more
+  /// request; the container's own state (404, 409) needs no retry.
+  static Future<DockerParseResult<ContainerTop>> _containerTop(
+    DockerClient client,
+    String containerId,
+  ) async {
+    try {
+      return await client.containerTop(
+        containerId,
+        psArgs: kContainerTopPsArgs,
+      );
+    } on DockerServerException {
+      return client.containerTop(containerId);
+    }
+  }
+
   /// Whether [spec] names what it reads in a form the engine takes.
   static bool _valid(DockerQuerySpec spec) => switch (spec) {
     DockerContainerQuery(:final containerId) => containerId.isNotEmpty,
+    DockerContainerTopQuery(:final containerId) => containerId.isNotEmpty,
     DockerImageHistoryQuery(:final image) => image.isNotEmpty,
     DockerStackFileQuery(:final project, :final path) =>
       composeNamePattern.hasMatch(project) && _absolute(path),
