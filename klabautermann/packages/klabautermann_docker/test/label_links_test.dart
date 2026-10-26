@@ -106,7 +106,17 @@ void main() {
       isEmpty,
     );
     expect(uris({'dev.dozzle.url': MaskedValue.plain('/logs')}), isEmpty);
-    expect(uris({'dockhand.url': MaskedValue.plain('ssh://host')}), isEmpty);
+    for (final address in [
+      'ssh://host',
+      'javascript:alert(1)',
+      'file:///etc/passwd',
+    ]) {
+      expect(
+        uris({'dockhand.url': MaskedValue.plain(address)}),
+        isEmpty,
+        reason: address,
+      );
+    }
     // A wildcard or a placeholder, in any label that takes a URL.
     for (final address in [
       'https://*.example.com',
@@ -124,11 +134,20 @@ void main() {
         reason: address,
       );
     }
-    // A malformed escape in the host is no placeholder, and reading it
-    // does not throw: Uri.tryParse stores the bare % as %25.
+    // A bare % in the host is no placeholder, and reading it does not
+    // throw: Uri.tryParse stores it as %25.
     expect(uris({'dockhand.url': MaskedValue.plain('https://bad%host/')}), [
       'https://bad%25host/',
     ]);
+    // An escape that is not UTF-8 names no host and does not throw either.
+    for (final address in ['http://a%FF.example.com', 'https://%E2%82.x/']) {
+      expect(
+        uris({'dockhand.url': MaskedValue.plain(address)}),
+        isEmpty,
+        reason: address,
+      );
+    }
+    // A percent-encoded placeholder is still a placeholder.
     expect(
       uris({'dockhand.url': MaskedValue.plain('http://%7Bhost%7D:8080/')}),
       isEmpty,

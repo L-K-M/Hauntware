@@ -153,7 +153,15 @@ Uri? _webUri(String text) {
   // open. Uri.tryParse keeps `*` and `$` in the host but percent-encodes
   // braces and angle brackets, so the host is decoded first; a path or
   // query may hold any of them (`?$select=name`).
-  if (_placeholder.hasMatch(Uri.decodeComponent(uri.host))) return null;
+  final String host;
+  try {
+    host = Uri.decodeComponent(uri.host);
+    // An escape that is not UTF-8 (`a%FF.example`) parses but does not
+    // decode, and names no host a browser can open either.
+  } on FormatException {
+    return null;
+  }
+  if (_placeholder.hasMatch(host)) return null;
   return uri;
 }
 
