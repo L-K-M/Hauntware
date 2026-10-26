@@ -72,6 +72,7 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show DangerFinding;
 
 import '../catalog/klabautermann_records.dart' show SyncedRule;
+import '../certificates/tls_check.dart' show TlsEndpoint, TlsEndpointCheck;
 import '../history/history_store.dart' show HistoryRange, HistoryTier;
 import '../docker/docker_ladder.dart'
     show
@@ -767,6 +768,16 @@ final class RedactLines extends EngineRequest {
 
   final String requestId;
   final List<String> lines;
+}
+
+/// Checks each of [endpoints]' TLS certificate from this device (CRT-01,
+/// 03 §7.10): a handshake per endpoint, at once, without SSH. One
+/// [TlsEndpointsChecked] with [requestId] answers it.
+final class CheckTlsEndpoints extends EngineRequest {
+  const CheckTlsEndpoints(this.requestId, this.endpoints);
+
+  final String requestId;
+  final List<TlsEndpoint> endpoints;
 }
 
 /// Watches [lists] on [serverId]'s engine (03 §7.12 DKE-02, CST-01), as
@@ -2152,6 +2163,15 @@ final class RedactedLines extends EngineEvent {
 
   final String requestId;
   final String text;
+}
+
+/// [CheckTlsEndpoints]' checks, in its order.
+final class TlsEndpointsChecked extends EngineEvent {
+  TlsEndpointsChecked(this.requestId, Iterable<TlsEndpointCheck> checks)
+    : checks = List.unmodifiable(checks);
+
+  final String requestId;
+  final List<TlsEndpointCheck> checks;
 }
 
 /// What the engine knows of [serverId]'s Docker endpoint (03 §5.8, §5.9),

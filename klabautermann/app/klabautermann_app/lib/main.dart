@@ -28,6 +28,7 @@ import 'controllers/prompt_controller.dart';
 import 'controllers/server_editor_controller.dart';
 import 'controllers/server_prefs_controller.dart';
 import 'controllers/stack_folders.dart';
+import 'controllers/tls_endpoints.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
 import 'l10n/app_localizations.dart';
@@ -197,10 +198,17 @@ Future<void> main(List<String> args) async {
     stored: settings.stackFolders,
     save: settings.setStackFolders,
   );
+  // CRT-01's endpoints per server, device-local in settings.json, since
+  // the check runs from this device.
+  final tlsEndpoints = TlsEndpoints(
+    stored: settings.tlsEndpoints,
+    save: settings.setTlsEndpoints,
+  );
   final monitoring = MonitoringController(
     engine,
     dockerEndpointChoices: dockerEndpointChoices,
     stackFolders: stackFolders,
+    tlsEndpoints: tlsEndpoints,
   );
   // The host-key and keyboard-interactive prompts the engine raises while
   // it connects, shown one at a time over every route.
