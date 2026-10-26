@@ -26,6 +26,9 @@ final class AdminController extends ChangeNotifier {
 
   /// The services-needing-restart reads waiting on the engine, likewise.
   final Map<String, (String, Completer<RestartReport>)> _restartReads = {};
+
+  /// The sshd posture reads waiting on the engine, likewise.
+  final Map<String, (String, Completer<SshdPostureReport>)> _sshdReads = {};
   int _nextRead = 0;
   bool _engineStopped = false;
 
@@ -114,6 +117,30 @@ final class AdminController extends ChangeNotifier {
     return read.future;
   }
 
+  /// Reads [serverId]'s effective sshd configuration for this connection
+  /// (SEC-01), which needs admin mode; the engine answers with
+  /// [SshdPostureReport], a failure included. A stopped engine answers
+  /// no link.
+  Future<SshdPostureReport> readSshdPosture(String serverId) {
+    final requestId = (_nextRead++).toString();
+    if (_engineStopped) return Future.value(_noSshdLink(serverId, requestId));
+    final read = Completer<SshdPostureReport>();
+    _sshdReads[requestId] = (serverId, read);
+    try {
+      _engine.send(ReadSshdPosture(serverId, requestId: requestId));
+    } on StateError {
+      _onEngineDone();
+    }
+    return read.future;
+  }
+
+  static SshdPostureReport _noSshdLink(String serverId, String requestId) =>
+      SshdPostureReport(
+        serverId: serverId,
+        requestId: requestId,
+        failure: SshdPostureFailure.noLink,
+      );
+
   static RestartReport _noRestartsLink(String serverId, String requestId) =>
       RestartReport(
         serverId: serverId,
@@ -146,6 +173,8 @@ final class AdminController extends ChangeNotifier {
         _smartReads.remove(requestId)?.$2.complete(event);
       case RestartReport(:final requestId):
         _restartReads.remove(requestId)?.$2.complete(event);
+      case SshdPostureReport(:final requestId):
+        _sshdReads.remove(requestId)?.$2.complete(event);
       default:
     }
   }
@@ -169,6 +198,11 @@ final class AdminController extends ChangeNotifier {
       read.complete(_noRestartsLink(serverId, requestId));
     }
     _restartReads.clear();
+    for (final MapEntry(key: requestId, value: (serverId, read))
+        in _sshdReads.entries) {
+      read.complete(_noSshdLink(serverId, requestId));
+    }
+    _sshdReads.clear();
     notifyListeners();
   }
 

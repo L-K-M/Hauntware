@@ -65,3 +65,10 @@ Implementation follows the plan in
 state and next steps live in [`docs/STATUS.md`](docs/STATUS.md); install
 instructions live in [`docs/INSTALL.md`](docs/INSTALL.md); the working
 guide for agents and contributors is [`AGENTS.md`](AGENTS.md).
+
+## License
+
+Poltergeist's own code uses the [Unlicense](LICENSE). The bundled
+third-party code, including the vendored pdfium_dart and the PDFium
+library, keeps its own licenses; see the suite's
+[License section](../README.md#license).

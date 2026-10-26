@@ -27,3 +27,9 @@ decision log is `03-ARCHITECTURE.md` section 2 and the milestone plan is
 `04-IMPLEMENTATION.md` section 13. Current state and open manual checks
 live in [`docs/STATUS.md`](docs/STATUS.md); the working guide for agents
 and contributors is [`AGENTS.md`](AGENTS.md).
+
+## License
+
+Klabautermann's own code uses the [Unlicense](LICENSE). The bundled
+third-party code keeps its own licenses; see the suite's
+[License section](../README.md#license).

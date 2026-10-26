@@ -986,8 +986,12 @@ is on main:
   checking its start ticks, and names the systemd unit or container
   that owns it. Environment values are masked by key; the working
   directory, descriptors and environment of another user's process come
-  back marked denied. The Processes tab shows it with
-  N43c.
+  back marked denied.
+- Process details sheet (M6 N43c, PRC-04, PRC-05): opening a process
+  reads its details: the unit and container that own it, working
+  directory, threads, swap, context switches, open files and limits,
+  and its environment with secret values masked until revealed for
+  30 s. An exited or reused PID says so; "Read again" reads anew.
 - Processes tab (M2, 03 §7.2, §8.9, §10.4, PRC-01, SAF-07, D48, D50,
   K33, #238): the Processes tab lists the `procs` stream while it shows,
   in the sortable table by CPU (busiest first), IEC memory, user, start
@@ -2024,6 +2028,15 @@ is on main:
   NVMe wear, bad sectors and powered-on hours, and a failed read says
   why (smartmontools missing or older than 7.0, elevation refused, link
   lost).
+- SSH server (M6 N41a, SEC-01): in admin mode, the System tab's SSH
+  server section reads sshd's effective settings for the app's own
+  connection with `sshd -T -C`, so the `Match` blocks that apply to it
+  count. It shows the ports, root, password, keyboard-interactive and
+  key login, host and accepted user key types, sessions per connection
+  and forwarding. It also names any of `AllowStreamLocalForwarding`,
+  `AllowTcpForwarding`, `PermitOpen` and `DisableForwarding` that block
+  Docker over SSH. A missing sshd, a refused configuration (with sshd's
+  error) and an sshd too old for part of `-C` each say so.
 - GPUs (M6 N37b, HW-03): collector-set version 12 adds the slow `gpu`
   collector, which asks `nvidia-smi` and reads the amdgpu sysfs files
   every 30 s. The System tab's GPUs section lists each GPU's busy share,
