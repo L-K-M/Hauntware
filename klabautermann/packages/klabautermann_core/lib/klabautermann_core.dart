@@ -129,6 +129,17 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         RestartCheck,
         RestartTool,
         kPackageUpdatesKept;
+// The System tab's Firewall section (NET-06): what a FirewallReport
+// read.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        FirewallChain,
+        FirewallRead,
+        FirewalldStatus,
+        FirewalldZone,
+        UfwRule,
+        UfwStatus;
+
 // The System tab's SSH server section (SEC-01): what an
 // SshdPostureReport read.
 export 'package:klabautermann_host/klabautermann_host.dart'
@@ -340,6 +351,9 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
 // stack's is its ComposeProject.ownership.
 export 'package:klabautermann_docker/klabautermann_docker.dart'
     show detectOwnership;
+// A container's label links (CTR-11): the pages its labels point at.
+export 'package:klabautermann_docker/klabautermann_docker.dart'
+    show LabelLink, LabelLinkSource, labelLinks;
 // The coverage card's external-monitor finding (03 §9.5 item 3): K04's
 // rule over a `units` reading, and what it reports.
 export 'package:klabautermann_host/klabautermann_host.dart'

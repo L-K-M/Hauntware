@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
-import 'package:planchette_app/widgets/command_palette.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 
 void main() {
   group('fuzzyMatch', () {

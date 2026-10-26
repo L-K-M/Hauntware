@@ -1,11 +1,18 @@
+import 'dart:io' show FileSystemException;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
+import 'package:klabautermann_app/controllers/container_columns.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/operations_controller.dart';
+import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
+import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/docker/containers_panel.dart';
 import 'package:klabautermann_app/ui/docker/containers_view.dart';
+import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_app/ui/sortable_table.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -126,6 +133,12 @@ final class _Panel {
   final ValueNotifier<bool> visible;
 
   List<DockerWatch> get watches => engine.sentOfType<DockerWatch>().cast();
+
+  List<ActionIntent> get planned => [
+    for (final PlanAction(:intent)
+        in engine.sentOfType<PlanAction>().cast<PlanAction>())
+      intent,
+  ];
   List<DockerUnwatch> get unwatches =>
       engine.sentOfType<DockerUnwatch>().cast();
 
@@ -165,6 +178,9 @@ Future<_Panel> _pump(
   Brightness brightness = Brightness.light,
   TargetPlatform platform = TargetPlatform.linux,
   double textScale = 1,
+  ContainerColumnChoice? columns,
+
+  bool managed = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -172,11 +188,24 @@ Future<_Panel> _pump(
 
   _clock = _now;
   final engine = FakeEngineClient();
-  final monitoring = MonitoringController(engine, now: () => _clock);
+  final monitoring = MonitoringController(
+    engine,
+    now: () => _clock,
+    containerColumns: columns,
+  );
   final visible = ValueNotifier(true);
+  final operations = OperationsController(engine);
+  final safety = SafetyController(
+    initial: SafetyPolicy(
+      servers: {_serverId: ServerSafety(management: managed)},
+    ),
+    apply: (_) {},
+  );
   addTearDown(() async {
     monitoring.dispose();
     visible.dispose();
+    operations.dispose();
+    safety.dispose();
     await engine.close();
   });
 
@@ -192,6 +221,10 @@ Future<_Panel> _pump(
       theme: theme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => SafetyScope(
+        safety: safety,
+        child: OperationsScope(operations: operations, child: child!),
+      ),
       home: MediaQuery.withClampedTextScaling(
         minScaleFactor: textScale,
         maxScaleFactor: textScale,
@@ -240,6 +273,25 @@ Finder _header(String column) =>
 
 Finder _heading(String project) =>
     find.byKey(ValueKey('containers.row.group.$project'));
+
+/// Toggles [column]'s box in the column chooser, scrolled into view.
+Future<void> _check(WidgetTester tester, String column) async {
+  final tile = find.widgetWithText(CheckboxListTile, column);
+  await tester.scrollUntilVisible(
+    tile,
+    48,
+    scrollable: find
+        .descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
+  await tester.ensureVisible(tile);
+  await tester.pumpAndSettle();
+  await tester.tap(tile);
+  await tester.pumpAndSettle();
+}
 
 /// 03 §10.4's Containers sub-tab (CTR-01, CTR-04, CST-01) over the
 /// container watch.
@@ -381,6 +433,196 @@ void main() {
       find.bySemanticsLabel(RegExp(r'Name: web-worker\n.*CPU:', dotAll: true)),
       findsNothing,
     );
+  });
+
+  test('reads a stored column choice against the known columns (CTR-08)', () {
+    expect(chosenContainerColumns(null), kDefaultContainerColumns);
+    expect(chosenContainerColumns(['pids', 'gone', 'name', 'pids', 'state']), [
+      ContainerColumn.pids,
+      ContainerColumn.state,
+    ]);
+    expect(chosenContainerColumns([]), isEmpty);
+  });
+
+  testWidgets('the chooser shows, hides and orders the columns, and saves '
+      'the choice (CTR-08)', (tester) async {
+    final saved = <List<String>>[];
+    final columns = ContainerColumnChoice(
+      save: (names) async => saved.add(names),
+    );
+    final panel = await _pump(tester, columns: columns);
+    await panel.emit(
+      tester,
+      dockerContainerList(_serverId, [_containers.first], at: _now),
+    );
+    await panel.emit(
+      tester,
+      dockerStatsRound(_serverId, [
+        ContainerListStats(
+          containerId: _containers.first.id,
+          at: _now,
+          networkRx: 2048,
+          networkTx: 512,
+          pids: 7,
+        ),
+      ], at: _now),
+    );
+    expect(_header('image'), findsOneWidget);
+    expect(_header('pids'), findsNothing);
+
+    await tester.tap(find.text('Columns'));
+    await tester.pumpAndSettle();
+    await _check(tester, 'Image');
+    await _check(tester, 'PIDs');
+    await _check(tester, 'Network');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+
+    expect(saved.single, [
+      'state',
+      'health',
+      'status',
+      'ports',
+      'stack',
+      'cpu',
+      'memory',
+      'network',
+      'pids',
+    ]);
+    expect(_header('image'), findsNothing);
+    expect(_header('pids'), findsOneWidget);
+    expect(find.text('7'), findsOneWidget);
+    expect(find.text('2 KiB / 512 B'), findsOneWidget);
+    expect(
+      tester.getTopLeft(_header('network')).dx,
+      lessThan(tester.getTopLeft(_header('pids')).dx),
+    );
+
+    // Reset puts back the default.
+    await tester.tap(find.text('Columns'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Reset'));
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(saved.last, [
+      for (final column in kDefaultContainerColumns) column.name,
+    ]);
+  });
+
+  testWidgets('a choice that could not be saved still shows, and says so', (
+    tester,
+  ) async {
+    final columns = ContainerColumnChoice(
+      save: (_) async => throw const FileSystemException('read-only'),
+    );
+    final panel = await _pump(tester, columns: columns);
+    await panel.list(tester);
+    await tester.tap(find.text('Columns'));
+    await tester.pumpAndSettle();
+    await _check(tester, 'IP');
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(_header('ip'), findsOneWidget);
+    expect(find.textContaining('could not be saved'), findsOneWidget);
+  });
+
+  group('bulk actions (CTR-07)', () {
+    testWidgets('Select shows only where actions are allowed', (tester) async {
+      final panel = await _pump(tester);
+      await panel.list(tester);
+      expect(find.text('Select'), findsNothing);
+    });
+
+    testWidgets('a heading selects its project; each verb takes the selected '
+        'containers it applies to, as one action', (tester) async {
+      final panel = await _pump(tester, managed: true);
+      await panel.list(tester);
+      await tester.tap(find.widgetWithText(FilterChip, 'Select'));
+      await tester.pumpAndSettle();
+      expect(find.text('None selected'), findsOneWidget);
+      expect(find.text('Stop (0)'), findsOneWidget);
+
+      // The web project: two running containers and a stopped one.
+      await tester.tap(
+        find.descendant(of: _heading('web'), matching: find.byType(Checkbox)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('3 selected'), findsOneWidget);
+      expect(find.text('Start (1)'), findsOneWidget);
+      expect(find.text('Stop (2)'), findsOneWidget);
+      expect(find.text('Restart (2)'), findsOneWidget);
+      expect(find.text('Remove (1)'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Selection: Selected\nName: web-db\n')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Stop (2)'));
+      await tester.pumpAndSettle();
+      final stop = panel.planned.single as ContainerBulkAction;
+      expect(stop.verb, ContainerBulkVerb.stop);
+      expect(stop.containerIds, ['a1f3c2e4b5d6', 'b7e9d0c1a2f3']);
+
+      // A row toggles alone; the heading reads as partly selected.
+      await tester.tap(find.text('web-worker'));
+      await tester.pumpAndSettle();
+      expect(find.text('2 selected'), findsOneWidget);
+      expect(
+        tester
+            .widget<Checkbox>(
+              find.descendant(
+                of: _heading('web'),
+                matching: find.byType(Checkbox),
+              ),
+            )
+            .value,
+        isNull,
+      );
+
+      await tester.tap(find.text('Clear selection'));
+      await tester.pumpAndSettle();
+      expect(find.text('None selected'), findsOneWidget);
+      await tester.tap(find.text('Select all shown'));
+      await tester.pumpAndSettle();
+      expect(find.text('${_containers.length} selected'), findsOneWidget);
+
+      // Turning Select off clears it.
+      await tester.tap(find.widgetWithText(FilterChip, 'Select'));
+      await tester.pumpAndSettle();
+      expect(find.byType(Checkbox), findsNothing);
+    });
+
+    testWidgets('a phone row toggles by a tap and says it is checked', (
+      tester,
+    ) async {
+      final panel = await _pump(tester, size: _phone, managed: true);
+      await panel.list(tester);
+      await tester.tap(find.widgetWithText(FilterChip, 'Select'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('grafana'));
+      await tester.pumpAndSettle();
+      expect(find.text('1 selected'), findsOneWidget);
+      expect(
+        tester.getSemantics(
+          find.byKey(const ValueKey('containers.row.d0e1f2a3b4c5')),
+        ),
+        isSemantics(hasCheckedState: true, isChecked: true),
+      );
+    });
+
+    test('bulk targets keep the selection order and the states each verb '
+        'takes', () {
+      final selected = [
+        dockerContainer('r', state: 'running'),
+        dockerContainer('x', state: 'exited'),
+        dockerContainer('p', state: 'paused'),
+      ];
+      expect(bulkTargets(selected, ContainerBulkVerb.stop), ['r']);
+      expect(bulkTargets(selected, ContainerBulkVerb.start), ['x']);
+      expect(bulkTargets(selected, ContainerBulkVerb.remove), ['x']);
+    });
   });
 
   testWidgets('a flagged state shows an icon and says why', (tester) async {

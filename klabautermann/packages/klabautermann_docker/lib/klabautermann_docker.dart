@@ -51,6 +51,8 @@ export 'src/compose/file_masking.dart' show StackFileKind, maskStackFile;
 export 'src/compose/grouping.dart'
     show ComposeGrouping, ComposeProject, ComposeService, groupComposeProjects;
 export 'src/compose/labels.dart' show ComposeLabelKeys, ComposeLabels;
+export 'src/compose/label_links.dart'
+    show LabelLink, LabelLinkSource, labelLinks;
 export 'src/compose/ownership.dart'
     show ExternalManager, Ownership, OwnershipMarker, detectOwnership;
 export 'src/compose/parsers.dart'
