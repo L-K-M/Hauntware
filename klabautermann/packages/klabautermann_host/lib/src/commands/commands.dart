@@ -353,6 +353,12 @@ const kBootEndsRead = 10;
 /// [HostCommands.kernels]' output.
 const kKernelsMarker = '== modules';
 
+/// The markers before the usable CPU count, `lscpu`'s JSON and the
+/// `/proc/cpuinfo` lines in [HostCommands.cpuTopology]' output.
+const kCpuNprocMarker = '== nproc';
+const kCpuLscpuMarker = '== lscpu';
+const kCpuInfoMarker = '== cpuinfo';
+
 /// The markers before each part of [HostCommands.interfaces]' output:
 /// the sysfs link files, the physical interfaces, the addresses, the TCP
 /// socket states and `/proc/net/sockstat`.
@@ -630,8 +636,11 @@ abstract final class HostCommands {
   /// directory, descriptors and environment, which the kernel shows only
   /// to the owner and root, hold `== denied` when unreadable; `status`,
   /// `cgroup` and `limits` are readable by anyone who sees the process.
-  /// The environment comes last: its values can hold newlines, so no
-  /// section after it could be told from them, and its cap counts lines. It exits as [startTicks] does when the process is
+  /// The environment comes last, an entry a line: a value's newlines
+  /// print as `\x01` so they cannot split it, and the cap counts entries.
+  /// A value's own `\x01` byte comes back as a newline, the one loss
+  /// this accepts.
+  /// It exits as [startTicks] does when the process is
   /// gone or unreadable, and [kProcessDetailReused] when its start ticks
   /// are not [startTicks]: the PID names another process now.
   static List<String> processDetail(int pid, int startTicks) {
@@ -668,7 +677,7 @@ abstract final class HostCommands {
       'if ls "\$p/fd" >/dev/null 2>&1; then ls -1 "\$p/fd" | wc -l; '
       "else echo '$kProcessDetailDenied'; fi\n"
       "echo '$kProcessDetailMarker environ'\n"
-      'if e=\$(tr \'\\0\' \'\\n\' <"\$p/environ" 2>/dev/null); then '
+      'if e=\$(tr \'\\n\\000\' \'\\001\\n\' <"\$p/environ" 2>/dev/null); then '
       'printf \'%s\\n\' "\$e" | head -n $kProcessEnvironLimit; '
       "else echo '$kProcessDetailDenied'; fi\n"
       'exit 0';
@@ -914,6 +923,22 @@ abstract final class HostCommands {
   static const _kKernelsScript =
       'uname -r; echo "$kKernelsMarker"; '
       'ls -1 /lib/modules 2>/dev/null || ls -1 /usr/lib/modules 2>/dev/null; '
+      'exit 0';
+
+  /// CPU-07's read: the CPUs this login may run on, `lscpu`'s fields in
+  /// the C locale, whose names it translates otherwise, and the
+  /// `/proc/cpuinfo` lines that name the model and place each CPU, for a
+  /// host without `lscpu` (BusyBox). `parseCpuTopology` reads it. Only
+  /// those lines are kept: the flags make the file about 1.5 KiB a CPU.
+  static List<String> cpuTopology() => const ['sh', '-c', _kCpuTopologyScript];
+
+  static const _kCpuTopologyScript =
+      'echo "$kCpuNprocMarker"; '
+      'nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null; '
+      'echo "$kCpuLscpuMarker"; LC_ALL=C lscpu -J 2>/dev/null; '
+      'echo "$kCpuInfoMarker"; '
+      "grep -E '^(processor|model name|cpu model|cpu|physical id|core id)"
+      "[[:space:]]*:' /proc/cpuinfo 2>/dev/null; "
       'exit 0';
 
   /// NET-02 and NET-03's read: each interface's sysfs files as

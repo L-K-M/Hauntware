@@ -46,6 +46,14 @@ void main() {
     ]);
   });
 
+  test("a value's newlines, printed as \\x01, come back in its one entry", () {
+    final head = _read.substring(0, _read.indexOf('== environ'));
+    final detail = parseProcessDetail(
+      '$head== environ\nKEY=a\x01YWJj==\x01b\nPATH=/bin\n',
+    )!;
+    expect(detail.environment, ['KEY=a\nYWJj==\nb', 'PATH=/bin']);
+  });
+
   test('sections the user may not read are denied, not empty', () {
     final detail = parseProcessDetail('''
 == cwd

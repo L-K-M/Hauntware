@@ -1245,11 +1245,19 @@ void engineMain(
         );
       case CheckTlsEndpoints(:final requestId, :final endpoints):
         // Not awaited: each check may wait out its timeout, and the queue
-        // keeps serving meanwhile. checkTlsEndpoint never throws.
+        // keeps serving meanwhile. checkTlsEndpoint throws no exception;
+        // anything else still answers as a failed check, so the request
+        // is never left without an answer.
         unawaited(
           Future.wait([
             for (final endpoint in endpoints.take(kTlsEndpointsMax))
-              checkTlsEndpoint(endpoint),
+              checkTlsEndpoint(endpoint).catchError(
+                (Object error) => TlsEndpointCheck(
+                  endpoint: endpoint,
+                  failure: TlsCheckFailure.connect,
+                  detail: '$error',
+                ),
+              ),
           ]).then(
             (checks) => uiPort.send(TlsEndpointsChecked(requestId, checks)),
           ),
@@ -1475,6 +1483,7 @@ void engineMain(
             );
           case ContainerAction() ||
               RemoveContainer() ||
+              ContainerBulkAction() ||
               RemoveImage() ||
               CreateVolume() ||
               RemoveVolume() ||
