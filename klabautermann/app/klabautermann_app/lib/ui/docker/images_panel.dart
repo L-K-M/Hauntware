@@ -10,6 +10,7 @@ import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import '../actions/docker_actions.dart'
     show ImageActionsButton, PruneButton, imageActionEntries;
 import '../sortable_table.dart';
+import 'image_history.dart';
 import 'image_pull.dart' show ImagePullButton;
 import 'containers_panel.dart' show DockerNotice;
 import 'containers_view.dart' show searchTerms;
@@ -301,6 +302,7 @@ class _ImagesPanelState extends State<ImagesPanel> {
       rowKey: _rowKey,
       sort: _sort,
       onSort: (sort) => setState(() => _sort = sort),
+      onRowActivated: (entry) => _openHistory(entry.image),
       rowActions:
           actionsAllowedAt(
             context,
@@ -415,9 +417,18 @@ class _ImagesPanelState extends State<ImagesPanel> {
     );
   }
 
+  /// Opens [image]'s history (IMG-04), a read that needs no actions.
+  void _openHistory(ImageSummary image) => openImageHistory(
+    context,
+    monitoring: widget.monitoring,
+    serverId: widget.serverId,
+    image: image,
+  );
+
   /// The phone layout: two-line rows that wrap at large text, the tags
   /// (or the dangling badge) over the other figures, each row one node
-  /// naming its cells as the table's rows do.
+  /// naming its cells as the table's rows do. A tap opens the image's
+  /// history.
   Widget _list(
     List<ImageEntry> entries,
     List<SortableTableColumn<ImageEntry>> columns,
@@ -440,39 +451,45 @@ class _ImagesPanelState extends State<ImagesPanel> {
         final row = Semantics(
           key: ValueKey(_phoneRowKey(entry)),
           container: true,
+          button: true,
           label: [
             for (final cell in cells)
               l10n.tableCellSemantics(cell.label, cell.text),
           ].join('\n'),
           excludeSemantics: true,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 4,
-              children: [
-                if (tags.isEmpty)
-                  const ImageDanglingBadge()
-                else
-                  Text(
-                    imageTagsText(tags),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall,
+          onTap: () => _openHistory(entry.image),
+          child: InkWell(
+            excludeFromSemantics: true,
+            onTap: () => _openHistory(entry.image),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 4,
+                children: [
+                  if (tags.isEmpty)
+                    const ImageDanglingBadge()
+                  else
+                    Text(
+                      imageTagsText(tags),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 2,
+                    children: [
+                      // The tags head the row.
+                      for (final cell in cells.skip(1))
+                        Text(
+                          l10n.dockerImagesFact(cell.label, cell.text),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                    ],
                   ),
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 2,
-                  children: [
-                    // The tags head the row.
-                    for (final cell in cells.skip(1))
-                      Text(
-                        l10n.dockerImagesFact(cell.label, cell.text),
-                        style: theme.textTheme.bodySmall,
-                      ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

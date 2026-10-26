@@ -40,14 +40,15 @@ final class RestartCheck {
   final KernelState? kernel;
 }
 
-/// A systemd unit name as the tools print them.
+/// A systemd unit name as the tools print them, with the backslash of
+/// `systemd-escape`'s `\x2d` in device and mount units.
 final _unit = RegExp(r'^[A-Za-z0-9:_.@\\-]+\.(service|socket|timer|target)$');
 
 /// [raw], the check's output (`HostCommands.restartCheck`): a
 /// `== tool <name>` line, then the tool's own output.
 RestartCheck parseRestartCheck(String raw) {
   final lines = raw.split('\n');
-  final header = lines.isEmpty ? '' : lines.first.trim();
+  final header = lines.first.trim();
   final tool = switch (header) {
     '== tool needrestart' => RestartTool.needrestart,
     '== tool needs-restarting' => RestartTool.needsRestarting,

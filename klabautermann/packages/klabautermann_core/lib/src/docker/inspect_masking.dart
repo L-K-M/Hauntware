@@ -1,7 +1,8 @@
 /// What the engine masks in a Docker read before it crosses (03 §8.9):
 /// an inspected container's command line and health-check output, read
-/// as Processes reads a command line, and the list's command line, which
-/// the list drops.
+/// as Processes reads a command line, the list's command line, which
+/// the list drops, the instruction of each layer of an image's history,
+/// and the command line of each of a container's processes.
 library;
 
 import 'package:klabautermann_docker/klabautermann_docker.dart'
@@ -11,6 +12,8 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         ContainerInspect,
         ContainerState,
         ContainerSummary,
+        ContainerTop,
+        ImageHistoryEntry,
         MaskedValue;
 
 import '../engine/protocol.dart';
@@ -43,6 +46,55 @@ ContainerDetails maskContainerInspect(ContainerInspect inspect) {
     hostConfig: inspect.hostConfig,
     mounts: inspect.mounts,
     networkSettings: inspect.networkSettings,
+  );
+}
+
+/// [history] as it may cross (02 IMG-04): each layer's instruction, such
+/// as `RUN |1 TOKEN=abc /bin/sh -c ...` or `ENV API_KEY=...`, masked as
+/// one command line, its first word read as the program. One budget
+/// bounds the tokens read across the layers.
+List<ImageLayer> maskImageHistory(List<ImageHistoryEntry> history) {
+  final budget = ArgumentMaskingBudget();
+  return [
+    for (final entry in history)
+      ImageLayer(
+        id: entry.id,
+        created: entry.created,
+        createdBy: entry.createdBy.isEmpty
+            ? MaskedValue.plain('')
+            : maskCommandLine([entry.createdBy], budget: budget).single,
+        size: entry.size,
+        comment: entry.comment,
+        tags: entry.tags,
+      ),
+  ];
+}
+
+/// The column titles `ps` gives a command line: `CMD` for its default
+/// `-ef`, `COMMAND` for `args`, and `ARGS` where a `ps` names it so.
+const _commandTitles = {'CMD', 'COMMAND', 'ARGS'};
+
+/// [top] as it may cross (CTR-10): each process's command line masked as
+/// Processes masks one, read as one argument whose first word is the
+/// program. One budget bounds the tokens read across the rows; the other
+/// columns (PID, user, CPU, memory, times) cross as they are.
+DockerContainerTopPayload maskContainerTop(ContainerTop top) {
+  final budget = ArgumentMaskingBudget();
+  final command = top.titles.indexWhere(
+    (title) => _commandTitles.contains(title.toUpperCase()),
+  );
+  return DockerContainerTopPayload(
+    titles: top.titles,
+    commandColumn: command < 0 ? null : command,
+    processes: [
+      for (final row in top.processes)
+        [
+          for (final (index, cell) in row.indexed)
+            index == command && cell.isNotEmpty
+                ? maskCommandLine([cell], budget: budget).single
+                : MaskedValue.plain(cell),
+        ],
+    ],
   );
 }
 

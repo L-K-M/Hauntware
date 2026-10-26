@@ -1318,6 +1318,30 @@ abstract class AppLocalizations {
   /// **'Parent PID'**
   String get processesParentPid;
 
+  /// Processes tab: the toggle that shows each process under its parent (PRC-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Tree'**
+  String get processesTree;
+
+  /// Processes tab: the badge beside a process in a flagged run state (PRC-06): a zombie (state Z) or in uninterruptible sleep (state D). Lower case, as a label beside the command.
+  ///
+  /// In en, this message translates to:
+  /// **'{flag, select, zombie{zombie} uninterruptible{waiting on I/O} other{flagged}}'**
+  String processesFlag(String flag);
+
+  /// Processes tab: how many processes a run state flag marks (PRC-06), above the list.
+  ///
+  /// In en, this message translates to:
+  /// **'{flag, select, zombie{{count, plural, =1{1 zombie process} other{{count} zombie processes}}} uninterruptible{{count, plural, =1{1 process waiting on I/O it cannot be interrupted from} other{{count} processes waiting on I/O they cannot be interrupted from}}} other{{count, plural, =1{1 flagged process} other{{count} flagged processes}}}}'**
+  String processesFlagCount(String flag, int count);
+
+  /// Processes tab: what joins the flag counts above the list.
+  ///
+  /// In en, this message translates to:
+  /// **'; '**
+  String get processesFlagSeparator;
+
   /// Label of a process's run state letter as the kernel reports it (such as R or S), in a process's details.
   ///
   /// In en, this message translates to:
@@ -1815,6 +1839,119 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 more drive was not read.} other{{count} more drives were not read.}}'**
   String systemDriveHealthNotRead(int count);
+
+  /// System tab: heading of the section listing the server's accounts and who is logged in (ACC-01, ACC-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Users'**
+  String get systemAccountsTitle;
+
+  /// System tab, Users: column of the account's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get systemAccountsColumn;
+
+  /// System tab, Users: column of the account's numeric user ID.
+  ///
+  /// In en, this message translates to:
+  /// **'UID'**
+  String get systemAccountsUid;
+
+  /// System tab, Users: column saying why the account can become root, empty for most accounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Root access'**
+  String get systemAccountsRoot;
+
+  /// System tab, Users: column of the account's groups, its primary group first.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get systemAccountsGroups;
+
+  /// System tab, Users: column of the account's login shell.
+  ///
+  /// In en, this message translates to:
+  /// **'Shell'**
+  String get systemAccountsShell;
+
+  /// System tab, Users: one reason the account can become root; reason is the engine's RootEquivalence name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, uidZero{UID 0} adminGroup{sudo, wheel or admin group} dockerGroup{docker group} other{Can become root}}'**
+  String systemAccountsRootReason(String reason);
+
+  /// System tab, Users: why a read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so its accounts could not be read.} unreadable{The server\'s answer could not be read as its accounts.} transport{The connection failed while the accounts were read.} other{The accounts could not be read.}}'**
+  String systemAccountsFailed(String reason);
+
+  /// System tab, Users: shown while the first read runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading accounts…'**
+  String get systemAccountsReading;
+
+  /// System tab, Users: accounts past the read's limit, as on a host whose directory lists thousands.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more account is not listed.} other{{count} more accounts are not listed.}}'**
+  String systemAccountsNotListed(int count);
+
+  /// System tab, Users: button that lists the accounts without a login shell or below the people's UID range, hidden by default.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Show 1 service account} other{Show {count} service accounts}}'**
+  String systemAccountsShowSystem(int count);
+
+  /// System tab, Users: button that hides the service accounts again.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide service accounts'**
+  String get systemAccountsHideSystem;
+
+  /// System tab, Users: heading of the list of current logins.
+  ///
+  /// In en, this message translates to:
+  /// **'Logged in'**
+  String get systemAccountsSessionsTitle;
+
+  /// System tab, Users: the server lists no login.
+  ///
+  /// In en, this message translates to:
+  /// **'No one is logged in.'**
+  String get systemAccountsSessionsNone;
+
+  /// System tab, Users: the server's who printed lines the app could not parse, as BusyBox's.
+  ///
+  /// In en, this message translates to:
+  /// **'Who is logged in is unknown: this server\'s who prints a format the app does not read.'**
+  String get systemAccountsSessionsUnknown;
+
+  /// System tab, Users: a local login; since is when it began, in this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{user} on {line}, since {since}'**
+  String systemAccountsSessionLocal(String user, String line, DateTime since);
+
+  /// System tab, Users: a remote login with the host or address it came from; since is when it began, in this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{user} on {line} from {from}, since {since}'**
+  String systemAccountsSessionRemote(
+    String user,
+    String line,
+    String from,
+    DateTime since,
+  );
+
+  /// System tab, Users: button that reads the accounts and logins again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemAccountsReadAgain;
 
   /// Drive health table: column of the drive's model, or its device where it reports none.
   ///
@@ -6886,6 +7023,90 @@ abstract class AppLocalizations {
   /// **'Which images are in use is unknown: this engine\'s API reports no count, and the containers could not be listed.'**
   String get dockerImagesUseUnknown;
 
+  /// Image history sheet title (IMG-04): the image's tags, or its short id when it has none.
+  ///
+  /// In en, this message translates to:
+  /// **'{image}: history'**
+  String dockerImageHistoryTitle(String image);
+
+  /// Image history sheet: shown while the engine reads the image's layers.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the image\'s history…'**
+  String get dockerImageHistoryReading;
+
+  /// Image history sheet: the daemon answered with an empty history.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine reports no layers for this image.'**
+  String get dockerImageHistoryEmpty;
+
+  /// Image history sheet: how many layer instructions the engine masked, since build arguments can hold secrets.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 instruction holds masked values. Reveal values shows them for {seconds} seconds.} other{{count} instructions hold masked values. Reveal values shows them for {seconds} seconds.}}'**
+  String dockerImageHistoryMasked(int count, int seconds);
+
+  /// Image history sheet: a layer whose CreatedBy is empty, as for an imported base layer.
+  ///
+  /// In en, this message translates to:
+  /// **'No instruction recorded'**
+  String get dockerImageHistoryNoInstruction;
+
+  /// Image history sheet: the label before a layer's comment, such as the builder that made it.
+  ///
+  /// In en, this message translates to:
+  /// **'Comment'**
+  String get dockerImageHistoryComment;
+
+  /// Container details: the section listing the processes running inside the container (CTR-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Processes'**
+  String get dockerProcessesTitle;
+
+  /// Container details, Processes: shown while the container is stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'The container is not running, so it has no processes.'**
+  String get dockerProcessesStopped;
+
+  /// Container details, Processes: shown while the processes are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading processes…'**
+  String get dockerProcessesReading;
+
+  /// Container details, Processes: the button that reads the container's processes again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get dockerProcessesReadAgain;
+
+  /// Container details, Processes: shown when the read lists no process.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine lists no processes for this container.'**
+  String get dockerProcessesNone;
+
+  /// Container details, Processes: how many processes the container runs.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 process} other{{count} processes}}'**
+  String dockerProcessesCount(int count);
+
+  /// Container details, Processes: why the read failed, by DockerQueryFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server\'s capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} notFound{The engine no longer has this container.} daemonError{The engine refused or failed to list the container\'s processes.} connectionFailed{The connection to the engine failed while reading the processes.} cancelled{The read stopped before it ran.} other{The container\'s processes could not be read.}}'**
+  String dockerProcessesFailed(String reason);
+
+  /// Image history sheet: why the history read failed, by DockerQueryFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server\'s capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} notFound{The engine no longer has this image.} daemonError{The engine refused or failed to read the image\'s history.} connectionFailed{The connection to the engine failed while reading the history.} cancelled{The read stopped before it ran.} other{The image\'s history could not be read.}}'**
+  String dockerImageHistoryFailed(String reason);
+
   /// Images list: the server's link has a session limit (03 §5.2) on a relay route.
   ///
   /// In en, this message translates to:
@@ -6988,11 +7209,29 @@ abstract class AppLocalizations {
   /// **'Stop pull'**
   String get dockerPullCancel;
 
-  /// Pull sheet: while a pull runs. The pull runs over this connection and the daemon stops it when the sheet closes (03 §7.14).
+  /// Pull sheet: while a pull runs, by route. An engine pull stops when the sheet closes; the host's docker pull ends with its connection (03 §7.14).
   ///
   /// In en, this message translates to:
-  /// **'Pulling. Closing this sheet stops the pull.'**
-  String get dockerPullForeground;
+  /// **'{route, select, engine{Pulling. Closing this sheet stops the pull.} host{Pulling on the server. Losing the connection stops the pull.} other{Starting the pull on the server.}}'**
+  String dockerPullRunning(String route);
+
+  /// Pull sheet: the choice of how to pull (IMG-03, REG-01).
+  ///
+  /// In en, this message translates to:
+  /// **'{route, select, engine{Engine} host{Server\'s login} other{Detached}}'**
+  String dockerPullRoute(String route);
+
+  /// Pull sheet: under the route choice, what the chosen route does (03 §7.14, REG-01).
+  ///
+  /// In en, this message translates to:
+  /// **'{route, select, engine{The engine pulls anonymously and shows each layer. Closing the sheet stops it.} host{The server\'s docker pull uses its own docker login, for private registries. The output shows at the end.} other{The server\'s docker pull runs on its own and keeps running when you leave. Follow it under Operations.}}'**
+  String dockerPullRouteNote(String route);
+
+  /// Pull sheet: a detached pull launched; its log follows it (03 §7.17).
+  ///
+  /// In en, this message translates to:
+  /// **'The pull of {target} started on the server.'**
+  String dockerPullDetached(String target);
 
   /// Pull sheet: one layer's status with the bytes done of its total.
   ///

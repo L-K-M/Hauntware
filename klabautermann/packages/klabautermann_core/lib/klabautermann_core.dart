@@ -80,6 +80,7 @@ export 'src/settings/instance_lock.dart'
 // rows.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show
+        AccountsSnapshot,
         CpuPercentages,
         CronSnapshot,
         DiskRate,
@@ -88,11 +89,14 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         GpuDevice,
         GpuSnapshot,
         GpuSource,
+        HostAccount,
         HostProfile,
+        HostSession,
         JournalEntry,
         LoadAvg,
         NetRate,
         ProcsSelection,
+        RootEquivalence,
         SmartDisk,
         SmartVerdict,
         SystemWideProcFile,

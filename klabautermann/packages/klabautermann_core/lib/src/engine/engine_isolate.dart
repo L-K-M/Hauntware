@@ -72,6 +72,7 @@ import '../operations/plans/docker_plans.dart';
 import '../operations/plans/edit_plan.dart';
 import '../jobs/job_history_query.dart';
 import '../services/packages.dart';
+import '../services/accounts.dart';
 import '../services/unit_queries.dart';
 import '../operations/stack_edits.dart';
 import '../operations/plans/host_plans.dart';
@@ -1465,7 +1466,7 @@ void engineMain(
               RemoveVolume() ||
               RemoveNetwork() ||
               PruneDocker() ||
-              PullImage() ||
+              PullImage(via: PullRoute.engine) ||
               StackAction() ||
               ContainerExec():
             final router = docker;
@@ -1489,7 +1490,7 @@ void engineMain(
                     refusal: ActionRefusalReason.engineUnavailable,
                   ),
                 );
-          case RedeployStack() || StackComposeAction():
+          case RedeployStack() || StackComposeAction() || PullImage():
             final router = docker;
             if (router == null) {
               refuse(ActionRefusalReason.engineUnavailable);
@@ -1529,6 +1530,7 @@ void engineMain(
                         compose,
                         context,
                       ),
+                      final PullImage pull => planHostPull(pull, context),
                       _ => throw StateError(
                         'not a compose intent: ${intent.runtimeType}',
                       ),
@@ -1692,6 +1694,35 @@ void engineMain(
             ),
           ).then(uiPort.send),
         );
+      case ReadAccounts(:final serverId, :final requestId):
+        final link = links?.link(serverId);
+        if (!fleetIds.contains(serverId) || link == null) {
+          uiPort.send(
+            AccountsReport(
+              serverId: serverId,
+              requestId: requestId,
+              failure: AccountsReportFailure.noLink,
+            ),
+          );
+          return;
+        }
+        // Not awaited, as the other reads; a lend that fails still
+        // answers.
+        unawaited(
+          lendSession(
+            serverId,
+            () => readAccounts(serverId, requestId: requestId, link: link),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => uiPort.send(
+              AccountsReport(
+                serverId: serverId,
+                requestId: requestId,
+                failure: AccountsReportFailure.transport,
+              ),
+            ),
+          ),
+        );
       case ReadSmart(:final serverId, :final requestId):
         void fail(SmartReportFailure failure) => uiPort.send(
           SmartReport(
@@ -1745,13 +1776,17 @@ void engineMain(
           return;
         }
         admin?.touch(serverId);
-        // Not awaited, as the drive health read.
+        // Not awaited, as the drive health read, and answering a lend
+        // that fails the same way.
         unawaited(
           lendSession(
             serverId,
             () =>
                 readRestarts(serverId, requestId: requestId, session: session),
-          ).then(uiPort.send),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => fail(RestartReportFailure.transport),
+          ),
         );
       case ReadPackages(:final serverId, :final requestId, :final fresh):
         final link = links?.link(serverId);
@@ -1766,7 +1801,8 @@ void engineMain(
           return;
         }
         // Not awaited, as the other reads: the check answers rather than
-        // throws, and a kept answer goes out without one.
+        // throws, a kept answer goes out without one, and a lend that
+        // fails still answers.
         unawaited(
           packageReports
               .read(
@@ -1783,7 +1819,16 @@ void engineMain(
                   ),
                 ),
               )
-              .then(uiPort.send),
+              .then(
+                uiPort.send,
+                onError: (Object _) => uiPort.send(
+                  PackagesReport(
+                    serverId: serverId,
+                    requestId: requestId,
+                    failure: PackagesReportFailure.transport,
+                  ),
+                ),
+              ),
         );
       case UnitQuery(:final serverId, :final requestId, :final query):
         final link = links?.link(serverId);

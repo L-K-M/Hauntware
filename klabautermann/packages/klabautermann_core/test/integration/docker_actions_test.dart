@@ -497,8 +497,9 @@ void main() {
     expect(await dind(['image', 'ls', '--quiet', tag]), isNotEmpty);
   });
 
-  test('a pull streams its layers from the fixture registry, and a tag it '
-      'lacks fails with what the daemon said (IMG-03)', () async {
+  test('a pull streams its layers from the fixture registry, the host\'s '
+      'docker pull pulls too, and a tag it lacks fails with what the daemon '
+      'said (IMG-03, REG-01)', () async {
     const tag = 'registry:5000/klab/app:pulled';
     addTearDown(() async {
       try {
@@ -526,6 +527,23 @@ void main() {
     ];
     expect(reports, isNotEmpty);
     expect(reports.last.status, contains('Status:'));
+    expect(await dind(['image', 'ls', '--quiet', tag]), isNotEmpty);
+
+    // The host's own docker pull (REG-01), over the link, prints its
+    // progress.
+    await dind(['rmi', tag]);
+    final host = await plan(
+      engine,
+      const PullImage(dockerServer, reference: tag, via: PullRoute.host),
+    );
+    // A shell step that succeeds reports its exit code, unlike an API one.
+    expect(
+      await run(engine, host),
+      isA<ActionFinished>()
+          .having((f) => f.outcome, 'outcome', ActionOutcome.succeeded)
+          .having((f) => f.exitCode, 'exitCode', 0)
+          .having((f) => f.output?.stdout, 'stdout', contains(tag)),
+    );
     expect(await dind(['image', 'ls', '--quiet', tag]), isNotEmpty);
 
     final missing = await plan(

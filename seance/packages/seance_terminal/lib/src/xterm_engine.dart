@@ -95,6 +95,17 @@ class XtermTerminalEngine implements TerminalEngine {
   /// (`133;D`) or a fresh prompt (`133;A`).
   final ValueNotifier<String?> activeCommand = ValueNotifier<String?>(null);
 
+  /// Ticks when the shell may have moved, with or without shell
+  /// integration: on every Enter that may reach it, an empty line or a
+  /// recalled history entry included, and when a full-screen program hands
+  /// the terminal back (a picker whose choice the shell then `cd`s to). An
+  /// Enter on the alternate screen (an editor, a pager) or known to go to a
+  /// running program does not tick. [activeCommand] needs OSC 133, and
+  /// [onCommand] skips lines it could not reconstruct, so a shell that
+  /// reports no directory is re-read on this instead.
+  Listenable get shellMayHaveMoved => _shellMoves;
+  final ValueNotifier<int> _shellMoves = ValueNotifier<int>(0);
+
   // A best-effort reconstruction of the current, not-yet-submitted input line,
   // built from the keystrokes the user sends. Used to prefill the command
   // generator. It's an approximation — full readline editing (history, cursor
@@ -301,6 +312,7 @@ class XtermTerminalEngine implements TerminalEngine {
           inputSincePrompt: true,
         );
         _submitPending(atPrompt: atPrompt, toProgram: toProgram);
+        if (!toProgram && !terminal.isUsingAltBuffer) _shellMoves.value++;
       } else if (r == 0x7f || r == 0x08) {
         if (_pendingInput.isNotEmpty) {
           _pendingInput = _pendingInput.substring(0, _pendingInput.length - 1);
@@ -404,12 +416,14 @@ class XtermTerminalEngine implements TerminalEngine {
     // first; never revive a disposed terminal or notify its released views.
     if (_disposed) return;
     final wasFeedingOutput = _feedingOutput;
+    final wasFullScreen = terminal.isUsingAltBuffer;
     _feedingOutput = true;
     try {
       _terminalDecoder.add(data);
     } finally {
       _feedingOutput = wasFeedingOutput;
     }
+    if (wasFullScreen && !terminal.isUsingAltBuffer) _shellMoves.value++;
   }
 
   @override
@@ -469,6 +483,7 @@ class XtermTerminalEngine implements TerminalEngine {
     terminalTitle.dispose();
     shellIntegration.dispose();
     activeCommand.dispose();
+    _shellMoves.dispose();
     await _input.close();
   }
 }

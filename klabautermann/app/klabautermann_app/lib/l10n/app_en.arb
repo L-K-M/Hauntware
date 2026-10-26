@@ -906,6 +906,36 @@
   "@processesParentPid": {
     "description": "Label of the process ID of a process's parent, in a process's details."
   },
+  "processesTree": "Tree",
+  "@processesTree": {
+    "description": "Processes tab: the toggle that shows each process under its parent (PRC-03)."
+  },
+  "processesFlag": "{flag, select, zombie{zombie} uninterruptible{waiting on I/O} other{flagged}}",
+  "@processesFlag": {
+    "description": "Processes tab: the badge beside a process in a flagged run state (PRC-06): a zombie (state Z) or in uninterruptible sleep (state D). Lower case, as a label beside the command.",
+    "placeholders": {
+      "flag": {
+        "type": "String"
+      }
+    }
+  },
+  "processesFlagCount": "{flag, select, zombie{{count, plural, =1{1 zombie process} other{{count} zombie processes}}} uninterruptible{{count, plural, =1{1 process waiting on I/O it cannot be interrupted from} other{{count} processes waiting on I/O they cannot be interrupted from}}} other{{count, plural, =1{1 flagged process} other{{count} flagged processes}}}}",
+  "@processesFlagCount": {
+    "description": "Processes tab: how many processes a run state flag marks (PRC-06), above the list.",
+    "placeholders": {
+      "flag": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "processesFlagSeparator": "; ",
+  "@processesFlagSeparator": {
+    "description": "Processes tab: what joins the flag counts above the list."
+  },
   "processesState": "State",
   "@processesState": {
     "description": "Label of a process's run state letter as the kernel reports it (such as R or S), in a process's details."
@@ -1409,6 +1439,128 @@
         "type": "int"
       }
     }
+  },
+  "systemAccountsTitle": "Users",
+  "@systemAccountsTitle": {
+    "description": "System tab: heading of the section listing the server's accounts and who is logged in (ACC-01, ACC-02)."
+  },
+  "systemAccountsColumn": "Account",
+  "@systemAccountsColumn": {
+    "description": "System tab, Users: column of the account's name."
+  },
+  "systemAccountsUid": "UID",
+  "@systemAccountsUid": {
+    "description": "System tab, Users: column of the account's numeric user ID."
+  },
+  "systemAccountsRoot": "Root access",
+  "@systemAccountsRoot": {
+    "description": "System tab, Users: column saying why the account can become root, empty for most accounts."
+  },
+  "systemAccountsGroups": "Groups",
+  "@systemAccountsGroups": {
+    "description": "System tab, Users: column of the account's groups, its primary group first."
+  },
+  "systemAccountsShell": "Shell",
+  "@systemAccountsShell": {
+    "description": "System tab, Users: column of the account's login shell."
+  },
+  "systemAccountsRootReason": "{reason, select, uidZero{UID 0} adminGroup{sudo, wheel or admin group} dockerGroup{docker group} other{Can become root}}",
+  "@systemAccountsRootReason": {
+    "description": "System tab, Users: one reason the account can become root; reason is the engine's RootEquivalence name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "systemAccountsFailed": "{reason, select, noLink{The server is not connected, so its accounts could not be read.} unreadable{The server's answer could not be read as its accounts.} transport{The connection failed while the accounts were read.} other{The accounts could not be read.}}",
+  "@systemAccountsFailed": {
+    "description": "System tab, Users: why a read read nothing, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "systemAccountsReading": "Reading accounts…",
+  "@systemAccountsReading": {
+    "description": "System tab, Users: shown while the first read runs."
+  },
+  "systemAccountsNotListed": "{count, plural, =1{1 more account is not listed.} other{{count} more accounts are not listed.}}",
+  "@systemAccountsNotListed": {
+    "description": "System tab, Users: accounts past the read's limit, as on a host whose directory lists thousands.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemAccountsShowSystem": "{count, plural, =1{Show 1 service account} other{Show {count} service accounts}}",
+  "@systemAccountsShowSystem": {
+    "description": "System tab, Users: button that lists the accounts without a login shell or below the people's UID range, hidden by default.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemAccountsHideSystem": "Hide service accounts",
+  "@systemAccountsHideSystem": {
+    "description": "System tab, Users: button that hides the service accounts again."
+  },
+  "systemAccountsSessionsTitle": "Logged in",
+  "@systemAccountsSessionsTitle": {
+    "description": "System tab, Users: heading of the list of current logins."
+  },
+  "systemAccountsSessionsNone": "No one is logged in.",
+  "@systemAccountsSessionsNone": {
+    "description": "System tab, Users: the server lists no login."
+  },
+  "systemAccountsSessionsUnknown": "Who is logged in is unknown: this server's who prints a format the app does not read.",
+  "@systemAccountsSessionsUnknown": {
+    "description": "System tab, Users: the server's who printed lines the app could not parse, as BusyBox's."
+  },
+  "systemAccountsSessionLocal": "{user} on {line}, since {since}",
+  "@systemAccountsSessionLocal": {
+    "description": "System tab, Users: a local login; since is when it began, in this device's time zone.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      },
+      "line": {
+        "type": "String",
+        "example": "tty1"
+      },
+      "since": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemAccountsSessionRemote": "{user} on {line} from {from}, since {since}",
+  "@systemAccountsSessionRemote": {
+    "description": "System tab, Users: a remote login with the host or address it came from; since is when it began, in this device's time zone.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      },
+      "line": {
+        "type": "String",
+        "example": "pts/0"
+      },
+      "from": {
+        "type": "String",
+        "example": "203.0.113.7"
+      },
+      "since": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemAccountsReadAgain": "Read again",
+  "@systemAccountsReadAgain": {
+    "description": "System tab, Users: button that reads the accounts and logins again."
   },
   "systemDriveColumn": "Drive",
   "@systemDriveColumn": {
@@ -6385,6 +6537,92 @@
   "@dockerImagesUseUnknown": {
     "description": "Images list: below Docker API 1.51 the image list carries no container count, and the container list it is computed from failed."
   },
+  "dockerImageHistoryTitle": "{image}: history",
+  "@dockerImageHistoryTitle": {
+    "description": "Image history sheet title (IMG-04): the image's tags, or its short id when it has none.",
+    "placeholders": {
+      "image": {
+        "type": "String",
+        "example": "nginx:1.27"
+      }
+    }
+  },
+  "dockerImageHistoryReading": "Reading the image's history…",
+  "@dockerImageHistoryReading": {
+    "description": "Image history sheet: shown while the engine reads the image's layers."
+  },
+  "dockerImageHistoryEmpty": "The engine reports no layers for this image.",
+  "@dockerImageHistoryEmpty": {
+    "description": "Image history sheet: the daemon answered with an empty history."
+  },
+  "dockerImageHistoryMasked": "{count, plural, =1{1 instruction holds masked values. Reveal values shows them for {seconds} seconds.} other{{count} instructions hold masked values. Reveal values shows them for {seconds} seconds.}}",
+  "@dockerImageHistoryMasked": {
+    "description": "Image history sheet: how many layer instructions the engine masked, since build arguments can hold secrets.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerImageHistoryNoInstruction": "No instruction recorded",
+  "@dockerImageHistoryNoInstruction": {
+    "description": "Image history sheet: a layer whose CreatedBy is empty, as for an imported base layer."
+  },
+  "dockerImageHistoryComment": "Comment",
+  "@dockerImageHistoryComment": {
+    "description": "Image history sheet: the label before a layer's comment, such as the builder that made it."
+  },
+  "dockerProcessesTitle": "Processes",
+  "@dockerProcessesTitle": {
+    "description": "Container details: the section listing the processes running inside the container (CTR-10)."
+  },
+  "dockerProcessesStopped": "The container is not running, so it has no processes.",
+  "@dockerProcessesStopped": {
+    "description": "Container details, Processes: shown while the container is stopped."
+  },
+  "dockerProcessesReading": "Reading processes…",
+  "@dockerProcessesReading": {
+    "description": "Container details, Processes: shown while the processes are read."
+  },
+  "dockerProcessesReadAgain": "Read again",
+  "@dockerProcessesReadAgain": {
+    "description": "Container details, Processes: the button that reads the container's processes again."
+  },
+  "dockerProcessesNone": "The engine lists no processes for this container.",
+  "@dockerProcessesNone": {
+    "description": "Container details, Processes: shown when the read lists no process."
+  },
+  "dockerProcessesCount": "{count, plural, =1{1 process} other{{count} processes}}",
+  "@dockerProcessesCount": {
+    "description": "Container details, Processes: how many processes the container runs.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "dockerProcessesFailed": "{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server's capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} notFound{The engine no longer has this container.} daemonError{The engine refused or failed to list the container's processes.} connectionFailed{The connection to the engine failed while reading the processes.} cancelled{The read stopped before it ran.} other{The container's processes could not be read.}}",
+  "@dockerProcessesFailed": {
+    "description": "Container details, Processes: why the read failed, by DockerQueryFailure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerImageHistoryFailed": "{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server's capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} notFound{The engine no longer has this image.} daemonError{The engine refused or failed to read the image's history.} connectionFailed{The connection to the engine failed while reading the history.} cancelled{The read stopped before it ran.} other{The image's history could not be read.}}",
+  "@dockerImageHistoryFailed": {
+    "description": "Image history sheet: why the history read failed, by DockerQueryFailure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "dockerImagesLowSessionRelay": "Low-session mode: the list is read again every 15 seconds instead of following engine events.",
   "@dockerImagesLowSessionRelay": {
     "description": "Images list: the server's link has a session limit (03 §5.2) on a relay route."
@@ -6463,9 +6701,42 @@
   "@dockerPullCancel": {
     "description": "Pull sheet: the button that stops a running pull."
   },
-  "dockerPullForeground": "Pulling. Closing this sheet stops the pull.",
-  "@dockerPullForeground": {
-    "description": "Pull sheet: while a pull runs. The pull runs over this connection and the daemon stops it when the sheet closes (03 §7.14)."
+  "dockerPullRunning": "{route, select, engine{Pulling. Closing this sheet stops the pull.} host{Pulling on the server. Losing the connection stops the pull.} other{Starting the pull on the server.}}",
+  "@dockerPullRunning": {
+    "description": "Pull sheet: while a pull runs, by route. An engine pull stops when the sheet closes; the host's docker pull ends with its connection (03 §7.14).",
+    "placeholders": {
+      "route": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerPullRoute": "{route, select, engine{Engine} host{Server's login} other{Detached}}",
+  "@dockerPullRoute": {
+    "description": "Pull sheet: the choice of how to pull (IMG-03, REG-01).",
+    "placeholders": {
+      "route": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerPullRouteNote": "{route, select, engine{The engine pulls anonymously and shows each layer. Closing the sheet stops it.} host{The server's docker pull uses its own docker login, for private registries. The output shows at the end.} other{The server's docker pull runs on its own and keeps running when you leave. Follow it under Operations.}}",
+  "@dockerPullRouteNote": {
+    "description": "Pull sheet: under the route choice, what the chosen route does (03 §7.14, REG-01).",
+    "placeholders": {
+      "route": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerPullDetached": "The pull of {target} started on the server.",
+  "@dockerPullDetached": {
+    "description": "Pull sheet: a detached pull launched; its log follows it (03 §7.17).",
+    "placeholders": {
+      "target": {
+        "type": "String",
+        "example": "registry.example.com/app:2"
+      }
+    }
   },
   "dockerPullLayerBytes": "{status}: {current} of {total}",
   "@dockerPullLayerBytes": {

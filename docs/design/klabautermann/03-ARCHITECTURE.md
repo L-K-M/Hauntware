@@ -3314,6 +3314,19 @@ unless the user enables admin mode for that panel.
 - **v1.** Tree, detail with masked environment (`environ` is
   NUL-separated like `cmdline` and goes through `tr` the same way), unit
   and container attribution from `/proc/<pid>/cgroup`, state highlighting.
+
+  As built (M6 N43a), the tree (PRC-03) and state highlighting (PRC-06)
+  are the app's, over the `procs` rows' parent PID and run state. The
+  Tree toggle orders the rows depth first, each under its parent and
+  siblings in the chosen sort; a row whose parent is not in the reading
+  (PID 1, `kthreadd`, a row a selection left out) is a root, and each row
+  shows once even where reused PIDs make a cycle. Indentation stops
+  growing past twelve levels. A filter in the tree keeps each match's
+  ancestors so it stays in place. State `Z` (zombie) and `D`
+  (uninterruptible sleep) carry a badge in words, and the list counts
+  them above the table. Runaway thread counts need the thread count,
+  which the `procs` rows do not carry yet; they come with the process
+  detail (N43b).
 - **v1.x.** Renice and ionice, per-process I/O (sudo).
 
 As built in M4 (E08, `klabautermann_host/lib/src/commands/commands.dart`),
@@ -3847,8 +3860,9 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   action, fleet update center from cached results.
 - **As built (M6 N36a).** One `sh -c` script (`HostCommands.packageCheck`)
   runs as the login user and reads the first manager it finds:
-  `apt-get -s -o Debug::NoLocking=1 upgrade` (security from an origin
-  naming `-security`), `dnf -q --cacheonly check-update` with
+  `apt-get -s -o Debug::NoLocking=1 dist-upgrade` (security from an
+  origin naming `-security`; `upgrade` would keep back updates that
+  bring new packages, as a kernel's do), `dnf -q --cacheonly check-update` with
   `updateinfo list --security` (an advisory naming a package followed by
   its version marks it), `zypper --no-refresh -q lu` with `lp -g security`
   (needed security patches counted, since zypper lists patches rather
@@ -3893,6 +3907,19 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   flagged as root-equivalent; logged-in sessions (`who`, `loginctl
   list-sessions --output=json`, JSON from systemd 240 [R: systemd NEWS],
   so RHEL 8 (239) shows `who` alone; `-j` from 256).
+
+  As built (M6 N40), one read as the login user, on request and never
+  cached, prints `getent passwd` and `getent group` (the files where
+  getent is missing), then `who`, each capped. An account is
+  root-equivalent at UID 0 or as a member, primary or listed, of
+  `sudo`, `wheel`, `admin` or `docker`; past 2000 accounts the rest are
+  counted. Service accounts (no login shell, a UID below 1000 other than
+  root's, or `nobody`) are hidden until the user shows them, unless
+  root-equivalent. The logins come from `who` alone: `loginctl`'s JSON
+  names no origin, which ACC-02 asks for. `who` runs under the command
+  wrapper's `TZ=UTC`, so each login's start is UTC; a `who` whose lines
+  do not parse, as BusyBox's, leaves the logins unknown rather than
+  none.
 - **v1.x.** Terminate a session; login history (`last`, `lastb`, sshd journal
   entries; wtmpdb and lastlog2 migrations [U]); `authorized_keys` inventory
   (sudo); "where is this key" across the fleet; sudoers overview.
@@ -5851,7 +5878,10 @@ shows there.
 | `PlanAction` with `RemoveNetwork(serverId, networkId)` (M6 N11, DNW-02): one `DELETE /networks/{id}` behind a plain confirmation, refused for a built-in network (`bridge`, `host`, `none`) and while a container is on it | As every action: `ActionPlanned`, then `ActionFinished`; refusals `builtinNetwork` and `networkInUse`; the network watch reads its list again |
 | `PlanAction` with `PruneDocker(serverId, kind, all)` (M6 N12, DKE-05, IMG-06): one `POST /<kind>/prune` behind the typed confirmation, previewed by reading what the same filters match now; `all` removes every unused image rather than the dangling ones | `ActionPlanned` whose preview carries a `PrunePreview` (what is removed with sizes, what is kept and why, the bytes freed), then `ActionFinished`; refusal `nothingToPrune`; the runner refuses a prune whose matches changed since the preview; the pruned lists are read again |
 | `PlanAction` with `PullImage(serverId, reference)` (M6 N13, IMG-03): one `POST /images/create` behind a plain confirmation; a name without a tag pulls `latest`; a reference Docker would reject is refused as `invalidTarget` | `ActionPlanned`, then `ImagePullProgress(planId, layers, status)` a few times a second while it runs (each layer's status and bytes, the image's own last message), then `ActionFinished`; an `errorDetail` fails the step with the daemon's words as its output; the image watch reads its list again |
+| `PullImage` with `via: host` or `hostDetached` (M6 N13b, REG-01): the host's own `docker --host unix://<socket> pull <reference>`, which uses the host's `docker login` and credential helpers; `host` runs it over the link with its output kept, `hostDetached` as a detached operation (7.17) on the runner row the host and admin mode allow; root over the sudo relay | `ActionPlanned`, then `ActionFinished` with the output, or with the operation id of the launched pull, which the operation list follows |
 | `CancelAction(planId)` (M6 N13, IMG-03): stops a running plan where its step can stop, today an image pull, whose request the engine closes so the daemon stops the pull | The plan's `ActionFinished` with `cancelled`; a step that cannot stop runs to its end |
+| `DockerQuery` with `DockerImageHistoryQuery(image)` (M6 N14, IMG-04): `GET /images/{name}/history` for an image's id or reference; the Images sub-tab opens it from a row | `DockerResult` with `DockerImageHistoryPayload(layers)`, newest first: each layer's id (null for one built elsewhere), creation time, size, comment and tags, and its `CreatedBy` masked as a command line, since build arguments can carry secrets (8.9); an empty image is `invalidQuery` |
+| `DockerQuery` with `DockerContainerTopQuery(containerId)` (M6 N17a, CTR-10): `GET /containers/{id}/top?ps_args=-eo pid,user,pcpu,rss,etime,args`, asked again without `ps_args` when the daemon answers 500, as BusyBox's `ps` (no `-e`) and a Windows daemon (no arguments) do; the container details open it for a running container | `DockerResult` with `DockerContainerTopPayload(titles, processes, commandColumn)`: the columns `ps` named and a row of cells per process, the `CMD`, `COMMAND` or `ARGS` cell masked as a command line (8.9) and its index in `commandColumn`; a stopped container's 409 is `daemonError`, an empty id `invalidQuery` |
 | `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)` (K41, 4.7) | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |

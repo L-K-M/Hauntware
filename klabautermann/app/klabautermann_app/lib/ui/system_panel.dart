@@ -9,6 +9,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'accounts.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
 import 'disk_activity.dart';
@@ -33,6 +34,7 @@ enum SystemSection {
   gpus,
   driveHealth,
   updates,
+  accounts,
   power,
 }
 
@@ -223,6 +225,12 @@ class _SystemPanelState extends State<SystemPanel> {
                 serverId: widget.serverId,
                 tableId: SystemSection.updates.name,
                 fleet: widget.fleet,
+              ),
+              AccountsSection(
+                key: const ValueKey(SystemSection.accounts),
+                reads: widget.monitoring.accounts,
+                serverId: widget.serverId,
+                tableId: SystemSection.accounts.name,
               ),
               PowerSection(
                 key: const ValueKey(SystemSection.power),

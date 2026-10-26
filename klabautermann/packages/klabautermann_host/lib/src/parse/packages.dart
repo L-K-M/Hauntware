@@ -135,6 +135,7 @@ PackageCheck parsePackageCheck(String raw) {
   if (manager == null) {
     return PackageCheck(
       manager: null,
+      cachedAt: cachedAt,
       reboot: reboot,
       rebootPackages: rebootPackages,
       failure: PackageCheckFailure.noManager,

@@ -969,6 +969,12 @@ is on main:
   Since K44b turned links on, the app's engine samples a connected server
   and sends its profile, so the tab shows its readings; phones reach it
   through More (K40, above).
+- Process tree and state flags (M6 N43a, PRC-03, PRC-06): the
+  Processes tab's Tree toggle shows each process under its parent, with
+  siblings in the chosen order; a filter keeps the matches' parents in
+  view. Zombies and processes in uninterruptible sleep carry a badge in
+  words ("zombie", "waiting on I/O"), and the tab counts them above the
+  list. Thread counts are not read yet.
 - Processes tab (M2, 03 §7.2, §8.9, §10.4, PRC-01, SAF-07, D48, D50,
   K33, #238): the Processes tab lists the `procs` stream while it shows,
   in the sortable table by CPU (busiest first), IEC memory, user, start
@@ -1974,6 +1980,12 @@ is on main:
   a reboot. "All servers" (N36d, PKG-06) opens the fleet update center:
   each server's updates, security updates and restart flag from its
   check of the last hour, most security updates first.
+- Users and logins (M6 N40, ACC-01, ACC-02): the System tab's Users
+  section reads the server's accounts and groups with `getent` and who
+  is logged in with `who`, as the login user, when it shows and on
+  request. Accounts that can become root (UID 0, the sudo, wheel, admin
+  or docker group) are flagged and sort first; service accounts are
+  hidden until shown. Each login shows its terminal, origin and start.
 - Drive health (M6 N37c, HW-04): in admin mode, the System tab's Drive
   health section reads every drive's SMART health on request through an
   elevated `smartctl --scan-open`, then `smartctl -n standby -a` per
@@ -2053,10 +2065,16 @@ is on main:
   `CancelAction`, the engine closes the request and the daemon stops the
   pull, and the plan finishes as cancelled. An `errorDetail` in the
   stream, or an error answer such as a refused registry, fails the step
-  with the daemon's words shown. The daemon pulls anonymously; private
-  registries through the host's own credentials (`docker pull` over exec,
-  REG-01) and the detached pull come with N13b. The Docker actions suite
-  pulls a tag pushed to the fixture registry and fails on a tag it lacks.
+  with the daemon's words shown. The daemon pulls anonymously; for a
+  private registry (M6 N13b, REG-01) the sheet's route choice runs the
+  host's own `docker --host unix://<socket> pull`, which uses the host's
+  `docker login` and credential helpers: "Server's login" over the link,
+  its output shown at the end, or "Detached" as an operation on the
+  runner row the host and admin mode allow, which keeps running when the
+  sheet closes and is followed under Operations. Over the sudo relay both
+  run as root, so only in admin mode. The Docker actions suite pulls a
+  tag pushed to the fixture registry through the engine and the host's
+  CLI, and fails on a tag it lacks.
 - Alert evaluation (M6 N50a, ALR-01): the engine evaluates every synced
   `client` rule on the live samples of the servers its scope names, with
   the rule's raise and clear thresholds and durations, over `cpu.busy`,
@@ -2098,6 +2116,26 @@ is on main:
   in settings.json. Each notification states the same limit (Y3). The
   app icon's badge is not built, and whether the notifications show on
   real Android, iOS, macOS, Windows and Linux desktops is a manual check.
+- Container processes (M6 N17a, CTR-10): a running container's details
+  end with a Processes section, read through `GET /containers/{id}/top`
+  when the details show, when the container starts and on "Read again".
+  Each process shows its command line over its PID, user, CPU share,
+  memory and age. The engine masks each command line as Processes masks
+  one, and "Reveal values" shows them for 30 seconds. Where `ps` rejects
+  those columns (BusyBox, a Windows daemon) the engine asks again with
+  the daemon's default. A stopped container says it has no processes.
+  Tested in the docker package, the router and the details view; no
+  Docker fixture runs it yet.
+- Image history (M6 N14, IMG-04): a click or tap on an Images row opens
+  a sheet with the image's layers, newest first, read by id through
+  `GET /images/{name}/history`. Each layer shows the instruction that
+  made it, when, its size, its id (none for a layer built elsewhere),
+  its tags and its comment. Build arguments can carry secrets, so the
+  engine masks each instruction as a command line, and "Reveal values"
+  shows them for 30 seconds, masked again early on request, when the
+  app turns inactive or when the sheet closes. It is a read, so it shows
+  with actions off. Tested in the docker package, the router and the
+  Images panel; no Docker fixture runs it yet.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container

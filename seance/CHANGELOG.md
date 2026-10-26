@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Follow terminal directory** in the Files pane now works on TrueNAS
+  and other Linux servers whose shell reports no directory. TrueNAS's
+  zsh sends neither OSC 7 nor a title, so the pane stayed at home. Files
+  now reads the shell's directory from `/proc` over a separate channel
+  after each Enter, without typing into the shell, and trusts it over a
+  title, which a `docker exec` or ssh session can leave behind. A nested
+  shell such as `sudo -i` or tmux still needs OSC 7.
 - The side panel's tabs now read Files, Git, Snippets and Assistant,
   and Files opens first. The line under them continues the one under
   the terminal's tabs, and the server list's filter field is as tall as

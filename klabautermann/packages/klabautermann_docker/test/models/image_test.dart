@@ -62,4 +62,34 @@ void main() {
       expect(parseImageInspect(null).warnings, isNotEmpty);
     });
   });
+
+  group('image history (IMG-04)', () {
+    test('reads each layer, a missing id as none and the placeholder tag '
+        'as no tag', () {
+      final r = parseImageHistory([
+        {
+          'Id': '<missing>',
+          'Created': 1750000000,
+          'CreatedBy': 'RUN make',
+          'Size': 10,
+          'Tags': ['<none>:<none>'],
+          'Comment': '',
+        },
+      ]);
+      final layer = r.value.single;
+      expect(layer.id, isNull);
+      expect(layer.createdBy, 'RUN make');
+      expect((layer.size, layer.comment), (10, null));
+      expect(layer.tags, isEmpty);
+      expect(
+        layer.created,
+        DateTime.fromMillisecondsSinceEpoch(1750000000000, isUtc: true),
+      );
+      expect(r.warnings, isEmpty);
+    });
+
+    test('never throws on a non-array history', () {
+      expect(parseImageHistory({}).warnings, isNotEmpty);
+    });
+  });
 }

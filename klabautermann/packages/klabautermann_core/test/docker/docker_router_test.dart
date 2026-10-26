@@ -8,6 +8,8 @@ import 'dart:convert';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/docker/docker_router.dart';
+import 'package:klabautermann_docker/klabautermann_docker.dart'
+    show kContainerTopPsArgs;
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:seance_core/seance_core.dart' show RemoteCommandResult, SshLink;
 import 'package:test/test.dart';
@@ -411,6 +413,106 @@ void main() {
       expect(health.log.first.output!.reveal(), 'TOKEN=s3cret rejected');
       expect(health.log.last.output!.display, 'ok');
       expect(details.hostConfig!.networkMode, 'bridge');
+    });
+
+    test('the history of an image crosses with each instruction masked '
+        '(IMG-04)', () async {
+      final (h, daemon) = await ready();
+      // The client percent-encodes the reference's colon.
+      daemon.routes['/v1.52/images/app%3A1/history'] = jsonEncode([
+        {
+          'Id': 'sha256:${'a' * 64}',
+          'Created': 1760000000,
+          'CreatedBy': '/bin/sh -c #(nop)  ENV API_TOKEN=s3cret',
+          'Size': 0,
+          'Tags': ['app:1'],
+          'Comment': '',
+        },
+        {
+          'Id': '<missing>',
+          'Created': 1750000000,
+          'CreatedBy': 'RUN |1 VERSION=2 /bin/sh -c make install',
+          'Size': 4096,
+          'Tags': null,
+          'Comment': 'buildkit.dockerfile.v0',
+        },
+      ]);
+
+      final id = h.query(const DockerImageHistoryQuery('app:1'));
+      final layers = (await h.result(id) as DockerImageHistoryPayload).layers;
+      expect(layers, hasLength(2));
+      expect(
+        layers.first.createdBy.display,
+        '/bin/sh -c #(nop)  ENV API_TOKEN=${MaskedValue.maskToken}',
+      );
+      expect(
+        layers.first.createdBy.reveal(),
+        '/bin/sh -c #(nop)  ENV API_TOKEN=s3cret',
+      );
+      expect(layers.first.tags, ['app:1']);
+      expect(layers.first.comment, isNull);
+      expect(
+        (layers.last.id, layers.last.size, layers.last.comment),
+        (null, 4096, 'buildkit.dockerfile.v0'),
+      );
+      expect(layers.last.createdBy.isMasked, isFalse);
+
+      final empty = h.query(const DockerImageHistoryQuery(''));
+      expect(await h.result(empty), _failed(DockerQueryFailure.invalidQuery));
+    });
+
+    test('a container\'s processes cross with each command line masked, '
+        'and a ps that rejects the columns is asked again with its default '
+        '(CTR-10)', () async {
+      final (h, daemon) = await ready();
+      daemon.routes['/v1.52/containers/app/top'] = jsonEncode({
+        'Titles': ['PID', 'USER', '%CPU', 'RSS', 'ELAPSED', 'COMMAND'],
+        'Processes': [
+          ['4211', 'root', '0.0', '5120', '01:02', 'app --password=s3cret'],
+          ['4250', 'app', '1.5', '2048', '01:01', 'nginx: worker process'],
+        ],
+      });
+
+      final id = h.query(const DockerContainerTopQuery('app'));
+      final top = await h.result(id) as DockerContainerTopPayload;
+      expect(top.titles.first, 'PID');
+      expect(top.commandColumn, 5);
+      expect(
+        top.processes.first.last.display,
+        'app --password=${MaskedValue.maskToken}',
+      );
+      expect(top.processes.first.last.reveal(), 'app --password=s3cret');
+      expect(top.processes.first.first.display, '4211');
+      expect(top.processes.last.last.isMasked, isFalse);
+      expect(
+        daemon.requests.last,
+        'GET /v1.52/containers/app/top?ps_args='
+        '${Uri.encodeQueryComponent(kContainerTopPsArgs)} HTTP/1.1',
+      );
+
+      daemon.failures['/v1.52/containers/app/top'] = (500, 'ps: bad -e');
+      final before = daemon.requests.length;
+      final failed = h.query(const DockerContainerTopQuery('app'));
+      expect(await h.result(failed), _failed(DockerQueryFailure.daemonError));
+      final asked = daemon.requests.sublist(before);
+      expect(asked, [
+        startsWith('GET /v1.52/containers/app/top?ps_args='),
+        'GET /v1.52/containers/app/top HTTP/1.1',
+      ]);
+
+      daemon.failures['/v1.52/containers/app/top'] = (409, 'is not running');
+      final stopped = daemon.requests.length;
+      final conflict = h.query(const DockerContainerTopQuery('app'));
+      expect(await h.result(conflict), _failed(DockerQueryFailure.daemonError));
+      expect(daemon.requests.sublist(stopped), hasLength(1));
+
+      daemon.failures['/v1.52/containers/app/top'] = (404, 'no such app');
+      final gone = h.query(const DockerContainerTopQuery('app'));
+      expect(await h.result(gone), _failed(DockerQueryFailure.notFound));
+      expect(daemon.requests.sublist(stopped), hasLength(2));
+
+      final empty = h.query(const DockerContainerTopQuery(''));
+      expect(await h.result(empty), _failed(DockerQueryFailure.invalidQuery));
     });
 
     test('the container list drops each command line; images keep their '

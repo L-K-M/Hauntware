@@ -8,6 +8,7 @@ import '../cron/document.dart' show splitCronCommand;
 import '../hws/collector.dart' show ArgValidators;
 import '../hws/request.dart' show ShellQuote;
 import '../parse/packages.dart' show PackageManager;
+import '../parse/accounts.dart' show kAccountsGroupMarker, kAccountsWhoMarker;
 import 'proc_stat.dart';
 
 /// The first systemd major whose `systemd-analyze calendar` takes
@@ -877,6 +878,8 @@ abstract final class HostCommands {
   /// (the metadata's age as epoch seconds), `== updates` and, where the
   /// manager has one, `== security`, each body ended by `== rc <status>`,
   /// then `== reboot required|no|unknown` with the packages that asked.
+  /// apt simulates a `dist-upgrade`, since `upgrade` keeps back updates
+  /// that bring new packages, as a kernel's do.
   static List<String> packageCheck() => const ['sh', '-c', _packageCheck];
 
   /// The first package manager the check would read, by name, as
@@ -887,6 +890,7 @@ abstract final class HostCommands {
     _packageManagerName,
   ];
 
+  // The same order as [_packageCheck]'s branches; a test pins the two.
   static const _packageManagerName =
       'for m in apt-get dnf zypper pacman apk; do '
       'command -v "\$m" >/dev/null 2>&1 && { echo "\${m%-get}"; exit 0; }; '
@@ -943,7 +947,7 @@ if have apt-get; then
   echo '== manager apt'
   echo "== cache $(mtime /var/cache/apt/pkgcache.bin)"
   echo '== updates'
-  apt-get -s -o Debug::NoLocking=1 upgrade 2>&1; echo "== rc $?"
+  apt-get -s -o Debug::NoLocking=1 dist-upgrade 2>&1; echo "== rc $?"
 elif have dnf; then
   echo '== manager dnf'
   echo "== cache $(for f in /var/cache/dnf/*.solv /var/cache/libdnf5/*/solv/*.solv; do mtime "$f"; done | sort -n | tail -n 1)"
@@ -953,6 +957,7 @@ elif have dnf; then
   dnf -q --cacheonly updateinfo list --security 2>&1; echo "== rc $?"
 elif have zypper; then
   echo '== manager zypper'
+  echo "== cache $(for f in /var/cache/zypp/raw/*/repodata/repomd.xml; do mtime "$f"; done | sort -n | tail -n 1)"
   echo '== updates'
   zypper --non-interactive --no-refresh -q lu 2>&1; echo "== rc $?"
   echo '== security'
@@ -982,6 +987,22 @@ else
   echo '== reboot unknown'
 fi
 ''';
+
+  /// ACC-01 and ACC-02's read: the accounts and groups through `getent`,
+  /// which sees directory users too, or the files where it is missing,
+  /// then the logins `who` lists. Each part is capped, so a directory
+  /// that enumerates thousands stays a bounded read; `parseAccounts`
+  /// counts what went past its own limit. `who`'s errors join its
+  /// output, so a host without `who` reads as logins unknown rather than
+  /// as no one logged in.
+  static List<String> accounts() => const ['sh', '-c', _accounts];
+
+  static const _accounts =
+      '{ getent passwd || cat /etc/passwd; } 2>/dev/null | head -n 5000; '
+      'echo "$kAccountsGroupMarker"; '
+      '{ getent group || cat /etc/group; } 2>/dev/null | head -n 5000; '
+      'echo "$kAccountsWhoMarker"; '
+      'who 2>&1 | head -n 500; exit 0';
 
   /// `smartctl --scan-open -j`: the drives smartctl can open, with the
   /// device type it would read each as (03 §7.11, HW-04).

@@ -823,6 +823,55 @@ class AppLocalizationsEn extends AppLocalizations {
   String get processesParentPid => 'Parent PID';
 
   @override
+  String get processesTree => 'Tree';
+
+  @override
+  String processesFlag(String flag) {
+    String _temp0 = intl.Intl.selectLogic(flag, {
+      'zombie': 'zombie',
+      'uninterruptible': 'waiting on I/O',
+      'other': 'flagged',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String processesFlagCount(String flag, int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString zombie processes',
+      one: '1 zombie process',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$countString processes waiting on I/O they cannot be interrupted from',
+      one: '1 process waiting on I/O it cannot be interrupted from',
+    );
+    String _temp2 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString flagged processes',
+      one: '1 flagged process',
+    );
+    String _temp3 = intl.Intl.selectLogic(flag, {
+      'zombie': '$_temp0',
+      'uninterruptible': '$_temp1',
+      'other': '$_temp2',
+    });
+    return '$_temp3';
+  }
+
+  @override
+  String get processesFlagSeparator => '; ';
+
+  @override
   String get processesState => 'State';
 
   @override
@@ -1244,6 +1293,113 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get systemAccountsTitle => 'Users';
+
+  @override
+  String get systemAccountsColumn => 'Account';
+
+  @override
+  String get systemAccountsUid => 'UID';
+
+  @override
+  String get systemAccountsRoot => 'Root access';
+
+  @override
+  String get systemAccountsGroups => 'Groups';
+
+  @override
+  String get systemAccountsShell => 'Shell';
+
+  @override
+  String systemAccountsRootReason(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'uidZero': 'UID 0',
+      'adminGroup': 'sudo, wheel or admin group',
+      'dockerGroup': 'docker group',
+      'other': 'Can become root',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemAccountsFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink':
+          'The server is not connected, so its accounts could not be read.',
+      'unreadable': 'The server\'s answer could not be read as its accounts.',
+      'transport': 'The connection failed while the accounts were read.',
+      'other': 'The accounts could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemAccountsReading => 'Reading accounts…';
+
+  @override
+  String systemAccountsNotListed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more accounts are not listed.',
+      one: '1 more account is not listed.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemAccountsShowSystem(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Show $count service accounts',
+      one: 'Show 1 service account',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemAccountsHideSystem => 'Hide service accounts';
+
+  @override
+  String get systemAccountsSessionsTitle => 'Logged in';
+
+  @override
+  String get systemAccountsSessionsNone => 'No one is logged in.';
+
+  @override
+  String get systemAccountsSessionsUnknown =>
+      'Who is logged in is unknown: this server\'s who prints a format the app does not read.';
+
+  @override
+  String systemAccountsSessionLocal(String user, String line, DateTime since) {
+    final intl.DateFormat sinceDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String sinceString = sinceDateFormat.format(since);
+
+    return '$user on $line, since $sinceString';
+  }
+
+  @override
+  String systemAccountsSessionRemote(
+    String user,
+    String line,
+    String from,
+    DateTime since,
+  ) {
+    final intl.DateFormat sinceDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String sinceString = sinceDateFormat.format(since);
+
+    return '$user on $line from $from, since $sinceString';
+  }
+
+  @override
+  String get systemAccountsReadAgain => 'Read again';
 
   @override
   String get systemDriveColumn => 'Drive';
@@ -5298,6 +5454,109 @@ class AppLocalizationsEn extends AppLocalizations {
       'Which images are in use is unknown: this engine\'s API reports no count, and the containers could not be listed.';
 
   @override
+  String dockerImageHistoryTitle(String image) {
+    return '$image: history';
+  }
+
+  @override
+  String get dockerImageHistoryReading => 'Reading the image\'s history…';
+
+  @override
+  String get dockerImageHistoryEmpty =>
+      'The engine reports no layers for this image.';
+
+  @override
+  String dockerImageHistoryMasked(int count, int seconds) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count instructions hold masked values. Reveal values shows them for $seconds seconds.',
+      one:
+          '1 instruction holds masked values. Reveal values shows them for $seconds seconds.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerImageHistoryNoInstruction => 'No instruction recorded';
+
+  @override
+  String get dockerImageHistoryComment => 'Comment';
+
+  @override
+  String get dockerProcessesTitle => 'Processes';
+
+  @override
+  String get dockerProcessesStopped =>
+      'The container is not running, so it has no processes.';
+
+  @override
+  String get dockerProcessesReading => 'Reading processes…';
+
+  @override
+  String get dockerProcessesReadAgain => 'Read again';
+
+  @override
+  String get dockerProcessesNone =>
+      'The engine lists no processes for this container.';
+
+  @override
+  String dockerProcessesCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString processes',
+      one: '1 process',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerProcessesFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notInFleet': 'This server is no longer in the fleet.',
+      'linkUnavailable': 'There is no connection to this server.',
+      'profileUnknown': 'The server\'s capability check has not answered yet.',
+      'endpointUnavailable': 'The Docker engine cannot be reached.',
+      'tooManyQueries':
+          'This server already has as many Docker reads waiting as Klabautermann allows.',
+      'notFound': 'The engine no longer has this container.',
+      'daemonError':
+          'The engine refused or failed to list the container\'s processes.',
+      'connectionFailed':
+          'The connection to the engine failed while reading the processes.',
+      'cancelled': 'The read stopped before it ran.',
+      'other': 'The container\'s processes could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerImageHistoryFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notInFleet': 'This server is no longer in the fleet.',
+      'linkUnavailable': 'There is no connection to this server.',
+      'profileUnknown': 'The server\'s capability check has not answered yet.',
+      'endpointUnavailable': 'The Docker engine cannot be reached.',
+      'tooManyQueries':
+          'This server already has as many Docker reads waiting as Klabautermann allows.',
+      'notFound': 'The engine no longer has this image.',
+      'daemonError':
+          'The engine refused or failed to read the image\'s history.',
+      'connectionFailed':
+          'The connection to the engine failed while reading the history.',
+      'cancelled': 'The read stopped before it ran.',
+      'other': 'The image\'s history could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get dockerImagesLowSessionRelay =>
       'Low-session mode: the list is read again every 15 seconds instead of following engine events.';
 
@@ -5371,8 +5630,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerPullCancel => 'Stop pull';
 
   @override
-  String get dockerPullForeground =>
-      'Pulling. Closing this sheet stops the pull.';
+  String dockerPullRunning(String route) {
+    String _temp0 = intl.Intl.selectLogic(route, {
+      'engine': 'Pulling. Closing this sheet stops the pull.',
+      'host': 'Pulling on the server. Losing the connection stops the pull.',
+      'other': 'Starting the pull on the server.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerPullRoute(String route) {
+    String _temp0 = intl.Intl.selectLogic(route, {
+      'engine': 'Engine',
+      'host': 'Server\'s login',
+      'other': 'Detached',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerPullRouteNote(String route) {
+    String _temp0 = intl.Intl.selectLogic(route, {
+      'engine':
+          'The engine pulls anonymously and shows each layer. Closing the sheet stops it.',
+      'host':
+          'The server\'s docker pull uses its own docker login, for private registries. The output shows at the end.',
+      'other':
+          'The server\'s docker pull runs on its own and keeps running when you leave. Follow it under Operations.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerPullDetached(String target) {
+    return 'The pull of $target started on the server.';
+  }
 
   @override
   String dockerPullLayerBytes(String status, String current, String total) {

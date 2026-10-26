@@ -28,8 +28,8 @@ final class PackageReads {
     try {
       _engine.send(ReadPackages(serverId, requestId: requestId, fresh: fresh));
     } on StateError {
-      _pending.remove(requestId);
-      return Future.value(_noLink(serverId, requestId));
+      // A closed engine answers every waiting read, this one included.
+      _onEngineDone();
     }
     return answer.future;
   }

@@ -31,6 +31,11 @@ const _generatedDartSuffixes = <String>{};
 // Literals are reviewed per file so an allowlist cannot hide UI copy. Every
 // entry is technical.
 const _allowedTechnicalLiterals = <String, Set<String>>{
+  // The separator between group names and root reasons, the UID as the
+  // host prints it, an empty root cell, and the groups' sort key.
+  'lib/ui/accounts.dart': {"', '", r"'${account.uid}'", "''", "','"},
+  // An account read's request id, matched in the engine's answer.
+  'lib/controllers/account_reads.dart': {r"'accounts-${_count++}'"},
   'lib/app.dart': {
     // The settings route's Navigator name.
     "'/settings'",
@@ -421,6 +426,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "''",
     "', '",
   },
+  // The ps column title of resident memory, matched, never shown.
+  'lib/ui/docker/container_processes.dart': {"'RSS'"},
   'lib/ui/docker/container_details_view.dart': {
     // The Engine API's restart policy names, matched, never shown; the
     // empty one is the default.
@@ -782,7 +789,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The ellipsis ending a cut command line, the space between its
     // arguments, and the filter's term separator and the line break
     // between the fields it searches. The plus sign GNU ps ends a cut
-    // user name with, which is matched, never shown.
+    // user name with, and the run states PRC-06 flags (zombie and
+    // uninterruptible sleep), which are matched, never shown.
+    "'Z'",
+    "'D'",
     r"'${text.substring(0, end)}…'",
     "' '",
     r"r'\s+'",

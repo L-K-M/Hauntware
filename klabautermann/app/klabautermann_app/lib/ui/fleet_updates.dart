@@ -35,6 +35,10 @@ class FleetUpdatesPage extends StatefulWidget {
 class _FleetUpdatesPageState extends State<FleetUpdatesPage> {
   final _reports = <String, PackagesReport>{};
 
+  /// The servers this round has asked for, so one that joins the fleet
+  /// while the page is open is read too.
+  final _asked = <String>{};
+
   /// Bumped by each "check all", so a slow answer from an earlier round
   /// never replaces a later one.
   int _round = 0;
@@ -42,20 +46,42 @@ class _FleetUpdatesPageState extends State<FleetUpdatesPage> {
   @override
   void initState() {
     super.initState();
+    widget.fleet.addListener(_readJoined);
     _readAll(fresh: false);
   }
 
+  @override
+  void dispose() {
+    widget.fleet.removeListener(_readJoined);
+    super.dispose();
+  }
+
   void _readAll({required bool fresh}) {
-    final round = ++_round;
-    setState(_reports.clear);
+    ++_round;
+    setState(() {
+      _reports.clear();
+      _asked.clear();
+    });
     for (final server in widget.fleet.servers) {
-      unawaited(
-        widget.reads.read(server.id, fresh: fresh).then((report) {
-          if (!mounted || round != _round) return;
-          setState(() => _reports[server.id] = report);
-        }),
-      );
+      _read(server.id, fresh: fresh);
     }
+  }
+
+  void _readJoined() {
+    for (final server in widget.fleet.servers) {
+      if (!_asked.contains(server.id)) _read(server.id, fresh: false);
+    }
+  }
+
+  void _read(String serverId, {required bool fresh}) {
+    final round = _round;
+    _asked.add(serverId);
+    unawaited(
+      widget.reads.read(serverId, fresh: fresh).then((report) {
+        if (!mounted || round != _round) return;
+        setState(() => _reports[serverId] = report);
+      }),
+    );
   }
 
   /// Most security updates first, then most updates, then by name; a
@@ -111,6 +137,8 @@ class _FleetUpdatesPageState extends State<FleetUpdatesPage> {
     final colors = Theme.of(context).colorScheme;
     final security = check?.securityCount ?? 0;
     final restart = check?.reboot == RebootState.required;
+    final failed =
+        report?.failure != null || check?.failure == PackageCheckFailure.failed;
     final String summary;
     if (report == null) {
       summary = l10n.systemUpdatesChecking;
@@ -133,12 +161,18 @@ class _FleetUpdatesPageState extends State<FleetUpdatesPage> {
     }
     return ListTile(
       leading: Icon(
-        security > 0
+        report == null
+            ? Icons.hourglass_empty
+            : failed
+            ? Icons.error_outline
+            : check?.failure != null
+            ? Icons.help_outline
+            : security > 0
             ? Icons.gpp_maybe_outlined
             : (check?.updates.isNotEmpty ?? false)
             ? Icons.system_update_alt
             : Icons.check_circle_outline,
-        color: security > 0 ? colors.error : null,
+        color: failed || security > 0 ? colors.error : null,
       ),
       title: Text(server.displayName),
       subtitle: Text(summary),

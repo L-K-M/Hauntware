@@ -28,6 +28,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         RestartCheck,
         SmartDisk,
+        AccountsSnapshot,
         SystemdUnit,
         SystemctlVerb,
         TempsSnapshot,
@@ -284,7 +285,16 @@ import '../operations/plan_types.dart';
 ///
 /// The image pull then joined v3 the same way (03 §7.14 IMG-03, M6 plan
 /// N13): the [PullImage] intent, [ImagePullProgress] while it runs, and
-/// [CancelAction], which stops it.
+/// [CancelAction], which stops it; then [PullRoute], the host's own
+/// `docker pull`, in the foreground or detached (REG-01, N13b).
+///
+/// An image's history then joined v3 the same way (03 §7.14 IMG-04, M6
+/// plan N14): [DockerImageHistoryQuery], answered by
+/// [DockerImageHistoryPayload] with each layer's instruction masked.
+///
+/// A container's processes then joined v3 the same way (03 §7.12 CTR-10,
+/// M6 plan N17): [DockerContainerTopQuery], answered by
+/// [DockerContainerTopPayload] with each command line masked.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -1218,6 +1228,16 @@ final class ReadPackages extends EngineRequest {
 /// memory maps. One [RestartReport] with [requestId] answers it.
 final class ReadRestarts extends EngineRequest {
   const ReadRestarts(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s accounts, their groups and who is logged in (ACC-01,
+/// ACC-02, 03 §7.9) as the login user; never cached. One [AccountsReport]
+/// with [requestId] answers it.
+final class ReadAccounts extends EngineRequest {
+  const ReadAccounts(this.serverId, {required this.requestId});
 
   final String serverId;
   final String requestId;
@@ -2571,6 +2591,34 @@ enum UserCrontabsFailure {
   transport,
 }
 
+/// Why a [ReadAccounts] read nothing.
+enum AccountsReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// The read printed nothing the parser recognised.
+  unreadable,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadAccounts]: what the read found, or why nothing was
+/// read.
+final class AccountsReport extends EngineEvent {
+  const AccountsReport({
+    required this.serverId,
+    required this.requestId,
+    this.snapshot,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+  final AccountsSnapshot? snapshot;
+  final AccountsReportFailure? failure;
+}
+
 /// Why a [ReadSmart] read nothing.
 enum SmartReportFailure {
   /// The server has no ready link.
@@ -3846,9 +3894,28 @@ final class DockerContainerQuery extends DockerQuerySpec {
   final String containerId;
 }
 
+/// One running container's processes (CTR-10). Answered by
+/// [DockerContainerTopPayload]; the daemon refuses a container that is
+/// not running (409), which answers [DockerQueryFailed] with
+/// `daemonError`.
+final class DockerContainerTopQuery extends DockerQuerySpec {
+  const DockerContainerTopQuery(this.containerId);
+
+  /// The container's id or name.
+  final String containerId;
+}
+
 /// The image list (IMG-01). Answered by [DockerImagesPayload].
 final class DockerImagesQuery extends DockerQuerySpec {
   const DockerImagesQuery();
+}
+
+/// One image's layers (IMG-04). Answered by [DockerImageHistoryPayload].
+final class DockerImageHistoryQuery extends DockerQuerySpec {
+  const DockerImageHistoryQuery(this.image);
+
+  /// The image's id, or a tag of it.
+  final String image;
 }
 
 /// Disk use by type (02 OV-05): `/system/df` without `verbose`, which
@@ -3966,6 +4033,62 @@ final class DockerContainerPayload extends DockerPayload {
   const DockerContainerPayload(this.container);
 
   final ContainerDetails container;
+}
+
+/// An image's layers, newest first (IMG-04), each layer's instruction
+/// masked as a command line is (03 §8.9): a build argument or a secret
+/// assignment in it crosses only behind [MaskedValue].
+final class DockerImageHistoryPayload extends DockerPayload {
+  DockerImageHistoryPayload(Iterable<ImageLayer> layers)
+    : layers = List.unmodifiable(layers);
+
+  final List<ImageLayer> layers;
+}
+
+/// A container's processes (CTR-10): the columns `ps` named and a row
+/// per process, the command line column masked as Processes masks one
+/// (03 §8.9).
+final class DockerContainerTopPayload extends DockerPayload {
+  DockerContainerTopPayload({
+    required Iterable<String> titles,
+    required Iterable<List<MaskedValue>> processes,
+    this.commandColumn,
+  }) : titles = List.unmodifiable(titles),
+       processes = List.unmodifiable([
+         for (final row in processes) List<MaskedValue>.unmodifiable(row),
+       ]);
+
+  final List<String> titles;
+
+  /// One cell per title; only the command line's can be masked.
+  final List<List<MaskedValue>> processes;
+
+  /// The index of the command line's title, or null where `ps` named
+  /// none (a Windows daemon lists the image name instead).
+  final int? commandColumn;
+}
+
+/// One layer of an image's history (IMG-04).
+@immutable
+final class ImageLayer {
+  const ImageLayer({
+    required this.createdBy,
+    this.id,
+    this.created,
+    this.size,
+    this.comment,
+    this.tags = const [],
+  });
+
+  /// The image id at this layer, or null for one built elsewhere.
+  final String? id;
+  final DateTime? created;
+
+  /// The instruction that made the layer, masked.
+  final MaskedValue createdBy;
+  final int? size;
+  final String? comment;
+  final List<String> tags;
 }
 
 /// The image list (IMG-01), labels masked by key.
@@ -4727,14 +4850,35 @@ final class RemoveNetwork extends ActionIntent {
   final String networkId;
 }
 
+/// How an image pull runs (03 §7.14 IMG-03, REG-01).
+enum PullRoute {
+  /// `POST /images/create` with per-layer progress; the daemon pulls
+  /// anonymously, and closing the view stops it.
+  engine,
+
+  /// The host's `docker pull` over the link, with the host's own
+  /// `docker login` and credential helpers; it ends with its channel.
+  host,
+
+  /// The host's `docker pull` as a detached operation (03 §7.17), which
+  /// outlives a closed view or a backgrounded phone.
+  hostDetached,
+}
+
 /// Pulls the image [reference] (03 §7.14 IMG-03): `name`, `name:tag` or
 /// `name@digest`, with a registry host when it has one. A name without a
-/// tag pulls `latest`, never every tag. The daemon pulls anonymously; a
-/// private registry's credentials are the host's own (REG-01).
+/// tag pulls `latest`, never every tag. [via] says how; a private
+/// registry's credentials are the host's own (REG-01), which only the
+/// host routes use.
 final class PullImage extends ActionIntent {
-  const PullImage(super.serverId, {required this.reference});
+  const PullImage(
+    super.serverId, {
+    required this.reference,
+    this.via = PullRoute.engine,
+  });
 
   final String reference;
+  final PullRoute via;
 }
 
 /// The kinds of unused Docker objects a prune removes (03 §7.12 DKE-05).

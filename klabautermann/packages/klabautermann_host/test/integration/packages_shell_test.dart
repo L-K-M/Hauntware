@@ -54,6 +54,19 @@ Future<PackageCheck> _check(String shell, Directory root) async {
 }
 
 void main() {
+  test('the refresh and the check try the managers in one order', () {
+    final named = RegExp(
+      r'for m in ([^;]+); do',
+    ).firstMatch(HostCommands.packageManagerName()[2])![1]!.split(' ');
+    final checked = [
+      for (final match in RegExp(
+        r"have (\S+); then\n  echo '== manager",
+      ).allMatches(HostCommands.packageCheck()[2]))
+        match[1]!,
+    ];
+    expect(named, checked);
+  });
+
   for (final MapEntry(key: name, value: shell) in _shells.entries) {
     test('$name: apt is read from its cache, with the reboot it asks '
         'for', () async {
@@ -63,7 +76,7 @@ void main() {
       await _write(root, 'var/run/reboot-required', '');
       await _write(root, 'var/run/reboot-required.pkgs', 'libc6\n');
       await _stub(root, 'apt-get', r'''
-[ "$1 $2 $3 $4" = "-s -o Debug::NoLocking=1 upgrade" ] || exit 9
+[ "$1 $2 $3 $4" = "-s -o Debug::NoLocking=1 dist-upgrade" ] || exit 9
 echo 'Inst libssl3 [3.0.11-1] (3.0.13-1 Debian-Security:12/stable-security [amd64])'
 ''');
 
@@ -87,13 +100,39 @@ case "$*" in
   *) exit 9 ;;
 esac
 ''');
-      await _stub(root, 'needs-restarting', '[ "\$1" = -r ] && exit 1');
+      await _stub(root, 'needs-restarting', r'[ "$1" = -r ] && exit 1; exit 9');
 
       final check = await _check(shell, root);
       expect(check.manager, PackageManager.dnf);
       expect(check.updates.single.security, isTrue);
       expect(check.securityCount, 1);
       expect(check.reboot, RebootState.required);
+    });
+
+    test('$name: zypper\'s cache age is its newest repository index, and '
+        'its security patches are counted', () async {
+      final root = await Directory.systemTemp.createTemp('klab-pkg-');
+      addTearDown(() => root.delete(recursive: true));
+      await _write(root, 'var/cache/zypp/raw/repo-oss/repodata/repomd.xml', '');
+      await _stub(root, 'zypper', r'''
+case "$*" in
+  '--non-interactive --no-refresh -q lu')
+    echo 'S | Repository | Name | Current Version | Available Version | Arch'
+    echo '--+------------+------+-----------------+-------------------+-----'
+    echo 'v | repo-oss   | curl | 8.6.0-1.1       | 8.6.0-2.1         | x86_64' ;;
+  '--non-interactive --no-refresh -q lp -g security')
+    echo 'Repository | Name | Category | Severity | Interactive | Status | Summary'
+    echo '-----------+------+----------+----------+-------------+--------+--------'
+    echo 'repo-oss   | p-1  | security | moderate | ---         | needed | curl' ;;
+  *) exit 9 ;;
+esac
+''');
+
+      final check = await _check(shell, root);
+      expect(check.manager, PackageManager.zypper);
+      expect(check.cachedAt, isNotNull);
+      expect(check.updates.single.name, 'curl');
+      expect(check.securityCount, 1);
     });
 
     test('$name: the refresh names the manager the check reads, apt-get '
