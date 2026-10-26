@@ -2146,6 +2146,72 @@ abstract class AppLocalizations {
   /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the kernel check.} missing{The server lacks the tools the kernel check runs.} other{The kernel check failed.}}'**
   String systemKernelFailed(String failure);
 
+  /// System tab: the heading of the processor section (CPU-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Processor'**
+  String get systemProcessorTitle;
+
+  /// System tab, Processor: shown while the processor is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the processor…'**
+  String get systemProcessorReading;
+
+  /// System tab, Processor: the button that reads the processor again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemProcessorReadAgain;
+
+  /// System tab, Processor: the label of the processor's model name, or its vendor where the server names no model.
+  ///
+  /// In en, this message translates to:
+  /// **'Model'**
+  String get systemProcessorModel;
+
+  /// System tab, Processor: why the model is unknown after a read that succeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'This processor does not report a model name, as is common on ARM boards.'**
+  String get systemProcessorNoModel;
+
+  /// System tab, Processor: the label of the number of physical processor packages.
+  ///
+  /// In en, this message translates to:
+  /// **'Sockets'**
+  String get systemProcessorSockets;
+
+  /// System tab, Processor: the label of the number of physical cores across all sockets.
+  ///
+  /// In en, this message translates to:
+  /// **'Cores'**
+  String get systemProcessorCores;
+
+  /// System tab, Processor: the label of how many hardware threads one core runs; 2 with simultaneous multithreading.
+  ///
+  /// In en, this message translates to:
+  /// **'Threads per core'**
+  String get systemProcessorThreadsPerCore;
+
+  /// System tab, Processor: the label of how many CPUs the kernel counts.
+  ///
+  /// In en, this message translates to:
+  /// **'Logical CPUs'**
+  String get systemProcessorLogical;
+
+  /// System tab, Processor: the label of how many CPUs the login's processes may run on: fewer than the logical CPUs when the processes are pinned to some of them, as in a container given a CPU set. A CPU time quota does not lower it.
+  ///
+  /// In en, this message translates to:
+  /// **'Usable CPUs'**
+  String get systemProcessorUsable;
+
+  /// System tab, Processor: why the processor read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the processor read.} missing{The server lacks the tools the processor read runs.} other{The processor read failed.}}'**
+  String systemProcessorFailed(String failure);
+
   /// System tab: the heading of the network interfaces section (NET-02, NET-03).
   ///
   /// In en, this message translates to:

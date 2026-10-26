@@ -9,6 +9,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         BackupEntry,
         CpuPercentages,
         BootEnd,
+        CpuTopology,
         CronSnapshot,
         DiskRate,
         EngineMode,
@@ -759,6 +760,11 @@ final class BootEndsQuery extends HostQuerySpec {
 /// [Kernels].
 final class KernelsQuery extends HostQuerySpec {
   const KernelsQuery();
+}
+
+/// The processor's model and topology (CPU-07), as [CpuTopologyRead].
+final class CpuTopologyQuery extends HostQuerySpec {
+  const CpuTopologyQuery();
 }
 
 /// The network interfaces and socket counts (NET-02, NET-03), as
@@ -2167,6 +2173,13 @@ final class Kernels extends HostPayload {
   const Kernels(this.check);
 
   final KernelCheck check;
+}
+
+/// [CpuTopologyQuery]'s processor.
+final class CpuTopologyRead extends HostPayload {
+  const CpuTopologyRead(this.topology);
+
+  final CpuTopology topology;
 }
 
 /// [InterfacesQuery]'s interfaces and sockets.
