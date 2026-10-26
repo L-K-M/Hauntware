@@ -1,5 +1,5 @@
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show ContainerPort, ContainerSummary, HealthStatus;
+    show ContainerBulkVerb, ContainerPort, ContainerSummary, HealthStatus;
 
 /// The Containers sub-tab's columns, whose names key them in the table,
 /// its sort and the stored choice (03 §7.12 CTR-01, CTR-04, CTR-08,
@@ -274,6 +274,28 @@ int healthRank(HealthStatus? health) => switch (health) {
   HealthStatus.none || null => 3,
 };
 
+/// [containers] that [runningOnly] and [terms] keep, in their order: the
+/// containers the tab shows, folded headings or not.
+List<ContainerSummary> containersShown(
+  List<ContainerSummary> containers, {
+  required bool runningOnly,
+  required List<String> terms,
+}) => [
+  for (final container in containers)
+    if ((!runningOnly || containerIsUp(container)) &&
+        containerMatches(container, terms))
+      container,
+];
+
+/// The ids of [selected] that [verb] takes (CTR-07), in their order.
+List<String> bulkTargets(
+  Iterable<ContainerSummary> selected,
+  ContainerBulkVerb verb,
+) => [
+  for (final container in selected)
+    if (verb.appliesTo(container.state)) container.id,
+];
+
 /// One row of the grouped list: a compose project's heading or a
 /// container.
 sealed class ContainerListEntry {
@@ -318,9 +340,11 @@ List<ContainerListEntry> containerListEntries(
   required List<ContainerEntry> Function(List<ContainerEntry> rows) order,
 }) {
   final groups = <String?, List<ContainerEntry>>{};
-  for (final container in containers) {
-    if (runningOnly && !containerIsUp(container)) continue;
-    if (!containerMatches(container, terms)) continue;
+  for (final container in containersShown(
+    containers,
+    runningOnly: runningOnly,
+    terms: terms,
+  )) {
     groups
         .putIfAbsent(composeProjectOf(container), () => [])
         .add(ContainerEntry(container));

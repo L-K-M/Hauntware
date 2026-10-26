@@ -607,6 +607,7 @@ void main() {
       // The view still draws and reveals what was read.
       final masked = _inDetails(find.text('POSTGRES_PASSWORD'));
       await tester.ensureVisible(masked);
+      await tester.pumpAndSettle();
       await tester.tap(masked);
       await tester.pumpAndSettle();
       expect(_inDetails(find.text('hunter2')), findsOneWidget);
@@ -728,6 +729,8 @@ void main() {
       _inDetails(find.text('Restart on failure, at most 5 times')),
       findsOneWidget,
     );
+    expect(_inDetails(find.text('Diagnosis')), findsOneWidget);
+    expect(_inDetails(find.text('Out of memory on the host')), findsOneWidget);
     expect(_inDetails(find.text('Health checks')), findsNothing);
     expect(_inDetails(find.text('No mounts.')), findsOneWidget);
     expect(_inDetails(find.text('Not attached to a network.')), findsOneWidget);

@@ -353,6 +353,12 @@ const kBootEndsRead = 10;
 /// [HostCommands.kernels]' output.
 const kKernelsMarker = '== modules';
 
+/// The markers before the usable CPU count, `lscpu`'s JSON and the
+/// `/proc/cpuinfo` lines in [HostCommands.cpuTopology]' output.
+const kCpuNprocMarker = '== nproc';
+const kCpuLscpuMarker = '== lscpu';
+const kCpuInfoMarker = '== cpuinfo';
+
 /// The markers before each part of [HostCommands.interfaces]' output:
 /// the sysfs link files, the physical interfaces, the addresses, the TCP
 /// socket states and `/proc/net/sockstat`.
@@ -368,6 +374,17 @@ const kNetSockstatMarker = '== sockstat';
 const kMountsFindmntMarker = '== findmnt';
 const kMountsProcMarker = '== proc';
 const kMountsSwapsMarker = '== swaps';
+
+/// [HostCommands.firewall]'s section markers, each printed only where its
+/// tool is installed; firewalld's carries its state.
+const kFirewallUfwMarker = '== ufw';
+const kFirewallFirewalldMarker = '== firewalld';
+const kFirewallNftMarker = '== nft';
+const kFirewallIptablesMarker = '== iptables';
+const kFirewallIp6tablesMarker = '== ip6tables';
+
+/// The most lines [HostCommands.firewall] keeps of each tool's output [E].
+const kFirewallLinesKept = 4000;
 
 /// The line before [HostCommands.sshdPosture]'s configuration: `== sshd`
 /// and how much of the connection `-C` named, or `missing` or `failed`.
@@ -908,6 +925,22 @@ abstract final class HostCommands {
       'ls -1 /lib/modules 2>/dev/null || ls -1 /usr/lib/modules 2>/dev/null; '
       'exit 0';
 
+  /// CPU-07's read: the CPUs this login may run on, `lscpu`'s fields in
+  /// the C locale, whose names it translates otherwise, and the
+  /// `/proc/cpuinfo` lines that name the model and place each CPU, for a
+  /// host without `lscpu` (BusyBox). `parseCpuTopology` reads it. Only
+  /// those lines are kept: the flags make the file about 1.5 KiB a CPU.
+  static List<String> cpuTopology() => const ['sh', '-c', _kCpuTopologyScript];
+
+  static const _kCpuTopologyScript =
+      'echo "$kCpuNprocMarker"; '
+      'nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null; '
+      'echo "$kCpuLscpuMarker"; LC_ALL=C lscpu -J 2>/dev/null; '
+      'echo "$kCpuInfoMarker"; '
+      "grep -E '^(processor|model name|cpu model|cpu|physical id|core id)"
+      "[[:space:]]*:' /proc/cpuinfo 2>/dev/null; "
+      'exit 0';
+
   /// NET-02 and NET-03's read: each interface's sysfs files as
   /// `<name>/<file>:<value>` lines from one `grep` (a down link's `speed`
   /// fails to read and is left out), the interfaces backed by a device,
@@ -936,6 +969,41 @@ abstract final class HostCommands {
       'echo "$kNetSockstatMarker"; '
       'cat /proc/net/sockstat /proc/net/sockstat6 2>/dev/null; '
       'exit 0';
+
+  /// NET-06's read (03 §7.4), run as root, since every tool here needs
+  /// it: `ufw status verbose`, firewalld's state and its zones,
+  /// `nft -j list ruleset`, and `iptables-save` and `ip6tables-save`,
+  /// each after its marker and only where installed, each cut to
+  /// [kFirewallLinesKept] lines. `parseFirewall` reads it.
+  static List<String> firewall() => const ['sh', '-c', _firewall];
+
+  static const _firewall =
+      '''
+# ufw's labels are translated; the parser reads the English ones.
+export LC_ALL=C
+keep() { head -n $kFirewallLinesKept; }
+if command -v ufw >/dev/null 2>&1; then
+  echo '$kFirewallUfwMarker'
+  ufw status verbose 2>&1 | keep
+fi
+if command -v firewall-cmd >/dev/null 2>&1; then
+  s=\$(firewall-cmd --state 2>&1)
+  echo "$kFirewallFirewalldMarker \$s"
+  [ "\$s" = running ] && firewall-cmd --list-all-zones 2>&1 | keep
+fi
+if command -v nft >/dev/null 2>&1; then
+  echo '$kFirewallNftMarker'
+  nft -j list ruleset 2>/dev/null | keep
+fi
+if command -v iptables-save >/dev/null 2>&1; then
+  echo '$kFirewallIptablesMarker'
+  iptables-save 2>/dev/null | keep
+fi
+if command -v ip6tables-save >/dev/null 2>&1; then
+  echo '$kFirewallIp6tablesMarker'
+  ip6tables-save 2>/dev/null | keep
+fi
+exit 0''';
 
   /// SEC-01's read (03 §7.10), run as root, since `sshd -T` loads the
   /// host keys: the effective configuration for this connection, with the

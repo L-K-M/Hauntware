@@ -9,6 +9,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         BackupEntry,
         CpuPercentages,
         BootEnd,
+        CpuTopology,
         CronSnapshot,
         DiskRate,
         EngineMode,
@@ -36,6 +37,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         RestartCheck,
         SmartDisk,
+        FirewallRead,
         SshdPosture,
         SystemctlVerb,
         SystemdUnit,
@@ -761,6 +763,11 @@ final class KernelsQuery extends HostQuerySpec {
   const KernelsQuery();
 }
 
+/// The processor's model and topology (CPU-07), as [CpuTopologyRead].
+final class CpuTopologyQuery extends HostQuerySpec {
+  const CpuTopologyQuery();
+}
+
 /// The network interfaces and socket counts (NET-02, NET-03), as
 /// [NetInterfaces].
 final class InterfacesQuery extends HostQuerySpec {
@@ -1287,6 +1294,16 @@ final class ReadPackages extends EngineRequest {
 /// memory maps. One [RestartReport] with [requestId] answers it.
 final class ReadRestarts extends EngineRequest {
   const ReadRestarts(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s firewall rules (NET-06, 03 §7.4): in admin mode
+/// only, since ufw, firewalld, nft and iptables-save all need root. One
+/// [FirewallReport] with [requestId] answers it.
+final class ReadFirewall extends EngineRequest {
+  const ReadFirewall(this.serverId, {required this.requestId});
 
   final String serverId;
   final String requestId;
@@ -2169,6 +2186,13 @@ final class Kernels extends HostPayload {
   final KernelCheck check;
 }
 
+/// [CpuTopologyQuery]'s processor.
+final class CpuTopologyRead extends HostPayload {
+  const CpuTopologyRead(this.topology);
+
+  final CpuTopology topology;
+}
+
 /// [InterfacesQuery]'s interfaces and sockets.
 final class NetInterfaces extends HostPayload {
   const NetInterfaces(this.read);
@@ -2837,6 +2861,24 @@ final class RestartReport extends EngineEvent {
   final RestartReportFailure? failure;
 }
 
+/// Why a [ReadFirewall] read nothing.
+enum FirewallReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// The read printed something else.
+  unreadable,
+
+  /// The link failed while reading.
+  transport,
+}
+
 /// Why a [ReadSshdPosture] read nothing.
 enum SshdPostureFailure {
   /// The server has no ready link.
@@ -2860,6 +2902,21 @@ enum SshdPostureFailure {
 
   /// The link failed while reading.
   transport,
+}
+
+/// The answer to [ReadFirewall].
+final class FirewallReport extends EngineEvent {
+  const FirewallReport({
+    required this.serverId,
+    required this.requestId,
+    this.read,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+  final FirewallRead? read;
+  final FirewallReportFailure? failure;
 }
 
 /// The answer to [ReadSshdPosture].
