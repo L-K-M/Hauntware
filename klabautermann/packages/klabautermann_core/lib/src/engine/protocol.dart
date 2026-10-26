@@ -283,7 +283,8 @@ import '../operations/plan_types.dart';
 ///
 /// The image pull then joined v3 the same way (03 §7.14 IMG-03, M6 plan
 /// N13): the [PullImage] intent, [ImagePullProgress] while it runs, and
-/// [CancelAction], which stops it.
+/// [CancelAction], which stops it; then [PullRoute], the host's own
+/// `docker pull`, in the foreground or detached (REG-01, N13b).
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -4717,14 +4718,35 @@ final class RemoveNetwork extends ActionIntent {
   final String networkId;
 }
 
+/// How an image pull runs (03 §7.14 IMG-03, REG-01).
+enum PullRoute {
+  /// `POST /images/create` with per-layer progress; the daemon pulls
+  /// anonymously, and closing the view stops it.
+  engine,
+
+  /// The host's `docker pull` over the link, with the host's own
+  /// `docker login` and credential helpers; it ends with its channel.
+  host,
+
+  /// The host's `docker pull` as a detached operation (03 §7.17), which
+  /// outlives a closed view or a backgrounded phone.
+  hostDetached,
+}
+
 /// Pulls the image [reference] (03 §7.14 IMG-03): `name`, `name:tag` or
 /// `name@digest`, with a registry host when it has one. A name without a
-/// tag pulls `latest`, never every tag. The daemon pulls anonymously; a
-/// private registry's credentials are the host's own (REG-01).
+/// tag pulls `latest`, never every tag. [via] says how; a private
+/// registry's credentials are the host's own (REG-01), which only the
+/// host routes use.
 final class PullImage extends ActionIntent {
-  const PullImage(super.serverId, {required this.reference});
+  const PullImage(
+    super.serverId, {
+    required this.reference,
+    this.via = PullRoute.engine,
+  });
 
   final String reference;
+  final PullRoute via;
 }
 
 /// The kinds of unused Docker objects a prune removes (03 §7.12 DKE-05).

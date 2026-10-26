@@ -74,9 +74,18 @@ void main() {
     );
   }
 
-  /// Types [reference], plans it and confirms its preview.
-  Future<PullImage> pull(WidgetTester tester, String reference) async {
+  /// Types [reference], picks [route] when given, plans it and confirms
+  /// its preview.
+  Future<PullImage> pull(
+    WidgetTester tester,
+    String reference, {
+    String? route,
+  }) async {
     await tester.enterText(find.byType(TextField), reference);
+    if (route != null) {
+      await tester.tap(find.text(route));
+      await tester.pump();
+    }
     await tester.tap(_pullButton);
     await tester.pump();
     final intent =
@@ -185,5 +194,83 @@ void main() {
     shown.value = false;
     await tester.pump();
     expect(engine.sentOfType<CancelAction>(), hasLength(1));
+  });
+
+  testWidgets('the server\'s login runs the host\'s docker pull: no stop, '
+      'a closed sheet leaves it, and its output shows at the end', (
+    tester,
+  ) async {
+    await pumpSheet(tester);
+    expect(find.textContaining('pulls anonymously'), findsOneWidget);
+    final intent = await pull(
+      tester,
+      'registry.example.com/app:2',
+      route: "Server's login",
+    );
+    expect(intent.via, PullRoute.host);
+    expect(find.text('Stop pull'), findsNothing);
+    expect(
+      find.text('Pulling on the server. Losing the connection stops the pull.'),
+      findsOneWidget,
+    );
+
+    engine.emit(
+      const ActionFinished(
+        planId: 'plan-1',
+        outcome: ActionOutcome.failed,
+        failure: ActionFailure.stepFailed,
+        failedStep: 0,
+        exitCode: 1,
+        output: ExecOutput(stdout: '', stderr: 'unauthorized: login first'),
+      ),
+    );
+    await _settle(tester);
+    expect(find.text('unauthorized: login first'), findsOneWidget);
+  });
+
+  testWidgets('a detached pull says it started on the server, and closing '
+      'the sheet does not stop it', (tester) async {
+    await pumpSheet(tester);
+    final intent = await pull(tester, 'nginx:1.27', route: 'Detached');
+    expect(intent.via, PullRoute.hostDetached);
+    shown.value = false;
+    await tester.pump();
+    expect(engine.sentOfType<CancelAction>(), isEmpty);
+
+    shown.value = true;
+    await tester.pump();
+  });
+
+  testWidgets('a launched detached pull reads as started', (tester) async {
+    await pumpSheet(tester);
+    await pull(tester, 'nginx:1.27', route: 'Detached');
+    engine.emit(
+      const ActionFinished(
+        planId: 'plan-1',
+        outcome: ActionOutcome.succeeded,
+        operationId: 'op-1',
+      ),
+    );
+    await _settle(tester);
+    expect(
+      find.text('The pull of nginx:1.27 started on the server.'),
+      findsOne,
+    );
+  });
+
+  testWidgets('a pull on the server\'s login that finished reads as done, '
+      'whatever the run reports', (tester) async {
+    await pumpSheet(tester);
+    await pull(tester, 'nginx:1.27', route: "Server's login");
+    engine.emit(
+      const ActionFinished(
+        planId: 'plan-1',
+        outcome: ActionOutcome.succeeded,
+        operationId: 'op-1',
+      ),
+    );
+    await _settle(tester);
+    expect(find.text('Done: nginx:1.27'), findsOne);
+    expect(find.textContaining('started on the server'), findsNothing);
   });
 }

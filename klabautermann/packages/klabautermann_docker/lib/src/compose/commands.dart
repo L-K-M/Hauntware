@@ -321,6 +321,28 @@ ComposeInvocation composeRestart({
   return ComposeInvocation(argv);
 }
 
+/// `docker --host unix://<socket> pull <reference>` (03 §7.14 REG-01):
+/// the host's CLI pulls with the host's own `docker login` and credential
+/// helpers, which the daemon never reads. [reference] is validated by the
+/// caller; one that starts with `-` is refused here, so it is never read
+/// as an option.
+ComposeInvocation dockerPull({
+  String binary = 'docker',
+  required String socketPath,
+  required String reference,
+}) {
+  if (reference.isEmpty || reference.startsWith('-')) {
+    throw ArgumentError.value(reference, 'reference', 'not an image');
+  }
+  return ComposeInvocation([
+    binary,
+    '--host',
+    validateSocketPath(socketPath),
+    'pull',
+    reference,
+  ]);
+}
+
 /// `docker compose version` (03 §7.16 STK-05), used for CLI detection.
 ComposeInvocation composeVersion({
   String binary = 'docker',

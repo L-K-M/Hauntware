@@ -5366,8 +5366,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerPullCancel => 'Stop pull';
 
   @override
-  String get dockerPullForeground =>
-      'Pulling. Closing this sheet stops the pull.';
+  String dockerPullRunning(String route) {
+    String _temp0 = intl.Intl.selectLogic(route, {
+      'engine': 'Pulling. Closing this sheet stops the pull.',
+      'host': 'Pulling on the server. Losing the connection stops the pull.',
+      'other': 'Starting the pull on the server.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerPullRoute(String route) {
+    String _temp0 = intl.Intl.selectLogic(route, {
+      'engine': 'Engine',
+      'host': 'Server\'s login',
+      'other': 'Detached',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerPullRouteNote(String route) {
+    String _temp0 = intl.Intl.selectLogic(route, {
+      'engine':
+          'The engine pulls anonymously and shows each layer. Closing the sheet stops it.',
+      'host':
+          'The server\'s docker pull uses its own docker login, for private registries. The output shows at the end.',
+      'other':
+          'The server\'s docker pull runs on its own and keeps running when you leave. Follow it under Operations.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerPullDetached(String target) {
+    return 'The pull of $target started on the server.';
+  }
 
   @override
   String dockerPullLayerBytes(String status, String current, String total) {

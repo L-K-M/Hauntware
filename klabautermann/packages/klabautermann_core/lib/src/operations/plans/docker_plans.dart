@@ -393,13 +393,22 @@ final _imageReference = RegExp(
   r'(?:@sha256:[a-f0-9]{64})?$',
 );
 
+/// Whether [reference] is an image reference a pull accepts.
+bool validImageReference(String reference) =>
+    _imageReference.hasMatch(reference);
+
 /// IMG-03: one `POST /images/create` after a plain confirmation. The
 /// daemon pulls anonymously; the runner streams its progress
 /// ([runPullStep]).
 PlanAttempt _planPullImage(PullImage intent, DockerPlanContext c) {
   final reference = intent.reference;
-  if (!_imageReference.hasMatch(reference)) {
+  if (!validImageReference(reference)) {
     return _refused(ActionRefusalReason.invalidTarget);
+  }
+  // The host's own `docker pull` is planned with the stack runners
+  // ([planHostPull]).
+  if (intent.via != PullRoute.engine) {
+    return _refused(ActionRefusalReason.notImplemented);
   }
 
   final (:fromImage, :tag) = pullTarget(reference);

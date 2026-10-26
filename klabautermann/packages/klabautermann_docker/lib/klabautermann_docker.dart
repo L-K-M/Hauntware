@@ -41,6 +41,7 @@ export 'src/compose/commands.dart'
         composeRestart,
         composeUp,
         composeVersion,
+        dockerPull,
         kComposeMaxScale,
         validateAbsolutePath,
         validateComposeProjectName,
