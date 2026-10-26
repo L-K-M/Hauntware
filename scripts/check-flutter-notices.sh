@@ -11,7 +11,8 @@
 # Each FILE is a NOTICES.Z, a readable notices file, or an APK or IPA
 # holding a flutter_assets/NOTICES.Z. It must not be empty and must name
 # the components PRODUCT bundles from outside the pub graph or under terms
-# that need their text: the OFL fonts every app bundles (ghost_fonts),
+# that need their text: the OFL fonts every app bundles (ghost_fonts) and
+# the CC BY-SA credit for the Debian logo glyph in its 3270 font,
 # Séance's vendored xterm and flutter_pty and the NuGet libraries of its
 # Windows build, Poltergeist's PDFium and the Unicode data tables. Exits 1
 # on any miss.
@@ -21,7 +22,7 @@ set -euo pipefail
 product="$1"
 shift
 
-required=('Iosevka Term' 'SIL Open Font License')
+required=('Iosevka Term' 'SIL Open Font License' 'Software in the Public Interest')
 case "$product" in
   planchette | klabautermann) ;;
   seance) required+=('xterm' 'flutter_pty' 'Windows Implementation Libraries' 'C++/WinRT') ;;
