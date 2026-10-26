@@ -1,0 +1,13 @@
+{
+  "_comment": "protocolbuffers/protobuf tag v32.1 (Java runtime 4.32.1), LICENSE (sha256 6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d). tink-android 1.21.0 shades that runtime and carries no license file for it; recheck the version when tink-android changes.",
+  "uniqueId": "com.google.protobuf:protobuf-javalite",
+  "licenses": [
+    "BSD-3-Clause-protobuf"
+  ],
+  "name": "Protocol Buffers Java Lite runtime (in tink-android)",
+  "artifactVersion": "4.32.1",
+  "website": "https://github.com/protocolbuffers/protobuf/tree/v32.1/java",
+  "description": "Shaded into com.google.crypto.tink:tink-android 1.21.0 (flutter_secure_storage), relocated to com.google.crypto.tink.shaded.protobuf; its RuntimeVersion reads 4.32.1. Tink's POM names only Apache-2.0, so AboutLibraries cannot list it.",
+  "developers": [],
+  "tag": "bundled"
+}

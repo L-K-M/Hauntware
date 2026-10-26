@@ -129,6 +129,16 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         RestartCheck,
         RestartTool,
         kPackageUpdatesKept;
+// The System tab's SSH server section (SEC-01): what an
+// SshdPostureReport read.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        SshdForwarding,
+        SshdForwardingBlock,
+        SshdMatchContext,
+        SshdPosture,
+        SshdRootLogin;
+
 // A process's details and owner (PRC-04, PRC-05), as a HostResult's
 // ProcessDetails carry them.
 export 'package:klabautermann_host/klabautermann_host.dart'

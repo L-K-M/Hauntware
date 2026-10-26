@@ -2,7 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart'
-    show debugDefaultTargetPlatformOverride;
+    show
+        LicenseEntryWithLineBreaks,
+        LicenseRegistry,
+        debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -386,6 +389,37 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.calls, ['setCheckForUpdates(false)']);
+  });
+
+  testWidgets('General opens the open-source licenses', (tester) async {
+    // A known entry instead of the bundle's NOTICES, which tests lack.
+    LicenseRegistry.reset();
+    LicenseRegistry.addLicense(
+      () => Stream.value(
+        const LicenseEntryWithLineBreaks(['bundled_component'], 'Its text.'),
+      ),
+    );
+    addTearDown(LicenseRegistry.reset);
+    await pumpScreen(tester);
+
+    // The list builds its rows lazily: scroll to the last one.
+    final licenses = find.byKey(const ValueKey('settings.licenses'));
+    await tester.scrollUntilVisible(
+      licenses,
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const PageStorageKey('general-settings')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(licenses);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LicensePage), findsOneWidget);
+    expect(find.text('bundled_component'), findsWidgets);
   });
 
   testWidgets('the editor text size writes through when the slider settles', (
