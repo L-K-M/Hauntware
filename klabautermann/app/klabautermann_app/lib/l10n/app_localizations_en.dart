@@ -1078,6 +1078,84 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemOomTitle => 'Out-of-memory kills';
+
+  @override
+  String get systemOomReading => 'Reading the kernel\'s out-of-memory kills.';
+
+  @override
+  String systemOomFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected, so the out-of-memory kills cannot be read.',
+      'denied': 'The server refused the out-of-memory read.',
+      'missing': 'The server lacks a tool the out-of-memory read needs.',
+      'other': 'The out-of-memory kills could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemOomCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count processes were killed for lack of memory since boot.',
+      one: '1 process was killed for lack of memory since boot.',
+      zero: 'No process was killed for lack of memory since boot.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemOomCountUnknown =>
+      'This kernel does not count out-of-memory kills (Linux 4.13 and later do).';
+
+  @override
+  String get systemOomLogDenied =>
+      'Your login may not read the kernel log, so the killed processes cannot be named. Membership in the adm or systemd-journal group, or sudo, gives access.';
+
+  @override
+  String systemOomProcess(String command, int pid) {
+    return '$command (PID $pid)';
+  }
+
+  @override
+  String systemOomKilledAt(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Killed $timeString';
+  }
+
+  @override
+  String systemOomAfterBoot(String time) {
+    return 'Killed $time after boot';
+  }
+
+  @override
+  String systemOomMemory(String size) {
+    return '$size of its own memory when killed';
+  }
+
+  @override
+  String get systemOomCgroupLimit =>
+      'A memory limit ran out, such as a container\'s, not the server\'s memory.';
+
+  @override
+  String get systemOomShowLog => 'Show in kernel log';
+
+  @override
+  String get systemOomReadAgain => 'Read again';
+
+  @override
+  String get systemOomLogTitle => 'Out-of-memory reports';
+
+  @override
+  String get systemOomLogClose => 'Close';
+
+  @override
   String get systemReceive => 'Receive';
 
   @override

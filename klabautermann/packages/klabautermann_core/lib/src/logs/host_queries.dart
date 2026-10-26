@@ -82,6 +82,19 @@ final class HostQueries {
               final parsed = parseJournalBoots(stdout, format);
               answer(JournalBoots(parsed.value), parsed.warnings);
           }
+        case OomKillsQuery():
+          switch (await _run(link, HostCommands.oomKills())) {
+            case _Failed(:final payload):
+              answer(payload);
+            case _Ran(:final stdout):
+              answer(switch (parseOomKills(stdout)) {
+                final read? => OomKills(read),
+                null => const HostQueryFailed(
+                  HostQueryFailure.failed,
+                  detail: 'The out-of-memory read printed something else.',
+                ),
+              });
+          }
       }
     } on Object catch (error) {
       answer(HostQueryFailed(HostQueryFailure.failed, detail: '$error'));

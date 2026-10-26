@@ -122,6 +122,10 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // HostResult's rows and the boot a source reads.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show JournalBoot, JournalBootEntry, LogCompression, LogFileEntry;
+// The System tab's out-of-memory kills (MEM-03): the read a HostResult
+// carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show OomKill, OomKillsRead, OomLogSource;
 // The Jobs panel (JOB-01, JOB-02): the jobs rows a CronResult carries, the
 // timer rows the app builds from a TimersResult, their schedule
 // descriptions and their runs as plain CronRun values (D52), and the
