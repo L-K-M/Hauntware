@@ -93,6 +93,275 @@ void main() {
     terminalTitle.dispose();
   });
 
+  group('a shell that reports no directory', () {
+    // TrueNAS's zsh sets a prompt and nothing else: no OSC 7, no title.
+    late _FakeRemoteFileSystem remote;
+    late ValueNotifier<String?> shellDirectory;
+    late ValueNotifier<String?> terminalTitle;
+    late ValueNotifier<int> shellMoved;
+
+    /// What each read answers, in order: a directory, null for no answer,
+    /// or a [RemoteCommandResult] (or a future of one) as the server sends.
+    late List<Object?> answers;
+    late int reads;
+
+    setUp(() {
+      remote = _FakeRemoteFileSystem();
+      shellDirectory = ValueNotifier<String?>(null);
+      terminalTitle = ValueNotifier<String?>(null);
+      shellMoved = ValueNotifier<int>(0);
+      answers = [];
+      reads = 0;
+    });
+
+    tearDown(() {
+      shellDirectory.dispose();
+      terminalTitle.dispose();
+      shellMoved.dispose();
+    });
+
+    RemoteFilesController controller() {
+      final reader = RemoteShellDirectory((command, {timeout}) async {
+        reads++;
+        final answer = answers.isEmpty ? null : answers.removeAt(0);
+        return switch (answer) {
+          final Future<RemoteCommandResult> later => await later,
+          final RemoteCommandResult result => result,
+          final String path => _shellAnswer(path),
+          _ => const RemoteCommandResult(exitCode: 4),
+        };
+      });
+      final controller = RemoteFilesController(
+        () async => remote,
+        shellDirectory: shellDirectory,
+        terminalTitle: terminalTitle,
+        managedFileStore: _store(),
+        serverId: 'server',
+        editSessionId: 'session',
+        shellReader: reader,
+        shellMayHaveMoved: shellMoved,
+      );
+      addTearDown(controller.dispose);
+      return controller;
+    }
+
+    test('opens where the shell is and follows it after Enter', () async {
+      answers = ['/var/log', '/home/test/docker'];
+      final files = controller();
+
+      await files.initialize();
+      expect(files.currentPath, '/var/log');
+      expect(files.reportedShellDirectory, '/var/log');
+
+      shellMoved.value++;
+      await _until(() => files.currentPath == '/home/test/docker');
+      expect(reads, 2);
+    });
+
+    test('a burst of Enters reads once', () async {
+      answers = ['/home/test', '/var/log'];
+      final files = controller();
+      await files.initialize();
+
+      for (var i = 0; i < 5; i++) {
+        shellMoved.value++;
+      }
+      await _until(() => files.currentPath == '/var/log');
+      await _pastDebounce();
+      expect(reads, 2);
+    });
+
+    test('an unchanged answer leaves a manual navigation alone', () async {
+      answers = ['/var/log', '/var/log'];
+      final files = controller();
+      await files.initialize();
+      await files.navigate('/home/test');
+
+      shellMoved.value++;
+      await _pastDebounce();
+      expect(reads, 2);
+      expect(files.currentPath, '/home/test');
+    });
+
+    test(
+      'reads nothing while follow is off, then reads when it is back on',
+      () async {
+        answers = ['/home/test', '/var/log'];
+        final files = controller();
+        await files.initialize();
+
+        files.setFollowTerminal(false);
+        shellMoved.value++;
+        await _pastDebounce();
+        expect(reads, 1);
+
+        files.setFollowTerminal(true);
+        await _until(() => files.currentPath == '/var/log');
+        expect(reads, 2);
+      },
+    );
+
+    test('reads nothing before the pane opens', () async {
+      final files = controller();
+
+      shellMoved.value++;
+      await _pastDebounce();
+      expect(reads, 0);
+      expect(files.initialized, isFalse);
+    });
+
+    test('reads nothing while OSC 7 answers', () async {
+      shellDirectory.value = '/var/log';
+      final files = controller();
+      await files.initialize();
+      expect(files.currentPath, '/var/log');
+
+      shellMoved.value++;
+      await _pastDebounce();
+      expect(reads, 0);
+    });
+
+    test('the directory read beats a title left behind', () async {
+      // `docker exec -it app bash` titled the tab, then exited; nothing
+      // clears a title.
+      terminalTitle.value = 'root@3f2a: /app';
+      answers = ['/mnt/tank'];
+      final files = controller();
+
+      await files.initialize();
+      expect(files.currentPath, '/mnt/tank');
+    });
+
+    test('a title change is a cue to read again, not a destination', () async {
+      // `git clone … && cd repo`: the cd lands after the read that followed
+      // its Enter, and only the title says so.
+      answers = ['/home/test', '/home/test', '/var/log'];
+      final files = controller();
+      await files.initialize();
+      shellMoved.value++;
+      await _until(() => reads == 2);
+
+      terminalTitle.value = 'root@server: /home/test/docker';
+      await _until(() => files.currentPath == '/var/log');
+      expect(files.reportedShellDirectory, '/var/log');
+    });
+
+    test('a title still leads where nothing can be read', () async {
+      terminalTitle.value = 'root@server: /var/log';
+      final files = controller();
+
+      await files.initialize();
+      expect(files.currentPath, '/var/log');
+      expect(reads, 1);
+    });
+
+    test('once the server cannot answer, the title leads again', () async {
+      answers = ['/home/test', const RemoteCommandResult(exitCode: 3)];
+      final files = controller();
+      await files.initialize();
+      expect(files.reportedShellDirectory, '/home/test');
+
+      terminalTitle.value = 'root@server: /var/log';
+      await _until(() => files.currentPath == '/var/log');
+      expect(files.reportedShellDirectory, '/var/log');
+
+      shellMoved.value++;
+      await _pastDebounce();
+      expect(reads, 2);
+    });
+
+    test('no answer leaves the pane at home without an error', () async {
+      final files = controller();
+
+      await files.initialize();
+      expect(files.currentPath, '/home/test');
+      expect(files.error, isNull);
+      expect(files.reportedShellDirectory, isNull);
+    });
+
+    test('reads one at a time, and once more for an Enter meanwhile', () async {
+      final slow = Completer<RemoteCommandResult>();
+      answers = [null, slow.future, '/var/log'];
+      final files = controller();
+      await files.initialize();
+
+      shellMoved.value++;
+      await _until(() => reads == 2);
+      shellMoved.value++;
+      await _pastDebounce();
+      expect(reads, 2, reason: 'no second read while one is in flight');
+
+      slow.complete(_shellAnswer('/home/test/docker'));
+      await _until(() => files.currentPath == '/var/log');
+      expect(reads, 3);
+    });
+
+    test('an Enter during the first read asks once more after it', () async {
+      final first = Completer<RemoteCommandResult>();
+      answers = [first.future, '/var/log'];
+      final files = controller();
+
+      final opening = files.initialize();
+      await _until(() => reads == 1);
+      shellMoved.value++; // `cd /var/log` typed right after connecting
+      first.complete(_shellAnswer('/home/test'));
+      await opening;
+
+      await _until(() => files.currentPath == '/var/log');
+      expect(reads, 2);
+    });
+
+    test('the first listing waits for a slow read only briefly', () async {
+      final slow = Completer<RemoteCommandResult>();
+      answers = [slow.future];
+      final files = controller();
+
+      await files.initialize();
+      expect(files.currentPath, '/home/test');
+
+      slow.complete(_shellAnswer('/var/log'));
+      await _until(() => files.currentPath == '/var/log');
+    });
+
+    test('a late first answer keeps the pane loading until it lists', () async {
+      final slow = Completer<RemoteCommandResult>();
+      final listings = {
+        '/home/test': Completer<void>(),
+        '/var/log': Completer<void>(),
+      };
+      answers = [slow.future];
+      remote.beforeList = (path) => listings[path]!.future;
+      final files = controller();
+
+      final opening = files.initialize();
+      await _until(() => remote.listed.contains('/home/test'));
+      slow.complete(_shellAnswer('/var/log'));
+      await _until(() => remote.listed.contains('/var/log'));
+      listings['/home/test']!.complete();
+      await opening;
+      expect(files.loading, isTrue, reason: '/var/log is still listing');
+
+      listings['/var/log']!.complete();
+      await _until(() => files.currentPath == '/var/log');
+      expect(files.loading, isFalse);
+    });
+
+    test('once read, a title change alone moves nothing', () async {
+      answers = ['/var/log', '/var/log'];
+      final files = controller();
+      await files.initialize();
+      await files.navigate('/home/test');
+
+      // A program titling the tab: the read that follows finds the shell
+      // where it was.
+      terminalTitle.value = 'root@server: /home/test/docker';
+      await _until(() => reads == 2);
+      await _pastDebounce();
+      expect(files.currentPath, '/home/test');
+      expect(files.reportedShellDirectory, '/var/log');
+    });
+  });
+
   test('records upload progress and refreshes the directory', () async {
     final remote = _FakeRemoteFileSystem();
     final shellDirectory = ValueNotifier<String?>(null);
@@ -974,6 +1243,25 @@ void main() {
   });
 }
 
+/// What [RemoteShellDirectory]'s script prints when the shell is in [path].
+RemoteCommandResult _shellAnswer(String path) =>
+    RemoteCommandResult(stdout: 'seance-cwd\n$path\n', exitCode: 0);
+
+/// Waits in real time until [condition] holds: the shell directory is read
+/// on a real debounce timer.
+Future<void> _until(bool Function() condition) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 10));
+  while (!condition()) {
+    if (DateTime.now().isAfter(deadline)) fail('the condition never held');
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
+
+/// Outlasts the controller's debounce after Enter, for asserting that
+/// nothing more happened.
+Future<void> _pastDebounce() =>
+    Future<void>.delayed(const Duration(milliseconds: 700));
+
 ManagedRemoteFileStore _store() {
   final directory = Directory.systemTemp.createTempSync('seance-files-test-');
   addTearDown(() async {
@@ -1044,9 +1332,18 @@ class _FakeRemoteFileSystem implements RemoteFileSystem {
   Future<String> canonicalize(String path) async =>
       path == '.' ? '/home/test' : path;
 
+  /// Paths [listDirectory] was asked for, in order.
+  final List<String> listed = [];
+
+  /// A hook awaited before a listing answers, letting a test hold one.
+  Future<void> Function(String path)? beforeList;
+
   @override
-  Future<List<RemoteFileEntry>> listDirectory(String path) async =>
-      List.of(directories[path] ?? const []);
+  Future<List<RemoteFileEntry>> listDirectory(String path) async {
+    listed.add(path);
+    await beforeList?.call(path);
+    return List.of(directories[path] ?? const []);
+  }
 
   @override
   Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) async {
