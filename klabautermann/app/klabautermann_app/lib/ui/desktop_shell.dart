@@ -11,6 +11,7 @@ import 'fleet_rail.dart';
 import 'inspector_pane.dart';
 import 'server_workspace.dart';
 import 'sidebar_kit.dart' show SidebarThemeTokens;
+import 'workspace_navigation.dart';
 
 /// The desktop three-pane shell of 03 §10.2, shown at widths of 960 px
 /// and up: fleet rail, server workspace, inspector. It holds the
@@ -27,6 +28,7 @@ class DesktopShell extends StatefulWidget {
     required this.onOpenSettings,
     this.onAddServer,
     this.sync,
+    this.navigation,
   });
 
   final FleetController fleet;
@@ -37,6 +39,10 @@ class DesktopShell extends StatefulWidget {
   final VoidCallback onOpenSettings;
   final VoidCallback? onAddServer;
   final SyncController? sync;
+
+  /// Where the command palette sends the workspace: its tabs follow the
+  /// requests and the inspector takes the containers.
+  final WorkspaceNavigation? navigation;
 
   /// The rail's fixed width; the kit's rows keep their own insets.
   static const double railWidth = 260;
@@ -61,11 +67,16 @@ class _DesktopShellState extends State<DesktopShell> {
   void initState() {
     super.initState();
     widget.fleet.addListener(_onFleetChanged);
+    widget.navigation?.addListener(_onNavigation);
   }
 
   @override
   void didUpdateWidget(DesktopShell oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.navigation != oldWidget.navigation) {
+      oldWidget.navigation?.removeListener(_onNavigation);
+      widget.navigation?.addListener(_onNavigation);
+    }
     if (widget.fleet == oldWidget.fleet) return;
     oldWidget.fleet.removeListener(_onFleetChanged);
     widget.fleet.addListener(_onFleetChanged);
@@ -74,11 +85,30 @@ class _DesktopShellState extends State<DesktopShell> {
 
   @override
   void dispose() {
+    widget.navigation?.removeListener(_onNavigation);
     widget.fleet.removeListener(_onFleetChanged);
     _inspection.dispose();
     _logs.dispose();
     super.dispose();
   }
+
+  /// A container the palette picked goes to the inspector; the selection
+  /// that came with it has already let the previous one go.
+  void _onNavigation() {
+    if (widget.navigation?.takeContainer() case final container?) {
+      _inspection.value = container;
+    }
+  }
+
+  /// [child] under the palette's navigation, which the workspace's tabs
+  /// follow; as is without one.
+  Widget _withNavigation(Widget child) => switch (widget.navigation) {
+    final navigation? => WorkspaceNavigationScope(
+      navigation: navigation,
+      child: child,
+    ),
+    null => child,
+  };
 
   void _onFleetChanged() {
     final selected = widget.fleet.selectedServer?.id;
@@ -112,54 +142,58 @@ class _DesktopShellState extends State<DesktopShell> {
           builder: (context) => MediaQuery.removePadding(
             context: context,
             removeTop: true,
-            child: ContainerInspectionScope(
-              inspection: _inspection,
-              child: ContainerLogsScope(
-                logs: _logs,
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: DesktopShell.railWidth,
-                      child: _BelowTopInset(
-                        inset: top,
-                        color: SidebarThemeTokens.of(context).sidebarBackground,
-                        child: FleetRail(
-                          fleet: fleet,
-                          monitoring: monitoring,
-                          onOpenSettings: widget.onOpenSettings,
-                          onAddServer: widget.onAddServer,
-                          sync: widget.sync,
+            child: _withNavigation(
+              ContainerInspectionScope(
+                inspection: _inspection,
+                child: ContainerLogsScope(
+                  logs: _logs,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: DesktopShell.railWidth,
+                        child: _BelowTopInset(
+                          inset: top,
+                          color: SidebarThemeTokens.of(
+                            context,
+                          ).sidebarBackground,
+                          child: FleetRail(
+                            fleet: fleet,
+                            monitoring: monitoring,
+                            onOpenSettings: widget.onOpenSettings,
+                            onAddServer: widget.onAddServer,
+                            sync: widget.sync,
+                          ),
                         ),
                       ),
-                    ),
-                    VerticalDivider(width: 1, color: colors.outlineVariant),
-                    Expanded(
-                      child: _BelowTopInset(
-                        inset: top,
-                        child: CoverageHeader(
-                          placement: CoveragePlacement.desktopWorkspace,
-                          coverage: widget.coverage,
-                          fleet: fleet,
-                          child: ServerWorkspace(
+                      VerticalDivider(width: 1, color: colors.outlineVariant),
+                      Expanded(
+                        child: _BelowTopInset(
+                          inset: top,
+                          child: CoverageHeader(
+                            placement: CoveragePlacement.desktopWorkspace,
+                            coverage: widget.coverage,
+                            fleet: fleet,
+                            child: ServerWorkspace(
+                              fleet: fleet,
+                              monitoring: monitoring,
+                            ),
+                          ),
+                        ),
+                      ),
+                      VerticalDivider(width: 1, color: colors.outlineVariant),
+                      SizedBox(
+                        width: DesktopShell.inspectorWidth,
+                        child: _BelowTopInset(
+                          inset: top,
+                          color: colors.surfaceContainerLow,
+                          child: InspectorPane(
                             fleet: fleet,
                             monitoring: monitoring,
                           ),
                         ),
                       ),
-                    ),
-                    VerticalDivider(width: 1, color: colors.outlineVariant),
-                    SizedBox(
-                      width: DesktopShell.inspectorWidth,
-                      child: _BelowTopInset(
-                        inset: top,
-                        color: colors.surfaceContainerLow,
-                        child: InspectorPane(
-                          fleet: fleet,
-                          monitoring: monitoring,
-                        ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

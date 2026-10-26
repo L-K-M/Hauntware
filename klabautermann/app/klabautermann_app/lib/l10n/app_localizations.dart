@@ -11341,6 +11341,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Checked {time}'**
   String systemUpdatesCheckedAt(DateTime time);
+
+  /// View menu: opens the command palette (PLT-07), ⌘K or Ctrl+K.
+  ///
+  /// In en, this message translates to:
+  /// **'Command Palette…'**
+  String get paletteCommand;
+
+  /// Command palette: the path of the app's menu commands.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions'**
+  String get paletteActions;
+
+  /// Command palette: the path of the fleet's servers.
+  ///
+  /// In en, this message translates to:
+  /// **'Servers'**
+  String get paletteServers;
+
+  /// Command palette: the path of the selected server's tabs.
+  ///
+  /// In en, this message translates to:
+  /// **'{server} tabs'**
+  String paletteTabs(String server);
+
+  /// Command palette: the path of the selected server's containers.
+  ///
+  /// In en, this message translates to:
+  /// **'{server} containers'**
+  String paletteContainers(String server);
+
+  /// Command palette: a container row's second line, its state and image.
+  ///
+  /// In en, this message translates to:
+  /// **'{state} · {image}'**
+  String paletteContainerDescription(String state, String image);
 }
 
 class _AppLocalizationsDelegate
