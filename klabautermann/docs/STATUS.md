@@ -2023,6 +2023,15 @@ is on main:
   NVMe wear, bad sectors and powered-on hours, and a failed read says
   why (smartmontools missing or older than 7.0, elevation refused, link
   lost).
+- SSH server (M6 N41a, SEC-01): in admin mode, the System tab's SSH
+  server section reads sshd's effective settings for the app's own
+  connection with `sshd -T -C`, so the `Match` blocks that apply to it
+  count. It shows the ports, root, password, keyboard-interactive and
+  key login, host and accepted user key types, sessions per connection
+  and forwarding. It also names any of `AllowStreamLocalForwarding`,
+  `AllowTcpForwarding`, `PermitOpen` and `DisableForwarding` that block
+  Docker over SSH. A missing sshd, a refused configuration (with sshd's
+  error) and an sshd too old for part of `-C` each say so.
 - GPUs (M6 N37b, HW-03): collector-set version 12 adds the slow `gpu`
   collector, which asks `nvidia-smi` and reads the amdgpu sysfs files
   every 30 s. The System tab's GPUs section lists each GPU's busy share,

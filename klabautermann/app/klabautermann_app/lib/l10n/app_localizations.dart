@@ -2379,6 +2379,174 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 more drive was not read.} other{{count} more drives were not read.}}'**
   String systemDriveHealthNotRead(int count);
 
+  /// System tab: the heading of the SSH server section (SEC-01).
+  ///
+  /// In en, this message translates to:
+  /// **'SSH server'**
+  String get systemSshdTitle;
+
+  /// System tab, SSH server: why the read waits for admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on admin mode to read the SSH server\'s settings: sshd needs root to print them.'**
+  String get systemSshdAdminNeeded;
+
+  /// System tab, SSH server: the button that reads the settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Read SSH server settings'**
+  String get systemSshdRead;
+
+  /// System tab, SSH server: the button that reads the settings again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemSshdReadAgain;
+
+  /// System tab, SSH server: shown while the settings are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the SSH server\'s settings…'**
+  String get systemSshdReading;
+
+  /// System tab, SSH server: why a read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so the SSH server\'s settings could not be read.} adminRequired{Admin mode ended before the SSH server\'s settings were read.} elevationRefused{Elevation was refused, so the SSH server\'s settings were not read.} missing{No sshd was found on this server.} refused{sshd refused to print its settings, as for an error in its configuration.} unreadable{sshd\'s settings could not be read.} transport{The connection failed while the SSH server\'s settings were read.} other{The SSH server\'s settings could not be read.}}'**
+  String systemSshdFailed(String reason);
+
+  /// System tab, SSH server: the settings apply the Match blocks for the user and the device's address, but not those for the server's local address and port.
+  ///
+  /// In en, this message translates to:
+  /// **'Match blocks for the server\'s own address or port are not applied: this sshd is too old to be told them.'**
+  String get systemSshdMatchRemote;
+
+  /// System tab, SSH server: the settings ignore every Match block in the configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'No Match blocks are applied: these are sshd\'s settings before any Match block, as the read could not name this connection.'**
+  String get systemSshdMatchNone;
+
+  /// System tab, SSH server: the label of the ports sshd listens on.
+  ///
+  /// In en, this message translates to:
+  /// **'Ports'**
+  String get systemSshdPorts;
+
+  /// System tab, SSH server: the label of the addresses and ports sshd listens on.
+  ///
+  /// In en, this message translates to:
+  /// **'Listens on'**
+  String get systemSshdListen;
+
+  /// System tab, SSH server: the label of whether root may log in (PermitRootLogin).
+  ///
+  /// In en, this message translates to:
+  /// **'Root login'**
+  String get systemSshdRootLogin;
+
+  /// System tab, SSH server: whether root may log in.
+  ///
+  /// In en, this message translates to:
+  /// **'{value, select, yes{Allowed} no{Not allowed} keysOnly{With a key only} forcedCommandsOnly{Forced commands only} other{Unknown}}'**
+  String systemSshdRoot(String value);
+
+  /// System tab, SSH server: the label of whether passwords are accepted (PasswordAuthentication).
+  ///
+  /// In en, this message translates to:
+  /// **'Password login'**
+  String get systemSshdPassword;
+
+  /// System tab, SSH server: the label of whether keyboard-interactive login is accepted, as for one-time codes (KbdInteractiveAuthentication).
+  ///
+  /// In en, this message translates to:
+  /// **'Keyboard-interactive login'**
+  String get systemSshdKeyboard;
+
+  /// System tab, SSH server: the label of whether public keys are accepted (PubkeyAuthentication).
+  ///
+  /// In en, this message translates to:
+  /// **'Key login'**
+  String get systemSshdPubkey;
+
+  /// System tab, SSH server: whether a login method is accepted.
+  ///
+  /// In en, this message translates to:
+  /// **'{state, select, true{On} false{Off} other{Unknown}}'**
+  String systemSshdEnabled(String state);
+
+  /// System tab, SSH server: the label of the login methods every login must pass, in sshd's notation (AuthenticationMethods).
+  ///
+  /// In en, this message translates to:
+  /// **'Required login methods'**
+  String get systemSshdMethods;
+
+  /// System tab, SSH server: the label of the server's host key types.
+  ///
+  /// In en, this message translates to:
+  /// **'Host keys'**
+  String get systemSshdHostKeys;
+
+  /// System tab, SSH server: the label of the user key types sshd accepts (PubkeyAcceptedAlgorithms).
+  ///
+  /// In en, this message translates to:
+  /// **'Accepted user key types'**
+  String get systemSshdUserKeys;
+
+  /// System tab, SSH server: the label of how many sessions one connection may open at once (MaxSessions); the app needs several.
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions per connection'**
+  String get systemSshdMaxSessions;
+
+  /// System tab, SSH server: the label of whether ports may be forwarded (AllowTcpForwarding).
+  ///
+  /// In en, this message translates to:
+  /// **'TCP forwarding'**
+  String get systemSshdTcpForwarding;
+
+  /// System tab, SSH server: the label of whether Unix sockets may be forwarded (AllowStreamLocalForwarding).
+  ///
+  /// In en, this message translates to:
+  /// **'Socket forwarding'**
+  String get systemSshdSocketForwarding;
+
+  /// System tab, SSH server: whether forwarding is allowed, and in which direction.
+  ///
+  /// In en, this message translates to:
+  /// **'{value, select, all{Allowed} local{Local only} remote{Remote only} no{Off} other{Unknown}}'**
+  String systemSshdForwarding(String value);
+
+  /// System tab, SSH server: the label of where forwarded connections may go, in sshd's notation (PermitOpen); any means anywhere.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarding targets'**
+  String get systemSshdPermitOpen;
+
+  /// System tab, SSH server: the label of whether sshd lets the app reach Docker's socket by forwarding it.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker over SSH'**
+  String get systemSshdDocker;
+
+  /// System tab, SSH server: no sshd setting blocks the forwarding of Docker's socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Not blocked by sshd\'s settings'**
+  String get systemSshdDockerAllowed;
+
+  /// System tab, SSH server: the sshd settings that block the forwarding of Docker's socket; settings lists their names as in sshd_config.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked by {settings}'**
+  String systemSshdDockerBlocked(String settings);
+
+  /// System tab, SSH server: why Docker may still be blocked when no setting blocks it.
+  ///
+  /// In en, this message translates to:
+  /// **'A key\'s options in authorized_keys, such as restrict, can block it too; sshd does not show those.'**
+  String get systemSshdDockerNote;
+
   /// System tab: the heading of the section that checks the TLS certificates of endpoints the user lists (CRT-01).
   ///
   /// In en, this message translates to:
