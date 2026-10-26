@@ -102,16 +102,18 @@ AttentionScan scanAttention(Iterable<AttentionSource> sources) {
   for (final source in sources) {
     final id = source.serverId;
     final seen = observed[id] = {
-      // An idle link has not tried yet, and one connecting or waiting for
-      // the user has not settled: a stored blocked or unreachable
-      // acknowledgement stands until the link settles, so a relaunch or a
-      // retry between backoffs does not reopen it.
+      // An idle link has not tried yet, one connecting or waiting for the
+      // user has not settled, and one closed without a failure (by its
+      // owner, or lost before the redial) says nothing about reaching
+      // the server: a stored blocked or unreachable acknowledgement
+      // stands until the link settles, so a relaunch or a retry between
+      // backoffs does not reopen it.
       if (source.link
           case LinkReady() ||
               LinkDegraded() ||
               LinkBlocked() ||
               LinkBackoff() ||
-              LinkClosed()) ...[
+              LinkClosed(failure: _?)) ...[
         AttentionKind.blocked,
         AttentionKind.unreachable,
       ],

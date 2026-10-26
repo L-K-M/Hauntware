@@ -118,6 +118,8 @@ void main() {
         LinkIdle(),
         LinkConnecting(),
         LinkAuthenticating(),
+        LinkClosed(LinkClosedReason.closedByOwner),
+        LinkClosed(LinkClosedReason.linkLost),
       ]) {
         expect(observed(link), {AttentionKind.alert}, reason: '$link');
       }

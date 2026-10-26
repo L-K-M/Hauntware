@@ -4025,9 +4025,11 @@ TLS. The section checks when it shows, after an edit and on request.
   takes an optional note of up to 500 code points and hides the problem
   until a reading shows it cleared, so the same problem coming back asks
   again; a kind the run holds no reading for keeps its
-  acknowledgements, as do a link's while it is idle, connecting or
-  waiting for the user, so a relaunch or a retry between backoffs does
-  not reopen them, and a server that leaves the fleet loses them. They
+  acknowledgements, as do a link's while it is idle, connecting,
+  waiting for the user or closed without a failure, so a relaunch or a
+  retry between backoffs does not reopen them, and a server that leaves
+  the fleet loses them. Alerts last one run (7.19), so an alert raised
+  again after a relaunch asks again. They
   stay on this device in `settings.json`
   (`klabautermann.attention.acknowledged`: by server id, each problem's
   kind and subject with when and the note; anything unreadable reads as
