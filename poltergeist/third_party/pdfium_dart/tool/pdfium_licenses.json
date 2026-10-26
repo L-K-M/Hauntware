@@ -1,0 +1,33 @@
+{
+  "release": "chromium/7811",
+  "base_url": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F7811",
+  "archives": {
+    "pdfium-android-arm.tgz": "bb9250eefb33343f56f27f7e60c81ab3236d932c40e21557bf02ca4c276eb832",
+    "pdfium-android-arm64.tgz": "f51539cadeb5135534305b8bdf8685ce2fbe9991dbbc5b35f553108411b9ed14",
+    "pdfium-android-x64.tgz": "23faaf6f993a39524d9dc7fafbb760e295f8bd5e9ffa46139bad2299fb5c80f3",
+    "pdfium-linux-x64.tgz": "e76e0a37aefb843d56f04657475ce612157021b1ebc53d801f2fbfcc537ccf64",
+    "pdfium-mac-arm64.tgz": "f9bbf1ebdc459e5f5ff25b2d457cc21db55ebfc0cf3d89fc1b90ce5445dac394",
+    "pdfium-mac-x64.tgz": "b31565aacda1f84393cd98438b06b49f21124888785e7dd1ddf015fa4406bd80",
+    "pdfium-win-x64.tgz": "2e7af12674ac3716cb0e20369bb9fb269ceadfa2f0b0597097a520e6834175a0"
+  },
+  "components": [
+    {"name": "PDFium", "files": ["licenses/pdfium.txt"]},
+    {"name": "pdfium-binaries", "files": ["LICENSE"]},
+    {"name": "PDFium: Abseil", "files": ["licenses/abseil.txt"]},
+    {"name": "PDFium: Anti-Grain Geometry", "files": ["licenses/agg23.txt"]},
+    {"name": "PDFium: Catapult", "files": ["licenses/catapult.txt"]},
+    {"name": "PDFium: cpu_features", "files": ["licenses/cpu_features.txt"]},
+    {"name": "PDFium: fast_float", "files": ["licenses/fast_float.txt"]},
+    {"name": "PDFium: FreeType", "files": ["licenses/freetype.txt"]},
+    {"name": "PDFium: ICU", "files": ["licenses/icu.txt"]},
+    {"name": "PDFium: libjpeg-turbo", "files": ["licenses/libjpeg_turbo.md", "licenses/libjpeg_turbo.ijg"]},
+    {"name": "PDFium: libpng", "files": ["licenses/libpng.txt"]},
+    {"name": "PDFium: libtiff", "files": ["licenses/libtiff.txt"]},
+    {"name": "PDFium: libunwind", "files": ["licenses/libunwind.txt"]},
+    {"name": "PDFium: Little CMS", "files": ["licenses/lcms.txt"]},
+    {"name": "PDFium: LLVM libc", "files": ["licenses/llvm-libc.txt"]},
+    {"name": "PDFium: OpenJPEG", "files": ["licenses/libopenjpeg.txt"]},
+    {"name": "PDFium: simdutf", "files": ["licenses/simdutf.txt"]},
+    {"name": "PDFium: zlib", "files": ["licenses/zlib.txt"]}
+  ]
+}
