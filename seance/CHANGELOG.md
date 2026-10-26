@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The Git pane and the terminal's tab now follow a TrueNAS shell, or
+  any Linux shell that reports no directory, as Files already did: all
+  three share one read of the shell's directory. The bash and zsh setup
+  in SHELL_INTEGRATION.md now reports the directory itself (OSC 7),
+  which also works on servers without `/proc`. The zsh setup no longer
+  fails at every prompt with "read-only variable: status".
 - **Follow terminal directory** in the Files pane now works on TrueNAS
   and other Linux servers whose shell reports no directory. TrueNAS's
   zsh sends neither OSC 7 nor a title, so the pane stayed at home. Files

@@ -25,6 +25,7 @@ import 'services/remote_files_controller.dart';
 import 'services/remote_git_controller.dart';
 import 'services/secrets_recovery.dart';
 import 'services/server_duplication.dart';
+import 'services/shell_location.dart';
 import 'services/xterm_engine.dart';
 import 'theme/app_appearance.dart';
 import 'ui/built_in_text_editor.dart';
@@ -36,9 +37,9 @@ import 'ui/terminal_appearance.dart';
 /// server list (green / grey / red, with a spinner while connecting).
 enum TerminalStatus { connecting, connected, disconnected, error }
 
-/// What the remote shell has told us about a session: the OSC 7 working
-/// directory, the OSC 0/2 terminal title, and the command it is running right
-/// now. Used to name the session's tab.
+/// What the remote shell has told us about a session: its working directory
+/// ([ShellLocation]), the OSC 0/2 terminal title, and the command it is
+/// running right now. Used to name the session's tab.
 @immutable
 class SessionMetadata {
   final String? workingDirectory;
@@ -140,6 +141,10 @@ class TerminalSession extends PaneTab {
 
   XtermTerminalEngine engine;
   SessionTransport? session;
+
+  /// Where the shell is, for [files], [git] and [metadata] alike. Reads
+  /// beside the shell only while a connection lends it a reader.
+  final ShellLocation _shellLocation;
   RemoteFilesController? files;
 
   /// Git status/actions for the shell's reported directory, driven by the
@@ -224,10 +229,15 @@ class TerminalSession extends PaneTab {
     SessionMetadata initialMetadata = const SessionMetadata(),
     String? initialCustomName,
   }) : editSessionId = editSessionId ?? id,
+       _shellLocation = ShellLocation(
+         reported: engine.workingDirectory,
+         mayHaveMoved: engine.shellMayHaveMoved,
+         titleChanged: engine.terminalTitle,
+       ),
        metadata = ValueNotifier<SessionMetadata>(initialMetadata),
        customName = ValueNotifier<String?>(initialCustomName) {
     log = SshConnectionLog(onUpdate: logNotifier.bump);
-    engine.workingDirectory.addListener(_syncMetadata);
+    _shellLocation.addListener(_syncMetadata);
     engine.terminalTitle.addListener(_syncMetadata);
     engine.activeCommand.addListener(_syncRunningCommand);
   }
@@ -238,7 +248,7 @@ class TerminalSession extends PaneTab {
       // its title with an empty OSC 2, which is a common way to reset it —
       // should not blank the tab back to "Session N" mid-session.
       workingDirectory: _keepLast(
-        engine.workingDirectory.value,
+        _shellLocation.value,
         metadata.value.workingDirectory,
       ),
       terminalTitle: _keepLast(
@@ -291,7 +301,8 @@ class TerminalSession extends PaneTab {
   @override
   void dispose() {
     _commandReveal?.cancel();
-    engine.workingDirectory.removeListener(_syncMetadata);
+    _shellLocation.removeListener(_syncMetadata);
+    _shellLocation.dispose();
     engine.terminalTitle.removeListener(_syncMetadata);
     engine.activeCommand.removeListener(_syncRunningCommand);
     metadata.dispose();
@@ -1548,9 +1559,10 @@ class AppState extends ChangeNotifier {
         return;
       }
       tab.session = session;
+      tab._shellLocation.readWith(RemoteShellDirectory(session.runCommand));
       tab.files = RemoteFilesController(
         session.openRemoteFileSystem,
-        shellDirectory: engine.workingDirectory,
+        shellDirectory: tab._shellLocation,
         managedFileStore: services.managedRemoteFiles,
         serverId: tab.serverId,
         editSessionId: tab.editSessionId,
@@ -1573,12 +1585,10 @@ class AppState extends ChangeNotifier {
         terminalTitle: engine.terminalTitle,
         activeCommand: engine.activeCommand,
         initialLocalCopies: tab.retainedLocalCopies,
-        shellReader: RemoteShellDirectory(session.runCommand),
-        shellMayHaveMoved: engine.shellMayHaveMoved,
       );
       tab.git = RemoteGitController(
         session.runCommand,
-        shellDirectory: engine.workingDirectory,
+        shellDirectory: tab._shellLocation,
         terminalTitle: engine.terminalTitle,
         activeCommand: engine.activeCommand,
       );
@@ -1599,6 +1609,7 @@ class AppState extends ChangeNotifier {
           }
           tab.git?.dispose();
           tab.git = null;
+          tab._shellLocation.stopReading();
           tab.session = null;
           tab.connecting = false;
           notifyListeners();
@@ -2513,6 +2524,7 @@ class AppState extends ChangeNotifier {
     }
     tab.git?.dispose();
     tab.git = null;
+    tab._shellLocation.stopReading();
     await tab.session?.close();
     tab.session = null;
     tab.connecting = false;
