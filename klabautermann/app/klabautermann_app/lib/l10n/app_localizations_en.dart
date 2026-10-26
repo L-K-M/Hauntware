@@ -1329,6 +1329,70 @@ class AppLocalizationsEn extends AppLocalizations {
   String get systemBootsTitle => 'Boots';
 
   @override
+  String get systemMountReading => 'Reading mount options…';
+
+  @override
+  String systemMountFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server denied the read.',
+      'missing': 'The server lacks a tool this read needs.',
+      'other': 'The read failed.',
+    });
+    return 'Mount options could not be read. $_temp0';
+  }
+
+  @override
+  String get systemMountGone => 'Nothing is mounted here any more.';
+
+  @override
+  String get systemMountSource => 'Source';
+
+  @override
+  String get systemMountOptions => 'Options';
+
+  @override
+  String get systemMountReadOnly => 'Mounted read-only';
+
+  @override
+  String get systemSwapTitle => 'Swap';
+
+  @override
+  String get systemSwapReading => 'Reading swap devices…';
+
+  @override
+  String get systemSwapNone => 'No swap devices are in use.';
+
+  @override
+  String systemSwapFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server denied the read.',
+      'missing': 'The server lacks a tool this read needs.',
+      'other': 'The read failed.',
+    });
+    return 'Swap devices could not be read. $_temp0';
+  }
+
+  @override
+  String systemSwapUsage(String used, String size) {
+    return '$used used of $size';
+  }
+
+  @override
+  String systemSwapDetail(String kind, int priority) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'partition': 'Partition',
+      'file': 'File',
+      'other': 'Swap device',
+    });
+    return '$_temp0, priority $priority';
+  }
+
+  @override
+  String get systemSwapReadAgain => 'Read again';
+
+  @override
   String get systemBootsReading => 'Reading kernels and boots…';
 
   @override
