@@ -13,15 +13,14 @@ void main() {
         ['4250', '101', '0.3', '2048', '01:02:01', 'nginx: worker process'],
         ['bad'],
         'not a row',
+        // A cell that is not a string would shift the rest.
+        ['4300', null, '0.0', '1', '00:01', 'x', 'extra'],
       ],
     });
     expect(r.value.titles.last, 'COMMAND');
     expect(r.value.processes, hasLength(2));
     expect(r.value.processes.first.last, 'nginx: master process');
-    expect(r.warnings, [
-      'container top row skipped',
-      'container top row skipped',
-    ]);
+    expect(r.warnings, List.filled(3, 'container top row skipped'));
   });
 
   test('an empty container lists its titles and no rows', () {
@@ -35,6 +34,13 @@ void main() {
   });
 
   test('a body that is not the answer reads as empty, with a warning', () {
+    final processes = parseContainerTop({
+      'Titles': ['PID'],
+      'Processes': 'nothing',
+    });
+    expect(processes.value.processes, isEmpty);
+    expect(processes.warnings, ['container top processes are not a list']);
+
     for (final body in [
       null,
       [],
