@@ -97,7 +97,12 @@ const _socketFolders = {'/', '/run', '/var/run'};
 
 bool _isEngineSocket(String? path) {
   if (path == null) return false;
-  if (_socketFolders.contains(path)) return true;
+  // The engine keeps a bind's source as written, `/run/` included.
+  var folder = path;
+  while (folder.length > 1 && folder.endsWith('/')) {
+    folder = folder.substring(0, folder.length - 1);
+  }
+  if (_socketFolders.contains(folder)) return true;
   return _engineSockets.contains(path.substring(path.lastIndexOf('/') + 1));
 }
 

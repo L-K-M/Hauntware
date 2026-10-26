@@ -244,7 +244,7 @@ void main() {
         ),
         [ContainerRisk.socketMount],
       );
-      for (final folder in ['/', '/run', '/var/run']) {
+      for (final folder in ['/', '/run', '/var/run', '/run/', '/var/run//']) {
         expect(mounted(ContainerMount(type: 'bind', source: folder)), [
           ContainerRisk.socketMount,
         ], reason: '$folder holds the sockets');
