@@ -7137,6 +7137,48 @@ abstract class AppLocalizations {
   /// **'Comment'**
   String get dockerImageHistoryComment;
 
+  /// Container details: the section listing the processes running inside the container (CTR-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Processes'**
+  String get dockerProcessesTitle;
+
+  /// Container details, Processes: shown while the container is stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'The container is not running, so it has no processes.'**
+  String get dockerProcessesStopped;
+
+  /// Container details, Processes: shown while the processes are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading processes…'**
+  String get dockerProcessesReading;
+
+  /// Container details, Processes: the button that reads the container's processes again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get dockerProcessesReadAgain;
+
+  /// Container details, Processes: shown when the read lists no process.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine lists no processes for this container.'**
+  String get dockerProcessesNone;
+
+  /// Container details, Processes: how many processes the container runs.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 process} other{{count} processes}}'**
+  String dockerProcessesCount(int count);
+
+  /// Container details, Processes: why the read failed, by DockerQueryFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server\'s capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} notFound{The engine no longer has this container.} daemonError{The engine refused or failed to list the container\'s processes.} connectionFailed{The connection to the engine failed while reading the processes.} cancelled{The read stopped before it ran.} other{The container\'s processes could not be read.}}'**
+  String dockerProcessesFailed(String reason);
+
   /// Image history sheet: why the history read failed, by DockerQueryFailure name.
   ///
   /// In en, this message translates to:

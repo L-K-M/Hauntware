@@ -389,6 +389,12 @@ final class DockerController {
   Future<DockerPayload> readImageHistory(String serverId, String image) =>
       _ask(serverId, DockerImageHistoryQuery(image));
 
+  /// The processes of [containerId] on [serverId] (CTR-10): a
+  /// [DockerContainerTopPayload] whose command lines the engine masked,
+  /// or a [DockerQueryFailed]. Nothing of the answer stays here.
+  Future<DockerPayload> readContainerTop(String serverId, String containerId) =>
+      _ask(serverId, DockerContainerTopQuery(containerId));
+
   /// Sends [spec] once and completes with the engine's answer, as
   /// [readStackFile] describes.
   Future<DockerPayload> _ask(String serverId, DockerQuerySpec spec) {
