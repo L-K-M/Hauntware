@@ -201,6 +201,59 @@ final class _Panel {
     await sample(tester, SampleStream.fs, FsResult(_fs));
     await sample(tester, SampleStream.temps, const TempsResult(_temps));
     await sample(tester, SampleStream.gpu, const GpuResult(_gpus));
+    await interfaces(tester);
+  }
+
+  /// Answers the interfaces section's read (NET-02, NET-03).
+  Future<void> interfaces(WidgetTester tester) async {
+    final query = engine.sentOfType<HostQuery>().cast<HostQuery>().lastWhere(
+      (query) => query.query is InterfacesQuery,
+    );
+    engine.emit(
+      HostResult(
+        serverId: query.serverId,
+        queryId: query.queryId,
+        payload: NetInterfaces(
+          InterfacesRead(
+            interfaces: [
+              NetInterface(
+                name: 'eth0',
+                state: NetLinkState.up,
+                physical: true,
+                addresses: const [
+                  NetAddress(
+                    family: NetAddressFamily.ipv4,
+                    address: '192.0.2.10',
+                    prefixLength: 24,
+                    scope: 'global',
+                  ),
+                ],
+                mtu: 1500,
+                mac: '52:54:00:12:34:56',
+                speedMbps: 1000,
+                rxErrors: 0,
+                txErrors: 0,
+                rxDropped: 0,
+                txDropped: 0,
+              ),
+              NetInterface(
+                name: 'lo',
+                state: NetLinkState.unknown,
+                physical: false,
+                addresses: const [],
+              ),
+            ],
+            addressesRead: true,
+            sockets: SocketCounts(
+              tcp: {TcpState.established: 12, TcpState.listen: 4},
+              used: 180,
+              udp: 3,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
   }
 }
 

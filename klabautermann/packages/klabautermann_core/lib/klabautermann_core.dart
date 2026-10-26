@@ -127,6 +127,17 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // ended and the kernels a HostResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show BootEnd, KernelCheck, KernelCheckState, kBootEndsRead;
+// The System tab's interfaces section (NET-02, NET-03): the interfaces
+// and socket counts a HostResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        InterfacesRead,
+        NetAddress,
+        NetAddressFamily,
+        NetInterface,
+        NetLinkState,
+        SocketCounts,
+        TcpState;
 // The Jobs panel (JOB-01, JOB-02): the jobs rows a CronResult carries, the
 // timer rows the app builds from a TimersResult, their schedule
 // descriptions and their runs as plain CronRun values (D52), and the

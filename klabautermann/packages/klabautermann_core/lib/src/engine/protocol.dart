@@ -14,6 +14,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         FsSnapshot,
         GpuSnapshot,
         HostProfile,
+        InterfacesRead,
         JobEntry,
         JournalBoot,
         JournalBootEntry,
@@ -736,6 +737,12 @@ final class BootEndsQuery extends HostQuerySpec {
 /// [Kernels].
 final class KernelsQuery extends HostQuerySpec {
   const KernelsQuery();
+}
+
+/// The network interfaces and socket counts (NET-02, NET-03), as
+/// [NetInterfaces].
+final class InterfacesQuery extends HostQuerySpec {
+  const InterfacesQuery();
 }
 
 /// Redacts [lines] the app holds for an export (LOG-10, 03 §8.9) through
@@ -2077,6 +2084,13 @@ final class Kernels extends HostPayload {
   const Kernels(this.check);
 
   final KernelCheck check;
+}
+
+/// [InterfacesQuery]'s interfaces and sockets.
+final class NetInterfaces extends HostPayload {
+  const NetInterfaces(this.read);
+
+  final InterfacesRead read;
 }
 
 /// A [HostQuery] that read nothing; [detail] is the end of its stderr,

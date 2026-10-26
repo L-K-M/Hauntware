@@ -102,6 +102,19 @@ final class HostQueries {
                 ),
               });
           }
+        case InterfacesQuery():
+          switch (await _run(link, HostCommands.interfaces())) {
+            case _Failed(:final payload):
+              answer(payload);
+            case _Ran(:final stdout):
+              answer(switch (parseInterfaces(stdout)) {
+                final read? => NetInterfaces(read),
+                null => const HostQueryFailed(
+                  HostQueryFailure.failed,
+                  detail: 'The interface read printed something else.',
+                ),
+              });
+          }
       }
     } on Object catch (error) {
       answer(HostQueryFailed(HostQueryFailure.failed, detail: '$error'));
