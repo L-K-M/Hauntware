@@ -7610,6 +7610,18 @@ abstract class AppLocalizations {
   /// **'{state, select, created{Created} running{Running} paused{Paused} restarting{Restarting} removing{Removing} exited{Exited} dead{Dead} other{Unknown}}'**
   String dockerContainerState(String state);
 
+  /// Containers list: a container's state with its flag (CTR-09), as a screen reader hears the state cell. state is dockerContainerState's text; flag is restartLoop (the daemon is restarting it after it exited) or failed (it exited with a code a stop does not leave).
+  ///
+  /// In en, this message translates to:
+  /// **'{state} ({flag, select, restartLoop{restart loop} failed{failed} other{flagged}})'**
+  String dockerContainerStateFlagged(String state, String flag);
+
+  /// Containers list: the tooltip on a flagged container's state (CTR-09). flag is restartLoop or failed; code is the exit code in the container's status, which only failed shows.
+  ///
+  /// In en, this message translates to:
+  /// **'{flag, select, restartLoop{The engine is starting it again after it exited, as a restart policy does in a loop. The details show how often it restarted.} failed{Its last run exited with code {code}, which a stop does not leave.} other{Exit code {code}}}'**
+  String dockerContainerFlagTooltip(String flag, int code);
+
   /// A container's health check status (CTR-04), beside an icon.
   ///
   /// In en, this message translates to:
