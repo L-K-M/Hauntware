@@ -29,8 +29,8 @@ final class ContainerTop {
   final List<List<String>> processes;
 }
 
-/// Parses a container top response; never throws. A row whose cells do
-/// not match the titles is skipped.
+/// Parses a container top response; never throws. A row whose cells are
+/// not all strings, one per title, is skipped.
 DockerParseResult<ContainerTop> parseContainerTop(Object? decoded) {
   final warnings = <String>[];
   if (decoded is! Map) {
@@ -51,17 +51,19 @@ DockerParseResult<ContainerTop> parseContainerTop(Object? decoded) {
 
   final processes = <List<String>>[];
   final rawProcesses = decoded['Processes'];
+  if (rawProcesses != null && rawProcesses is! List) {
+    warnings.add('container top processes are not a list');
+  }
   for (final row in rawProcesses is List ? rawProcesses : const []) {
-    final cells = [
-      if (row is List)
-        for (final cell in row)
-          if (cell is String) cell,
-    ];
-    if (row is! List || cells.length != titles.length) {
+    // Every cell a string, one per title: a cell dropped or added would
+    // move the rest under the wrong titles.
+    if (row is! List ||
+        row.length != titles.length ||
+        row.any((cell) => cell is! String)) {
       warnings.add('container top row skipped');
       continue;
     }
-    processes.add(cells);
+    processes.add(row.cast<String>().toList());
   }
   return DockerParseResult(
     ContainerTop(titles: titles, processes: processes),
