@@ -323,6 +323,11 @@ is on main:
   of its containers and merges their lines by time, each led by its
   container's name in its own colour, with a chip per container that
   hides or shows its lines, and LOG-10's export.
+- Container log levels and JSON (M6 N19d, CTX-05): container and stack
+  log lines take the level they name of themselves (JSON and logfmt
+  keys, a leading level word, an exception line) with the gutter icon
+  and colour, a stack trace's frames take its opener's level, and a JSON
+  line opens its keys beneath it on a tap.
 - Images in the app (M3, D16, 03 §7.14, §10.4): the Images sub-tab
   holds one `DockerWatch` of the images and containers per server while
   it shows, apart from the Containers view's, and sends `DockerUnwatch`
