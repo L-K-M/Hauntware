@@ -33,9 +33,10 @@ export 'src/operations/plan_types.dart';
 
 export 'package:seance_core/seance_core.dart'
     show DangerFinding, DangerLinter, DangerSeverity;
-// The signal and unit verb an ActionIntent names (PRC-02, SVC-03).
+// The signal, unit verb and power verb an ActionIntent names (PRC-02,
+// SVC-03, SYS-03).
 export 'package:klabautermann_host/klabautermann_host.dart'
-    show KillSignal, SystemctlVerb;
+    show KillSignal, PowerVerb, SystemctlVerb;
 
 // FL-21's monitor set rules, which the engine enforces and the app's
 // toggles offer (03 §4.3 step 4).

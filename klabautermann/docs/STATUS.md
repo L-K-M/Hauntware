@@ -1963,6 +1963,15 @@ is on main:
   clock against this device's. The System tab's Time section shows the
   time zone, whether the clock is synchronized, and how far it is ahead
   or behind (in step within two seconds).
+- Reboot and shutdown (M6 N38b, SYS-03): in admin mode, the System
+  tab's Power section reboots or shuts down the server after the user
+  types the host's own name, which planning reads with `uname -n`. The
+  engine runs `systemctl reboot` or `systemctl poweroff` as root, or
+  init's own `reboot` and `poweroff` without systemd. A link that drops
+  while that step runs counts as the host having taken it, and the host
+  syslog line is written before it. After a reboot the section waits,
+  counting the time, until a `core` reading reports a later boot. A
+  reboot and shutdown on a real host stay a manual check.
 - Pending updates (M6 N36a, PKG-01 to PKG-03): the System tab's Updates
   section asks the server's package manager (apt, dnf, zypper, pacman or
   apk) for its pending updates as the login user and from cached
