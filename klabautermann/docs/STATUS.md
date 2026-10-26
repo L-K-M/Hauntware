@@ -2004,6 +2004,12 @@ is on main:
   a reboot. "All servers" (N36d, PKG-06) opens the fleet update center:
   each server's updates, security updates and restart flag from its
   check of the last hour, most security updates first.
+- Certificates (M6 N41b, CRT-01): the System tab's Certificates section
+  checks the TLS certificates of endpoints you list for a server, from
+  this device and without SSH. Each shows when its certificate expires
+  and how many days are left, warning within two weeks. It also shows
+  the issuer and whether this device trusts it for the host name; a
+  failed check says why. The list is kept on this device.
 - Users and logins (M6 N40, ACC-01, ACC-02): the System tab's Users
   section reads the server's accounts and groups with `getent` and who
   is logged in with `who`, as the login user, when it shows and on
