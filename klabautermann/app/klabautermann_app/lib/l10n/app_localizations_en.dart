@@ -1294,6 +1294,73 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemTimeTitle => 'Time';
+
+  @override
+  String get systemTimeZone => 'Time zone';
+
+  @override
+  String get systemTimeSync => 'Time sync';
+
+  @override
+  String get systemTimeSynced => 'Synchronized';
+
+  @override
+  String get systemTimeNotSynced => 'Not synchronized';
+
+  @override
+  String get systemTimeSyncOff => 'Off';
+
+  @override
+  String get systemClock => 'Clock';
+
+  @override
+  String get systemClockInStep => 'In step with this device';
+
+  @override
+  String systemClockAhead(String amount) {
+    return '$amount ahead of this device';
+  }
+
+  @override
+  String systemClockBehind(String amount) {
+    return '$amount behind this device';
+  }
+
+  @override
+  String systemClockSeconds(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count seconds',
+      one: '1 second',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemClockMinutes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count minutes',
+      one: '1 minute',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemClockHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count hours',
+      one: '1 hour',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get systemColumnMount => 'Mount';
 
   @override

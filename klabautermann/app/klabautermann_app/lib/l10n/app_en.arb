@@ -1463,6 +1463,85 @@
       }
     }
   },
+  "systemTimeTitle": "Time",
+  "@systemTimeTitle": {
+    "description": "System tab: the section of the server's time zone, time sync and clock against this device's (SYS-02, CN-17)."
+  },
+  "systemTimeZone": "Time zone",
+  "@systemTimeZone": {
+    "description": "System tab, Time: label of the server's time zone, an IANA name such as Europe/Berlin or its UTC offset."
+  },
+  "systemTimeSync": "Time sync",
+  "@systemTimeSync": {
+    "description": "System tab, Time: label of whether the server keeps its clock in sync over NTP."
+  },
+  "systemTimeSynced": "Synchronized",
+  "@systemTimeSynced": {
+    "description": "System tab, Time sync: the kernel clock is in sync."
+  },
+  "systemTimeNotSynced": "Not synchronized",
+  "@systemTimeNotSynced": {
+    "description": "System tab, Time sync: a sync service is on but the clock is not in sync yet."
+  },
+  "systemTimeSyncOff": "Off",
+  "@systemTimeSyncOff": {
+    "description": "System tab, Time sync: no time sync service is enabled."
+  },
+  "systemClock": "Clock",
+  "@systemClock": {
+    "description": "System tab, Time: label of how far the server's clock is from this device's."
+  },
+  "systemClockInStep": "In step with this device",
+  "@systemClockInStep": {
+    "description": "System tab, Time: the server's clock is within about a second of this device's."
+  },
+  "systemClockAhead": "{amount} ahead of this device",
+  "@systemClockAhead": {
+    "description": "System tab, Time: the server's clock is ahead of this device's by amount, such as '3 seconds'.",
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "3 seconds"
+      }
+    }
+  },
+  "systemClockBehind": "{amount} behind this device",
+  "@systemClockBehind": {
+    "description": "System tab, Time: the server's clock is behind this device's by amount, such as '2 minutes'.",
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "2 minutes"
+      }
+    }
+  },
+  "systemClockSeconds": "{count, plural, =1{1 second} other{{count} seconds}}",
+  "@systemClockSeconds": {
+    "description": "A clock difference in seconds.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemClockMinutes": "{count, plural, =1{1 minute} other{{count} minutes}}",
+  "@systemClockMinutes": {
+    "description": "A clock difference in minutes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemClockHours": "{count, plural, =1{1 hour} other{{count} hours}}",
+  "@systemClockHours": {
+    "description": "A clock difference in hours.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "systemColumnMount": "Mount",
   "@systemColumnMount": {
     "description": "Disks table column: where the filesystem is mounted."

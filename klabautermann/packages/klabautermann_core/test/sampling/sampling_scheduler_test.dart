@@ -171,6 +171,25 @@ void main() {
     expect(samples(), ['overview@10']);
   });
 
+  test('CN-17: each probe answer measures the server clock against the '
+      'engine\'s', () async {
+    final epoch = clock.now.toUtc().millisecondsSinceEpoch ~/ 1000;
+    link.probeClock = 'epoch=${epoch + 3600}\noffset=+0000';
+    link.stalled.add(_slow);
+    subscribe({SampleStream.overview});
+    await clock.elapse(const Duration(seconds: 10));
+    expect(events.whereType<ServerClock>(), isEmpty);
+
+    final slow = link.running.singleWhere((p) => p.kind == _slow);
+    slow.answer(slow.held.single);
+    await settle();
+    final measured = events.whereType<ServerClock>().single;
+    expect(measured.serverId, _s1);
+    // The probe's clock read an hour ahead of when it started; its answer
+    // came 10 s later, which reads as 10 s less.
+    expect(measured.skew.inSeconds, closeTo(3590, 1));
+  });
+
   test('a slow sampler that cannot start does not hold the fast one, and '
       'probes once it is ready', () async {
     // Starts go slow sampler first.

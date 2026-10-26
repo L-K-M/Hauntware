@@ -1941,6 +1941,11 @@ is on main:
   created again under its name is not removed. An API step can now
   carry a JSON body, which the preview shows as sent. The Docker
   actions suite creates, refuses and removes a volume on the fixture.
+- Time (M6 N38a, SYS-02, CN-17): collector-set version 13's probe reads
+  timedatectl's NTP state, and each probe answer measures the server's
+  clock against this device's. The System tab's Time section shows the
+  time zone, whether the clock is synchronized, and how far it is ahead
+  or behind (in step within two seconds).
 - Drive health (M6 N37c, HW-04): in admin mode, the System tab's Drive
   health section reads every drive's SMART health on request through an
   elevated `smartctl --scan-open`, then `smartctl -n standby -a` per

@@ -133,6 +133,31 @@ void main() {
     expect(r.value.epochSeconds, 1750000000);
     expect(r.value.zoneOffset, '+0200');
     expect(r.value.timezone, 'Europe/Berlin');
+    // A timedatectl before the NTP properties, or none, leaves them unknown.
+    expect(r.value.ntpEnabled, isNull);
+    expect(r.value.ntpSynchronized, isNull);
+  });
+
+  test('SYS-02: the clock area carries timedatectl\'s NTP state', () {
+    HostProfile clock(String timedatectl) => parseProbe([
+      ProbeSection(
+        'clock',
+        SectionStatus.ok,
+        'epoch=1750000000\noffset=+0000\n$timedatectl',
+      ),
+    ], _ctx).value;
+
+    final synced = clock('Timezone=Etc/UTC\nNTP=yes\nNTPSynchronized=yes');
+    expect(synced.timezone, 'Etc/UTC');
+    expect(synced.ntpEnabled, isTrue);
+    expect(synced.ntpSynchronized, isTrue);
+    final read = HostProfile.fromJson(synced.toJson());
+    expect(read.ntpEnabled, isTrue);
+    expect(read.ntpSynchronized, isTrue);
+
+    final off = clock('NTP=no\nNTPSynchronized=no\nTimezone=Etc/UTC');
+    expect(off.ntpEnabled, isFalse);
+    expect(off.ntpSynchronized, isFalse);
   });
 
   group('virt', () {

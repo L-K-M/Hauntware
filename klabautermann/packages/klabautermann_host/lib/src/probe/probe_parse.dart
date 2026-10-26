@@ -121,6 +121,7 @@ final class _ProfileBuilder {
   int? sessionParentPid;
   int? epochSeconds;
   String? zoneOffset, timezone, etcTimezone, localtimeTarget;
+  bool? ntpEnabled, ntpSynchronized;
   bool? lingerEnabled;
   String? killUserProcesses, xdgRuntimeDir;
 
@@ -273,6 +274,8 @@ final class _ProfileBuilder {
     timezone = _emptyNull(kv['Timezone']);
     etcTimezone = _emptyNull(kv['etc_timezone']);
     localtimeTarget = _emptyNull(kv['localtime']);
+    ntpEnabled = _yesNo(kv['NTP']);
+    ntpSynchronized = _yesNo(kv['NTPSynchronized']);
     if (kv['timedatectl_error'] == 'yes' && timezone == null) {
       w.add('probe clock: timedatectl failed');
     }
@@ -324,6 +327,8 @@ final class _ProfileBuilder {
     timezone: timezone,
     etcTimezone: etcTimezone,
     localtimeTarget: localtimeTarget,
+    ntpEnabled: ntpEnabled,
+    ntpSynchronized: ntpSynchronized,
     lingerEnabled: lingerEnabled,
     killUserProcesses: killUserProcesses,
     xdgRuntimeDir: xdgRuntimeDir,

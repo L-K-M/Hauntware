@@ -19,6 +19,10 @@ final class AnsweringLink extends TestLinkBase {
   /// The payload of each collector's on-demand `ok` section.
   final onDemandPayloads = <String, String>{};
 
+  /// The probe's `clock` area payload, when set; the probe answers with
+  /// no area otherwise.
+  String? probeClock;
+
   /// Samplers whose requests get no reply, as if the process stalled.
   final stalled = <SamplerKind>{};
 
@@ -120,7 +124,15 @@ final class AnsweringProcess implements RemoteProcess {
       for (final name in words.skip(2)) {
         b.write('\x1e$_nonce S $name ok 0\n\n');
       }
-    } else if (words[2] != 'probe') {
+    } else if (words[2] == 'probe') {
+      if (_link.probeClock case final clock?) {
+        final payload = utf8.encode(clock);
+        b
+          ..write('\x1e$_nonce S probe_clock ok ${payload.length}\n')
+          ..write(clock)
+          ..write('\n');
+      }
+    } else {
       final payload = utf8.encode(_link.onDemandPayloads[words[2]] ?? '');
       b
         ..write('\x1e$_nonce S ${words[2]} ok ${payload.length}\n')

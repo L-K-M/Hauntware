@@ -89,6 +89,8 @@
     "timezone": "America/New_York",
     "etcTimezone": null,
     "localtimeTarget": "/usr/share/zoneinfo/America/New_York",
+    "ntpEnabled": null,
+    "ntpSynchronized": null,
     "lingerEnabled": false,
     "killUserProcesses": "no",
     "xdgRuntimeDir": "/run/user/1001",

@@ -45,7 +45,9 @@ const kSamplerStartCommand =
 /// `core`'s diskstats rows (D48).
 /// Version 11 adds the slow `temps` collector (HW-01).
 /// Version 12 adds the slow `gpu` collector (HW-03).
-const kCollectorSetVersion = '12';
+/// Version 13 adds NTP and NTPSynchronized to the probe's clock area
+/// (SYS-02).
+const kCollectorSetVersion = '13';
 
 /// The most `procs` rows one reply carries (D48). With more processes the
 /// fragment keeps the union of the [kProcsRowCap] / 2 with the highest CPU
@@ -804,9 +806,9 @@ _probe_clock() {
     _st=error
   fi
   if command -v timedatectl >/dev/null 2>&1; then
-    _t=$(hw_qrun timedatectl show -p Timezone </dev/null 2>&1)
+    _t=$(hw_qrun timedatectl show -p Timezone -p NTP -p NTPSynchronized </dev/null 2>&1)
     case $_t in
-      Timezone=*)
+      *Timezone=*)
         _o="$_o${NL}$_t" ;;
       *)
         _o="$_o${NL}timedatectl_error=yes" ;;

@@ -1870,6 +1870,84 @@ abstract class AppLocalizations {
   /// **'{hours} h'**
   String systemDriveHours(int hours);
 
+  /// System tab: the section of the server's time zone, time sync and clock against this device's (SYS-02, CN-17).
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get systemTimeTitle;
+
+  /// System tab, Time: label of the server's time zone, an IANA name such as Europe/Berlin or its UTC offset.
+  ///
+  /// In en, this message translates to:
+  /// **'Time zone'**
+  String get systemTimeZone;
+
+  /// System tab, Time: label of whether the server keeps its clock in sync over NTP.
+  ///
+  /// In en, this message translates to:
+  /// **'Time sync'**
+  String get systemTimeSync;
+
+  /// System tab, Time sync: the kernel clock is in sync.
+  ///
+  /// In en, this message translates to:
+  /// **'Synchronized'**
+  String get systemTimeSynced;
+
+  /// System tab, Time sync: a sync service is on but the clock is not in sync yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not synchronized'**
+  String get systemTimeNotSynced;
+
+  /// System tab, Time sync: no time sync service is enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get systemTimeSyncOff;
+
+  /// System tab, Time: label of how far the server's clock is from this device's.
+  ///
+  /// In en, this message translates to:
+  /// **'Clock'**
+  String get systemClock;
+
+  /// System tab, Time: the server's clock is within about a second of this device's.
+  ///
+  /// In en, this message translates to:
+  /// **'In step with this device'**
+  String get systemClockInStep;
+
+  /// System tab, Time: the server's clock is ahead of this device's by amount, such as '3 seconds'.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} ahead of this device'**
+  String systemClockAhead(String amount);
+
+  /// System tab, Time: the server's clock is behind this device's by amount, such as '2 minutes'.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} behind this device'**
+  String systemClockBehind(String amount);
+
+  /// A clock difference in seconds.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 second} other{{count} seconds}}'**
+  String systemClockSeconds(int count);
+
+  /// A clock difference in minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 minute} other{{count} minutes}}'**
+  String systemClockMinutes(int count);
+
+  /// A clock difference in hours.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 hour} other{{count} hours}}'**
+  String systemClockHours(int count);
+
   /// Disks table column: where the filesystem is mounted.
   ///
   /// In en, this message translates to:

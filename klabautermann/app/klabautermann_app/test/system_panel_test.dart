@@ -147,6 +147,9 @@ final _vm = HostProfile(
   virtualization: 'kvm',
   container: 'none',
   lxcfsMounts: const [],
+  timezone: 'Europe/Berlin',
+  ntpEnabled: true,
+  ntpSynchronized: true,
 );
 
 /// An LXC container without lxcfs: every system-wide `/proc` file is the
@@ -572,6 +575,28 @@ void main() {
       drives('smartmontools is not installed on this server.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('SYS-02 and CN-17: the time zone, its sync and the clock '
+      'against this device\'s, each unknown until the probe says', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    Finder time(String text) => _inSection(SystemSection.time, find.text(text));
+    expect(time('Unknown'), findsNWidgets(3));
+
+    await panel.profile(tester, _vm);
+    panel.engine.emit(
+      ServerClock(
+        _serverId,
+        skew: const Duration(seconds: -42),
+        at: DateTime.utc(2026, 10, 25),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(time('Europe/Berlin'), findsOneWidget);
+    expect(time('Synchronized'), findsOneWidget);
+    expect(time('42 seconds behind this device'), findsOneWidget);
   });
 
   testWidgets('where every column does not fit, the disk activity table '

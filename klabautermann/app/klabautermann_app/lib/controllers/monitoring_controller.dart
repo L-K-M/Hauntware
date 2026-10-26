@@ -272,6 +272,11 @@ final class MonitoringController extends ChangeNotifier {
   ValueListenable<HostProfile?> profileFor(String serverId) =>
       _server(serverId).profile;
 
+  /// How far [serverId]'s clock was from this device's at its last probe
+  /// in this engine run (CN-17), or null before one.
+  ValueListenable<ServerClock?> clockFor(String serverId) =>
+      _server(serverId).clock;
+
   /// The session ring of [serverId]'s [series] as [stream] reports it
   /// (OV-03): one reading per kept sample of [stream], null where it had no
   /// value.
@@ -629,6 +634,9 @@ final class MonitoringController extends ChangeNotifier {
         // As for a sample: a server that left the fleet stays purged.
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
         _server(serverId).profile.value = profile;
+      case ServerClock(:final serverId):
+        if (_fleetIds case final ids? when !ids.contains(serverId)) return;
+        _server(serverId).clock.value = event;
       case CatalogReplaced(:final entries):
         final fleetIds = {for (final entry in entries) entry.serverId};
         final rejected = _connectRejections.value.keys.toList();
@@ -881,6 +889,7 @@ final class _ServerReadings {
   final Map<SampleStream, ValueNotifier<Sample?>> _lastReadings = {};
   final Map<SampleStream, Map<MetricSeries, SeriesRing>> _rings = {};
   final ValueNotifier<HostProfile?> profile = ValueNotifier(null);
+  final ValueNotifier<ServerClock?> clock = ValueNotifier(null);
 
   /// Ring streams no subscription names, and those named again since,
   /// whose next reading follows a hole.
@@ -1033,5 +1042,6 @@ final class _ServerReadings {
       ring.dispose();
     }
     profile.dispose();
+    clock.dispose();
   }
 }
