@@ -129,6 +129,16 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         RestartCheck,
         RestartTool,
         kPackageUpdatesKept;
+// The System tab's SSH server section (SEC-01): what an
+// SshdPostureReport read.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        SshdForwarding,
+        SshdForwardingBlock,
+        SshdMatchContext,
+        SshdPosture,
+        SshdRootLogin;
+
 // A process's details and owner (PRC-04, PRC-05), as a HostResult's
 // ProcessDetails carry them.
 export 'package:klabautermann_host/klabautermann_host.dart'
@@ -150,6 +160,9 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // ended and the kernels a HostResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show BootEnd, KernelCheck, KernelCheckState, kBootEndsRead;
+// The System tab's processor section (CPU-07): the model and topology a
+// HostResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart' show CpuTopology;
 // The System tab's interfaces section (NET-02, NET-03): the interfaces
 // and socket counts a HostResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart'

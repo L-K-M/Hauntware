@@ -526,6 +526,132 @@ void main() {
     handle.dispose();
   });
 
+  testWidgets('PRC-04, PRC-05: the details read the process, with its '
+      'owner, and its environment masked until revealed', (tester) async {
+    final panel = await _pump(tester);
+    await panel.all(tester);
+
+    await tester.tap(_row(812));
+    await tester.pumpAndSettle();
+    final sheet = find.byType(BottomSheet);
+    expect(find.text('Reading details…'), findsOneWidget);
+    final read = panel.engine.sentOfType<HostQuery>().cast<HostQuery>().last;
+    final query = read.query as ProcessDetailQuery;
+    expect(
+      (read.serverId, query.pid, query.startTicks),
+      (_serverId, 812, 5000),
+    );
+
+    panel.engine.emit(
+      HostResult(
+        serverId: _serverId,
+        queryId: read.queryId,
+        payload: ProcessDetails(
+          ProcessDetail(
+            cwdDenied: true,
+            threads: 37,
+            swapKb: 2048,
+            voluntarySwitches: 120,
+            involuntarySwitches: 4,
+            attribution: const ProcessAttribution(
+              unit: 'docker-0123456789abcdef.scope',
+              containerId: '0123456789abcdef0123',
+              runtime: ContainerRuntime.docker,
+            ),
+            openFiles: 61,
+            openFilesLimit: const ProcessLimit(soft: 1024, hard: 524288),
+            processesLimit: const ProcessLimit(),
+          ),
+          environment: [
+            EnvVar('LANG', MaskedValue.plain('C.UTF-8')),
+            EnvVar(
+              'MYSQL_PASSWORD',
+              MaskedValue.redacted('********', 'hunter2'),
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Reading details…'), findsNothing);
+    for (final text in [
+      'docker-0123456789abcdef.scope',
+      'Docker 0123456789ab',
+      'Not readable as this user',
+      '37',
+      '2 MiB',
+      '120 voluntary, 4 involuntary',
+      '61 of 1024',
+      'Unlimited',
+    ]) {
+      expect(
+        find.descendant(of: sheet, matching: find.text(text)),
+        findsOneWidget,
+      );
+    }
+
+    final list = find.descendant(of: sheet, matching: find.byType(Scrollable));
+    // The variables end the sheet, so scrolling to its end shows them.
+    await tester.fling(list, const Offset(0, -2000), 3000);
+    await tester.pumpAndSettle();
+    expect(find.text('C.UTF-8'), findsOneWidget);
+    expect(
+      tester.getSemantics(find.text('********')),
+      isSemantics(
+        label: 'MYSQL_PASSWORD: (masked)',
+        hint: 'Show the masked value',
+        isButton: true,
+      ),
+    );
+    await tester.tap(find.text('********'));
+    await tester.pumpAndSettle();
+    expect(find.text('hunter2'), findsOneWidget);
+
+    // A new read masks the variables again and says what it found.
+    await tester.dragUntilVisible(
+      find.text('Read again'),
+      list,
+      const Offset(0, 200),
+    );
+    await tester.tap(find.text('Read again'));
+    await tester.pump();
+    final again = panel.engine.sentOfType<HostQuery>().cast<HostQuery>().last;
+    expect(again.queryId, isNot(read.queryId));
+    panel.engine.emit(
+      HostResult(
+        serverId: _serverId,
+        queryId: again.queryId,
+        payload: const ProcessEnded(ProcessEnd.reused),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Its process ID now belongs to another process, so nothing was read.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('MYSQL_PASSWORD'), findsNothing);
+  });
+
+  testWidgets('a process without a start time is not read', (tester) async {
+    final panel = await _pump(tester);
+    await panel.all(tester);
+    final sent = panel.engine.sentOfType<HostQuery>().length;
+
+    await tester.tap(_row(3100));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'The server did not report when this process started, so its '
+        'details are not read.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Read again'), findsNothing);
+    expect(panel.engine.sentOfType<HostQuery>(), hasLength(sent));
+  });
+
   testWidgets('a long masked argument reads cut, as it draws', (tester) async {
     final panel = await _pump(tester);
     final script = '${'x' * 5000} TOKEN=';

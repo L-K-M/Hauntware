@@ -25,7 +25,12 @@ void main() {
     child = await Process.start(
       'sleep',
       ['60'],
-      environment: {'KLAB_TEST_TOKEN': 's3cret'},
+      environment: {
+        'KLAB_TEST_TOKEN': 's3cret',
+        // A PEM-like value: its lines, one ending in base64 padding, must
+        // stay one entry rather than read as entries of their own.
+        'KLAB_TEST_KEY': '-----BEGIN KEY-----\nYWJjZA==\n-----END KEY-----',
+      },
     );
     final stat = File('/proc/${child.pid}/stat').readAsStringSync();
     startTicks = int.parse(
@@ -54,6 +59,13 @@ void main() {
         expect(detail.openFiles, greaterThan(0));
         expect(detail.openFilesLimit?.soft, isNotNull);
         expect(detail.environment, contains('KLAB_TEST_TOKEN=s3cret'));
+        expect(
+          detail.environment,
+          contains(
+            'KLAB_TEST_KEY=-----BEGIN KEY-----\nYWJjZA==\n-----END KEY-----',
+          ),
+        );
+        expect(detail.environment, isNot(contains('YWJjZA==')));
       });
 
       test('another start ticks value is a reused PID, and a gone PID is '

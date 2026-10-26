@@ -297,6 +297,12 @@ void main() {
       expect(restarts.requestId, 'r-4');
       expect(restarts.failure, RestartReportFailure.noLink);
 
+      // SEC-01's read too.
+      client.send(const ReadSshdPosture('ssh-config:web', requestId: 'r-9'));
+      final sshd = (await next(events)) as SshdPostureReport;
+      expect(sshd.requestId, 'r-9');
+      expect(sshd.failure, SshdPostureFailure.noLink);
+
       // ACC-01's read answers without a link.
       client.send(const ReadAccounts('ssh-config:web', requestId: 'r-5'));
       final accounts = (await next(events)) as AccountsReport;
