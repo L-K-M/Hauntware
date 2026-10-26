@@ -157,18 +157,30 @@ Future<TlsEndpointCheck> checkTlsEndpoint(
       );
 
   var trusted = true;
+  // connect's own timeout bounds only the TCP connection; the outer one
+  // bounds connection and handshake together.
+  final connect = SecureSocket.connect(
+    endpoint.host,
+    endpoint.port,
+    context: context,
+    timeout: timeout,
+    onBadCertificate: (_) {
+      trusted = false;
+      return true;
+    },
+  );
   SecureSocket? socket;
   try {
-    socket = await SecureSocket.connect(
-      endpoint.host,
-      endpoint.port,
-      context: context,
-      timeout: timeout,
-      onBadCertificate: (_) {
-        trusted = false;
-        return true;
+    socket = await connect.timeout(
+      timeout,
+      onTimeout: () {
+        // A handshake that completes after the timeout is closed at once.
+        unawaited(
+          connect.then<void>((late) => late.destroy(), onError: (Object _) {}),
+        );
+        throw TimeoutException('No TLS handshake', timeout);
       },
-    ).timeout(timeout);
+    );
     final certificate = socket.peerCertificate;
     if (certificate == null) {
       return failed(TlsCheckFailure.handshake, 'no certificate presented');

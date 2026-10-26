@@ -93,6 +93,38 @@ void main() {
       },
     );
 
+    test('a handshake that completes after the timeout is closed, not '
+        'leaked', () async {
+      final openssl = await _mint();
+      if (openssl == null) {
+        markTestSkipped('openssl is not installed');
+        return;
+      }
+      final context = SecurityContext()
+        ..useCertificateChain(openssl.cert)
+        ..usePrivateKey(openssl.key);
+      final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(server.close);
+      final closed = Completer<void>();
+      server.listen((raw) async {
+        // Answers the handshake only after the client gave up.
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        final secure = await SecureSocket.secureServer(raw, context);
+        secure.listen(
+          null,
+          onDone: closed.complete,
+          onError: (Object _) => closed.complete(),
+        );
+      });
+
+      final check = await checkTlsEndpoint(
+        TlsEndpoint('127.0.0.1', server.port),
+        timeout: const Duration(milliseconds: 300),
+      );
+      expect(check.failure, TlsCheckFailure.timeout);
+      await closed.future.timeout(const Duration(seconds: 5));
+    });
+
     test('a port that speaks no TLS fails the handshake', () async {
       final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(server.close);
