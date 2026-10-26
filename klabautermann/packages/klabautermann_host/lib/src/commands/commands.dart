@@ -355,6 +355,17 @@ const kMountsFindmntMarker = '== findmnt';
 const kMountsProcMarker = '== proc';
 const kMountsSwapsMarker = '== swaps';
 
+/// [HostCommands.firewall]'s section markers, each printed only where its
+/// tool is installed; firewalld's carries its state.
+const kFirewallUfwMarker = '== ufw';
+const kFirewallFirewalldMarker = '== firewalld';
+const kFirewallNftMarker = '== nft';
+const kFirewallIptablesMarker = '== iptables';
+const kFirewallIp6tablesMarker = '== ip6tables';
+
+/// The most lines [HostCommands.firewall] keeps of each tool's output [E].
+const kFirewallLinesKept = 4000;
+
 /// How [HostCommands.journalBoots] asks for the boot list: JSON on
 /// systemd [kListBootsJsonSystemd] and later, the text table below.
 enum JournalBootsFormat { json, text }
@@ -865,6 +876,39 @@ abstract final class HostCommands {
       'echo "$kNetSockstatMarker"; '
       'cat /proc/net/sockstat /proc/net/sockstat6 2>/dev/null; '
       'exit 0';
+
+  /// NET-06's read (03 §7.4), run as root, since every tool here needs
+  /// it: `ufw status verbose`, firewalld's state and its zones,
+  /// `nft -j list ruleset`, and `iptables-save` and `ip6tables-save`,
+  /// each after its marker and only where installed, each cut to
+  /// [kFirewallLinesKept] lines. `parseFirewall` reads it.
+  static List<String> firewall() => const ['sh', '-c', _firewall];
+
+  static const _firewall =
+      '''
+keep() { head -n $kFirewallLinesKept; }
+if command -v ufw >/dev/null 2>&1; then
+  echo '$kFirewallUfwMarker'
+  ufw status verbose 2>&1 | keep
+fi
+if command -v firewall-cmd >/dev/null 2>&1; then
+  s=\$(firewall-cmd --state 2>&1)
+  echo "$kFirewallFirewalldMarker \$s"
+  [ "\$s" = running ] && firewall-cmd --list-all-zones 2>&1 | keep
+fi
+if command -v nft >/dev/null 2>&1; then
+  echo '$kFirewallNftMarker'
+  nft -j list ruleset 2>/dev/null | keep
+fi
+if command -v iptables-save >/dev/null 2>&1; then
+  echo '$kFirewallIptablesMarker'
+  iptables-save 2>/dev/null | keep
+fi
+if command -v ip6tables-save >/dev/null 2>&1; then
+  echo '$kFirewallIp6tablesMarker'
+  ip6tables-save 2>/dev/null | keep
+fi
+exit 0''';
 
   /// DSK-05 and DSK-14's read: every mount's source, type and options,
   /// from `findmnt -J -l` (util-linux 2.27+) or `/proc/self/mounts`, then

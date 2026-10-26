@@ -33,6 +33,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         RestartCheck,
         SmartDisk,
+        FirewallRead,
         AccountsSnapshot,
         SystemdUnit,
         SystemctlVerb,
@@ -1263,6 +1264,16 @@ final class ReadPackages extends EngineRequest {
 /// memory maps. One [RestartReport] with [requestId] answers it.
 final class ReadRestarts extends EngineRequest {
   const ReadRestarts(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s firewall rules (NET-06, 03 §7.4): in admin mode
+/// only, since ufw, firewalld, nft and iptables-save all need root. One
+/// [FirewallReport] with [requestId] answers it.
+final class ReadFirewall extends EngineRequest {
+  const ReadFirewall(this.serverId, {required this.requestId});
 
   final String serverId;
   final String requestId;
@@ -2764,6 +2775,39 @@ final class RestartReport extends EngineEvent {
   final String requestId;
   final RestartCheck? check;
   final RestartReportFailure? failure;
+}
+
+/// Why a [ReadFirewall] read nothing.
+enum FirewallReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// The read printed something else.
+  unreadable,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadFirewall].
+final class FirewallReport extends EngineEvent {
+  const FirewallReport({
+    required this.serverId,
+    required this.requestId,
+    this.read,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+  final FirewallRead? read;
+  final FirewallReportFailure? failure;
 }
 
 /// Why a [ReadPackages] checked nothing.

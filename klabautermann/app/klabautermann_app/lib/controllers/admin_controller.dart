@@ -26,6 +26,9 @@ final class AdminController extends ChangeNotifier {
 
   /// The services-needing-restart reads waiting on the engine, likewise.
   final Map<String, (String, Completer<RestartReport>)> _restartReads = {};
+
+  /// The firewall reads waiting on the engine, likewise.
+  final Map<String, (String, Completer<FirewallReport>)> _firewallReads = {};
   int _nextRead = 0;
   bool _engineStopped = false;
 
@@ -114,6 +117,31 @@ final class AdminController extends ChangeNotifier {
     return read.future;
   }
 
+  /// Reads [serverId]'s firewall rules (NET-06), which needs admin mode;
+  /// the engine answers with [FirewallReport], a failure included. A
+  /// stopped engine answers no link.
+  Future<FirewallReport> readFirewall(String serverId) {
+    final requestId = (_nextRead++).toString();
+    if (_engineStopped) {
+      return Future.value(_noFirewallLink(serverId, requestId));
+    }
+    final read = Completer<FirewallReport>();
+    _firewallReads[requestId] = (serverId, read);
+    try {
+      _engine.send(ReadFirewall(serverId, requestId: requestId));
+    } on StateError {
+      _onEngineDone();
+    }
+    return read.future;
+  }
+
+  static FirewallReport _noFirewallLink(String serverId, String requestId) =>
+      FirewallReport(
+        serverId: serverId,
+        requestId: requestId,
+        failure: FirewallReportFailure.noLink,
+      );
+
   static RestartReport _noRestartsLink(String serverId, String requestId) =>
       RestartReport(
         serverId: serverId,
@@ -146,6 +174,8 @@ final class AdminController extends ChangeNotifier {
         _smartReads.remove(requestId)?.$2.complete(event);
       case RestartReport(:final requestId):
         _restartReads.remove(requestId)?.$2.complete(event);
+      case FirewallReport(:final requestId):
+        _firewallReads.remove(requestId)?.$2.complete(event);
       default:
     }
   }
@@ -169,6 +199,11 @@ final class AdminController extends ChangeNotifier {
       read.complete(_noRestartsLink(serverId, requestId));
     }
     _restartReads.clear();
+    for (final MapEntry(key: requestId, value: (serverId, read))
+        in _firewallReads.entries) {
+      read.complete(_noFirewallLink(serverId, requestId));
+    }
+    _firewallReads.clear();
     notifyListeners();
   }
 

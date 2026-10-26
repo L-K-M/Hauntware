@@ -2029,6 +2029,11 @@ is on main:
   zones, every 10 s. The System tab's Temperatures section lists each
   sensor with its high and critical limits, and does not show where the
   host has no sensor, as VMs, or inside a container.
+- Firewall (M6 N35, NET-06): in admin mode, the System tab's Firewall
+  section reads the rules of whichever of ufw, firewalld, nftables and
+  iptables the server has: ufw's state, default policies and rules,
+  firewalld's default and active zones with their services and ports,
+  and each nftables or iptables chain with its policy and rule count.
 - Interfaces and connections (M6 N33, NET-02, NET-03): the System tab's
   new Interfaces section lists each interface with its state,
   addresses, MTU, link speed, current receive and send rates, and

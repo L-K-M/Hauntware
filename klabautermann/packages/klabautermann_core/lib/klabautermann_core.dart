@@ -119,6 +119,16 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         RestartCheck,
         RestartTool,
         kPackageUpdatesKept;
+// The System tab's Firewall section (NET-06): what a FirewallReport
+// read.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        FirewallChain,
+        FirewallRead,
+        FirewalldStatus,
+        FirewalldZone,
+        UfwRule,
+        UfwStatus;
 // The Logs panel's boot picker and /var/log browser (LOG-08, LOG-09): a
 // HostResult's rows and the boot a source reads.
 export 'package:klabautermann_host/klabautermann_host.dart'

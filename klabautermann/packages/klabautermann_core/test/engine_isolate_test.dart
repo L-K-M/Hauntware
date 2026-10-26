@@ -283,6 +283,12 @@ void main() {
       expect(restarts.requestId, 'r-4');
       expect(restarts.failure, RestartReportFailure.noLink);
 
+      // NET-06's read too.
+      client.send(const ReadFirewall('ssh-config:web', requestId: 'r-8'));
+      final firewall = (await next(events)) as FirewallReport;
+      expect(firewall.requestId, 'r-8');
+      expect(firewall.failure, FirewallReportFailure.noLink);
+
       // ACC-01's read answers without a link.
       client.send(const ReadAccounts('ssh-config:web', requestId: 'r-5'));
       final accounts = (await next(events)) as AccountsReport;
