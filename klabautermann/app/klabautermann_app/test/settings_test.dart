@@ -164,8 +164,9 @@ void main() {
     for (final text in [
       'Klabautermann $kPreviewLabel',
       'Version 1.2.3',
-      'Klabautermann is free and unencumbered software released into the '
-          'public domain under the Unlicense.',
+      "Klabautermann's own code is public domain (Unlicense). It includes "
+          'third-party components that keep their own licenses, listed under '
+          'View licenses.',
     ]) {
       expect(
         find.descendant(of: dialog, matching: find.text(text)),
