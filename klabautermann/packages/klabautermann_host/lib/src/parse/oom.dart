@@ -110,8 +110,10 @@ OomKillsRead? parseOomKills(String raw) {
   );
   if (read == null) return null;
 
-  // The kernel prints `oom-kill:` before the kill line it explains.
-  final cgroups = <int, String>{};
+  // The kernel prints `oom-kill:` before the kill line it explains: the
+  // task's memory cgroup and the limit that ran out, CONSTRAINT_MEMCG for
+  // a cgroup's.
+  final explained = <int, ({String? cgroup, bool memcg})>{};
   final kills = <OomKill>[];
   for (final line in lines.sublist(2, readAt)) {
     if (_oomKillFields.firstMatch(line) case final match?) {
@@ -119,11 +121,11 @@ OomKillsRead? parseOomKills(String raw) {
         for (final field in match[1]!.split(','))
           if (field.split('=') case [final key, final value]) key: value,
       };
-      if ((int.tryParse(fields['pid'] ?? ''), fields['task_memcg']) case (
-        final pid?,
-        final cgroup?,
-      )) {
-        cgroups[pid] = cgroup;
+      if (int.tryParse(fields['pid'] ?? '') case final pid?) {
+        explained[pid] = (
+          cgroup: fields['task_memcg'],
+          memcg: fields['constraint'] == 'CONSTRAINT_MEMCG',
+        );
       }
       continue;
     }
@@ -131,6 +133,7 @@ OomKillsRead? parseOomKills(String raw) {
     final killed = _killed.firstMatch(line);
     if (killed == null) continue;
     final pid = int.parse(killed[1]!);
+    final explanation = explained.remove(pid);
     kills.add(
       OomKill(
         pid: pid,
@@ -147,12 +150,15 @@ OomKillsRead? parseOomKills(String raw) {
         sinceBoot: switch (_dmesgTime.firstMatch(line)) {
           final time? when source == OomLogSource.dmesg => Duration(
             seconds: int.parse(time[1]!),
+            microseconds: int.parse(time[2]!.padRight(6, '0').substring(0, 6)),
           ),
           _ => null,
         },
         anonRssKb: int.tryParse(_anonRss.firstMatch(line)?[1] ?? ''),
-        cgroupLimit: line.contains('Memory cgroup out of memory'),
-        cgroup: cgroups.remove(pid),
+        cgroupLimit:
+            (explanation?.memcg ?? false) ||
+            line.contains('Memory cgroup out of memory'),
+        cgroup: explanation?.cgroup,
       ),
     );
   }

@@ -93,7 +93,10 @@ done''');
           await _stub(root, 'dmesg', "echo '[  12.000001] $_kill'");
           final read = (await _read(shell, root))!;
           expect(read.source, OomLogSource.dmesg);
-          expect(read.kills.single.sinceBoot, const Duration(seconds: 12));
+          expect(
+            read.kills.single.sinceBoot,
+            const Duration(seconds: 12, microseconds: 1),
+          );
         },
       );
 

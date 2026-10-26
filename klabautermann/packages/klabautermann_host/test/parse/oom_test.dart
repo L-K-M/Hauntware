@@ -58,7 +58,7 @@ void main() {
     expect(read.source, OomLogSource.dmesg);
     expect(kill.command, 'a b');
     expect(kill.at, isNull);
-    expect(kill.sinceBoot, const Duration(seconds: 8123));
+    expect(kill.sinceBoot, const Duration(seconds: 8123, microseconds: 456789));
     expect(kill.anonRssKb, isNull);
   });
 
@@ -67,6 +67,25 @@ void main() {
     expect(read.killsSinceBoot, isNull);
     expect(read.logRead, isFalse);
     expect(read.kills, isEmpty);
+  });
+
+  test('a counted zero reads as zero, and a cgroup limit shows in the '
+      'oom-kill line\'s constraint too', () {
+    final read = parseOomKills(
+      _out(count: '0', [
+        '1729912400.000001 h kernel: oom-kill:constraint=CONSTRAINT_MEMCG,'
+            'nodemask=(null),cpuset=/,mems_allowed=0,'
+            'oom_memcg=/system.slice/docker-1.scope,'
+            'task_memcg=/system.slice/docker-1.scope,task=java,pid=777,uid=0',
+        '1729912400.000002 h kernel: Out of memory: Killed process 777 '
+            '(java) total-vm:900kB, anon-rss:512kB',
+      ]),
+    )!;
+    expect(read.killsSinceBoot, 0);
+    final java = read.kills.single;
+    expect(java.cgroupLimit, isTrue);
+    expect(java.cgroup, '/system.slice/docker-1.scope');
+    expect(java.at, DateTime.utc(2024, 10, 26, 3, 13, 20, 0, 2));
   });
 
   test('anything else is not the read', () {
