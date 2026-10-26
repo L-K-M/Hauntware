@@ -163,6 +163,11 @@ void main() {
         ),
         const HostQuery(
           serverId: 'srv-1',
+          queryId: 'h-cpu',
+          query: CpuTopologyQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
           queryId: 'h-net',
           query: InterfacesQuery(),
         ),
@@ -466,6 +471,20 @@ void main() {
               running: '6.1.0-13-amd64',
               installed: ['6.1.0-13-amd64'],
               state: KernelCheckState.current,
+            ),
+          ),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-cpu',
+          payload: CpuTopologyRead(
+            CpuTopology(
+              models: ['Cortex-A53', 'Cortex-A72'],
+              vendor: 'ARM',
+              logicalCpus: 6,
+              usableCpus: 6,
+              cores: 6,
+              threadsPerCore: 1,
             ),
           ),
         ),

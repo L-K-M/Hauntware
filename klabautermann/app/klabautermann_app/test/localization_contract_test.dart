@@ -547,6 +547,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${DockerWatchList.containers.name}.row.${_rowKey(entry)}'",
     r"'\n'",
     r"'group.${project ?? ''}'",
+    // The selection column's table id (CTR-07), a key.
+    "'select'",
     "''",
   },
   'lib/ui/docker/containers_view.dart': {
@@ -817,6 +819,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${SampleStream.procs.name}.row.${row.pid}'",
     r"'\n'",
   },
+  'lib/ui/processor.dart': {r"'\n'"},
   'lib/ui/processes_view.dart': {
     // The ellipsis ending a cut command line, the space between its
     // arguments, and the filter's term separator and the line break

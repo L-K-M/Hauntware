@@ -1761,6 +1761,55 @@
       }
     }
   },
+  "systemProcessorTitle": "Processor",
+  "@systemProcessorTitle": {
+    "description": "System tab: the heading of the processor section (CPU-07)."
+  },
+  "systemProcessorReading": "Reading the processor…",
+  "@systemProcessorReading": {
+    "description": "System tab, Processor: shown while the processor is read."
+  },
+  "systemProcessorReadAgain": "Read again",
+  "@systemProcessorReadAgain": {
+    "description": "System tab, Processor: the button that reads the processor again."
+  },
+  "systemProcessorModel": "Model",
+  "@systemProcessorModel": {
+    "description": "System tab, Processor: the label of the processor's model name, or its vendor where the server names no model."
+  },
+  "systemProcessorNoModel": "This processor does not report a model name, as is common on ARM boards.",
+  "@systemProcessorNoModel": {
+    "description": "System tab, Processor: why the model is unknown after a read that succeeded."
+  },
+  "systemProcessorSockets": "Sockets",
+  "@systemProcessorSockets": {
+    "description": "System tab, Processor: the label of the number of physical processor packages."
+  },
+  "systemProcessorCores": "Cores",
+  "@systemProcessorCores": {
+    "description": "System tab, Processor: the label of the number of physical cores across all sockets."
+  },
+  "systemProcessorThreadsPerCore": "Threads per core",
+  "@systemProcessorThreadsPerCore": {
+    "description": "System tab, Processor: the label of how many hardware threads one core runs; 2 with simultaneous multithreading."
+  },
+  "systemProcessorLogical": "Logical CPUs",
+  "@systemProcessorLogical": {
+    "description": "System tab, Processor: the label of how many CPUs the kernel counts."
+  },
+  "systemProcessorUsable": "Usable CPUs",
+  "@systemProcessorUsable": {
+    "description": "System tab, Processor: the label of how many CPUs the login's processes may run on: fewer than the logical CPUs when the processes are pinned to some of them, as in a container given a CPU set. A CPU time quota does not lower it."
+  },
+  "systemProcessorFailed": "{failure, select, noLink{Not connected to the server.} denied{The server refused the processor read.} missing{The server lacks the tools the processor read runs.} other{The processor read failed.}}",
+  "@systemProcessorFailed": {
+    "description": "System tab, Processor: why the processor read nothing, by reason.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
   "systemNetInterfacesTitle": "Interfaces",
   "@systemNetInterfacesTitle": {
     "description": "System tab: the heading of the network interfaces section (NET-02, NET-03)."
@@ -3974,6 +4023,109 @@
   "overviewSwapNone": "No swap is set up.",
   "@overviewSwapNone": {
     "description": "The swap card of a server with no swap space."
+  },
+  "overviewSlowTitle": "Why is it slow?",
+  "@overviewSlowTitle": {
+    "description": "Overview: the heading of TRI-02's card, what in the latest reading slows the server."
+  },
+  "overviewSlowNone": "Nothing in the latest reading points to a slowdown.",
+  "@overviewSlowNone": {
+    "description": "Overview, Why is it slow: no signal in the latest reading."
+  },
+  "overviewSlowCpuWait": "Tasks waited for a CPU {percent} of the last 10 seconds: the processor is the bottleneck.",
+  "@overviewSlowCpuWait": {
+    "description": "Overview, Why is it slow: PSI cpu some over 10 s reached 20 %. percent is the share, such as \"35%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowLoadHigh": "The load is {load} per core: more tasks want to run than there are cores.",
+  "@overviewSlowLoadHigh": {
+    "description": "Overview, Why is it slow: without PSI, the load per core reached 1.5.",
+    "placeholders": {
+      "load": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 2
+        }
+      }
+    }
+  },
+  "overviewSlowSteal": "The hypervisor gave {percent} of the CPU time to other guests.",
+  "@overviewSlowSteal": {
+    "description": "Overview, Why is it slow: steal reached 10 % of CPU time. percent is the share, such as \"25%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowIoStall": "Tasks stalled on storage {percent} of the last 10 seconds: the disks are the bottleneck.",
+  "@overviewSlowIoStall": {
+    "description": "Overview, Why is it slow: PSI io some over 10 s reached 10 %. percent is the share, such as \"25%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowIowait": "Cores sat idle {percent} of the time waiting for storage.",
+  "@overviewSlowIowait": {
+    "description": "Overview, Why is it slow: without PSI, iowait reached 10 % of CPU time. percent is the share, such as \"25%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowSlowDisk": "{device} takes {ms} ms per request: it is slow or saturated.",
+  "@overviewSlowSlowDisk": {
+    "description": "Overview, Why is it slow: a disk's mean time per request reached 50 ms. device is the disk's kernel name, such as sda.",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      },
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "overviewSlowBusyDisk": "{device} is busy {percent} of the time: requests queue behind each other.",
+  "@overviewSlowBusyDisk": {
+    "description": "Overview, Why is it slow: a disk was busy 90 % of the time. device is the disk's kernel name; percent the share, such as \"95%\".",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowMemoryStall": "Tasks stalled waiting for memory {percent} of the last 10 seconds: the server is short of RAM.",
+  "@overviewSlowMemoryStall": {
+    "description": "Overview, Why is it slow: PSI memory some over 10 s reached 5 %. percent is the share, such as \"12%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowSwapHeavy": "Swap is {percent} full and little memory is free: the server pages to disk.",
+  "@overviewSlowSwapHeavy": {
+    "description": "Overview, Why is it slow: swap is half full while under 10 % of memory is available. percent is swap's used share, such as \"80%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowWhere": "Processes sorts what runs by CPU and memory; System lists recent out-of-memory kills.",
+  "@overviewSlowWhere": {
+    "description": "Overview, Why is it slow: where to look next, under the signals."
   },
   "overviewPressureTitle": "Pressure",
   "@overviewPressureTitle": {
@@ -7211,6 +7363,96 @@
   "@dockerContainersColumnMemory": {
     "description": "Containers table column: the memory the container uses, from its list stats (CST-01)."
   },
+  "dockerContainersSelect": "Select",
+  "@dockerContainersSelect": {
+    "description": "Containers tab: the chip that puts a checkbox on each row and heading, to act on several containers at once (CTR-07)."
+  },
+  "dockerContainersColumnSelect": "Selection",
+  "@dockerContainersColumnSelect": {
+    "description": "Containers table: the checkbox column's name, which a screen reader says before each row's selection."
+  },
+  "dockerContainersRowSelected": "{selected, select, true{Selected} other{Not selected}}",
+  "@dockerContainersRowSelected": {
+    "description": "Containers table: whether a row is selected, as a screen reader hears its checkbox cell. selected is true or false.",
+    "placeholders": {
+      "selected": {
+        "type": "String",
+        "example": "true"
+      }
+    }
+  },
+  "dockerContainersSelectOne": "Select",
+  "@dockerContainersSelectOne": {
+    "description": "Containers table: the row action that selects the container."
+  },
+  "dockerContainersDeselect": "Deselect",
+  "@dockerContainersDeselect": {
+    "description": "Containers table: the row action that clears the container's selection."
+  },
+  "dockerContainersSelectProject": "Select its containers",
+  "@dockerContainersSelectProject": {
+    "description": "Containers tab: the action on a compose project's heading that selects every container under it."
+  },
+  "dockerContainersDeselectProject": "Deselect its containers",
+  "@dockerContainersDeselectProject": {
+    "description": "Containers tab: the action on a compose project's heading that clears the selection of every container under it."
+  },
+  "dockerContainersGroupSelection": "{summary}, {selection, select, all{all selected} some{some selected} other{none selected}}",
+  "@dockerContainersGroupSelection": {
+    "description": "Containers tab: a heading's counts with how many of its containers are selected, as a screen reader hears it. summary is dockerContainersGroupSummary's text; selection is all, some or none.",
+    "placeholders": {
+      "summary": {
+        "type": "String",
+        "example": "3 containers, 2 running"
+      },
+      "selection": {
+        "type": "String",
+        "example": "some"
+      }
+    }
+  },
+  "dockerContainersSelectedCount": "{count, plural, =0{None selected} =1{1 selected} other{{count} selected}}",
+  "@dockerContainersSelectedCount": {
+    "description": "Containers tab: how many containers are selected, at the start of the bulk bar (CTR-07).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "dockerContainersBulkVerb": "{verb, select, start{Start} stop{Stop} restart{Restart} remove{Remove} other{Act}} ({count})",
+  "@dockerContainersBulkVerb": {
+    "description": "Containers tab: a bulk bar button, with how many of the selected containers the verb takes; a stopped container takes no stop. verb is start, stop, restart or remove.",
+    "placeholders": {
+      "verb": {
+        "type": "String",
+        "example": "stop"
+      },
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "dockerContainersSelectAll": "Select all shown",
+  "@dockerContainersSelectAll": {
+    "description": "Containers tab: the bulk bar button that selects every container the search and filters show."
+  },
+  "dockerContainersSelectNone": "Clear selection",
+  "@dockerContainersSelectNone": {
+    "description": "Containers tab: the bulk bar button that clears the selection."
+  },
+  "dockerContainersBulkMax": "Select at most {max} containers to act on them at once.",
+  "@dockerContainersBulkMax": {
+    "description": "Containers tab: why the bulk buttons are off when too many containers are selected.",
+    "placeholders": {
+      "max": {
+        "type": "int",
+        "example": "100"
+      }
+    }
+  },
   "dockerContainerState": "{state, select, created{Created} running{Running} paused{Paused} restarting{Restarting} removing{Removing} exited{Exited} dead{Dead} other{Unknown}}",
   "@dockerContainerState": {
     "description": "A container's state in words. state is the Engine API's state name; a state outside this list shows as the engine gave it instead.",
@@ -7961,6 +8203,55 @@
       "label": {
         "type": "String",
         "example": "coolify.managed"
+      }
+    }
+  },
+  "dockerDiagnosisTitle": "Diagnosis",
+  "@dockerDiagnosisTitle": {
+    "description": "Container details: the heading of TRI-04's diagnosis, what the container's state says went wrong."
+  },
+  "dockerDiagnosisKind": "{kind, select, oomLimit{Out of memory} oomHost{Out of memory on the host} killed{Killed} segfault{Crashed} notExecutable{Command not executable} commandNotFound{Command not found} runtimeError{The engine could not start it} exitedWithError{Exited with an error} exitsAtOnce{Exits right after starting} restartLoop{Restart loop} unhealthy{Health check failing} other{Something went wrong}}",
+  "@dockerDiagnosisKind": {
+    "description": "Container details, Diagnosis: what went wrong, by ContainerDiagnosisKind name.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerDiagnosisWhy": "{kind, select, oomLimit{The kernel stopped it, most likely for going over its memory limit. Raise the limit or find what keeps growing.} oomHost{The kernel stopped it while the host ran out of memory. It has no memory limit of its own.} killed{It ended with SIGKILL (exit code 137) without running out of memory: a docker kill, a stop that ran past its timeout, or another process.} segfault{It ended with a segmentation fault (exit code 139), a crash inside the program.} notExecutable{Exit code 126: the command exists but cannot run. Check its permissions and its interpreter line.} commandNotFound{Exit code 127: the entrypoint or command names a program the image does not have.} runtimeError{The engine reported this error for it:} exitedWithError{Its process ended with an error. Its last log lines usually say why.} exitsAtOnce{It exited with code 0 and its restart policy starts it again: its main process does not stay in the foreground.} restartLoop{Its restart policy has started it again after each exit since it was last started by hand. Its logs show what each run ended with.} unhealthy{Its health check keeps failing. Health checks shows what each check printed.} other{Its state says something went wrong.}}",
+  "@dockerDiagnosisWhy": {
+    "description": "Container details, Diagnosis: what the finding means and where to look, by ContainerDiagnosisKind name.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerDiagnosisMemoryLimit": "Memory limit: {limit}",
+  "@dockerDiagnosisMemoryLimit": {
+    "description": "Container details, Diagnosis: the memory limit an out-of-memory container went over.",
+    "placeholders": {
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerDiagnosisExitCode": "Exit code: {code}",
+  "@dockerDiagnosisExitCode": {
+    "description": "Container details, Diagnosis: the exit code of a container that exited with an error.",
+    "placeholders": {
+      "code": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerDiagnosisRestarts": "{count, plural, =0{Restarting now} =1{Restarted once} other{Restarted {count} times}}",
+  "@dockerDiagnosisRestarts": {
+    "description": "Container details, Diagnosis: how often the restart policy has started the container again.",
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
     }
   },
