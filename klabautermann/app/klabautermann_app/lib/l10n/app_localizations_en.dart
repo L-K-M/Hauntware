@@ -4090,6 +4090,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'forcesImageInUse': '$count containers still use this image.',
       'deletesVolumeData': 'This deletes the volume and the data in it.',
       'interruptsTarget': 'This interrupts what the target is doing.',
+      'restartsHost':
+          'This restarts the server: everything on it stops, and the connection drops until it is back.',
+      'stopsHost':
+          'This turns the server off: everything on it stops, and it stays off until someone starts it.',
       'other': '',
     });
     return '$_temp0';
@@ -4574,6 +4578,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'UnitAction': 'Unit action',
       'StartTimer': 'Run timer now',
       'RefreshPackageLists': 'Refresh package lists',
+      'PowerAction': 'Reboot or shut down',
       'ContainerAction': 'Container action',
       'RemoveContainer': 'Remove container',
       'RemoveImage': 'Remove image',
@@ -7938,6 +7943,36 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get systemUpdatesRefreshStarted =>
       'When the refresh has finished, check again to read the new lists.';
+
+  @override
+  String get systemPowerTitle => 'Power';
+
+  @override
+  String get systemPowerReboot => 'Reboot';
+
+  @override
+  String get systemPowerShutDown => 'Shut down';
+
+  @override
+  String get systemPowerAdminNeeded =>
+      'Turn on admin mode to reboot or shut down this server.';
+
+  @override
+  String systemPowerWaiting(String elapsed) {
+    return 'Rebooting. Waiting for the server to answer again: $elapsed so far.';
+  }
+
+  @override
+  String systemPowerBack(String elapsed) {
+    return 'The server answered again $elapsed after the reboot.';
+  }
+
+  @override
+  String get systemPowerOff =>
+      'The server is shutting down. It stays off until someone starts it.';
+
+  @override
+  String get systemPowerStopWaiting => 'Stop waiting';
 
   @override
   String get systemUpdatesRestartsTitle => 'Services to restart';

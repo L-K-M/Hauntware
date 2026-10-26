@@ -14,7 +14,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         parseCrontabText,
         userCrontabSource;
 import 'package:klabautermann_core/src/operations/confirmation.dart'
-    show OperationKind;
+    show OperationKind, confirmationSatisfies;
 import 'package:klabautermann_core/src/operations/operation_plan.dart';
 import 'package:klabautermann_core/src/operations/operation_runner.dart';
 import 'package:klabautermann_core/src/operations/plans/host_plans.dart';
@@ -55,6 +55,27 @@ final class _Link extends TestLinkBase {
   }
 }
 
+/// A link the host drops while a command containing [drops] runs.
+final class _Dropping extends _Link {
+  _Dropping(this.drops) : super(const {});
+
+  final String drops;
+
+  @override
+  Future<RemoteCommandResult> run(
+    String command, {
+    Duration? timeout,
+    int maxOutputBytes = 256 * 1024,
+    List<int>? stdin,
+  }) async {
+    commands.add(command);
+    if (command.contains(drops)) {
+      throw const RemoteCommandException('connection closed');
+    }
+    return _ok;
+  }
+}
+
 RemoteCommandResult _out(String stdout) =>
     RemoteCommandResult(exitCode: 0, stdout: stdout);
 
@@ -67,10 +88,11 @@ _Link _process({int uid = 1000, String comm = 'worker'}) => _Link({
 HostPlanContext _context(
   _Link link, {
   bool adminMode = false,
+  bool systemd = false,
   ProtectionContext protection = const ProtectionContext(),
 }) => (
   link: link,
-  profile: HostProfile(uid: 1000, user: 'deploy'),
+  profile: HostProfile(uid: 1000, user: 'deploy', systemdDir: systemd),
   protection: protection,
   adminMode: adminMode,
 );
@@ -443,6 +465,146 @@ void main() {
         );
         expect(attempt.refusal, ActionRefusalReason.invalidTarget);
       }
+    });
+  });
+
+  group('power (SYS-03)', () {
+    const reboot = PowerAction(_server, PowerVerb.reboot);
+
+    test('the host reboots as root, in admin mode only, once its own name '
+        'is typed', () async {
+      final link = _Link({"'uname'": _out('web-01\n')});
+      expect(
+        (await planHostAction(reboot, _context(link))).refusal,
+        ActionRefusalReason.adminRequired,
+      );
+      expect(link.commands, isEmpty);
+
+      final plan = (await planHostAction(
+        reboot,
+        _context(link, adminMode: true, systemd: true),
+      )).plan!;
+      final preview = plan.preview;
+      expect(preview.targetName, 'web-01');
+      final step = preview.steps.single as ShellStep;
+      expect(step.argv, ['systemctl', 'reboot']);
+      expect(step.elevated, isTrue);
+      expect(step.endsLink, isTrue);
+      expect(preview.requiredLevel, RequiredLevel.admin);
+      expect(preview.requiredTier, ConfirmationTier.typedPhrase);
+      expect(preview.impact?.kind, ImpactKind.restartsHost);
+      expect(
+        confirmationSatisfies(
+          required: plan.tier,
+          given: ConfirmationTier.typedPhrase,
+          targetName: plan.targetName,
+          phrase: 'web-01',
+        ),
+        isTrue,
+      );
+    });
+
+    test('without systemd the host\'s own reboot and poweroff run, and '
+        'power off stops the host', () async {
+      final link = _Link({"'uname'": _out('nas\n')});
+      final rebootStep =
+          (await planHostAction(
+                reboot,
+                _context(link, adminMode: true),
+              )).plan!.preview.steps.single
+              as ShellStep;
+      expect(rebootStep.argv, ['reboot']);
+
+      final off = (await planHostAction(
+        const PowerAction(_server, PowerVerb.poweroff),
+        _context(link, adminMode: true),
+      )).plan!.preview;
+      expect((off.steps.single as ShellStep).argv, ['poweroff']);
+      expect(off.impact?.kind, ImpactKind.stopsHost);
+      expect(off.requiredTier, ConfirmationTier.typedPhrase);
+    });
+
+    test('a host that names no host name is refused', () async {
+      for (final answer in [
+        _out('\n'),
+        const RemoteCommandResult(exitCode: 1),
+      ]) {
+        final attempt = await planHostAction(
+          reboot,
+          _context(_Link({"'uname'": answer}), adminMode: true),
+        );
+        expect(attempt.refusal, ActionRefusalReason.invalidTarget);
+      }
+    });
+
+    test('the syslog line goes before the step that takes the host down', () {
+      final plan = OperationPlan(
+        intent: reboot,
+        kind: OperationKind.reboot,
+        targetName: 'web-01',
+        steps: [
+          ShellStep(['systemctl', 'reboot'], endsLink: true),
+        ],
+        requiredLevel: RequiredLevel.login,
+        runner: const RunnerFacts(identity: 'deploy'),
+        hostWrites: const [HostWriteRow.loginRecords],
+      ).withAuditLine(['logger', '--', 'reboot web-01']);
+      final steps = plan.steps.cast<ShellStep>();
+      expect(steps.map((step) => step.argv.first), ['logger', 'systemctl']);
+      expect(steps.first.bestEffort, isTrue);
+    });
+
+    test('a link the host takes down while the step runs ends the run as '
+        'done; a refusal before that fails it', () async {
+      final plan = OperationPlan(
+        intent: reboot,
+        kind: OperationKind.reboot,
+        targetName: 'web-01',
+        steps: [
+          ShellStep(['systemctl', 'reboot'], endsLink: true),
+        ],
+        requiredLevel: RequiredLevel.login,
+        runner: const RunnerFacts(identity: 'deploy'),
+        hostWrites: const [HostWriteRow.loginRecords],
+      );
+      final dropped = _Dropping("'reboot'");
+      final done = await _run(dropped, plan);
+      expect(done.outcome, ActionOutcome.succeeded);
+      expect(dropped.commands.single, contains("'systemctl' 'reboot'"));
+
+      final refused = await _run(
+        _Link({
+          "'reboot'": const RemoteCommandResult(
+            exitCode: 1,
+            stderr: 'Operation inhibited',
+          ),
+        }),
+        plan,
+      );
+      expect(refused.failure, ActionFailure.stepFailed);
+      expect(refused.exitCode, 1);
+    });
+
+    test('a step that takes the host down and exits 0 ends the run', () async {
+      final plan = OperationPlan(
+        intent: reboot,
+        kind: OperationKind.reboot,
+        targetName: 'web-01',
+        steps: [
+          ShellStep(['systemctl', 'reboot'], endsLink: true),
+          ShellStep(['true']),
+        ],
+        requiredLevel: RequiredLevel.login,
+        runner: const RunnerFacts(identity: 'deploy'),
+        hostWrites: const [HostWriteRow.loginRecords],
+      );
+      final link = _Link({
+        "'reboot'": const RemoteCommandResult(exitCode: 0),
+        "'true'": const RemoteCommandResult(exitCode: 0),
+      });
+      final done = await _run(link, plan);
+      expect(done.outcome, ActionOutcome.succeeded);
+      expect(link.commands.where((c) => c.contains("'true'")), isEmpty);
     });
   });
 
