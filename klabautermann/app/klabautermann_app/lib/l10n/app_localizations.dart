@@ -7980,6 +7980,84 @@ abstract class AppLocalizations {
   /// **'Memory'**
   String get dockerContainersColumnMemory;
 
+  /// Containers table column: bytes received and sent since the container started, from its list stats (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get dockerContainersColumnNetwork;
+
+  /// Containers table column: bytes read from and written to disk since the container started (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Block I/O'**
+  String get dockerContainersColumnBlockIo;
+
+  /// Containers table column: the processes and threads in the container (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'PIDs'**
+  String get dockerContainersColumnPids;
+
+  /// Containers table column: the container's first address on a network (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'IP'**
+  String get dockerContainersColumnIp;
+
+  /// Containers table column: how long ago a running container started, read from its status (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Started'**
+  String get dockerContainersColumnStarted;
+
+  /// Containers table: two byte totals, received then sent, or read then written, as docker stats shows them.
+  ///
+  /// In en, this message translates to:
+  /// **'{first} / {second}'**
+  String dockerContainersIo(String first, String second);
+
+  /// Containers tab: the button that opens the column chooser (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Columns'**
+  String get dockerContainersColumns;
+
+  /// Column chooser: its title.
+  ///
+  /// In en, this message translates to:
+  /// **'Columns'**
+  String get dockerContainersColumnsTitle;
+
+  /// Column chooser: the tooltip on a column's drag handle.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to reorder'**
+  String get dockerContainersColumnsDrag;
+
+  /// Column chooser: puts back the default columns.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get dockerContainersColumnsReset;
+
+  /// Column chooser: closes it without a change.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerContainersColumnsCancel;
+
+  /// Column chooser: shows the checked columns in their order.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get dockerContainersColumnsDone;
+
+  /// Containers tab: the chosen columns show, but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The columns could not be saved. They stay until Klabautermann quits.'**
+  String get dockerContainersColumnsNotSaved;
+
   /// Containers tab: the chip that puts a checkbox on each row and heading, to act on several containers at once (CTR-07).
   ///
   /// In en, this message translates to:
