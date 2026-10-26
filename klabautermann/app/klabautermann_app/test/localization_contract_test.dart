@@ -414,6 +414,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "''",
     "', '",
   },
+  // The ps column title of resident memory, matched, never shown.
+  'lib/ui/docker/container_processes.dart': {"'RSS'"},
   'lib/ui/docker/container_details_view.dart': {
     // The Engine API's restart policy names, matched, never shown; the
     // empty one is the default.

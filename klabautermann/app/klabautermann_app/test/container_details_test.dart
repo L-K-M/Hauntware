@@ -733,6 +733,128 @@ void main() {
     expect(_inDetails(find.text('Not attached to a network.')), findsOneWidget);
   });
 
+  group('processes (CTR-10)', () {
+    List<DockerQuery> tops(_Harness harness) => [
+      for (final query
+          in harness.engine.sentOfType<DockerQuery>().cast<DockerQuery>())
+        if (query.query is DockerContainerTopQuery) query,
+    ];
+
+    final top = DockerContainerTopPayload(
+      titles: const ['PID', 'USER', '%CPU', 'RSS', 'ELAPSED', 'COMMAND'],
+      commandColumn: 5,
+      processes: [
+        [
+          for (final cell in ['4211', 'postgres', '0.3', '20480', '03:01:02'])
+            MaskedValue.plain(cell),
+          MaskedValue.redacted(
+            'postgres -c password=${MaskedValue.maskToken}',
+            'postgres -c password=s3cret',
+          ),
+        ],
+        [
+          for (final cell in ['4250', 'postgres', '0.0', '4096', '03:01:00'])
+            MaskedValue.plain(cell),
+          MaskedValue.plain('postgres: checkpointer'),
+        ],
+      ],
+    );
+
+    testWidgets('a running container reads its processes once the details '
+        'show, masked until revealed, and reads again on request', (
+      tester,
+    ) async {
+      final harness = await _pump(tester);
+      await _open(tester);
+      expect(tops(harness), isEmpty);
+      await harness.answer(
+        tester,
+        DockerContainerPayload(dockerContainerDetails(_id)),
+      );
+      expect(tops(harness), hasLength(1));
+      expect(
+        (tops(harness).single.query as DockerContainerTopQuery).containerId,
+        _id,
+      );
+      expect(_inDetails(find.text('Reading processes…')), findsOneWidget);
+
+      await harness.emit(tester, dockerAnswer(tops(harness).last, top));
+      expect(_inDetails(find.text('Processes')), findsOneWidget);
+      expect(_inDetails(find.text('2 processes')), findsOneWidget);
+      expect(
+        _inDetails(find.text('postgres -c password=${MaskedValue.maskToken}')),
+        findsOneWidget,
+      );
+      expect(_inDetails(find.text('postgres: checkpointer')), findsOneWidget);
+      expect(_inDetails(find.text('PID: 4211')), findsOneWidget);
+      expect(_inDetails(find.text('RSS: 20 MiB')), findsOneWidget);
+
+      final reveal = _inDetails(
+        find.widgetWithText(TextButton, 'Reveal values'),
+      ).last;
+      await tester.ensureVisible(reveal);
+      await tester.tap(reveal);
+      await tester.pumpAndSettle();
+      expect(
+        _inDetails(find.text('postgres -c password=s3cret')),
+        findsOneWidget,
+      );
+      await tester.pump(kRevealDuration);
+      await tester.pumpAndSettle();
+      expect(
+        _inDetails(find.text('postgres -c password=s3cret')),
+        findsNothing,
+      );
+
+      final again = _inDetails(find.text('Read again'));
+      await tester.ensureVisible(again);
+      await tester.tap(again);
+      await tester.pumpAndSettle();
+      expect(tops(harness), hasLength(2));
+      await harness.emit(
+        tester,
+        dockerAnswer(
+          tops(harness).last,
+          const DockerQueryFailed(
+            DockerQueryFailure.daemonError,
+            detail: 'Container is not running',
+          ),
+        ),
+      );
+      expect(
+        _inDetails(
+          find.text(
+            'The engine refused or failed to list the container\'s '
+            'processes.',
+          ),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a stopped container reads none and says why', (tester) async {
+      final harness = await _pump(tester);
+      await harness.emit(
+        tester,
+        dockerContainerList(_serverId, [
+          dockerContainer(_id, name: 'web-db', state: 'exited'),
+        ], at: _now),
+      );
+      await _open(tester);
+      await harness.answer(
+        tester,
+        DockerContainerPayload(dockerContainerDetails(_id, status: 'exited')),
+      );
+      expect(tops(harness), isEmpty);
+      expect(
+        _inDetails(
+          find.text('The container is not running, so it has no processes.'),
+        ),
+        findsOneWidget,
+      );
+    });
+  });
+
   testWidgets('a phone pushes the details on a page of their own', (
     tester,
   ) async {

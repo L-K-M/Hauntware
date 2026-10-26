@@ -5322,6 +5322,58 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerImageHistoryComment => 'Comment';
 
   @override
+  String get dockerProcessesTitle => 'Processes';
+
+  @override
+  String get dockerProcessesStopped =>
+      'The container is not running, so it has no processes.';
+
+  @override
+  String get dockerProcessesReading => 'Reading processes…';
+
+  @override
+  String get dockerProcessesReadAgain => 'Read again';
+
+  @override
+  String get dockerProcessesNone =>
+      'The engine lists no processes for this container.';
+
+  @override
+  String dockerProcessesCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString processes',
+      one: '1 process',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerProcessesFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notInFleet': 'This server is no longer in the fleet.',
+      'linkUnavailable': 'There is no connection to this server.',
+      'profileUnknown': 'The server\'s capability check has not answered yet.',
+      'endpointUnavailable': 'The Docker engine cannot be reached.',
+      'tooManyQueries':
+          'This server already has as many Docker reads waiting as Klabautermann allows.',
+      'notFound': 'The engine no longer has this container.',
+      'daemonError':
+          'The engine refused or failed to list the container\'s processes.',
+      'connectionFailed':
+          'The connection to the engine failed while reading the processes.',
+      'cancelled': 'The read stopped before it ran.',
+      'other': 'The container\'s processes could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String dockerImageHistoryFailed(String reason) {
     String _temp0 = intl.Intl.selectLogic(reason, {
       'notInFleet': 'This server is no longer in the fleet.',
