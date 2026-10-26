@@ -108,7 +108,8 @@ final _healthMarker = RegExp(
 /// Docker's `State.String` and Podman print it. Null for any other.
 int? containerExitCode(ContainerSummary container) {
   final match = _exitStatus.firstMatch(container.status ?? '');
-  return match == null ? null : int.parse(match.group(1)!);
+  // A digit run past int's range reads as no code, not a thrown build.
+  return match == null ? null : int.tryParse(match.group(1)!);
 }
 
 final _exitStatus = RegExp(r'^(?:Exited|Restarting) \((-?\d+)\)');

@@ -4106,8 +4106,8 @@ TLS. The section checks when it shows, after an edit and on request.
   change would cost a request per container, so a row flags what its
   state and Status text say: a restarting container as a restart loop,
   and an exited one whose code a stop does not leave (anything but 0
-  and 128 plus SIGINT, SIGQUIT, SIGKILL or SIGTERM) as failed, in words
-  beside an icon. The details show the restart count, the exit code and
+  and 128 plus SIGINT, SIGQUIT, SIGKILL or SIGTERM) as failed: the state
+  in the error colour and an icon before the status words. The details show the restart count, the exit code and
   an OOM kill from the inspect.
 - **As built (M4 E15).** `operations/plans/docker_plans.dart` plans
   CTR-02's verbs, CTR-06's removal, IMG-02 and STK-03 (7.14, 7.16) over

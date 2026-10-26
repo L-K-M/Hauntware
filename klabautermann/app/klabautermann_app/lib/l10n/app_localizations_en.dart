@@ -5695,7 +5695,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String dockerContainerFlagTooltip(String flag, int code) {
     String _temp0 = intl.Intl.selectLogic(flag, {
       'restartLoop':
-          'Docker is starting it again after it exited, as a restart policy does in a loop. The details show how often it restarted.',
+          'The engine is starting it again after it exited, as a restart policy does in a loop. The details show how often it restarted.',
       'failed':
           'Its last run exited with code $code, which a stop does not leave.',
       'other': 'Exit code $code',

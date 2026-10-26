@@ -645,7 +645,10 @@ class _ContainersPanelState extends State<ContainersPanel> {
         (container) => containerStateFlagText(l10n, container),
         (container) => _stateRank(container.state),
         extent: const FixedColumnExtent(88),
-        cell: (context, container) => ContainerStateBadge(container: container),
+        // The flag's icon sits in the wider Status cell, so "Restarting"
+        // keeps its room here.
+        cell: (context, container) =>
+            ContainerStateBadge(container: container, icon: false),
       ),
       column(
         ContainerColumn.health,
@@ -665,6 +668,10 @@ class _ContainersPanelState extends State<ContainersPanel> {
         (container) => containerStatusText(container) ?? unknown,
         (container) => containerUptime(container)?.inSeconds,
         extent: const FlexColumnExtent(2),
+        cell: (context, container) => _StatusCell(
+          text: containerStatusText(container) ?? unknown,
+          flag: containerFlagOf(container),
+        ),
       ),
       column(
         ContainerColumn.image,
@@ -885,9 +892,18 @@ class ContainerHealthBadge extends StatelessWidget {
 /// the only cue (A11Y-01); the tooltip says why. The list's rows and a
 /// stack's share it.
 class ContainerStateBadge extends StatelessWidget {
-  const ContainerStateBadge({super.key, required this.container, this.style});
+  const ContainerStateBadge({
+    super.key,
+    required this.container,
+    this.style,
+    this.icon = true,
+  });
 
   final ContainerSummary container;
+
+  /// Whether the flag's icon leads the words; the table puts it in the
+  /// row's Status cell instead.
+  final bool icon;
 
   /// The words' style; the body text's by default.
   final TextStyle? style;
@@ -910,6 +926,21 @@ class ContainerStateBadge extends StatelessWidget {
     }
 
     final error = theme.colorScheme.error;
+    if (!icon) {
+      return Tooltip(
+        message: l10n.dockerContainerFlagTooltip(
+          flag.name,
+          containerExitCode(container) ?? 0,
+        ),
+        child: Text(
+          words,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          softWrap: false,
+          style: style?.copyWith(color: error),
+        ),
+      );
+    }
     return Tooltip(
       message: l10n.dockerContainerFlagTooltip(
         flag.name,
@@ -938,6 +969,44 @@ class ContainerStateBadge extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The Status column's text, after the CTR-09 flag's icon in the error
+/// colour when the row has one.
+class _StatusCell extends StatelessWidget {
+  const _StatusCell({required this.text, required this.flag});
+
+  final String text;
+  final ContainerFlag? flag;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final flag = this.flag;
+    return Row(
+      spacing: 4,
+      children: [
+        if (flag != null)
+          Icon(
+            switch (flag) {
+              ContainerFlag.restartLoop => Icons.loop,
+              ContainerFlag.failed => Icons.error_outline,
+            },
+            size: 14,
+            color: theme.colorScheme.error,
+          ),
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            style: theme.textTheme.bodyMedium,
+          ),
+        ),
+      ],
     );
   }
 }

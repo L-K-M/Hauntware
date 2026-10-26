@@ -278,6 +278,13 @@ void main() {
     expect(flag('exited', 'Exited (137) 2 days ago'), isNull);
     expect(flag('exited', 'Exited'), isNull);
     expect(flag('running', 'Up 3 hours'), isNull);
+    // A code past int's range is no code.
+    expect(
+      containerExitCode(
+        dockerContainer('c', status: 'Exited (99999999999999999999) 1 s ago'),
+      ),
+      isNull,
+    );
   });
 
   testWidgets('watches while it shows and reads nothing hidden', (
@@ -420,13 +427,29 @@ void main() {
       find.bySemanticsLabel(RegExp(r'^Name: stopped\nState: Exited\n')),
       findsOneWidget,
     );
-    final tooltip = tester.widget<Tooltip>(
-      find.ancestor(
-        of: find.byIcon(Icons.error_outline),
-        matching: find.byType(Tooltip),
-      ),
+    // The state's words say why on hover; the icon leads the status.
+    expect(
+      tester
+          .widgetList<Tooltip>(find.byType(Tooltip))
+          .where((t) => t.message?.contains('exited with code 2') ?? false),
+      hasLength(1),
     );
-    expect(tooltip.message, contains('exited with code 2'));
+    expect(
+      find.ancestor(of: find.byIcon(Icons.loop), matching: find.byType(Row)),
+      findsWidgets,
+    );
+    expect(
+      find.descendant(
+        of: find
+            .ancestor(
+              of: find.text('Restarting (1) 3 seconds ago'),
+              matching: find.byType(Row),
+            )
+            .first,
+        matching: find.byIcon(Icons.loop),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('sorts within each group, the busiest first by CPU', (

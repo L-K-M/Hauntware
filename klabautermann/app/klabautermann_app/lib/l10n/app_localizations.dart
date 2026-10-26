@@ -7301,7 +7301,7 @@ abstract class AppLocalizations {
   /// Containers list: the tooltip on a flagged container's state (CTR-09). flag is restartLoop or failed; code is the exit code in the container's status, which only failed shows.
   ///
   /// In en, this message translates to:
-  /// **'{flag, select, restartLoop{Docker is starting it again after it exited, as a restart policy does in a loop. The details show how often it restarted.} failed{Its last run exited with code {code}, which a stop does not leave.} other{Exit code {code}}}'**
+  /// **'{flag, select, restartLoop{The engine is starting it again after it exited, as a restart policy does in a loop. The details show how often it restarted.} failed{Its last run exited with code {code}, which a stop does not leave.} other{Exit code {code}}}'**
   String dockerContainerFlagTooltip(String flag, int code);
 
   /// A container's health check status (CTR-04), beside an icon.
