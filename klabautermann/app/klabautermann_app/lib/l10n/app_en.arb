@@ -1181,6 +1181,100 @@
       }
     }
   },
+  "systemOomTitle": "Out-of-memory kills",
+  "@systemOomTitle": {
+    "description": "Heading of the System tab's MEM-03 section: processes the kernel's OOM killer ended since boot."
+  },
+  "systemOomReading": "Reading the kernel's out-of-memory kills.",
+  "@systemOomReading": {
+    "description": "The OOM kills section while its read runs."
+  },
+  "systemOomFailed": "{failure, select, noLink{Not connected, so the out-of-memory kills cannot be read.} denied{The server refused the out-of-memory read.} missing{The server lacks a tool the out-of-memory read needs.} other{The out-of-memory kills could not be read.}}",
+  "@systemOomFailed": {
+    "description": "The OOM kills section when its read failed; failure is noLink, denied, missing or failed.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "systemOomCount": "{count, plural, =0{No process was killed for lack of memory since boot.} =1{1 process was killed for lack of memory since boot.} other{{count} processes were killed for lack of memory since boot.}}",
+  "@systemOomCount": {
+    "description": "How many processes the kernel's OOM killer ended since boot, from /proc/vmstat.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemOomCountUnknown": "This kernel does not count out-of-memory kills (Linux 4.13 and later do).",
+  "@systemOomCountUnknown": {
+    "description": "The OOM kills section on a kernel without the oom_kill counter in /proc/vmstat."
+  },
+  "systemOomLogDenied": "Your login may not read the kernel log, so the killed processes cannot be named. Membership in the adm or systemd-journal group, or sudo, gives access.",
+  "@systemOomLogDenied": {
+    "description": "The OOM kills section when neither the journal's kernel lines nor dmesg gave any line to the login user."
+  },
+  "systemOomProcess": "{command} (PID {pid})",
+  "@systemOomProcess": {
+    "description": "A killed process: its command name and process ID.",
+    "placeholders": {
+      "command": {
+        "type": "String"
+      },
+      "pid": {
+        "type": "int"
+      }
+    }
+  },
+  "systemOomKilledAt": "Killed {time}",
+  "@systemOomKilledAt": {
+    "description": "When a process was killed, from the journal: a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemOomAfterBoot": "Killed {time} after boot",
+  "@systemOomAfterBoot": {
+    "description": "When a process was killed, from dmesg, which counts from boot; time is a span such as \"3 days, 4 hours\".",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "systemOomMemory": "{size} of its own memory when killed",
+  "@systemOomMemory": {
+    "description": "How much anonymous memory (anon-rss) a killed process held, in binary units.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "systemOomCgroupLimit": "A memory limit ran out, such as a container's, not the server's memory.",
+  "@systemOomCgroupLimit": {
+    "description": "Shown under a kill the kernel made because a memory cgroup reached its limit."
+  },
+  "systemOomShowLog": "Show in kernel log",
+  "@systemOomShowLog": {
+    "description": "Opens the current boot's kernel log lines of the OOM reports."
+  },
+  "systemOomReadAgain": "Read again",
+  "@systemOomReadAgain": {
+    "description": "Reads the OOM kills again."
+  },
+  "systemOomLogTitle": "Out-of-memory reports",
+  "@systemOomLogTitle": {
+    "description": "Heading of the sheet with the current boot's kernel log lines of OOM reports."
+  },
+  "systemOomLogClose": "Close",
+  "@systemOomLogClose": {
+    "description": "Tooltip of the button that closes the OOM reports sheet."
+  },
   "systemReceive": "Receive",
   "@systemReceive": {
     "description": "Label of the server's total receive rate over all its network interfaces, in the System tab."

@@ -2030,6 +2030,15 @@ is on main:
   and those the login may use, from `lscpu`, or `/proc/cpuinfo` where
   `lscpu` is missing. A big.LITTLE board lists both models. Inside a
   container the counts that would be the host machine's read as unknown.
+- Out-of-memory kills (M6 N42b, MEM-03): the System tab's new section
+  counts the kills since boot from `/proc/vmstat`'s `oom_kill` (Linux
+  4.13+) and names the current boot's victims, newest first, from the
+  kernel log: the journal's where the login user may read it, else
+  `dmesg`. Each kill shows its command and PID, when it happened (from
+  boot with `dmesg`), its memory and its memory cgroup, and says when a
+  cgroup's limit ran out rather than the server's memory. "Show in
+  kernel log" opens the boot's OOM report lines from the journal. An
+  unreadable kernel log and a kernel without the counter say so.
 - CPU breakdown and pressure (M6 N42a, CPU-04, CPU-05, MEM-04): the
   Overview's CPU card adds I/O wait, steal, IRQ and soft IRQ beside
   user, system and idle, with a plain-language hint once steal, iowait

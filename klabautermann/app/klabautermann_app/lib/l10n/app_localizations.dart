@@ -1558,6 +1558,96 @@ abstract class AppLocalizations {
   /// **'{time}'**
   String systemBootedValue(DateTime time);
 
+  /// Heading of the System tab's MEM-03 section: processes the kernel's OOM killer ended since boot.
+  ///
+  /// In en, this message translates to:
+  /// **'Out-of-memory kills'**
+  String get systemOomTitle;
+
+  /// The OOM kills section while its read runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the kernel\'s out-of-memory kills.'**
+  String get systemOomReading;
+
+  /// The OOM kills section when its read failed; failure is noLink, denied, missing or failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected, so the out-of-memory kills cannot be read.} denied{The server refused the out-of-memory read.} missing{The server lacks a tool the out-of-memory read needs.} other{The out-of-memory kills could not be read.}}'**
+  String systemOomFailed(String failure);
+
+  /// How many processes the kernel's OOM killer ended since boot, from /proc/vmstat.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No process was killed for lack of memory since boot.} =1{1 process was killed for lack of memory since boot.} other{{count} processes were killed for lack of memory since boot.}}'**
+  String systemOomCount(int count);
+
+  /// The OOM kills section on a kernel without the oom_kill counter in /proc/vmstat.
+  ///
+  /// In en, this message translates to:
+  /// **'This kernel does not count out-of-memory kills (Linux 4.13 and later do).'**
+  String get systemOomCountUnknown;
+
+  /// The OOM kills section when neither the journal's kernel lines nor dmesg gave any line to the login user.
+  ///
+  /// In en, this message translates to:
+  /// **'Your login may not read the kernel log, so the killed processes cannot be named. Membership in the adm or systemd-journal group, or sudo, gives access.'**
+  String get systemOomLogDenied;
+
+  /// A killed process: its command name and process ID.
+  ///
+  /// In en, this message translates to:
+  /// **'{command} (PID {pid})'**
+  String systemOomProcess(String command, int pid);
+
+  /// When a process was killed, from the journal: a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Killed {time}'**
+  String systemOomKilledAt(DateTime time);
+
+  /// When a process was killed, from dmesg, which counts from boot; time is a span such as "3 days, 4 hours".
+  ///
+  /// In en, this message translates to:
+  /// **'Killed {time} after boot'**
+  String systemOomAfterBoot(String time);
+
+  /// How much anonymous memory (anon-rss) a killed process held, in binary units.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} of its own memory when killed'**
+  String systemOomMemory(String size);
+
+  /// Shown under a kill the kernel made because a memory cgroup reached its limit.
+  ///
+  /// In en, this message translates to:
+  /// **'A memory limit ran out, such as a container\'s, not the server\'s memory.'**
+  String get systemOomCgroupLimit;
+
+  /// Opens the current boot's kernel log lines of the OOM reports.
+  ///
+  /// In en, this message translates to:
+  /// **'Show in kernel log'**
+  String get systemOomShowLog;
+
+  /// Reads the OOM kills again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemOomReadAgain;
+
+  /// Heading of the sheet with the current boot's kernel log lines of OOM reports.
+  ///
+  /// In en, this message translates to:
+  /// **'Out-of-memory reports'**
+  String get systemOomLogTitle;
+
+  /// Tooltip of the button that closes the OOM reports sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get systemOomLogClose;
+
   /// Label of the server's total receive rate over all its network interfaces, in the System tab.
   ///
   /// In en, this message translates to:

@@ -123,6 +123,10 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // HostResult's rows and the boot a source reads.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show JournalBoot, JournalBootEntry, LogCompression, LogFileEntry;
+// The System tab's out-of-memory kills (MEM-03): the read a HostResult
+// carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show OomKill, OomKillsRead, OomLogSource;
 // The System tab's boots section (BOOT-02, BOOT-03): how earlier boots
 // ended and the kernels a HostResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart'
