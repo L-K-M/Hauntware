@@ -5,6 +5,7 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart' show syncLocalDirectory;
 import 'package:seance_core/seance_core.dart' show uuidV4;
 
+import '../certificates/tls_check.dart' show TlsEndpoint;
 import '../docker/docker_ladder.dart' show dockerSocketPathProblem;
 import '../engine/protocol.dart'
     show DockerEndpointCustom, DockerEndpointDetected, DockerEndpointSocket;
@@ -38,6 +39,7 @@ const String _appLockKey = 'klabautermann.appLock';
 
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
 const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
+const String _tlsEndpointsKey = 'klabautermann.certificates.endpoints';
 
 // The fields of one server's entry under [_endpointOverridesKey].
 const String _overrideChoiceField = 'choice';
@@ -551,6 +553,45 @@ final class DeviceSettingsStore {
 
   Map<String, Object?> get _rawStackFolders =>
       switch (_values[_stackFoldersKey]) {
+        final Map<String, Object?> entries => {...entries},
+        _ => {},
+      };
+
+  /// The endpoints CRT-01 checks for each server, by server id, as
+  /// `host:port` labels: `klabautermann.certificates.endpoints`.
+  /// Device-local, since the check runs from this device. Read leniently,
+  /// as [stackFolders]: an entry that is not a list and items that are
+  /// not endpoints are skipped, rather than failing the file.
+  Map<String, List<TlsEndpoint>> get tlsEndpoints => {
+    for (final MapEntry(:key, :value) in _rawTlsEndpoints.entries)
+      if (value case final List<Object?> labels)
+        if ([
+              for (final label in labels)
+                if (label case final String text)
+                  if (TlsEndpoint.parse(text) case final endpoint?) endpoint,
+            ]
+            case final endpoints when endpoints.isNotEmpty)
+          key: List.unmodifiable(endpoints),
+  };
+
+  /// Stores [endpoints] as [serverId]'s, or removes its entry when empty,
+  /// and writes the document, as [setStackFolders] does.
+  Future<void> setTlsEndpoints(
+    String serverId,
+    List<TlsEndpoint> endpoints,
+  ) async {
+    final entries = _rawTlsEndpoints;
+    if (endpoints.isEmpty) {
+      entries.remove(serverId);
+    } else {
+      entries[serverId] = [for (final endpoint in endpoints) endpoint.label];
+    }
+    _values[_tlsEndpointsKey] = entries;
+    await _save();
+  }
+
+  Map<String, Object?> get _rawTlsEndpoints =>
+      switch (_values[_tlsEndpointsKey]) {
         final Map<String, Object?> entries => {...entries},
         _ => {},
       };
