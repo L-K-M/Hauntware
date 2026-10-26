@@ -73,11 +73,13 @@ squash the initial migration PR: original source ancestry must reach main.
   client bundles needs a Flutter license chunk in a package `LICENSE`
   (ghost_fonts, pdfium_dart through its `tool/pdfium_licenses.py`, Séance's
   app `LICENSE` for the Windows NuGet packages), and every Android Maven
-  license a text in the app's `android/app/config/`. The sync server's
-  notices come from `seance/scripts/licenses/`. The generators and the
-  AboutLibraries build fail on a component without license text; keep
-  `scripts/check-flutter-notices.sh`, `scripts/check-release-notices.sh`
-  and the APK and image checks passing.
+  license a text in the app's `android/app/config/`, where code a Maven
+  artifact shades (the Protocol Buffers runtime in tink-android) also needs
+  a bundled entry. The sync server's notices come from
+  `seance/scripts/licenses/`. The generators and the AboutLibraries build
+  fail on a component without license text; keep
+  `scripts/check-flutter-notices.sh`, `scripts/check-release-notices.sh` and
+  the APK and image checks passing.
 
 ## Releases and review
 

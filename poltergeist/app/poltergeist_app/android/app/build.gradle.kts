@@ -123,7 +123,9 @@ aboutLibraries {
     }
     license {
         strictMode.set(com.mikepenz.aboutlibraries.plugin.StrictMode.FAIL)
-        allowedLicenses.addAll("Apache-2.0")
+        // BSD-3-Clause: the Protocol Buffers runtime tink-android shades,
+        // a bundled entry in config/libraries/.
+        allowedLicenses.addAll("Apache-2.0", "BSD-3-Clause")
     }
 }
 
