@@ -590,7 +590,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
           libsecret-1-dev libjsoncpp-dev imagemagick file
-          dpkg-dev binutils xvfb xdotool
+          dpkg-dev binutils xvfb xdotool squashfs-tools
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -684,6 +684,11 @@ jobs:
               # point the packager at it explicitly (--bundle asks the ELF for
               # its arch).
               planchette/scripts/package-linux.sh --bundle "planchette-linux-${{ matrix.flavor }}" --output-dir .
+              # The AppImage runtime appimagetool put in front of the squashfs
+              # statically links libfuse, squashfuse, musl, zstd and zlib: add
+              # their notices and source pointers inside the AppImage.
+              python3 -I scripts/appimage-notices.py appimage "planchette-linux-${{ matrix.flavor }}.AppImage" \
+                --package planchette --overrides scripts/appimage-notices.json
               # The tarball also carries the notices readable at its top, beside
               # the license; added after packaging, so the .deb keeps them in
               # its doc directory only.
@@ -1057,7 +1062,7 @@ jobs:
         run: >-
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
-          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
+          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool squashfs-tools
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -1154,6 +1159,11 @@ jobs:
               # point the packager at it explicitly (--bundle asks the ELF for
               # its arch).
               seance/scripts/package-linux.sh --bundle "seance-linux-${{ matrix.flavor }}" --output-dir .
+              # The AppImage runtime appimagetool put in front of the squashfs
+              # statically links libfuse, squashfuse, musl, zstd and zlib: add
+              # their notices and source pointers inside the AppImage.
+              python3 -I scripts/appimage-notices.py appimage "seance-linux-${{ matrix.flavor }}.AppImage" \
+                --package seance --overrides scripts/appimage-notices.json
               # The tarball also carries the notices readable at its top, beside
               # the license; added after packaging, so the .deb keeps them in
               # its doc directory only.
@@ -1299,7 +1309,7 @@ jobs:
         run: >-
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
-          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
+          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool squashfs-tools
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -1399,6 +1409,11 @@ jobs:
               # point the packager at it explicitly (--bundle asks the ELF for
               # its arch).
               poltergeist/scripts/package-linux.sh --bundle "poltergeist-linux-${{ matrix.flavor }}" --output-dir .
+              # The AppImage runtime appimagetool put in front of the squashfs
+              # statically links libfuse, squashfuse, musl, zstd and zlib: add
+              # their notices and source pointers inside the AppImage.
+              python3 -I scripts/appimage-notices.py appimage "poltergeist-linux-${{ matrix.flavor }}.AppImage" \
+                --package poltergeist --overrides scripts/appimage-notices.json
               # The tarball also carries the notices readable at its top, beside
               # the license; added after packaging, so the .deb keeps them in
               # its doc directory only.
@@ -1545,7 +1560,7 @@ jobs:
         run: >-
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
-          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
+          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool squashfs-tools
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -1636,6 +1651,11 @@ jobs:
               # The mv above renamed the bundle out of Flutter's layout, so
               # point the packager at it explicitly.
               klabautermann/scripts/package-linux.sh --bundle "klabautermann-preview-linux-${{ matrix.flavor }}" --output-dir .
+              # The AppImage runtime appimagetool put in front of the squashfs
+              # statically links libfuse, squashfuse, musl, zstd and zlib: add
+              # their notices and source pointers inside the AppImage.
+              python3 -I scripts/appimage-notices.py appimage "klabautermann-preview-linux-${{ matrix.flavor }}.AppImage" \
+                --package klabautermann --overrides scripts/appimage-notices.json
               # The tarball also carries the notices readable at its top, beside
               # the license; added after packaging, so the .deb keeps them in
               # its doc directory only.

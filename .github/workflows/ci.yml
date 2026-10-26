@@ -1575,6 +1575,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
           libsecret-1-dev libjsoncpp-dev dpkg-dev file binutils imagemagick xvfb xdotool
+          squashfs-tools
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -1607,10 +1608,17 @@ jobs:
       - name: Linux packages
         if: matrix.target == 'linux'
         working-directory: planchette
-        run: scripts/package-linux.sh --appimage=required
+        run: |
+          scripts/package-linux.sh --appimage=required
+          # The AppImage runtime appimagetool put in front of the squashfs
+          # statically links libfuse, squashfuse, musl, zstd and zlib: add
+          # their notices and source pointers inside the AppImage, as
+          # release.yml does.
+          python3 -I ../scripts/appimage-notices.py appimage dist/planchette-linux-x64.AppImage \
+            --package planchette --overrides ../scripts/appimage-notices.json
       # The built artifacts carry their third-party notices: each
       # NOTICES, the APK's Maven library definitions, the readable copy in
-      # the Apple apps, and the .deb's copyright file and
+      # the Apple apps, and the .deb's and the AppImage's copyright file and
       # Third-Party-Notices.txt.
       - name: Verify bundled notices
         shell: bash
@@ -1634,6 +1642,14 @@ jobs:
               dpkg-deb -x planchette/dist/planchette_*.deb "$RUNNER_TEMP/notices-deb"
               test -s "$RUNNER_TEMP/notices-deb/usr/share/doc/planchette/copyright"
               check "$RUNNER_TEMP/notices-deb/usr/share/doc/planchette/Third-Party-Notices.txt"
+              # The repacked AppImage still unpacks, and its notices name the
+              # runtime too.
+              (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/planchette/dist/planchette-linux-x64.AppImage" --appimage-extract >/dev/null)
+              appdoc="$RUNNER_TEMP/squashfs-root/usr/share/doc/planchette"
+              test -s "$appdoc/copyright"
+              test -s "$appdoc/SOURCES.txt"
+              check "$appdoc/Third-Party-Notices.txt"
+              grep -q '^AppImage type2-runtime ' "$appdoc/Third-Party-Notices.txt"
               ;;
             macos) check "$build"/macos/Build/Products/Release/*.app/Contents/Resources/Third-Party-Notices.txt ;;
             windows) check "$build/windows/x64/runner/Release/data/flutter_assets/NOTICES.Z" ;;
@@ -1753,6 +1769,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
           libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
+          squashfs-tools
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -1821,10 +1838,17 @@ jobs:
       - name: Package Linux artifacts (.deb + AppImage)
         if: startsWith(matrix.target, 'linux')
         working-directory: seance
-        run: scripts/package-linux.sh --output-dir dist-packages
+        run: |
+          scripts/package-linux.sh --output-dir dist-packages
+          # The AppImage runtime appimagetool put in front of the squashfs
+          # statically links libfuse, squashfuse, musl, zstd and zlib: add
+          # their notices and source pointers inside the AppImage, as
+          # release.yml does.
+          python3 -I ../scripts/appimage-notices.py appimage dist-packages/seance-linux-x64.AppImage \
+            --package seance --overrides ../scripts/appimage-notices.json
       # The built artifacts carry their third-party notices: each
       # NOTICES, the APK's Maven library definitions, the readable copy in
-      # the Apple apps, and the .deb's copyright file and
+      # the Apple apps, and the .deb's and the AppImage's copyright file and
       # Third-Party-Notices.txt.
       - name: Verify bundled notices
         shell: bash
@@ -1848,6 +1872,14 @@ jobs:
               dpkg-deb -x seance/dist-packages/seance_*.deb "$RUNNER_TEMP/notices-deb"
               test -s "$RUNNER_TEMP/notices-deb/usr/share/doc/seance/copyright"
               check "$RUNNER_TEMP/notices-deb/usr/share/doc/seance/Third-Party-Notices.txt"
+              # The repacked AppImage still unpacks, and its notices name the
+              # runtime too.
+              (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/seance/dist-packages/seance-linux-x64.AppImage" --appimage-extract >/dev/null)
+              appdoc="$RUNNER_TEMP/squashfs-root/usr/share/doc/seance"
+              test -s "$appdoc/copyright"
+              test -s "$appdoc/SOURCES.txt"
+              check "$appdoc/Third-Party-Notices.txt"
+              grep -q '^AppImage type2-runtime ' "$appdoc/Third-Party-Notices.txt"
               ;;
             macos) check "$build"/macos/Build/Products/Release/*.app/Contents/Resources/Third-Party-Notices.txt ;;
             ios) check "$build"/ios/iphoneos/Runner.app/Third-Party-Notices.txt "$build"/ios/iphoneos/Runner.app/Frameworks/App.framework/flutter_assets/NOTICES.Z ;;
@@ -1949,6 +1981,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
           libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
+          squashfs-tools
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -2011,10 +2044,17 @@ jobs:
       - name: Package Linux artifacts (.deb + AppImage)
         if: startsWith(matrix.target, 'linux')
         working-directory: poltergeist
-        run: scripts/package-linux.sh --output-dir dist-packages
+        run: |
+          scripts/package-linux.sh --output-dir dist-packages
+          # The AppImage runtime appimagetool put in front of the squashfs
+          # statically links libfuse, squashfuse, musl, zstd and zlib: add
+          # their notices and source pointers inside the AppImage, as
+          # release.yml does.
+          python3 -I ../scripts/appimage-notices.py appimage dist-packages/poltergeist-linux-x64.AppImage \
+            --package poltergeist --overrides ../scripts/appimage-notices.json
       # The built artifacts carry their third-party notices: each
       # NOTICES, the APK's Maven library definitions, the readable copy in
-      # the Apple apps, and the .deb's copyright file and
+      # the Apple apps, and the .deb's and the AppImage's copyright file and
       # Third-Party-Notices.txt.
       - name: Verify bundled notices
         shell: bash
@@ -2038,6 +2078,14 @@ jobs:
               dpkg-deb -x poltergeist/dist-packages/poltergeist_*.deb "$RUNNER_TEMP/notices-deb"
               test -s "$RUNNER_TEMP/notices-deb/usr/share/doc/poltergeist/copyright"
               check "$RUNNER_TEMP/notices-deb/usr/share/doc/poltergeist/Third-Party-Notices.txt"
+              # The repacked AppImage still unpacks, and its notices name the
+              # runtime too.
+              (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/poltergeist/dist-packages/poltergeist-linux-x64.AppImage" --appimage-extract >/dev/null)
+              appdoc="$RUNNER_TEMP/squashfs-root/usr/share/doc/poltergeist"
+              test -s "$appdoc/copyright"
+              test -s "$appdoc/SOURCES.txt"
+              check "$appdoc/Third-Party-Notices.txt"
+              grep -q '^AppImage type2-runtime ' "$appdoc/Third-Party-Notices.txt"
               ;;
             macos) check "$build"/macos/Build/Products/Release/*.app/Contents/Resources/Third-Party-Notices.txt ;;
             ios) check "$build"/ios/archive/Runner.xcarchive/Products/Applications/*.app/Third-Party-Notices.txt "$build"/ios/archive/Runner.xcarchive/Products/Applications/*.app/Frameworks/App.framework/flutter_assets/NOTICES.Z ;;
@@ -2130,6 +2178,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
           libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
+          squashfs-tools
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -2199,10 +2248,17 @@ jobs:
       - name: Package Linux artifacts (.deb + AppImage)
         if: startsWith(matrix.target, 'linux')
         working-directory: klabautermann
-        run: scripts/package-linux.sh --output-dir dist-packages
+        run: |
+          scripts/package-linux.sh --output-dir dist-packages
+          # The AppImage runtime appimagetool put in front of the squashfs
+          # statically links libfuse, squashfuse, musl, zstd and zlib: add
+          # their notices and source pointers inside the AppImage, as
+          # release.yml does.
+          python3 -I ../scripts/appimage-notices.py appimage dist-packages/klabautermann-preview-linux-x64.AppImage \
+            --package klabautermann --overrides ../scripts/appimage-notices.json
       # The built artifacts carry their third-party notices: each
       # NOTICES, the APK's Maven library definitions, the readable copy in
-      # the Apple apps, and the .deb's copyright file and
+      # the Apple apps, and the .deb's and the AppImage's copyright file and
       # Third-Party-Notices.txt.
       - name: Verify bundled notices
         shell: bash
@@ -2226,6 +2282,14 @@ jobs:
               dpkg-deb -x klabautermann/dist-packages/klabautermann_*.deb "$RUNNER_TEMP/notices-deb"
               test -s "$RUNNER_TEMP/notices-deb/usr/share/doc/klabautermann/copyright"
               check "$RUNNER_TEMP/notices-deb/usr/share/doc/klabautermann/Third-Party-Notices.txt"
+              # The repacked AppImage still unpacks, and its notices name the
+              # runtime too.
+              (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/klabautermann/dist-packages/klabautermann-preview-linux-x64.AppImage" --appimage-extract >/dev/null)
+              appdoc="$RUNNER_TEMP/squashfs-root/usr/share/doc/klabautermann"
+              test -s "$appdoc/copyright"
+              test -s "$appdoc/SOURCES.txt"
+              check "$appdoc/Third-Party-Notices.txt"
+              grep -q '^AppImage type2-runtime ' "$appdoc/Third-Party-Notices.txt"
               ;;
             macos) check "$build"/macos/Build/Products/Release/*.app/Contents/Resources/Third-Party-Notices.txt ;;
             ios) check "$build"/ios/archive/Runner.xcarchive/Products/Applications/*.app/Third-Party-Notices.txt "$build"/ios/archive/Runner.xcarchive/Products/Applications/*.app/Frameworks/App.framework/flutter_assets/NOTICES.Z ;;

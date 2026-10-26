@@ -102,6 +102,8 @@ bundle third-party code that keeps its own licenses:
   WIL and C++/WinRT. Séance and Poltergeist for iOS also bundle
   DKImagePickerController, DKCamera, DKPhotoGallery, TOCropViewController,
   SwiftyGif and SDWebImage, which file_picker pulls in.
+- The Linux AppImages also carry the AppImage runtime, which statically
+  links libfuse (LGPL-2.1), squashfuse, musl, zstd and zlib.
 - The sync server bundles the Dart runtime (with BoringSSL, ICU, zlib and
   other code it embeds) and its pub packages; its Docker image adds Debian
   packages.
@@ -115,7 +117,9 @@ Their notices ship inside each artifact:
 - macOS apps: `<App>.app/Contents/Resources/Third-Party-Notices.txt`; iOS
   apps: `Third-Party-Notices.txt` in the app bundle.
 - Linux packages: `copyright` and `Third-Party-Notices.txt` in
-  `/usr/share/doc/<package>/` (Flatpak: `/app/share/doc/<package>/`).
+  `/usr/share/doc/<package>/` (Flatpak: `/app/share/doc/<package>/`). The
+  AppImage's notices also cover its runtime, with source links in
+  `SOURCES.txt` beside them.
 - Sync-server tarballs: `Third-Party-Notices.txt` and `LICENSE` beside the
   binary. Docker image: `Third-Party-Notices.txt`, `OS-Packages.txt` and
   `LICENSE` in `/usr/share/doc/seance-sync/`; system packages from the base
@@ -133,4 +137,5 @@ above, after the app's own Unlicense), the Unicode License V3 for the
 generated Unicode tables in `poltergeist/packages/poltergeist_core/LICENSE`,
 `poltergeist/packages/poltergeist_core/tool/unicode/LICENSE.txt` and
 `poltergeist/app/poltergeist_app/tool/unicode/LICENSE.txt`, and the license
-texts under `*/app/*/android/app/config/licenses/`.
+texts under `*/app/*/android/app/config/licenses/` and
+`scripts/licenses/`.

@@ -5,7 +5,8 @@
 #   android  the APK's flutter_assets/NOTICES.Z and its Maven library
 #            definitions (scripts/android_notices.py)
 #   linux    LICENSE and Third-Party-Notices.txt at the tarball's top, the
-#            .deb's and the AppImage's /usr/share/doc/<package>/ files
+#            .deb's and the AppImage's /usr/share/doc/<package>/ files (the
+#            AppImage's with its runtime's notices and SOURCES.txt)
 #   macos    <App>.app/Contents/Resources/Third-Party-Notices.txt
 #   ios      the IPA's NOTICES.Z and Payload/<App>.app/Third-Party-Notices.txt
 #   windows  LICENSE and Third-Party-Notices.txt at the zip's top
@@ -58,10 +59,14 @@ case "$target" in
     grep -q 'Third-Party-Notices.txt next to this file' "$copyright"
     check "$work/deb/usr/share/doc/$product/Third-Party-Notices.txt"
 
-    # --appimage-extract unpacks without running the app.
+    # --appimage-extract unpacks without running the app. The AppImage's
+    # notices also cover its runtime (scripts/appimage-notices.py).
     (cd "$work" && "../$stem-linux-x64.AppImage" --appimage-extract >/dev/null)
     present "$work/squashfs-root/usr/share/doc/$product/copyright"
     check "$work/squashfs-root/usr/share/doc/$product/Third-Party-Notices.txt"
+    grep -q '^AppImage type2-runtime ' "$work/squashfs-root/usr/share/doc/$product/Third-Party-Notices.txt" \
+      || { echo "error: the AppImage's notices do not list its runtime" >&2; exit 1; }
+    present "$work/squashfs-root/usr/share/doc/$product/SOURCES.txt"
     ;;
   macos)
     ditto -x -k "$stem-macos-universal.zip" "$work"
