@@ -146,6 +146,12 @@ void main() {
     )!.firewalld!;
     expect(stopped.running, isFalse);
     expect(stopped.zones, isEmpty);
+
+    final silent = parseFirewall(
+      '$kFirewallFirewalldMarker \n$kFirewallNftMarker\n',
+    )!;
+    expect(silent.firewalld!.running, isFalse);
+    expect(silent.nftables, isEmpty);
   });
 
   test('nftables counts each chain\'s rules', () {

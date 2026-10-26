@@ -23,14 +23,13 @@ Future<FirewallReport> readFirewall(
       HostCommands.firewall(),
       password: session.password,
     );
-    return switch (parseFirewall(result.stdout)) {
-      final read? => FirewallReport(
-        serverId: serverId,
-        requestId: requestId,
-        read: read,
-      ),
-      null => failed(FirewallReportFailure.unreadable),
-    };
+    final read = parseFirewall(result.stdout);
+    // The script exits 0; a failure that printed no tool's section is a
+    // read that failed, not a host without a firewall.
+    if (read == null || (read.noTool && result.exitCode != 0)) {
+      return failed(FirewallReportFailure.unreadable);
+    }
+    return FirewallReport(serverId: serverId, requestId: requestId, read: read);
   } on ElevationException {
     return failed(FirewallReportFailure.elevationRefused);
   } on RemoteCommandException {

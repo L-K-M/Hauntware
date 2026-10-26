@@ -886,6 +886,8 @@ abstract final class HostCommands {
 
   static const _firewall =
       '''
+# ufw's labels are translated; the parser reads the English ones.
+export LC_ALL=C
 keep() { head -n $kFirewallLinesKept; }
 if command -v ufw >/dev/null 2>&1; then
   echo '$kFirewallUfwMarker'

@@ -158,6 +158,8 @@ FirewallRead? parseFirewall(String raw) {
       kFirewallNftMarker => kFirewallNftMarker,
       kFirewallIptablesMarker => kFirewallIptablesMarker,
       kFirewallIp6tablesMarker => kFirewallIp6tablesMarker,
+      // firewall-cmd --state that printed nothing.
+      kFirewallFirewalldMarker => kFirewallFirewalldMarker,
       final text when text.startsWith('$kFirewallFirewalldMarker ') =>
         kFirewallFirewalldMarker,
       _ => null,

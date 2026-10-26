@@ -63,6 +63,15 @@ void main() {
     expect(report.read!.noTool, isTrue);
   });
 
+  test('a run that failed before printing a section is unreadable, not '
+      'a host without a firewall', () async {
+    final report = await _read(
+      _Link(const RemoteCommandResult(exitCode: 126, stderr: 'denied')),
+    );
+    expect(report.failure, FirewallReportFailure.unreadable);
+    expect(report.read, isNull);
+  });
+
   test('other output is unreadable', () async {
     final report = await _read(_Link(_out('sudo: a password is required\n')));
     expect(report.failure, FirewallReportFailure.unreadable);
