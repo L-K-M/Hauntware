@@ -506,6 +506,11 @@ void main() {
       expect(await h.result(conflict), _failed(DockerQueryFailure.daemonError));
       expect(daemon.requests.sublist(stopped), hasLength(1));
 
+      daemon.failures['/v1.52/containers/app/top'] = (404, 'no such app');
+      final gone = h.query(const DockerContainerTopQuery('app'));
+      expect(await h.result(gone), _failed(DockerQueryFailure.notFound));
+      expect(daemon.requests.sublist(stopped), hasLength(2));
+
       final empty = h.query(const DockerContainerTopQuery(''));
       expect(await h.result(empty), _failed(DockerQueryFailure.invalidQuery));
     });

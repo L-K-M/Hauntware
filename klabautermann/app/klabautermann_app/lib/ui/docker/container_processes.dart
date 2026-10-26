@@ -21,9 +21,9 @@ const _residentTitle = 'RSS';
 /// on Windows).
 ///
 /// "Reveal values" shows the masked values for [kRevealDuration]; they
-/// are masked again when the time is up, when the app turns inactive and
-/// when the section goes, and nothing sends, stores or logs them
-/// (SAF-07).
+/// are masked again when the time is up, when the app turns inactive,
+/// when a read starts and when the section goes, and nothing sends,
+/// stores or logs them (SAF-07).
 class ContainerProcessesSection extends StatefulWidget {
   const ContainerProcessesSection({
     super.key,
@@ -94,6 +94,9 @@ class _ContainerProcessesSectionState extends State<ContainerProcessesSection> {
 
   Future<void> _read() async {
     final read = ++_reads;
+    // A fresh read starts masked: nothing revealed carries over to it.
+    _reveal?.cancel();
+    _reveal = null;
     if (_answer != null) setState(() => _answer = null);
 
     final answer = await widget.docker.readContainerTop(

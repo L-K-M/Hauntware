@@ -972,9 +972,10 @@ final class DockerRouter {
   }
 
   /// [containerId]'s processes with CTR-10's columns, or with the
-  /// daemon's default `ps -ef` where `ps` rejects them: BusyBox's takes
-  /// no `-e`, and a Windows daemon takes no arguments at all. Either
-  /// answers 500; the container's own state (404, 409) needs no retry.
+  /// daemon's default `ps -ef` where `ps` rejects those columns, as a
+  /// minimal `ps` (BusyBox's) or a Windows daemon, which takes no
+  /// arguments, does. Either answers 500, so any 500 costs one more
+  /// request; the container's own state (404, 409) needs no retry.
   static Future<DockerParseResult<ContainerTop>> _containerTop(
     DockerClient client,
     String containerId,
