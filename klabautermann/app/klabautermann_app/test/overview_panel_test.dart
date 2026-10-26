@@ -570,6 +570,25 @@ void main() {
       inPressure(find.textContaining('reports no pressure')),
       findsNothing,
     );
+
+    // All three withheld, as in a container without lxcfs: only the reason.
+    await panel.sample(
+      tester,
+      CoreResult(
+        withheld: const {
+          MetricField.cpuPressure: MetricWithheldReason.containerHostFigures,
+          MetricField.memoryPressure: MetricWithheldReason.containerHostFigures,
+          MetricField.ioPressure: MetricWithheldReason.containerHostFigures,
+        },
+      ),
+    );
+    expect(inPressure(find.textContaining('host\'s, so they')), findsOne);
+    expect(inPressure(find.textContaining('over the last 10 s')), findsNothing);
+    expect(inPressure(find.text('Unknown')), findsNothing);
+    expect(
+      inPressure(find.textContaining('reports no pressure')),
+      findsNothing,
+    );
   });
 
   for (final textScale in [1.0, 2.0]) {

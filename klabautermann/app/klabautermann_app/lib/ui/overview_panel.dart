@@ -1250,32 +1250,30 @@ final class _Cards {
       (l10n.overviewPressureIo, core.ioPressure),
     ];
     final withheld = _withheld(l10n, fields);
-    final none = withheld == null && files.every((file) => file.$2 == null);
+    final figures = [
+      for (final (name, file) in files)
+        if (file != null) ...[
+          if (file.some != null)
+            (l10n.overviewPressureSome(name), averages(file.some)),
+          if (file.full != null)
+            (l10n.overviewPressureFull(name), averages(file.full)),
+        ],
+    ];
     return PanelSection(
       title: l10n.overviewPressureTitle,
       children: [
-        if (none)
-          Text(l10n.overviewPressureNone, style: _valueStyle(context, stale))
-        else ...[
+        // A container without its own pressure files withholds them all:
+        // the reason then stands alone, without a caption over nothing.
+        if (figures.isNotEmpty) ...[
           Text(
             l10n.overviewPressureCaption,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
-          _Facts(
-            stale: stale,
-            facts: [
-              for (final (name, file) in files)
-                if (file != null) ...[
-                  if (file.some != null)
-                    (l10n.overviewPressureSome(name), averages(file.some)),
-                  if (file.full != null)
-                    (l10n.overviewPressureFull(name), averages(file.full)),
-                ],
-            ],
-          ),
-        ],
+          _Facts(stale: stale, facts: figures),
+        ] else if (withheld == null)
+          Text(l10n.overviewPressureNone, style: _valueStyle(context, stale)),
         ?withheld,
       ],
     );
