@@ -285,6 +285,111 @@ void main() {
       );
     });
   });
+
+  // Planchette and Séance keep their own copies of the two marked
+  // writers; the wrappers run the shared packager's. Every package must
+  // scope the Unlicense to its own code and ship the bundle's NOTICES
+  // readable next to it.
+  group('every packager ships the license and the notices', () {
+    const die = 'die() { echo "package-linux: \$*" >&2; exit 1; }\n';
+
+    for (final product in _packagerProducts) {
+      final source = _packagerSource(product);
+
+      test('$product scopes the license and points to the notices', () async {
+        final license = _repositoryFile('LICENSE');
+        final sandbox = Directory.systemTemp.createTempSync(
+          'poltergeist-copyright-test-',
+        );
+        addTearDown(() {
+          if (sandbox.existsSync()) sandbox.deleteSync(recursive: true);
+        });
+        final out = File(p.join(sandbox.path, 'copyright'));
+
+        final result = await _sourceAndCall(
+          _markerBlock(source, 'copyright file writer'),
+          'write_copyright ${_shellQuote(out.path)}',
+          environment: {
+            'DEB_COPYRIGHT_TITLE': 'Title',
+            'VERSION': '9.9.9',
+            'LICENSE_FILE': license.path,
+          },
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        final text = out.readAsStringSync();
+        expect(text, contains('Upstream-Version: 9.9.9'));
+        expect(text, contains(license.readAsStringSync()));
+        expect(text, contains("It covers this package's own\ncode"));
+        expect(text, contains('Third-Party-Notices.txt next to this file.'));
+      });
+
+      test("$product ships the bundle's NOTICES readable", () async {
+        final sandbox = Directory.systemTemp.createTempSync(
+          'poltergeist-notices-test-',
+        );
+        addTearDown(() {
+          if (sandbox.existsSync()) sandbox.deleteSync(recursive: true);
+        });
+        // Flutter writes NOTICES.Z gzip-compressed.
+        final notices = 'pdfium_dart\n\nMIT\n${'-' * 80}\nPDFium\n\nBSD\n';
+        File(p.join(sandbox.path, 'bundle/data/flutter_assets/NOTICES.Z'))
+          ..createSync(recursive: true)
+          ..writeAsBytesSync(gzip.encode(notices.codeUnits));
+        final out = File(p.join(sandbox.path, 'Third-Party-Notices.txt'));
+
+        final result = await _sourceAndCall(
+          _markerBlock(source, 'third-party notices writer'),
+          '${die}write_third_party_notices '
+          '${_shellQuote(p.join(sandbox.path, 'bundle'))} '
+          '${_shellQuote(out.path)}',
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(out.readAsStringSync(), notices);
+      });
+
+      test('$product refuses a bundle without NOTICES', () async {
+        final sandbox = Directory.systemTemp.createTempSync(
+          'poltergeist-notices-test-',
+        );
+        addTearDown(() {
+          if (sandbox.existsSync()) sandbox.deleteSync(recursive: true);
+        });
+        Directory(
+          p.join(sandbox.path, 'bundle/data/flutter_assets'),
+        ).createSync(recursive: true);
+
+        final result = await _sourceAndCall(
+          _markerBlock(source, 'third-party notices writer'),
+          '${die}write_third_party_notices '
+          '${_shellQuote(p.join(sandbox.path, 'bundle'))} '
+          '${_shellQuote(p.join(sandbox.path, 'out.txt'))}',
+        );
+
+        expect(result.exitCode, isNot(0));
+        expect(result.stderr, contains('NOTICES.Z not found'));
+      });
+
+      test('$product writes both into its doc directory', () {
+        final doc = source.contains('package-linux-common.sh"')
+            ? r'$PACKAGE_NAME'
+            : product;
+        expect(
+          source,
+          allOf(
+            contains(
+              'write_copyright "\$DEBROOT/usr/share/doc/$doc/copyright"',
+            ),
+            contains(
+              'write_third_party_notices "\$BUNDLE" '
+              '"\$DEBROOT/usr/share/doc/$doc/Third-Party-Notices.txt"',
+            ),
+          ),
+        );
+      });
+    }
+  });
 }
 
 /// Runs [product]'s real packager with --print-deps on a stub bundle

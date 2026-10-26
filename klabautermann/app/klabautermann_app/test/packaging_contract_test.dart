@@ -181,7 +181,14 @@ void main() {
         );
         expect(copyright, startsWith('Klabautermann: '));
         expect(copyright, contains('Upstream-Version: $version\n'));
-        expect(copyright, endsWith(_read('../../LICENSE')));
+        expect(copyright, contains(_read('../../LICENSE')));
+        // The Unlicense covers the app's own code; the bundled components'
+        // texts are the bundle's NOTICES, shipped readable beside it.
+        expect(copyright, contains('Third-Party-Notices.txt next to this file'));
+        expect(
+          _read('${deb.path}/usr/share/doc/$_packageName/Third-Party-Notices.txt'),
+          _stubNotices,
+        );
 
         final appDir = '${appImage.path}.appdir';
         expect(
@@ -195,6 +202,10 @@ void main() {
           ),
         );
         expect(_read('$appDir/$_packageName.png'), '512x512');
+        expect(
+          _read('$appDir/usr/share/doc/$_packageName/Third-Party-Notices.txt'),
+          _stubNotices,
+        );
         expect(File('$appDir/.DirIcon').existsSync(), isTrue);
         expect(Directory('$appDir/usr/bin').existsSync(), isFalse);
       },
@@ -274,6 +285,9 @@ String _desktopEntry({required String exec}) =>
     '\n# lowercase application id); StartupWMClass is case-sensitive.\n'
     'StartupWMClass=$_linuxStartupWmClass\n';
 
+/// The stub bundle's NOTICES, which the packages must ship readable.
+const _stubNotices = 'ghost_fonts\n\nUnlicense\n';
+
 /// Runs the real packager on a stub bundle in a scratch directory. Stubs
 /// stand in for the host tools: readelf and objdump report a glibc,
 /// libstdc++ and GTK runtime, magick writes each requested size into its
@@ -287,6 +301,10 @@ Future<({ProcessResult result, Directory out})> _packageStubBundle() async {
     ..createSync(recursive: true);
   File('${bundle.parent.path}/$_linuxBinaryName').writeAsStringSync('ELF');
   File('${bundle.path}/libapp.so').writeAsStringSync('ELF');
+  // Flutter writes the bundle's notices gzip-compressed.
+  File('${bundle.parent.path}/data/flutter_assets/NOTICES.Z')
+    ..createSync(recursive: true)
+    ..writeAsBytesSync(gzip.encode(_stubNotices.codeUnits));
 
   final bin = Directory('${sandbox.path}/bin')..createSync();
   void tool(String name, String body) {

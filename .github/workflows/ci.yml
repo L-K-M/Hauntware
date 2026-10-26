@@ -88,6 +88,17 @@ jobs:
       # exactly (docs/history/source-refs.json is the contract).
       - name: Verify preserved history
         run: python3 scripts/check-history.py
+      # License statements agree with LICENSE (the Unlicense): the README
+      # scopes it to the suite's own code and names where the bundled
+      # code's notices ship, and no About string reserves rights the
+      # dedication gives away.
+      - name: Check license statements
+        run: |
+          grep -q '^## License$' README.md
+          grep -q 'Third-Party-Notices.txt' README.md
+          if grep -n 'All rights reserved' */app/*/macos/Runner/Configs/AppInfo.xcconfig; then
+            exit 1
+          fi
 
   # ---- Suite tooling ----------------------------------------------------
   # The root release_version tool is the suite's version contract: the

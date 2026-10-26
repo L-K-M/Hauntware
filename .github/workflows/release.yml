@@ -201,6 +201,17 @@ jobs:
       # (fetch-depth: 0 above — the validator walks the full graph.)
       - name: Verify preserved history
         run: python3 scripts/check-history.py
+      # License statements agree with LICENSE (the Unlicense): the README
+      # scopes it to the suite's own code and names where the bundled
+      # code's notices ship, and no About string reserves rights the
+      # dedication gives away.
+      - name: Check license statements
+        run: |
+          grep -q '^## License$' README.md
+          grep -q 'Third-Party-Notices.txt' README.md
+          if grep -n 'All rights reserved' */app/*/macos/Runner/Configs/AppInfo.xcconfig; then
+            exit 1
+          fi
       # Tag ordering: monotonic releases only. The tool owns the
       # semantics (prior-tag list); zero prior tags is vacuously fine.
       - name: Verify tag ordering
