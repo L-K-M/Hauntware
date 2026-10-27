@@ -33,6 +33,10 @@ const double _listWidth = 280;
 /// text never pushes the list out of sight.
 const double _headerShare = 0.4;
 
+/// A stack the command palette asked to open (PLT-07); [serial] tells
+/// two requests for the same stack apart.
+typedef StackRequest = ({String project, int serial});
+
 /// The Stacks sub-tab (03 §7.16 STK-01, STK-02, STK-05, STK-10): every
 /// compose project the engine groups the containers into, each with its
 /// source verdict ("verified source", "unverified source" with why, or
@@ -46,10 +50,6 @@ const double _headerShare = 0.4;
 /// checks on the host; hidden, it lets the watch go, so nothing runs
 /// compose for a sub-tab nobody sees. A failed read keeps the last list
 /// under why it failed.
-/// A stack the command palette asked to open (PLT-07); [serial] tells
-/// two requests for the same stack apart.
-typedef StackRequest = ({String project, int serial});
-
 class StacksPanel extends StatefulWidget {
   const StacksPanel({
     super.key,
