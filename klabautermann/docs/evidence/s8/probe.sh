@@ -1,5 +1,5 @@
 #!/bin/sh
-# Spike S8 (04 S8, 03 §7.12 IMG-05): how a digest update check reads the
+# Spike S8 (04 S8, 03 §7.14 IMG-05): how a digest update check reads the
 # registry. Prints what each route answers; writes nothing but a scratch
 # registry directory under $TMPDIR when --private is given, and removes
 # the container it starts. Needs curl and python3; the daemon and private

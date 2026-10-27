@@ -1,6 +1,6 @@
 # Spike S8: update checks
 
-Spike S8 (04 S8; 03 §7.12 IMG-05, D68) asks how Klabautermann learns
+Spike S8 (04 S8; 03 §7.14 IMG-05, D68) asks how Klabautermann learns
 that a tag now points at a different image. It compares three routes:
 
 - a registry manifest `HEAD`;
