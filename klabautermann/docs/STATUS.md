@@ -1878,6 +1878,15 @@ is on main:
   `sudo -n -l` lists the rule without a password while `systemd-run`
   needs one; the engine now reads the rules before it elevates a runner
   (above).
+- M6 spike S8 (N06, 03 D68, evidence in
+  [docs/evidence/s8](evidence/s8/README.md)): `probe.sh` reads Docker
+  Hub, GHCR and Quay by manifest `HEAD`, the daemon's DistributionInspect
+  and a local registry behind basic auth. A `HEAD` leaves Docker Hub's
+  quota unchanged but is refused once the address's hourly quota is
+  spent; DistributionInspect spends a pull; on the containerd store a
+  pushed single-platform manifest matches a child of the local index,
+  not `RepoDigests`; private registries answer through
+  `docker buildx imagetools inspect`. IMG-05 (N15) builds on it.
 - M4 theme editing (E25): Settings > Appearance edits the theme with
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,
