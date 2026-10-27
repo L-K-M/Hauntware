@@ -95,6 +95,8 @@ void main() {
         const Unsubscribe(serverId: 'srv-1', subscriptionId: 'row'),
         const RefreshSubscription(serverId: 'srv-1', subscriptionId: 'row'),
         const SetCadenceProfile(CadenceProfile.phone),
+        const SetServerCadenceCap('srv-1', CadenceProfile.cellularSaver),
+        const SetServerCadenceCap('srv-1', null),
         const ImportSshConfig('Host web-1\n  HostName web-1.example\n'),
         OpenLogStream(
           streamId: 'stream-1',
@@ -150,6 +152,11 @@ void main() {
           serverId: 'srv-1',
           queryId: 'h-7',
           query: OomKillsQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
+          queryId: 'h-ports',
+          query: ListeningPortsQuery(),
         ),
         const HostQuery(
           serverId: 'srv-1',
@@ -454,6 +461,24 @@ void main() {
                   cgroup: '/system.slice/docker-0123.scope',
                 ),
               ],
+            ),
+          ),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-ports',
+          payload: ListeningPorts(
+            ListeningPortsRead(
+              tool: PortsTool.ss,
+              sockets: [
+                ListeningSocket(
+                  protocol: PortProtocol.tcp,
+                  address: '0.0.0.0',
+                  port: 22,
+                  processes: const [PortProcess(name: 'sshd', pid: 812)],
+                ),
+              ],
+              owners: const {812: ProcessAttribution(unit: 'ssh.service')},
             ),
           ),
         ),
@@ -1235,6 +1260,12 @@ void main() {
             await roundTrip(SetCadenceProfile(profile)) as SetCadenceProfile;
         expect(received.profile, profile);
       }
+      final cap =
+          await roundTrip(
+                const SetServerCadenceCap('srv-9', CadenceProfile.phone),
+              )
+              as SetServerCadenceCap;
+      expect((cap.serverId, cap.cap), ('srv-9', CadenceProfile.phone));
     });
 
     test('every sample result survives with its values (D43)', () async {

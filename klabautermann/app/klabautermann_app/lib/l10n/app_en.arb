@@ -1810,6 +1810,100 @@
       }
     }
   },
+  "systemPortsTitle": "Listening ports",
+  "@systemPortsTitle": {
+    "description": "System tab: the heading of the listening ports section (NET-04)."
+  },
+  "systemPortsReading": "Reading the listening ports…",
+  "@systemPortsReading": {
+    "description": "System tab, Listening ports: shown while the ports are read."
+  },
+  "systemPortsReadAgain": "Read again",
+  "@systemPortsReadAgain": {
+    "description": "System tab, Listening ports: the button that reads the ports again."
+  },
+  "systemPortsFailed": "{failure, select, noLink{Not connected to the server.} denied{The server refused the port read.} missing{The server lacks the tools the port read runs.} other{The port read failed.}}",
+  "@systemPortsFailed": {
+    "description": "System tab, Listening ports: why the port read read nothing, by reason.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "systemPortsNoTool": "The server has neither ss nor netstat, so its ports cannot be listed.",
+  "@systemPortsNoTool": {
+    "description": "System tab, Listening ports: shown when neither listing tool is installed. ss and netstat are command names, never translated."
+  },
+  "systemPortsHidden": "Some ports belong to other users' processes, whose names only root may see.",
+  "@systemPortsHidden": {
+    "description": "System tab, Listening ports: shown when the login user could not see which process holds some sockets."
+  },
+  "systemPortsNone": "Nothing listens on this server.",
+  "@systemPortsNone": {
+    "description": "System tab, Listening ports: shown when no socket listens."
+  },
+  "systemPortsEvery": "{protocol, select, tcp{TCP} udp{UDP} other{{protocol}}} {port} on every address",
+  "@systemPortsEvery": {
+    "description": "System tab, Listening ports: a port that accepts connections on all of the server's addresses.",
+    "placeholders": {
+      "protocol": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "systemPortsOn": "{protocol, select, tcp{TCP} udp{UDP} other{{protocol}}} {port} on {addresses}",
+  "@systemPortsOn": {
+    "description": "System tab, Listening ports: a port that accepts connections only on the listed addresses, such as 127.0.0.1.",
+    "placeholders": {
+      "protocol": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      },
+      "addresses": {
+        "type": "String"
+      }
+    }
+  },
+  "systemPortsProcess": "{name} (PID {pid})",
+  "@systemPortsProcess": {
+    "description": "System tab, Listening ports: a process holding the port, by its command name and process ID.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "pid": {
+        "type": "int"
+      }
+    }
+  },
+  "systemPortsOwnerHidden": "Held by another user's process",
+  "@systemPortsOwnerHidden": {
+    "description": "System tab, Listening ports: shown under a port whose process the login user may not see."
+  },
+  "systemPortsUnit": "Unit {unit}",
+  "@systemPortsUnit": {
+    "description": "System tab, Listening ports: the systemd unit the process runs in, such as nginx.service.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "systemPortsContainer": "Container {id}",
+  "@systemPortsContainer": {
+    "description": "System tab, Listening ports: the container the process runs in, by its short ID.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
   "systemNetInterfacesTitle": "Interfaces",
   "@systemNetInterfacesTitle": {
     "description": "System tab: the heading of the network interfaces section (NET-02, NET-03)."
@@ -2966,6 +3060,10 @@
         "example": "critical"
       }
     }
+  },
+  "chartSeverityCareful": "careful",
+  "@chartSeverityCareful": {
+    "description": "A value past its careful threshold (OV-11), below warning: shown with an info icon in the usual colour."
   },
   "chartSeverityWarning": "warning",
   "@chartSeverityWarning": {
@@ -7095,6 +7193,128 @@
   "@dockerTabStacks": {
     "description": "Docker tab: the sub-tab listing compose stacks."
   },
+  "dockerTabReview": "Review",
+  "@dockerTabReview": {
+    "description": "Docker tab: the sub-tab with the containers' security review (DKE-06, DKE-07)."
+  },
+  "dockerReviewIntro": "Reads each container's configuration and flags settings that give a container power over the host, expose a database, or let its logs fill the disk. Each container is read once per review.",
+  "@dockerReviewIntro": {
+    "description": "Docker Review sub-tab: what a review does, above its button."
+  },
+  "dockerReviewRun": "Review containers",
+  "@dockerReviewRun": {
+    "description": "Docker Review sub-tab: the button that starts the first review."
+  },
+  "dockerReviewAgain": "Review again",
+  "@dockerReviewAgain": {
+    "description": "Docker Review sub-tab: the button that reviews again after a review."
+  },
+  "dockerReviewReading": "Reading each container's configuration\u2026",
+  "@dockerReviewReading": {
+    "description": "Docker Review sub-tab: while each container is read."
+  },
+  "dockerReviewNone": "{total, plural, =0{The engine has no containers to review.} =1{The one container carries no finding.} other{None of the {total} containers carries a finding.}}",
+  "@dockerReviewNone": {
+    "description": "Docker Review sub-tab: no container carries a finding.",
+    "placeholders": {
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerReviewFlagged": "Containers with findings: {flagged} of {total}",
+  "@dockerReviewFlagged": {
+    "description": "Docker Review sub-tab: how many containers carry findings, of all read.",
+    "placeholders": {
+      "flagged": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerReviewOmitted": "{omitted, plural, =1{1 more container was not read: a review reads at most {max}.} other{{omitted} more containers were not read: a review reads at most {max}.}}",
+  "@dockerReviewOmitted": {
+    "description": "Docker Review sub-tab: containers past the review's cap, which were not read.",
+    "placeholders": {
+      "omitted": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerReviewUnreadable": "{count, plural, =1{The engine refused to inspect 1 container, so it is not reviewed.} other{The engine refused to inspect {count} containers, so they are not reviewed.}}",
+  "@dockerReviewUnreadable": {
+    "description": "Docker Review sub-tab: containers whose inspect the engine refused, which the review leaves out.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerReviewContainerInStack": "{name} in {stack}",
+  "@dockerReviewContainerInStack": {
+    "description": "Docker Review sub-tab: a container's heading when it belongs to a compose stack.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "stack": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerReviewFinding": "{level}: {risk}",
+  "@dockerReviewFinding": {
+    "description": "Docker Review sub-tab: one finding's heading, its level then what it is.",
+    "placeholders": {
+      "level": {
+        "type": "String"
+      },
+      "risk": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerReviewLevel": "{level, select, high{High} medium{Medium} low{Low} other{Finding}}",
+  "@dockerReviewLevel": {
+    "description": "Docker Review sub-tab: a finding's severity, by ContainerRiskLevel name.",
+    "placeholders": {
+      "level": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerReviewRisk": "{risk, select, privileged{Privileged} socketMount{Engine socket mounted} hostNetwork{Host network} hostPid{Host processes visible} addedCapabilities{Added capabilities} databasePublished{Database on every address} rootUser{Runs as root} logsUnrotated{Logs never rotate} latestTag{Floating image tag} noHealthcheck{No health check} noRestartPolicy{No restart policy} other{Finding}}",
+  "@dockerReviewRisk": {
+    "description": "Docker Review sub-tab: what a finding is, by ContainerRisk name.",
+    "placeholders": {
+      "risk": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerReviewRiskWhy": "{risk, select, privileged{It has every device and capability of the host, so a break-in reaches the host.} socketMount{Whoever controls the container controls the engine, which is root on the host.} hostNetwork{It shares the host's network and reaches every service listening on it.} hostPid{It sees, and can signal, every process on the host.} addedCapabilities{It holds capabilities beyond the engine's default set.} databasePublished{Its database port is published on every address, not only on localhost or a private network.} rootUser{Its processes run as root, and the engine maps root to root on the host.} logsUnrotated{It logs with json-file and no max-size, so its log file grows until the disk is full.} latestTag{A new pull can bring a different image. Pin a version or a digest.} noHealthcheck{The engine cannot tell when it stops working while it still runs.} noRestartPolicy{It stays stopped after a crash or a reboot.} other{It may put the host at risk.}}",
+  "@dockerReviewRiskWhy": {
+    "description": "Docker Review sub-tab: why a finding matters, by ContainerRisk name.",
+    "placeholders": {
+      "risk": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerReviewFailed": "{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server's capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to list or inspect the containers.} connectionFailed{The connection to the engine failed during the review.} cancelled{The review stopped before it finished.} other{The containers could not be reviewed.}}",
+  "@dockerReviewFailed": {
+    "description": "Docker Review sub-tab: why the review failed, by DockerQueryFailure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "dockerEngineHeading": "Engine",
   "@dockerEngineHeading": {
     "description": "Docker tab: heading of the strip with the engine's runtime, API version, version and operating system (DKE-01)."
@@ -11220,6 +11440,355 @@
         "format": "yMMMd+jm"
       }
     }
+  },
+  "doctorOpen": "Run the doctor",
+  "@doctorOpen": {
+    "description": "The health card's button that opens the doctor checklist (TRI-01)."
+  },
+  "doctorTitle": "Doctor",
+  "@doctorTitle": {
+    "description": "Title of the doctor checklist (TRI-01)."
+  },
+  "doctorIntro": "Read-only checks of this server, each with what to do about a finding. Nothing on the server changes.",
+  "@doctorIntro": {
+    "description": "Doctor: what the checklist is."
+  },
+  "doctorRunning": "Checking…",
+  "@doctorRunning": {
+    "description": "Doctor: the summary line while a check still reads."
+  },
+  "doctorSummary": "{problems, plural, =0{No problems} =1{1 problem} other{{problems} problems}}, {warnings, plural, =0{no warnings} =1{1 warning} other{{warnings} warnings}}",
+  "@doctorSummary": {
+    "description": "Doctor: how many checks found a problem and how many a warning.",
+    "placeholders": {
+      "problems": {
+        "type": "int"
+      },
+      "warnings": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorAgain": "Check again",
+  "@doctorAgain": {
+    "description": "Doctor: runs the on-demand reads again."
+  },
+  "doctorClose": "Close",
+  "@doctorClose": {
+    "description": "Doctor: closes the checklist."
+  },
+  "doctorCheck": "{kind, select, diskSpace{Disk space} inodes{Inodes} failedUnits{Failed units} securityUpdates{Security updates} rebootRequired{Reboot} timeSync{Time sync} certificates{Certificates} dockerDiskUse{Docker disk use} danglingImages{Dangling images} other{Check}}",
+  "@doctorCheck": {
+    "description": "Doctor: a check's name, by kind.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorHint": "{kind, select, diskSpace{Remove old logs, caches and unused images, or grow the filesystem. Disks on the System tab lists every mount.} inodes{Many small files use up inodes: look for caches, mail queues or session files and remove what is no longer needed.} failedUnits{Open Services to read each unit's log, and restart it once the cause is fixed.} securityUpdates{Install them from Updates on the System tab or with the package manager.} rebootRequired{Reboot from Power on the System tab when it suits, so the updated kernel or libraries run.} timeSync{Turn time sync on (for example with timedatectl set-ntp true) and make sure the NTP server can be reached.} certificates{Renew or replace the certificate before it expires. Certificates on the System tab shows each endpoint.} dockerDiskUse{Remove unused images, stopped containers and build cache from the Docker tab.} danglingImages{Rebuilds leave untagged images behind. Remove them from Images with the Dangling filter.} other{}}",
+  "@doctorHint": {
+    "description": "Doctor: what to do about a check's finding, by kind.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorUnknown": "Not known: the reading failed or has not arrived.",
+  "@doctorUnknown": {
+    "description": "Doctor: a check whose reading is missing."
+  },
+  "doctorChecking": "Reading…",
+  "@doctorChecking": {
+    "description": "Doctor: a check whose on-demand read is under way."
+  },
+  "doctorSpaceOk": "Every filesystem is under {percent} full.",
+  "@doctorSpaceOk": {
+    "description": "Doctor, disk space: nothing past the warning level.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorSpaceFull": "Filling up, the fullest at {percent}:",
+  "@doctorSpaceFull": {
+    "description": "Doctor, disk space: mounts past the warning level follow, one per line.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorInodesOk": "Every filesystem uses under {percent} of its inodes.",
+  "@doctorInodesOk": {
+    "description": "Doctor, inodes: nothing past the warning level.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorInodesFull": "Running out of inodes, the fullest at {percent}:",
+  "@doctorInodesFull": {
+    "description": "Doctor, inodes: mounts past the warning level follow, one per line.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorUnitsOk": "No unit has failed.",
+  "@doctorUnitsOk": {
+    "description": "Doctor, failed units: none."
+  },
+  "doctorUnitsFailed": "{count, plural, =1{1 unit has failed:} other{{count} units have failed:}}",
+  "@doctorUnitsFailed": {
+    "description": "Doctor, failed units: the units follow, one per line.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorSecurityPending": "{count, plural, =1{1 security update is pending.} other{{count} security updates are pending.}}",
+  "@doctorSecurityPending": {
+    "description": "Doctor, security updates: how many.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorUpdatesUnclassified": "{count, plural, =1{1 update is pending, and the package manager does not say whether it fixes a security issue.} other{{count} updates are pending, and the package manager does not say which fix security issues.}}",
+  "@doctorUpdatesUnclassified": {
+    "description": "Doctor, security updates: updates the manager cannot classify.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorSecurityNone": "{count, plural, =0{No updates are pending.} =1{No security updates are pending; 1 other update is.} other{No security updates are pending; {count} other updates are.}}",
+  "@doctorSecurityNone": {
+    "description": "Doctor, security updates: none, with the other updates pending.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorRebootNo": "No reboot is needed.",
+  "@doctorRebootNo": {
+    "description": "Doctor, reboot: none needed."
+  },
+  "doctorRebootYes": "A reboot is needed. Packages that asked for it, where the host says:",
+  "@doctorRebootYes": {
+    "description": "Doctor, reboot: needed; the packages follow, one per line."
+  },
+  "doctorTimeOk": "The clock is synchronized.",
+  "@doctorTimeOk": {
+    "description": "Doctor, time sync: in step."
+  },
+  "doctorTimeNotSynced": "The clock is not synchronized.",
+  "@doctorTimeNotSynced": {
+    "description": "Doctor, time sync: the kernel is not synchronized or time sync is off."
+  },
+  "doctorTimeNotSyncedSkew": "The clock is not synchronized; it reads {skew}.",
+  "@doctorTimeNotSyncedSkew": {
+    "description": "Doctor, time sync: not synchronized, with how far it is from this device (\"2 minutes ahead of this device\").",
+    "placeholders": {
+      "skew": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorClockOff": "The clock reads {skew}.",
+  "@doctorClockOff": {
+    "description": "Doctor, time sync: the host believes it is synchronized but is off this device's clock (\"2 minutes ahead of this device\").",
+    "placeholders": {
+      "skew": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorCertificatesNone": "No endpoints are listed for this server.",
+  "@doctorCertificatesNone": {
+    "description": "Doctor, certificates: nothing to check."
+  },
+  "doctorCertificatesSetUp": "List endpoints under Certificates on the System tab to check them here.",
+  "@doctorCertificatesSetUp": {
+    "description": "Doctor, certificates: how to set the check up."
+  },
+  "doctorCertificatesOk": "{count, plural, =1{The endpoint presents a valid certificate.} other{All {count} endpoints present valid certificates.}}",
+  "@doctorCertificatesOk": {
+    "description": "Doctor, certificates: all fine.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorCertificatesBad": "Failing, untrusted, expired or expiring within 14 days:",
+  "@doctorCertificatesBad": {
+    "description": "Doctor, certificates: the endpoints follow, one per line."
+  },
+  "doctorDockerReclaimable": "Docker could free {size} of unused data.",
+  "@doctorDockerReclaimable": {
+    "description": "Doctor, Docker disk use: the reclaimable size from docker system df.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorDanglingNone": "No dangling images.",
+  "@doctorDanglingNone": {
+    "description": "Doctor, dangling images: none."
+  },
+  "doctorDangling": "{count, plural, =1{1 dangling image takes {size}.} other{{count} dangling images take {size}.}}",
+  "@doctorDangling": {
+    "description": "Doctor, dangling images: how many and their size.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionNotice": "{count, plural, =1{1 problem needs attention} other{{count} problems need attention}}",
+  "@attentionNotice": {
+    "description": "Fleet list: the attention notice (TRI-03), counting the unacknowledged problems.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "attentionShow": "Show",
+  "@attentionShow": {
+    "description": "Fleet list: opens the attention queue."
+  },
+  "attentionTitle": "Attention",
+  "@attentionTitle": {
+    "description": "Title of the attention queue (TRI-03)."
+  },
+  "attentionIntro": "Problems across the fleet, from what this device has read this run. Acknowledging one hides it until it clears; acknowledgements stay on this device.",
+  "@attentionIntro": {
+    "description": "Attention queue: what it lists and how acknowledging works."
+  },
+  "attentionNone": "Nothing needs attention.",
+  "@attentionNone": {
+    "description": "Attention queue: no unacknowledged problem."
+  },
+  "attentionAcknowledgedHeading": "{count, plural, =1{Acknowledged (1)} other{Acknowledged ({count})}}",
+  "@attentionAcknowledgedHeading": {
+    "description": "Attention queue: heading over the acknowledged problems.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "attentionClose": "Close",
+  "@attentionClose": {
+    "description": "Attention queue: closes it."
+  },
+  "attentionAcknowledgedAt": "Acknowledged {time}",
+  "@attentionAcknowledgedAt": {
+    "description": "Attention queue: when a problem was acknowledged, in this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "attentionAcknowledge": "Acknowledge",
+  "@attentionAcknowledge": {
+    "description": "Attention queue: acknowledges a problem, after an optional note."
+  },
+  "attentionReopen": "Reopen",
+  "@attentionReopen": {
+    "description": "Attention queue: takes an acknowledgement back."
+  },
+  "attentionOpenServer": "Open server",
+  "@attentionOpenServer": {
+    "description": "Attention queue: opens the problem's server."
+  },
+  "attentionBlocked": "Connecting is blocked until you decide, for example about a changed host key.",
+  "@attentionBlocked": {
+    "description": "Attention queue: the engine will not dial the server until the user decides (D46)."
+  },
+  "attentionUnreachable": "Cannot be reached: the last attempt failed.",
+  "@attentionUnreachable": {
+    "description": "Attention queue: the link failed or waits before dialling again."
+  },
+  "attentionAlert": "Alert raised: {metric}",
+  "@attentionAlert": {
+    "description": "Attention queue: an in-app alert is raised, with its metric's name.",
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionFailedUnit": "Unit failed: {unit}",
+  "@attentionFailedUnit": {
+    "description": "Attention queue: a failed systemd unit.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionDiskFull": "{mount} is {percent} full",
+  "@attentionDiskFull": {
+    "description": "Attention queue: a mount's space at the critical level.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionInodesFull": "{mount} uses {percent} of its inodes",
+  "@attentionInodesFull": {
+    "description": "Attention queue: a mount's inodes at the critical level.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionUnhealthy": "Container unhealthy: {container}",
+  "@attentionUnhealthy": {
+    "description": "Attention queue: a container whose health check fails.",
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionNoteTitle": "Acknowledge the problem",
+  "@attentionNoteTitle": {
+    "description": "Attention queue: title of the note dialog."
+  },
+  "attentionNoteLabel": "Note (optional)",
+  "@attentionNoteLabel": {
+    "description": "Attention queue: the note field's label."
+  },
+  "attentionCancel": "Cancel",
+  "@attentionCancel": {
+    "description": "Attention queue: closes the note dialog without acknowledging."
   },
   "paletteCommand": "Command Palette…",
   "@paletteCommand": {

@@ -8,6 +8,7 @@ import '../controllers/monitoring_controller.dart';
 import '../controllers/sync_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'alerts.dart';
+import 'attention.dart';
 import 'coverage.dart';
 import 'endpoint_confirmation.dart';
 import 'fleet_rows.dart';
@@ -153,6 +154,11 @@ class _PhoneShellState extends State<PhoneShell> {
                     children: [
                       AlertsNotice(
                         fleet: fleet,
+                        onOpenServer: (server) => unawaited(_open(server)),
+                      ),
+                      AttentionNotice(
+                        fleet: fleet,
+                        monitoring: widget.monitoring,
                         onOpenServer: (server) => unawaited(_open(server)),
                       ),
                       EndpointsPendingNotice(fleet: fleet),

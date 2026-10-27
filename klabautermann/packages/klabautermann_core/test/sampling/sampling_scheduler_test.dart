@@ -316,6 +316,22 @@ void main() {
     ]);
   });
 
+  test('a server cap samples its server at the slower column, and lifting '
+      'it brings the app\'s back at the next aligned tick (SAF-19)', () async {
+    subscribe({SampleStream.core});
+    await clock.elapse(const Duration(seconds: 4));
+    subscriptions.capServer(_s1, CadenceProfile.phone);
+    scheduler.profileChanged();
+    await clock.elapse(const Duration(seconds: 8));
+    subscriptions.capServer(_s1, null);
+    scheduler.profileChanged();
+    await clock.elapse(const Duration(seconds: 4));
+
+    expect(samples(), [
+      for (final t in [0, 2, 4, 6, 9, 12, 14, 16]) 'core@$t',
+    ]);
+  });
+
   test('a new profile leaves streams not read yet due at once', () async {
     link.stalled.add(_slow);
     subscribe({SampleStream.core, SampleStream.fs});

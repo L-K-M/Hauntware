@@ -26,6 +26,7 @@ ChartStrings klabautermannChartStrings(AppLocalizations l10n) {
     barPart: l10n.chartBarPart,
     listSeparator: l10n.chartListSeparator,
     withSeverity: l10n.chartWithSeverity,
+    severityCareful: l10n.chartSeverityCareful,
     severityWarning: l10n.chartSeverityWarning,
     severityCritical: l10n.chartSeverityCritical,
     stale: l10n.chartStale,

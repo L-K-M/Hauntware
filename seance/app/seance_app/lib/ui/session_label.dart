@@ -1,6 +1,6 @@
 /// Naming for one terminal session, derived from what the remote shell tells
-/// us: the command it is running, the OSC 7 working directory, and the
-/// OSC 0/2 terminal title.
+/// us: the command it is running, its working directory (OSC 7, or read
+/// beside a shell that sends none), and the OSC 0/2 terminal title.
 ///
 /// Kept free of Flutter so the rules can be unit-tested directly. Everything
 /// here treats remote metadata as untrusted display text: control and
@@ -72,8 +72,9 @@ String? posixBasename(String path) {
 /// 2. the command the session is running — what the tab is *doing* beats
 ///    where it is; two tabs on one host usually exist to run different
 ///    things, so this is both the best name and a natural disambiguator,
-/// 3. the working directory's last segment (OSC 7) — the server is already
-///    identified by the selected row, so *where* on it is the useful part,
+/// 3. the working directory's last segment (OSC 7, or read beside the
+///    shell) — the server is already identified by the selected row, so
+///    *where* on it is the useful part,
 /// 4. the terminal title (OSC 0/2), which many Bash setups carry even when
 ///    they do not emit OSC 7,
 /// 5. `Session N` — the original behavior, when the shell reports nothing.

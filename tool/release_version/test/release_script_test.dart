@@ -1,3 +1,8 @@
+// Each case runs the real scripts/release.sh, which starts the release
+// tool through `dart` and walks the suite's pubspecs. On a GitHub-hosted
+// runner a case takes 13 to 22 s and grows with the suite; the default
+// 30 s failed the slowest cases on busy runners.
+@Timeout(Duration(minutes: 2))
 @TestOn('posix')
 library;
 

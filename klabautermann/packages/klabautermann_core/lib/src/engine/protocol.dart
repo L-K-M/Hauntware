@@ -26,6 +26,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         KillSignal,
         LoadAvg,
         LogFileEntry,
+        ListeningPortsRead,
         OomKillsRead,
         LoggedCronRun,
         NetRate,
@@ -305,6 +306,9 @@ import '../operations/plan_types.dart';
 /// A container's processes then joined v3 the same way (03 §7.12 CTR-10,
 /// M6 plan N17): [DockerContainerTopQuery], answered by
 /// [DockerContainerTopPayload] with each command line masked.
+///
+/// Per-server polling caps then joined v3 the same way (02 SAF-19, M6
+/// plan N64): [SetServerCadenceCap].
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -528,6 +532,18 @@ final class SetCadenceProfile extends EngineRequest {
   final CadenceProfile profile;
 }
 
+/// Caps [serverId]'s cadence at [cap]'s 03 §6.4 column (SAF-19), such as
+/// the cellular saver for a server behind a metered link; null lifts the
+/// cap. The slower of the cap and [SetCadenceProfile]'s column wins, so a
+/// cap never speeds a server up. Caps outlive the fleet: a server that
+/// leaves and returns keeps its own.
+final class SetServerCadenceCap extends EngineRequest {
+  const SetServerCadenceCap(this.serverId, this.cap);
+
+  final String serverId;
+  final CadenceProfile? cap;
+}
+
 /// Opens a log stream on [spec]'s server (03 §10.1, §7.6): its records
 /// arrive as [LogBatch]es and its progress as [LogStreamState]s, all
 /// under [streamId], until it ends or [CloseStream] closes it. The engine
@@ -749,6 +765,12 @@ final class ProcessDetailQuery extends HostQuerySpec {
 /// names (MEM-03), as [OomKills].
 final class OomKillsQuery extends HostQuerySpec {
   const OomKillsQuery();
+}
+
+/// The listening TCP and bound UDP sockets with their processes and
+/// those processes' units and containers (NET-04), as [ListeningPorts].
+final class ListeningPortsQuery extends HostQuerySpec {
+  const ListeningPortsQuery();
 }
 
 /// How the boots before the current one ended (BOOT-02), as [BootEnds]:
@@ -2170,6 +2192,13 @@ final class OomKills extends HostPayload {
   const OomKills(this.read);
 
   final OomKillsRead read;
+}
+
+/// [ListeningPortsQuery]'s sockets.
+final class ListeningPorts extends HostPayload {
+  const ListeningPorts(this.read);
+
+  final ListeningPortsRead read;
 }
 
 /// [BootEndsQuery]'s ends by boot ID; a boot it did not read is absent.
@@ -4185,6 +4214,13 @@ final class DockerSystemDfQuery extends DockerQuerySpec {
   const DockerSystemDfQuery();
 }
 
+/// DKE-06's security review and DKE-07's log rotation lint, on demand:
+/// the list, then an inspect of each container, up to
+/// [kDockerReviewMax]. Answered by [DockerReviewPayload].
+final class DockerReviewQuery extends DockerQuerySpec {
+  const DockerReviewQuery();
+}
+
 /// One file of the compose project [project] (03 §7.16 STK-04, M11):
 /// a config file or an environment file its containers recorded, or the
 /// `.env` in its working directory, read over SFTP once the project's
@@ -4443,6 +4479,131 @@ final class DockerSystemDfPayload extends DockerPayload {
   const DockerSystemDfPayload(this.df);
 
   final SystemDf df;
+}
+
+/// The most containers a [DockerReviewQuery] inspects, one request
+/// each; the rest are counted in [DockerReviewPayload.omitted].
+const kDockerReviewMax = 200;
+
+/// What DKE-06 and DKE-07 flag in a container's configuration, from
+/// the most to the least severe.
+enum ContainerRisk {
+  /// `HostConfig.Privileged`: every device and capability of the host.
+  privileged,
+
+  /// An engine socket bind-mounted in, which is root on the host
+  /// (03 §8.1), or a host folder that holds one (`/`, `/run`,
+  /// `/var/run`); its path is the finding's detail.
+  socketMount,
+
+  /// `NetworkMode` host.
+  hostNetwork,
+
+  /// `PidMode` host.
+  hostPid,
+
+  /// `CapAdd`; the capabilities are the detail.
+  addedCapabilities,
+
+  /// A database's port published on every address; the port is the
+  /// detail.
+  databasePublished,
+
+  /// No `User`, or root, on an engine that maps neither (rootless or a
+  /// user namespace remap).
+  rootUser,
+
+  /// The `json-file` log driver without `max-size`, which never rotates
+  /// (r5 §1.6).
+  logsUnrotated,
+
+  /// An image named without a tag or digest, or by `latest`; the
+  /// reference is the detail.
+  latestTag,
+
+  /// No health check from the image or the container, or one turned
+  /// off.
+  noHealthcheck,
+
+  /// Restart policy `no`, on a container that is not removed when it
+  /// stops and not a compose one-off run.
+  noRestartPolicy;
+
+  /// How much the risk matters: [ContainerRiskLevel.high] where the
+  /// container can take the host, [ContainerRiskLevel.medium] where it
+  /// widens what a break-in reaches or fills the disk.
+  ContainerRiskLevel get level => switch (this) {
+    privileged ||
+    socketMount ||
+    hostNetwork ||
+    hostPid ||
+    addedCapabilities ||
+    databasePublished => ContainerRiskLevel.high,
+    rootUser || logsUnrotated => ContainerRiskLevel.medium,
+    latestTag || noHealthcheck || noRestartPolicy => ContainerRiskLevel.low,
+  };
+}
+
+enum ContainerRiskLevel { high, medium, low }
+
+/// One [ContainerRisk] a container carries, with what it names: a path,
+/// capabilities, a port or an image reference.
+@immutable
+final class ContainerFinding {
+  const ContainerFinding(this.risk, {this.detail});
+
+  final ContainerRisk risk;
+  final String? detail;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ContainerFinding && other.risk == risk && other.detail == detail;
+
+  @override
+  int get hashCode => Object.hash(risk, detail);
+
+  @override
+  String toString() => 'ContainerFinding($risk, $detail)';
+}
+
+/// One container's review: its findings, most severe first, empty when
+/// it carries none.
+@immutable
+final class ContainerReview {
+  const ContainerReview({
+    required this.containerId,
+    required this.name,
+    required this.state,
+    this.project,
+    required this.findings,
+  });
+
+  final String containerId;
+  final String name;
+
+  /// The list's `State`, such as `running` or `exited`.
+  final String? state;
+
+  /// The compose project, when the container belongs to one.
+  final String? project;
+
+  final List<ContainerFinding> findings;
+}
+
+/// A [DockerReviewQuery]'s answer: each container read, in the list's
+/// order. A container removed between the list and its inspect is left
+/// out; [omitted] counts those past [kDockerReviewMax], [unreadable]
+/// those whose inspect the daemon refused.
+final class DockerReviewPayload extends DockerPayload {
+  const DockerReviewPayload(
+    this.reviews, {
+    this.omitted = 0,
+    this.unreadable = 0,
+  });
+
+  final List<ContainerReview> reviews;
+  final int omitted;
+  final int unreadable;
 }
 
 /// The containers grouped by compose project (STK-01), from the same
@@ -6250,7 +6411,8 @@ enum SampleStream {
   gpu,
 }
 
-/// The 03 §6.4 cadence columns [SetCadenceProfile] picks among.
+/// The 03 §6.4 cadence columns [SetCadenceProfile] picks among, from the
+/// fastest to the slowest; [SetServerCadenceCap] relies on that order.
 enum CadenceProfile {
   /// The Desktop column; the engine starts with it.
   desktop,
