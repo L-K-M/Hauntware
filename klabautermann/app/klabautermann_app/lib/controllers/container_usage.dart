@@ -20,7 +20,8 @@ const kMemoryRiskShare = 0.9;
 /// (CST-03): a ring per chart, fed by every stats round that names it.
 /// Network and block I/O arrive as totals since the container started;
 /// the rings hold their rates between two reads, and none across a
-/// total that went down, as after a restart.
+/// total that went down, as after a restart, or across a gap, whose
+/// totals would average the whole break into one point.
 final class ContainerUsageHistory {
   ContainerUsageHistory({int capacity = kContainerUsageCapacity})
     : cpu = TimeSeriesRing(capacity: capacity, lanes: 1),
@@ -57,23 +58,25 @@ final class ContainerUsageHistory {
     if (last != null && !row.at.isAfter(last.at)) return;
 
     final span = last == null ? null : row.at.difference(last.at);
-    if (last != null && span! > _gapAfter) {
+    final broke = last != null && span! > _gapAfter;
+    if (broke) {
       for (final ring in _rings) {
         ring.openGap(last.at, ChartGapReason.readingFailed);
       }
     }
+    final before = broke ? null : last;
     cpu.add(row.at, [row.cpuPercent]);
     memory.add(row.at, [
       row.memoryUsed?.toDouble(),
       row.memoryLimit?.toDouble(),
     ]);
     network.add(row.at, [
-      _rate(last?.networkRx, row.networkRx, span),
-      _rate(last?.networkTx, row.networkTx, span),
+      _rate(before?.networkRx, row.networkRx, span),
+      _rate(before?.networkTx, row.networkTx, span),
     ]);
     blockIo.add(row.at, [
-      _rate(last?.blockRead, row.blockRead, span),
-      _rate(last?.blockWrite, row.blockWrite, span),
+      _rate(before?.blockRead, row.blockRead, span),
+      _rate(before?.blockWrite, row.blockWrite, span),
     ]);
     pids.add(row.at, [row.pids?.toDouble()]);
     _latest = row;

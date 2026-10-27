@@ -717,7 +717,12 @@ final class DockerController {
     final server = _server(serverId);
     final pins = server.pinnedStats[containerId] ?? 0;
     server.pinnedStats[containerId] = pins + 1;
-    if (pins == 0 && server.watchId != null) _watch(serverId, server);
+    // A container the list already reads changes nothing to watch.
+    if (pins == 0 &&
+        server.watchId != null &&
+        !server.statsFor.contains(containerId)) {
+      _watch(serverId, server);
+    }
   }
 
   /// Ends one [pinStats].

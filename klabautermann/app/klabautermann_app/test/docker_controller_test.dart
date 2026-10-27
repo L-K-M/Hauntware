@@ -385,6 +385,10 @@ void main() {
       final sent = watches().length;
       docker.unpinStats('srv-1', 'c-2');
       expect(watches(), hasLength(sent), reason: 'another view pins it');
+      docker.pinStats('srv-1', 'c-1');
+      expect(watches(), hasLength(sent), reason: 'its row already reads it');
+      docker.unpinStats('srv-1', 'c-1');
+      expect(watches(), hasLength(sent), reason: 'its row still reads it');
 
       await emit(
         dockerContainerList('srv-1', [

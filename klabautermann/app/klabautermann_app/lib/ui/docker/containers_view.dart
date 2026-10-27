@@ -351,10 +351,12 @@ List<ContainerListEntry> containerListEntries(
 }) {
   if (grouping == ContainerGrouping.flat) {
     return order([
-      for (final container in containers)
-        if ((!runningOnly || containerIsUp(container)) &&
-            containerMatches(container, terms))
-          ContainerEntry(container),
+      for (final container in containersShown(
+        containers,
+        runningOnly: runningOnly,
+        terms: terms,
+      ))
+        ContainerEntry(container),
     ]);
   }
 

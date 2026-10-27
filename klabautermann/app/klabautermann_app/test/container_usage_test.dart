@@ -77,6 +77,21 @@ void main() {
     expect(history.network.valueAt(0, 1), isNull, reason: 'it restarted');
   });
 
+  test('no rate across a break, which would average the whole pause', () {
+    final history = ContainerUsageHistory();
+    addTearDown(history.dispose);
+    history
+      ..add(_row(0, cpu: 5, rx: 0, read: 0))
+      ..add(_row(60, cpu: 6, rx: 600000, read: 60000))
+      ..add(_row(65, cpu: 7, rx: 605000, read: 60500));
+
+    expect(history.network.joinsPrevious(1), isFalse, reason: 'a gap');
+    expect(history.network.valueAt(0, 1), isNull);
+    expect(history.blockIo.valueAt(0, 1), isNull);
+    expect(history.cpu.valueAt(0, 1), 6, reason: 'readings still land');
+    expect(history.network.valueAt(0, 2), 1000, reason: 'joined again');
+  });
+
   test('the memory share of its limit, none without one', () {
     expect(memoryLimitShare(_row(0, used: 930, limit: 1000)), 0.93);
     expect(memoryLimitShare(_row(0, used: 930)), isNull);

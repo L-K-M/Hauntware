@@ -392,10 +392,8 @@ class _ContainersPanelState extends State<ContainersPanel> {
     required bool wide,
   }) {
     final l10n = AppLocalizations.of(context);
-    final columns = _shownColumns(
-      _columns(l10n, stats, widget.monitoring.clock.value),
-      _chosen,
-    );
+    final allColumns = _columns(l10n, stats, widget.monitoring.clock.value);
+    final columns = _shownColumns(allColumns, _chosen);
     final terms = searchTerms(_search.text);
     final selecting = _selecting && _bulkAllowed(context);
     final shown = containersShown(
@@ -409,8 +407,12 @@ class _ContainersPanelState extends State<ContainersPanel> {
       terms: terms,
       collapsed: _collapsed,
       grouping: _top ? ContainerGrouping.flat : ContainerGrouping.byProject,
-      order: (rows) =>
-          sortTableRows<ContainerListEntry>(rows, columns, _sort).cast(),
+      // Top ranks by CPU even with its column hidden (CST-05).
+      order: (rows) => sortTableRows<ContainerListEntry>(
+        rows,
+        _top ? allColumns : columns,
+        _sort,
+      ).cast(),
     );
     final empty = Padding(
       padding: const EdgeInsets.all(16),
