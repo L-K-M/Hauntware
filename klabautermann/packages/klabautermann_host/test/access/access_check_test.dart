@@ -333,6 +333,11 @@ void main() {
         isNull,
         reason: 'no unit to enable',
       );
+      expect(
+        _of(host(tools: podman, systemdDir: null), I.runtime).$3,
+        isNull,
+        reason: 'systemd unknown',
+      );
       expect(_of(host(tools: podman, uid: null), I.runtime).$3, isNull);
     });
 
