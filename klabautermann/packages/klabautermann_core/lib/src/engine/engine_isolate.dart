@@ -1474,6 +1474,7 @@ void engineMain(
               UnitAction() ||
               StartTimer() ||
               RunCronJob() ||
+              RunSnippet() ||
               RefreshPackageLists() ||
               PowerAction():
             // Planning reads the target over the link, as the run will.

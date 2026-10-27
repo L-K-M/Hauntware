@@ -9865,4 +9865,46 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get attentionCancel => 'Cancel';
+
+  @override
+  String get snippetsTitle => 'Snippets';
+
+  @override
+  String snippetsPageTitle(String server) {
+    return 'Snippets on $server';
+  }
+
+  @override
+  String get snippetsSearch => 'Search snippets';
+
+  @override
+  String get snippetsEmpty =>
+      'No snippets yet. Snippets you save in Séance appear here once this device syncs with the same account.';
+
+  @override
+  String get snippetsNoMatch => 'No snippet matches your search.';
+
+  @override
+  String get snippetsUntitled => 'Untitled snippet';
+
+  @override
+  String snippetsFillTitle(String title) {
+    return 'Fill in $title';
+  }
+
+  @override
+  String get snippetsFillHint =>
+      'Each value replaces its placeholder in the command. Nothing runs until you confirm the preview.';
+
+  @override
+  String get snippetsFillCommand => 'Command';
+
+  @override
+  String get snippetsFillRequired => 'Fill in every value to continue.';
+
+  @override
+  String get snippetsContinue => 'Preview';
+
+  @override
+  String get snippetsCancel => 'Cancel';
 }

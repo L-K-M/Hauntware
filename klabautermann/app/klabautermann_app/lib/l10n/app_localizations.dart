@@ -12419,6 +12419,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get attentionCancel;
+
+  /// Server header button and page title (AUT-01): Séance's synced snippets, run on this server.
+  ///
+  /// In en, this message translates to:
+  /// **'Snippets'**
+  String get snippetsTitle;
+
+  /// Snippets page title (AUT-01): the server the chosen snippet runs on.
+  ///
+  /// In en, this message translates to:
+  /// **'Snippets on {server}'**
+  String snippetsPageTitle(String server);
+
+  /// Snippets page (AUT-01): the search field's label; it matches titles and commands.
+  ///
+  /// In en, this message translates to:
+  /// **'Search snippets'**
+  String get snippetsSearch;
+
+  /// Snippets page (AUT-01): shown when the account carries no snippet.
+  ///
+  /// In en, this message translates to:
+  /// **'No snippets yet. Snippets you save in Séance appear here once this device syncs with the same account.'**
+  String get snippetsEmpty;
+
+  /// Snippets page (AUT-01): shown when the search leaves no snippet.
+  ///
+  /// In en, this message translates to:
+  /// **'No snippet matches your search.'**
+  String get snippetsNoMatch;
+
+  /// Snippets page (AUT-01): stands in for a snippet Séance saved without a title.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled snippet'**
+  String get snippetsUntitled;
+
+  /// Placeholder dialog title (AUT-01): the snippet whose placeholders the user fills before the preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in {title}'**
+  String snippetsFillTitle(String title);
+
+  /// Placeholder dialog (AUT-01): explains the fields above the command.
+  ///
+  /// In en, this message translates to:
+  /// **'Each value replaces its placeholder in the command. Nothing runs until you confirm the preview.'**
+  String get snippetsFillHint;
+
+  /// Placeholder dialog (AUT-01): label of the filled command shown under the fields.
+  ///
+  /// In en, this message translates to:
+  /// **'Command'**
+  String get snippetsFillCommand;
+
+  /// Placeholder dialog (AUT-01): shown while a placeholder is still empty, so a blank value never runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in every value to continue.'**
+  String get snippetsFillRequired;
+
+  /// Placeholder dialog (AUT-01): opens the action preview of the filled command.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get snippetsContinue;
+
+  /// Placeholder dialog (AUT-01): closes it without running anything.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get snippetsCancel;
 }
 
 class _AppLocalizationsDelegate

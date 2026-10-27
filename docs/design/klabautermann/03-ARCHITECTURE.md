@@ -5006,6 +5006,17 @@ arrives with E22's Docker actions.
   loss re-seals nothing and a pending record has no source. The engine
   sends every live snippet, by title, as `SnippetsChanged` at start and
   after a round that changed them, as it sends `AlertRulesChanged`.
+- **As built (M6 N65c).** The server header's Snippets button, shown
+  where actions are allowed, opens the account's snippets, searchable by
+  title and command. Choosing one asks for each `{{name}}` placeholder
+  once, shows the filled command, and continues only when every value is
+  in, so a blank never turns `rm -rf /{{dir}}` into `rm -rf /`. The
+  filled command is the `RunSnippet` action: `sh -c` as the login user,
+  planned like JOB-19's run now. The preview, the linter and the audit
+  show it masked by 8.9's rules, the danger findings come from the
+  preview's linter, and its output shows in the run-now sheet. Admin
+  mode never applies: a snippet that needs root says so in its own
+  words, as in Séance's terminal.
 - **v1.x.** Custom probes, run on many with a concurrency cap; assistant
   features (explain a log excerpt, suggest a fix, diagnostics the user
   chooses to attach, explain a container) after `ChatController` is

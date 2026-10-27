@@ -103,6 +103,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The space between a firewalld zone's names, as firewalld lists them,
   // and between a chain's family, table and name.
   'lib/ui/firewall.dart': {"' '"},
+  // The snippet search's haystack and its term separator (AUT-01).
+  'lib/ui/snippets.dart': {r"'${snippet.title}\n${snippet.body}'", "' '"},
   // The separator between the ports, addresses, key types and setting
   // names sshd printed.
   'lib/ui/sshd_posture.dart': {"', '"},

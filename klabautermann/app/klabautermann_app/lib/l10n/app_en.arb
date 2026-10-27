@@ -11799,5 +11799,65 @@
   "attentionCancel": "Cancel",
   "@attentionCancel": {
     "description": "Attention queue: closes the note dialog without acknowledging."
+  },
+  "snippetsTitle": "Snippets",
+  "@snippetsTitle": {
+    "description": "Server header button and page title (AUT-01): Séance's synced snippets, run on this server."
+  },
+  "snippetsPageTitle": "Snippets on {server}",
+  "@snippetsPageTitle": {
+    "description": "Snippets page title (AUT-01): the server the chosen snippet runs on.",
+    "placeholders": {
+      "server": {
+        "type": "String",
+        "example": "web-1"
+      }
+    }
+  },
+  "snippetsSearch": "Search snippets",
+  "@snippetsSearch": {
+    "description": "Snippets page (AUT-01): the search field's label; it matches titles and commands."
+  },
+  "snippetsEmpty": "No snippets yet. Snippets you save in Séance appear here once this device syncs with the same account.",
+  "@snippetsEmpty": {
+    "description": "Snippets page (AUT-01): shown when the account carries no snippet."
+  },
+  "snippetsNoMatch": "No snippet matches your search.",
+  "@snippetsNoMatch": {
+    "description": "Snippets page (AUT-01): shown when the search leaves no snippet."
+  },
+  "snippetsUntitled": "Untitled snippet",
+  "@snippetsUntitled": {
+    "description": "Snippets page (AUT-01): stands in for a snippet Séance saved without a title."
+  },
+  "snippetsFillTitle": "Fill in {title}",
+  "@snippetsFillTitle": {
+    "description": "Placeholder dialog title (AUT-01): the snippet whose placeholders the user fills before the preview.",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Restart a unit"
+      }
+    }
+  },
+  "snippetsFillHint": "Each value replaces its placeholder in the command. Nothing runs until you confirm the preview.",
+  "@snippetsFillHint": {
+    "description": "Placeholder dialog (AUT-01): explains the fields above the command."
+  },
+  "snippetsFillCommand": "Command",
+  "@snippetsFillCommand": {
+    "description": "Placeholder dialog (AUT-01): label of the filled command shown under the fields."
+  },
+  "snippetsFillRequired": "Fill in every value to continue.",
+  "@snippetsFillRequired": {
+    "description": "Placeholder dialog (AUT-01): shown while a placeholder is still empty, so a blank value never runs."
+  },
+  "snippetsContinue": "Preview",
+  "@snippetsContinue": {
+    "description": "Placeholder dialog (AUT-01): opens the action preview of the filled command."
+  },
+  "snippetsCancel": "Cancel",
+  "@snippetsCancel": {
+    "description": "Placeholder dialog (AUT-01): closes it without running anything."
   }
 }

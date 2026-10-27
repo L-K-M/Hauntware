@@ -14,6 +14,7 @@ import 'controllers/admin_controller.dart';
 import 'controllers/alert_center.dart';
 import 'controllers/alert_notifications.dart';
 import 'controllers/alert_rules_controller.dart';
+import 'controllers/snippets_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
 import 'controllers/pin_publication_controller.dart';
@@ -39,6 +40,7 @@ import 'ui/adaptive_shell.dart';
 import 'ui/admin_mode_chip.dart' show AdminScope;
 import 'ui/alert_notifications.dart' show AlertNotificationsScope;
 import 'ui/alert_rules.dart' show AlertRulesScope;
+import 'ui/snippets.dart' show SnippetsScope;
 import 'ui/alerts.dart' show AlertScope;
 import 'ui/app_lock_gate.dart';
 import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
@@ -78,6 +80,7 @@ class KlabautermannApp extends StatelessWidget {
     this.admin,
     this.alerts,
     this.alertRules,
+    this.snippets,
     this.alertNotifications,
     this.operations,
     required this.dockerNotice,
@@ -145,6 +148,10 @@ class KlabautermannApp extends StatelessWidget {
   /// run's like [fleet]. Null in tests that leave it out, where no surface
   /// offers the rules page.
   final AlertRulesController? alertRules;
+
+  /// Séance's synced snippets (AUT-01), one engine run's like [fleet].
+  /// Null in tests that leave it out, where no surface offers them.
+  final SnippetsController? snippets;
 
   /// Raised alerts' system notifications (ALR-01), one engine run's like
   /// [fleet]. Null in tests that leave it out, where no surface offers
@@ -315,12 +322,19 @@ class KlabautermannApp extends StatelessWidget {
               final rules? => AlertRulesScope(rules: rules, child: withEditing),
               null => withEditing,
             };
-            final withNotifications = switch (alertNotifications) {
-              final notifications? => AlertNotificationsScope(
-                notifications: notifications,
+            final withSnippets = switch (snippets) {
+              final snippets? => SnippetsScope(
+                snippets: snippets,
                 child: withRules,
               ),
               null => withRules,
+            };
+            final withNotifications = switch (alertNotifications) {
+              final notifications? => AlertNotificationsScope(
+                notifications: notifications,
+                child: withSnippets,
+              ),
+              null => withSnippets,
             };
             final withAlerts = switch (alerts) {
               final alerts? => AlertScope(
