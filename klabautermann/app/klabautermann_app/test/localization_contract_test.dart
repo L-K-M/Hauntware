@@ -929,6 +929,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
   // debugPrint of a failed theme change; the toast is ARB text.
+  // The top lists' subscription surface kind (D45), and a process with
+  // no name, which shows its id.
+  'lib/ui/top_lists.dart': {"'overview-top'", r"'${row.pid}'"},
   // The Poltergeist link's root folder, and the pin's diagnostic.
   'lib/ui/quick_actions.dart': {"'/'", r"'$error'"},
   'lib/ui/fleet_board.dart': {r"'$error'"},

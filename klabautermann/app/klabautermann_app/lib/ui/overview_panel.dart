@@ -22,6 +22,7 @@ import 'system_panel.dart' show PanelNotice, PanelSection;
 import 'system_view.dart';
 import 'threshold_announcer.dart';
 import 'threshold_scope.dart';
+import 'top_lists.dart';
 
 /// The panel width from which the cards sit in two columns, growing with
 /// the text scale as the System tab's does.
@@ -303,6 +304,12 @@ class OverviewPanel extends StatelessWidget {
               host,
               ?dockerCard,
             ],
+            // OV-07: what keeps the server busy, read while this shows.
+            TopListsCard(
+              monitoring: monitoring,
+              serverId: serverId,
+              visible: visible,
+            ),
             HistoryCard(reads: monitoring.rollups, serverId: serverId),
             ?coverage,
           ]),

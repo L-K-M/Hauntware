@@ -3363,6 +3363,14 @@ unless the user enables admin mode for that panel.
   linked to journal entries, configurable cards, top lists, quick actions,
   threshold bands, bottom dock.
 
+  As built in M6 (N61d, OV-07), the Overview's Top card ranks the
+  server's five busiest processes and, where its Docker engine answers,
+  its five busiest containers, by CPU or by memory. It is closed at
+  first and reads nothing; opened, it subscribes `procs` and holds the
+  container watch with list stats for the running containers while the
+  Overview shows, as the Processes tab and the Containers view do, so an
+  unopened card costs the host no process list.
+
   As built in M6 (N61c, OV-08), the Overview's quick actions card offers
   a terminal in Séance and the server's files in Poltergeist where those
   apps take the hand-off (X-03, X-10), a reboot, and a restart of each

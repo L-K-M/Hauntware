@@ -320,6 +320,46 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get topListsTitle => 'Top';
+
+  @override
+  String topListsMeasure(String measure) {
+    String _temp0 = intl.Intl.selectLogic(measure, {
+      'cpu': 'CPU',
+      'other': 'Memory',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get topListsShow => 'Show the busiest processes and containers';
+
+  @override
+  String get topListsHide => 'Hide';
+
+  @override
+  String topListsProcess(String name, int pid) {
+    return '$name ($pid)';
+  }
+
+  @override
+  String topListsPercent(String value) {
+    return '$value %';
+  }
+
+  @override
+  String get topListsProcesses => 'Processes';
+
+  @override
+  String get topListsContainers => 'Containers';
+
+  @override
+  String get topListsWaiting => 'Waiting for the first reading…';
+
+  @override
+  String get topListsEmpty => 'Nothing to rank yet.';
+
+  @override
   String get quickActionsTitle => 'Quick actions';
 
   @override
