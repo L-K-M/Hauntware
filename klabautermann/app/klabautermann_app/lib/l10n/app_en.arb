@@ -12408,5 +12408,185 @@
         "type": "String"
       }
     }
+  },
+  "exportNameServer": "Name the server",
+  "@exportNameServer": {
+    "description": "Export sheet: switch that adds the server's name and host name to a status card (PLT-08)."
+  },
+  "exportServerUnnamed": "The card leaves out the server's name and host name.",
+  "@exportServerUnnamed": {
+    "description": "Export sheet: under Name the server while it is off."
+  },
+  "exportServerNamed": "The card names the server and its host name.",
+  "@exportServerNamed": {
+    "description": "Export sheet: under Name the server while it is on."
+  },
+  "statusCardAction": "Share status…",
+  "@statusCardAction": {
+    "description": "Overview: button at the end that opens the export sheet over a status card of the server's last readings (PLT-08)."
+  },
+  "statusCardTitle": "Status card",
+  "@statusCardTitle": {
+    "description": "Title of the export sheet over a server's status card (PLT-08)."
+  },
+  "statusCardFileName": "status.txt",
+  "@statusCardFileName": {
+    "description": "The suggested file name for a saved status card. Keep it a valid file name."
+  },
+  "statusCardNothingRead": "Nothing has been read from the server yet.",
+  "@statusCardNothingRead": {
+    "description": "Status card: its only line before the server sent any reading."
+  },
+  "statusCardHeading": "Server status at {time}",
+  "@statusCardHeading": {
+    "description": "Status card: first line, with when the newest reading in it arrived, in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "statusCardServer": "Server: {name}",
+  "@statusCardServer": {
+    "description": "Status card: the server's name in Klabautermann, only when the user chose to name it.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "statusCardHostName": "Host name: {hostname}",
+  "@statusCardHostName": {
+    "description": "Status card: the host's static host name, only when the user chose to name the server.",
+    "placeholders": {
+      "hostname": {
+        "type": "String"
+      }
+    }
+  },
+  "statusCardSystem": "System: {os}",
+  "@statusCardSystem": {
+    "description": "Status card: the host's operating system as it names itself, such as Debian GNU/Linux 13 (trixie).",
+    "placeholders": {
+      "os": {
+        "type": "String"
+      }
+    }
+  },
+  "statusCardUptime": "Up for {uptime}",
+  "@statusCardUptime": {
+    "description": "Status card: how long the host has been up, already formatted, such as 3 days, 4 hours.",
+    "placeholders": {
+      "uptime": {
+        "type": "String"
+      }
+    }
+  },
+  "statusCardCpu": "CPU: {percent} busy",
+  "@statusCardCpu": {
+    "description": "Status card: total CPU use, already formatted with its percent sign.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "statusCardLoad": "Load: {load1}, {load5}, {load15}",
+  "@statusCardLoad": {
+    "description": "Status card: the 1, 5 and 15 minute load averages.",
+    "placeholders": {
+      "load1": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 2
+        }
+      },
+      "load5": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 2
+        }
+      },
+      "load15": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 2
+        }
+      }
+    }
+  },
+  "statusCardMemory": "Memory: {used} of {total} used ({percent})",
+  "@statusCardMemory": {
+    "description": "Status card: memory used and total in IEC units, and the share used with its percent sign, all already formatted.",
+    "placeholders": {
+      "used": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "statusCardDisk": "Disk {mount}: {percent} used",
+  "@statusCardDisk": {
+    "description": "Status card: one mount's space used, with its percent sign; the mount point is a path such as /var.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "statusCardFailedUnits": "{count, plural, =0{No failed units} =1{1 failed unit} other{{count} failed units}}",
+  "@statusCardFailedUnits": {
+    "description": "Status card: how many systemd units have failed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "statusCardContainers": "Containers: {running} of {total} running",
+  "@statusCardContainers": {
+    "description": "Status card: Docker containers running out of all the server has.",
+    "placeholders": {
+      "running": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "statusCardUnhealthy": "{count, plural, =1{1 container unhealthy} other{{count} containers unhealthy}}",
+  "@statusCardUnhealthy": {
+    "description": "Status card: how many containers fail their health check; shown only when some do.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerDetailsRawExportTitle": "Export the container's details",
+  "@dockerDetailsRawExportTitle": {
+    "description": "Title of the export sheet over a container's inspect output as JSON (PLT-08)."
+  },
+  "dockerDetailsRawFileName": "{name}-inspect.json",
+  "@dockerDetailsRawFileName": {
+    "description": "The suggested file name for a container's saved inspect output. Keep it a valid file name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   }
 }

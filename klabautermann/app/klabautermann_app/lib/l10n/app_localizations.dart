@@ -13089,6 +13089,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{state} · {image}'**
   String paletteContainerDescription(String state, String image);
+
+  /// Export sheet: switch that adds the server's name and host name to a status card (PLT-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Name the server'**
+  String get exportNameServer;
+
+  /// Export sheet: under Name the server while it is off.
+  ///
+  /// In en, this message translates to:
+  /// **'The card leaves out the server\'s name and host name.'**
+  String get exportServerUnnamed;
+
+  /// Export sheet: under Name the server while it is on.
+  ///
+  /// In en, this message translates to:
+  /// **'The card names the server and its host name.'**
+  String get exportServerNamed;
+
+  /// Overview: button at the end that opens the export sheet over a status card of the server's last readings (PLT-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Share status…'**
+  String get statusCardAction;
+
+  /// Title of the export sheet over a server's status card (PLT-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Status card'**
+  String get statusCardTitle;
+
+  /// The suggested file name for a saved status card. Keep it a valid file name.
+  ///
+  /// In en, this message translates to:
+  /// **'status.txt'**
+  String get statusCardFileName;
+
+  /// Status card: its only line before the server sent any reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing has been read from the server yet.'**
+  String get statusCardNothingRead;
+
+  /// Status card: first line, with when the newest reading in it arrived, in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Server status at {time}'**
+  String statusCardHeading(DateTime time);
+
+  /// Status card: the server's name in Klabautermann, only when the user chose to name it.
+  ///
+  /// In en, this message translates to:
+  /// **'Server: {name}'**
+  String statusCardServer(String name);
+
+  /// Status card: the host's static host name, only when the user chose to name the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Host name: {hostname}'**
+  String statusCardHostName(String hostname);
+
+  /// Status card: the host's operating system as it names itself, such as Debian GNU/Linux 13 (trixie).
+  ///
+  /// In en, this message translates to:
+  /// **'System: {os}'**
+  String statusCardSystem(String os);
+
+  /// Status card: how long the host has been up, already formatted, such as 3 days, 4 hours.
+  ///
+  /// In en, this message translates to:
+  /// **'Up for {uptime}'**
+  String statusCardUptime(String uptime);
+
+  /// Status card: total CPU use, already formatted with its percent sign.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU: {percent} busy'**
+  String statusCardCpu(String percent);
+
+  /// Status card: the 1, 5 and 15 minute load averages.
+  ///
+  /// In en, this message translates to:
+  /// **'Load: {load1}, {load5}, {load15}'**
+  String statusCardLoad(double load1, double load5, double load15);
+
+  /// Status card: memory used and total in IEC units, and the share used with its percent sign, all already formatted.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory: {used} of {total} used ({percent})'**
+  String statusCardMemory(String used, String total, String percent);
+
+  /// Status card: one mount's space used, with its percent sign; the mount point is a path such as /var.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk {mount}: {percent} used'**
+  String statusCardDisk(String mount, String percent);
+
+  /// Status card: how many systemd units have failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No failed units} =1{1 failed unit} other{{count} failed units}}'**
+  String statusCardFailedUnits(int count);
+
+  /// Status card: Docker containers running out of all the server has.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers: {running} of {total} running'**
+  String statusCardContainers(int running, int total);
+
+  /// Status card: how many containers fail their health check; shown only when some do.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 container unhealthy} other{{count} containers unhealthy}}'**
+  String statusCardUnhealthy(int count);
+
+  /// Title of the export sheet over a container's inspect output as JSON (PLT-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Export the container\'s details'**
+  String get dockerDetailsRawExportTitle;
+
+  /// The suggested file name for a container's saved inspect output. Keep it a valid file name.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}-inspect.json'**
+  String dockerDetailsRawFileName(String name);
 }
 
 class _AppLocalizationsDelegate

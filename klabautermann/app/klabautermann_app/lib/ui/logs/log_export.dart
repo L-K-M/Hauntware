@@ -103,7 +103,24 @@ Future<void> showLogExport(
   required String fileName,
 }) {
   final l10n = AppLocalizations.of(context);
-  final lines = logExportLines(logs, dropped: l10n.logDroppedLines);
+  return showExportSheet(
+    context,
+    monitoring: monitoring,
+    lines: logExportLines(logs, dropped: l10n.logDroppedLines),
+    fileName: fileName,
+  );
+}
+
+/// Opens [LogExportSheet] over [lines] as a bottom sheet: LOG-10's log
+/// exports, and PLT-08's status cards and inspect snapshots.
+Future<void> showExportSheet(
+  BuildContext context, {
+  required MonitoringController monitoring,
+  required List<String> lines,
+  required String fileName,
+  String? title,
+  List<String>? namedLines,
+}) {
   final host = LogExportScope.of(context);
   return showModalBottomSheet<void>(
     context: context,
@@ -123,6 +140,8 @@ Future<void> showLogExport(
             host: host,
             lines: lines,
             fileName: fileName,
+            title: title,
+            namedLines: namedLines,
           ),
         ),
       ),
@@ -133,7 +152,8 @@ Future<void> showLogExport(
 /// LOG-10's export sheet over [lines]: redacted through the engine's
 /// secret redactor unless the user turns on Include secrets (SAF-07),
 /// then copied, saved as [fileName] or shared. It pops once the export
-/// went out.
+/// went out. With [namedLines], a switch, off at first, exports those
+/// instead: PLT-08's status card names its server only when asked.
 class LogExportSheet extends StatefulWidget {
   const LogExportSheet({
     super.key,
@@ -143,6 +163,7 @@ class LogExportSheet extends StatefulWidget {
     required this.fileName,
     this.title,
     this.note,
+    this.namedLines,
   });
 
   final MonitoringController monitoring;
@@ -160,12 +181,16 @@ class LogExportSheet extends StatefulWidget {
   /// A paragraph under the title, if any.
   final String? note;
 
+  /// [lines] with the server named, if they leave it out.
+  final List<String>? namedLines;
+
   @override
   State<LogExportSheet> createState() => _LogExportSheetState();
 }
 
 class _LogExportSheetState extends State<LogExportSheet> {
   bool _includeSecrets = false;
+  bool _named = false;
   LogExportTarget? _busy;
 
   Future<void> _export(LogExportTarget target) async {
@@ -182,9 +207,10 @@ class _LogExportSheetState extends State<LogExportSheet> {
       if (overlay.mounted) showTopToast(overlay, message: message);
     }
 
+    final lines = _named ? widget.namedLines ?? widget.lines : widget.lines;
     final text = _includeSecrets
-        ? widget.lines.join('\n')
-        : await widget.monitoring.redactLines(widget.lines);
+        ? lines.join('\n')
+        : await widget.monitoring.redactLines(lines);
     if (!mounted) return;
     if (text == null) {
       setState(() => _busy = null);
@@ -247,6 +273,16 @@ class _LogExportSheetState extends State<LogExportSheet> {
           Text(note),
         ],
         const SizedBox(height: 8),
+        if (widget.namedLines != null)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _named,
+            onChanged: busy ? null : (value) => setState(() => _named = value),
+            title: Text(l10n.exportNameServer),
+            subtitle: Text(
+              _named ? l10n.exportServerNamed : l10n.exportServerUnnamed,
+            ),
+          ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: _includeSecrets,
