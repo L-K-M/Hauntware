@@ -138,9 +138,8 @@ final class _Files implements RemoteFileSystem {
         bytes.sublist(at, (at + 32 * 1024).clamp(0, bytes.length)),
     ];
     await destination.addStream(
-      Stream.fromIterable(
-        chunks,
-      ).takeWhile((_) => !(cancellation?.isCancelled ?? false)),
+      Stream.fromIterable(chunks)
+          .takeWhile((_) => !(cancellation?.isCancelled ?? false)),
     );
     if (cancellation?.isCancelled ?? false) {
       cancelled = true;
@@ -724,8 +723,10 @@ void main() {
         ),
       );
       expect(
-        (await h.read('demo', '/srv/demo/.env') as DockerStackFileFailed)
-            .failure,
+        (await h.read(
+          'demo',
+          '/srv/demo/.env',
+        ) as DockerStackFileFailed).failure,
         StackFileFailure.readFailed,
       );
 
@@ -827,9 +828,9 @@ void main() {
     test("a verified project's profiles arrive sorted from config "
         '--profiles over its files', () async {
       final h = _Harness(_demo());
-      final payload =
-          await h.query(const DockerStackProfilesQuery('demo'))
-              as DockerStackProfilesPayload;
+      final payload = await h.query(
+        const DockerStackProfilesQuery('demo'),
+      ) as DockerStackProfilesPayload;
 
       expect(payload.profiles, ['debug', 'tools']);
       final (_, argv) = h.runs.lastWhere((r) => r.$1 == _Run.profiles);
@@ -843,9 +844,9 @@ void main() {
         'compose, and a failed run says so', () async {
       final unverified = _Harness(_demo(webHash: 'dead00'));
       expect(
-        (await unverified.query(const DockerStackProfilesQuery('demo'))
-                as DockerStackFileFailed)
-            .failure,
+        (await unverified.query(
+          const DockerStackProfilesQuery('demo'),
+        ) as DockerStackFileFailed).failure,
         StackFileFailure.notVerified,
       );
       expect(unverified.kinds, isNot(contains(_Run.profiles)));
@@ -876,9 +877,9 @@ void main() {
           stderr: "find: '/srv/apps/': No such file or directory",
           exitCode: 1,
         );
-      final payload =
-          await h.query(DockerStackScanQuery(['/opt/stacks', '/srv/apps']))
-              as DockerStackScanPayload;
+      final payload = await h.query(
+        DockerStackScanQuery(['/opt/stacks', '/srv/apps']),
+      ) as DockerStackScanPayload;
 
       expect(payload.files, [
         '/opt/stacks/a/docker-compose.yml',

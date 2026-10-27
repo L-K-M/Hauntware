@@ -73,10 +73,8 @@ void main() {
 
       List<LogStreamStatus> statuses(String id) => [
         for (final e in events)
-          if (e case LogStreamState(
-            :final streamId,
-            :final status,
-          ) when streamId == id)
+          if (e case LogStreamState(:final streamId, :final status)
+              when streamId == id)
             status,
       ];
 

@@ -59,15 +59,14 @@ enum BackgroundLinkPolicy {
 }
 
 /// [LinkConnector.connect] as the supervisor calls it; tests pass a fake.
-typedef LinkConnect =
-    Future<LinkConnectResult> Function(
-      ServerConfig config, {
-      required ConnectPurpose purpose,
-      required ChangedHostKey changedKey,
-      void Function(LinkStatus phase)? onPhase,
-      void Function()? onDialing,
-      Future<void>? abandoned,
-    });
+typedef LinkConnect = Future<LinkConnectResult> Function(
+  ServerConfig config, {
+  required ConnectPurpose purpose,
+  required ChangedHostKey changedKey,
+  void Function(LinkStatus phase)? onPhase,
+  void Function()? onDialing,
+  Future<void>? abandoned,
+});
 
 /// Holds at most one link per server and decides when to dial; every
 /// change reaches the app as a [LinkState]. The rules are 03 §5.1 and

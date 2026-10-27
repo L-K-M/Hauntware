@@ -58,9 +58,11 @@ void main() {
       'a denied socket takes the sudo relay while admin mode is on',
       () async {
         final link = ForwardingLink()..probeAnswers[_rootful] = _denied;
-        final route =
-            await DockerLadder.resolve(link, _profile(), adminMode: true)
-                as DockerRoute;
+        final route = await DockerLadder.resolve(
+          link,
+          _profile(),
+          adminMode: true,
+        ) as DockerRoute;
 
         expect(route.rank, DockerRank.sudoRelay);
         expect(route.rank.number, 3);
@@ -123,9 +125,11 @@ void main() {
 
     test('an excluded sudo relay gives way to none', () async {
       final link = ForwardingLink()..probeAnswers[_rootful] = _denied;
-      final route =
-          await DockerLadder.resolve(link, _profile(), adminMode: true)
-              as DockerRoute;
+      final route = await DockerLadder.resolve(
+        link,
+        _profile(),
+        adminMode: true,
+      ) as DockerRoute;
       expect(
         await DockerLadder.resolve(
           link,
@@ -142,9 +146,11 @@ void main() {
     test('each connection is one elevated exec, sudo -n first, and the '
         'engine answers through it', () async {
       final link = ForwardingLink()..probeAnswers[_rootful] = _denied;
-      final route =
-          await DockerLadder.resolve(link, _profile(), adminMode: true)
-              as DockerRoute;
+      final route = await DockerLadder.resolve(
+        link,
+        _profile(),
+        adminMode: true,
+      ) as DockerRoute;
       final session = _session(link);
       final client = DockerClient(
         DockerHttpClient(() => openDockerDuplex(link, route, admin: session)),
@@ -165,9 +171,11 @@ void main() {
 
     test('without an admin session a sudo relay does not open', () async {
       final link = ForwardingLink()..probeAnswers[_rootful] = _denied;
-      final route =
-          await DockerLadder.resolve(link, _profile(), adminMode: true)
-              as DockerRoute;
+      final route = await DockerLadder.resolve(
+        link,
+        _profile(),
+        adminMode: true,
+      ) as DockerRoute;
       final client = DockerClient(
         DockerHttpClient(() => openDockerDuplex(link, route)),
         apiVersion: const ApiVersion(1, 44),

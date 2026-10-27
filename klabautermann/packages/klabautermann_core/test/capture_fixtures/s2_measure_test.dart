@@ -80,9 +80,10 @@ void main() {
       environment: env,
     );
     await sampler.ready;
-    final argv0 = File(
-      '/proc/${sampler.pid}/cmdline',
-    ).readAsStringSync().split('\x00').first;
+    final argv0 = File('/proc/${sampler.pid}/cmdline')
+        .readAsStringSync()
+        .split('\x00')
+        .first;
     expect(argv0.split('/').last, 'sh');
     await sampler.close();
   }, skip: bash == null ? 'bash is not installed' : false);

@@ -63,9 +63,8 @@ Future<PlanAttempt> planRedeploy(
   final orphans = <String>[];
   var profileGated = false;
   for (final container in stack.containers) {
-    final service = ComposeLabels.fromContainerLabels(
-      container.labels,
-    )?.service;
+    final service = ComposeLabels.fromContainerLabels(container.labels)
+        ?.service;
     if (service == null || stack.named.contains(service)) continue;
     if (everyProfile != null && everyProfile.contains(service)) {
       profileGated |= container.state == _running;
@@ -524,10 +523,9 @@ Map<String, String> _labelHashes(
   Set<String> named,
 ) => {
   for (final container in containers)
-    if (ComposeLabels.fromContainerLabels(container.labels) case ComposeLabels(
-      :final service?,
-      :final configHash?,
-    ) when named.contains(service))
+    if (ComposeLabels.fromContainerLabels(container.labels)
+        case ComposeLabels(:final service?, :final configHash?)
+        when named.contains(service))
       service: configHash,
 };
 

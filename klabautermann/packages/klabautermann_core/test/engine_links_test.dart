@@ -404,15 +404,14 @@ void main() {
       final engine = await _Engine.start(
         support.path,
         linksEnabled: true,
-        dial:
-            ({
-              required config,
-              required credentials,
-              required tofu,
-              required onHostKey,
-              onKeyboardInteractive,
-              resolveJumpHost,
-            }) => Completer<SshLink>().future,
+        dial: ({
+          required config,
+          required credentials,
+          required tofu,
+          required onHostKey,
+          onKeyboardInteractive,
+          resolveJumpHost,
+        }) => Completer<SshLink>().future,
       );
       final hosts = [
         for (var i = 1; i <= kMaxConnectsInFlight + 1; i++) 'ssh-config:s$i',
@@ -502,15 +501,14 @@ void main() {
       final engine = await _Engine.start(
         support.path,
         linksEnabled: true,
-        dial:
-            ({
-              required config,
-              required credentials,
-              required tofu,
-              required onHostKey,
-              onKeyboardInteractive,
-              resolveJumpHost,
-            }) async => link,
+        dial: ({
+          required config,
+          required credentials,
+          required tofu,
+          required onHostKey,
+          onKeyboardInteractive,
+          resolveJumpHost,
+        }) async => link,
       );
       await engine.import(_webConfig);
       engine.send(
@@ -560,15 +558,14 @@ void main() {
       final engine = await _Engine.start(
         support.path,
         linksEnabled: true,
-        dial:
-            ({
-              required config,
-              required credentials,
-              required tofu,
-              required onHostKey,
-              onKeyboardInteractive,
-              resolveJumpHost,
-            }) async => link,
+        dial: ({
+          required config,
+          required credentials,
+          required tofu,
+          required onHostKey,
+          onKeyboardInteractive,
+          resolveJumpHost,
+        }) async => link,
       );
       await engine.import(_webConfig);
       return engine;
@@ -789,15 +786,14 @@ void main() {
       final engine = await _Engine.start(
         support.path,
         linksEnabled: true,
-        dial:
-            ({
-              required config,
-              required credentials,
-              required tofu,
-              required onHostKey,
-              onKeyboardInteractive,
-              resolveJumpHost,
-            }) async => ForwardingLink(),
+        dial: ({
+          required config,
+          required credentials,
+          required tofu,
+          required onHostKey,
+          onKeyboardInteractive,
+          resolveJumpHost,
+        }) async => ForwardingLink(),
       );
       await engine.import(_webConfig);
 
@@ -837,15 +833,14 @@ void main() {
       final engine = await _Engine.start(
         support.path,
         linksEnabled: true,
-        dial:
-            ({
-              required config,
-              required credentials,
-              required tofu,
-              required onHostKey,
-              onKeyboardInteractive,
-              resolveJumpHost,
-            }) async => ForwardingLink(),
+        dial: ({
+          required config,
+          required credentials,
+          required tofu,
+          required onHostKey,
+          onKeyboardInteractive,
+          resolveJumpHost,
+        }) async => ForwardingLink(),
       );
       await engine.import(_webConfig);
 
@@ -882,15 +877,14 @@ void main() {
       final engine = await _Engine.start(
         support.path,
         linksEnabled: true,
-        dial:
-            ({
-              required config,
-              required credentials,
-              required tofu,
-              required onHostKey,
-              onKeyboardInteractive,
-              resolveJumpHost,
-            }) async => link,
+        dial: ({
+          required config,
+          required credentials,
+          required tofu,
+          required onHostKey,
+          onKeyboardInteractive,
+          resolveJumpHost,
+        }) async => link,
       );
       await engine.import(_webConfig);
 

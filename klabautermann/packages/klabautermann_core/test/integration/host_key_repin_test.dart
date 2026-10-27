@@ -20,9 +20,9 @@ import 'support/fixture.dart';
 
 /// The fingerprints `host_keys.json` in [support] pins.
 Future<List<String>> _pinned(Directory support) async => [
-  for (final json
-      in jsonDecode(await File('${support.path}/host_keys.json').readAsString())
-          as List)
+  for (final json in jsonDecode(
+    await File('${support.path}/host_keys.json').readAsString(),
+  ) as List)
     (json as Map)['fingerprintSha256'] as String,
 ];
 

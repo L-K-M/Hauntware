@@ -598,9 +598,8 @@ void main() {
       final failed = h.query(const DockerSystemDfQuery());
       expect(
         await h.result(failed),
-        _failed(
-          DockerQueryFailure.daemonError,
-        ).having((f) => f.detail, 'detail', 'busy'),
+        _failed(DockerQueryFailure.daemonError)
+            .having((f) => f.detail, 'detail', 'busy'),
       );
     });
 
@@ -612,16 +611,14 @@ void main() {
       final gone = h.query(const DockerContainerQuery('gone'));
       expect(
         await h.result(gone),
-        _failed(
-          DockerQueryFailure.notFound,
-        ).having((f) => f.detail, 'detail', 'page not found'),
+        _failed(DockerQueryFailure.notFound)
+            .having((f) => f.detail, 'detail', 'page not found'),
       );
       final broken = h.query(const DockerContainerQuery('broken'));
       expect(
         await h.result(broken),
-        _failed(
-          DockerQueryFailure.daemonError,
-        ).having((f) => f.detail, 'detail', 'boom'),
+        _failed(DockerQueryFailure.daemonError)
+            .having((f) => f.detail, 'detail', 'boom'),
       );
       final empty = h.query(const DockerContainerQuery(''));
       expect(await h.result(empty), _failed(DockerQueryFailure.invalidQuery));

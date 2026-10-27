@@ -245,8 +245,10 @@ void main() {
 
     final invalid = _Link(_out(''));
     expect(
-      (await _query(invalid, const UnitFileQuery('a b')) as UnitQueryFailed)
-          .failure,
+      (await _query(
+        invalid,
+        const UnitFileQuery('a b'),
+      ) as UnitQueryFailed).failure,
       UnitQueryFailure.invalidUnit,
     );
     expect(invalid.commands, isEmpty);

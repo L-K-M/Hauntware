@@ -52,15 +52,14 @@ final class _Engine {
         linksEnabled: true,
         supportDirectoryAccess: SupportDirectoryAccess.exclusive,
       ),
-      dial:
-          ({
-            required config,
-            required credentials,
-            required tofu,
-            required onHostKey,
-            onKeyboardInteractive,
-            resolveJumpHost,
-          }) async => link,
+      dial: ({
+        required config,
+        required credentials,
+        required tofu,
+        required onHostKey,
+        onKeyboardInteractive,
+        resolveJumpHost,
+      }) async => link,
     );
     expect(await events.moveNext(), isTrue);
     final engine = _Engine._(events.current as SendPort, events)
@@ -178,9 +177,8 @@ void main() {
       await engine.until<SamplingState>(
         (e) => e.phase == SamplingPhase.pausedInBackground,
       );
-      await Future.wait([
-        for (final p in link.processes) p.exit,
-      ]).timeout(const Duration(seconds: 10));
+      await Future.wait([for (final p in link.processes) p.exit])
+          .timeout(const Duration(seconds: 10));
       final started = link.processes.length;
       engine.send(const SetAppActivity(AppActivity.foreground));
       await engine.until<Gap>((g) => g.cause == GapCause.background);
@@ -194,9 +192,8 @@ void main() {
       await engine.until<SamplingState>(
         (e) => e.phase == SamplingPhase.unsubscribed,
       );
-      await Future.wait([
-        for (final p in link.processes) p.exit,
-      ]).timeout(const Duration(seconds: 10));
+      await Future.wait([for (final p in link.processes) p.exit])
+          .timeout(const Duration(seconds: 10));
     });
   }
 
@@ -209,9 +206,8 @@ void main() {
       addTearDown(link.dispose);
       final engine = await _Engine.start(support.path, link);
       // A directory with an entry cannot be replaced by the saved file.
-      Directory(
-        '${support.path}/$sshConfigImportsFileName/entry',
-      ).createSync(recursive: true);
+      Directory('${support.path}/$sshConfigImportsFileName/entry')
+          .createSync(recursive: true);
 
       engine.send(
         const ImportSshConfig('Host web\n  HostName 192.0.2.10\n  User me\n'),
@@ -238,9 +234,8 @@ void main() {
       await engine.until<SamplingState>(
         (e) => e.phase == SamplingPhase.unsubscribed,
       );
-      await Future.wait([
-        for (final p in link.processes) p.exit,
-      ]).timeout(const Duration(seconds: 10));
+      await Future.wait([for (final p in link.processes) p.exit])
+          .timeout(const Duration(seconds: 10));
     });
   }
 

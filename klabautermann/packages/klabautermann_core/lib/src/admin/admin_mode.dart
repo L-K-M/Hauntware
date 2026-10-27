@@ -36,8 +36,11 @@ const kAdminPasswordAttempts = 3;
 /// `timestamp_type=global` a cached record lets a wrong password through
 /// that check (03 D65); E04's executor validation ignores cached records,
 /// and replaces this default when it lands.
-typedef AdminValidator =
-    Future<void> Function(SshLink link, ElevationProbe probe, String? password);
+typedef AdminValidator = Future<void> Function(
+  SshLink link,
+  ElevationProbe probe,
+  String? password,
+);
 
 /// What elevated work needs while admin mode is on: the executor and the
 /// password, which never leave the engine.

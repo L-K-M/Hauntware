@@ -105,9 +105,8 @@ void main() {
 
     // sshd accepted the file's key, and the engine audited the read.
     expect(await acceptedKeys(logged), [contains(fixture.identityFingerprint)]);
-    final audit = await File(
-      '${engine.supportDirectory}/identity_reads.jsonl',
-    ).readAsLines();
+    final audit = await File('${engine.supportDirectory}/identity_reads.jsonl')
+        .readAsLines();
     expect(audit, isNotEmpty);
     for (final line in audit) {
       expect(jsonDecode(line), containsPair('ok', true));

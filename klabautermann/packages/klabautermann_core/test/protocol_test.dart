@@ -95,6 +95,8 @@ void main() {
         const Unsubscribe(serverId: 'srv-1', subscriptionId: 'row'),
         const RefreshSubscription(serverId: 'srv-1', subscriptionId: 'row'),
         const SetCadenceProfile(CadenceProfile.phone),
+        const SetServerCadenceCap('srv-1', CadenceProfile.cellularSaver),
+        const SetServerCadenceCap('srv-1', null),
         const ImportSshConfig('Host web-1\n  HostName web-1.example\n'),
         OpenLogStream(
           streamId: 'stream-1',
@@ -889,24 +891,20 @@ void main() {
         DockerEndpointDetected('/run/podman/podman.sock'),
         DockerEndpointCustom('/srv/engine.sock'),
       ]) {
-        final sent =
-            await roundTrip(
-                  SetDockerEndpoint(serverId: 'srv-1', choice: choice),
-                )
-                as SetDockerEndpoint;
+        final sent = await roundTrip(
+          SetDockerEndpoint(serverId: 'srv-1', choice: choice),
+        ) as SetDockerEndpoint;
         expect(sent.choice, choice);
         expect(sent.choice.hashCode, choice.hashCode);
 
-        final state =
-            await roundTrip(
-                  DockerEndpointState(
-                    serverId: 'srv-1',
-                    phase: DockerEndpointPhase.failed,
-                    failure: DockerEndpointFailure.invalidChoice,
-                    choice: choice,
-                  ),
-                )
-                as DockerEndpointState;
+        final state = await roundTrip(
+          DockerEndpointState(
+            serverId: 'srv-1',
+            phase: DockerEndpointPhase.failed,
+            failure: DockerEndpointFailure.invalidChoice,
+            choice: choice,
+          ),
+        ) as DockerEndpointState;
         expect(state.choice, choice);
       }
       expect(
@@ -918,17 +916,15 @@ void main() {
         isNot(const DockerEndpointCustom('/b.sock')),
       );
 
-      final compose =
-          await roundTrip(
-                const DockerResult(
-                  serverId: 'srv-1',
-                  queryId: 'q-9',
-                  payload: DockerComposePayload(
-                    DockerComposeCli(pluginVersion: '2.29.7'),
-                  ),
-                ),
-              )
-              as DockerResult;
+      final compose = await roundTrip(
+        const DockerResult(
+          serverId: 'srv-1',
+          queryId: 'q-9',
+          payload: DockerComposePayload(
+            DockerComposeCli(pluginVersion: '2.29.7'),
+          ),
+        ),
+      ) as DockerResult;
       expect(
         (compose.payload as DockerComposePayload).composeCli.pluginVersion,
         '2.29.7',
@@ -937,85 +933,77 @@ void main() {
 
     test('Docker queries, results and endpoint states survive with their '
         'payloads (M7)', () async {
-      final query =
-          await roundTrip(
-                const DockerQuery(
-                  serverId: 'srv-1',
-                  queryId: 'q-7',
-                  query: DockerContainerQuery('db'),
-                ),
-              )
-              as DockerQuery;
+      final query = await roundTrip(
+        const DockerQuery(
+          serverId: 'srv-1',
+          queryId: 'q-7',
+          query: DockerContainerQuery('db'),
+        ),
+      ) as DockerQuery;
       expect(query.serverId, 'srv-1');
       expect(query.queryId, 'q-7');
       expect((query.query as DockerContainerQuery).containerId, 'db');
 
-      final result =
-          await roundTrip(
-                DockerResult(
-                  serverId: 'srv-1',
-                  queryId: 'q-7',
-                  payload: DockerContainerPayload(
-                    ContainerDetails(
-                      id: 'abc',
-                      args: [MaskedValue.secret('hunter2')],
-                      state: ContainerDetailsState(
-                        running: true,
-                        health: ContainerDetailsHealth(
-                          status: HealthStatus.healthy,
-                          log: [
-                            ContainerHealthCheck(
-                              exitCode: 0,
-                              output: MaskedValue.plain('ok'),
-                            ),
-                          ],
-                        ),
-                      ),
+      final result = await roundTrip(
+        DockerResult(
+          serverId: 'srv-1',
+          queryId: 'q-7',
+          payload: DockerContainerPayload(
+            ContainerDetails(
+              id: 'abc',
+              args: [MaskedValue.secret('hunter2')],
+              state: ContainerDetailsState(
+                running: true,
+                health: ContainerDetailsHealth(
+                  status: HealthStatus.healthy,
+                  log: [
+                    ContainerHealthCheck(
+                      exitCode: 0,
+                      output: MaskedValue.plain('ok'),
                     ),
-                  ),
-                  warnings: const ['Labels is not an object'],
+                  ],
                 ),
-              )
-              as DockerResult;
+              ),
+            ),
+          ),
+          warnings: const ['Labels is not an object'],
+        ),
+      ) as DockerResult;
       final details = (result.payload as DockerContainerPayload).container;
       expect(details.args.single.display, MaskedValue.maskToken);
       expect(details.args.single.reveal(), 'hunter2');
       expect(details.state!.health!.log.single.output!.display, 'ok');
       expect(result.warnings, ['Labels is not an object']);
 
-      final state =
-          await roundTrip(
-                const DockerEndpointState(
-                  serverId: 'srv-1',
-                  phase: DockerEndpointPhase.ready,
-                  route: DockerEndpointRoute(
-                    rank: DockerRank.cliRelay,
-                    socketPath: '/var/run/docker.sock',
-                    rootEquivalence: DockerRootEquivalence.rootfulSocket,
-                    runtime: EngineRuntime.podman,
-                    mode: EngineMode.rootful,
-                  ),
-                  negotiatedApi: ApiVersion(1, 44),
-                ),
-              )
-              as DockerEndpointState;
+      final state = await roundTrip(
+        const DockerEndpointState(
+          serverId: 'srv-1',
+          phase: DockerEndpointPhase.ready,
+          route: DockerEndpointRoute(
+            rank: DockerRank.cliRelay,
+            socketPath: '/var/run/docker.sock',
+            rootEquivalence: DockerRootEquivalence.rootfulSocket,
+            runtime: EngineRuntime.podman,
+            mode: EngineMode.rootful,
+          ),
+          negotiatedApi: ApiVersion(1, 44),
+        ),
+      ) as DockerEndpointState;
       expect(state.label, DockerRouteLabel.cliRelay);
       expect(state.route!.runtime, EngineRuntime.podman);
       expect(state.negotiatedApi, const ApiVersion(1, 44));
       expect(state.choice, const DockerEndpointAuto());
 
-      final failed =
-          await roundTrip(
-                const DockerResult(
-                  serverId: 'srv-1',
-                  queryId: 'q-8',
-                  payload: DockerQueryFailed(
-                    DockerQueryFailure.notFound,
-                    detail: 'No such container: db',
-                  ),
-                ),
-              )
-              as DockerResult;
+      final failed = await roundTrip(
+        const DockerResult(
+          serverId: 'srv-1',
+          queryId: 'q-8',
+          payload: DockerQueryFailed(
+            DockerQueryFailure.notFound,
+            detail: 'No such container: db',
+          ),
+        ),
+      ) as DockerResult;
       expect(
         (failed.payload as DockerQueryFailed).failure,
         DockerQueryFailure.notFound,
@@ -1024,69 +1012,59 @@ void main() {
 
     test('Docker watches and their lists survive with their payloads '
         '(M7)', () async {
-      final watch =
-          await roundTrip(
-                const DockerWatch(
-                  serverId: 'srv-1',
-                  watchId: 'w-1',
-                  lists: {DockerWatchList.stacks, DockerWatchList.stats},
-                  statsFor: {'abc'},
-                ),
-              )
-              as DockerWatch;
+      final watch = await roundTrip(
+        const DockerWatch(
+          serverId: 'srv-1',
+          watchId: 'w-1',
+          lists: {DockerWatchList.stacks, DockerWatchList.stats},
+          statsFor: {'abc'},
+        ),
+      ) as DockerWatch;
       expect(watch.lists, {DockerWatchList.stacks, DockerWatchList.stats});
       expect(watch.statsFor, {'abc'});
 
       final at = DateTime.utc(2026, 10, 17, 12);
-      final stacks =
-          await roundTrip(
-                DockerListChanged(
-                  serverId: 'srv-1',
-                  list: DockerWatchList.stacks,
-                  payload: DockerStacksPayload(
-                    groupComposeProjects([
-                      ContainerSummary(
-                        id: 'abc',
-                        labels: {
-                          'com.docker.compose.project': MaskedValue.plain(
-                            'demo',
-                          ),
-                          'com.docker.compose.service': MaskedValue.plain(
-                            'web',
-                          ),
-                        },
-                      ),
-                    ]),
-                  ),
-                  at: at,
-                  fullRelist: true,
-                ),
-              )
-              as DockerListChanged;
+      final stacks = await roundTrip(
+        DockerListChanged(
+          serverId: 'srv-1',
+          list: DockerWatchList.stacks,
+          payload: DockerStacksPayload(
+            groupComposeProjects([
+              ContainerSummary(
+                id: 'abc',
+                labels: {
+                  'com.docker.compose.project': MaskedValue.plain('demo'),
+                  'com.docker.compose.service': MaskedValue.plain('web'),
+                },
+              ),
+            ]),
+          ),
+          at: at,
+          fullRelist: true,
+        ),
+      ) as DockerListChanged;
       final grouping = (stacks.payload as DockerStacksPayload).grouping;
       expect(grouping.projects.single.name, 'demo');
       expect(grouping.projects.single.services.single.name, 'web');
       expect(stacks.fullRelist, isTrue);
       expect(stacks.at, at);
 
-      final stats =
-          await roundTrip(
-                DockerListChanged(
-                  serverId: 'srv-1',
-                  list: DockerWatchList.stats,
-                  payload: DockerStatsPayload([
-                    ContainerListStats(
-                      containerId: 'abc',
-                      at: at,
-                      cpuPercent: 12.5,
-                      memoryUsed: 1024,
-                      memoryLimit: 4096,
-                    ),
-                  ]),
-                  at: at,
-                ),
-              )
-              as DockerListChanged;
+      final stats = await roundTrip(
+        DockerListChanged(
+          serverId: 'srv-1',
+          list: DockerWatchList.stats,
+          payload: DockerStatsPayload([
+            ContainerListStats(
+              containerId: 'abc',
+              at: at,
+              cpuPercent: 12.5,
+              memoryUsed: 1024,
+              memoryLimit: 4096,
+            ),
+          ]),
+          at: at,
+        ),
+      ) as DockerListChanged;
       final row = (stats.payload as DockerStatsPayload).stats.single;
       expect(row.cpuPercent, 12.5);
       expect(row.memoryUsed, 1024);
@@ -1095,30 +1073,26 @@ void main() {
 
     test('stack verdicts and stack files survive with their masked '
         'spans (03 §7.16)', () async {
-      final stacks =
-          await roundTrip(
-                DockerListChanged(
-                  serverId: 'srv-1',
-                  list: DockerWatchList.stacks,
-                  payload: DockerStacksPayload(
-                    groupComposeProjects(const []),
-                    verdicts: const {
-                      'a': StackVerified(),
-                      'b': StackUnverified(StackUnverifiedReason.hashMismatch),
-                      'c': StackSourceNotOnHost(
-                        deployedBy: ExternalManager.dockge,
-                      ),
-                      'd': StackVerifying(),
-                    },
-                    composeCli: const DockerComposeCli(
-                      pluginVersion: '2.29.7',
-                      standaloneVersion: '1.29.2',
-                    ),
-                  ),
-                  at: DateTime.utc(2026, 10, 17),
-                ),
-              )
-              as DockerListChanged;
+      final stacks = await roundTrip(
+        DockerListChanged(
+          serverId: 'srv-1',
+          list: DockerWatchList.stacks,
+          payload: DockerStacksPayload(
+            groupComposeProjects(const []),
+            verdicts: const {
+              'a': StackVerified(),
+              'b': StackUnverified(StackUnverifiedReason.hashMismatch),
+              'c': StackSourceNotOnHost(deployedBy: ExternalManager.dockge),
+              'd': StackVerifying(),
+            },
+            composeCli: const DockerComposeCli(
+              pluginVersion: '2.29.7',
+              standaloneVersion: '1.29.2',
+            ),
+          ),
+          at: DateTime.utc(2026, 10, 17),
+        ),
+      ) as DockerListChanged;
       final payload = stacks.payload as DockerStacksPayload;
       expect(payload.verdicts['a'], isA<StackVerified>());
       expect(
@@ -1131,51 +1105,42 @@ void main() {
       );
       expect(payload.composeCli!.standaloneLegacy, isTrue);
 
-      final query =
-          await roundTrip(
-                const DockerQuery(
-                  serverId: 'srv-1',
-                  queryId: 'q-1',
-                  query: DockerStackFileQuery(
-                    project: 'demo',
-                    path: '/srv/demo/.env',
-                  ),
-                ),
-              )
-              as DockerQuery;
+      final query = await roundTrip(
+        const DockerQuery(
+          serverId: 'srv-1',
+          queryId: 'q-1',
+          query: DockerStackFileQuery(project: 'demo', path: '/srv/demo/.env'),
+        ),
+      ) as DockerQuery;
       expect((query.query as DockerStackFileQuery).path, '/srv/demo/.env');
 
-      final file =
-          await roundTrip(
-                DockerResult(
-                  serverId: 'srv-1',
-                  queryId: 'q-1',
-                  payload: DockerStackFilePayload(
-                    project: 'demo',
-                    path: '/srv/demo/.env',
-                    text: [
-                      MaskedValue.plain('DB_PASSWORD='),
-                      MaskedValue.secret('hunter2'),
-                      MaskedValue.plain('\n'),
-                    ],
-                    size: 20,
-                  ),
-                ),
-              )
-              as DockerResult;
+      final file = await roundTrip(
+        DockerResult(
+          serverId: 'srv-1',
+          queryId: 'q-1',
+          payload: DockerStackFilePayload(
+            project: 'demo',
+            path: '/srv/demo/.env',
+            text: [
+              MaskedValue.plain('DB_PASSWORD='),
+              MaskedValue.secret('hunter2'),
+              MaskedValue.plain('\n'),
+            ],
+            size: 20,
+          ),
+        ),
+      ) as DockerResult;
       final spans = (file.payload as DockerStackFilePayload).text;
       expect(spans.map((s) => s.display).join(), 'DB_PASSWORD=********\n');
       expect(spans[1].reveal(), 'hunter2');
 
-      final failed =
-          await roundTrip(
-                const DockerResult(
-                  serverId: 'srv-1',
-                  queryId: 'q-2',
-                  payload: DockerStackFileFailed(StackFileFailure.notVerified),
-                ),
-              )
-              as DockerResult;
+      final failed = await roundTrip(
+        const DockerResult(
+          serverId: 'srv-1',
+          queryId: 'q-2',
+          payload: DockerStackFileFailed(StackFileFailure.notVerified),
+        ),
+      ) as DockerResult;
       expect(
         (failed.payload as DockerStackFileFailed).failure,
         StackFileFailure.notVerified,
@@ -1183,36 +1148,32 @@ void main() {
     });
 
     test('a disk use query and its totals survive (02 OV-05)', () async {
-      final query =
-          await roundTrip(
-                const DockerQuery(
-                  serverId: 'srv-1',
-                  queryId: 'q-df',
-                  query: DockerSystemDfQuery(),
-                ),
-              )
-              as DockerQuery;
+      final query = await roundTrip(
+        const DockerQuery(
+          serverId: 'srv-1',
+          queryId: 'q-df',
+          query: DockerSystemDfQuery(),
+        ),
+      ) as DockerQuery;
       expect(query.query, isA<DockerSystemDfQuery>());
 
-      final result =
-          await roundTrip(
-                const DockerResult(
-                  serverId: 'srv-1',
-                  queryId: 'q-df',
-                  payload: DockerSystemDfPayload(
-                    SystemDf(
-                      images: DiskUsageTotals(
-                        totalCount: 12,
-                        activeCount: 4,
-                        totalSize: 3000,
-                        reclaimable: 1000,
-                      ),
-                      volumes: DiskUsageTotals(reclaimable: 500),
-                    ),
-                  ),
-                ),
-              )
-              as DockerResult;
+      final result = await roundTrip(
+        const DockerResult(
+          serverId: 'srv-1',
+          queryId: 'q-df',
+          payload: DockerSystemDfPayload(
+            SystemDf(
+              images: DiskUsageTotals(
+                totalCount: 12,
+                activeCount: 4,
+                totalSize: 3000,
+                reclaimable: 1000,
+              ),
+              volumes: DiskUsageTotals(reclaimable: 500),
+            ),
+          ),
+        ),
+      ) as DockerResult;
       final df = (result.payload as DockerSystemDfPayload).df;
       expect(df.images!.activeCount, 4);
       expect(df.containers, isNull);
@@ -1221,35 +1182,29 @@ void main() {
 
     test('sampling requests survive with their ids, streams and '
         'profile (D45)', () async {
-      final subscribe =
-          await roundTrip(
-                const Subscribe(
-                  serverId: 'srv-9',
-                  subscriptionId: 'overview',
-                  streams: {SampleStream.core, SampleStream.failedUnits},
-                ),
-              )
-              as Subscribe;
+      final subscribe = await roundTrip(
+        const Subscribe(
+          serverId: 'srv-9',
+          subscriptionId: 'overview',
+          streams: {SampleStream.core, SampleStream.failedUnits},
+        ),
+      ) as Subscribe;
       expect(subscribe.serverId, 'srv-9');
       expect(subscribe.subscriptionId, 'overview');
       expect(subscribe.streams, {SampleStream.core, SampleStream.failedUnits});
 
-      final unsubscribe =
-          await roundTrip(
-                const Unsubscribe(serverId: 'srv-9', subscriptionId: 'row'),
-              )
-              as Unsubscribe;
+      final unsubscribe = await roundTrip(
+        const Unsubscribe(serverId: 'srv-9', subscriptionId: 'row'),
+      ) as Unsubscribe;
       expect(unsubscribe.serverId, 'srv-9');
       expect(unsubscribe.subscriptionId, 'row');
 
-      final refresh =
-          await roundTrip(
-                const RefreshSubscription(
-                  serverId: 'srv-9',
-                  subscriptionId: 'processes',
-                ),
-              )
-              as RefreshSubscription;
+      final refresh = await roundTrip(
+        const RefreshSubscription(
+          serverId: 'srv-9',
+          subscriptionId: 'processes',
+        ),
+      ) as RefreshSubscription;
       expect(refresh.serverId, 'srv-9');
       expect(refresh.subscriptionId, 'processes');
 
@@ -1258,6 +1213,10 @@ void main() {
             await roundTrip(SetCadenceProfile(profile)) as SetCadenceProfile;
         expect(received.profile, profile);
       }
+      final cap = await roundTrip(
+        const SetServerCadenceCap('srv-9', CadenceProfile.phone),
+      ) as SetServerCadenceCap;
+      expect((cap.serverId, cap.cap), ('srv-9', CadenceProfile.phone));
     });
 
     test('every sample result survives with its values (D43)', () async {
@@ -1265,17 +1224,15 @@ void main() {
         SampleStream stream,
         SampleResult value,
       ) async {
-        final sample =
-            await roundTrip(
-                  Sample(
-                    serverId: 'srv-1',
-                    stream: stream,
-                    seq: 41,
-                    at: DateTime.utc(2026, 10, 14, 12, 0, 5),
-                    result: value,
-                  ),
-                )
-                as Sample;
+        final sample = await roundTrip(
+          Sample(
+            serverId: 'srv-1',
+            stream: stream,
+            seq: 41,
+            at: DateTime.utc(2026, 10, 14, 12, 0, 5),
+            result: value,
+          ),
+        ) as Sample;
         expect(sample.serverId, 'srv-1');
         expect(sample.stream, stream);
         expect(sample.seq, 41);
@@ -1297,23 +1254,21 @@ void main() {
       const cpu = CpuPercentages([10, 0, 5, 80, 5], 15);
       const load = LoadAvg(load1: 1.5, load5: 1, load15: 0.5);
 
-      final overview =
-          await result(
-                SampleStream.overview,
-                OverviewResult(
-                  cpu: cpu,
-                  memory: memory,
-                  load: load,
-                  loadPerCore: 0.375,
-                  network: const {
-                    'eth0': NetRate(rxBytesPerSecond: 10, txBytesPerSecond: 2),
-                  },
-                  withheld: const {
-                    MetricField.load: MetricWithheldReason.containerHostFigures,
-                  },
-                ),
-              )
-              as OverviewResult;
+      final overview = await result(
+        SampleStream.overview,
+        OverviewResult(
+          cpu: cpu,
+          memory: memory,
+          load: load,
+          loadPerCore: 0.375,
+          network: const {
+            'eth0': NetRate(rxBytesPerSecond: 10, txBytesPerSecond: 2),
+          },
+          withheld: const {
+            MetricField.load: MetricWithheldReason.containerHostFigures,
+          },
+        ),
+      ) as OverviewResult;
       expect(overview.cpu!.busy, 15);
       expect(overview.cpu!.system, 5);
       expect(overview.memory!.usedBytes, 4096);
@@ -1329,29 +1284,24 @@ void main() {
       });
       expect(() => overview.withheld.clear(), throwsUnsupportedError);
 
-      final core =
-          await result(
-                SampleStream.core,
-                CoreResult(
-                  cpu: cpu,
-                  // The host sends each core's busy and idle jiffies only
-                  // (D48), so the engine can fill exactly this map.
-                  perCpu: perCpuBusyPercent(
-                    const {'cpu0': CoreCpuTimes('cpu0', busy: 10, idle: 90)},
-                    const {'cpu0': CoreCpuTimes('cpu0', busy: 25, idle: 175)},
-                  ),
-                  disks: const {
-                    'sda': DiskRate(
-                      readBytesPerSecond: 512,
-                      writeBytesPerSecond: 1024,
-                    ),
-                  },
-                  ioPressure: const StallShares(some: StallAverages(1, 2, 3)),
-                  uptime: const Duration(days: 3),
-                  bootedAt: DateTime.utc(2026, 10, 11, 12),
-                ),
-              )
-              as CoreResult;
+      final core = await result(
+        SampleStream.core,
+        CoreResult(
+          cpu: cpu,
+          // The host sends each core's busy and idle jiffies only
+          // (D48), so the engine can fill exactly this map.
+          perCpu: perCpuBusyPercent(
+            const {'cpu0': CoreCpuTimes('cpu0', busy: 10, idle: 90)},
+            const {'cpu0': CoreCpuTimes('cpu0', busy: 25, idle: 175)},
+          ),
+          disks: const {
+            'sda': DiskRate(readBytesPerSecond: 512, writeBytesPerSecond: 1024),
+          },
+          ioPressure: const StallShares(some: StallAverages(1, 2, 3)),
+          uptime: const Duration(days: 3),
+          bootedAt: DateTime.utc(2026, 10, 11, 12),
+        ),
+      ) as CoreResult;
       expect(core.perCpu, {'cpu0': 15});
       expect(core.disks!['sda']!.writeBytesPerSecond, 1024);
       expect(core.ioPressure!.some!.avg60, 2);
@@ -1360,73 +1310,68 @@ void main() {
       expect(core.bootedAt, DateTime.utc(2026, 10, 11, 12));
       // No previous reading is unknown, not zero (03 §1.2 principle 6).
       expect(core.network, isNull);
-      final measuredNone =
-          await result(SampleStream.overview, OverviewResult(network: {}))
-              as OverviewResult;
+      final measuredNone = await result(
+        SampleStream.overview,
+        OverviewResult(network: {}),
+      ) as OverviewResult;
       expect(measuredNone.network, isEmpty);
 
-      final fs =
-          await result(
-                SampleStream.fs,
-                FsResult(
-                  FsSnapshot([
-                    const FsMount(
-                      device: '/dev/sda1',
-                      type: 'ext4',
-                      mountPoint: '/',
-                      capacityPercent: 42,
-                    ),
-                  ]),
-                ),
-              )
-              as FsResult;
+      final fs = await result(
+        SampleStream.fs,
+        FsResult(
+          FsSnapshot([
+            const FsMount(
+              device: '/dev/sda1',
+              type: 'ext4',
+              mountPoint: '/',
+              capacityPercent: 42,
+            ),
+          ]),
+        ),
+      ) as FsResult;
       expect(fs.fs.mounts.single.capacityPercent, 42);
 
-      final identity =
-          await result(
-                SampleStream.identity,
-                const IdentityResult(
-                  hostname: 'web-1',
-                  osPrettyName: 'Debian GNU/Linux 12 (bookworm)',
-                  kernelName: 'Linux',
-                  kernelRelease: '6.1.0-26-amd64',
-                  arch: 'x86-64',
-                ),
-              )
-              as IdentityResult;
+      final identity = await result(
+        SampleStream.identity,
+        const IdentityResult(
+          hostname: 'web-1',
+          osPrettyName: 'Debian GNU/Linux 12 (bookworm)',
+          kernelName: 'Linux',
+          kernelRelease: '6.1.0-26-amd64',
+          arch: 'x86-64',
+        ),
+      ) as IdentityResult;
       expect(identity.hostname, 'web-1');
       expect(identity.osPrettyName, 'Debian GNU/Linux 12 (bookworm)');
       expect(identity.kernelName, 'Linux');
       expect(identity.kernelRelease, '6.1.0-26-amd64');
       expect(identity.arch, 'x86-64');
 
-      final procs =
-          await result(
-                SampleStream.procs,
-                ProcsResult(
-                  [
-                    ProcessRow(
-                      pid: 812,
-                      parentPid: 1,
-                      name: 'mysql',
-                      state: 'S',
-                      userName: 'root',
-                      uid: 0,
-                      residentBytes: 8192,
-                      cpuPercent: 0.5,
-                      startTicks: 1234,
-                      startedAt: DateTime.utc(2026, 10, 15, 9, 41),
-                      arguments: [
-                        MaskedValue.plain('mysql'),
-                        MaskedValue.redacted('-p********', '-phunter2'),
-                      ],
-                    ),
-                  ],
-                  totalProcesses: 2083,
-                  selection: ProcsSelection.cpuAndMemory,
-                ),
-              )
-              as ProcsResult;
+      final procs = await result(
+        SampleStream.procs,
+        ProcsResult(
+          [
+            ProcessRow(
+              pid: 812,
+              parentPid: 1,
+              name: 'mysql',
+              state: 'S',
+              userName: 'root',
+              uid: 0,
+              residentBytes: 8192,
+              cpuPercent: 0.5,
+              startTicks: 1234,
+              startedAt: DateTime.utc(2026, 10, 15, 9, 41),
+              arguments: [
+                MaskedValue.plain('mysql'),
+                MaskedValue.redacted('-p********', '-phunter2'),
+              ],
+            ),
+          ],
+          totalProcesses: 2083,
+          selection: ProcsSelection.cpuAndMemory,
+        ),
+      ) as ProcsResult;
       expect(procs.totalProcesses, 2083);
       expect(procs.selection, ProcsSelection.cpuAndMemory);
       final mysql = procs.processes.single;
@@ -1444,38 +1389,27 @@ void main() {
       expect(mysql.arguments!.last.reveal(), '-phunter2');
 
       const failedUnit = SystemdUnit(unit: 'nginx.service', active: 'failed');
-      final units =
-          await result(
-                SampleStream.units,
-                UnitsResult(
-                  UnitsSnapshot(
-                    units: const [failedUnit],
-                    failed: const [failedUnit],
-                  ),
-                ),
-              )
-              as UnitsResult;
+      final units = await result(
+        SampleStream.units,
+        UnitsResult(
+          UnitsSnapshot(units: const [failedUnit], failed: const [failedUnit]),
+        ),
+      ) as UnitsResult;
       expect(units.units.units.single.unit, 'nginx.service');
-      final failed =
-          await result(
-                SampleStream.failedUnits,
-                FailedUnitsResult(const [failedUnit]),
-              )
-              as FailedUnitsResult;
+      final failed = await result(
+        SampleStream.failedUnits,
+        FailedUnitsResult(const [failedUnit]),
+      ) as FailedUnitsResult;
       expect(failed.failed.single.active, 'failed');
 
-      final timers =
-          await result(
-                SampleStream.timers,
-                TimersResult(
-                  TimersSnapshot(
-                    timers: const [
-                      SystemdTimer(unit: 'apt-daily.timer', nextUs: 1),
-                    ],
-                  ),
-                ),
-              )
-              as TimersResult;
+      final timers = await result(
+        SampleStream.timers,
+        TimersResult(
+          TimersSnapshot(
+            timers: const [SystemdTimer(unit: 'apt-daily.timer', nextUs: 1)],
+          ),
+        ),
+      ) as TimersResult;
       expect(timers.timers.timers.single.unit, 'apt-daily.timer');
 
       final crontab = CronSnapshot(
@@ -1490,21 +1424,19 @@ void main() {
           ),
         ],
       );
-      final cron =
-          await result(
-                SampleStream.cron,
-                CronResult(
-                  crontab,
-                  // The zone, which holds a function, stays behind (D52).
-                  jobs: mergeJobs(
-                    cron: crontab,
-                    nowUtc: DateTime.utc(2026, 10, 14, 12),
-                    zone: const ServerZone(offset: Duration(hours: 2)),
-                  ),
-                  zoneFallback: CronZoneFallback.noZoneName,
-                ),
-              )
-              as CronResult;
+      final cron = await result(
+        SampleStream.cron,
+        CronResult(
+          crontab,
+          // The zone, which holds a function, stays behind (D52).
+          jobs: mergeJobs(
+            cron: crontab,
+            nowUtc: DateTime.utc(2026, 10, 14, 12),
+            zone: const ServerZone(offset: Duration(hours: 2)),
+          ),
+          zoneFallback: CronZoneFallback.noZoneName,
+        ),
+      ) as CronResult;
       expect(cron.cron.jobs.single.command, 'backup');
       final run = (cron.jobs.single as CronJobEntry).nextRuns.first;
       expect(run.atUtc, DateTime.utc(2026, 10, 14, 22));
@@ -1513,15 +1445,13 @@ void main() {
       expect(cron.zoneName, isNull);
       expect(cron.zoneFallback, CronZoneFallback.noZoneName);
 
-      final unavailable =
-          await result(
-                SampleStream.units,
-                const CollectorUnavailable(
-                  CollectorUnavailableReason.missing,
-                  detail: 'systemctl: not found',
-                ),
-              )
-              as CollectorUnavailable;
+      final unavailable = await result(
+        SampleStream.units,
+        const CollectorUnavailable(
+          CollectorUnavailableReason.missing,
+          detail: 'systemctl: not found',
+        ),
+      ) as CollectorUnavailable;
       expect(unavailable.reason, CollectorUnavailableReason.missing);
       expect(unavailable.detail, 'systemctl: not found');
     });
@@ -1575,32 +1505,28 @@ void main() {
 
     test('sampling states, gaps and host profiles survive', () async {
       for (final phase in SamplingPhase.values) {
-        final state =
-            await roundTrip(
-                  SamplingState(
-                    serverId: 'srv-1',
-                    phase: phase,
-                    since: DateTime.utc(2026, 10, 14, 12, 1),
-                  ),
-                )
-                as SamplingState;
+        final state = await roundTrip(
+          SamplingState(
+            serverId: 'srv-1',
+            phase: phase,
+            since: DateTime.utc(2026, 10, 14, 12, 1),
+          ),
+        ) as SamplingState;
         expect(state.serverId, 'srv-1');
         expect(state.phase, phase);
         expect(state.since, DateTime.utc(2026, 10, 14, 12, 1));
       }
 
       for (final cause in GapCause.values) {
-        final gap =
-            await roundTrip(
-                  Gap(
-                    serverId: 'srv-1',
-                    streams: const {SampleStream.overview, SampleStream.fs},
-                    from: DateTime.utc(2026, 10, 14, 12, 1),
-                    until: DateTime.utc(2026, 10, 14, 12, 14),
-                    cause: cause,
-                  ),
-                )
-                as Gap;
+        final gap = await roundTrip(
+          Gap(
+            serverId: 'srv-1',
+            streams: const {SampleStream.overview, SampleStream.fs},
+            from: DateTime.utc(2026, 10, 14, 12, 1),
+            until: DateTime.utc(2026, 10, 14, 12, 14),
+            cause: cause,
+          ),
+        ) as Gap;
         expect(gap.serverId, 'srv-1');
         expect(gap.streams, {SampleStream.overview, SampleStream.fs});
         expect(gap.from, DateTime.utc(2026, 10, 14, 12, 1));
@@ -1608,19 +1534,17 @@ void main() {
         expect(gap.cause, cause);
       }
 
-      final changed =
-          await roundTrip(
-                HostProfileChanged(
-                  'srv-1',
-                  HostProfile(
-                    systemdVersion: 252,
-                    groups: const ['adm', 'systemd-journal'],
-                    tools: const {'timeout': '/usr/bin/timeout', 'zstd': null},
-                  ),
-                  cachedAt: DateTime.utc(2026, 10, 15, 9),
-                ),
-              )
-              as HostProfileChanged;
+      final changed = await roundTrip(
+        HostProfileChanged(
+          'srv-1',
+          HostProfile(
+            systemdVersion: 252,
+            groups: const ['adm', 'systemd-journal'],
+            tools: const {'timeout': '/usr/bin/timeout', 'zstd': null},
+          ),
+          cachedAt: DateTime.utc(2026, 10, 15, 9),
+        ),
+      ) as HostProfileChanged;
       expect(changed.serverId, 'srv-1');
       expect(changed.cachedAt, DateTime.utc(2026, 10, 15, 9));
       expect(changed.profile.systemdVersion, 252);
@@ -1632,9 +1556,9 @@ void main() {
 
     test('log stream requests survive with their specs', () async {
       Future<LogStreamSpec> spec(LogStreamSpec value) async {
-        final open =
-            await roundTrip(OpenLogStream(streamId: 'logs-1', spec: value))
-                as OpenLogStream;
+        final open = await roundTrip(
+          OpenLogStream(streamId: 'logs-1', spec: value),
+        ) as OpenLogStream;
         expect(open.streamId, 'logs-1');
         return open.spec;
       }
@@ -1779,44 +1703,42 @@ void main() {
     });
 
     test('every log record survives with its values', () async {
-      final batch =
-          await roundTrip(
-                LogBatch(
-                  streamId: 'logs-1',
-                  // Growable, so the read-only check below proves the
-                  // batch holds its own copy.
-                  records: [
-                    JournalRecord(
-                      cursor: 's=ab;i=1f',
-                      at: DateTime.utc(2026, 10, 14, 12, 0, 0, 0, 7),
-                      priority: LogPriority.error,
-                      unit: 'nginx.service',
-                      identifier: 'nginx',
-                      pid: 812,
-                      message: 'bind() failed',
-                      fields: Map.unmodifiable({
-                        '__CURSOR': 's=ab;i=1f',
-                        'MESSAGE': 'bind() failed',
-                        'CODE_LINE': null,
-                      }),
-                    ),
-                    const KernelRecord(
-                      message: 'usb 1-1: new high-speed USB device',
-                      sinceBoot: Duration(seconds: 3, microseconds: 12),
-                      priority: LogPriority.info,
-                    ),
-                    const KernelRecord(message: 'no level'),
-                    const FileRecord('GET / HTTP/1.1 200'),
-                    ContainerRecord(
-                      stream: ContainerLogStream.stderr,
-                      at: DateTime.utc(2026, 10, 17, 10, 0, 0, 0, 3),
-                      text: 'warn: slow',
-                    ),
-                  ],
-                  dropped: 41,
-                ),
-              )
-              as LogBatch;
+      final batch = await roundTrip(
+        LogBatch(
+          streamId: 'logs-1',
+          // Growable, so the read-only check below proves the
+          // batch holds its own copy.
+          records: [
+            JournalRecord(
+              cursor: 's=ab;i=1f',
+              at: DateTime.utc(2026, 10, 14, 12, 0, 0, 0, 7),
+              priority: LogPriority.error,
+              unit: 'nginx.service',
+              identifier: 'nginx',
+              pid: 812,
+              message: 'bind() failed',
+              fields: Map.unmodifiable({
+                '__CURSOR': 's=ab;i=1f',
+                'MESSAGE': 'bind() failed',
+                'CODE_LINE': null,
+              }),
+            ),
+            const KernelRecord(
+              message: 'usb 1-1: new high-speed USB device',
+              sinceBoot: Duration(seconds: 3, microseconds: 12),
+              priority: LogPriority.info,
+            ),
+            const KernelRecord(message: 'no level'),
+            const FileRecord('GET / HTTP/1.1 200'),
+            ContainerRecord(
+              stream: ContainerLogStream.stderr,
+              at: DateTime.utc(2026, 10, 17, 10, 0, 0, 0, 3),
+              text: 'warn: slow',
+            ),
+          ],
+          dropped: 41,
+        ),
+      ) as LogBatch;
       expect(batch.streamId, 'logs-1');
       expect(batch.dropped, 41);
       expect(batch.records.map((r) => r.runtimeType), [
@@ -1895,23 +1817,21 @@ void main() {
     });
 
     test('fleet entries survive with every field and stay read-only', () async {
-      final event =
-          await roundTrip(
-                // Growable, so the read-only check below proves the event
-                // holds its own copy instead of passing a const list on.
-                CatalogReplaced([
-                  _webEntry,
-                  const FleetEntry(
-                    serverId: '0b9a6f3e-2d1c-4e5f-8a7b-6c5d4e3f2a1b',
-                    label: 'db-1',
-                    host: '10.0.0.4',
-                    port: kSshDefaultPort,
-                    origin: FleetEntryOrigin.synced,
-                    group: 'Production',
-                  ),
-                ]),
-              )
-              as CatalogReplaced;
+      final event = await roundTrip(
+        // Growable, so the read-only check below proves the event
+        // holds its own copy instead of passing a const list on.
+        CatalogReplaced([
+          _webEntry,
+          const FleetEntry(
+            serverId: '0b9a6f3e-2d1c-4e5f-8a7b-6c5d4e3f2a1b',
+            label: 'db-1',
+            host: '10.0.0.4',
+            port: kSshDefaultPort,
+            origin: FleetEntryOrigin.synced,
+            group: 'Production',
+          ),
+        ]),
+      ) as CatalogReplaced;
 
       final [web, db] = event.entries;
       expect(web.serverId, 'ssh-config:web-1');
@@ -1928,15 +1848,13 @@ void main() {
       // place, on either side of the boundary.
       expect(() => event.entries.add(_webEntry), throwsUnsupportedError);
 
-      final answer =
-          await roundTrip(
-                const SshConfigImported(
-                  importedCount: 3,
-                  skippedCount: 2,
-                  saved: false,
-                ),
-              )
-              as SshConfigImported;
+      final answer = await roundTrip(
+        const SshConfigImported(
+          importedCount: 3,
+          skippedCount: 2,
+          saved: false,
+        ),
+      ) as SshConfigImported;
       expect(answer.importedCount, 3);
       expect(answer.skippedCount, 2);
       expect(answer.saved, isFalse);
@@ -1947,26 +1865,24 @@ void main() {
     });
 
     test('the import store issue survives with EngineReady', () async {
-      final ready =
-          await roundTrip(
-                const EngineReady(
-                  kEngineProtocolVersion,
-                  importStoreIssue: ImportStoreIssue(
-                    ImportStoreIssueKind.recovered,
-                    preservedAs: '/support/ssh_config_imports.json.corrupt-1',
-                    detail: 'entry 0 has no host',
-                  ),
-                ),
-              )
-              as EngineReady;
+      final ready = await roundTrip(
+        const EngineReady(
+          kEngineProtocolVersion,
+          importStoreIssue: ImportStoreIssue(
+            ImportStoreIssueKind.recovered,
+            preservedAs: '/support/ssh_config_imports.json.corrupt-1',
+            detail: 'entry 0 has no host',
+          ),
+        ),
+      ) as EngineReady;
       final issue = ready.importStoreIssue!;
       expect(issue.kind, ImportStoreIssueKind.recovered);
       expect(issue.preservedAs, '/support/ssh_config_imports.json.corrupt-1');
       expect(issue.detail, 'entry 0 has no host');
 
-      final clean =
-          await roundTrip(const EngineReady(kEngineProtocolVersion))
-              as EngineReady;
+      final clean = await roundTrip(
+        const EngineReady(kEngineProtocolVersion),
+      ) as EngineReady;
       expect(clean.importStoreIssue, isNull);
     });
 
@@ -2045,9 +1961,9 @@ void main() {
           searchText: 'inner @10.0.0.4:22 ',
           locatorConflict: ['ssh-config:other-inner'],
         );
-        final event =
-            await roundTrip(CatalogReplaced(const [routed, _webEntry]))
-                as CatalogReplaced;
+        final event = await roundTrip(
+          CatalogReplaced(const [routed, _webEntry]),
+        ) as CatalogReplaced;
 
         final [inner, web] = event.entries;
         expect(inner, routed);
@@ -2077,9 +1993,9 @@ void main() {
         expect((event as CatalogReplaced).entries.single.endpoint, endpoint);
       }
 
-      final request =
-          await roundTrip(const ConfirmEndpoints(['a', 'b']))
-              as ConfirmEndpoints;
+      final request = await roundTrip(
+        const ConfirmEndpoints(['a', 'b']),
+      ) as ConfirmEndpoints;
       expect(request.serverIds, ['a', 'b']);
       final changed =
           await roundTrip(const EndpointChanged('srv-1')) as EndpointChanged;
@@ -2176,9 +2092,9 @@ void main() {
 
     test('a Connect rejection keeps its server and every reason', () async {
       for (final reason in ConnectRejectedReason.values) {
-        final received =
-            await roundTrip(ConnectRejected('ssh-config:web', reason))
-                as ConnectRejected;
+        final received = await roundTrip(
+          ConnectRejected('ssh-config:web', reason),
+        ) as ConnectRejected;
         expect(
           (received.serverId, received.reason),
           ('ssh-config:web', reason),
@@ -2188,17 +2104,15 @@ void main() {
 
     test('structured prompts survive with every field', () async {
       Future<PromptRequest> request(PromptRequest request) async {
-        final prompt =
-            await roundTrip(
-                  Prompt(
-                    promptId: 'p-7',
-                    serverId: 'ssh-config:inner',
-                    host: 'bastion.example',
-                    port: 2200,
-                    request: request,
-                  ),
-                )
-                as Prompt;
+        final prompt = await roundTrip(
+          Prompt(
+            promptId: 'p-7',
+            serverId: 'ssh-config:inner',
+            host: 'bastion.example',
+            port: 2200,
+            request: request,
+          ),
+        ) as Prompt;
         // The jump host asks here, not the server the prompt is for.
         expect(prompt.promptId, 'p-7');
         expect(prompt.serverId, 'ssh-config:inner');
@@ -2207,14 +2121,12 @@ void main() {
         return prompt.request;
       }
 
-      final hostKey =
-          await request(
-                const HostKeyPromptRequest(
-                  keyType: 'ssh-ed25519',
-                  fingerprintSha256: 'SHA256:abc',
-                ),
-              )
-              as HostKeyPromptRequest;
+      final hostKey = await request(
+        const HostKeyPromptRequest(
+          keyType: 'ssh-ed25519',
+          fingerprintSha256: 'SHA256:abc',
+        ),
+      ) as HostKeyPromptRequest;
       expect(hostKey.kind, PromptKind.hostKey);
       expect(hostKey.keyType, 'ssh-ed25519');
       expect(hostKey.fingerprintSha256, 'SHA256:abc');
@@ -2222,16 +2134,14 @@ void main() {
         (hostKey.pinnedFingerprintSha256, hostKey.pinnedKeyType),
         (null, null),
       );
-      final changed =
-          await request(
-                const HostKeyPromptRequest(
-                  keyType: 'ecdsa-sha2-nistp256',
-                  fingerprintSha256: 'SHA256:new',
-                  pinnedFingerprintSha256: 'SHA256:abc',
-                  pinnedKeyType: 'ssh-ed25519',
-                ),
-              )
-              as HostKeyPromptRequest;
+      final changed = await request(
+        const HostKeyPromptRequest(
+          keyType: 'ecdsa-sha2-nistp256',
+          fingerprintSha256: 'SHA256:new',
+          pinnedFingerprintSha256: 'SHA256:abc',
+          pinnedKeyType: 'ssh-ed25519',
+        ),
+      ) as HostKeyPromptRequest;
       expect(
         (
           changed.keyType,
@@ -2242,50 +2152,41 @@ void main() {
         ('ecdsa-sha2-nistp256', 'SHA256:new', 'SHA256:abc', 'ssh-ed25519'),
       );
 
-      final challenge =
-          await request(
-                const KeyboardInteractivePromptRequest(
-                  user: 'jump',
-                  name: 'Duo',
-                  instruction: 'Second factor',
-                  questions: ['Passcode: ', 'Push? '],
-                ),
-              )
-              as KeyboardInteractivePromptRequest;
+      final challenge = await request(
+        const KeyboardInteractivePromptRequest(
+          user: 'jump',
+          name: 'Duo',
+          instruction: 'Second factor',
+          questions: ['Passcode: ', 'Push? '],
+        ),
+      ) as KeyboardInteractivePromptRequest;
       expect(challenge.kind, PromptKind.keyboardInteractive);
       expect(challenge.user, 'jump');
       expect(challenge.name, 'Duo');
       expect(challenge.instruction, 'Second factor');
       expect(challenge.questions, ['Passcode: ', 'Push? ']);
-      final unnamed =
-          await request(const KeyboardInteractivePromptRequest())
-              as KeyboardInteractivePromptRequest;
+      final unnamed = await request(
+        const KeyboardInteractivePromptRequest(),
+      ) as KeyboardInteractivePromptRequest;
       expect(unnamed.user, isNull);
 
-      final credential =
-          await request(
-                const CredentialPromptRequest(user: 'deploy', retry: true),
-              )
-              as CredentialPromptRequest;
+      final credential = await request(
+        const CredentialPromptRequest(user: 'deploy', retry: true),
+      ) as CredentialPromptRequest;
       expect(credential.kind, PromptKind.credential);
       expect(credential.user, 'deploy');
       expect(credential.retry, isTrue);
 
-      final elevation =
-          await request(const ElevationPromptRequest(user: 'deploy'))
-              as ElevationPromptRequest;
+      final elevation = await request(
+        const ElevationPromptRequest(user: 'deploy'),
+      ) as ElevationPromptRequest;
       expect(elevation.kind, PromptKind.elevation);
       expect(elevation.user, 'deploy');
       expect(elevation.retry, isFalse);
 
-      final withdrawn =
-          await roundTrip(
-                const PromptWithdrawn(
-                  'p-7',
-                  PromptWithdrawnReason.attemptEnded,
-                ),
-              )
-              as PromptWithdrawn;
+      final withdrawn = await roundTrip(
+        const PromptWithdrawn('p-7', PromptWithdrawnReason.attemptEnded),
+      ) as PromptWithdrawn;
       expect(withdrawn.promptId, 'p-7');
       expect(withdrawn.reason, PromptWithdrawnReason.attemptEnded);
     });
@@ -2305,18 +2206,18 @@ void main() {
     });
 
     test('sealed answers and typed bytes survive', () async {
-      final trust =
-          await roundTrip(const AnswerPrompt('p', PromptTrustAnswer(false)))
-              as AnswerPrompt;
+      final trust = await roundTrip(
+        const AnswerPrompt('p', PromptTrustAnswer(false)),
+      ) as AnswerPrompt;
       expect((trust.answer as PromptTrustAnswer).accepted, isFalse);
-      final cancel =
-          await roundTrip(const AnswerPrompt('p', PromptCancelAnswer()))
-              as AnswerPrompt;
+      final cancel = await roundTrip(
+        const AnswerPrompt('p', PromptCancelAnswer()),
+      ) as AnswerPrompt;
       expect(cancel.answer, isA<PromptCancelAnswer>());
 
-      final bytes =
-          await roundTrip(TerminalBytes('t', Uint8List.fromList(const [9, 8])))
-              as TerminalBytes;
+      final bytes = await roundTrip(
+        TerminalBytes('t', Uint8List.fromList(const [9, 8])),
+      ) as TerminalBytes;
       expect(bytes.bytes, orderedEquals(const [9, 8]));
     });
   });

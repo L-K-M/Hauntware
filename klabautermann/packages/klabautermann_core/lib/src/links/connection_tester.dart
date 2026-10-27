@@ -18,13 +18,12 @@ import '../engine/protocol.dart';
 import 'prompt_broker.dart';
 
 /// Builds the sign-in a test runs; tests pass a fake.
-typedef TestAuthenticatorFactory =
-    HostAuthenticator Function({
-      required HostKeyStore hostKeys,
-      required HostKeyPrompter onHostKey,
-      required KeyboardInteractiveResponder onKeyboardInteractive,
-      required SshJumpHostResolver resolveJumpHost,
-    });
+typedef TestAuthenticatorFactory = HostAuthenticator Function({
+  required HostKeyStore hostKeys,
+  required HostKeyPrompter onHostKey,
+  required KeyboardInteractiveResponder onKeyboardInteractive,
+  required SshJumpHostResolver resolveJumpHost,
+});
 
 /// The server editor's Test connection (FL-03, M5 plan M09b): seance_core's
 /// `runConnectionTest` over the engine's credentials, pins and prompts, as

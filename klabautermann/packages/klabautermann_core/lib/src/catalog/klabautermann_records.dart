@@ -284,10 +284,8 @@ final class KlabautermannRecordStore {
   /// its server is in the catalog.
   Map<String, ServerPrefs> prefs() => {
     for (final MapEntry(:key, :value) in _entries.entries)
-      if (parseKlabautermannId(key) case (
-        type: 'pref',
-        key: final serverId,
-      ) when !value.removed)
+      if (parseKlabautermannId(key) case (type: 'pref', key: final serverId)
+          when !value.removed)
         if (_tryDecode(() => decodeServerPrefs(value.payload)) case final p?)
           serverId: p,
   };

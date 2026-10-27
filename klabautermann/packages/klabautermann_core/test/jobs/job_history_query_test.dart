@@ -92,15 +92,13 @@ void main() {
         ),
       );
 
-      final payload =
-          await _query(
-                link,
-                const TimerLastRunQuery(
-                  timer: 'backup.timer',
-                  service: 'backup.service',
-                ),
-              )
-              as TimerLastRunPayload;
+      final payload = await _query(
+        link,
+        const TimerLastRunQuery(
+          timer: 'backup.timer',
+          service: 'backup.service',
+        ),
+      ) as TimerLastRunPayload;
 
       expect(payload.lastRun.lastTrigger, DateTime.utc(2026, 10, 20, 3));
       expect(payload.lastRun.result, 'exit-code');
@@ -130,23 +128,17 @@ void main() {
     final invalid = _Link(_out(''));
     expect(
       ((await _query(
-                invalid,
-                const TimerLastRunQuery(timer: 'a b', service: 'x.service'),
-              ))
-              as JobHistoryFailed)
-          .failure,
+        invalid,
+        const TimerLastRunQuery(timer: 'a b', service: 'x.service'),
+      )) as JobHistoryFailed).failure,
       JobHistoryFailure.invalidTarget,
     );
     expect(invalid.commands, isEmpty);
 
-    final failed =
-        await _query(
-              _Link(
-                const RemoteCommandResult(exitCode: 1, stderr: 'No journal\n'),
-              ),
-              const CronRunsQuery(),
-            )
-            as JobHistoryFailed;
+    final failed = await _query(
+      _Link(const RemoteCommandResult(exitCode: 1, stderr: 'No journal\n')),
+      const CronRunsQuery(),
+    ) as JobHistoryFailed;
     expect(
       (failed.failure, failed.detail),
       (JobHistoryFailure.failed, 'No journal'),
@@ -155,8 +147,10 @@ void main() {
     final broken = _Link(_out(''))
       ..failure = const RemoteCommandException('channel closed');
     expect(
-      ((await _query(broken, const AnacronQuery())) as JobHistoryFailed)
-          .failure,
+      ((await _query(
+        broken,
+        const AnacronQuery(),
+      )) as JobHistoryFailed).failure,
       JobHistoryFailure.noLink,
     );
   });

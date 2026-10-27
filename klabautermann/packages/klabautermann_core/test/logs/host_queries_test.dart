@@ -120,9 +120,8 @@ void main() {
         'key', () async {
       link = _RunLink((_) => _ok(read));
       final payload =
-          (await ask(
-                const ProcessDetailQuery(pid: 42, startTicks: 900),
-              )).payload
+          (await ask(const ProcessDetailQuery(pid: 42, startTicks: 900)))
+                  .payload
               as ProcessDetails;
       expect(payload.detail.cwd, '/srv/app');
       expect(payload.detail.attribution.unit, 'app.service');

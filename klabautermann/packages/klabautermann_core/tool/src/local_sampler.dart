@@ -21,9 +21,10 @@ const kCapturePath =
     '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 
 /// The first [name] on [kCapturePath], or null.
-String? findOnCapturePath(String name) => [
-  for (final dir in kCapturePath.split(':')) '$dir/$name',
-].where((p) => File(p).existsSync()).firstOrNull;
+String? findOnCapturePath(String name) =>
+    [for (final dir in kCapturePath.split(':')) '$dir/$name']
+        .where((p) => File(p).existsSync())
+        .firstOrNull;
 
 /// The environment a local run gets instead of the caller's. With
 /// [ssh] it carries `SSH_CLIENT` and `SSH_CONNECTION`, which sshd sets

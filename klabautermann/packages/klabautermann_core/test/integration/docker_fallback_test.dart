@@ -201,9 +201,8 @@ void main() {
     Map<String, Object?> details, {
     String? name,
   }) async {
-    final evidence = const JsonEncoder.withIndent(
-      '  ',
-    ).convert({'service': service.composeName, ...details});
+    final evidence = const JsonEncoder.withIndent('  ')
+        .convert({'service': service.composeName, ...details});
     print(evidence);
     await fixture.writeEvidence(
       'fallback/${name ?? service.composeName}.json',

@@ -72,9 +72,8 @@ void main() {
   }
 
   test('agent auth resolves without reading a file or a secret', () async {
-    final credentials = await CredentialResolver(
-      source(),
-    ).resolve(_config(authMethod: AuthMethod.agent, identityFilePath: null));
+    final credentials = await CredentialResolver(source())
+        .resolve(_config(authMethod: AuthMethod.agent, identityFilePath: null));
 
     expect(credentials.method, AuthMethod.agent);
     expect(await audit.readAll(), isEmpty);
@@ -83,9 +82,8 @@ void main() {
   test('reads a plain key from the expanded path and audits it', () async {
     await File('$home/.ssh/id_test').writeAsString(_pem);
 
-    final credentials = await CredentialResolver(
-      source(),
-    ).resolve(_config(secretRef: 'passphrase-ref'));
+    final credentials = await CredentialResolver(source())
+        .resolve(_config(secretRef: 'passphrase-ref'));
 
     expect(credentials.method, AuthMethod.privateKey);
     expect(credentials.privateKeyPem, _pem);

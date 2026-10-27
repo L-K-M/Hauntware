@@ -373,16 +373,15 @@ void main() {
   test('a Connect to a fleet server without a config says why (D61)', () async {
     // A schema 1 store kept addresses only, so the engine maps no config
     // until the next import.
-    File(
-      '${support.path}${Platform.pathSeparator}$sshConfigImportsFileName',
-    ).writeAsStringSync(
-      jsonEncode({
-        'version': 1,
-        'entries': [
-          {'alias': 'web', 'host': '192.0.2.10', 'port': 22, 'user': 'me'},
-        ],
-      }),
-    );
+    File('${support.path}${Platform.pathSeparator}$sshConfigImportsFileName')
+        .writeAsStringSync(
+          jsonEncode({
+            'version': 1,
+            'entries': [
+              {'alias': 'web', 'host': '192.0.2.10', 'port': 22, 'user': 'me'},
+            ],
+          }),
+        );
     final engine = await start(SupportDirectoryAccess.exclusive);
 
     engine.send(const Connect(_web));

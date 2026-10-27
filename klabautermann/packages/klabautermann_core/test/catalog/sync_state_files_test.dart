@@ -298,9 +298,8 @@ void main() {
 
     test('an assertion that names no release is a damaged file', () async {
       for (final value in ['""', 'true', '["2026.11.0"]']) {
-        await fileIn(
-          syncEnrollmentFileName,
-        ).writeAsString('{"version":1,"seance56Asserted":$value}');
+        await fileIn(syncEnrollmentFileName)
+            .writeAsString('{"version":1,"seance56Asserted":$value}');
         final state = await openEnrollment();
         expect(state.issue?.kind, SyncStateIssueKind.recovered, reason: value);
         expect(state.pinPublicationAssertion, isNull, reason: value);

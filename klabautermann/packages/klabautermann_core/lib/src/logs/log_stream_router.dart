@@ -37,12 +37,11 @@ import 'log_service.dart';
 const kLogStreamsPerServerMax = 16;
 
 /// Builds the [LogService] of one link; tests pass a fake clock.
-typedef LogServiceOpener =
-    LogService Function(
-      SshLink link,
-      void Function(EngineEvent) emit, {
-      SshLink? Function()? elevatedLink,
-    });
+typedef LogServiceOpener = LogService Function(
+  SshLink link,
+  void Function(EngineEvent) emit, {
+  SshLink? Function()? elevatedLink,
+});
 
 LogService _defaultService(
   SshLink link,

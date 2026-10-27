@@ -173,9 +173,9 @@ void main() {
     await audit.append(record(now.add(const Duration(minutes: 1))));
 
     expect((await audit.query(_server)).records, hasLength(2));
-    final copies = Directory(
-      '${root.path}/$auditDirectoryName',
-    ).listSync().where((e) => e.path.contains('.corrupt-'));
+    final copies = Directory('${root.path}/$auditDirectoryName')
+        .listSync()
+        .where((e) => e.path.contains('.corrupt-'));
     expect(copies, hasLength(1));
     expect(fileOf(_server).readAsLinesSync(), hasLength(2));
   });

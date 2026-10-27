@@ -241,9 +241,8 @@ void main() {
       'host': 'docker-sshd',
       'user': fixture.user,
       'busybox': (await run('busybox | head -n 1')).stdout.trim(),
-      'setsid': (await run(
-        'readlink -f "\$(command -v setsid)"',
-      )).stdout.trim(),
+      'setsid': (await run('readlink -f "\$(command -v setsid)"')).stdout
+          .trim(),
     };
 
     test('BusyBox setsid has no -f', () async {

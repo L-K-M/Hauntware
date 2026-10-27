@@ -38,8 +38,10 @@ const String _identityFileKey = 'identityFile';
 const String _proxyJumpKey = 'proxyJump';
 
 /// Replaces a file's contents: [writeFileAtomically] outside tests.
-typedef SshConfigImportsWriter =
-    Future<void> Function(File target, List<int> bytes);
+typedef SshConfigImportsWriter = Future<void> Function(
+  File target,
+  List<int> bytes,
+);
 
 /// The imported ssh_config hosts on disk (03 §4.10, D13): one JSON file,
 /// `{"version": 3, "entries": [{"alias", "host", "port", "user",

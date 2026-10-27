@@ -67,11 +67,10 @@ typedef ExecOpener =
 
 /// Runs a short call on a server's pooled Docker client
 /// ([DockerRouter.useEndpoint]).
-typedef ExecControl =
-    Future<T> Function<T>(
-      String serverId,
-      Future<T> Function(DockerClient client) call,
-    );
+typedef ExecControl = Future<T> Function<T>(
+  String serverId,
+  Future<T> Function(DockerClient client) call,
+);
 
 /// How long a one-off command may run before the engine gives up on it
 /// and closes its connection [E] (CTX-08).

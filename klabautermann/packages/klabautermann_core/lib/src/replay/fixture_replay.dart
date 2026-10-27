@@ -131,9 +131,8 @@ Uint8List replyFrame(int seq, double? uptime, List<ReplaySection> sections) {
     final payload = utf8.encode(section.payload);
     out
       ..add(
-        _marker(
-          'S ${section.name} ${section.status.name} ${payload.length}',
-        ).toBytes(),
+        _marker('S ${section.name} ${section.status.name} ${payload.length}')
+            .toBytes(),
       )
       ..add(payload)
       ..addByte(0x0a);
