@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 
+import '../../controllers/account_size.dart';
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/cadence_controller.dart';
 import '../../controllers/app_lock_controller.dart';
@@ -36,6 +37,7 @@ SettingsWindowHost? settingsWindowHostFor(
   required SyncSecretsSettings syncSecrets,
   ThresholdSettings? thresholds,
   PinPublicationSettings? pinPublication,
+  ValueListenable<AccountSize?>? accountSize,
   AppLockSettings? appLock,
   CadenceSettings? cadence,
   CadenceCapSettings? cadenceCaps,
@@ -52,6 +54,7 @@ SettingsWindowHost? settingsWindowHostFor(
     syncSecrets: syncSecrets,
     thresholds: thresholds,
     pinPublication: pinPublication,
+    accountSize: accountSize,
     appLock: appLock,
     cadence: cadence,
     cadenceCaps: cadenceCaps,
@@ -82,6 +85,7 @@ final class SettingsWindowHost {
     required SyncSecretsSettings syncSecrets,
     ThresholdSettings? thresholds,
     PinPublicationSettings? pinPublication,
+    ValueListenable<AccountSize?>? accountSize,
     AppLockSettings? appLock,
     CadenceSettings? cadence,
     CadenceCapSettings? cadenceCaps,
@@ -96,6 +100,7 @@ final class SettingsWindowHost {
        _syncSecrets = syncSecrets,
        _thresholds = thresholds,
        _pinPublication = pinPublication,
+       _accountSize = accountSize,
        _appLock = appLock,
        _cadence = cadence,
        _cadenceCaps = cadenceCaps {
@@ -115,6 +120,7 @@ final class SettingsWindowHost {
           syncSecrets,
           ?thresholds,
           ?pinPublication,
+          ?accountSize,
           ?appLock,
           ?cadence,
           ?cadenceCaps,
@@ -134,6 +140,7 @@ final class SettingsWindowHost {
   final SyncSecretsSettings _syncSecrets;
   final ThresholdSettings? _thresholds;
   final PinPublicationSettings? _pinPublication;
+  final ValueListenable<AccountSize?>? _accountSize;
   final AppLockSettings? _appLock;
   final CadenceSettings? _cadence;
   final CadenceCapSettings? _cadenceCaps;
@@ -171,6 +178,10 @@ final class SettingsWindowHost {
     SettingsLinkKey.syncSecrets.name: _syncSecrets.value,
     SettingsLinkKey.pinPublication.name: switch (_pinPublication?.value) {
       final value? => encodePinPublication(value),
+      null => null,
+    },
+    SettingsLinkKey.accountSize.name: switch (_accountSize?.value) {
+      final size? => encodeAccountSize(size),
       null => null,
     },
     SettingsLinkKey.appVersion.name: _appVersion,

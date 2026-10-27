@@ -467,6 +467,7 @@ Future<void> main(List<String> args) async {
     appLock: appLock,
     syncSecrets: syncSecrets,
     pinPublication: pinPublication,
+    accountSize: sync.accountSize,
     cadence: cadence,
     cadenceCaps: cadenceCaps,
   );

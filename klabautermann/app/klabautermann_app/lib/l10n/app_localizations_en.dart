@@ -4627,6 +4627,37 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get settingsAccountSizeTitle => 'Account size';
+
+  @override
+  String settingsAccountSizeUsed(String used, String budget) {
+    return 'Klabautermann\'s records take $used of their $budget in the sync account.';
+  }
+
+  @override
+  String get settingsAccountSizeWarn =>
+      'They are close to the limit. Remove alert rules or server preferences you no longer need.';
+
+  @override
+  String get settingsAccountSizeFull =>
+      'They have reached the limit, so new changes may not sync. Remove alert rules or server preferences you no longer need.';
+
+  @override
+  String get settingsAccountSizeDetail =>
+      'Every kind of record in the account, as this device last pulled it. The account is shared with Séance, so its records count too.';
+
+  @override
+  String settingsAccountSizeRow(int records, String size) {
+    String _temp0 = intl.Intl.pluralLogic(
+      records,
+      locale: localeName,
+      other: '$records records',
+      one: '1 record',
+    );
+    return '$_temp0, $size';
+  }
+
+  @override
   String get settingsPinPublicationDetail =>
       'While on, host keys you confirm are shared with your other devices, so they can check a server the first time they connect. Turning it off stops sharing; keys already shared stay.';
 
