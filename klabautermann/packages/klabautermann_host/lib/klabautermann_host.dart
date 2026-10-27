@@ -51,6 +51,7 @@ export 'src/parse/ops.dart';
 export 'src/parse/packages.dart';
 export 'src/parse/parse_result.dart';
 export 'src/parse/ports.dart';
+export 'src/parse/registry_heads.dart';
 export 'src/parse/process_detail.dart';
 export 'src/parse/procs.dart';
 export 'src/parse/restarts.dart';

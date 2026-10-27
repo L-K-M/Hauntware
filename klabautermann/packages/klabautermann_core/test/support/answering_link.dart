@@ -26,6 +26,9 @@ final class AnsweringLink extends TestLinkBase {
   /// Samplers whose requests get no reply, as if the process stalled.
   final stalled = <SamplerKind>{};
 
+  /// Collectors a tick's reply leaves out, as a sampler that skips one.
+  final omitted = <String>{};
+
   /// How many of the next starts fail, as a refused channel does.
   int failStarts = 0;
 
@@ -122,6 +125,7 @@ final class AnsweringProcess implements RemoteProcess {
     final b = StringBuffer('\x1e$_nonce B $seq 100.0\n');
     if (words.first == 'hw_t') {
       for (final name in words.skip(2)) {
+        if (_link.omitted.contains(name)) continue;
         b.write('\x1e$_nonce S $name ok 0\n\n');
       }
     } else if (words[2] == 'probe') {

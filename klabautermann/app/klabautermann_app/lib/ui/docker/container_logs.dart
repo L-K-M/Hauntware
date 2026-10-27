@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../logs/container_lines.dart';
 import '../logs/log_export.dart' show showLogExport;
 import '../logs/log_view.dart';
 import '../logs/logs_panel.dart';
@@ -225,6 +226,9 @@ class ContainerLogsView extends StatefulWidget {
 class _ContainerLogsViewState extends State<ContainerLogsView> {
   late LogsPanelController _panel = _start();
 
+  /// The lines' levels and JSON fields (CTX-05), kept per panel.
+  late ContainerLineReader _reader = ContainerLineReader(_panel.logs);
+
   LogsPanelController _start() => LogsPanelController.container(
     streams: widget.monitoring.logs,
     serverId: widget.serverId,
@@ -239,6 +243,7 @@ class _ContainerLogsViewState extends State<ContainerLogsView> {
         widget.monitoring != oldWidget.monitoring) {
       _panel.dispose();
       _panel = _start();
+      _reader = ContainerLineReader(_panel.logs);
     }
     _panel.setVisible(widget.visible);
   }
@@ -370,7 +375,12 @@ class _ContainerLogsViewState extends State<ContainerLogsView> {
   Widget _lines(AppLocalizations l10n) => Stack(
     fit: StackFit.expand,
     children: [
-      LogView(controller: _panel.logs, search: _panel.search),
+      LogView(
+        controller: _panel.logs,
+        search: _panel.search,
+        levelOf: _reader.levelOf,
+        fieldsOf: _reader.fieldsOf,
+      ),
       if (logsPanelEndedEmpty(_panel))
         Center(
           child: Padding(

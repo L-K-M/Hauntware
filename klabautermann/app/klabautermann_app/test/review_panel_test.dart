@@ -86,6 +86,21 @@ void main() {
           ],
           omitted: 3,
           unreadable: 1,
+          tools: [
+            HostToolContainer(
+              tool: HostTool.uptimeKuma,
+              containerId: 'k',
+              name: 'kuma',
+              state: 'running',
+              ports: ['0.0.0.0:3001->3001/tcp'],
+            ),
+            HostToolContainer(
+              tool: HostTool.portainer,
+              containerId: 'p',
+              name: 'portainer-agent',
+              state: 'running',
+            ),
+          ],
         ),
       ),
     );
@@ -121,6 +136,13 @@ void main() {
     );
     expect(find.text('Low: No health check'), findsOne);
 
+    expect(find.text('Other tools on this host'), findsOne);
+    expect(find.text('Uptime Kuma'), findsOne);
+    expect(find.text('Container kuma, Running'), findsOne);
+    expect(find.text('0.0.0.0:3001->3001/tcp'), findsOne);
+    expect(find.text('Portainer'), findsOne);
+    expect(find.text('It publishes no port.'), findsOne);
+
     await tester.tap(find.text('Review again'));
     await tester.pump();
     expect(reviews(), hasLength(2));
@@ -147,6 +169,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('The one container carries no finding.'), findsOne);
+    expect(find.text('Other tools on this host'), findsNothing);
 
     await tester.tap(find.text('Review again'));
     await tester.pump();

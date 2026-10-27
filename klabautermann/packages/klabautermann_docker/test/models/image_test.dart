@@ -61,6 +61,53 @@ void main() {
     test('never throws on a non-object inspect', () {
       expect(parseImageInspect(null).warnings, isNotEmpty);
     });
+
+    // Spike S8 (D68): the containerd store's Descriptor and the index
+    // children that `manifests=1` lists; only images present locally
+    // count, attestations never.
+    test('reads the containerd Descriptor and available image children', () {
+      const index =
+          'sha256:2e0b81d60597f449baa56dc25d355367869d2dca4cd57e866f1e2b52af3eb55f';
+      const amd64 =
+          'sha256:dc92f017beea8e7f43263073d717f7bc011228c95d5312e440deb4d035bb4eec';
+      final r = parseImageInspect({
+        'Id': 'sha256:$index',
+        'RepoDigests': ['alpine@$index'],
+        'Descriptor': {
+          'mediaType': 'application/vnd.oci.image.index.v1+json',
+          'digest': index,
+          'size': 9218,
+        },
+        'Manifests': [
+          {
+            'Descriptor': {'digest': amd64},
+            'Kind': 'image',
+            'Available': true,
+          },
+          {
+            'Descriptor': {'digest': 'sha256:ae0881df4bf2'},
+            'Kind': 'attestation',
+            'Available': true,
+          },
+          {
+            'Descriptor': {'digest': 'sha256:3e07a4f627d1'},
+            'Kind': 'image',
+            'Available': false,
+          },
+        ],
+      });
+      expect(r.warnings, isEmpty);
+      expect(r.value.descriptorDigest, index);
+      expect(r.value.availableChildDigests, [amd64]);
+    });
+
+    test('the classic store has neither', () {
+      final image = parseImageInspect(
+        fixtureJson('image-inspect-1.55.json'),
+      ).value;
+      expect(image.descriptorDigest, isNull);
+      expect(image.availableChildDigests, isEmpty);
+    });
   });
 
   group('image history (IMG-04)', () {

@@ -153,6 +153,21 @@ void main() {
     });
   });
 
+  test('sends the engine a changed polling budget column once, and none '
+      'for the desktop column it starts on (SAF-19)', () async {
+    monitoring.setCadenceProfile(CadenceProfile.desktop);
+    monitoring.setCadenceProfile(CadenceProfile.cellularSaver);
+    monitoring.setCadenceProfile(CadenceProfile.cellularSaver);
+    await settle();
+
+    expect(
+      engine.sentOfType<SetCadenceProfile>().cast<SetCadenceProfile>().map(
+        (request) => request.profile,
+      ),
+      [CadenceProfile.cellularSaver],
+    );
+  });
+
   group('refresh (PLT-02)', () {
     SamplingState phase(SamplingPhase phase) => SamplingState(
       serverId: 'srv-1',

@@ -5502,6 +5502,42 @@ abstract class AppLocalizations {
   /// **'Accessibility'**
   String get settingsAccessibilityTitle;
 
+  /// Settings, General: the heading of the polling budget section (SAF-19).
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get settingsCadenceTitle;
+
+  /// Settings, General: the label beside the polling budget's preset menu (SAF-19).
+  ///
+  /// In en, this message translates to:
+  /// **'How often servers are read'**
+  String get settingsCadenceLabel;
+
+  /// Settings, General: a polling budget preset in its menu.
+  ///
+  /// In en, this message translates to:
+  /// **'{preset, select, automatic{Automatic} desktop{Desktop} phone{Phone} other{Cellular saver}}'**
+  String settingsCadencePreset(String preset);
+
+  /// Settings, General: what the chosen polling budget preset reads how often (03 §6.4).
+  ///
+  /// In en, this message translates to:
+  /// **'{preset, select, automatic{Desktop rates on a computer, phone rates on a phone or tablet.} desktop{Fleet rows every 5 s, the open server every 2 s.} phone{Fleet rows every 10 s, the open server every 3 s, to save battery.} other{Fleet rows every 30 s, the open server every 10 s; timers, cron jobs, temperatures, GPUs and disk health are read once when you open them.}}'**
+  String settingsCadenceDetail(String preset);
+
+  /// Settings, General: toast when the polling budget applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The refresh rate changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get settingsCadenceNotSaved;
+
+  /// Settings, General: toast when the polling budget change failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The refresh rate could not be changed.'**
+  String get settingsCadenceNotChanged;
+
   /// Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level.
   ///
   /// In en, this message translates to:
@@ -7542,6 +7578,12 @@ abstract class AppLocalizations {
   /// **'Stacks'**
   String get dockerTabStacks;
 
+  /// Docker tab, engine strip: a rootless engine whose user has linger off (DKE-11).
+  ///
+  /// In en, this message translates to:
+  /// **'This rootless engine runs under your user, and linger is off: its containers stop when your last session on the server ends. Turn linger on with loginctl enable-linger to keep them running.'**
+  String get dockerEngineLingerOff;
+
   /// Docker tab: the sub-tab with the containers' security review (DKE-06, DKE-07).
   ///
   /// In en, this message translates to:
@@ -7625,6 +7667,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{risk, select, privileged{It has every device and capability of the host, so a break-in reaches the host.} socketMount{Whoever controls the container controls the engine, which is root on the host.} hostNetwork{It shares the host\'s network and reaches every service listening on it.} hostPid{It sees, and can signal, every process on the host.} addedCapabilities{It holds capabilities beyond the engine\'s default set.} databasePublished{Its database port is published on every address, not only on localhost or a private network.} rootUser{Its processes run as root, and the engine maps root to root on the host.} logsUnrotated{It logs with json-file and no max-size, so its log file grows until the disk is full.} latestTag{A new pull can bring a different image. Pin a version or a digest.} noHealthcheck{The engine cannot tell when it stops working while it still runs.} noRestartPolicy{It stays stopped after a crash or a reboot.} other{It may put the host at risk.}}'**
   String dockerReviewRiskWhy(String risk);
+
+  /// Docker Review sub-tab: the heading over other managers and monitors found among the containers (DKE-17).
+  ///
+  /// In en, this message translates to:
+  /// **'Other tools on this host'**
+  String get dockerReviewToolsHeading;
+
+  /// Docker Review sub-tab: another tool's product name, by HostTool name. Product names stay as their makers spell them.
+  ///
+  /// In en, this message translates to:
+  /// **'{tool, select, portainer{Portainer} dockhand{Dockhand} dockge{Dockge} dozzle{Dozzle} beszel{Beszel} uptimeKuma{Uptime Kuma} netdata{Netdata} wud{What\'s Up Docker} other{Another tool}}'**
+  String dockerReviewTool(String tool);
+
+  /// Docker Review sub-tab: the container another tool runs in, and its state as the Containers sub-tab words it.
+  ///
+  /// In en, this message translates to:
+  /// **'Container {name}, {state}'**
+  String dockerReviewToolContainer(String name, String state);
+
+  /// Docker Review sub-tab: the container another tool runs in, when the list gives no state.
+  ///
+  /// In en, this message translates to:
+  /// **'Container {name}'**
+  String dockerReviewToolContainerName(String name);
+
+  /// Docker Review sub-tab: another tool's container publishes no port.
+  ///
+  /// In en, this message translates to:
+  /// **'It publishes no port.'**
+  String get dockerReviewToolNoPorts;
 
   /// Docker Review sub-tab: why the review failed, by DockerQueryFailure name.
   ///
@@ -8478,6 +8550,12 @@ abstract class AppLocalizations {
   /// **'Use'**
   String get dockerImagesColumnUse;
 
+  /// Images table column: whether the image's registry has a newer digest for its tag (IMG-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get dockerImagesColumnUpdate;
+
   /// Images list: the badge of a dangling image, one without a tag, which docker images shows as <none>.
   ///
   /// In en, this message translates to:
@@ -8627,6 +8705,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No image is dangling.'**
   String get dockerImagesNoneDangling;
+
+  /// Images list: a filter choice that lists only the images whose registry has a newer digest.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates'**
+  String get dockerImagesFilterUpdates;
+
+  /// Images list: the Updates filter hides every image.
+  ///
+  /// In en, this message translates to:
+  /// **'No image has an update.'**
+  String get dockerImagesNoneUpdates;
+
+  /// Images list: the button that asks every tag's registry again, even within the six hours a check is kept.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get dockerImagesUpdatesCheck;
+
+  /// Images list: the update check button while a check runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for updates…'**
+  String get dockerImagesUpdatesChecking;
+
+  /// Images list: why the update check could not run. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, connectionFailed{The update check could not run on the server.} endpointUnavailable{The update check needs the Docker engine, which is not reachable.} daemonError{The engine refused or failed to list the images for the update check.} other{The update check failed.}}'**
+  String dockerImagesUpdatesFailed(String reason);
+
+  /// Images list: the server has no curl for the update check; the button after it asks the Docker engine instead, at the cost it names.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no curl, so no registry was asked. The engine can ask instead, but each tag it checks spends one of Docker Hub\'s pulls for the server\'s address.'**
+  String get dockerImagesUpdatesNoCurl;
+
+  /// Images list: the button that runs the update check through the Docker engine, spending a Docker Hub pull per tag.
+  ///
+  /// In en, this message translates to:
+  /// **'Check through the engine'**
+  String get dockerImagesUpdatesThroughDaemon;
+
+  /// Images list: Docker Hub refused the update check for the server's address; time is when the check asks again.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker Hub\'s limit for this server\'s address is used up. Those images are checked again after {time}.'**
+  String dockerImagesUpdatesRateLimited(String time);
+
+  /// Images list: the update check has not read this image's registry yet, or the image has no tag.
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked'**
+  String get dockerImagesUpdateNotChecked;
+
+  /// Images list: the registry has a newer digest for one of the image's tags.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get dockerImagesUpdateAvailable;
+
+  /// Images list: the registry's digest for each of the image's tags matches the local one.
+  ///
+  /// In en, this message translates to:
+  /// **'Current'**
+  String get dockerImagesUpdateCurrent;
+
+  /// Images list: the update check could not compare one of the image's tags; the tooltip says why.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get dockerImagesUpdateUndecided;
+
+  /// Images list: the update check could not compare one of the image's tags, and why.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown: {reason}'**
+  String dockerImagesUpdateUnknown(String reason);
+
+  /// Images list: why the update check could not compare a tag. issue is the check's issue name.
+  ///
+  /// In en, this message translates to:
+  /// **'{issue, select, noResult{the registry did not answer} unauthorized{the registry wants credentials the server\'s Docker CLI does not have} notFound{the registry does not know this tag} rateLimited{Docker Hub\'s limit for the server\'s address is used up} noDigest{this registry does not say which digest it holds} noLocalDigest{this image was not pulled from the registry} other{the registry refused the check}}'**
+  String dockerImagesUpdateWhy(String issue);
+
+  /// Images list: why the update check could not compare a tag from a registry that wants credentials.
+  ///
+  /// In en, this message translates to:
+  /// **'the registry wants credentials, and the server\'s Docker CLI has no buildx plugin to read them'**
+  String get dockerImagesUpdateWhyNoBuildx;
 
   /// Images list: why the list could not be read. reason is the engine's failure name.
   ///
@@ -9690,6 +9858,36 @@ abstract class AppLocalizations {
   /// **'{container}.log'**
   String dockerLogsExportFileName(String container);
 
+  /// Stack overview: opens the logs of all the stack's containers, merged by time.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs'**
+  String get dockerStackLogsOpen;
+
+  /// Title of a stack's merged logs page.
+  ///
+  /// In en, this message translates to:
+  /// **'{project} logs'**
+  String dockerStackLogsTitle(String project);
+
+  /// Stack logs page: the stack has no containers to read.
+  ///
+  /// In en, this message translates to:
+  /// **'This stack has no containers, so it has no logs.'**
+  String get dockerStackLogsNone;
+
+  /// Stack logs page: only the first containers' logs are read.
+  ///
+  /// In en, this message translates to:
+  /// **'{shown} containers\' logs are read at once, as each holds a connection to the server. {omitted, plural, =1{1 more is not shown.} other{{omitted} more are not shown.}}'**
+  String dockerStackLogsOmitted(int shown, int omitted);
+
+  /// Stack logs page: a container's filter chip while its log stream is not running.
+  ///
+  /// In en, this message translates to:
+  /// **'{container}: {state, select, waiting{waiting} ended{stopped reading} refused{refused} other{opening}}'**
+  String dockerStackLogsState(String container, String state);
+
   /// Tooltip of the off Live chip while a container's logs read a range with a chosen end.
   ///
   /// In en, this message translates to:
@@ -10295,6 +10493,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Footprint'**
   String get footprintMenu;
+
+  /// Server Safety menu: reads each collector once and offers the raw output for a bug report (CN-18).
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostic bundle…'**
+  String get diagnosticsMenu;
+
+  /// Diagnostic bundle sheet: shown while the server's collectors are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading each collector once…'**
+  String get diagnosticsReading;
+
+  /// Diagnostic bundle sheet: its title, with the server's name and how many collector sections the bundle holds.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostic bundle for {server}: {count, plural, =1{1 section} other{{count} sections}}'**
+  String diagnosticsTitle(String server, int count);
+
+  /// Diagnostic bundle sheet: what the bundle holds and why to check it before sharing.
+  ///
+  /// In en, this message translates to:
+  /// **'The raw output of each collector, for a parser bug report. It names this server\'s processes, units, mounts and paths, so read it before you share it.'**
+  String get diagnosticsHint;
+
+  /// Diagnostic bundle sheet: the collectors whose sampler did not answer in time, by their wire names, which are not translated.
+  ///
+  /// In en, this message translates to:
+  /// **'No answer from: {collectors}'**
+  String diagnosticsMissing(String collectors);
+
+  /// Diagnostic bundle sheet: why no bundle was read.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Klabautermann is not reading this server right now, so its collectors cannot be read. Open the server while it is connected and try again.} other{The collectors could not be read.}}'**
+  String diagnosticsFailed(String failure);
+
+  /// The suggested file name for a saved diagnostic bundle. Keep it a valid file name.
+  ///
+  /// In en, this message translates to:
+  /// **'diagnostics.txt'**
+  String get diagnosticsFileName;
 
   /// Footprint page title. server is the server's name.
   ///
