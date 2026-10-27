@@ -6858,6 +6858,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerImagesColumnUse => 'Use';
 
   @override
+  String get dockerImagesColumnUpdate => 'Update';
+
+  @override
   String get dockerImagesDangling => 'Dangling';
 
   @override
@@ -6998,6 +7001,79 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerImagesNoneDangling => 'No image is dangling.';
+
+  @override
+  String get dockerImagesFilterUpdates => 'Updates';
+
+  @override
+  String get dockerImagesNoneUpdates => 'No image has an update.';
+
+  @override
+  String get dockerImagesUpdatesCheck => 'Check for updates';
+
+  @override
+  String get dockerImagesUpdatesChecking => 'Checking for updates…';
+
+  @override
+  String dockerImagesUpdatesFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'connectionFailed': 'The update check could not run on the server.',
+      'endpointUnavailable':
+          'The update check needs the Docker engine, which is not reachable.',
+      'daemonError':
+          'The engine refused or failed to list the images for the update check.',
+      'other': 'The update check failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerImagesUpdatesNoCurl =>
+      'This server has no curl, so no registry was asked. The engine can ask instead, but each tag it checks spends one of Docker Hub\'s pulls for the server\'s address.';
+
+  @override
+  String get dockerImagesUpdatesThroughDaemon => 'Check through the engine';
+
+  @override
+  String dockerImagesUpdatesRateLimited(String time) {
+    return 'Docker Hub\'s limit for this server\'s address is used up. Those images are checked again after $time.';
+  }
+
+  @override
+  String get dockerImagesUpdateNotChecked => 'Not checked';
+
+  @override
+  String get dockerImagesUpdateAvailable => 'Update available';
+
+  @override
+  String get dockerImagesUpdateCurrent => 'Current';
+
+  @override
+  String get dockerImagesUpdateUndecided => 'Unknown';
+
+  @override
+  String dockerImagesUpdateUnknown(String reason) {
+    return 'Unknown: $reason';
+  }
+
+  @override
+  String dockerImagesUpdateWhy(String issue) {
+    String _temp0 = intl.Intl.selectLogic(issue, {
+      'noResult': 'the registry did not answer',
+      'unauthorized':
+          'the registry wants credentials the server\'s Docker CLI does not have',
+      'notFound': 'the registry does not know this tag',
+      'rateLimited': 'Docker Hub\'s limit for the server\'s address is used up',
+      'noDigest': 'this registry does not say which digest it holds',
+      'noLocalDigest': 'this image was not pulled from the registry',
+      'other': 'the registry refused the check',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerImagesUpdateWhyNoBuildx =>
+      'the registry wants credentials, and the server\'s Docker CLI has no buildx plugin to read them';
 
   @override
   String dockerImagesFailed(String reason) {
@@ -7888,6 +7964,40 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get dockerStackLogsOpen => 'Logs';
+
+  @override
+  String dockerStackLogsTitle(String project) {
+    return '$project logs';
+  }
+
+  @override
+  String get dockerStackLogsNone =>
+      'This stack has no containers, so it has no logs.';
+
+  @override
+  String dockerStackLogsOmitted(int shown, int omitted) {
+    String _temp0 = intl.Intl.pluralLogic(
+      omitted,
+      locale: localeName,
+      other: '$omitted more are not shown.',
+      one: '1 more is not shown.',
+    );
+    return '$shown containers\' logs are read at once, as each holds a connection to the server. $_temp0';
+  }
+
+  @override
+  String dockerStackLogsState(String container, String state) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'waiting': 'waiting',
+      'ended': 'stopped reading',
+      'refused': 'refused',
+      'other': 'opening',
+    });
+    return '$container: $_temp0';
+  }
+
+  @override
   String get dockerLogsLiveRange =>
       'A range with an end has no new lines to follow.';
 
@@ -8409,6 +8519,45 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get footprintMenu => 'Footprint';
+
+  @override
+  String get diagnosticsMenu => 'Diagnostic bundle…';
+
+  @override
+  String get diagnosticsReading => 'Reading each collector once…';
+
+  @override
+  String diagnosticsTitle(String server, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sections',
+      one: '1 section',
+    );
+    return 'Diagnostic bundle for $server: $_temp0';
+  }
+
+  @override
+  String get diagnosticsHint =>
+      'The raw output of each collector, for a parser bug report. It names this server\'s processes, units, mounts and paths, so read it before you share it.';
+
+  @override
+  String diagnosticsMissing(String collectors) {
+    return 'No answer from: $collectors';
+  }
+
+  @override
+  String diagnosticsFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink':
+          'Klabautermann is not reading this server right now, so its collectors cannot be read. Open the server while it is connected and try again.',
+      'other': 'The collectors could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get diagnosticsFileName => 'diagnostics.txt';
 
   @override
   String footprintTitle(String server) {

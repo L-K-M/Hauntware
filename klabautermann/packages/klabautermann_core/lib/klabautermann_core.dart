@@ -53,6 +53,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 export 'src/fleet/monitor_set.dart'
     show MonitorEligibility, kMonitorSetLimit, monitorEligibilityOf;
 // The log viewer's line store and SGR reader (03 §10.8).
+export 'src/logs/line_reading.dart';
 export 'src/logs/log_buffer.dart';
 export 'src/logs/sgr.dart';
 // The app's settings.json (03 §4.10), and the atomic writer the app's
@@ -300,6 +301,9 @@ export 'package:seance_core/seance_core.dart' show AuthMethod;
 // The id a server added in the editor is saved under (FL-03), minted as
 // the catalog mints every record id.
 export 'package:seance_core/seance_core.dart' show uuidV4;
+// Séance's synced snippets (03 §7.21, AUT-01), which SnippetsChanged
+// carries and the Snippets view fills and runs.
+export 'package:seance_core/seance_core.dart' show Snippet;
 // A process row's masked arguments (03 §8.9): the Processes panel shows
 // their display and reveals one on request.
 export 'package:klabautermann_docker/klabautermann_docker.dart'
@@ -321,6 +325,9 @@ export 'src/docker/docker_ladder.dart'
 export 'src/docker/docker_ladder.dart'
     show DockerSocketPathProblem, dockerSocketPathProblem;
 export 'src/docker/docker_access.dart' show dockerAccessFacts;
+// When an update check reads a registry again (IMG-05, D68).
+export 'src/docker/image_updates.dart'
+    show kImageUpdateBackoff, kImageUpdateFresh;
 
 export 'package:klabautermann_host/klabautermann_host.dart'
     show ComposeFacts, DockerAccessFacts;
@@ -346,12 +353,16 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
         EnvVar,
         ExternalManager,
         HealthStatus,
+        ImageDigestComparison,
         ImageSummary,
+        ImageUpdateIssue,
+        ImageUpdateStatus,
         LogConfig,
         NetworkIpamConfig,
         NetworkSummary,
         Ownership,
         OwnershipMarker,
+        RegistryRateLimit,
         SystemDf,
         VolumeSummary,
         dockerSummary,

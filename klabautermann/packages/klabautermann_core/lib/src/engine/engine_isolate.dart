@@ -712,6 +712,8 @@ void engineMain(
       linkFor: links.link,
       systemdVersionOf: (serverId) => profiles[serverId]?.systemdVersion,
       emit: uiPort.send,
+      readDiagnostics: (serverId) =>
+          scheduler?.readDiagnostics(serverId) ?? Future.value(),
     );
     logs = LogStreamRouter(
       linkFor: links.link,
@@ -756,6 +758,8 @@ void engineMain(
   var prefsSent = <String, String>{};
   // The alert rules the app last heard, encoded; none to start with.
   var rulesSent = '[]';
+  // The snippets the app last heard, encoded likewise.
+  var snippetsSent = '[]';
   Future<void> sendServerPrefs() async {
     final (changes, sent) = diffServerPrefs(
       prefsSent,
@@ -774,6 +778,15 @@ void engineMain(
       rulesSent = encoded;
     }
     alerts.setRules(rules, DateTime.now().toUtc()).forEach(uiPort.send);
+
+    final snippets = sync.snippets();
+    final snippetsEncoded = jsonEncode([
+      for (final snippet in snippets) snippet.toJson(),
+    ]);
+    if (snippetsEncoded != snippetsSent) {
+      uiPort.send(SnippetsChanged(List.unmodifiable(snippets)));
+      snippetsSent = snippetsEncoded;
+    }
   }
 
   void probeFleet() {

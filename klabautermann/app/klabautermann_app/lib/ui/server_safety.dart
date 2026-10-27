@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../controllers/monitoring_controller.dart';
 import '../controllers/safety_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'actions/action_entry.dart' show OperationsScope;
 import 'actions/activity_page.dart';
+import 'diagnostic_bundle.dart';
 import 'footprint_page.dart';
 import 'settings_page.dart' show changeSafetyWithFeedback;
 
@@ -51,9 +53,18 @@ List<String> serverSafetyNotices(BuildContext context, String serverId) {
 /// (management, SAF-01), Read-only switch (SAF-06) and host log switch
 /// (SAF-13). Nothing without a [SafetyScope].
 class ServerSafetyMenu extends StatelessWidget {
-  const ServerSafetyMenu({super.key, required this.serverId, this.serverName});
+  const ServerSafetyMenu({
+    super.key,
+    required this.serverId,
+    this.serverName,
+    this.monitoring,
+  });
 
   final String serverId;
+
+  /// Reads the diagnostic bundle (CN-18); without it the menu offers
+  /// none.
+  final MonitoringController? monitoring;
 
   /// The name the Activity page's title shows; the id without it.
   final String? serverName;
@@ -120,6 +131,19 @@ class ServerSafetyMenu extends StatelessWidget {
               ),
             ),
             child: Text(l10n.footprintMenu),
+          ),
+        if (monitoring case final monitoring?)
+          MenuItemButton(
+            leadingIcon: const Icon(Icons.bug_report_outlined),
+            onPressed: () => unawaited(
+              showDiagnosticBundle(
+                context,
+                monitoring: monitoring,
+                serverId: serverId,
+                serverName: serverName ?? serverId,
+              ),
+            ),
+            child: Text(l10n.diagnosticsMenu),
           ),
       ],
       builder: (context, controller, _) => IconButton(

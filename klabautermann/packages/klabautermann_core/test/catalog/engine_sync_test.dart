@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/catalog/engine_sync.dart';
 import 'package:klabautermann_core/src/catalog/engine_vault.dart';
 import 'package:klabautermann_core/src/catalog/klabautermann_records.dart';
+import 'package:klabautermann_core/src/catalog/snippet_mirror.dart';
 import 'package:seance_core/catalog.dart'
     show FileVaultStore, InMemoryConflictAwareHostKeyStore, RecordCrypto;
 import 'package:seance_core/seance_core.dart'
@@ -890,6 +891,62 @@ void main() {
       final removal = await sync.runRound();
       expect(removal.phase, SyncPhase.succeeded, reason: removal.detail);
       expect(await sync.serverPrefs(), isEmpty);
+    });
+
+    test(
+      "Séance's snippets are mirrored, never pushed: a tombstone "
+      'removes one for good and a payload of another id is refused',
+      () async {
+        Map<String, Object?> snippet(String id, String title) => Snippet(
+          id: id,
+          title: title,
+          body: 'systemctl restart {{unit}}',
+          createdAt: 1,
+          updatedAt: 1,
+        ).toJson();
+        await server.seedSnippet('snippet:s-a', snippet('s-a', 'Restart'));
+        await server.seedSnippet('snippet:s-x', snippet('s-y', 'Forged'));
+        final sync = await open();
+
+        final enrolled = await sync.enroll(_enroll);
+        expect(enrolled.phase, SyncPhase.succeeded, reason: enrolled.detail);
+        expect([for (final s in sync.snippets()) s.id], ['s-a']);
+        expect(
+          file('sync_tripwires.json').readAsStringSync(),
+          contains('snippet:s-x'),
+        );
+
+        server.seedTombstone('snippet:s-a', updatedAt: 2);
+        await server.seedSnippet('snippet:s-b', snippet('s-b', 'Disk'));
+        final removal = await sync.runRound();
+        expect(removal.phase, SyncPhase.succeeded, reason: removal.detail);
+        expect([for (final s in sync.snippets()) s.id], ['s-b']);
+
+        // An older copy pulled later does not bring it back.
+        await server.seedSnippet('snippet:s-a', snippet('s-a', 'Restart'));
+        final stale = await sync.runRound();
+        expect(stale.phase, SyncPhase.succeeded, reason: stale.detail);
+        expect([for (final s in sync.snippets()) s.id], ['s-b']);
+        expect(
+          server.pushed.where((r) => r.id.startsWith('snippet:')),
+          isEmpty,
+        );
+
+        final reopened = await open();
+        expect([for (final s in reopened.snippets()) s.id], ['s-b']);
+      },
+    );
+
+    test('a damaged snippet mirror is reported by name', () async {
+      file(snippetMirrorFileName).writeAsStringSync('{');
+
+      final sync = await open();
+
+      expect(
+        [for (final issue in sync.issues) (issue.fileName, issue.kind)],
+        [(snippetMirrorFileName, SyncStoreIssueKind.recovered)],
+      );
+      expect(sync.snippets(), isEmpty);
     });
 
     test('a session the server rejects fails the round', () async {

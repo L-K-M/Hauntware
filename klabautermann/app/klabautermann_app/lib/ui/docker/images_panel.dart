@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show ghostFormatBinarySize, ghostIsDesktopPlatform;
@@ -9,6 +11,7 @@ import '../../l10n/app_localizations.dart';
 import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import '../actions/docker_actions.dart'
     show ImageActionsButton, PruneButton, imageActionEntries;
+import '../charts/charts.dart' show ChartPalette;
 import '../sortable_table.dart';
 import 'image_history.dart';
 import 'image_pull.dart' show ImagePullButton;
@@ -27,15 +30,20 @@ const double _wideWidth = 600;
 const double _headerShare = 0.4;
 
 /// The Images sub-tab (03 §7.14 IMG-01): every image by its tags, short
-/// id, size in IEC units, age and date of creation, and whether any
-/// container uses it, a dangling one marked by word, with a filter for
-/// the unused or the dangling ones and a search by tag or ID.
+/// id, size in IEC units, age and date of creation, whether any
+/// container uses it and whether its registry has a newer digest
+/// (IMG-05), a dangling one marked by word, with a filter for the
+/// unused, the dangling or the updatable ones and a search by tag or ID.
 ///
 /// While [visible], it holds the server's image watch
 /// ([DockerController.watchImages]), which reads the containers too:
 /// they tell which images are in use ([imageContainerCount]). Hidden, it
 /// lets the watch go. A failed read keeps the last list under why it
 /// failed. The ages follow the monitoring clock while the tab shows.
+///
+/// Each time it shows, it asks for the update check
+/// ([DockerController.checkImageUpdates]); the engine reads a registry
+/// again only for tags last read six hours ago, or on Check for updates.
 class ImagesPanel extends StatefulWidget {
   const ImagesPanel({
     super.key,
@@ -68,6 +76,15 @@ class _ImagesPanelState extends State<ImagesPanel> {
   /// The server whose image watch this panel holds, if any.
   String? _held;
 
+  /// The update check's last answer, and why the last check failed if
+  /// it did, for [ImagesPanel.serverId] (IMG-05).
+  DockerImageUpdatesPayload? _updates;
+  DockerQueryFailed? _updatesFailed;
+  bool _checking = false;
+
+  /// Counts the checks, so an answer for an earlier one is dropped.
+  int _checks = 0;
+
   DockerController get _docker => widget.monitoring.docker;
 
   @override
@@ -83,6 +100,10 @@ class _ImagesPanelState extends State<ImagesPanel> {
       // Another server's images.
       _release();
       _search.clear();
+      _updates = null;
+      _updatesFailed = null;
+      _checking = false;
+      _checks++;
     }
     _sync();
   }
@@ -102,6 +123,39 @@ class _ImagesPanelState extends State<ImagesPanel> {
 
     _docker.watchImages(wanted);
     _held = wanted;
+    _checkUpdates();
+  }
+
+  /// Asks for the update check; the caller rebuilds, as [_sync]'s do.
+  void _checkUpdates({
+    bool refresh = false,
+    ImageCheckRunner runner = ImageCheckRunner.host,
+  }) {
+    final check = ++_checks;
+    _checking = true;
+    unawaited(
+      _docker
+          .checkImageUpdates(widget.serverId, refresh: refresh, runner: runner)
+          .then((answer) {
+            if (!mounted || check != _checks) return;
+
+            setState(() {
+              _checking = false;
+              switch (answer) {
+                case DockerImageUpdatesPayload():
+                  _updates = answer;
+                  _updatesFailed = null;
+                case DockerQueryFailed():
+                  _updatesFailed = answer;
+                default:
+                  // The engine answers this query with one of the two.
+                  _updatesFailed = const DockerQueryFailed(
+                    DockerQueryFailure.daemonError,
+                  );
+              }
+            });
+          }),
+    );
   }
 
   void _release() {
@@ -185,36 +239,54 @@ class _ImagesPanelState extends State<ImagesPanel> {
                 text: l10n.dockerImagesUseUnknown,
                 detail: containers.failure?.detail,
               ),
-            if (images != null &&
-                actionsAllowedAt(
-                  context,
-                  widget.serverId,
-                  ActionEntryPoint.prune,
-                ))
+            if (images != null) ..._updateNotices(context, l10n),
+            if (images != null)
               Align(
                 alignment: AlignmentDirectional.centerStart,
-                // Pull and prune share the server's action policy.
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    ImagePullButton(serverId: widget.serverId),
-                    PruneButton(
-                      choices: [
-                        PruneDocker(
-                          widget.serverId,
-                          kind: DockerPruneKind.images,
-                        ),
-                        PruneDocker(
-                          widget.serverId,
-                          kind: DockerPruneKind.images,
-                          all: true,
-                        ),
-                        PruneDocker(
-                          widget.serverId,
-                          kind: DockerPruneKind.buildCache,
-                        ),
-                      ],
+                    // Pull and prune share the server's action policy;
+                    // the update check only reads.
+                    if (actionsAllowedAt(
+                      context,
+                      widget.serverId,
+                      ActionEntryPoint.prune,
+                    )) ...[
+                      ImagePullButton(serverId: widget.serverId),
+                      PruneButton(
+                        choices: [
+                          PruneDocker(
+                            widget.serverId,
+                            kind: DockerPruneKind.images,
+                          ),
+                          PruneDocker(
+                            widget.serverId,
+                            kind: DockerPruneKind.images,
+                            all: true,
+                          ),
+                          PruneDocker(
+                            widget.serverId,
+                            kind: DockerPruneKind.buildCache,
+                          ),
+                        ],
+                      ),
+                    ],
+                    OutlinedButton.icon(
+                      onPressed: _checking
+                          ? null
+                          : () => setState(() => _checkUpdates(refresh: true)),
+                      // A still icon: a check can wait minutes on a slow
+                      // registry, and the label already says it runs.
+                      icon: Icon(
+                        _checking ? Icons.hourglass_empty : Icons.update,
+                      ),
+                      label: Text(
+                        _checking
+                            ? l10n.dockerImagesUpdatesChecking
+                            : l10n.dockerImagesUpdatesCheck,
+                      ),
                     ),
                   ],
                 ),
@@ -275,6 +347,10 @@ class _ImagesPanelState extends State<ImagesPanel> {
       containers: containers,
       filter: _filter,
       terms: terms,
+      updates: {
+        for (final row in _updates?.rows ?? const <ImageUpdateRow>[])
+          row.reference: row,
+      },
     );
     final empty = Padding(
       padding: const EdgeInsets.all(16),
@@ -286,6 +362,7 @@ class _ImagesPanelState extends State<ImagesPanel> {
             : switch (_filter) {
                 ImageFilter.unused => l10n.dockerImagesNoneUnused,
                 ImageFilter.dangling => l10n.dockerImagesNoneDangling,
+                ImageFilter.updates => l10n.dockerImagesNoneUpdates,
                 // Every image passes; the engine listed none.
                 ImageFilter.all => l10n.dockerImagesEmpty,
               },
@@ -352,6 +429,7 @@ class _ImagesPanelState extends State<ImagesPanel> {
                 ImageFilter.all => l10n.dockerImagesFilterAll,
                 ImageFilter.unused => l10n.dockerImagesFilterUnused,
                 ImageFilter.dangling => l10n.dockerImagesFilterDangling,
+                ImageFilter.updates => l10n.dockerImagesFilterUpdates,
               }),
               selected: _filter == filter,
               onSelected: (_) => setState(() => _filter = filter),
@@ -415,6 +493,66 @@ class _ImagesPanelState extends State<ImagesPanel> {
         ),
       ],
     );
+  }
+
+  /// Why the update check could not run or skipped some tags (IMG-05,
+  /// D68): a failed check, a host without curl, which offers the
+  /// daemon's DistributionInspect with what it costs, and Docker Hub's
+  /// spent quota with when the check reads it again.
+  List<Widget> _updateNotices(BuildContext context, AppLocalizations l10n) {
+    final failed = _updatesFailed;
+    if (failed != null) {
+      return [
+        DockerNotice(
+          icon: Icons.error_outline,
+          text: l10n.dockerImagesUpdatesFailed(failed.failure.name),
+          detail: failed.detail,
+          action: TextButton(
+            onPressed: _checking ? null : () => setState(_checkUpdates),
+            child: Text(l10n.dockerRetry),
+          ),
+        ),
+      ];
+    }
+
+    final updates = _updates;
+    if (updates == null) return const [];
+
+    DateTime? resumes;
+    for (final row in updates.rows) {
+      if (row.comparison.issue != ImageUpdateIssue.rateLimited) continue;
+      final at = row.checkedAt.add(
+        row.rateLimit?.window ?? kImageUpdateBackoff,
+      );
+      if (resumes == null || at.isAfter(resumes)) resumes = at;
+    }
+    return [
+      if (updates.curlMissing)
+        DockerNotice(
+          icon: Icons.cloud_off_outlined,
+          text: l10n.dockerImagesUpdatesNoCurl,
+          action: TextButton(
+            onPressed: _checking
+                ? null
+                : () => setState(
+                    () => _checkUpdates(
+                      refresh: true,
+                      runner: ImageCheckRunner.daemon,
+                    ),
+                  ),
+            child: Text(l10n.dockerImagesUpdatesThroughDaemon),
+          ),
+        ),
+      if (resumes != null)
+        DockerNotice(
+          icon: Icons.hourglass_bottom,
+          text: l10n.dockerImagesUpdatesRateLimited(
+            MaterialLocalizations.of(
+              context,
+            ).formatTimeOfDay(TimeOfDay.fromDateTime(resumes.toLocal())),
+          ),
+        ),
+    ];
   }
 
   /// Opens [image]'s history (IMG-04), a read that needs no actions.
@@ -601,6 +739,21 @@ class _ImagesPanelState extends State<ImagesPanel> {
           final count => DockerUseBadge(count: count),
         },
       ),
+      SortableTableColumn(
+        id: ImageColumn.update.name,
+        label: _label(l10n, ImageColumn.update),
+        text: (entry) => imageUpdateText(l10n, entry),
+        // Updates first, then the undecided, then the current; images
+        // not checked yet sort last either way.
+        sortKey: (entry) => switch (entry.update) {
+          ImageUpdateStatus.updateAvailable => 0,
+          ImageUpdateStatus.unknown => 1,
+          ImageUpdateStatus.upToDate => 2,
+          null => null,
+        },
+        extent: const FixedColumnExtent(168),
+        cell: (context, entry) => ImageUpdateBadge(entry: entry),
+      ),
     ];
   }
 }
@@ -622,7 +775,87 @@ String _label(AppLocalizations l10n, ImageColumn column) => switch (column) {
   ImageColumn.size => l10n.dockerImagesColumnSize,
   ImageColumn.created => l10n.dockerImagesColumnCreated,
   ImageColumn.use => l10n.dockerImagesColumnUse,
+  ImageColumn.update => l10n.dockerImagesColumnUpdate,
 };
+
+/// What the update check says of [entry] in words (IMG-05), with why
+/// when it could not decide.
+String imageUpdateText(AppLocalizations l10n, ImageEntry entry) =>
+    switch (entry.update) {
+      null => l10n.dockerImagesUpdateNotChecked,
+      ImageUpdateStatus.updateAvailable => l10n.dockerImagesUpdateAvailable,
+      ImageUpdateStatus.upToDate => l10n.dockerImagesUpdateCurrent,
+      ImageUpdateStatus.unknown => l10n.dockerImagesUpdateUnknown(
+        _undecidedReason(l10n, entry),
+      ),
+    };
+
+/// Why the first undecided tag of [entry] could not be compared.
+String _undecidedReason(AppLocalizations l10n, ImageEntry entry) {
+  final row = entry.updates.firstWhere(
+    (row) => row.comparison.status == ImageUpdateStatus.unknown,
+  );
+  if (row.cliMissing) return l10n.dockerImagesUpdateWhyNoBuildx;
+  return l10n.dockerImagesUpdateWhy(
+    (row.comparison.issue ?? ImageUpdateIssue.noResult).name,
+  );
+}
+
+/// The update check's mark for one image (IMG-05): an icon and its word,
+/// amber for an update, so colour is never the only cue (A11Y-01). The
+/// tooltip says why an undecided one could not be compared.
+class ImageUpdateBadge extends StatelessWidget {
+  const ImageUpdateBadge({super.key, required this.entry});
+
+  final ImageEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final (icon, color, label) = switch (entry.update) {
+      null => (Icons.remove, muted, l10n.dockerImagesUpdateNotChecked),
+      ImageUpdateStatus.updateAvailable => (
+        Icons.upgrade,
+        ChartPalette.of(context).warning,
+        l10n.dockerImagesUpdateAvailable,
+      ),
+      ImageUpdateStatus.upToDate => (
+        Icons.check,
+        muted,
+        l10n.dockerImagesUpdateCurrent,
+      ),
+      ImageUpdateStatus.unknown => (
+        Icons.help_outline,
+        muted,
+        l10n.dockerImagesUpdateUndecided,
+      ),
+    };
+    final badge = Row(
+      spacing: 4,
+      children: [
+        Icon(icon, size: 14, color: color),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: entry.update == ImageUpdateStatus.updateAvailable
+                  ? color
+                  : muted,
+            ),
+          ),
+        ),
+      ],
+    );
+    if (entry.update != ImageUpdateStatus.unknown) return badge;
+
+    return Tooltip(message: imageUpdateText(l10n, entry), child: badge);
+  }
+}
 
 /// The mark of a dangling image, one without a tag (IMG-01): an icon and
 /// its word in a tinted pill, so colour is never the only cue (A11Y-01).
