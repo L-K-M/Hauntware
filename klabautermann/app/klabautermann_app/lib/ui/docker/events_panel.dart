@@ -5,6 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../time_display.dart';
 import 'containers_panel.dart' show DockerNotice;
 import 'containers_view.dart' show searchTerms;
 
@@ -148,7 +149,8 @@ class _EventsPanelState extends State<EventsPanel> {
     final rows = entries == null
         ? const <DockerTimelineEntry>[]
         : timelineRows(entries, kind: _kind, terms: searchTerms(_search.text));
-    final format = _TimeFormat(l10n.localeName, widget.now().toLocal());
+    DateTime shown(DateTime at) => displayTime(context, widget.serverId, at);
+    final format = _TimeFormat(l10n.localeName, shown(widget.now()), shown);
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -228,18 +230,20 @@ class _EventsPanelState extends State<EventsPanel> {
 }
 
 /// A row's time: the time alone today, with the date before, since the
-/// buffer can span days on a quiet server.
+/// buffer can span days on a quiet server. [_shown] gives a server time
+/// for the time display (A11Y-07), as [_today] was given.
 final class _TimeFormat {
-  _TimeFormat(String locale, this._today)
+  _TimeFormat(String locale, this._today, this._shown)
     : _time = DateFormat.Hms(locale),
       _dated = DateFormat.yMMMd(locale).add_Hms();
 
   final DateTime _today;
+  final DateTime Function(DateTime at) _shown;
   final DateFormat _time;
   final DateFormat _dated;
 
   String call(DateTime at) {
-    final local = at.toLocal();
+    final local = _shown(at);
     final today =
         local.year == _today.year &&
         local.month == _today.month &&

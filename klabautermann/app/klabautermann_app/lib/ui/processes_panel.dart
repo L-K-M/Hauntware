@@ -14,6 +14,7 @@ import 'freshness.dart';
 import 'process_detail_view.dart';
 import 'processes_view.dart';
 import 'sortable_table.dart';
+import 'time_display.dart';
 
 /// The panel width from which the processes show as the sortable table;
 /// narrower, as on a phone, they show as a list of two-line rows rather
@@ -215,7 +216,13 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
 
         // Filled below in tree mode; the command cell indents by it.
         final depths = <int, int>{};
-        final columns = _columns(l10n, profile, reading.at, depths: depths);
+        final columns = _columns(
+          l10n,
+          profile,
+          reading.at,
+          shown: (at) => displayTime(context, widget.serverId, at),
+          depths: depths,
+        );
         final user = columns.firstWhere(
           (column) => column.id == ProcessColumn.user.name,
         );
@@ -477,19 +484,21 @@ String _label(AppLocalizations l10n, ProcessColumn column) => switch (column) {
 
 /// The table's columns, which the phone list sorts and words by too. A
 /// start on the day of the reading taken [at] shows its time, an earlier
-/// one its date. Unknown values sort last (SortableTable).
+/// one its date, both as [shown] gives a server time for the time display
+/// (A11Y-07). Unknown values sort last (SortableTable).
 List<SortableTableColumn<ProcessRow>> _columns(
   AppLocalizations l10n,
   HostProfile? profile,
   DateTime at, {
+  required DateTime Function(DateTime at) shown,
   Map<int, int> depths = const {},
 }) {
   final unknown = l10n.chartUnknownValue;
-  final day = at.toLocal();
+  final day = shown(at);
   String started(DateTime? startedAt) {
     if (startedAt == null) return unknown;
 
-    final local = startedAt.toLocal();
+    final local = shown(startedAt);
     final today =
         local.year == day.year &&
         local.month == day.month &&

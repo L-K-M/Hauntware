@@ -28,6 +28,7 @@ import 'sortable_table.dart';
 import 'sshd_posture.dart';
 import 'system_view.dart';
 import 'temperatures.dart';
+import 'time_display.dart';
 import 'updates.dart';
 
 /// The System tab's sections, which key them; the Disks section's id also
@@ -369,7 +370,11 @@ class _SystemPanelState extends State<SystemPanel> {
           _hostFact(
             l10n,
             l10n.systemBooted,
-            booted == null ? null : l10n.systemBootedValue(booted.toLocal()),
+            booted == null
+                ? null
+                : l10n.systemBootedValue(
+                    displayTime(context, widget.serverId, booted),
+                  ),
             withheld: withholdsHostFigure(profile, SystemWideProcFile.stat),
           ),
         ];
@@ -518,7 +523,11 @@ class _SystemPanelState extends State<SystemPanel> {
           :final at,
           result: FsResult(:final fs),
         )) ...[
-          Text(l10n.systemDisksLastListed(at.toLocal())),
+          Text(
+            l10n.systemDisksLastListed(
+              displayTime(context, widget.serverId, at),
+            ),
+          ),
           ..._mounts(context, l10n, fs, wide: wide, timedOut: true),
         ],
       ],

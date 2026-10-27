@@ -5506,6 +5506,22 @@
   "@settingsLogDisplayNotChanged": {
     "description": "Settings, General: toast when the log text size or wrapping change failed."
   },
+  "settingsServerTimes": "Show server times in the server's zone",
+  "@settingsServerTimes": {
+    "description": "Settings, General: switch that shows the times a server reports in that server's time zone instead of this device's (A11Y-07)."
+  },
+  "settingsServerTimesDetail": "Times on a server's screens use the zone it reported when it connected. Until then, and with this off, they use this device's zone.",
+  "@settingsServerTimesDetail": {
+    "description": "Settings, General: explanation under the server times switch (A11Y-07)."
+  },
+  "settingsServerTimesNotSaved": "The time display changed but could not be saved. It lasts until Klabautermann quits.",
+  "@settingsServerTimesNotSaved": {
+    "description": "Settings, General: toast when the server times switch applied but settings.json could not be written."
+  },
+  "settingsServerTimesNotChanged": "The time display could not be changed.",
+  "@settingsServerTimesNotChanged": {
+    "description": "Settings, General: toast when the server times switch failed to change."
+  },
   "settingsThresholdsTitle": "Usage bands",
   "@settingsThresholdsTitle": {
     "description": "Settings, Alerts: the heading of OV-11's threshold levels."

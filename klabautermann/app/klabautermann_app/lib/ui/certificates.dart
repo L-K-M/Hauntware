@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/monitoring_controller.dart';
 import '../controllers/tls_endpoints.dart';
 import '../l10n/app_localizations.dart';
+import 'time_display.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 
 /// How close an expiry is before its line warns [E]: Let's Encrypt
@@ -120,6 +121,7 @@ class _CertificatesSectionState extends State<CertificatesSection> {
             check: checks?[endpoint],
             checking: _checking,
             now: widget.now().toUtc(),
+            serverId: widget.serverId,
           ),
         Wrap(
           spacing: 8,
@@ -149,12 +151,14 @@ class _EndpointLine extends StatelessWidget {
     required this.check,
     required this.checking,
     required this.now,
+    required this.serverId,
   });
 
   final TlsEndpoint endpoint;
   final TlsEndpointCheck? check;
   final bool checking;
   final DateTime now;
+  final String serverId;
 
   @override
   Widget build(BuildContext context) {
@@ -214,10 +218,18 @@ class _EndpointLine extends StatelessWidget {
                   Text(
                     left!.isNegative
                         ? l10n.systemCertificatesExpired(
-                            certificate.notAfter.toLocal(),
+                            displayTime(
+                              context,
+                              serverId,
+                              certificate.notAfter,
+                            ),
                           )
                         : l10n.systemCertificatesExpires(
-                            certificate.notAfter.toLocal(),
+                            displayTime(
+                              context,
+                              serverId,
+                              certificate.notAfter,
+                            ),
                             left.inDays,
                           ),
                   ),

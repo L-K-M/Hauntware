@@ -6,6 +6,7 @@ import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../chart_strings.dart';
 import '../charts/charts.dart';
+import '../time_display.dart';
 
 /// How much time each chart shows: what the history keeps.
 const _span = Duration(minutes: 30);
@@ -64,6 +65,7 @@ class ContainerUsageCharts extends StatelessWidget {
                 source: source,
                 end: end,
                 span: _span,
+                zoneOffset: TimeDisplayScope.serverOffsetOf(context, serverId),
               ),
             ),
           ],

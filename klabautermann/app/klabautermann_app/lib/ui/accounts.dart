@@ -7,6 +7,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/account_reads.dart';
 import '../l10n/app_localizations.dart';
 import 'sortable_table.dart';
+import 'time_display.dart';
 import 'system_panel.dart' show PanelSection;
 
 /// The accounts table's columns with the width each claims before text
@@ -253,13 +254,13 @@ class _AccountsSectionState extends State<AccountsSection> {
                 ? l10n.systemAccountsSessionLocal(
                     session.user,
                     session.line,
-                    session.since.toLocal(),
+                    displayTime(context, widget.serverId, session.since),
                   )
                 : l10n.systemAccountsSessionRemote(
                     session.user,
                     session.line,
                     session.from!,
-                    session.since.toLocal(),
+                    displayTime(context, widget.serverId, session.since),
                   ),
           ),
     ];
