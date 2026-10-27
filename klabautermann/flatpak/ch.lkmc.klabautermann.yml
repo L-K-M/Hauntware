@@ -16,10 +16,12 @@ finish-args:
   # access (04 §12.1): exports go through the portal file chooser.
   - --share=network
   - --socket=ssh-auth
-  # FL-02 imports hosts from ~/.ssh/config, and nothing reads identity
-  # files until links land (M2), so M1 grants that one file, read-only.
-  # The rest of ~/.ssh, private keys included, stays outside the sandbox;
-  # widening the grant needs owner sign-off (04 §12.1).
+  # FL-02 imports hosts from ~/.ssh/config, so that one file is granted,
+  # read-only. The rest of ~/.ssh, private keys included, stays outside
+  # the sandbox (PLT-09): the app cannot read an IdentityFile there in
+  # this build and says so (a sandbox-denied key error), so such a key
+  # has to come from the agent above or be imported into the app's
+  # keystore. Widening the grant needs owner sign-off (04 §12.1).
   - --filesystem=~/.ssh/config:ro
   # Secrets live in the host keyring (Secret Service API).
   - --talk-name=org.freedesktop.secrets
