@@ -865,6 +865,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'fleet.importSshConfig'",
     "'app.quit'",
     "'app.commandPalette'",
+    "'app.keyboardShortcuts'",
+    r"'view.panel.${panel.name}'",
   },
   'lib/ui/menus/app_menu_host.dart': {
     // A FocusNode debug label.
@@ -956,6 +958,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${widget.tableId}.column.${column.id}'",
     r"'${widget.tableId}.rowActions.$key'",
     r"'${widget.tableId}.row.$key'",
+    // The keys `/` and `?`, bound and named as the keyboard shows them.
+    "'/'",
+    "'?'",
   },
   // What systemd-detect-virt prints for no virtualization, compared with
   // the probe's answer; the System tab shows ARB text for it

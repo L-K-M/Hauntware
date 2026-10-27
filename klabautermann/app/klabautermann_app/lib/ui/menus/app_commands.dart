@@ -5,6 +5,7 @@ import 'package:window_manager/window_manager.dart';
 import '../../controllers/fleet_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../about_dialog.dart';
+import '../server_surfaces.dart' show ServerPanel;
 import '../ssh_config_import_action.dart';
 
 /// The app's top-level menus in menu-bar order (03 §10.2). [app] is the
@@ -94,6 +95,36 @@ const String kAppQuitCommandId = 'app.quit';
 /// View ▸ Command Palette… (PLT-07, 03 §10.6), on desktops.
 const String kAppCommandPaletteCommandId = 'app.commandPalette';
 
+/// Help ▸ Keyboard Shortcuts (PLT-06, 03 §10.6), on desktops.
+const String kAppKeyboardShortcutsCommandId = 'app.keyboardShortcuts';
+
+/// View ▸ the selected server's tabs (PLT-06), one command per
+/// [ServerPanel]: `view.panel.<name>`.
+String viewPanelCommandId(ServerPanel panel) => 'view.panel.${panel.name}';
+
+/// The digit keys of the tab commands, in [ServerPanel] order.
+const List<LogicalKeyboardKey> _panelDigits = [
+  LogicalKeyboardKey.digit1,
+  LogicalKeyboardKey.digit2,
+  LogicalKeyboardKey.digit3,
+  LogicalKeyboardKey.digit4,
+  LogicalKeyboardKey.digit5,
+  LogicalKeyboardKey.digit6,
+  LogicalKeyboardKey.digit7,
+  LogicalKeyboardKey.digit8,
+  LogicalKeyboardKey.digit9,
+];
+
+/// ⌘[key] on macOS and Ctrl+[key] elsewhere.
+List<ShortcutActivator> primaryChord(
+  TargetPlatform platform,
+  LogicalKeyboardKey key,
+) => [
+  platform == TargetPlatform.macOS
+      ? SingleActivator(key, meta: true)
+      : SingleActivator(key, control: true),
+];
+
 /// The commands the app has a real action for today, for [platform]: no
 /// placeholders for commands that do not exist yet.
 ///
@@ -120,6 +151,13 @@ const String kAppCommandPaletteCommandId = 'app.commandPalette';
 ///   over every command, server, tab and held container: ⌘K on macOS and
 ///   Ctrl+K elsewhere (03 §10.6). In View.
 ///
+/// - The tab commands, on desktops with [onOpenPanel], show a tab of the
+///   selected server's workspace: ⌘1 to ⌘8 on macOS and Ctrl+1 to Ctrl+8
+///   elsewhere, in [ServerPanel] order (03 §10.6). In View, disabled
+///   while no server is selected.
+/// - Keyboard Shortcuts, on desktops with [onShowKeyboardMap], lists the
+///   keys the app takes: ⌘/ on macOS and Ctrl+/ elsewhere. In Help.
+///
 /// The window commands (Minimize, Zoom, Bring All to Front) and Enter
 /// Full Screen are AppKit's own rows on macOS (`buildAppMenus`); Linux and
 /// Windows have no counterparts in the app yet.
@@ -130,7 +168,10 @@ List<AppCommand> buildAppCommands({
   required String? appVersion,
   Future<void> Function()? requestClose,
   Future<void> Function(BuildContext context)? onOpenPalette,
+  void Function(BuildContext context, ServerPanel panel)? onOpenPanel,
+  Future<void> Function(BuildContext context)? onShowKeyboardMap,
 }) {
+  assert(ServerPanel.values.length <= _panelDigits.length);
   final desktop = switch (platform) {
     TargetPlatform.macOS ||
     TargetPlatform.linux ||
@@ -163,6 +204,33 @@ List<AppCommand> buildAppCommands({
         menuPlacement: const CommandMenuPlacement(
           menu: AppMenuId.view,
           order: 10,
+        ),
+      ),
+    if (desktop && onOpenPanel != null)
+      for (final panel in ServerPanel.values)
+        AppCommand(
+          id: viewPanelCommandId(panel),
+          label: (l10n) => l10n.viewPanelCommand(panel.label(l10n)),
+          enabled: () => fleet.selectedServer != null,
+          activators: (platform) =>
+              primaryChord(platform, _panelDigits[panel.index]),
+          run: (context) async => onOpenPanel(context, panel),
+          menuPlacement: CommandMenuPlacement(
+            menu: AppMenuId.view,
+            order: 10 + panel.index,
+            group: 1,
+          ),
+        ),
+    if (desktop && onShowKeyboardMap != null)
+      AppCommand(
+        id: kAppKeyboardShortcutsCommandId,
+        label: (l10n) => l10n.keyboardMapCommand,
+        activators: (platform) =>
+            primaryChord(platform, LogicalKeyboardKey.slash),
+        run: onShowKeyboardMap,
+        menuPlacement: const CommandMenuPlacement(
+          menu: AppMenuId.help,
+          order: 20,
         ),
       ),
     if (fleet.canImportSshConfig)

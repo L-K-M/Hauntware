@@ -7702,12 +7702,34 @@ there from its own page too.
   workspace tab; a container row also opens the Docker tab and hands
   the container to the inspector. `WorkspaceNavigation` carries those
   requests: the desktop shell takes the container and the workspace's
-  tabs consume the panel request once shown. Units, stacks and the
-  keyboard model below come with N60b.
+  tabs consume the panel request once shown. Units and stacks come
+  with N60c.
 - Keyboard: `/` filters the focused list; `j` and `k` move; `Enter` opens;
   `l` logs, `s` shell, `r` restart (opens the confirmation dialog); `?` shows
   the contextual map; `Cmd/Ctrl-1..9` switch tabs; `Esc` goes back; bindings
   through `GhostChordScope`.
+  As built (M6 N60b, PLT-06, A11Y-10): the single keys belong to the
+  focused list, so a text field keeps its letters. `SortableTable` takes
+  `j` and `k` beside the arrows, `/` focuses the list's filter field
+  (`filterFocus`: Containers, Images, Volumes, Networks, Processes), `?`
+  opens the keyboard map, and `keyActions` bind single-key verbs to the
+  active row, each enabled only where its menu verb is: on Containers
+  `l` opens the logs, `s` a shell while the container runs and `r` a
+  restart through its confirmation; on Services `l` opens the unit's
+  page, which leads with its logs on a desktop, and `r` restarts it. A
+  key whose verb does not apply passes on. View gains "Go to <tab>" with
+  `Cmd/Ctrl-1` to `8` in `ServerPanel` order (eight tabs, so 9 is
+  unused), disabled until a server is selected and doing nothing in a
+  narrow window's phone shell; Help gains Keyboard Shortcuts
+  (`Cmd/Ctrl-/`). The keyboard map lists the focused list's keys, then
+  the window's, read from the command registry with Esc, so it cannot
+  drift from the menus. `EscapeGoesBack` over the navigator binds Esc to
+  an intent of its own (a page route's disabled `DismissIntent` action
+  would stop the search above it): it dismisses what Esc always
+  dismissed, and otherwise pops the page that holds focus, such as the
+  phone's server screen or Settings; a dialog Esc does not dismiss
+  stays. Every row verb was already reachable from the keyboard through
+  Shift+F10 and the context-menu key (A11Y-10).
 - MVP: every list and confirmation is keyboard-operable with visible focus.
 
 ### 10.7 Charts

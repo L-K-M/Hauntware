@@ -59,6 +59,9 @@ class _NetworksPanelState extends State<NetworksPanel> {
     TableSortDirection.ascending,
   );
   final _search = TextEditingController();
+
+  /// The filter field, which `/` in the table focuses (PLT-06).
+  final _searchFocus = FocusNode();
   NetworkFilter _filter = NetworkFilter.all;
 
   /// The server whose network watch this panel holds, if any.
@@ -87,6 +90,7 @@ class _NetworksPanelState extends State<NetworksPanel> {
   void dispose() {
     _release();
     _search.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -269,6 +273,7 @@ class _NetworksPanelState extends State<NetworksPanel> {
 
     return SortableTable<NetworkEntry>(
       tableId: DockerWatchList.networks.name,
+      filterFocus: _searchFocus,
       columns: columns,
       rows: entries,
       rowKey: _rowKey,
@@ -305,6 +310,7 @@ class _NetworksPanelState extends State<NetworksPanel> {
         constraints: const BoxConstraints(maxWidth: 420),
         child: TextField(
           controller: _search,
+          focusNode: _searchFocus,
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             prefixIcon: const Icon(Icons.search),

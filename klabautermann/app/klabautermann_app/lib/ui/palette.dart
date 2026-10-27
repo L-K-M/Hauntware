@@ -16,7 +16,8 @@ import 'workspace_navigation.dart';
 
 /// The command palette's rows (PLT-07, 03 §10.6), each provider's under a
 /// path of its own, so `:servers` or `:containers` narrows to one: the
-/// app's [actions] but the palette's own, every fleet server, and, while
+/// app's [actions] but the palette's own and the tab commands, every
+/// fleet server, and, while
 /// the window shows the desktop workspace, the selected server's tabs
 /// and the containers its held list names.
 List<PaletteCommand> paletteCommands({
@@ -35,8 +36,10 @@ List<PaletteCommand> paletteCommands({
       ? null
       : monitoring.docker.containersFor(selected.id).value.containers;
   return [
+    // The tab commands' rows would repeat the tabs' own, below.
     for (final action in actions)
-      if (action.id != kAppCommandPaletteCommandId)
+      if (action.id != kAppCommandPaletteCommandId &&
+          !ServerPanel.values.any((p) => action.id == viewPanelCommandId(p)))
         PaletteCommand(
           label: action.label(l10n),
           path: l10n.paletteActions,

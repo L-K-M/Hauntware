@@ -2,6 +2,7 @@ import 'dart:async' show Timer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:ghost_ui/ghost_ui.dart'
     show SidebarMenuAction, ghostFormatBinarySize, ghostIsDesktopPlatform;
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -14,10 +15,16 @@ import '../../l10n/app_localizations.dart';
 import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import '../actions/action_preview.dart' show startAction;
 import '../actions/docker_actions.dart'
-    show PruneButton, containerActionEntries;
+    show
+        ContainerOffer,
+        PruneButton,
+        containerActionEntries,
+        containerIntent,
+        containerOffers;
 import '../sortable_table.dart';
 import 'container_details.dart';
 import 'container_logs.dart';
+import 'container_terminal.dart' show openContainerShellPage;
 import 'containers_view.dart';
 import 'docker_cells.dart' show dockerAgeText;
 
@@ -93,6 +100,9 @@ class _ContainersPanelState extends State<ContainersPanel> {
     TableSortDirection.ascending,
   );
   final _search = TextEditingController();
+
+  /// The filter field, which `/` in the table focuses (PLT-06).
+  final _searchFocus = FocusNode();
   bool _runningOnly = false;
 
   /// CST-05's Top view: the running containers in one list, the busiest
@@ -168,6 +178,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
   void dispose() {
     _release();
     _search.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -430,6 +441,8 @@ class _ContainersPanelState extends State<ContainersPanel> {
 
     return SortableTable<ContainerListEntry>(
       tableId: DockerWatchList.containers.name,
+      filterFocus: _searchFocus,
+      keyActions: _keyActions(l10n),
       columns: [if (selecting) _selectColumn(l10n), ...columns],
       rows: entries,
       rowKey: _rowKey,
@@ -502,6 +515,72 @@ class _ContainersPanelState extends State<ContainersPanel> {
     );
   }
 
+  /// The table's single-key verbs (PLT-06, 03 §10.6) on a container
+  /// row: `l` its logs, `s` a shell in it while it runs, `r` a restart
+  /// through the action's confirmation; each only where its menu verb
+  /// would be allowed.
+  List<TableKeyAction<ContainerListEntry>> _keyActions(AppLocalizations l10n) {
+    ContainerSummary? containerOf(ContainerListEntry entry) => switch (entry) {
+      ContainerEntry(:final container) => container,
+      ContainerGroupEntry() => null,
+    };
+    return [
+      TableKeyAction(
+        key: LogicalKeyboardKey.keyL,
+        label: l10n.keyActionLogs,
+        appliesTo: (entry) => containerOf(entry) != null,
+        run: (entry) => openContainerLogs(
+          context,
+          monitoring: widget.monitoring,
+          serverId: widget.serverId,
+          container: containerOf(entry)!,
+        ),
+      ),
+      TableKeyAction(
+        key: LogicalKeyboardKey.keyS,
+        label: l10n.keyActionShell,
+        appliesTo: (entry) => switch (containerOf(entry)) {
+          final container? =>
+            containerIsUp(container) &&
+                actionsAllowedAt(
+                  context,
+                  widget.serverId,
+                  ActionEntryPoint.containerShell,
+                ),
+          null => false,
+        },
+        run: (entry) => openContainerShellPage(
+          context,
+          monitoring: widget.monitoring,
+          serverId: widget.serverId,
+          container: containerOf(entry)!,
+        ),
+      ),
+      TableKeyAction(
+        key: LogicalKeyboardKey.keyR,
+        label: l10n.keyActionRestart,
+        appliesTo: (entry) => switch (containerOf(entry)) {
+          final container? =>
+            containerOffers(container.state).contains(ContainerOffer.restart) &&
+                actionsAllowedAt(
+                  context,
+                  widget.serverId,
+                  ActionEntryPoint.containerVerb,
+                ),
+          null => false,
+        },
+        run: (entry) => startAction(
+          context,
+          containerIntent(
+            widget.serverId,
+            containerOf(entry)!.id,
+            ContainerOffer.restart,
+          ),
+        ),
+      ),
+    ];
+  }
+
   Widget _filters(AppLocalizations l10n) => Wrap(
     spacing: 12,
     runSpacing: 8,
@@ -511,6 +590,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
         constraints: const BoxConstraints(maxWidth: 420),
         child: TextField(
           controller: _search,
+          focusNode: _searchFocus,
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             prefixIcon: const Icon(Icons.search),

@@ -16,6 +16,7 @@ import 'package:ghost_ui/ghost_ui.dart'
         sidebarMenuWidgets;
 
 import '../l10n/app_localizations.dart';
+import 'keyboard_map.dart';
 
 /// Which way a [TableSort] orders its column.
 enum TableSortDirection { ascending, descending }
@@ -171,6 +172,29 @@ List<R> sortTableRows<R>(
   return [for (final entry in keyed) rows[entry.index]];
 }
 
+/// A single-key verb on a [SortableTable]'s active row (PLT-06, 03
+/// §10.6), such as `l` for logs: [key] runs [run] on the row when
+/// [appliesTo] holds, and [label] names it in the keyboard map.
+@immutable
+final class TableKeyAction<R> {
+  const TableKeyAction({
+    required this.key,
+    required this.label,
+    required this.run,
+    this.appliesTo,
+  });
+
+  /// A letter key, pressed without modifiers.
+  final LogicalKeyboardKey key;
+
+  final String label;
+  final ValueChanged<R> run;
+
+  /// Whether the verb applies to a row; null applies it to every row. A
+  /// key whose verb does not apply passes on.
+  final bool Function(R row)? appliesTo;
+}
+
 /// The sortable semantic table the M2 lists (processes, services, jobs)
 /// share, ahead of `ghost_ui`'s `GhostColumnTable` (F5e, v1; 03 §10.10):
 ///
@@ -183,9 +207,11 @@ List<R> sortTableRows<R>(
 /// - Keyboard focus: the body is one focus stop (the sortable headers
 ///   come before it) holding an active row, drawn with a ring while focus
 ///   is from the keyboard. ↑ and ↓, Page Up and Page Down, Home and End
-///   move it; Enter or Space activates it; Shift+F10 or the context-menu
-///   key opens its actions. The active row follows its [rowKey] across
-///   re-sorts and refreshes.
+///   move it, as `j` and `k` do (PLT-06); Enter or Space activates it;
+///   Shift+F10 or the context-menu key opens its actions; [keyActions]
+///   run single-key verbs on it; `/` moves focus to the list's filter
+///   ([filterFocus]) and `?` shows the keyboard map. The active row
+///   follows its [rowKey] across re-sorts and refreshes.
 /// - Fixed row height: every row is the platform's listing extent (22 px
 ///   on desktop, 48 on touch) at the ambient text scale, so a refresh
 ///   never reflows the list and keyboard paging is exact.
@@ -215,6 +241,8 @@ class SortableTable<R> extends StatefulWidget {
     this.rowOrder = TableRowOrder.bySort,
     this.spanningRow,
     this.onShownRowsChanged,
+    this.filterFocus,
+    this.keyActions = const [],
   });
 
   /// Prefixes the keys of the header cells (`<tableId>.column.<id>`),
@@ -262,6 +290,14 @@ class SortableTable<R> extends StatefulWidget {
   /// (CST-01).
   final ValueChanged<List<R>>? onShownRowsChanged;
 
+  /// The list's filter field, which `/` focuses; null leaves `/` to pass
+  /// on.
+  final FocusNode? filterFocus;
+
+  /// Single-key verbs on the active row, each a distinct letter other than
+  /// `j` and `k`.
+  final List<TableKeyAction<R>> keyActions;
+
   @override
   State<SortableTable<R>> createState() => _SortableTableState<R>();
 }
@@ -294,6 +330,21 @@ final class _CloseMenuIntent extends Intent {
   const _CloseMenuIntent();
 }
 
+final class _FocusFilterIntent extends Intent {
+  const _FocusFilterIntent();
+}
+
+final class _ShowKeyboardMapIntent extends Intent {
+  const _ShowKeyboardMapIntent();
+}
+
+final class _KeyActionIntent extends Intent {
+  const _KeyActionIntent(this.index);
+
+  /// The verb's index in [SortableTable.keyActions].
+  final int index;
+}
+
 /// An action that is enabled only while [enabled] holds, so a key the
 /// table cannot use (Enter without [SortableTable.onRowActivated], an
 /// arrow over no rows) passes on instead of being swallowed. Its intents
@@ -316,10 +367,29 @@ final class _TableAction<T extends Intent> extends Action<T> {
   }
 }
 
+/// Runs a [SortableTable.keyActions] verb on the active row; enabled only
+/// while the verb applies to it, so the key otherwise passes on.
+final class _KeyAction extends Action<_KeyActionIntent> {
+  _KeyAction(this._table);
+
+  final _SortableTableState<Object?> _table;
+
+  @override
+  bool isEnabled(_KeyActionIntent intent) => _table._keyActionApplies(intent);
+
+  @override
+  Object? invoke(_KeyActionIntent intent) {
+    _table._runKeyAction(intent);
+    return null;
+  }
+}
+
 class _SortableTableState<R> extends State<SortableTable<R>> {
   static const _shortcuts = <ShortcutActivator, Intent>{
     SingleActivator(LogicalKeyboardKey.arrowUp): _MoveIntent(_Step.previous),
     SingleActivator(LogicalKeyboardKey.arrowDown): _MoveIntent(_Step.next),
+    SingleActivator(LogicalKeyboardKey.keyK): _MoveIntent(_Step.previous),
+    SingleActivator(LogicalKeyboardKey.keyJ): _MoveIntent(_Step.next),
     SingleActivator(LogicalKeyboardKey.pageUp): _MoveIntent(_Step.pageUp),
     SingleActivator(LogicalKeyboardKey.pageDown): _MoveIntent(_Step.pageDown),
     SingleActivator(LogicalKeyboardKey.home): _MoveIntent(_Step.first),
@@ -336,6 +406,19 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
     SingleActivator(LogicalKeyboardKey.f10, shift: true, includeRepeats: false):
         _OpenRowActionsIntent(),
     SingleActivator(LogicalKeyboardKey.escape): _CloseMenuIntent(),
+    SingleActivator(LogicalKeyboardKey.slash, includeRepeats: false):
+        _FocusFilterIntent(),
+    // `?` is Shift+/ on some layouts and its own key on others.
+    CharacterActivator('?', includeRepeats: false): _ShowKeyboardMapIntent(),
+  };
+
+  /// [_shortcuts] and a binding per [SortableTable.keyActions] verb.
+  Map<ShortcutActivator, Intent> get _allShortcuts => {
+    ..._shortcuts,
+    for (final (index, action) in widget.keyActions.indexed)
+      SingleActivator(action.key, includeRepeats: false): _KeyActionIntent(
+        index,
+      ),
   };
 
   final _scroll = ScrollController();
@@ -370,6 +453,15 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
       () => _menu.isOpen,
       (_) => _menu.close(),
     ),
+    _FocusFilterIntent: _TableAction<_FocusFilterIntent>(
+      () => widget.filterFocus?.canRequestFocus ?? false,
+      (_) => widget.filterFocus!.requestFocus(),
+    ),
+    _ShowKeyboardMapIntent: _TableAction<_ShowKeyboardMapIntent>(
+      () => true,
+      (_) => showKeyboardMap(context, list: _keyboardMap()),
+    ),
+    _KeyActionIntent: _KeyAction(this),
   };
 
   List<R> _sorted = const [];
@@ -582,6 +674,37 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
   /// takes focus once it has mounted, or its arrows would still walk the
   /// rows behind it; a pointer's leaves it on the body, so no verb shows
   /// a focus fill the click did not ask for.
+  R? get _activeRow => _activeIndex == null ? null : _sorted[_activeIndex!];
+
+  bool _keyActionApplies(_KeyActionIntent intent) {
+    final row = _activeRow;
+    if (row == null || intent.index >= widget.keyActions.length) return false;
+    return widget.keyActions[intent.index].appliesTo?.call(row) ?? true;
+  }
+
+  void _runKeyAction(_KeyActionIntent intent) =>
+      widget.keyActions[intent.index].run(_activeRow as R);
+
+  /// The keys this table takes, for its `?` (PLT-06).
+  List<KeyboardMapEntry> _keyboardMap() {
+    final l10n = AppLocalizations.of(context);
+    return [
+      KeyboardMapEntry(l10n.keyboardMapMoveKeys, l10n.keyboardMapMove),
+      if (widget.onRowActivated != null)
+        KeyboardMapEntry(l10n.keyboardMapOpenKeys, l10n.keyboardMapOpen),
+      if (widget.rowActions != null)
+        KeyboardMapEntry(
+          l10n.keyboardMapRowActionsKeys,
+          l10n.keyboardMapRowActions,
+        ),
+      for (final action in widget.keyActions)
+        KeyboardMapEntry(action.key.keyLabel, action.label),
+      if (widget.filterFocus != null)
+        KeyboardMapEntry('/', l10n.keyboardMapFilter),
+      KeyboardMapEntry('?', l10n.keyboardMapShow),
+    ];
+  }
+
   void _openActions(int index, {Offset? global}) {
     final row = _sorted[index];
     final entries = widget.rowActions!(row);
@@ -667,7 +790,7 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
         // One stop for the body: Shift+F10 reaches a row's actions, not a
         // Tab stop per row.
         descendantsAreFocusable: false,
-        shortcuts: _shortcuts,
+        shortcuts: _allShortcuts,
         actions: _actions,
         onFocusChange: _onFocusChange,
         onShowFocusHighlight: (show) => setState(() => _showRing = show),

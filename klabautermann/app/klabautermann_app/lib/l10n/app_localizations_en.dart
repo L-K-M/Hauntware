@@ -10544,6 +10544,65 @@ class AppLocalizationsEn extends AppLocalizations {
   String get paletteCommand => 'Command Palette…';
 
   @override
+  String viewPanelCommand(String panel) {
+    return 'Go to $panel';
+  }
+
+  @override
+  String get keyboardMapCommand => 'Keyboard Shortcuts';
+
+  @override
+  String get keyboardMapTitle => 'Keyboard shortcuts';
+
+  @override
+  String get keyboardMapList => 'In this list';
+
+  @override
+  String get keyboardMapEverywhere => 'Everywhere';
+
+  @override
+  String get keyboardMapClose => 'Close';
+
+  @override
+  String get keyboardMapEscapeKeys => 'Esc';
+
+  @override
+  String get keyboardMapEscape => 'Close the dialog, sheet or page on top';
+
+  @override
+  String get keyboardMapMoveKeys => '↑ ↓  or  J K';
+
+  @override
+  String get keyboardMapMove => 'Move between rows';
+
+  @override
+  String get keyboardMapOpenKeys => 'Enter';
+
+  @override
+  String get keyboardMapOpen => 'Open the row';
+
+  @override
+  String get keyboardMapRowActionsKeys => 'Shift+F10';
+
+  @override
+  String get keyboardMapRowActions => 'Show the row\'s actions';
+
+  @override
+  String get keyboardMapFilter => 'Filter the list';
+
+  @override
+  String get keyboardMapShow => 'Show these shortcuts';
+
+  @override
+  String get keyActionLogs => 'Show logs';
+
+  @override
+  String get keyActionShell => 'Open a shell';
+
+  @override
+  String get keyActionRestart => 'Restart';
+
+  @override
   String get paletteActions => 'Actions';
 
   @override
