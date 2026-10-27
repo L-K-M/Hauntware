@@ -4078,6 +4078,25 @@ TLS. The section checks when it shows, after an edit and on request.
   the top processes and to System for recent out-of-memory kills, which
   stay their own reads.
 
+  As built (M6 N53d), the attention queue (TRI-03) reads cached results
+  only: each fleet server's link (blocked, or failed or backing off), its
+  raised alerts, and where this run holds them its failed units, mounts
+  at the fleet rows' critical level (space or inodes, 90 %) and
+  unhealthy containers. The fleet list counts the unacknowledged ones in
+  a notice that opens the queue (`ui/attention.dart`). Acknowledging
+  takes an optional note of up to 500 code points and hides the problem
+  until a reading shows it cleared, so the same problem coming back asks
+  again; a kind the run holds no reading for keeps its
+  acknowledgements, as do a link's while it is idle, connecting,
+  waiting for the user or closed without a failure, so a relaunch or a
+  retry between backoffs does not reopen them, and a server that leaves
+  the fleet loses them. Alerts last one run (7.19), so an alert raised
+  again after a relaunch asks again. They
+  stay on this device in `settings.json`
+  (`klabautermann.attention.acknowledged`: by server id, each problem's
+  kind and subject with when and the note; anything unreadable reads as
+  none).
+
   As built (M6 N37a, collector-set version 11), the slow `temps`
   collector reads each hwmon chip's `temp<N>_input` with its `_max`,
   `_crit` and `_label` through builtins, without `sensors`, and lists the

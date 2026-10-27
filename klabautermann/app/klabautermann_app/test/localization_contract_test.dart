@@ -258,6 +258,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'..'",
   },
   'lib/controllers/sync_controller.dart': {"'the engine stopped'"},
+  // TRI-03's acknowledgement keys (kind and subject) and the fields they
+  // are stored under in settings.json.
+  'lib/controllers/attention.dart': {
+    r"'${kind.name}:${subject ?? ''}'",
+    "''",
+    "':'",
+    "'at'",
+    "'note'",
+  },
   // A Docker query id the engine echoes in its answer (03 §10.1).
   // The query and watch ids the engine keys Docker answers by (03 §10.1).
   'lib/controllers/docker_controller.dart': {

@@ -11658,5 +11658,136 @@
         "type": "String"
       }
     }
+  },
+  "attentionNotice": "{count, plural, =1{1 problem needs attention} other{{count} problems need attention}}",
+  "@attentionNotice": {
+    "description": "Fleet list: the attention notice (TRI-03), counting the unacknowledged problems.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "attentionShow": "Show",
+  "@attentionShow": {
+    "description": "Fleet list: opens the attention queue."
+  },
+  "attentionTitle": "Attention",
+  "@attentionTitle": {
+    "description": "Title of the attention queue (TRI-03)."
+  },
+  "attentionIntro": "Problems across the fleet, from what this device has read this run. Acknowledging one hides it until it clears; acknowledgements stay on this device.",
+  "@attentionIntro": {
+    "description": "Attention queue: what it lists and how acknowledging works."
+  },
+  "attentionNone": "Nothing needs attention.",
+  "@attentionNone": {
+    "description": "Attention queue: no unacknowledged problem."
+  },
+  "attentionAcknowledgedHeading": "{count, plural, =1{Acknowledged (1)} other{Acknowledged ({count})}}",
+  "@attentionAcknowledgedHeading": {
+    "description": "Attention queue: heading over the acknowledged problems.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "attentionClose": "Close",
+  "@attentionClose": {
+    "description": "Attention queue: closes it."
+  },
+  "attentionAcknowledgedAt": "Acknowledged {time}",
+  "@attentionAcknowledgedAt": {
+    "description": "Attention queue: when a problem was acknowledged, in this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "attentionAcknowledge": "Acknowledge",
+  "@attentionAcknowledge": {
+    "description": "Attention queue: acknowledges a problem, after an optional note."
+  },
+  "attentionReopen": "Reopen",
+  "@attentionReopen": {
+    "description": "Attention queue: takes an acknowledgement back."
+  },
+  "attentionOpenServer": "Open server",
+  "@attentionOpenServer": {
+    "description": "Attention queue: opens the problem's server."
+  },
+  "attentionBlocked": "Connecting is blocked until you decide, for example about a changed host key.",
+  "@attentionBlocked": {
+    "description": "Attention queue: the engine will not dial the server until the user decides (D46)."
+  },
+  "attentionUnreachable": "Cannot be reached: the last attempt failed.",
+  "@attentionUnreachable": {
+    "description": "Attention queue: the link failed or waits before dialling again."
+  },
+  "attentionAlert": "Alert raised: {metric}",
+  "@attentionAlert": {
+    "description": "Attention queue: an in-app alert is raised, with its metric's name.",
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionFailedUnit": "Unit failed: {unit}",
+  "@attentionFailedUnit": {
+    "description": "Attention queue: a failed systemd unit.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionDiskFull": "{mount} is {percent} full",
+  "@attentionDiskFull": {
+    "description": "Attention queue: a mount's space at the critical level.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionInodesFull": "{mount} uses {percent} of its inodes",
+  "@attentionInodesFull": {
+    "description": "Attention queue: a mount's inodes at the critical level.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionUnhealthy": "Container unhealthy: {container}",
+  "@attentionUnhealthy": {
+    "description": "Attention queue: a container whose health check fails.",
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionNoteTitle": "Acknowledge the problem",
+  "@attentionNoteTitle": {
+    "description": "Attention queue: title of the note dialog."
+  },
+  "attentionNoteLabel": "Note (optional)",
+  "@attentionNoteLabel": {
+    "description": "Attention queue: the note field's label."
+  },
+  "attentionCancel": "Cancel",
+  "@attentionCancel": {
+    "description": "Attention queue: closes the note dialog without acknowledging."
   }
 }

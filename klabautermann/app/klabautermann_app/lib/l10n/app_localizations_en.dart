@@ -9761,4 +9761,103 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String attentionNotice(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count problems need attention',
+      one: '1 problem needs attention',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get attentionShow => 'Show';
+
+  @override
+  String get attentionTitle => 'Attention';
+
+  @override
+  String get attentionIntro =>
+      'Problems across the fleet, from what this device has read this run. Acknowledging one hides it until it clears; acknowledgements stay on this device.';
+
+  @override
+  String get attentionNone => 'Nothing needs attention.';
+
+  @override
+  String attentionAcknowledgedHeading(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Acknowledged ($count)',
+      one: 'Acknowledged (1)',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get attentionClose => 'Close';
+
+  @override
+  String attentionAcknowledgedAt(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Acknowledged $timeString';
+  }
+
+  @override
+  String get attentionAcknowledge => 'Acknowledge';
+
+  @override
+  String get attentionReopen => 'Reopen';
+
+  @override
+  String get attentionOpenServer => 'Open server';
+
+  @override
+  String get attentionBlocked =>
+      'Connecting is blocked until you decide, for example about a changed host key.';
+
+  @override
+  String get attentionUnreachable =>
+      'Cannot be reached: the last attempt failed.';
+
+  @override
+  String attentionAlert(String metric) {
+    return 'Alert raised: $metric';
+  }
+
+  @override
+  String attentionFailedUnit(String unit) {
+    return 'Unit failed: $unit';
+  }
+
+  @override
+  String attentionDiskFull(String mount, String percent) {
+    return '$mount is $percent full';
+  }
+
+  @override
+  String attentionInodesFull(String mount, String percent) {
+    return '$mount uses $percent of its inodes';
+  }
+
+  @override
+  String attentionUnhealthy(String container) {
+    return 'Container unhealthy: $container';
+  }
+
+  @override
+  String get attentionNoteTitle => 'Acknowledge the problem';
+
+  @override
+  String get attentionNoteLabel => 'Note (optional)';
+
+  @override
+  String get attentionCancel => 'Cancel';
 }
