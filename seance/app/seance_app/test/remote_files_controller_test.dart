@@ -329,14 +329,16 @@ void main() {
       expect(files.reportedShellDirectory, isNull);
     });
 
-    test('an Enter during the first read asks once more after it', () async {
+    test('opening during a read asks once more after it', () async {
+      // The read in flight may have looked before the shell moved.
       final first = Completer<RemoteCommandResult>();
       answers = [first.future, '/var/log'];
       final files = controller();
 
       final opening = files.initialize();
-      await _until(() => reads == 1);
-      shellMoved.value++; // `cd /var/log` typed right after connecting
+      // Home is known just before the pane asks where the shell is.
+      await _until(() => files.homePath != null);
+      expect(reads, 1);
       first.complete(_shellAnswer('/home/test'));
       await opening;
 

@@ -249,10 +249,11 @@ void main() {
     });
   });
 
-  test('readNow joins the read in flight', () {
+  test('readNow during a read answers with it, then asks once more', () {
     fakeAsync((async) {
+      // The shell may have moved since the read in flight looked.
       final slow = Completer<RemoteCommandResult>();
-      answers = [slow.future];
+      answers = [slow.future, '/home/test'];
       final shell = location();
       var answered = false;
       unawaited(shell.readNow().then((_) => answered = true));
@@ -262,8 +263,8 @@ void main() {
       slow.complete(_answer('/var/log'));
       async.flushMicrotasks();
       expect(answered, isTrue);
-      expect(shell.value, '/var/log');
-      expect(reads, 1);
+      expect(reads, 2);
+      expect(shell.value, '/home/test');
     });
   });
 

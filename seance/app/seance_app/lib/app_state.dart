@@ -46,9 +46,9 @@ class SessionMetadata {
   final String? terminalTitle;
 
   /// The command the session has been running for a while (already redacted),
-  /// or null at a prompt. Unlike the fields above this is *not* kept-last:
-  /// it names what the tab is doing, and a finished command must fall back
-  /// to where the tab is.
+  /// or null at a prompt. Unlike the title this is *not* kept-last: it names
+  /// what the tab is doing, and a finished command must fall back to where
+  /// the tab is.
   final String? runningCommand;
 
   const SessionMetadata({
