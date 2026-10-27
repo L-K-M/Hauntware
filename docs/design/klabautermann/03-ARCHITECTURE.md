@@ -7950,7 +7950,7 @@ codec's lenient reading; v1 adds nothing beyond it.
   operating system's text scale and wrap or scroll rather than cut a key
   value short; the panel tests check their own layouts at 200 %, and
   `test/text_scaling_test.dart` checks every server panel on a phone and
-  on the desktop with readings in place, every Settings tab and the
+  on the desktop with readings in place, every phone Settings tab and the
   shared server editor at 200 % with no overflow. The editor's
   authentication menu and appearance heading wrap in `ghost_servers`, so
   Séance and Poltergeist gain the same fix.

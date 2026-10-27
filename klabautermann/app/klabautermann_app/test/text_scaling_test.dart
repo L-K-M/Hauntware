@@ -82,11 +82,17 @@ void main() {
     await settle(tester);
     expect(find.textContaining('trixie'), findsWidgets, reason: 'read');
 
+    // Every tab the workspace shows, whatever panels it holds.
     final tabs = DefaultTabController.of(tester.element(find.byType(TabBar)));
-    for (final panel in ServerPanel.values) {
-      tabs.index = panel.index;
+    expect(tabs.length, ServerPanel.values.length);
+    for (var index = 0; index < tabs.length; index++) {
+      tabs.index = index;
       await settle(tester);
-      expect(tester.takeException(), isNull, reason: panel.name);
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: ServerPanel.values[index].name,
+      );
     }
   });
 
@@ -104,6 +110,7 @@ void main() {
     await settle(tester);
     _emitReadings(harness);
     await settle(tester);
+    expect(find.textContaining('trixie'), findsWidgets, reason: 'read');
 
     final bar = find.byType(NavigationBar);
     final destinations = tester.widget<NavigationBar>(bar).destinations.length;
