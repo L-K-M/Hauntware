@@ -1595,7 +1595,8 @@ final class SyncRecordUsage {
 /// The prefix the account size view groups a record [id] under (SYN-09):
 /// a `klabautermann:` record's type with the prefix
 /// (`klabautermann:pref`), any other record's first segment (`snippet`),
-/// or the whole id when it has no `:`.
+/// or the whole id when it has no `:`, or is `klabautermann:` and a type
+/// with no further `:`.
 String syncRecordPrefixOf(String id) {
   final first = id.indexOf(':');
   if (first < 0) return id;

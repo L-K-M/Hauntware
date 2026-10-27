@@ -510,7 +510,10 @@ class _AccountSizeSection extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               dense: true,
               title: Text(row.prefix),
-              trailing: Text(
+              // Under the prefix rather than beside it: a trailing figure
+              // takes its full width and overflows a narrow window at
+              // large text (A11Y-09).
+              subtitle: Text(
                 l10n.settingsAccountSizeRow(
                   row.records,
                   ghostFormatBinarySize(row.bytes),

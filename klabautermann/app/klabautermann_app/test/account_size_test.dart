@@ -114,4 +114,47 @@ void main() {
     await tester.pump();
     expect(find.textContaining('reached the limit'), findsOneWidget);
   });
+
+  testWidgets('the rows fit a narrow window at 200 % text (A11Y-09)', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final syncSecrets = SyncSecretsController(apply: (_) {});
+    final size = ValueNotifier<AccountSize?>(
+      accountSizeOf(
+        SyncPrefixBudget(
+          900 * 1024,
+          byPrefix: {
+            'klabautermann:serverConfig': const SyncRecordUsage(
+              records: 1234,
+              bytes: 900 * 1024,
+            ),
+          },
+        ),
+      ),
+    );
+    addTearDown(() {
+      syncSecrets.dispose();
+      size.dispose();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: SyncTab(syncSecrets: syncSecrets, accountSize: size),
+        ),
+      ),
+    );
+    expect(find.textContaining('records, 900 KiB'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
