@@ -7272,6 +7272,21 @@ the engine in `engine_isolate.dart` beside it):
   and the `.deb` description to `kPreviewLabel`
   (`app/klabautermann_app/lib/app_identity.dart`), and M7 drops the label
   in one change (11.7).
+- As built in M6 (N61, OV-10): the bottom dock sits under the workspace's
+  panels. `WorkspaceDock`, which the desktop shell owns, holds its items:
+  the server's journal (the Logs panel, streaming only while it shows),
+  a unit run's output (JOB-08), a cron line's or snippet's run (JOB-19,
+  AUT-01), and container shells. Each server keeps its own items, and
+  every item stays built while open, so a shell keeps running and a
+  follow keeps its lines while another server or a collapsed dock hides
+  it. A server that leaves the fleet takes its items. The button beside
+  the tab strip opens the server's logs when the dock holds nothing of
+  it, and otherwise expands or collapses the dock. A tab per item can be
+  closed, which ends its follow or shell. The top edge resizes the dock
+  by drag or by the arrow keys, from 120 px to 70% of the workspace. On
+  the desktop, run output and the inspector's shell button open in the
+  dock. Phones and narrower layouts keep the bottom sheets and pushed
+  shell page, as 02 OV-10 notes for mobile.
 
 ### 10.3 Fleet view
 
