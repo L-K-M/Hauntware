@@ -83,6 +83,7 @@ import 'package:seance_core/seance_core.dart' show DangerFinding, Snippet;
 import '../catalog/klabautermann_records.dart' show SyncedRule;
 import '../certificates/tls_check.dart' show TlsEndpoint, TlsEndpointCheck;
 import '../history/history_store.dart' show HistoryRange, HistoryTier;
+import '../docker/dropbear.dart' show DropbearRelease;
 import '../docker/docker_ladder.dart'
     show
         DockerNoRouteReason,
@@ -5404,11 +5405,17 @@ final class DockerEndpointRoute {
     required this.runtime,
     required this.rootEquivalence,
     this.mode,
+    this.peerCredentialsExposedBy,
     this.dockerProgram = 'docker',
   });
 
   final DockerRank rank;
   final String socketPath;
+
+  /// The Dropbear release a socket forward runs through when it is one
+  /// where the engine sees forwarded connections as root (CN-15,
+  /// CVE-2025-14282); null on other servers and on relays.
+  final DropbearRelease? peerCredentialsExposedBy;
 
   /// The program compose commands run for `docker` on this server: its
   /// [SetDockerProgram] path, or `docker` on the exec `PATH` (CN-16).
