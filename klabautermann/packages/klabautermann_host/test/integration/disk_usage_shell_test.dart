@@ -16,9 +16,13 @@ final _shells = {
       if (File('$dir/$name').existsSync()) name: '$dir/$name',
 };
 
-Future<DiskUsageParse> _read(String shell, String path) async {
+Future<DiskUsageParse> _read(
+  String shell,
+  String path, {
+  Map<String, String>? environment,
+}) async {
   final argv = HostCommands.diskUsage(path);
-  final r = await Process.run(shell, argv.sublist(1));
+  final r = await Process.run(shell, argv.sublist(1), environment: environment);
   expect(r.exitCode, 0, reason: '${r.stderr}');
   return parseDiskUsage(r.stdout as String, path);
 }
@@ -53,6 +57,32 @@ void main() {
       expect(byName.keys, containsAll(['small', 'with space', 'link']));
       expect(byName['link']!.isFolder, isFalse);
       expect(byName['small']!.isFolder, isFalse);
+    });
+
+    test('$name: a du that prints more errors than are kept still '
+        'lists the whole folder', () async {
+      // More than a pipe holds, so a cut that stopped reading would end
+      // this du before its listing: as SIGPIPE ends du under sshd, though
+      // this test's processes ignore it, the fake exits on a failed write.
+      final bin = Directory('${root.path}/bin')..createSync();
+      final du = File('${bin.path}/du')
+        ..writeAsStringSync(
+          '#!/bin/sh\n'
+          'i=0; while [ \$i -lt 2000 ]; do '
+          'echo "du: cannot read directory \'/x/\$i\': Permission denied" >&2 || exit 141; '
+          'i=\$((i + 1)); done\n'
+          'for p; do :; done\n'
+          'printf "8\\t%s\\n4\\t%s/small\\n" "\$p" "\$p"\n',
+        );
+      await Process.run('chmod', ['+x', du.path]);
+
+      final listing = (await _read(
+        shell,
+        root.path,
+        environment: {'PATH': '${bin.path}:${Platform.environment['PATH']}'},
+      )).listing!;
+      expect(listing.incomplete, isTrue);
+      expect(listing.entries.single.name, 'small');
     });
 
     test('$name: a missing folder says so', () async {

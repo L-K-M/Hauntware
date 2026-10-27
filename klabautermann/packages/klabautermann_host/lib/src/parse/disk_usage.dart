@@ -57,8 +57,8 @@ final class DiskUsageListing {
   /// Largest first.
   final List<DiskUsageEntry> entries;
 
-  /// The folder holds more entries than [kDiskUsageEntries], the largest
-  /// of which are listed.
+  /// The list reached [kDiskUsageEntries], the folder's largest; a folder
+  /// with exactly that many entries reads as truncated too.
   final bool truncated;
 
   /// `du` could not read something under the folder, so the sizes are a
@@ -138,8 +138,7 @@ DiskUsageParse parseDiskUsage(String stdout, String path) {
     return const DiskUsageParse.problem(DiskUsageProblem.unreadable);
   }
 
-  // The sort already ordered them; ties keep its order.
-  entries.sort((a, b) => b.bytes.compareTo(a.bytes));
+  // `sort -rn` already listed them largest first, which the list keeps.
   return DiskUsageParse.listing(
     DiskUsageListing(
       path: path,

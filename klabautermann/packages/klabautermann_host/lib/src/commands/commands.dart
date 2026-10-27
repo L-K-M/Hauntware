@@ -387,7 +387,7 @@ const kMountsSwapsMarker = '== swaps';
 const kDiskUsageErrorsMarker = '== du errors';
 
 /// The most entries one [HostCommands.diskUsage] read lists, largest
-/// first [E]: a folder of mail or cache files can hold far more than a
+/// first: a folder of mail or cache files can hold far more than a
 /// list is useful for.
 const kDiskUsageEntries = 1000;
 
@@ -1111,7 +1111,8 @@ printf '%s\\n' "\$o"''';
   /// [kDiskUsageEntries] of them, each marked `d` for a folder (not a
   /// symlink) or `f` for anything else; then [kDiskUsageErrorsMarker]
   /// and the first 2 KiB of what `du` printed on stderr, such as the
-  /// folders it could not read. Portable to BusyBox and BSD `du`, which
+  /// folders it could not read, in the C locale the parser matches; the
+  /// rest is drained, so `du` walks the whole folder. Portable to BusyBox and BSD `du`, which
   /// take the same flags. `parseDiskUsage` reads it. [path] is absolute
   /// and normalized, without a trailing slash unless it is `/`.
   static List<String> diskUsage(String path) {
@@ -1126,13 +1127,15 @@ printf '%s\\n' "\$o"''';
   // only stderr; a name with a newline in it splits into lines the
   // parser drops, as `du` has no way to quote it.
   static const _kDiskUsageScript =
+      'export LC_ALL=C\n'
       't=\$(printf "\\t")\n'
       'exec 3>&1\n'
       'err=\$( { du -x -k -a -d 1 -- "\$1" | sort -rn | '
       'head -n ${kDiskUsageEntries + 1} | '
       'while IFS= read -r l; do p=\${l#*"\$t"}; '
       'if [ -d "\$p" ] && [ ! -L "\$p" ]; then k=d; else k=f; fi; '
-      'printf "%s\\t%s\\n" "\$k" "\$l" >&3; done; } 2>&1 | head -c 2048 )\n'
+      'printf "%s\\t%s\\n" "\$k" "\$l" >&3; done; } 2>&1 | '
+      '{ head -c 2048; cat >/dev/null; } )\n'
       'exec 3>&-\n'
       'echo "$kDiskUsageErrorsMarker"\n'
       'printf "%s\\n" "\$err"\n'
