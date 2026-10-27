@@ -13468,6 +13468,138 @@ abstract class AppLocalizations {
   /// **'Command Palette…'**
   String get paletteCommand;
 
+  /// A mount's details: opens the disk space explorer on the mount (DSK-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Explore space'**
+  String get diskExplorerOpen;
+
+  /// Disk space explorer title: the mount point it explores.
+  ///
+  /// In en, this message translates to:
+  /// **'Space on {mount}'**
+  String diskExplorerTitle(String mount);
+
+  /// Disk space explorer: reads the shown folder again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get diskExplorerRefresh;
+
+  /// Disk space explorer: shows the folder above, never above the mount point.
+  ///
+  /// In en, this message translates to:
+  /// **'Up a folder'**
+  String get diskExplorerUp;
+
+  /// Disk space explorer, in admin mode: reads folders as root.
+  ///
+  /// In en, this message translates to:
+  /// **'Read as root'**
+  String get diskExplorerAsRoot;
+
+  /// Disk space explorer: what reading as root changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Counts what the login user may not read.'**
+  String get diskExplorerAsRootDetail;
+
+  /// Disk space explorer: a folder is being read with du.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading {path}… A large folder takes a while.'**
+  String diskExplorerReading(String path);
+
+  /// Disk space explorer: reads a folder that failed again.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get diskExplorerRetry;
+
+  /// Disk space explorer: the shown folder's total size.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} in this folder'**
+  String diskExplorerTotal(String size);
+
+  /// Disk space explorer: du could not read part of the folder; admin mode is off.
+  ///
+  /// In en, this message translates to:
+  /// **'Some folders here could not be read as the login user, so the sizes are at least this. Turn on admin mode to read them as root.'**
+  String get diskExplorerIncomplete;
+
+  /// Disk space explorer: du could not read part of the folder; admin mode is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Some folders here could not be read as the login user, so the sizes are at least this. Read as root to count them.'**
+  String get diskExplorerIncompleteAdmin;
+
+  /// Disk space explorer: du could not read part of the folder as root.
+  ///
+  /// In en, this message translates to:
+  /// **'Some folders here could not be read even as root, so the sizes are at least this.'**
+  String get diskExplorerIncompleteAsRoot;
+
+  /// Disk space explorer: the folder holds more entries than listed.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the {count} largest entries.'**
+  String diskExplorerTruncated(int count);
+
+  /// Disk space explorer: a folder with no entries.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder is empty.'**
+  String get diskExplorerEmpty;
+
+  /// Disk space explorer: an entry's size and its share of the folder.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} · {percent} %'**
+  String diskExplorerEntrySize(String size, int percent);
+
+  /// Disk space explorer failure: no link.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected, so nothing was read.'**
+  String get diskExplorerNoLink;
+
+  /// Disk space explorer failure: an elevated read without admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading as root needs admin mode.'**
+  String get diskExplorerAdminRequired;
+
+  /// Disk space explorer failure: sudo refused.
+  ///
+  /// In en, this message translates to:
+  /// **'Elevation was refused, so nothing was read.'**
+  String get diskExplorerRefused;
+
+  /// Disk space explorer failure: the folder is gone.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder is not there any more.'**
+  String get diskExplorerNotFound;
+
+  /// Disk space explorer failure: permission denied.
+  ///
+  /// In en, this message translates to:
+  /// **'The login user may not read this folder. Turn on admin mode to read it as root.'**
+  String get diskExplorerDenied;
+
+  /// Disk space explorer failure: du missing or unreadable output.
+  ///
+  /// In en, this message translates to:
+  /// **'du is not installed on this server, or printed something else.'**
+  String get diskExplorerUnreadable;
+
+  /// Disk space explorer failure: link failed or the read timed out (kDiskUsageTimeout).
+  ///
+  /// In en, this message translates to:
+  /// **'The read failed or ran past its 3 minutes. Try a folder further down.'**
+  String get diskExplorerTransport;
+
   /// Command palette: the path of the app's menu commands.
   ///
   /// In en, this message translates to:

@@ -334,6 +334,22 @@ void main() {
       expect(accounts.requestId, 'r-5');
       expect(accounts.failure, AccountsReportFailure.noLink);
 
+      // DSK-07's folder read answers without a link, elevated or not.
+      for (final elevated in [false, true]) {
+        client.send(
+          ReadDiskUsage(
+            'ssh-config:web',
+            '/var',
+            requestId: 'r-du-$elevated',
+            elevated: elevated,
+          ),
+        );
+        final usage = (await next(events)) as DiskUsageReport;
+        expect(usage.requestId, 'r-du-$elevated');
+        expect(usage.path, '/var');
+        expect(usage.failure, DiskUsageReportFailure.noLink);
+      }
+
       // JOB-02's timer read answers without a link.
       client.send(
         const ReadTimerDetail('ssh-config:web', 'a.timer', requestId: 'r-t'),

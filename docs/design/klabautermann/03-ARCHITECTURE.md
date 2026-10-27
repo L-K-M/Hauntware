@@ -3614,6 +3614,30 @@ the guarded kill needs it.
   when it shows and on request, and lists each swap partition or file
   with how much is used of its size and its priority, the device used
   first at the top.
+- **As built (M6 N32).** DSK-07 reads one folder at a time:
+  `HostCommands.diskUsage` runs `du -x -k -a -d 1` over the folder (the
+  same flags on GNU, BusyBox and BSD `du`), sorts it largest first and
+  keeps the folder's total and at most 1,000 entries (`kDiskUsageEntries`
+  [E]), marking each `d` for a folder that is not a symlink, then the
+  first 2 KiB of what `du` said on stderr. `parseDiskUsage` reads that
+  into a listing in bytes, incomplete when `du` could not read something
+  under the folder and cut short at 1,000 entries; without the folder's
+  own total, the errors say whether it is gone, denied or `du` missing.
+  `ReadDiskUsage` runs it as the login user over the link or, with
+  `elevated`, through admin mode's executor, under a 3 minute timeout
+  (`kDiskUsageTimeout`); one `DiskUsageReport` answers it. A mount's
+  details in the System tab's Disks section open "Explore space" on the
+  mount point, a page that lists a folder's entries with their share of
+  it, opens a folder on a tap and steps back up, never above the mount
+  point. Each folder is read once, when it first opens, with Read again
+  for a fresh read; in admin mode "Read as root" reads the same folders
+  as root. It says when sizes are a lower bound and how to count the
+  rest. *Not built:* streaming `ncdu -x -o -` or `gdu -o-`, which export
+  the whole tree in one run. On a large filesystem that export passes
+  the 1 MiB a host read keeps, and reading it needs a streamed parser,
+  so the explorer reads each folder as it opens instead, the fallback
+  this row names. The explorer is read-only; deleting stays with
+  DSK-08 (v1.x).
 - **v1.x.** "Open in Poltergeist" for deletion (DSK-08), layout (`lsblk -J
   -b`, LVM JSON reports with sudo), ZFS, mdraid, network mounts with
   stale-mount detection, cleanup suggestions with sizes and previews, fill
