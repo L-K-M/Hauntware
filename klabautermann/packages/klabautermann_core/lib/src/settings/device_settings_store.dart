@@ -40,6 +40,7 @@ const String _appLockKey = 'klabautermann.appLock';
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
 const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
 const String _tlsEndpointsKey = 'klabautermann.certificates.endpoints';
+const String _cadenceKey = 'klabautermann.sampling.cadence';
 
 // The fields of one server's entry under [_endpointOverridesKey].
 const String _overrideChoiceField = 'choice';
@@ -338,6 +339,22 @@ final class DeviceSettingsStore {
   /// way.
   Future<void> setSyncSecrets(bool enabled) async {
     _values[_syncSecretsKey] = enabled;
+    await _save();
+  }
+
+  /// The device's polling budget preset (SAF-19),
+  /// `klabautermann.sampling.cadence`, as the name the app stored, or null
+  /// when there is none or it is not a string; the app reads a name it
+  /// does not know as its default.
+  String? get cadence => switch (_values[_cadenceKey]) {
+    final String name => name,
+    _ => null,
+  };
+
+  /// Stores [name] and writes the document. Throws when the write fails
+  /// or this session is read-only; the value stays in memory either way.
+  Future<void> setCadence(String name) async {
+    _values[_cadenceKey] = name;
     await _save();
   }
 

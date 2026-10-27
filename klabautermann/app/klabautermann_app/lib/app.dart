@@ -15,6 +15,7 @@ import 'controllers/alert_center.dart';
 import 'controllers/alert_notifications.dart';
 import 'controllers/alert_rules_controller.dart';
 import 'controllers/announcement_controller.dart';
+import 'controllers/cadence_controller.dart';
 import 'controllers/app_lock_controller.dart';
 import 'controllers/pin_publication_controller.dart';
 import 'controllers/safety_controller.dart';
@@ -70,6 +71,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.appearance,
     required this.coverage,
     required this.announcements,
+    this.cadence,
     this.deviceName,
     this.safety,
     this.appLock,
@@ -107,6 +109,10 @@ class KlabautermannApp extends StatelessWidget {
   /// Whether threshold-band changes are announced (A11Y-15, D60); like
   /// [appearance], it outlives an engine run.
   final AnnouncementController announcements;
+
+  /// The polling budget (SAF-19) in Settings; null in tests that leave it
+  /// out.
+  final CadenceController? cadence;
 
   /// The safety preferences the engine enforces (M4 plan M4); like
   /// [appearance], they outlive an engine run. Null in tests that leave
@@ -400,6 +406,7 @@ class KlabautermannApp extends StatelessWidget {
             kSettingsRoute: (_) => SettingsPage(
               appearance: appearance,
               announcements: announcements,
+              cadence: cadence,
               deviceName: deviceName,
               appVersion: appVersion,
               monitorSet: fleet.monitorSettings,

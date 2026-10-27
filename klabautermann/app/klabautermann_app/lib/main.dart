@@ -16,6 +16,7 @@ import 'controllers/alert_notifications.dart';
 import 'controllers/alert_rules_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
+import 'controllers/cadence_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/device_name.dart';
 import 'controllers/pin_publication_controller.dart';
@@ -314,6 +315,18 @@ Future<void> main(List<String> args) async {
     save: settings.setAnnounceThresholdBands,
   );
 
+  // The polling budget (SAF-19), kept per device in settings.json; the
+  // engine samples at its 6.4 column from the start and follows changes.
+  final cadence = CadenceController(
+    preset: CadencePreset.parse(settings.cadence),
+    save: settings.setCadence,
+  );
+  void applyCadence() => monitoring.setCadenceProfile(
+    cadence.value.profileOn(defaultTargetPlatform),
+  );
+  applyCadence();
+  cadence.addListener(applyCadence);
+
   // The synced servers' preferences (03 §4.8), as the engine reports their
   // `pref` records.
   final serverPrefs = ServerPrefsController(engine);
@@ -396,6 +409,7 @@ Future<void> main(List<String> args) async {
     appLock: appLock,
     syncSecrets: syncSecrets,
     pinPublication: pinPublication,
+    cadence: cadence,
   );
 
   runApp(
@@ -406,6 +420,7 @@ Future<void> main(List<String> args) async {
       appearance: appearance,
       coverage: coverage,
       announcements: announcements,
+      cadence: cadence,
       deviceName: deviceName,
       safety: safety,
       appLock: appLock,

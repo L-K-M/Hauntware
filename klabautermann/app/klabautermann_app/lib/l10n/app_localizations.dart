@@ -5418,6 +5418,42 @@ abstract class AppLocalizations {
   /// **'Accessibility'**
   String get settingsAccessibilityTitle;
 
+  /// Settings, General: the heading of the polling budget section (SAF-19).
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get settingsCadenceTitle;
+
+  /// Settings, General: the label beside the polling budget's preset menu (SAF-19).
+  ///
+  /// In en, this message translates to:
+  /// **'How often servers are read'**
+  String get settingsCadenceLabel;
+
+  /// Settings, General: a polling budget preset in its menu.
+  ///
+  /// In en, this message translates to:
+  /// **'{preset, select, automatic{Automatic} desktop{Desktop} phone{Phone} other{Cellular saver}}'**
+  String settingsCadencePreset(String preset);
+
+  /// Settings, General: what the chosen polling budget preset reads how often (03 §6.4).
+  ///
+  /// In en, this message translates to:
+  /// **'{preset, select, automatic{Desktop rates on a computer, phone rates on a phone or tablet.} desktop{Fleet rows every 5 s, the open server every 2 s.} phone{Fleet rows every 10 s, the open server every 3 s, to save battery.} other{Fleet rows every 30 s, the open server every 10 s; timers, cron jobs, temperatures, GPUs and disk health are read once when you open them.}}'**
+  String settingsCadenceDetail(String preset);
+
+  /// Settings, General: toast when the polling budget applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The refresh rate changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get settingsCadenceNotSaved;
+
+  /// Settings, General: toast when the polling budget change failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The refresh rate could not be changed.'**
+  String get settingsCadenceNotChanged;
+
   /// Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level.
   ///
   /// In en, this message translates to:

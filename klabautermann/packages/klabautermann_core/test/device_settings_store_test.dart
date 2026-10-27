@@ -14,6 +14,7 @@ const _alertNotificationsKey = 'klabautermann.alerts.notifications';
 const _appLockKey = 'klabautermann.appLock';
 const _syncSecretsKey = 'klabautermann.sync.secrets';
 const _deviceNameKey = 'klabautermann.audit.deviceName';
+const _cadenceKey = 'klabautermann.sampling.cadence';
 const _overridesKey = 'klabautermann.docker.endpointOverrides';
 const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const _monitorSetKey = 'klabautermann.monitorSet';
@@ -507,6 +508,20 @@ void main() {
         });
         expect((await DeviceSettingsStore.open(file)).deviceName, isNull);
       }
+    });
+
+    test('keeps the polling budget\'s preset name across reloads, and reads '
+        'a missing or damaged one as none (SAF-19)', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.cadence, isNull);
+      await store.setCadence('cellularSaver');
+      expect(document()[_cadenceKey], 'cellularSaver');
+      expect((await DeviceSettingsStore.open(file)).cadence, 'cellularSaver');
+
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a', _cadenceKey: 3});
+      expect((await DeviceSettingsStore.open(file)).cadence, isNull);
     });
 
     test('posts no alert notification until turned on, keeps it off once '
