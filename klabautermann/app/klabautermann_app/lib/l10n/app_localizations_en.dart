@@ -4369,6 +4369,64 @@ class AppLocalizationsEn extends AppLocalizations {
       'While a server\'s Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.';
 
   @override
+  String get settingsThresholdsTitle => 'Usage bands';
+
+  @override
+  String get settingsThresholdsDetail =>
+      'The levels the fleet rows, the Overview and its health card judge each metric by. Careful shows an info icon, warning and critical also take their colour, and only warning and critical are announced.';
+
+  @override
+  String get settingsThresholdCareful => 'Careful from';
+
+  @override
+  String get settingsThresholdWarning => 'Warning from';
+
+  @override
+  String get settingsThresholdCritical => 'Critical from';
+
+  @override
+  String get settingsThresholdPercentSuffix => '%';
+
+  @override
+  String get settingsThresholdsInvalid =>
+      'Each level must be a whole percent from 1 to 100, and each one higher than the one before.';
+
+  @override
+  String get settingsThresholdDefault => 'Default';
+
+  @override
+  String get settingsThresholdCancel => 'Cancel';
+
+  @override
+  String get settingsThresholdSave => 'Save';
+
+  @override
+  String get settingsThresholdsNotSaved =>
+      'The levels changed but could not be saved. They last until Klabautermann quits.';
+
+  @override
+  String get settingsThresholdsNotChanged => 'The levels could not be changed.';
+
+  @override
+  String settingsThresholdMetric(String metric) {
+    String _temp0 = intl.Intl.selectLogic(metric, {
+      'cpu': 'CPU',
+      'memory': 'Memory',
+      'other': 'Disk',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String settingsThresholdLevels(
+    String careful,
+    String warning,
+    String critical,
+  ) {
+    return 'Careful from $careful, warning from $warning, critical from $critical';
+  }
+
+  @override
   String get settingsAnnounceNotSaved =>
       'The setting changed, but it could not be saved, so it will not be kept after a restart.';
 

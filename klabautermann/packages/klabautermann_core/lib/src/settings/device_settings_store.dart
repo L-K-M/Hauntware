@@ -40,6 +40,7 @@ const String _appLockKey = 'klabautermann.appLock';
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
 const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
 const String _containerColumnsKey = 'klabautermann.docker.containerColumns';
+const String _thresholdsKey = 'klabautermann.overview.thresholds';
 const String _tlsEndpointsKey = 'klabautermann.certificates.endpoints';
 const String _cadenceKey = 'klabautermann.sampling.cadence';
 const String _attentionKey = 'klabautermann.attention.acknowledged';
@@ -463,6 +464,38 @@ final class DeviceSettingsStore {
   /// the value stays in memory either way.
   Future<void> setContainerColumns(List<String> names) async {
     _values[_containerColumnsKey] = [...names];
+    await _save();
+  }
+
+  /// OV-11's threshold levels by metric name,
+  /// `klabautermann.overview.thresholds`: each its careful, warning and
+  /// critical percent, which the app reads against its own metrics. An
+  /// entry that is not three numbers is skipped, as is a value that is
+  /// not an object, rather than failing the file.
+  Map<String, List<double>> get thresholds => switch (_values[_thresholdsKey]) {
+    final Map<String, Object?> byMetric => {
+      for (final MapEntry(:key, :value) in byMetric.entries)
+        if (value case [
+          final num careful,
+          final num warning,
+          final num critical,
+        ])
+          key: List.unmodifiable([
+            careful.toDouble(),
+            warning.toDouble(),
+            critical.toDouble(),
+          ]),
+    },
+    _ => const {},
+  };
+
+  /// Stores [levels] as the threshold levels, replacing every metric's,
+  /// and writes the document. Throws when the write fails or this
+  /// session is read-only; the value stays in memory either way.
+  Future<void> setThresholds(Map<String, List<double>> levels) async {
+    _values[_thresholdsKey] = {
+      for (final MapEntry(:key, :value) in levels.entries) key: [...value],
+    };
     await _save();
   }
 

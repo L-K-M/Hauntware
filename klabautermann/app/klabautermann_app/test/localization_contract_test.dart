@@ -78,6 +78,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/announcement_controller.dart': {
     r"'The announcement setting was not saved: $error'",
   },
+  // The not-saved diagnostic; the Alerts tab prints it and shows its own
+  // ARB text (settingsThresholdsNotSaved).
+  'lib/controllers/threshold_controller.dart': {
+    r"'The threshold levels were not saved: $error'",
+    "'levels'",
+    "'not valid bands'",
+  },
   // The not-saved diagnostic; the General tab prints it and shows its own
   // ARB text (settingsCadenceNotSaved).
   'lib/controllers/cadence_controller.dart': {
@@ -372,6 +379,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'No settings window method $name'",
     "'No pin publication settings'",
     "'No app lock settings'",
+    "'levels'",
+    "'not valid bands'",
   },
   'lib/services/settings_window/remote_settings.dart': {
     "'Settings link closed'",
@@ -908,6 +917,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // debugPrint of a failed theme change; the toast is ARB text.
   'lib/ui/settings_page.dart': {r"'$error'"},
+  'lib/ui/thresholds_tab.dart': {r"'$error'"},
   'lib/ui/sortable_table.dart': {
     // FocusNode debug labels.
     "'SortableTable'",

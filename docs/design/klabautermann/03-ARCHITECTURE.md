@@ -7427,7 +7427,10 @@ reading, in two columns from the System tab's 600 px panel width:
   rows, the Overview's gauges, the health card's disk alarms and the
   announcer read. Careful keeps the series colour and says so by an info
   icon and in words; only warning and critical raise disk alarms or are
-  announced. The user's levels follow in N61b.
+  announced. Settings > Alerts sets each metric's three levels (N61b),
+  whole percents from 1 to 100 in rising order, kept per device in
+  `settings.json` under `klabautermann.overview.thresholds`; the desktop
+  settings window sets them over the link.
 - Every figure goes through the chart formatters' IEC units, and a
   test keeps the decimal `ghostFormatFileSize` and `ghostFormatByteRate`
   out of `lib/`. A figure the container withholds (D50) reads unknown

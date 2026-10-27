@@ -14,6 +14,7 @@ const _alertNotificationsKey = 'klabautermann.alerts.notifications';
 const _appLockKey = 'klabautermann.appLock';
 const _syncSecretsKey = 'klabautermann.sync.secrets';
 const _deviceNameKey = 'klabautermann.audit.deviceName';
+const _thresholdsKey = 'klabautermann.overview.thresholds';
 const _cadenceKey = 'klabautermann.sampling.cadence';
 const _overridesKey = 'klabautermann.docker.endpointOverrides';
 const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
@@ -510,6 +511,42 @@ void main() {
         });
         expect((await DeviceSettingsStore.open(file)).deviceName, isNull);
       }
+    });
+
+    test('keeps the threshold levels across reloads and skips damaged '
+        'entries (OV-11)', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.thresholds, isEmpty);
+      await store.setThresholds({
+        'cpu': [60, 75, 95],
+      });
+      expect(document()[_thresholdsKey], {
+        'cpu': [60.0, 75.0, 95.0],
+      });
+      expect((await DeviceSettingsStore.open(file)).thresholds, {
+        'cpu': [60.0, 75.0, 95.0],
+      });
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _thresholdsKey: {
+          'cpu': [50, 70, 90],
+          'memory': [1, 2],
+          'disk': 'full',
+        },
+      });
+      expect((await DeviceSettingsStore.open(file)).thresholds, {
+        'cpu': [50.0, 70.0, 90.0],
+      });
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _thresholdsKey: 3,
+      });
+      expect((await DeviceSettingsStore.open(file)).thresholds, isEmpty);
     });
 
     test('keeps the polling budget\'s preset name across reloads, and reads '

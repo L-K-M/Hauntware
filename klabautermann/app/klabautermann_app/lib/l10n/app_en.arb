@@ -5306,6 +5306,70 @@
   "@settingsAnnounceBandsDetail": {
     "description": "Explanation under the threshold announcement switch on the General settings tab (A11Y-15)."
   },
+  "settingsThresholdsTitle": "Usage bands",
+  "@settingsThresholdsTitle": {
+    "description": "Settings, Alerts: the heading of OV-11's threshold levels."
+  },
+  "settingsThresholdsDetail": "The levels the fleet rows, the Overview and its health card judge each metric by. Careful shows an info icon, warning and critical also take their colour, and only warning and critical are announced.",
+  "@settingsThresholdsDetail": {
+    "description": "Settings, Alerts: what the usage bands do."
+  },
+  "settingsThresholdCareful": "Careful from",
+  "@settingsThresholdCareful": {
+    "description": "Settings, Alerts, threshold dialog: the careful level's field label."
+  },
+  "settingsThresholdWarning": "Warning from",
+  "@settingsThresholdWarning": {
+    "description": "Settings, Alerts, threshold dialog: the warning level's field label."
+  },
+  "settingsThresholdCritical": "Critical from",
+  "@settingsThresholdCritical": {
+    "description": "Settings, Alerts, threshold dialog: the critical level's field label."
+  },
+  "settingsThresholdPercentSuffix": "%",
+  "@settingsThresholdPercentSuffix": {
+    "description": "Settings, Alerts, threshold dialog: the unit after each level's number."
+  },
+  "settingsThresholdsInvalid": "Each level must be a whole percent from 1 to 100, and each one higher than the one before.",
+  "@settingsThresholdsInvalid": {
+    "description": "Settings, Alerts, threshold dialog: why the levels typed cannot be saved."
+  },
+  "settingsThresholdDefault": "Default",
+  "@settingsThresholdDefault": {
+    "description": "Settings, Alerts, threshold dialog: fills in the default levels (70, 80 and 90 %)."
+  },
+  "settingsThresholdCancel": "Cancel",
+  "@settingsThresholdCancel": {
+    "description": "Settings, Alerts, threshold dialog: closes it without a change."
+  },
+  "settingsThresholdSave": "Save",
+  "@settingsThresholdSave": {
+    "description": "Settings, Alerts, threshold dialog: applies the levels typed."
+  },
+  "settingsThresholdsNotSaved": "The levels changed but could not be saved. They last until Klabautermann quits.",
+  "@settingsThresholdsNotSaved": {
+    "description": "Settings, Alerts: toast when new levels applied but settings.json could not be written."
+  },
+  "settingsThresholdsNotChanged": "The levels could not be changed.",
+  "@settingsThresholdsNotChanged": {
+    "description": "Settings, Alerts: toast when the levels change failed."
+  },
+  "settingsThresholdMetric": "{metric, select, cpu{CPU} memory{Memory} other{Disk}}",
+  "@settingsThresholdMetric": {
+    "description": "Settings, Alerts: a metric whose usage bands are set (OV-11); disk covers space and inodes.",
+    "placeholders": {
+      "metric": {"type": "String", "example": "cpu"}
+    }
+  },
+  "settingsThresholdLevels": "Careful from {careful}, warning from {warning}, critical from {critical}",
+  "@settingsThresholdLevels": {
+    "description": "Settings, Alerts: a metric's three levels, each a formatted percent (chartPercent).",
+    "placeholders": {
+      "careful": {"type": "String", "example": "70%"},
+      "warning": {"type": "String", "example": "80%"},
+      "critical": {"type": "String", "example": "90%"}
+    }
+  },
   "settingsAnnounceNotSaved": "The setting changed, but it could not be saved, so it will not be kept after a restart.",
   "@settingsAnnounceNotSaved": {
     "description": "Toast when the threshold announcement switch applied but settings.json could not be written."

@@ -13,6 +13,7 @@ import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/app_lock_controller.dart';
 import 'package:klabautermann_app/controllers/cadence_controller.dart';
 import 'package:klabautermann_app/controllers/sync_secrets_controller.dart';
+import 'package:klabautermann_app/controllers/threshold_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/device_name.dart';
@@ -28,6 +29,8 @@ import 'package:klabautermann_app/services/settings_window/settings_window_link.
 import 'package:klabautermann_app/settings_window_app.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/settings_page.dart';
+import 'package:klabautermann_app/ui/charts/charts.dart' show ChartThresholds;
+import 'package:klabautermann_app/ui/threshold_scope.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
     show MonitorEligibility, SafetyPolicy, ServerSafety;
 
@@ -170,6 +173,7 @@ void main() {
     SyncSecretsSettings? syncSecrets,
     DeviceNameSettings? deviceName,
     AppLockSettings? appLock,
+    ThresholdSettings? thresholds,
     CadenceSettings? cadence,
   ]) {
     final host = SettingsWindowHost(
@@ -181,6 +185,7 @@ void main() {
       safety: safety ?? newSafety(),
       syncSecrets: syncSecrets ?? newSyncSecrets(),
       appLock: appLock,
+      thresholds: thresholds,
       cadence: cadence,
       control: _control,
       link: _appLink,
@@ -337,6 +342,7 @@ void main() {
     late FakeDeviceAuthenticator device;
     late AppLockController appLock;
     late List<bool> appLockSaved;
+    late ThresholdController thresholds;
     late CadenceController cadence;
     late SettingsWindowHost host;
 
@@ -381,6 +387,8 @@ void main() {
       );
       await appLock.refreshAvailability();
       addTearDown(appLock.dispose);
+      thresholds = ThresholdController();
+      addTearDown(thresholds.dispose);
       cadence = CadenceController();
       addTearDown(cadence.dispose);
       host = newHost(
@@ -391,6 +399,7 @@ void main() {
         syncSecrets,
         deviceName,
         appLock,
+        thresholds,
         cadence,
       );
     });
@@ -656,6 +665,50 @@ void main() {
       });
       await tester.pumpAndSettle();
       expect(windowSwitch(), isTrue);
+    });
+
+    testWidgets('the Alerts tab\'s usage bands change the app\'s through '
+        'the link (OV-11)', (tester) async {
+      final remote = await pumpBothWindows(
+        tester,
+        appearance,
+        tab: SettingsTab.alerts,
+      );
+      Finder inWindow(Finder finder) =>
+          find.descendant(of: find.byType(SettingsWindowApp), matching: finder);
+      const defaults = 'Careful from 70%, warning from 80%, critical from 90%';
+      expect(remote.thresholds, isNotNull);
+      expect(inWindow(find.text(defaults)), findsNWidgets(3));
+
+      await tester.tap(inWindow(find.text('Disk')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Careful from'),
+        '50',
+      );
+      await tester.tap(find.text('Save'));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      const changed = ChartThresholds(careful: 50, warning: 80, critical: 90);
+      expect(thresholds.value[ThresholdMetric.disk], changed);
+      expect(remote.thresholds!.value[ThresholdMetric.disk], changed);
+
+      // A change in the app reaches the showing window too.
+      await tester.runAsync(() async {
+        await thresholds.setThresholds(
+          ThresholdMetric.cpu,
+          const ChartThresholds(careful: 60, warning: 70, critical: 80),
+        );
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(
+        inWindow(
+          find.text('Careful from 60%, warning from 70%, critical from 80%'),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('the General tab\'s polling budget changes the app\'s '
@@ -1060,6 +1113,14 @@ void main() {
       expect(
         roundTrip(const AnnouncementNotSavedException('disk full')),
         isA<AnnouncementNotSavedException>().having(
+          (error) => error.message,
+          'message',
+          'disk full',
+        ),
+      );
+      expect(
+        roundTrip(const ThresholdsNotSavedException('disk full')),
+        isA<ThresholdsNotSavedException>().having(
           (error) => error.message,
           'message',
           'disk full',

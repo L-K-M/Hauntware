@@ -32,6 +32,7 @@ import 'controllers/prompt_controller.dart';
 import 'controllers/server_editor_controller.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
+import 'controllers/threshold_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/hand_off.dart' show HandOffLauncher;
@@ -58,6 +59,7 @@ import 'ui/server_surfaces.dart' show AppActivityReporter;
 import 'ui/settings_page.dart';
 import 'ui/startup_issue_notice.dart';
 import 'ui/threshold_announcer.dart' show AnnouncementScope;
+import 'ui/threshold_scope.dart' show ThresholdScope;
 import 'ui/workspace_navigation.dart';
 
 /// The settings route's name: Settings on phones, and on a desktop whose
@@ -76,6 +78,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.appearance,
     required this.coverage,
     required this.announcements,
+    this.thresholds,
     this.cadence,
     this.deviceName,
     this.safety,
@@ -130,6 +133,11 @@ class KlabautermannApp extends StatelessWidget {
   /// The app lock (SAF-20), whose screen covers every route while locked;
   /// null in tests that leave it out.
   final AppLockController? appLock;
+
+  /// OV-11's threshold bands; like [appearance], they outlive an engine
+  /// run. Null in tests that leave them out, where every metric takes the
+  /// default bands and the Alerts settings tab is a placeholder.
+  final ThresholdController? thresholds;
 
   /// The device name the host syslog line gives (M5 plan Q6); like
   /// [appearance], it outlives an engine run. Null in tests that leave it
@@ -307,7 +315,13 @@ class KlabautermannApp extends StatelessWidget {
               child: AnnouncementScope(
                 announce: announcements,
                 openSettings: (context) => unawaited(_openSettings(context)),
-                child: withMacosToolbarBand(toolbarBand, child: child!),
+                child: switch (thresholds) {
+                  final thresholds? => ThresholdScope(
+                    thresholds: thresholds,
+                    child: withMacosToolbarBand(toolbarBand, child: child!),
+                  ),
+                  null => withMacosToolbarBand(toolbarBand, child: child!),
+                },
               ),
             );
             final withOperations = switch (operations) {
@@ -447,6 +461,7 @@ class KlabautermannApp extends StatelessWidget {
             kSettingsRoute: (_) => SettingsPage(
               appearance: appearance,
               announcements: announcements,
+              thresholds: thresholds,
               cadence: cadence,
               deviceName: deviceName,
               appVersion: appVersion,

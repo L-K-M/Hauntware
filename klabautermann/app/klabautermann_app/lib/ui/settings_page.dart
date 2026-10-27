@@ -14,6 +14,7 @@ import '../controllers/monitor_set.dart';
 import '../controllers/pin_publication_controller.dart';
 import '../controllers/safety_controller.dart';
 import '../controllers/sync_secrets_controller.dart';
+import '../controllers/threshold_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../services/settings_window/settings_window_link.dart';
 import 'about_dialog.dart';
@@ -22,6 +23,7 @@ import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'appearance_tab.dart';
 import 'monitor_set_feedback.dart';
 import 'server_editing.dart';
+import 'thresholds_tab.dart';
 
 /// Settings (03 §10.2): the seven planned tabs as placeholders, except
 /// General, which holds A11Y-15's switch (D60), the device name (M5 plan
@@ -39,6 +41,7 @@ class SettingsPage extends StatefulWidget {
     required this.announcements,
     required this.appVersion,
     required this.monitorSet,
+    this.thresholds,
     this.cadence,
     this.deviceName,
     this.safety,
@@ -52,6 +55,10 @@ class SettingsPage extends StatefulWidget {
   final AppearanceSettings appearance;
   final AnnouncementSettings announcements;
   final MonitorSetSettings monitorSet;
+
+  /// OV-11's usage bands in the Alerts tab; null in tests that leave them
+  /// out, where the tab is a placeholder.
+  final ThresholdSettings? thresholds;
 
   /// The polling budget (SAF-19) in General; null in tests that leave it
   /// out, where General shows none.
@@ -162,6 +169,8 @@ class _SettingsPageState extends State<SettingsPage>
                 safety: widget.safety!,
                 appLock: widget.appLock,
               ),
+              SettingsTab.alerts when widget.thresholds != null =>
+                ThresholdsTab(thresholds: widget.thresholds!),
               _ => const PlaceholderPaneBody(),
             },
         ],

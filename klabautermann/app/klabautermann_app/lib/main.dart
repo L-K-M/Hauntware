@@ -36,6 +36,7 @@ import 'controllers/stack_folders.dart';
 import 'controllers/tls_endpoints.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
+import 'controllers/threshold_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/app_version.dart';
 import 'services/device_authenticator.dart';
@@ -333,6 +334,12 @@ Future<void> main(List<String> args) async {
     save: settings.setAnnounceThresholdBands,
   );
 
+  // OV-11's threshold bands, kept per device in settings.json.
+  final thresholds = ThresholdController(
+    stored: settings.thresholds,
+    save: settings.setThresholds,
+  );
+
   // The polling budget (SAF-19), kept per device in settings.json; the
   // engine samples at its 6.4 column from the start and follows changes.
   final cadence = CadenceController(
@@ -420,6 +427,7 @@ Future<void> main(List<String> args) async {
     defaultTargetPlatform,
     appearance: appearance,
     announcements: announcements,
+    thresholds: thresholds,
     deviceName: deviceName,
     appVersion: appVersion,
     monitorSet: fleet.monitorSettings,
@@ -438,6 +446,7 @@ Future<void> main(List<String> args) async {
       appearance: appearance,
       coverage: coverage,
       announcements: announcements,
+      thresholds: thresholds,
       cadence: cadence,
       deviceName: deviceName,
       safety: safety,
