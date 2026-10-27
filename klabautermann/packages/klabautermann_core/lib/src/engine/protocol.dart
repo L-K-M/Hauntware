@@ -4590,20 +4590,55 @@ final class ContainerReview {
   final List<ContainerFinding> findings;
 }
 
+/// Another manager, monitor or log viewer DKE-17 recognises among the
+/// containers by its image.
+enum HostTool {
+  portainer,
+  dockhand,
+  dockge,
+  dozzle,
+  beszel,
+  uptimeKuma,
+  netdata,
+  wud,
+}
+
+/// One container running a [HostTool], with its published ports as the
+/// list labels them (`0.0.0.0:9443->9443/tcp`).
+@immutable
+final class HostToolContainer {
+  const HostToolContainer({
+    required this.tool,
+    required this.containerId,
+    required this.name,
+    required this.state,
+    this.ports = const [],
+  });
+
+  final HostTool tool;
+  final String containerId;
+  final String name;
+  final String? state;
+  final List<String> ports;
+}
+
 /// A [DockerReviewQuery]'s answer: each container read, in the list's
-/// order. A container removed between the list and its inspect is left
-/// out; [omitted] counts those past [kDockerReviewMax], [unreadable]
-/// those whose inspect the daemon refused.
+/// order, and the other tools running among all of them (DKE-17). A
+/// container removed between the list and its inspect is left out;
+/// [omitted] counts those past [kDockerReviewMax], [unreadable] those
+/// whose inspect the daemon refused.
 final class DockerReviewPayload extends DockerPayload {
   const DockerReviewPayload(
     this.reviews, {
     this.omitted = 0,
     this.unreadable = 0,
+    this.tools = const [],
   });
 
   final List<ContainerReview> reviews;
   final int omitted;
   final int unreadable;
+  final List<HostToolContainer> tools;
 }
 
 /// The containers grouped by compose project (STK-01), from the same

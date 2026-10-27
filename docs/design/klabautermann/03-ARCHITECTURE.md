@@ -4386,6 +4386,15 @@ TLS. The section checks when it shows, after an edit and on request.
     Whether the log file grows needs its size, which only root can
     read under `/var/lib/docker`; the lint flags the configuration
     alone until an admin-mode size read joins it.
+- **As built (M6 N21b).** The same review names the other tools among
+  all listed containers (DKE-17) by their image's last path segment:
+  Portainer (and its agent), Dockhand, Dockge, Dozzle, Beszel (hub and
+  agent), Uptime Kuma, Netdata and What's Up Docker, each with its
+  published ports. Tools installed as host units are not detected yet,
+  and opening one or forwarding its port comes with the apps and ports
+  view (DKE-08, NET-11) after S7. The engine strip warns when a
+  rootless engine's user has linger off (DKE-11), from `/info`'s
+  `name=rootless` and the probe's `lingerEnabled`.
 
 - **As built (M6 N20).** DKE-03's timeline comes from the events stream
   the watcher already holds for the lists (5.7), so it costs no channel

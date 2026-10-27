@@ -629,6 +629,7 @@ void main() {
           {
             'Id': 'gone',
             'Names': ['/gone'],
+            'Image': 'amir20/dozzle:v8',
             'State': 'exited',
           },
         ])
@@ -674,6 +675,11 @@ void main() {
       final second = await h.result(again) as DockerReviewPayload;
       expect([for (final r in second.reviews) r.name], ['db']);
       expect(second.unreadable, 1);
+      expect(
+        [for (final tool in payload.tools) (tool.tool, tool.name)],
+        [(HostTool.dozzle, 'gone')],
+        reason: 'tools come from the whole list, inspected or not',
+      );
       expect(
         daemon.requests,
         contains('GET /v1.52/containers/gone/json HTTP/1.1'),

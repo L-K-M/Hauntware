@@ -5993,6 +5993,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerTabStacks => 'Stacks';
 
   @override
+  String get dockerEngineLingerOff =>
+      'This rootless engine runs under your user, and linger is off: its containers stop when your last session on the server ends. Turn linger on with loginctl enable-linger to keep them running.';
+
+  @override
   String get dockerTabReview => 'Review';
 
   @override
@@ -6116,6 +6120,38 @@ class AppLocalizationsEn extends AppLocalizations {
     });
     return '$_temp0';
   }
+
+  @override
+  String get dockerReviewToolsHeading => 'Other tools on this host';
+
+  @override
+  String dockerReviewTool(String tool) {
+    String _temp0 = intl.Intl.selectLogic(tool, {
+      'portainer': 'Portainer',
+      'dockhand': 'Dockhand',
+      'dockge': 'Dockge',
+      'dozzle': 'Dozzle',
+      'beszel': 'Beszel',
+      'uptimeKuma': 'Uptime Kuma',
+      'netdata': 'Netdata',
+      'wud': 'What\'s Up Docker',
+      'other': 'Another tool',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerReviewToolContainer(String name, String state) {
+    return 'Container $name, $state';
+  }
+
+  @override
+  String dockerReviewToolContainerName(String name) {
+    return 'Container $name';
+  }
+
+  @override
+  String get dockerReviewToolNoPorts => 'It publishes no port.';
 
   @override
   String dockerReviewFailed(String reason) {

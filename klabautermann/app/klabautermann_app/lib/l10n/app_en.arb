@@ -7193,6 +7193,10 @@
   "@dockerTabStacks": {
     "description": "Docker tab: the sub-tab listing compose stacks."
   },
+  "dockerEngineLingerOff": "This rootless engine runs under your user, and linger is off: its containers stop when your last session on the server ends. Turn linger on with loginctl enable-linger to keep them running.",
+  "@dockerEngineLingerOff": {
+    "description": "Docker tab, engine strip: a rootless engine whose user has linger off (DKE-11)."
+  },
   "dockerTabReview": "Review",
   "@dockerTabReview": {
     "description": "Docker tab: the sub-tab with the containers' security review (DKE-06, DKE-07)."
@@ -7305,6 +7309,44 @@
         "type": "String"
       }
     }
+  },
+  "dockerReviewToolsHeading": "Other tools on this host",
+  "@dockerReviewToolsHeading": {
+    "description": "Docker Review sub-tab: the heading over other managers and monitors found among the containers (DKE-17)."
+  },
+  "dockerReviewTool": "{tool, select, portainer{Portainer} dockhand{Dockhand} dockge{Dockge} dozzle{Dozzle} beszel{Beszel} uptimeKuma{Uptime Kuma} netdata{Netdata} wud{What's Up Docker} other{Another tool}}",
+  "@dockerReviewTool": {
+    "description": "Docker Review sub-tab: another tool's product name, by HostTool name. Product names stay as their makers spell them.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerReviewToolContainer": "Container {name}, {state}",
+  "@dockerReviewToolContainer": {
+    "description": "Docker Review sub-tab: the container another tool runs in, and its state as the Containers sub-tab words it.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerReviewToolContainerName": "Container {name}",
+  "@dockerReviewToolContainerName": {
+    "description": "Docker Review sub-tab: the container another tool runs in, when the list gives no state.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerReviewToolNoPorts": "It publishes no port.",
+  "@dockerReviewToolNoPorts": {
+    "description": "Docker Review sub-tab: another tool's container publishes no port."
   },
   "dockerReviewFailed": "{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server's capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to list or inspect the containers.} connectionFailed{The connection to the engine failed during the review.} cancelled{The review stopped before it finished.} other{The containers could not be reviewed.}}",
   "@dockerReviewFailed": {
