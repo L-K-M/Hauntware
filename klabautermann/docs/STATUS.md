@@ -2692,7 +2692,7 @@ next runs (N71).
 
 | Exit | Evidence | Status |
 |---|---|---|
-| Y1: every table-stakes item of 02 §4 complete | The N70 audit traced each 02 §4 ID to code on main and a STATUS entry; JOB-02's timer next runs were the one table-stakes gap, closed by N71 | met |
+| Y1: every table-stakes item of 02 §4 complete | The N70 audit traced each 02 §4 ID to code on main and a STATUS entry except JOB-02's timer next runs, the one table-stakes gap, which N71 then closed | met |
 | Y2: alert rules, including raise and clear hysteresis, covered by tests | N50a's `alert_evaluator_test.dart` (a breach raises only after its raise duration and clears only after its clear duration below the clear threshold, a short breach never raises, an unknown value holds the state, rule scope, removed rules and servers leaving the fleet) and `klabautermann_host`'s `threshold_test.dart` | met |
 | Y3: notification copy states the coverage limit | N51's `alert_notifications_test.dart` (the prompt and the switch say that rules are evaluated only while the app is open, before the system asks, and each notification carries the limit) and N50c's `alert_rules_test.dart` | met |
 | Y4: gap rendering covered by goldens | `time_series_goldens_test.dart` (a labelled hatched gap, a gap too narrow for its label, an open gap), N52b's `history_goldens_test.dart` (48 hours with a band per gap reason) and the chart and container log goldens | met |

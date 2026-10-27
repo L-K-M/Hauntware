@@ -242,8 +242,8 @@
   breakdown and pressure, out-of-memory kills, temperatures, GPUs, and
   in admin mode drive health, the SSH server's settings, reboot and
   shutdown with a wait for the server to return. Also time and clock
-  sync, boots, the processor, users and logins, and the expiry of TLS certificates on endpoints you
-  list.
+  sync, boots, the processor, users and logins, and the expiry of TLS
+  certificates on endpoints you list.
 - Jobs: a timer's details show its triggers and each calendar trigger's
   next runs.
 - Alerts: rules evaluated on this device while Klabautermann is open,
