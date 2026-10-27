@@ -418,6 +418,34 @@ void main() {
       );
       expect(_inHeader(find.text('Low-session mode')), findsOneWidget);
     });
+
+    testWidgets('warns when the socket forward runs through a Dropbear with '
+        'CVE-2025-14282 (CN-15)', (tester) async {
+      final harness = await _openWeb1(tester);
+      await _emit(tester, harness, dockerReady('srv-1'));
+      expect(_inHeader(find.textContaining('CVE-2025-14282')), findsNothing);
+
+      await _emit(
+        tester,
+        harness,
+        dockerReady(
+          'srv-1',
+          peerCredentialsExposedBy: const DropbearRelease(2024, 86),
+        ),
+      );
+      expect(
+        _inHeader(find.text('Dropbear 2024.86: CVE-2025-14282')),
+        findsOneWidget,
+      );
+      expect(
+        find.byTooltip(
+          'This server runs Dropbear 2024.86, where a forwarded connection '
+          'reaches the engine socket as if it came from root '
+          '(CVE-2025-14282). Update Dropbear to 2025.89 or later.',
+        ),
+        findsOneWidget,
+      );
+    });
   });
 
   group('the Docker tab', () {

@@ -12,6 +12,7 @@ import 'package:seance_core/seance_core.dart'
         ChannelOpenException,
         ChannelRefusal,
         RemoteCommandException,
+        SshLinkSeen,
         quoteShellWord;
 import 'package:test/test.dart';
 
@@ -234,6 +235,34 @@ void main() {
       final route = await _route(link, _profile([_rootful, _rootless]));
 
       expect(route.socketPath, _rootless);
+    });
+
+    test('a Dropbear before 2024.84 skips straight to the relays, without '
+        'a streamlocal open (CN-15)', () async {
+      final link = ForwardingLink()
+        ..seen = const SshLinkSeen(
+          serverIdentification: 'SSH-2.0-dropbear_2022.83',
+        )
+        ..daemons[_rootful] = PingDaemon()
+        ..probeAnswers[_rootful] = _disabled;
+
+      final route = await _route(link, _profile([_rootful], tools: _dockerCli));
+
+      expect(link.opens, isEmpty);
+      expect(route.rank, DockerRank.cliRelay);
+    });
+
+    test('a Dropbear from 2024.84 tries streamlocal first (CN-15)', () async {
+      final link = ForwardingLink()
+        ..seen = const SshLinkSeen(
+          serverIdentification: 'SSH-2.0-dropbear_2024.86',
+        )
+        ..daemons[_rootful] = PingDaemon();
+
+      final route = await _route(link, _profile([_rootful]));
+
+      expect(link.opens, [_rootful]);
+      expect(route.rank, DockerRank.streamlocal);
     });
 
     test('disabled forwarding goes to the relay ranks', () async {

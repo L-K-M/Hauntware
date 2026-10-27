@@ -11,7 +11,8 @@ import 'package:klabautermann_core/src/docker/docker_router.dart';
 import 'package:klabautermann_docker/klabautermann_docker.dart'
     show kContainerTopPsArgs;
 import 'package:klabautermann_host/klabautermann_host.dart';
-import 'package:seance_core/seance_core.dart' show RemoteCommandResult, SshLink;
+import 'package:seance_core/seance_core.dart'
+    show RemoteCommandResult, SshLink, SshLinkSeen;
 import 'package:test/test.dart';
 
 import '../support/engine_daemon.dart';
@@ -201,6 +202,30 @@ void main() {
       expect(ready.negotiatedApi, const ApiVersion(1, 41));
       expect(ready.route!.runtime, EngineRuntime.podman);
       expect(ready.route!.mode, EngineMode.rootful);
+    });
+  });
+
+  group('Dropbear (CN-15)', () {
+    test('a socket forward through a Dropbear with CVE-2025-14282 names '
+        'the release; a newer one names none', () async {
+      Future<DockerEndpointRoute> routeThrough(String identification) async {
+        final h = _Harness();
+        h.forwarding
+          ..seen = SshLinkSeen(serverIdentification: identification)
+          ..daemons[_rootful] = EngineDaemon();
+        await h.open();
+        return (await h.resolve(_profile([_rootful]))).route!;
+      }
+
+      final affected = await routeThrough('SSH-2.0-dropbear_2024.86');
+      expect(affected.rank, DockerRank.streamlocal);
+      expect(
+        affected.peerCredentialsExposedBy,
+        const DropbearRelease(2024, 86),
+      );
+
+      final fixed = await routeThrough('SSH-2.0-dropbear_2025.89');
+      expect(fixed.peerCredentialsExposedBy, isNull);
     });
   });
 

@@ -10150,6 +10150,18 @@ abstract class AppLocalizations {
   /// **'The output was longer than 1 MiB; the rest was dropped.'**
   String get dockerCommandTruncated;
 
+  /// Server header: warning that the Docker socket forward runs through a Dropbear release affected by CVE-2025-14282 (CN-15). The CVE identifier stays as is.
+  ///
+  /// In en, this message translates to:
+  /// **'Dropbear {release}: CVE-2025-14282'**
+  String dockerDropbearCve(String release);
+
+  /// Tooltip of the server header's Dropbear warning (CN-15): what the vulnerability means for the Docker socket forward and how to fix it.
+  ///
+  /// In en, this message translates to:
+  /// **'This server runs Dropbear {release}, where a forwarded connection reaches the engine socket as if it came from root (CVE-2025-14282). Update Dropbear to 2025.89 or later.'**
+  String dockerDropbearCveDetail(String release);
+
   /// Tooltip of the button on a container's details that opens a shell in the container (CTX-07).
   ///
   /// In en, this message translates to:

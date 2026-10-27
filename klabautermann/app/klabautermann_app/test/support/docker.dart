@@ -12,6 +12,7 @@ DockerEndpointState dockerReady(
   String socketPath = '/var/run/docker.sock',
   ApiVersion api = const ApiVersion(1, 47),
   bool lowSession = false,
+  DropbearRelease? peerCredentialsExposedBy,
 }) => DockerEndpointState(
   serverId: serverId,
   phase: DockerEndpointPhase.ready,
@@ -21,6 +22,7 @@ DockerEndpointState dockerReady(
     runtime: runtime,
     rootEquivalence: rootEquivalence,
     mode: mode,
+    peerCredentialsExposedBy: peerCredentialsExposedBy,
   ),
   negotiatedApi: api,
   lowSession: lowSession,

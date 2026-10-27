@@ -191,6 +191,29 @@ class _EngineFacts extends StatelessWidget {
                 Flexible(child: Text(l10n.dockerLowSession, style: style)),
               ],
             ),
+          // CN-15: the socket forward runs through a Dropbear where the
+          // engine sees every forwarded connection as root.
+          if (route?.peerCredentialsExposedBy case final release?)
+            Tooltip(
+              message: l10n.dockerDropbearCveDetail(release.toString()),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 4,
+                children: [
+                  Icon(
+                    Icons.warning_amber_outlined,
+                    size: 16,
+                    color: theme.colorScheme.error,
+                  ),
+                  Flexible(
+                    child: Text(
+                      l10n.dockerDropbearCve(release.toString()),
+                      style: style?.copyWith(color: theme.colorScheme.error),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       );
     },

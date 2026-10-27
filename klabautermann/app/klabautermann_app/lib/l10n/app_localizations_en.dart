@@ -8093,6 +8093,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'The output was longer than 1 MiB; the rest was dropped.';
 
   @override
+  String dockerDropbearCve(String release) {
+    return 'Dropbear $release: CVE-2025-14282';
+  }
+
+  @override
+  String dockerDropbearCveDetail(String release) {
+    return 'This server runs Dropbear $release, where a forwarded connection reaches the engine socket as if it came from root (CVE-2025-14282). Update Dropbear to 2025.89 or later.';
+  }
+
+  @override
   String get dockerShellOpen => 'Open a shell';
 
   @override

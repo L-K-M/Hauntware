@@ -2836,6 +2836,19 @@ TCP 2375 and 2376 are never offered. A Dropbear host older than 2024.84
 has no Unix stream forwarding and uses rank 2; 2024.84 to 2025.88 get a
 CVE-2025-14282 warning [R: r5 §1.1].
 
+As built in M6 (N67, CN-15): `seance_core`'s link reports the server's
+identification line (`SshLinkSeen.serverIdentification`), and
+`DropbearRelease` reads the release from it. The ladder skips the rank 1
+open on a Dropbear older than 2024.84 and goes straight to the exec
+probe; any other server's refused open still costs one try, since a
+refusal on a forwarding open reads as forwarding off. A socket forward
+through 2024.84 to 2025.88 names the release in its route
+(`DockerEndpointRoute.peerCredentialsExposedBy`), and the server header
+shows "Dropbear 2024.86: CVE-2025-14282" in the error colour, with a
+tooltip that says what it means and to update to 2025.89. Relays carry
+no warning: an exec relay's connection to the socket is the login
+user's own.
+
 As built in M3 (D22, `klabautermann_core/test/integration/
 docker_fallback_test.dart`), every fixture variant that refuses
 streamlocal (5.3) lands on rank 2 with `DockerRouteLabel.cliRelay`,
