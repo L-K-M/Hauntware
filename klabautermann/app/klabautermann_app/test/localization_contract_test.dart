@@ -78,6 +78,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/announcement_controller.dart': {
     r"'The announcement setting was not saved: $error'",
   },
+  // The not-saved diagnostic; the General tab prints it and shows its own
+  // ARB text (settingsCadenceNotSaved).
+  'lib/controllers/cadence_controller.dart': {
+    r"'The polling budget was not saved: $error'",
+  },
   // The host syslog line's device name, written into host journals in
   // one form (M5 plan Q6).
   'lib/controllers/device_name.dart': {
@@ -258,6 +263,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'..'",
   },
   'lib/controllers/sync_controller.dart': {"'the engine stopped'"},
+  // TRI-03's acknowledgement keys (kind and subject) and the fields they
+  // are stored under in settings.json.
+  'lib/controllers/attention.dart': {
+    r"'${kind.name}:${subject ?? ''}'",
+    "''",
+    "':'",
+    "'at'",
+    "'note'",
+  },
   // A Docker query id the engine echoes in its answer (03 §10.1).
   // The query and watch ids the engine keys Docker answers by (03 §10.1).
   'lib/controllers/docker_controller.dart': {
@@ -403,7 +417,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'a colour per cell'",
     "'a bar has a cell'",
   },
-  'lib/ui/charts/chart_style.dart': {"'warning must not exceed critical'"},
+  'lib/ui/charts/chart_style.dart': {
+    "'careful must not exceed warning'",
+    "'warning must not exceed critical'",
+  },
   'lib/ui/charts/chart_values.dart': {"'samples are finite'"},
   'lib/ui/charts/series_ring.dart': {
     "'a series needs two slots to draw a line'",

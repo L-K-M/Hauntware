@@ -11,6 +11,7 @@ import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/app_lock_controller.dart';
+import 'package:klabautermann_app/controllers/cadence_controller.dart';
 import 'package:klabautermann_app/controllers/sync_secrets_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
@@ -169,6 +170,7 @@ void main() {
     SyncSecretsSettings? syncSecrets,
     DeviceNameSettings? deviceName,
     AppLockSettings? appLock,
+    CadenceSettings? cadence,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
@@ -179,6 +181,7 @@ void main() {
       safety: safety ?? newSafety(),
       syncSecrets: syncSecrets ?? newSyncSecrets(),
       appLock: appLock,
+      cadence: cadence,
       control: _control,
       link: _appLink,
       requestAppExit: () async => AppExitResponse.exit,
@@ -334,6 +337,7 @@ void main() {
     late FakeDeviceAuthenticator device;
     late AppLockController appLock;
     late List<bool> appLockSaved;
+    late CadenceController cadence;
     late SettingsWindowHost host;
 
     setUp(() async {
@@ -377,6 +381,8 @@ void main() {
       );
       await appLock.refreshAvailability();
       addTearDown(appLock.dispose);
+      cadence = CadenceController();
+      addTearDown(cadence.dispose);
       host = newHost(
         appearance,
         announcements,
@@ -385,6 +391,7 @@ void main() {
         syncSecrets,
         deviceName,
         appLock,
+        cadence,
       );
     });
 
@@ -517,6 +524,16 @@ void main() {
       final remote = await pumpWindow(tester);
       expect(remote.appVersion, _appVersion);
 
+      await tester.scrollUntilVisible(
+        find.text('Version $_appVersion'),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(GeneralTab),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       expect(find.text('Klabautermann $kPreviewLabel'), findsOneWidget);
       await tester.tap(find.text('Version $_appVersion'));
       await tester.pumpAndSettle();
@@ -639,6 +656,37 @@ void main() {
       });
       await tester.pumpAndSettle();
       expect(windowSwitch(), isTrue);
+    });
+
+    testWidgets('the General tab\'s polling budget changes the app\'s '
+        'through the link (SAF-19)', (tester) async {
+      final remote = await pumpBothWindows(
+        tester,
+        appearance,
+        tab: SettingsTab.general,
+      );
+      Finder inWindow(Finder finder) =>
+          find.descendant(of: find.byType(SettingsWindowApp), matching: finder);
+      expect(remote.cadence?.value, CadencePreset.automatic);
+      expect(inWindow(find.text('Automatic')), findsOneWidget);
+
+      await tester.tap(inWindow(find.byType(DropdownButton<CadencePreset>)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cellular saver').last);
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      expect(cadence.value, CadencePreset.cellularSaver);
+      expect(remote.cadence?.value, CadencePreset.cellularSaver);
+      expect(inWindow(find.text('Cellular saver')), findsOneWidget);
+
+      // A change in the app reaches the showing window too.
+      await tester.runAsync(() async {
+        await cadence.setCadence(CadencePreset.desktop);
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(inWindow(find.text('Desktop')), findsOneWidget);
     });
 
     testWidgets('the General tab\'s device name changes the app\'s through '
@@ -1012,6 +1060,14 @@ void main() {
       expect(
         roundTrip(const AnnouncementNotSavedException('disk full')),
         isA<AnnouncementNotSavedException>().having(
+          (error) => error.message,
+          'message',
+          'disk full',
+        ),
+      );
+      expect(
+        roundTrip(const CadenceNotSavedException('disk full')),
+        isA<CadenceNotSavedException>().having(
           (error) => error.message,
           'message',
           'disk full',

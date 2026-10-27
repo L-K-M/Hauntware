@@ -250,7 +250,8 @@ cron zone rules · D59 capability cache · D60 threshold announcements ·
 D61 host-key pins and re-pin ·
 D62 sync state files and the keystore port · D63 pull-only sync in the
 engine · D64 a server's confirmation covers its route · D65 spike S3
-and admin validation · D66 spike S4 and Docker-scoped sudo rules.
+and admin validation · D66 spike S4 and Docker-scoped sudo rules · D67
+spike S6 and the privileged write · D68 spike S8 and update checks.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -1284,6 +1285,58 @@ Proposals awaiting the owner close the section; they are not decisions.
   - writing in place with `tee <target>`, which keeps every attribute but
     leaves a half-written file when the link drops, and no hash
     re-check can make it atomic.
+- **D68. Spike S8 settles the update check (M6 N06).** The spike sent
+  manifest `HEAD`s to Docker Hub, GHCR and Quay, called DistributionInspect
+  on Docker 29.8 with the containerd image store, and read a local
+  registry behind basic auth (evidence in
+  `klabautermann/docs/evidence/s8/`).
+
+  What it showed:
+  - A `HEAD` leaves Docker Hub's `ratelimit-remaining` unchanged, but is
+    refused with `429` once the source address has spent its quota. The
+    window is one hour (`ratelimit-limit: 100;w=3600`), not six.
+  - DistributionInspect resolves the tag with a `HEAD` and then `GET`s
+    the manifest, so each call spends one pull.
+  - All three public registries answer a multi-platform tag with its
+    index digest. Docker Hub needs its anonymous token, GHCR names a
+    Bearer realm in its first `401`, and Quay answers without a token.
+  - After a pull, the local `RepoDigests` entry and `Descriptor` carry the
+    index digest. A push from the containerd store with one platform
+    present stores that platform's manifest instead, while `RepoDigests`
+    keeps the index digest. `GET /images/{name}/json?manifests=1` (API
+    1.48) lists the children, and the pushed digest is the available one.
+  - A private registry answers `401` with a `Basic` challenge.
+    `docker buildx imagetools inspect` reads the CLI's credentials and
+    returns the digest, resolving with a `HEAD`. `docker manifest inspect
+    -v` gives a single manifest's digest, but for an index it lists only
+    the children, never the index digest, and it needs `--insecure` for
+    a plain-HTTP registry.
+
+  The check therefore runs as follows:
+  1. On the host, `curl -sI` with the realm's anonymous token where the
+     first answer names a Bearer realm.
+  2. On a `Basic` challenge or a `401` after the token, buildx
+     `imagetools inspect`. Without the plugin it says the host's Docker
+     CLI cannot read the registry.
+  3. A tag is current when the registry digest equals the repository's
+     `RepoDigests` entry, the image's `Descriptor` digest, or an
+     available child from `manifests=1` (on daemons below API 1.48, the
+     first two only).
+  4. A `429` reads "Docker Hub's limit for this host's address is used
+     up". The check waits for the reported window before it runs again,
+     and never falls back to DistributionInspect.
+  5. A `HEAD` without `Docker-Content-Digest` reads as "this registry does
+     not say" rather than a `GET`.
+  6. DistributionInspect stays the last resort, offered only with its
+     quota warning when the host has no `curl` and no CLI route.
+
+  *Rejected:*
+  - DistributionInspect as the default: it spends a pull per check and
+    needs credentials the device does not hold before REG-02;
+  - comparing `RepoDigests` alone: it reports an update for every image
+    pushed from a containerd store that holds only some platforms;
+  - `docker manifest inspect -v` as the CLI fallback: it cannot name an
+    index's digest, so a multi-platform tag would never compare.
 
 ### Persistence, alerts and tiers
 
@@ -3058,7 +3111,11 @@ while at least one subscription for the server names it; the Desktop,
 Phone and Cellular saver columns are cadence profiles, chosen by a request
 of their own rather than per subscription, and the health card's failed
 units are a stream of their own, apart from the Services panel's `units`
-(D45, 10.1). Rates
+(D45, 10.1). As built, Settings > General picks the profile per
+device: Automatic (Desktop on a computer, Phone on a phone or tablet),
+Desktop, Phone or Cellular saver, kept in `settings.json` under
+`klabautermann.sampling.cadence`; per-server caps are not built yet.
+Rates
 are computed in the engine isolate (D43) from counter deltas over the
 host's uptime between two replies that carry them, with wrap detection
 and reset detection: a changed `btime`, an uptime that went back or a
@@ -4054,6 +4111,19 @@ TLS. The section checks when it shows, after an edit and on request.
   installed kernel; doctor checklist; "why is it slow"; attention queue
   (acknowledgements device-local); container diagnose without an LLM.
 
+  As built (M6 N53c), the doctor (TRI-01) opens from the overview's
+  Health card as a checklist (`ui/doctor.dart`), read-only, each finding
+  with what to do about it. Disk space and inodes (a mount at 80 % warns,
+  at 90 % is a problem, as on the fleet rows), failed units, the clock
+  (not synchronized, or off this device's by 2 s or more) and dangling
+  images read what the Overview holds; the package check (security
+  updates, reboot needed), the listed endpoints' certificates (failing,
+  untrusted, expired, or within 14 days of expiry) and Docker's
+  reclaimable space (a warning from 1 GiB) are read as it opens and on
+  request. The Docker checks show only with a Docker endpoint. Open
+  ports and unrotated container logs join the list once the listening
+  ports (N34) and the container review (N21a) are on main.
+
   As built (M6 N53b), "why is it slow" (TRI-02) is a card under the
   overview's Health card, from the live core reading alone
   (`ui/slowness.dart`): tasks waiting for a CPU 20 % of the last 10 s
@@ -4064,6 +4134,25 @@ TLS. The section checks when it shows, after an edit and on request.
   memory is available, each in a sentence. It points to Processes for
   the top processes and to System for recent out-of-memory kills, which
   stay their own reads.
+
+  As built (M6 N53d), the attention queue (TRI-03) reads cached results
+  only: each fleet server's link (blocked, or failed or backing off), its
+  raised alerts, and where this run holds them its failed units, mounts
+  at the fleet rows' critical level (space or inodes, 90 %) and
+  unhealthy containers. The fleet list counts the unacknowledged ones in
+  a notice that opens the queue (`ui/attention.dart`). Acknowledging
+  takes an optional note of up to 500 code points and hides the problem
+  until a reading shows it cleared, so the same problem coming back asks
+  again; a kind the run holds no reading for keeps its
+  acknowledgements, as do a link's while it is idle, connecting,
+  waiting for the user or closed without a failure, so a relaunch or a
+  retry between backoffs does not reopen them, and a server that leaves
+  the fleet loses them. Alerts last one run (7.19), so an alert raised
+  again after a relaunch asks again. They
+  stay on this device in `settings.json`
+  (`klabautermann.attention.acknowledged`: by server id, each problem's
+  kind and subject with when and the note; anything unreadable reads as
+  none).
 
   As built (M6 N37a, collector-set version 11), the slow `temps`
   collector reads each hwmon chip's `temp<N>_input` with its `_max`,
@@ -4239,6 +4328,10 @@ TLS. The section checks when it shows, after an edit and on request.
   offers LOG-01's spans, counted back from when the stream opens, and a
   chosen start and end from date and time pickers, which reads once:
   the Live chip stops and says why.
+- **As built (M6 N19b).** CTX-06: the container log view's Export opens
+  LOG-10's sheet over the rows it holds, redacted by the engine's
+  `SecretRedactor` unless the user turns on Include secrets (SAF-07),
+  then copied, saved as `<container>.log` or shared.
 - **As built (M4 E15).** `operations/plans/docker_plans.dart` plans
   CTR-02's verbs, CTR-06's removal, IMG-02 and STK-03 (7.14, 7.16) over
   the server's Docker endpoint (`DockerRouter.useEndpoint`).
@@ -4308,6 +4401,15 @@ TLS. The section checks when it shows, after an edit and on request.
     Whether the log file grows needs its size, which only root can
     read under `/var/lib/docker`; the lint flags the configuration
     alone until an admin-mode size read joins it.
+- **As built (M6 N21b).** The same review names the other tools among
+  all listed containers (DKE-17) by their image's last path segment:
+  Portainer (and its agent), Dockhand, Dockge, Dozzle, Beszel (hub and
+  agent), Uptime Kuma, Netdata and What's Up Docker, each with its
+  published ports. Tools installed as host units are not detected yet,
+  and opening one or forwarding its port comes with the apps and ports
+  view (DKE-08, NET-11) after S7. The engine strip warns when a
+  rootless engine's user has linger off (DKE-11), from `/info`'s
+  `name=rootless` and the probe's `lingerEnabled`.
 
 - **As built (M6 N20).** DKE-03's timeline comes from the events stream
   the watcher already holds for the lists (5.7), so it costs no channel
@@ -4361,13 +4463,14 @@ TLS. The section checks when it shows, after an edit and on request.
   `CreatedBy` masked. Digest update detection (IMG-05): local `RepoDigests`
   against the registry digest from a manifest `HEAD`
   (`Docker-Content-Digest`), which does not count against Docker Hub pull
-  limits while `GET` does [R: r5 §1.10]; the default runner is `curl -sI` on
-  the host after the anonymous token flow (host network and proxy; nothing
-  about the device is disclosed); a device-side `HEAD` is opt-in (+E);
-  `GET /distribution/{name}/json` is the last resort with a quota warning;
-  results cached 6 h per repository and tag; index digests compared on the
-  containerd image store [U]; private registries through the host CLI [U:
-  spike S8]. Prune unused images through the DKE-05 preview.
+  limits while `GET` does [R: r5 §1.10; spike S8, D68]; the default
+  runner is `curl -sI` on the host after the registry's anonymous token
+  flow (host network and proxy; nothing about the device is disclosed); a
+  device-side `HEAD` is opt-in (+E); `GET /distribution/{name}/json` is
+  the last resort with a quota warning; results cached 6 h per repository
+  and tag; on the containerd image store the registry digest also matches
+  an available child of the local index (D68); private registries through
+  the host's `docker buildx imagetools inspect` (D68). Prune unused images through the DKE-05 preview.
 - **v1.x.** Update shelf; safe update (pull first, record previous digests,
   recreate, wait for health, roll back automatically, all run host-side as a
   detached operation, with host-side deploy history); semver advisories;
@@ -6138,7 +6241,7 @@ shows there.
 | `ConfirmEndpoints(ids)` (K41, 4.7) | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |
 | `SetMonitorSet(ids)` (FL-21, K30) | no event: it changes what samples; `RequestRejected` naming the ids it skipped (outside the fleet or not eligible), or for more than 10 ids, which leaves the last set |
 | `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status), `ConnectRejected(serverId, reason)` (no config to dial with, D61, or an endpoint not confirmed, 4.7) |
-| `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
+| `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`, `SetServerCadenceCap(serverId, cap)` (SAF-19); app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)`, `SetDockerEndpoint(serverId, choice)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason, choice)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
@@ -6449,9 +6552,11 @@ the engine in `engine_isolate.dart` beside it):
   fields that change with every probe; a profile the device cache kept
   comes first, with `cachedAt` (D59). The same ids again replace a
   subscription's streams, and an empty set drops it. `SetCadenceProfile`
-  picks the 6.4 column (Desktop until the app sends one); a stream the
-  column reads on demand is read once per `Subscribe` naming it, a
-  repeat included, so a surface refreshes it by resending. While the
+  picks the 6.4 column (Desktop until the app sends one), and
+  `SetServerCadenceCap` caps one server at a slower column, the slower
+  of the two winning; a stream the column reads on demand is read once
+  per `Subscribe` naming it, a repeat included, so a surface refreshes
+  it by resending. While the
   server is `waitingForLink` or `pausedInBackground`, that reading waits
   until the link is ready and the app is in the foreground, and resends
   in the meantime add no further reading. `RefreshSubscription` (K40)
@@ -7255,6 +7360,13 @@ reading, in two columns from the System tab's 600 px panel width:
 - The CPU and memory gauges and the CPU sparkline warn at the fleet
   rows' 80 % and 90 % until OV-11, so a server's row and Overview
   agree; swap, load and the per-core figures carry no thresholds.
+- As built (M6 N61a, OV-11), those stand-ins became bands: careful from
+  70 %, warning from 80 % and critical from 90 % for CPU, memory and
+  disk, each metric's own through `ThresholdScope`, which the fleet
+  rows, the Overview's gauges, the health card's disk alarms and the
+  announcer read. Careful keeps the series colour and says so by an info
+  icon and in words; only warning and critical raise disk alarms or are
+  announced. The user's levels follow in N61b.
 - Every figure goes through the chart formatters' IEC units, and a
   test keeps the decimal `ghostFormatFileSize` and `ghostFormatByteRate`
   out of `lib/`. A figure the container withholds (D50) reads unknown

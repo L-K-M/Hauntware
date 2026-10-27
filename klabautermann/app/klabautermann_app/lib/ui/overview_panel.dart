@@ -10,15 +10,17 @@ import '../l10n/app_localizations.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart';
 import 'cpu_hints.dart';
+import 'doctor.dart';
 import 'docker/containers_view.dart' show containerNameOf;
 import 'failed_units_summary.dart';
-import 'fleet_row_state.dart' show kFleetRowStaleAfter, kFleetRowThresholds;
+import 'fleet_row_state.dart' show kFleetRowStaleAfter;
 import 'freshness.dart';
 import 'history_card.dart';
 import 'slowness.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 import 'system_view.dart';
 import 'threshold_announcer.dart';
+import 'threshold_scope.dart';
 
 /// The panel width from which the cards sit in two columns, growing with
 /// the text scale as the System tab's does.
@@ -248,7 +250,15 @@ class OverviewPanel extends StatelessWidget {
                 icon: head.stale ? Icons.history : Icons.schedule,
                 text: freshnessText(l10n, head),
               ),
-            partTwo.health(context, scope),
+            partTwo.health(
+              context,
+              scope,
+              onDoctor: () => showDoctor(
+                context,
+                monitoring: monitoring,
+                serverId: serverId,
+              ),
+            ),
             if (unavailable != null)
               PanelNotice(
                 icon: unavailable.reason == CollectorUnavailableReason.timeout
@@ -309,11 +319,14 @@ typedef DiskAlarm = ({
   ChartSeverity severity,
 });
 
-/// [fs]'s mounts whose space or inode use reaches the fleet rows' warning
-/// level (OV-02, until OV-11), the most severe and fullest first. Pseudo
-/// filesystems stay out, as in the Disks card: a squashfs image is always
-/// full.
-List<DiskAlarm> diskAlarms(FsSnapshot fs) {
+/// [fs]'s mounts whose space or inode use reaches [levels]' warning level
+/// (OV-02, OV-11), the most severe and fullest first; the careful band
+/// raises none. Pseudo filesystems stay out, as in the Disks card: a
+/// squashfs image is always full.
+List<DiskAlarm> diskAlarms(
+  FsSnapshot fs, {
+  ChartThresholds levels = kDefaultThresholds,
+}) {
   final alarms = <DiskAlarm>[];
   for (final mount in shownMounts(fs, showPseudo: false)) {
     for (final (measure, percent) in [
@@ -321,8 +334,8 @@ List<DiskAlarm> diskAlarms(FsSnapshot fs) {
       (DiskMeasure.inodes, mount.inodeUsePercent),
     ]) {
       if (percent == null) continue;
-      final severity = kFleetRowThresholds.severityOf(percent.toDouble());
-      if (severity == ChartSeverity.normal) continue;
+      final severity = levels.severityOf(percent.toDouble());
+      if (!severity.alarms) continue;
       alarms.add((
         mountPoint: mount.mountPoint,
         measure: measure,
@@ -749,8 +762,13 @@ final class _PartTwo {
 
   /// OV-02: failed units through K34's summary and, with a Docker
   /// endpoint, the unhealthy containers, then the mounts past a level, and
-  /// the link to A11Y-15's switch in Settings (D60).
-  Widget health(BuildContext context, AnnouncementScope? scope) {
+  /// the doctor (TRI-01) and the link to A11Y-15's switch in Settings
+  /// (D60).
+  Widget health(
+    BuildContext context,
+    AnnouncementScope? scope, {
+    required VoidCallback onDoctor,
+  }) {
     final l10n = AppLocalizations.of(context);
     final stale = healthFreshness.stale;
     final unitsFailed = switch (slow.failed.value?.result) {
@@ -787,6 +805,14 @@ final class _PartTwo {
               stale: docker.stale,
             ),
         ..._diskHealth(context, l10n, stale),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton.icon(
+            onPressed: onDoctor,
+            icon: const Icon(Icons.medical_services_outlined),
+            label: Text(l10n.doctorOpen),
+          ),
+        ),
         if (scope != null)
           Align(
             alignment: AlignmentDirectional.centerStart,
@@ -841,14 +867,15 @@ final class _PartTwo {
     }
 
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    final alarms = diskAlarms(listed.fs);
+    final levels = ThresholdScope.of(context, ThresholdMetric.disk);
+    final alarms = diskAlarms(listed.fs, levels: levels);
     if (alarms.isEmpty) {
       return [
         _IconLine(
           icon: Icons.check_circle_outline,
           color: muted,
           text: l10n.overviewHealthDisksOk(
-            l10n.chartPercent(kFleetRowThresholds.warning / 100),
+            l10n.chartPercent(levels.warning / 100),
           ),
           stale: stale,
         ),
@@ -959,7 +986,7 @@ final class _PartTwo {
                 total: _diskBase(mount)?.toDouble(),
                 unit: ChartUnit.bytes,
                 strings: klabautermannChartStrings(l10n),
-                thresholds: kFleetRowThresholds,
+                thresholds: ThresholdScope.of(context, ThresholdMetric.disk),
                 stale: stale,
               ),
             _Facts(
@@ -1181,7 +1208,7 @@ final class _Cards {
           unit: ChartUnit.percent,
           segments: [BarSegment(label: l10n.overviewCpuBusy, value: cpu?.busy)],
           total: 100,
-          thresholds: kFleetRowThresholds,
+          thresholds: ThresholdScope.of(context, ThresholdMetric.cpu),
         ),
         _Facts(
           stale: stale,
@@ -1400,7 +1427,7 @@ final class _Cards {
             ),
           ],
           total: memory?.totalBytes?.toDouble(),
-          thresholds: kFleetRowThresholds,
+          thresholds: ThresholdScope.of(context, ThresholdMetric.memory),
         ),
         _Facts(
           stale: stale,

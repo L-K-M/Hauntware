@@ -174,7 +174,7 @@ const _waitingLink = LogStreamWaiting(LogStreamWaitReason.link);
 
 void main() {
   group('time range (CTX-03)', () {
-    test('a range reads every line in it: since and until, and no tail, '
+    test('a range asks for since and until, and no tail, '
         'which Docker would apply first', () async {
       final h = _Harness();
       await h.start(
@@ -209,6 +209,7 @@ void main() {
       expect(h.requests('/logs'), hasLength(2));
       expect(h.logsQuery()['since'], LogTimestamp.tryParse(_ts(1))!.sinceQuery);
       expect(h.logsQuery().containsKey('tail'), isFalse);
+      expect(h.logsQuery()['follow'], '1', reason: 'the resume still follows');
     });
   });
 

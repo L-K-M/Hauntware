@@ -299,4 +299,25 @@ void main() {
       isEmpty,
     );
   });
+
+  test('other tools are known by their image, agents too (DKE-17)', () {
+    HostTool? tool(String image) =>
+        hostToolOf(ContainerSummary(id: 'c1', names: const [], image: image));
+
+    expect(tool('portainer/portainer-ce:2.21.4'), HostTool.portainer);
+    expect(tool('portainer/agent:2.21.4'), HostTool.portainer);
+    expect(tool('amir20/dozzle:latest'), HostTool.dozzle);
+    expect(tool('ghcr.io/henrygd/beszel/beszel-agent'), HostTool.beszel);
+    expect(tool('louislam/uptime-kuma:1'), HostTool.uptimeKuma);
+    expect(tool('louislam/dockge:1'), HostTool.dockge);
+    expect(tool('netdata/netdata@sha256:${'a' * 64}'), HostTool.netdata);
+    expect(tool('getwud/wud:8'), HostTool.wud);
+    expect(tool('fmartinou/whats-up-docker'), HostTool.wud);
+    expect(tool('registry:5000/team/dockhand:1.0'), HostTool.dockhand);
+    expect(tool('jenkins/agent'), isNull);
+    expect(tool('myportainer/agent'), isNull);
+    expect(tool('registry.example.com/portainer/agent:2'), HostTool.portainer);
+    expect(tool('nginx:1.27'), isNull);
+    expect(tool(''), isNull);
+  });
 }

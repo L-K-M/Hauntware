@@ -1,13 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart' show FamilyHue, FamilyPalette;
 
-/// The warning and critical levels of a metric where higher is worse (CPU,
-/// memory, disk, rates): a value at or above a level has that severity.
+/// The careful, warning and critical levels of a metric where higher is
+/// worse (CPU, memory, disk, rates): a value at or above a level has that
+/// severity (OV-11). Without [careful] the band below warning is normal.
 @immutable
 final class ChartThresholds {
-  const ChartThresholds({required this.warning, required this.critical})
-    : assert(warning <= critical, 'warning must not exceed critical');
+  const ChartThresholds({
+    this.careful,
+    required this.warning,
+    required this.critical,
+  }) : assert(
+         careful == null || careful <= warning,
+         'careful must not exceed warning',
+       ),
+       assert(warning <= critical, 'warning must not exceed critical');
 
+  final double? careful;
   final double warning;
   final double critical;
 
@@ -15,12 +24,36 @@ final class ChartThresholds {
   ChartSeverity severityOf(double value) {
     if (value >= critical) return ChartSeverity.critical;
     if (value >= warning) return ChartSeverity.warning;
+    if (careful case final careful? when value >= careful) {
+      return ChartSeverity.careful;
+    }
     return ChartSeverity.normal;
   }
+
+  @override
+  bool operator ==(Object other) =>
+      other is ChartThresholds &&
+      other.careful == careful &&
+      other.warning == warning &&
+      other.critical == critical;
+
+  @override
+  int get hashCode => Object.hash(careful, warning, critical);
 }
 
-/// How far a value has crossed its [ChartThresholds].
-enum ChartSeverity { normal, warning, critical }
+/// How far a value has crossed its [ChartThresholds], from none to the
+/// worst. Careful keeps the series colour and says so by an icon and in
+/// words; warning and critical also take their colour.
+enum ChartSeverity {
+  normal,
+  careful,
+  warning,
+  critical;
+
+  /// Whether this is warning or worse: what alarms, announcements and
+  /// the health card count.
+  bool get alarms => index >= warning.index;
+}
 
 /// The colours a chart draws with (03 §10.7, A11Y-04): series and severity
 /// tints from the family palette, text from the colour scheme.
@@ -97,7 +130,7 @@ final class ChartPalette {
 
   /// The fill of a value at [severity], or null for the series colour.
   Color? severityColor(ChartSeverity severity) => switch (severity) {
-    ChartSeverity.normal => null,
+    ChartSeverity.normal || ChartSeverity.careful => null,
     ChartSeverity.warning => warning,
     ChartSeverity.critical => critical,
   };

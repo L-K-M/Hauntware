@@ -3366,6 +3366,12 @@ abstract class AppLocalizations {
   /// **'{part} ({severity})'**
   String chartWithSeverity(String part, String severity);
 
+  /// A value past its careful threshold (OV-11), below warning: shown with an info icon in the usual colour.
+  ///
+  /// In en, this message translates to:
+  /// **'careful'**
+  String get chartSeverityCareful;
+
   /// A value past its warning threshold, shown in the warning colour with a warning icon.
   ///
   /// In en, this message translates to:
@@ -5496,6 +5502,42 @@ abstract class AppLocalizations {
   /// **'Accessibility'**
   String get settingsAccessibilityTitle;
 
+  /// Settings, General: the heading of the polling budget section (SAF-19).
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get settingsCadenceTitle;
+
+  /// Settings, General: the label beside the polling budget's preset menu (SAF-19).
+  ///
+  /// In en, this message translates to:
+  /// **'How often servers are read'**
+  String get settingsCadenceLabel;
+
+  /// Settings, General: a polling budget preset in its menu.
+  ///
+  /// In en, this message translates to:
+  /// **'{preset, select, automatic{Automatic} desktop{Desktop} phone{Phone} other{Cellular saver}}'**
+  String settingsCadencePreset(String preset);
+
+  /// Settings, General: what the chosen polling budget preset reads how often (03 §6.4).
+  ///
+  /// In en, this message translates to:
+  /// **'{preset, select, automatic{Desktop rates on a computer, phone rates on a phone or tablet.} desktop{Fleet rows every 5 s, the open server every 2 s.} phone{Fleet rows every 10 s, the open server every 3 s, to save battery.} other{Fleet rows every 30 s, the open server every 10 s; timers, cron jobs, temperatures, GPUs and disk health are read once when you open them.}}'**
+  String settingsCadenceDetail(String preset);
+
+  /// Settings, General: toast when the polling budget applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The refresh rate changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get settingsCadenceNotSaved;
+
+  /// Settings, General: toast when the polling budget change failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The refresh rate could not be changed.'**
+  String get settingsCadenceNotChanged;
+
   /// Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level.
   ///
   /// In en, this message translates to:
@@ -7536,6 +7578,12 @@ abstract class AppLocalizations {
   /// **'Stacks'**
   String get dockerTabStacks;
 
+  /// Docker tab, engine strip: a rootless engine whose user has linger off (DKE-11).
+  ///
+  /// In en, this message translates to:
+  /// **'This rootless engine runs under your user, and linger is off: its containers stop when your last session on the server ends. Turn linger on with loginctl enable-linger to keep them running.'**
+  String get dockerEngineLingerOff;
+
   /// Docker tab: the sub-tab with the containers' security review (DKE-06, DKE-07).
   ///
   /// In en, this message translates to:
@@ -7619,6 +7667,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{risk, select, privileged{It has every device and capability of the host, so a break-in reaches the host.} socketMount{Whoever controls the container controls the engine, which is root on the host.} hostNetwork{It shares the host\'s network and reaches every service listening on it.} hostPid{It sees, and can signal, every process on the host.} addedCapabilities{It holds capabilities beyond the engine\'s default set.} databasePublished{Its database port is published on every address, not only on localhost or a private network.} rootUser{Its processes run as root, and the engine maps root to root on the host.} logsUnrotated{It logs with json-file and no max-size, so its log file grows until the disk is full.} latestTag{A new pull can bring a different image. Pin a version or a digest.} noHealthcheck{The engine cannot tell when it stops working while it still runs.} noRestartPolicy{It stays stopped after a crash or a reboot.} other{It may put the host at risk.}}'**
   String dockerReviewRiskWhy(String risk);
+
+  /// Docker Review sub-tab: the heading over other managers and monitors found among the containers (DKE-17).
+  ///
+  /// In en, this message translates to:
+  /// **'Other tools on this host'**
+  String get dockerReviewToolsHeading;
+
+  /// Docker Review sub-tab: another tool's product name, by HostTool name. Product names stay as their makers spell them.
+  ///
+  /// In en, this message translates to:
+  /// **'{tool, select, portainer{Portainer} dockhand{Dockhand} dockge{Dockge} dozzle{Dozzle} beszel{Beszel} uptimeKuma{Uptime Kuma} netdata{Netdata} wud{What\'s Up Docker} other{Another tool}}'**
+  String dockerReviewTool(String tool);
+
+  /// Docker Review sub-tab: the container another tool runs in, and its state as the Containers sub-tab words it.
+  ///
+  /// In en, this message translates to:
+  /// **'Container {name}, {state}'**
+  String dockerReviewToolContainer(String name, String state);
+
+  /// Docker Review sub-tab: the container another tool runs in, when the list gives no state.
+  ///
+  /// In en, this message translates to:
+  /// **'Container {name}'**
+  String dockerReviewToolContainerName(String name);
+
+  /// Docker Review sub-tab: another tool's container publishes no port.
+  ///
+  /// In en, this message translates to:
+  /// **'It publishes no port.'**
+  String get dockerReviewToolNoPorts;
 
   /// Docker Review sub-tab: why the review failed, by DockerQueryFailure name.
   ///
@@ -9785,6 +9863,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Apply'**
   String get dockerLogsRangeApply;
+
+  /// The suggested file name for a container's saved log export: the container's name. Keep it a valid file name.
+  ///
+  /// In en, this message translates to:
+  /// **'{container}.log'**
+  String dockerLogsExportFileName(String container);
 
   /// Tooltip of the off Live chip while a container's logs read a range with a chosen end.
   ///
@@ -12191,6 +12275,330 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Checked {time}'**
   String systemUpdatesCheckedAt(DateTime time);
+
+  /// The health card's button that opens the doctor checklist (TRI-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Run the doctor'**
+  String get doctorOpen;
+
+  /// Title of the doctor checklist (TRI-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Doctor'**
+  String get doctorTitle;
+
+  /// Doctor: what the checklist is.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only checks of this server, each with what to do about a finding. Nothing on the server changes.'**
+  String get doctorIntro;
+
+  /// Doctor: the summary line while a check still reads.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get doctorRunning;
+
+  /// Doctor: how many checks found a problem and how many a warning.
+  ///
+  /// In en, this message translates to:
+  /// **'{problems, plural, =0{No problems} =1{1 problem} other{{problems} problems}}, {warnings, plural, =0{no warnings} =1{1 warning} other{{warnings} warnings}}'**
+  String doctorSummary(int problems, int warnings);
+
+  /// Doctor: runs the on-demand reads again.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get doctorAgain;
+
+  /// Doctor: closes the checklist.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get doctorClose;
+
+  /// Doctor: a check's name, by kind.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, diskSpace{Disk space} inodes{Inodes} failedUnits{Failed units} securityUpdates{Security updates} rebootRequired{Reboot} timeSync{Time sync} certificates{Certificates} dockerDiskUse{Docker disk use} danglingImages{Dangling images} other{Check}}'**
+  String doctorCheck(String kind);
+
+  /// Doctor: what to do about a check's finding, by kind.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, diskSpace{Remove old logs, caches and unused images, or grow the filesystem. Disks on the System tab lists every mount.} inodes{Many small files use up inodes: look for caches, mail queues or session files and remove what is no longer needed.} failedUnits{Open Services to read each unit\'s log, and restart it once the cause is fixed.} securityUpdates{Install them from Updates on the System tab or with the package manager.} rebootRequired{Reboot from Power on the System tab when it suits, so the updated kernel or libraries run.} timeSync{Turn time sync on (for example with timedatectl set-ntp true) and make sure the NTP server can be reached.} certificates{Renew or replace the certificate before it expires. Certificates on the System tab shows each endpoint.} dockerDiskUse{Remove unused images, stopped containers and build cache from the Docker tab.} danglingImages{Rebuilds leave untagged images behind. Remove them from Images with the Dangling filter.} other{}}'**
+  String doctorHint(String kind);
+
+  /// Doctor: a check whose reading is missing.
+  ///
+  /// In en, this message translates to:
+  /// **'Not known: the reading failed or has not arrived.'**
+  String get doctorUnknown;
+
+  /// Doctor: a check whose on-demand read is under way.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading…'**
+  String get doctorChecking;
+
+  /// Doctor, disk space: nothing past the warning level.
+  ///
+  /// In en, this message translates to:
+  /// **'Every filesystem is under {percent} full.'**
+  String doctorSpaceOk(String percent);
+
+  /// Doctor, disk space: mounts past the warning level follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'Filling up, the fullest at {percent}:'**
+  String doctorSpaceFull(String percent);
+
+  /// Doctor, inodes: nothing past the warning level.
+  ///
+  /// In en, this message translates to:
+  /// **'Every filesystem uses under {percent} of its inodes.'**
+  String doctorInodesOk(String percent);
+
+  /// Doctor, inodes: mounts past the warning level follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'Running out of inodes, the fullest at {percent}:'**
+  String doctorInodesFull(String percent);
+
+  /// Doctor, failed units: none.
+  ///
+  /// In en, this message translates to:
+  /// **'No unit has failed.'**
+  String get doctorUnitsOk;
+
+  /// Doctor, failed units: the units follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 unit has failed:} other{{count} units have failed:}}'**
+  String doctorUnitsFailed(int count);
+
+  /// Doctor, security updates: how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 security update is pending.} other{{count} security updates are pending.}}'**
+  String doctorSecurityPending(int count);
+
+  /// Doctor, security updates: updates the manager cannot classify.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 update is pending, and the package manager does not say whether it fixes a security issue.} other{{count} updates are pending, and the package manager does not say which fix security issues.}}'**
+  String doctorUpdatesUnclassified(int count);
+
+  /// Doctor, security updates: none, with the other updates pending.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No updates are pending.} =1{No security updates are pending; 1 other update is.} other{No security updates are pending; {count} other updates are.}}'**
+  String doctorSecurityNone(int count);
+
+  /// Doctor, reboot: none needed.
+  ///
+  /// In en, this message translates to:
+  /// **'No reboot is needed.'**
+  String get doctorRebootNo;
+
+  /// Doctor, reboot: needed; the packages follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'A reboot is needed. Packages that asked for it, where the host says:'**
+  String get doctorRebootYes;
+
+  /// Doctor, time sync: in step.
+  ///
+  /// In en, this message translates to:
+  /// **'The clock is synchronized.'**
+  String get doctorTimeOk;
+
+  /// Doctor, time sync: the kernel is not synchronized or time sync is off.
+  ///
+  /// In en, this message translates to:
+  /// **'The clock is not synchronized.'**
+  String get doctorTimeNotSynced;
+
+  /// Doctor, time sync: not synchronized, with how far it is from this device ("2 minutes ahead of this device").
+  ///
+  /// In en, this message translates to:
+  /// **'The clock is not synchronized; it reads {skew}.'**
+  String doctorTimeNotSyncedSkew(String skew);
+
+  /// Doctor, time sync: the host believes it is synchronized but is off this device's clock ("2 minutes ahead of this device").
+  ///
+  /// In en, this message translates to:
+  /// **'The clock reads {skew}.'**
+  String doctorClockOff(String skew);
+
+  /// Doctor, certificates: nothing to check.
+  ///
+  /// In en, this message translates to:
+  /// **'No endpoints are listed for this server.'**
+  String get doctorCertificatesNone;
+
+  /// Doctor, certificates: how to set the check up.
+  ///
+  /// In en, this message translates to:
+  /// **'List endpoints under Certificates on the System tab to check them here.'**
+  String get doctorCertificatesSetUp;
+
+  /// Doctor, certificates: all fine.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{The endpoint presents a valid certificate.} other{All {count} endpoints present valid certificates.}}'**
+  String doctorCertificatesOk(int count);
+
+  /// Doctor, certificates: the endpoints follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'Failing, untrusted, expired or expiring within 14 days:'**
+  String get doctorCertificatesBad;
+
+  /// Doctor, Docker disk use: the reclaimable size from docker system df.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker could free {size} of unused data.'**
+  String doctorDockerReclaimable(String size);
+
+  /// Doctor, dangling images: none.
+  ///
+  /// In en, this message translates to:
+  /// **'No dangling images.'**
+  String get doctorDanglingNone;
+
+  /// Doctor, dangling images: how many and their size.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 dangling image takes {size}.} other{{count} dangling images take {size}.}}'**
+  String doctorDangling(int count, String size);
+
+  /// Fleet list: the attention notice (TRI-03), counting the unacknowledged problems.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 problem needs attention} other{{count} problems need attention}}'**
+  String attentionNotice(int count);
+
+  /// Fleet list: opens the attention queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Show'**
+  String get attentionShow;
+
+  /// Title of the attention queue (TRI-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Attention'**
+  String get attentionTitle;
+
+  /// Attention queue: what it lists and how acknowledging works.
+  ///
+  /// In en, this message translates to:
+  /// **'Problems across the fleet, from what this device has read this run. Acknowledging one hides it until it clears; acknowledgements stay on this device.'**
+  String get attentionIntro;
+
+  /// Attention queue: no unacknowledged problem.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing needs attention.'**
+  String get attentionNone;
+
+  /// Attention queue: heading over the acknowledged problems.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Acknowledged (1)} other{Acknowledged ({count})}}'**
+  String attentionAcknowledgedHeading(int count);
+
+  /// Attention queue: closes it.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get attentionClose;
+
+  /// Attention queue: when a problem was acknowledged, in this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledged {time}'**
+  String attentionAcknowledgedAt(DateTime time);
+
+  /// Attention queue: acknowledges a problem, after an optional note.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge'**
+  String get attentionAcknowledge;
+
+  /// Attention queue: takes an acknowledgement back.
+  ///
+  /// In en, this message translates to:
+  /// **'Reopen'**
+  String get attentionReopen;
+
+  /// Attention queue: opens the problem's server.
+  ///
+  /// In en, this message translates to:
+  /// **'Open server'**
+  String get attentionOpenServer;
+
+  /// Attention queue: the engine will not dial the server until the user decides (D46).
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting is blocked until you decide, for example about a changed host key.'**
+  String get attentionBlocked;
+
+  /// Attention queue: the link failed or waits before dialling again.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot be reached: the last attempt failed.'**
+  String get attentionUnreachable;
+
+  /// Attention queue: an in-app alert is raised, with its metric's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Alert raised: {metric}'**
+  String attentionAlert(String metric);
+
+  /// Attention queue: a failed systemd unit.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit failed: {unit}'**
+  String attentionFailedUnit(String unit);
+
+  /// Attention queue: a mount's space at the critical level.
+  ///
+  /// In en, this message translates to:
+  /// **'{mount} is {percent} full'**
+  String attentionDiskFull(String mount, String percent);
+
+  /// Attention queue: a mount's inodes at the critical level.
+  ///
+  /// In en, this message translates to:
+  /// **'{mount} uses {percent} of its inodes'**
+  String attentionInodesFull(String mount, String percent);
+
+  /// Attention queue: a container whose health check fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Container unhealthy: {container}'**
+  String attentionUnhealthy(String container);
+
+  /// Attention queue: title of the note dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge the problem'**
+  String get attentionNoteTitle;
+
+  /// Attention queue: the note field's label.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get attentionNoteLabel;
+
+  /// Attention queue: closes the note dialog without acknowledging.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get attentionCancel;
 }
 
 class _AppLocalizationsDelegate

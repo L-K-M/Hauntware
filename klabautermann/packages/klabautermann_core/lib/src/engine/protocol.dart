@@ -306,6 +306,9 @@ import '../operations/plan_types.dart';
 /// A container's processes then joined v3 the same way (03 §7.12 CTR-10,
 /// M6 plan N17): [DockerContainerTopQuery], answered by
 /// [DockerContainerTopPayload] with each command line masked.
+///
+/// Per-server polling caps then joined v3 the same way (02 SAF-19, M6
+/// plan N64): [SetServerCadenceCap].
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -527,6 +530,18 @@ final class SetCadenceProfile extends EngineRequest {
   const SetCadenceProfile(this.profile);
 
   final CadenceProfile profile;
+}
+
+/// Caps [serverId]'s cadence at [cap]'s 03 §6.4 column (SAF-19), such as
+/// the cellular saver for a server behind a metered link; null lifts the
+/// cap. The slower of the cap and [SetCadenceProfile]'s column wins, so a
+/// cap never speeds a server up. Caps outlive the fleet: a server that
+/// leaves and returns keeps its own.
+final class SetServerCadenceCap extends EngineRequest {
+  const SetServerCadenceCap(this.serverId, this.cap);
+
+  final String serverId;
+  final CadenceProfile? cap;
 }
 
 /// Opens a log stream on [spec]'s server (03 §10.1, §7.6): its records
@@ -4575,20 +4590,55 @@ final class ContainerReview {
   final List<ContainerFinding> findings;
 }
 
+/// Another manager, monitor or log viewer DKE-17 recognises among the
+/// containers by its image.
+enum HostTool {
+  portainer,
+  dockhand,
+  dockge,
+  dozzle,
+  beszel,
+  uptimeKuma,
+  netdata,
+  wud,
+}
+
+/// One container running a [HostTool], with its published ports as the
+/// list labels them (`0.0.0.0:9443->9443/tcp`).
+@immutable
+final class HostToolContainer {
+  const HostToolContainer({
+    required this.tool,
+    required this.containerId,
+    required this.name,
+    required this.state,
+    this.ports = const [],
+  });
+
+  final HostTool tool;
+  final String containerId;
+  final String name;
+  final String? state;
+  final List<String> ports;
+}
+
 /// A [DockerReviewQuery]'s answer: each container read, in the list's
-/// order. A container removed between the list and its inspect is left
-/// out; [omitted] counts those past [kDockerReviewMax], [unreadable]
-/// those whose inspect the daemon refused.
+/// order, and the other tools running among all of them (DKE-17). A
+/// container removed between the list and its inspect is left out;
+/// [omitted] counts those past [kDockerReviewMax], [unreadable] those
+/// whose inspect the daemon refused.
 final class DockerReviewPayload extends DockerPayload {
   const DockerReviewPayload(
     this.reviews, {
     this.omitted = 0,
     this.unreadable = 0,
+    this.tools = const [],
   });
 
   final List<ContainerReview> reviews;
   final int omitted;
   final int unreadable;
+  final List<HostToolContainer> tools;
 }
 
 /// The containers grouped by compose project (STK-01), from the same
@@ -6396,7 +6446,8 @@ enum SampleStream {
   gpu,
 }
 
-/// The 03 §6.4 cadence columns [SetCadenceProfile] picks among.
+/// The 03 §6.4 cadence columns [SetCadenceProfile] picks among, from the
+/// fastest to the slowest; [SetServerCadenceCap] relies on that order.
 enum CadenceProfile {
   /// The Desktop column; the engine starts with it.
   desktop,

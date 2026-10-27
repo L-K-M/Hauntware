@@ -6,12 +6,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart'
-    show ChartSeverity, StackedBar;
+    show ChartSeverity, ChartThresholds, StackedBar;
 import 'package:klabautermann_app/ui/cpu_hints.dart';
-import 'package:klabautermann_app/ui/fleet_row_state.dart'
-    show kFleetRowThresholds;
 import 'package:klabautermann_app/ui/overview_panel.dart';
 import 'package:klabautermann_app/ui/server_surfaces.dart';
+import 'package:klabautermann_app/ui/threshold_scope.dart';
 import 'package:klabautermann_app/ui/system_panel.dart' show PanelSection;
 import 'package:klabautermann_app/ui/threshold_announcer.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -889,6 +888,16 @@ void main() {
         ('/var', DiskMeasure.space, 80, ChartSeverity.warning),
       ],
     );
+
+    // The user's disk levels (OV-11) move the alarms; careful raises none.
+    final own = diskAlarms(
+      FsSnapshot([_mount('/', use: 79), _mount('/var', use: 66)]),
+      levels: const ChartThresholds(careful: 50, warning: 65, critical: 78),
+    );
+    expect(
+      [for (final a in own) (a.mountPoint, a.severity)],
+      [('/', ChartSeverity.critical), ('/var', ChartSeverity.warning)],
+    );
   });
 
   testWidgets('OV-01 adds mounts, network, uptime, OS and kernel in IEC '
@@ -919,10 +928,10 @@ void main() {
     // The System tab lists pseudo filesystems behind its filter.
     expect(find.text('/run'), findsNothing);
     expect(find.textContaining('GB'), findsNothing);
-    // A mount's bar warns at the fleet rows' levels, as the health card
+    // A mount's bar takes the disk levels (OV-11), as the health card
     // does.
     final varBar = _bars(tester).singleWhere((bar) => bar.label == '/var');
-    expect(varBar.thresholds, same(kFleetRowThresholds));
+    expect(varBar.thresholds, kDefaultThresholds);
   });
 
   testWidgets('a df timeout keeps the last mounts with their use unknown', (
@@ -1256,6 +1265,22 @@ void main() {
     expect(find.textContaining('Threshold announcements'), findsNothing);
   });
 
+  testWidgets('TRI-01: the health card runs the doctor', (tester) async {
+    final panel = await _pump(tester);
+    await tester.ensureVisible(find.text('Run the doctor'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Run the doctor'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Doctor'), findsOne);
+    expect(find.text('Checking…'), findsOne);
+    expect(panel.engine.sentOfType<ReadPackages>(), hasLength(1));
+
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Doctor'), findsNothing);
+  });
+
   testWidgets('TRI-02 names what in the reading slows the server', (
     tester,
   ) async {
@@ -1331,6 +1356,22 @@ void main() {
       await cpu(38, 96);
       await cpu(48, 96);
       expect(heard(tester), ['CPU 96%: critical level']);
+    });
+
+    test('the careful band is never heard: from it, warning starts from '
+        'normal and the way back says normal (OV-11)', () {
+      final watch = BandWatch(BandMetric.cpu);
+      ChartSeverity? at(int seconds, double value) =>
+          watch.observe(value, _start.add(Duration(seconds: seconds)));
+
+      expect(at(0, 75), isNull);
+      expect([
+        for (final s in [2, 4, 6, 8, 10, 12]) at(s, 72),
+      ], everyElement(isNull));
+      expect(at(14, 85), isNull);
+      expect(at(26, 85), ChartSeverity.warning);
+      expect(at(28, 74), isNull);
+      expect(at(40, 74), ChartSeverity.normal);
     });
 
     test('a band is heard only with a value inside it', () {

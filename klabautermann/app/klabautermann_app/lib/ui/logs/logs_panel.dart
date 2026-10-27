@@ -462,18 +462,14 @@ class _LogsPanelState extends State<LogsPanel> {
   }
 
   /// LOG-10: the held lines, redacted unless the user says otherwise.
-  Future<void> _export() {
-    final l10n = AppLocalizations.of(context);
-    final lines = logExportLines(_panel.logs, dropped: l10n.logDroppedLines);
-    return _sheet<void>(
-      (sheetContext) => LogExportSheet(
-        monitoring: widget.monitoring,
-        host: LogExportScope.of(context),
-        lines: lines,
-        fileName: l10n.logsExportFileName(_panel.query.source.name),
-      ),
-    );
-  }
+  Future<void> _export() => showLogExport(
+    context,
+    monitoring: widget.monitoring,
+    logs: _panel.logs,
+    fileName: AppLocalizations.of(
+      context,
+    ).logsExportFileName(_panel.query.source.name),
+  );
 
   Future<void> _editFilters() => _sheet<void>(
     (context) => _FilterForm(

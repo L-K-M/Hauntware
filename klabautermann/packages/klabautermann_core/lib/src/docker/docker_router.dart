@@ -1028,6 +1028,20 @@ final class DockerRouter {
           list.value.length,
         ),
         unreadable: unreadable,
+        tools: [
+          for (final summary in list.value)
+            if (hostToolOf(summary) case final tool?)
+              HostToolContainer(
+                tool: tool,
+                containerId: summary.id,
+                name: summary.name ?? summary.id,
+                state: summary.state,
+                ports: [
+                  for (final port in summary.ports)
+                    if (port.publicPort != null) port.label,
+                ],
+              ),
+        ],
       ),
       warnings,
     );

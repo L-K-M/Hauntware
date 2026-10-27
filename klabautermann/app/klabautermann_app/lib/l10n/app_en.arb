@@ -3061,6 +3061,10 @@
       }
     }
   },
+  "chartSeverityCareful": "careful",
+  "@chartSeverityCareful": {
+    "description": "A value past its careful threshold (OV-11), below warning: shown with an info icon in the usual colour."
+  },
   "chartSeverityWarning": "warning",
   "@chartSeverityWarning": {
     "description": "A value past its warning threshold, shown in the warning colour with a warning icon."
@@ -5264,6 +5268,36 @@
   "@settingsAccessibilityTitle": {
     "description": "Heading of the accessibility settings on the General settings tab."
   },
+  "settingsCadenceTitle": "Refresh",
+  "@settingsCadenceTitle": {
+    "description": "Settings, General: the heading of the polling budget section (SAF-19)."
+  },
+  "settingsCadenceLabel": "How often servers are read",
+  "@settingsCadenceLabel": {
+    "description": "Settings, General: the label beside the polling budget's preset menu (SAF-19)."
+  },
+  "settingsCadencePreset": "{preset, select, automatic{Automatic} desktop{Desktop} phone{Phone} other{Cellular saver}}",
+  "@settingsCadencePreset": {
+    "description": "Settings, General: a polling budget preset in its menu.",
+    "placeholders": {
+      "preset": {"type": "String", "example": "automatic"}
+    }
+  },
+  "settingsCadenceDetail": "{preset, select, automatic{Desktop rates on a computer, phone rates on a phone or tablet.} desktop{Fleet rows every 5 s, the open server every 2 s.} phone{Fleet rows every 10 s, the open server every 3 s, to save battery.} other{Fleet rows every 30 s, the open server every 10 s; timers, cron jobs, temperatures, GPUs and disk health are read once when you open them.}}",
+  "@settingsCadenceDetail": {
+    "description": "Settings, General: what the chosen polling budget preset reads how often (03 §6.4).",
+    "placeholders": {
+      "preset": {"type": "String", "example": "automatic"}
+    }
+  },
+  "settingsCadenceNotSaved": "The refresh rate changed but could not be saved. It lasts until Klabautermann quits.",
+  "@settingsCadenceNotSaved": {
+    "description": "Settings, General: toast when the polling budget applied but settings.json could not be written."
+  },
+  "settingsCadenceNotChanged": "The refresh rate could not be changed.",
+  "@settingsCadenceNotChanged": {
+    "description": "Settings, General: toast when the polling budget change failed."
+  },
   "settingsAnnounceBands": "Announce threshold changes",
   "@settingsAnnounceBands": {
     "description": "Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level."
@@ -7189,6 +7223,10 @@
   "@dockerTabStacks": {
     "description": "Docker tab: the sub-tab listing compose stacks."
   },
+  "dockerEngineLingerOff": "This rootless engine runs under your user, and linger is off: its containers stop when your last session on the server ends. Turn linger on with loginctl enable-linger to keep them running.",
+  "@dockerEngineLingerOff": {
+    "description": "Docker tab, engine strip: a rootless engine whose user has linger off (DKE-11)."
+  },
   "dockerTabReview": "Review",
   "@dockerTabReview": {
     "description": "Docker tab: the sub-tab with the containers' security review (DKE-06, DKE-07)."
@@ -7301,6 +7339,44 @@
         "type": "String"
       }
     }
+  },
+  "dockerReviewToolsHeading": "Other tools on this host",
+  "@dockerReviewToolsHeading": {
+    "description": "Docker Review sub-tab: the heading over other managers and monitors found among the containers (DKE-17)."
+  },
+  "dockerReviewTool": "{tool, select, portainer{Portainer} dockhand{Dockhand} dockge{Dockge} dozzle{Dozzle} beszel{Beszel} uptimeKuma{Uptime Kuma} netdata{Netdata} wud{What's Up Docker} other{Another tool}}",
+  "@dockerReviewTool": {
+    "description": "Docker Review sub-tab: another tool's product name, by HostTool name. Product names stay as their makers spell them.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerReviewToolContainer": "Container {name}, {state}",
+  "@dockerReviewToolContainer": {
+    "description": "Docker Review sub-tab: the container another tool runs in, and its state as the Containers sub-tab words it.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerReviewToolContainerName": "Container {name}",
+  "@dockerReviewToolContainerName": {
+    "description": "Docker Review sub-tab: the container another tool runs in, when the list gives no state.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerReviewToolNoPorts": "It publishes no port.",
+  "@dockerReviewToolNoPorts": {
+    "description": "Docker Review sub-tab: another tool's container publishes no port."
   },
   "dockerReviewFailed": "{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server's capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to list or inspect the containers.} connectionFailed{The connection to the engine failed during the review.} cancelled{The review stopped before it finished.} other{The containers could not be reviewed.}}",
   "@dockerReviewFailed": {
@@ -9364,6 +9440,16 @@
   "dockerLogsRangeApply": "Apply",
   "@dockerLogsRangeApply": {
     "description": "Reads the container's logs in the chosen time range."
+  },
+  "dockerLogsExportFileName": "{container}.log",
+  "@dockerLogsExportFileName": {
+    "description": "The suggested file name for a container's saved log export: the container's name. Keep it a valid file name.",
+    "placeholders": {
+      "container": {
+        "type": "String",
+        "example": "web-db"
+      }
+    }
   },
   "dockerLogsLiveRange": "A range with an end has no new lines to follow.",
   "@dockerLogsLiveRange": {
@@ -11530,5 +11616,354 @@
         "format": "yMMMd+jm"
       }
     }
+  },
+  "doctorOpen": "Run the doctor",
+  "@doctorOpen": {
+    "description": "The health card's button that opens the doctor checklist (TRI-01)."
+  },
+  "doctorTitle": "Doctor",
+  "@doctorTitle": {
+    "description": "Title of the doctor checklist (TRI-01)."
+  },
+  "doctorIntro": "Read-only checks of this server, each with what to do about a finding. Nothing on the server changes.",
+  "@doctorIntro": {
+    "description": "Doctor: what the checklist is."
+  },
+  "doctorRunning": "Checking…",
+  "@doctorRunning": {
+    "description": "Doctor: the summary line while a check still reads."
+  },
+  "doctorSummary": "{problems, plural, =0{No problems} =1{1 problem} other{{problems} problems}}, {warnings, plural, =0{no warnings} =1{1 warning} other{{warnings} warnings}}",
+  "@doctorSummary": {
+    "description": "Doctor: how many checks found a problem and how many a warning.",
+    "placeholders": {
+      "problems": {
+        "type": "int"
+      },
+      "warnings": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorAgain": "Check again",
+  "@doctorAgain": {
+    "description": "Doctor: runs the on-demand reads again."
+  },
+  "doctorClose": "Close",
+  "@doctorClose": {
+    "description": "Doctor: closes the checklist."
+  },
+  "doctorCheck": "{kind, select, diskSpace{Disk space} inodes{Inodes} failedUnits{Failed units} securityUpdates{Security updates} rebootRequired{Reboot} timeSync{Time sync} certificates{Certificates} dockerDiskUse{Docker disk use} danglingImages{Dangling images} other{Check}}",
+  "@doctorCheck": {
+    "description": "Doctor: a check's name, by kind.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorHint": "{kind, select, diskSpace{Remove old logs, caches and unused images, or grow the filesystem. Disks on the System tab lists every mount.} inodes{Many small files use up inodes: look for caches, mail queues or session files and remove what is no longer needed.} failedUnits{Open Services to read each unit's log, and restart it once the cause is fixed.} securityUpdates{Install them from Updates on the System tab or with the package manager.} rebootRequired{Reboot from Power on the System tab when it suits, so the updated kernel or libraries run.} timeSync{Turn time sync on (for example with timedatectl set-ntp true) and make sure the NTP server can be reached.} certificates{Renew or replace the certificate before it expires. Certificates on the System tab shows each endpoint.} dockerDiskUse{Remove unused images, stopped containers and build cache from the Docker tab.} danglingImages{Rebuilds leave untagged images behind. Remove them from Images with the Dangling filter.} other{}}",
+  "@doctorHint": {
+    "description": "Doctor: what to do about a check's finding, by kind.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorUnknown": "Not known: the reading failed or has not arrived.",
+  "@doctorUnknown": {
+    "description": "Doctor: a check whose reading is missing."
+  },
+  "doctorChecking": "Reading…",
+  "@doctorChecking": {
+    "description": "Doctor: a check whose on-demand read is under way."
+  },
+  "doctorSpaceOk": "Every filesystem is under {percent} full.",
+  "@doctorSpaceOk": {
+    "description": "Doctor, disk space: nothing past the warning level.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorSpaceFull": "Filling up, the fullest at {percent}:",
+  "@doctorSpaceFull": {
+    "description": "Doctor, disk space: mounts past the warning level follow, one per line.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorInodesOk": "Every filesystem uses under {percent} of its inodes.",
+  "@doctorInodesOk": {
+    "description": "Doctor, inodes: nothing past the warning level.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorInodesFull": "Running out of inodes, the fullest at {percent}:",
+  "@doctorInodesFull": {
+    "description": "Doctor, inodes: mounts past the warning level follow, one per line.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorUnitsOk": "No unit has failed.",
+  "@doctorUnitsOk": {
+    "description": "Doctor, failed units: none."
+  },
+  "doctorUnitsFailed": "{count, plural, =1{1 unit has failed:} other{{count} units have failed:}}",
+  "@doctorUnitsFailed": {
+    "description": "Doctor, failed units: the units follow, one per line.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorSecurityPending": "{count, plural, =1{1 security update is pending.} other{{count} security updates are pending.}}",
+  "@doctorSecurityPending": {
+    "description": "Doctor, security updates: how many.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorUpdatesUnclassified": "{count, plural, =1{1 update is pending, and the package manager does not say whether it fixes a security issue.} other{{count} updates are pending, and the package manager does not say which fix security issues.}}",
+  "@doctorUpdatesUnclassified": {
+    "description": "Doctor, security updates: updates the manager cannot classify.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorSecurityNone": "{count, plural, =0{No updates are pending.} =1{No security updates are pending; 1 other update is.} other{No security updates are pending; {count} other updates are.}}",
+  "@doctorSecurityNone": {
+    "description": "Doctor, security updates: none, with the other updates pending.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorRebootNo": "No reboot is needed.",
+  "@doctorRebootNo": {
+    "description": "Doctor, reboot: none needed."
+  },
+  "doctorRebootYes": "A reboot is needed. Packages that asked for it, where the host says:",
+  "@doctorRebootYes": {
+    "description": "Doctor, reboot: needed; the packages follow, one per line."
+  },
+  "doctorTimeOk": "The clock is synchronized.",
+  "@doctorTimeOk": {
+    "description": "Doctor, time sync: in step."
+  },
+  "doctorTimeNotSynced": "The clock is not synchronized.",
+  "@doctorTimeNotSynced": {
+    "description": "Doctor, time sync: the kernel is not synchronized or time sync is off."
+  },
+  "doctorTimeNotSyncedSkew": "The clock is not synchronized; it reads {skew}.",
+  "@doctorTimeNotSyncedSkew": {
+    "description": "Doctor, time sync: not synchronized, with how far it is from this device (\"2 minutes ahead of this device\").",
+    "placeholders": {
+      "skew": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorClockOff": "The clock reads {skew}.",
+  "@doctorClockOff": {
+    "description": "Doctor, time sync: the host believes it is synchronized but is off this device's clock (\"2 minutes ahead of this device\").",
+    "placeholders": {
+      "skew": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorCertificatesNone": "No endpoints are listed for this server.",
+  "@doctorCertificatesNone": {
+    "description": "Doctor, certificates: nothing to check."
+  },
+  "doctorCertificatesSetUp": "List endpoints under Certificates on the System tab to check them here.",
+  "@doctorCertificatesSetUp": {
+    "description": "Doctor, certificates: how to set the check up."
+  },
+  "doctorCertificatesOk": "{count, plural, =1{The endpoint presents a valid certificate.} other{All {count} endpoints present valid certificates.}}",
+  "@doctorCertificatesOk": {
+    "description": "Doctor, certificates: all fine.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorCertificatesBad": "Failing, untrusted, expired or expiring within 14 days:",
+  "@doctorCertificatesBad": {
+    "description": "Doctor, certificates: the endpoints follow, one per line."
+  },
+  "doctorDockerReclaimable": "Docker could free {size} of unused data.",
+  "@doctorDockerReclaimable": {
+    "description": "Doctor, Docker disk use: the reclaimable size from docker system df.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorDanglingNone": "No dangling images.",
+  "@doctorDanglingNone": {
+    "description": "Doctor, dangling images: none."
+  },
+  "doctorDangling": "{count, plural, =1{1 dangling image takes {size}.} other{{count} dangling images take {size}.}}",
+  "@doctorDangling": {
+    "description": "Doctor, dangling images: how many and their size.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionNotice": "{count, plural, =1{1 problem needs attention} other{{count} problems need attention}}",
+  "@attentionNotice": {
+    "description": "Fleet list: the attention notice (TRI-03), counting the unacknowledged problems.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "attentionShow": "Show",
+  "@attentionShow": {
+    "description": "Fleet list: opens the attention queue."
+  },
+  "attentionTitle": "Attention",
+  "@attentionTitle": {
+    "description": "Title of the attention queue (TRI-03)."
+  },
+  "attentionIntro": "Problems across the fleet, from what this device has read this run. Acknowledging one hides it until it clears; acknowledgements stay on this device.",
+  "@attentionIntro": {
+    "description": "Attention queue: what it lists and how acknowledging works."
+  },
+  "attentionNone": "Nothing needs attention.",
+  "@attentionNone": {
+    "description": "Attention queue: no unacknowledged problem."
+  },
+  "attentionAcknowledgedHeading": "{count, plural, =1{Acknowledged (1)} other{Acknowledged ({count})}}",
+  "@attentionAcknowledgedHeading": {
+    "description": "Attention queue: heading over the acknowledged problems.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "attentionClose": "Close",
+  "@attentionClose": {
+    "description": "Attention queue: closes it."
+  },
+  "attentionAcknowledgedAt": "Acknowledged {time}",
+  "@attentionAcknowledgedAt": {
+    "description": "Attention queue: when a problem was acknowledged, in this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "attentionAcknowledge": "Acknowledge",
+  "@attentionAcknowledge": {
+    "description": "Attention queue: acknowledges a problem, after an optional note."
+  },
+  "attentionReopen": "Reopen",
+  "@attentionReopen": {
+    "description": "Attention queue: takes an acknowledgement back."
+  },
+  "attentionOpenServer": "Open server",
+  "@attentionOpenServer": {
+    "description": "Attention queue: opens the problem's server."
+  },
+  "attentionBlocked": "Connecting is blocked until you decide, for example about a changed host key.",
+  "@attentionBlocked": {
+    "description": "Attention queue: the engine will not dial the server until the user decides (D46)."
+  },
+  "attentionUnreachable": "Cannot be reached: the last attempt failed.",
+  "@attentionUnreachable": {
+    "description": "Attention queue: the link failed or waits before dialling again."
+  },
+  "attentionAlert": "Alert raised: {metric}",
+  "@attentionAlert": {
+    "description": "Attention queue: an in-app alert is raised, with its metric's name.",
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionFailedUnit": "Unit failed: {unit}",
+  "@attentionFailedUnit": {
+    "description": "Attention queue: a failed systemd unit.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionDiskFull": "{mount} is {percent} full",
+  "@attentionDiskFull": {
+    "description": "Attention queue: a mount's space at the critical level.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionInodesFull": "{mount} uses {percent} of its inodes",
+  "@attentionInodesFull": {
+    "description": "Attention queue: a mount's inodes at the critical level.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionUnhealthy": "Container unhealthy: {container}",
+  "@attentionUnhealthy": {
+    "description": "Attention queue: a container whose health check fails.",
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionNoteTitle": "Acknowledge the problem",
+  "@attentionNoteTitle": {
+    "description": "Attention queue: title of the note dialog."
+  },
+  "attentionNoteLabel": "Note (optional)",
+  "@attentionNoteLabel": {
+    "description": "Attention queue: the note field's label."
+  },
+  "attentionCancel": "Cancel",
+  "@attentionCancel": {
+    "description": "Attention queue: closes the note dialog without acknowledging."
   }
 }

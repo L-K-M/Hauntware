@@ -2571,6 +2571,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get chartSeverityCareful => 'careful';
+
+  @override
   String get chartSeverityWarning => 'warning';
 
   @override
@@ -4320,6 +4323,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAccessibilityTitle => 'Accessibility';
 
   @override
+  String get settingsCadenceTitle => 'Refresh';
+
+  @override
+  String get settingsCadenceLabel => 'How often servers are read';
+
+  @override
+  String settingsCadencePreset(String preset) {
+    String _temp0 = intl.Intl.selectLogic(preset, {
+      'automatic': 'Automatic',
+      'desktop': 'Desktop',
+      'phone': 'Phone',
+      'other': 'Cellular saver',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String settingsCadenceDetail(String preset) {
+    String _temp0 = intl.Intl.selectLogic(preset, {
+      'automatic':
+          'Desktop rates on a computer, phone rates on a phone or tablet.',
+      'desktop': 'Fleet rows every 5 s, the open server every 2 s.',
+      'phone':
+          'Fleet rows every 10 s, the open server every 3 s, to save battery.',
+      'other':
+          'Fleet rows every 30 s, the open server every 10 s; timers, cron jobs, temperatures, GPUs and disk health are read once when you open them.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get settingsCadenceNotSaved =>
+      'The refresh rate changed but could not be saved. It lasts until Klabautermann quits.';
+
+  @override
+  String get settingsCadenceNotChanged =>
+      'The refresh rate could not be changed.';
+
+  @override
   String get settingsAnnounceBands => 'Announce threshold changes';
 
   @override
@@ -5990,6 +6032,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerTabStacks => 'Stacks';
 
   @override
+  String get dockerEngineLingerOff =>
+      'This rootless engine runs under your user, and linger is off: its containers stop when your last session on the server ends. Turn linger on with loginctl enable-linger to keep them running.';
+
+  @override
   String get dockerTabReview => 'Review';
 
   @override
@@ -6113,6 +6159,38 @@ class AppLocalizationsEn extends AppLocalizations {
     });
     return '$_temp0';
   }
+
+  @override
+  String get dockerReviewToolsHeading => 'Other tools on this host';
+
+  @override
+  String dockerReviewTool(String tool) {
+    String _temp0 = intl.Intl.selectLogic(tool, {
+      'portainer': 'Portainer',
+      'dockhand': 'Dockhand',
+      'dockge': 'Dockge',
+      'dozzle': 'Dozzle',
+      'beszel': 'Beszel',
+      'uptimeKuma': 'Uptime Kuma',
+      'netdata': 'Netdata',
+      'wud': 'What\'s Up Docker',
+      'other': 'Another tool',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerReviewToolContainer(String name, String state) {
+    return 'Container $name, $state';
+  }
+
+  @override
+  String dockerReviewToolContainerName(String name) {
+    return 'Container $name';
+  }
+
+  @override
+  String get dockerReviewToolNoPorts => 'It publishes no port.';
 
   @override
   String dockerReviewFailed(String reason) {
@@ -7803,6 +7881,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerLogsRangeApply => 'Apply';
+
+  @override
+  String dockerLogsExportFileName(String container) {
+    return '$container.log';
+  }
 
   @override
   String get dockerLogsLiveRange =>
@@ -9603,4 +9686,326 @@ class AppLocalizationsEn extends AppLocalizations {
 
     return 'Checked $timeString';
   }
+
+  @override
+  String get doctorOpen => 'Run the doctor';
+
+  @override
+  String get doctorTitle => 'Doctor';
+
+  @override
+  String get doctorIntro =>
+      'Read-only checks of this server, each with what to do about a finding. Nothing on the server changes.';
+
+  @override
+  String get doctorRunning => 'Checking…';
+
+  @override
+  String doctorSummary(int problems, int warnings) {
+    String _temp0 = intl.Intl.pluralLogic(
+      problems,
+      locale: localeName,
+      other: '$problems problems',
+      one: '1 problem',
+      zero: 'No problems',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      warnings,
+      locale: localeName,
+      other: '$warnings warnings',
+      one: '1 warning',
+      zero: 'no warnings',
+    );
+    return '$_temp0, $_temp1';
+  }
+
+  @override
+  String get doctorAgain => 'Check again';
+
+  @override
+  String get doctorClose => 'Close';
+
+  @override
+  String doctorCheck(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'diskSpace': 'Disk space',
+      'inodes': 'Inodes',
+      'failedUnits': 'Failed units',
+      'securityUpdates': 'Security updates',
+      'rebootRequired': 'Reboot',
+      'timeSync': 'Time sync',
+      'certificates': 'Certificates',
+      'dockerDiskUse': 'Docker disk use',
+      'danglingImages': 'Dangling images',
+      'other': 'Check',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String doctorHint(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'diskSpace':
+          'Remove old logs, caches and unused images, or grow the filesystem. Disks on the System tab lists every mount.',
+      'inodes':
+          'Many small files use up inodes: look for caches, mail queues or session files and remove what is no longer needed.',
+      'failedUnits':
+          'Open Services to read each unit\'s log, and restart it once the cause is fixed.',
+      'securityUpdates':
+          'Install them from Updates on the System tab or with the package manager.',
+      'rebootRequired':
+          'Reboot from Power on the System tab when it suits, so the updated kernel or libraries run.',
+      'timeSync':
+          'Turn time sync on (for example with timedatectl set-ntp true) and make sure the NTP server can be reached.',
+      'certificates':
+          'Renew or replace the certificate before it expires. Certificates on the System tab shows each endpoint.',
+      'dockerDiskUse':
+          'Remove unused images, stopped containers and build cache from the Docker tab.',
+      'danglingImages':
+          'Rebuilds leave untagged images behind. Remove them from Images with the Dangling filter.',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get doctorUnknown =>
+      'Not known: the reading failed or has not arrived.';
+
+  @override
+  String get doctorChecking => 'Reading…';
+
+  @override
+  String doctorSpaceOk(String percent) {
+    return 'Every filesystem is under $percent full.';
+  }
+
+  @override
+  String doctorSpaceFull(String percent) {
+    return 'Filling up, the fullest at $percent:';
+  }
+
+  @override
+  String doctorInodesOk(String percent) {
+    return 'Every filesystem uses under $percent of its inodes.';
+  }
+
+  @override
+  String doctorInodesFull(String percent) {
+    return 'Running out of inodes, the fullest at $percent:';
+  }
+
+  @override
+  String get doctorUnitsOk => 'No unit has failed.';
+
+  @override
+  String doctorUnitsFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count units have failed:',
+      one: '1 unit has failed:',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String doctorSecurityPending(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count security updates are pending.',
+      one: '1 security update is pending.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String doctorUpdatesUnclassified(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count updates are pending, and the package manager does not say which fix security issues.',
+      one:
+          '1 update is pending, and the package manager does not say whether it fixes a security issue.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String doctorSecurityNone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'No security updates are pending; $count other updates are.',
+      one: 'No security updates are pending; 1 other update is.',
+      zero: 'No updates are pending.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get doctorRebootNo => 'No reboot is needed.';
+
+  @override
+  String get doctorRebootYes =>
+      'A reboot is needed. Packages that asked for it, where the host says:';
+
+  @override
+  String get doctorTimeOk => 'The clock is synchronized.';
+
+  @override
+  String get doctorTimeNotSynced => 'The clock is not synchronized.';
+
+  @override
+  String doctorTimeNotSyncedSkew(String skew) {
+    return 'The clock is not synchronized; it reads $skew.';
+  }
+
+  @override
+  String doctorClockOff(String skew) {
+    return 'The clock reads $skew.';
+  }
+
+  @override
+  String get doctorCertificatesNone =>
+      'No endpoints are listed for this server.';
+
+  @override
+  String get doctorCertificatesSetUp =>
+      'List endpoints under Certificates on the System tab to check them here.';
+
+  @override
+  String doctorCertificatesOk(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'All $count endpoints present valid certificates.',
+      one: 'The endpoint presents a valid certificate.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get doctorCertificatesBad =>
+      'Failing, untrusted, expired or expiring within 14 days:';
+
+  @override
+  String doctorDockerReclaimable(String size) {
+    return 'Docker could free $size of unused data.';
+  }
+
+  @override
+  String get doctorDanglingNone => 'No dangling images.';
+
+  @override
+  String doctorDangling(int count, String size) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count dangling images take $size.',
+      one: '1 dangling image takes $size.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String attentionNotice(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count problems need attention',
+      one: '1 problem needs attention',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get attentionShow => 'Show';
+
+  @override
+  String get attentionTitle => 'Attention';
+
+  @override
+  String get attentionIntro =>
+      'Problems across the fleet, from what this device has read this run. Acknowledging one hides it until it clears; acknowledgements stay on this device.';
+
+  @override
+  String get attentionNone => 'Nothing needs attention.';
+
+  @override
+  String attentionAcknowledgedHeading(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Acknowledged ($count)',
+      one: 'Acknowledged (1)',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get attentionClose => 'Close';
+
+  @override
+  String attentionAcknowledgedAt(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Acknowledged $timeString';
+  }
+
+  @override
+  String get attentionAcknowledge => 'Acknowledge';
+
+  @override
+  String get attentionReopen => 'Reopen';
+
+  @override
+  String get attentionOpenServer => 'Open server';
+
+  @override
+  String get attentionBlocked =>
+      'Connecting is blocked until you decide, for example about a changed host key.';
+
+  @override
+  String get attentionUnreachable =>
+      'Cannot be reached: the last attempt failed.';
+
+  @override
+  String attentionAlert(String metric) {
+    return 'Alert raised: $metric';
+  }
+
+  @override
+  String attentionFailedUnit(String unit) {
+    return 'Unit failed: $unit';
+  }
+
+  @override
+  String attentionDiskFull(String mount, String percent) {
+    return '$mount is $percent full';
+  }
+
+  @override
+  String attentionInodesFull(String mount, String percent) {
+    return '$mount uses $percent of its inodes';
+  }
+
+  @override
+  String attentionUnhealthy(String container) {
+    return 'Container unhealthy: $container';
+  }
+
+  @override
+  String get attentionNoteTitle => 'Acknowledge the problem';
+
+  @override
+  String get attentionNoteLabel => 'Note (optional)';
+
+  @override
+  String get attentionCancel => 'Cancel';
 }

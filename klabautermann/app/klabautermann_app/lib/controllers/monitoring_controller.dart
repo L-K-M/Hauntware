@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../ui/charts/series_ring.dart';
 import '../ui/charts/time_series.dart';
 import 'account_reads.dart';
+import 'attention.dart';
 import 'container_columns.dart';
 import 'container_terminals.dart';
 import 'docker_controller.dart';
@@ -158,10 +159,12 @@ final class MonitoringController extends ChangeNotifier {
     DockerEndpointChoices? dockerEndpointChoices,
     StackFolders? stackFolders,
     TlsEndpoints? tlsEndpoints,
+    AttentionAcks? attentionAcks,
     ContainerColumnChoice? containerColumns,
   }) : _clock = _FreshnessClock(now),
        stackFolders = stackFolders ?? StackFolders(),
        tlsEndpoints = tlsEndpoints ?? TlsEndpoints(),
+       attentionAcks = attentionAcks ?? AttentionAcks(),
        containerColumns = containerColumns ?? ContainerColumnChoice() {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     logs = LogStreams(_engine);
@@ -188,6 +191,9 @@ final class MonitoringController extends ChangeNotifier {
   /// The endpoints the System tab's Certificates section checks from this
   /// device (CRT-01), chosen on this device.
   final TlsEndpoints tlsEndpoints;
+
+  /// TRI-03's acknowledged problems, kept on this device.
+  final AttentionAcks attentionAcks;
 
   /// The log streams panels open, and each server's journal access for
   /// LOG-04's notice (03 §10.1, §10.8): a concern of its own that lasts
@@ -265,6 +271,9 @@ final class MonitoringController extends ChangeNotifier {
   /// What the engine was last told. It starts with the app in the
   /// foreground, so only a change is sent (03 §10.1).
   AppActivity _activity = AppActivity.foreground;
+
+  /// The 6.4 column the engine samples at; it starts at Desktop's.
+  CadenceProfile _cadence = CadenceProfile.desktop;
   bool _engineStopped = false;
 
   /// When the app last went to the background, and the servers the
@@ -583,6 +592,14 @@ final class MonitoringController extends ChangeNotifier {
       _leaving.remove(serverId);
       _send(Disconnect(serverId));
     });
+  }
+
+  /// Picks the 6.4 column the engine samples at (SAF-19), when that
+  /// changed.
+  void setCadenceProfile(CadenceProfile profile) {
+    if (profile == _cadence) return;
+    _cadence = profile;
+    _send(SetCadenceProfile(profile));
   }
 
   /// Tells the engine whether the user can see the app (03 §10.1), when
