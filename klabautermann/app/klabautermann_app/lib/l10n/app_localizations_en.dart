@@ -10089,4 +10089,50 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get attentionCancel => 'Cancel';
+
+  @override
+  String fleetSummaryOnline(int online, int total) {
+    return '$online of $total online';
+  }
+
+  @override
+  String fleetSummaryAttention(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count need attention',
+      one: '1 needs attention',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String fleetSummaryCpu(int percent) {
+    return 'CPU $percent%';
+  }
+
+  @override
+  String fleetSummaryMemory(String used, String total) {
+    return 'Memory $used of $total';
+  }
+
+  @override
+  String fleetFaultsOnly(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Needs attention ($count)',
+      zero: 'Needs attention',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetAttentionFirst => 'Attention first';
+
+  @override
+  String get fleetNoFaults => 'Nothing needs attention.';
+
+  @override
+  String get fleetShowAll => 'Show all servers';
 }

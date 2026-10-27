@@ -19,6 +19,9 @@ import 'charts/charts.dart';
 import 'fleet_rail.dart' show FleetEmptyState, linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
 import 'alerts.dart';
+import 'attention.dart' show AttentionWatch, openProblemsByServer;
+import 'fleet_summary.dart';
+import 'fleet_triage.dart';
 import 'monitor_set_feedback.dart';
 import 'server_editing.dart';
 import 'sidebar_kit.dart';
@@ -143,6 +146,15 @@ class _FleetServerListState extends State<FleetServerList> {
 
   /// The folded sections and groups, by key.
   final Set<String> _collapsed = {};
+
+  /// FL-10's toggles, for this list's life: only the servers with an open
+  /// problem, and those first, most first.
+  var _faultsOnly = false;
+  var _attentionFirst = false;
+
+  /// The attention queue's open problems by server, as the last build saw
+  /// them.
+  Map<String, int> _open = const {};
 
   @override
   void dispose() {
@@ -281,14 +293,23 @@ class _FleetServerListState extends State<FleetServerList> {
     _filterFocus.unfocus();
   }
 
+  /// [servers] as the list shows them: those the filter and FL-10's
+  /// faults-only toggle keep, attention first when asked.
+  List<FleetServer> _shown(List<FleetServer> servers) {
+    final kept = [
+      for (final server in servers)
+        if (fleetServerMatches(server, _query) &&
+            (!_faultsOnly || (_open[server.id] ?? 0) > 0))
+          server,
+    ];
+    return _attentionFirst ? attentionFirst(kept, _open) : kept;
+  }
+
   /// Matches are recomputed here rather than captured from the last build:
   /// typing and submitting within one frame would act on a stale list.
   void _openFirstMatch() {
     if (_query.isEmpty) return;
-    final matches = [
-      for (final server in widget.fleet.servers)
-        if (fleetServerMatches(server, _query)) server,
-    ];
+    final matches = _shown(widget.fleet.servers);
     final first = _rows(
       AppLocalizations.of(context),
       matches,
@@ -346,16 +367,53 @@ class _FleetServerListState extends State<FleetServerList> {
     final l10n = AppLocalizations.of(context);
     return _LinkAnnouncer(
       fleet: widget.fleet,
-      child: ListenableBuilder(
-        listenable: widget.fleet,
-        builder: (context, _) {
+      child: AttentionWatch(
+        fleet: widget.fleet,
+        monitoring: widget.monitoring,
+        builder: (context, scan) {
           final servers = widget.fleet.servers;
           if (servers.isEmpty) return const FleetEmptyState();
 
-          final matches = [
-            for (final server in servers)
-              if (fleetServerMatches(server, _query)) server,
-          ];
+          _open = openProblemsByServer(scan, widget.monitoring.attentionAcks);
+          final matches = _shown(servers);
+          final faulted = _open.values.where((n) => n > 0).length;
+          // FL-10's toggles, offered while a server needs attention or one
+          // of them is on: with nothing to triage they would only take
+          // room.
+          final chipLabel = Theme.of(context).textTheme.labelMedium;
+          const chipPadding = EdgeInsets.symmetric(horizontal: 4);
+          final triage = faulted > 0 || _faultsOnly || _attentionFirst
+              ? Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 4),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      FilterChip(
+                        label: Text(l10n.fleetFaultsOnly(faulted)),
+                        // Compact and without the check, so both fit on
+                        // one line in the rail; the fill marks selection.
+                        visualDensity: VisualDensity.compact,
+                        showCheckmark: false,
+                        labelStyle: chipLabel,
+                        labelPadding: chipPadding,
+                        selected: _faultsOnly,
+                        onSelected: (on) => setState(() => _faultsOnly = on),
+                      ),
+                      FilterChip(
+                        label: Text(l10n.fleetAttentionFirst),
+                        visualDensity: VisualDensity.compact,
+                        showCheckmark: false,
+                        labelStyle: chipLabel,
+                        labelPadding: chipPadding,
+                        selected: _attentionFirst,
+                        onSelected: (on) =>
+                            setState(() => _attentionFirst = on),
+                      ),
+                    ],
+                  ),
+                )
+              : null;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -374,10 +432,30 @@ class _FleetServerListState extends State<FleetServerList> {
               ),
               Expanded(
                 child: matches.isEmpty
-                    ? _NoMatches(onClear: () => _setQuery(''))
+                    ? _faultsOnly && _query.isEmpty
+                          ? _NoMatches(
+                              message: l10n.fleetNoFaults,
+                              action: l10n.fleetShowAll,
+                              onClear: () =>
+                                  setState(() => _faultsOnly = false),
+                            )
+                          : _NoMatches(
+                              message: l10n.fleetFilterNoMatches,
+                              action: l10n.sidebarFilterClear,
+                              onClear: () => _setQuery(''),
+                            )
                     : ListView(
                         children: [
                           ?widget.header,
+                          // In the list rather than above it, so a short
+                          // window or large text scrolls them away with
+                          // the rows instead of squeezing the rows out.
+                          FleetSummaryStrip(
+                            fleet: widget.fleet,
+                            monitoring: widget.monitoring,
+                            openProblems: _open,
+                          ),
+                          ?triage,
                           for (final row in _rows(
                             l10n,
                             matches,
@@ -396,27 +474,29 @@ class _FleetServerListState extends State<FleetServerList> {
 }
 
 class _NoMatches extends StatelessWidget {
-  const _NoMatches({required this.onClear});
+  const _NoMatches({
+    required this.message,
+    required this.action,
+    required this.onClear,
+  });
 
+  final String message;
+  final String action;
   final VoidCallback onClear;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     // A list, so large text in a short rail scrolls instead of clipping.
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
         Text(
-          l10n.fleetFilterNoMatches,
+          message,
           style: Theme.of(context).textTheme.bodyMedium,
           textAlign: TextAlign.center,
         ),
         Center(
-          child: TextButton(
-            onPressed: onClear,
-            child: Text(l10n.sidebarFilterClear),
-          ),
+          child: TextButton(onPressed: onClear, child: Text(action)),
         ),
       ],
     );
