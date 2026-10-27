@@ -3349,6 +3349,15 @@ unless the user enables admin mode for that panel.
   steal explained), PSI (absence is normal), model and topology, OOM kills
   linked to journal entries, configurable cards, top lists, quick actions,
   threshold bands, bottom dock.
+
+  As built in M6 (N61c, OV-08), the Overview's quick actions card offers
+  a terminal in Séance and the server's files in Poltergeist where those
+  apps take the hand-off (X-03, X-10), a reboot, and a restart of each
+  service pinned from its page in the Services tab, at most five per
+  server, kept per device in `settings.json` under
+  `klabautermann.overview.pinnedServices`. Each action runs through the
+  preview and confirmation it has in its own tab (SAF-04), and the card
+  is left out when this device can offer none of them.
 - **As built (M6 N42c).** CPU-07's model and topology are a host query,
   `CpuTopologyQuery`, shown in the System tab's Processor section beside
   the identity, since they do not change while the Overview samples. It
@@ -7203,6 +7212,26 @@ and in the pressure bar. The optional `HealthMark` overlay (`ok`,
 the MVP (D55). v1 adds density modes, the summary strip, attention-first
 sort and the faults-only filter.
 
+As built in M6 (N63b, FL-08), the desktop and tablet workspace shows the
+fleet board while no server is open: every server as a card (state word,
+address, pressure bar with its shares in figures, age) or as a grid tile
+(name, dot, bar), opened by a tap and named to screen readers as its row
+is. A picker above it chooses Auto, Cards, Grid, Tree or Rows, kept per device in
+`settings.json` under `klabautermann.fleet.density`. Auto shows cards
+below 12 servers and the grid from 12 on; Rows keeps the rail's rows and
+the workspace's invitation. The phone's fleet list is its home and keeps
+rows: cards and a grid are layouts for a wide workspace.
+
+As built in M6 (N63c, FL-11), the board's Tree layout is the connection
+tree: every server as a node that opens to its compose stacks (each with
+its running count) and its standalone containers, and each stack to its
+containers. A server node reads its containers through the Docker tab's
+container watch while it is open and gives the watch back when it closes;
+it says when the list is being read, failed, or no engine answers. A
+container opens in the server's Docker tab and the inspector, a server
+through its node's open button. On the phone the server screen's tabs are
+the drill-down: fleet, server, Docker, stack, container.
+
 As built in M2 (`app/klabautermann_app/lib/ui/fleet_rows.dart`,
 `fleet_row_state.dart`), the desktop rail and the phone list share one
 row over the kit's `SidebarRow`, resolved through `ghost_servers`'
@@ -7539,6 +7568,19 @@ mutation (PLT-03). The first-run flow (4.3) is a sequence of full-screen
 steps with "confirm all shown". iOS and Android say plainly that sampling
 stops in the background (PLT-04) and show the return banner. Tablets use a
 two-pane layout (PLT-05, v1).
+
+As built in M6 (N62, PLT-05, `phone_shell.dart`), a window whose shorter
+side is at least 600 dp and that is narrower than the desktop breakpoint
+splits: the fleet list keeps a 320 dp column, with the selected row
+marked, and the selected server's screen (the same bottom bar, More and
+sheets) fills the rest; with nothing selected the pane asks for a server,
+and an empty fleet's invitation takes the whole window. Tapping a server
+selects it in place. The shorter side keeps a phone held sideways in the
+stack, so turning it never leaves a pushed screen over the split; a tall
+enough desktop window splits too. A server that leaves the fleet clears
+the pane with everything it opened, and the list says so as on a phone
+(SYN-08). Selection is the fleet's, so a tablet turned into the desktop
+layout keeps the same server open.
 
 As built in M2 (`app/klabautermann_app/lib/ui/server_detail_page.dart`,
 `phone_shell.dart`), the pushed screen's More destination lists

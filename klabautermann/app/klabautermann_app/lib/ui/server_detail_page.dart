@@ -27,6 +27,16 @@ enum ServerScreenExit {
   leftFleet,
 }
 
+/// Where a server screen sits, which decides who closes it when its
+/// server leaves the fleet (SYN-08).
+enum ServerScreenPlacement {
+  /// Pushed over the phone's fleet list: it closes itself.
+  pushed,
+
+  /// The tablet split's second pane (PLT-05): the shell clears it.
+  pane,
+}
+
 /// The pushed server screen of 03 §10.5: the server's title, the server
 /// header, and the bottom bar (Overview, Docker, Logs, More). More lists
 /// the other panels, which open full-screen.
@@ -36,17 +46,21 @@ enum ServerScreenExit {
 /// that samples pulls to refresh (PLT-02). On iOS and Android the header
 /// says that reading stops in the background (PLT-04). A server that
 /// leaves the fleet (SYN-08) closes the screen with everything opened
-/// over it, and its route pops with [ServerScreenExit.leftFleet].
+/// over it, and its route pops with [ServerScreenExit.leftFleet]. In the
+/// tablet split the same screen fills the second pane, and the shell
+/// closes it instead.
 class ServerDetailPage extends StatefulWidget {
   const ServerDetailPage({
     super.key,
     required this.server,
     required this.fleet,
     required this.monitoring,
+    this.placement = ServerScreenPlacement.pushed,
   });
 
   final FleetServer server;
   final FleetController fleet;
+  final ServerScreenPlacement placement;
 
   /// Opens the server, holds the visible panel's subscription and feeds
   /// the panels' per-server sample listenables (03 §10.1).
@@ -104,6 +118,7 @@ class _ServerDetailPageState extends State<ServerDetailPage>
   /// dialogs), back to the fleet list, which says why.
   void _onFleetChanged() {
     final serverId = widget.server.id;
+    if (widget.placement == ServerScreenPlacement.pane) return;
     if (_closing || widget.fleet.servers.any((s) => s.id == serverId)) return;
     // The fleet list is the route below; a screen with none has nowhere
     // to go back to.

@@ -564,6 +564,49 @@ void main() {
       expect((await DeviceSettingsStore.open(file)).cadence, isNull);
     });
 
+    test('keeps each server\'s pinned services across reloads, drops an '
+        'emptied one and skips what is not a list of names (OV-08)', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.overview.pinnedServices': {
+          'srv-9': 'nginx',
+          'srv-2': ['system/cron.service', 4],
+        },
+      });
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.pinnedServices, {
+        'srv-2': ['system/cron.service'],
+      });
+      await store.setPinnedServices('srv-1', [
+        'system/nginx.service',
+        'user/sync.service',
+      ]);
+      await store.setPinnedServices('srv-2', const []);
+      expect((await DeviceSettingsStore.open(file)).pinnedServices, {
+        'srv-1': ['system/nginx.service', 'user/sync.service'],
+      });
+    });
+
+    test('keeps the fleet board layout\'s name across reloads, and reads a '
+        'damaged one as none (FL-08)', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.fleetDensity, isNull);
+      await store.setFleetDensity('grid');
+      expect(document()['klabautermann.fleet.density'], 'grid');
+      expect((await DeviceSettingsStore.open(file)).fleetDensity, 'grid');
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.fleet.density': true,
+      });
+      expect((await DeviceSettingsStore.open(file)).fleetDensity, isNull);
+    });
+
     test('keeps each server\'s polling cap across reloads, lifts one on '
         'null and skips entries that are not names (SAF-19)', () async {
       writeDocument({
