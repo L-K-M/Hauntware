@@ -882,6 +882,11 @@ final class DockerWatcher {
               cpuPercent: delta.cpuPercent,
               memoryUsed: delta.memoryUsage,
               memoryLimit: delta.memoryLimit,
+              networkRx: _sum(read.value.networks.values.map((n) => n.rxBytes)),
+              networkTx: _sum(read.value.networks.values.map((n) => n.txBytes)),
+              blockRead: read.value.blockIo.readBytes,
+              blockWrite: read.value.blockIo.writeBytes,
+              pids: read.value.pids,
             ),
           );
         } on DockerException catch (e) {
@@ -912,4 +917,14 @@ final class DockerWatcher {
     }
     _scheduleStats();
   }
+}
+
+/// The total of [counts], or null when none is known: a network that
+/// reported no counter does not make the others unknown.
+int? _sum(Iterable<int?> counts) {
+  int? total;
+  for (final count in counts) {
+    if (count != null) total = (total ?? 0) + count;
+  }
+  return total;
 }

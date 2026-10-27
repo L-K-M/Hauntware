@@ -96,6 +96,19 @@ final class HostQueries {
           }
         case ProcessDetailQuery(:final pid, :final startTicks):
           answer(await _processDetail(link, pid, startTicks));
+        case ListeningPortsQuery():
+          switch (await _run(link, HostCommands.listeningPorts())) {
+            case _Failed(:final payload):
+              answer(payload);
+            case _Ran(:final stdout):
+              answer(switch (parseListeningPorts(stdout)) {
+                final read? => ListeningPorts(read),
+                null => const HostQueryFailed(
+                  HostQueryFailure.failed,
+                  detail: 'The listening ports read printed something else.',
+                ),
+              });
+          }
         case OomKillsQuery():
           switch (await _run(link, HostCommands.oomKills())) {
             case _Failed(:final payload):

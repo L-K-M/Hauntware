@@ -17,10 +17,12 @@ import 'package:ghost_ui/ghost_ui.dart'
         GhostMenuItem,
         GhostMenuRow,
         GhostSubmenuRow,
+        PaletteCommand,
         formatShortcutActivator,
         ghostMenuBarChildren,
         ghostMenuSignature,
-        ghostPlatformMenuGroups;
+        ghostPlatformMenuGroups,
+        showCommandPalette;
 import 'package:planchette_editor/planchette_editor.dart'
     hide GhostMenuDivider, GhostMenuItem;
 
@@ -33,7 +35,6 @@ import 'ui/workspace_servers_dialog.dart';
 import 'ui/workspace_remote_folder_dialog.dart';
 import 'ui/document_windows_root.dart';
 import 'theme/planchette_theme.dart';
-import 'widgets/command_palette.dart';
 import 'widgets/disk_notice.dart';
 import 'widgets/document_status_bar.dart';
 import 'widgets/tab_strip.dart';

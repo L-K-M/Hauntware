@@ -26,6 +26,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         KillSignal,
         LoadAvg,
         LogFileEntry,
+        ListeningPortsRead,
         OomKillsRead,
         LoggedCronRun,
         NetRate,
@@ -749,6 +750,12 @@ final class ProcessDetailQuery extends HostQuerySpec {
 /// names (MEM-03), as [OomKills].
 final class OomKillsQuery extends HostQuerySpec {
   const OomKillsQuery();
+}
+
+/// The listening TCP and bound UDP sockets with their processes and
+/// those processes' units and containers (NET-04), as [ListeningPorts].
+final class ListeningPortsQuery extends HostQuerySpec {
+  const ListeningPortsQuery();
 }
 
 /// How the boots before the current one ended (BOOT-02), as [BootEnds]:
@@ -2178,6 +2185,13 @@ final class OomKills extends HostPayload {
   const OomKills(this.read);
 
   final OomKillsRead read;
+}
+
+/// [ListeningPortsQuery]'s sockets.
+final class ListeningPorts extends HostPayload {
+  const ListeningPorts(this.read);
+
+  final ListeningPortsRead read;
 }
 
 /// [BootEndsQuery]'s ends by boot ID; a boot it did not read is absent.
@@ -3744,7 +3758,12 @@ final class LogStreamSpec {
          'a file tail and a container log have no cursor',
        ),
        assert(
-         !follow || source is! JournalLogSource || source.until == null,
+         !follow ||
+             switch (source) {
+               JournalLogSource(:final until) ||
+               ContainerLogSource(:final until) => until == null,
+               _ => true,
+             },
          'a follow reads up to the present',
        );
 
@@ -3886,12 +3905,24 @@ final class OperationLogSource extends LogSource {
 /// on, after the newest line it delivered, once the container runs
 /// again. The read waits for the server's Docker endpoint
 /// ([DockerEndpointState]) as [LogStreamWaitReason.link].
+///
+/// With a time range (CTX-03), the read is every line from [since] to
+/// [until] instead of the last [LogStreamSpec.window]: Docker applies
+/// `tail` before the range, so the two together would read only the
+/// window's lines that fall in it.
 final class ContainerLogSource extends LogSource {
-  const ContainerLogSource(this.containerId);
+  const ContainerLogSource(this.containerId, {this.since, this.until});
 
   /// The container's id, or its name; the engine validates it before it
   /// puts it in a path.
   final String containerId;
+
+  /// The time range (`since`, `until`), both inclusive. A follow takes no
+  /// [until], since it reads up to the present.
+  final DateTime? since, until;
+
+  /// Whether the read has a time range.
+  bool get ranged => since != null || until != null;
 }
 
 /// A syslog severity as journald and the kernel record it, most urgent
@@ -4693,6 +4724,11 @@ final class ContainerListStats {
     this.cpuPercent,
     this.memoryUsed,
     this.memoryLimit,
+    this.networkRx,
+    this.networkTx,
+    this.blockRead,
+    this.blockWrite,
+    this.pids,
   });
 
   final String containerId;
@@ -4707,6 +4743,21 @@ final class ContainerListStats {
   /// Bytes in use less `inactive_file` (cgroup v2) or the cache (v1).
   final int? memoryUsed;
   final int? memoryLimit;
+
+  /// Bytes received and sent over every interface since the container
+  /// started (CTR-08), as `docker stats` totals them; null when the
+  /// container has no network or the daemon reported none.
+  final int? networkRx;
+  final int? networkTx;
+
+  /// Bytes read and written on block devices since it started; null
+  /// where the cgroup reports no I/O accounting (`blkio_stats` empty, as
+  /// on some cgroup v2 hosts).
+  final int? blockRead;
+  final int? blockWrite;
+
+  /// The processes and threads in its cgroup.
+  final int? pids;
 }
 
 /// The query read nothing, for [failure]; [detail] is the daemon's own

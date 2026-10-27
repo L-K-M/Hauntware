@@ -3437,6 +3437,17 @@ the guarded kill needs it.
   listening socket with `userland-proxy: false` [U]); firewall view (`ufw
   status verbose`, `nft -j list ruleset`, `firewall-cmd --list-all-zones`,
   `iptables-save`; admin mode); local port forward (5.11).
+- **As built (M6 N34a).** NET-04 is a host query,
+  `ListeningPortsQuery`, which the System tab's Listening ports section
+  runs when it shows and on request. It runs `ss -Htulpn`, or BusyBox's
+  `netstat -tulpn` where there is no `ss`, and reads each named
+  process's `/proc/<pid>/cgroup`, so PRC-05's attribution gives each
+  port's systemd unit or container. The login user sees only its own
+  processes' sockets' owners; the section says when others are hidden.
+  Sockets the same processes hold on one port, as a daemon's IPv4 and
+  IPv6 listeners, share a row. Merging in Docker's published ports,
+  which with `userland-proxy: false` have no listening socket, and
+  reading other users' owners in admin mode follow in N34b.
 - **As built (M6 N33).** NET-02 and NET-03 are one host query,
   `InterfacesQuery`, which the System tab's Interfaces section runs when
   it shows and on request. One `grep -H` prints each interface's sysfs
@@ -4203,6 +4214,16 @@ TLS. The section checks when it shows, after an edit and on request.
   stats (CST-01): one-shot stats for visible rows, at most 4 in flight, CPU
   % from the spec formula, memory as usage minus `inactive_file` on cgroup v2
   (minus `cache` on v1) [R: r5 §1.7]. Managed-by badges (DKE-10): 8.7.
+  Column chooser (CTR-08, M6 N16d): the same one-shot read gives the
+  network bytes in and out (summed over interfaces), the block bytes
+  read and written and the PIDs, totals since the container started as
+  `docker stats` shows them. The tab shows, hides and orders the columns
+  after the name (state, health, status, image, ports, stack, CPU,
+  memory, network, block I/O, PIDs, IP, started), stored by name under
+  `klabautermann.docker.containerColumns`; a name it does not know is
+  skipped. Started is read from the status's uptime, since the list
+  carries no start time, so it is as coarse as the status words.
+
   Restart-loop and exit flags (CTR-09): the list carries no
   `RestartCount` or `State.OOMKilled`, and inspecting every row on each
   change would cost a request per container, so a row flags what its
@@ -4211,6 +4232,17 @@ TLS. The section checks when it shows, after an edit and on request.
   and 128 plus SIGINT, SIGQUIT, SIGKILL or SIGTERM) as failed: the state
   in the error colour and an icon before the status words. The details show the restart count, the exit code and
   an OOM kill from the inspect.
+- **As built (M6 N19a).** CTX-03: `ContainerLogSource` takes `since`
+  and `until`, both inclusive, sent as the logs request's `since=` and
+  `until=` in 5.6's seconds and nanoseconds. A ranged read sends no
+  `tail`, since Docker applies `tail` before the range and the two
+  together would read only the window's lines inside it; the Logs
+  panel's 32 MiB buffer bounds what a long range holds. A follow takes
+  no `until`, and its resume after a lost stream starts after the
+  newest line, not at the range's start. The log view's range menu
+  offers LOG-01's spans, counted back from when the stream opens, and a
+  chosen start and end from date and time pickers, which reads once:
+  the Live chip stops and says why.
 - **As built (M4 E15).** `operations/plans/docker_plans.dart` plans
   CTR-02's verbs, CTR-06's removal, IMG-02 and STK-03 (7.14, 7.16) over
   the server's Docker endpoint (`DockerRouter.useEndpoint`).
@@ -4244,6 +4276,23 @@ TLS. The section checks when it shows, after an edit and on request.
   through one `docker compose logs -f` in low-session mode); JSON and level
   parsing; redacted log export; stats detail charts, sorting, memory limit
   risk, top table.
+  Label links (M6 N17b, CTR-11) are read in the app from the inspected
+  labels, already masked by key (8.9), by `labelLinks` in
+  `klabautermann_docker`: `dockhand.url` (plain or `[Name](url)`),
+  `dockhand.port.<port>.url`, `dev.dozzle.url`, each Traefik router's
+  `Host(...)` names (scheme `https` with `tls=true`, a
+  `tls.certresolver` or a `websecure`/`https` entry point, else `http`;
+  skipped while `traefik.enable=false`, and `HostRegexp` never yields
+  one), and caddy-docker-proxy's `caddy` and `caddy_<n>` addresses
+  (HTTPS as Caddy serves it, but HTTP on an explicit port 80). A
+  masked value, another scheme, credentials, or a wildcard or a
+  placeholder in the host yields no link (a path or query may hold
+  them, as in `?$select=name`). The
+  links open through the hand-off launcher in the system browser, or
+  show as text where the app has none. CTR-11's mute labels
+  (`dockhand.notify`) wait for per-container notifications, which v1
+  does not send.
+
 - **As built (M6 N20).** DKE-03's timeline comes from the events stream
   the watcher already holds for the lists (5.7), so it costs no channel
   of its own. Each container, image, volume and network event the lists'
@@ -7345,6 +7394,12 @@ there from its own page too.
 - `GhostCommandPalette` in `ghost_ui`, extracted from Planchette's palette
   with Planchette switched (F5e); providers for servers, containers, units,
   stacks and actions; `Cmd/Ctrl-K` opens it and `:` jumps to a resource type.
+  As built (M6 N04, F5e-c), Planchette's palette moved byte for byte
+  into `ghost_ui` (`src/ghost_command_palette.dart`, with its tests), so
+  its public names stay `CommandPalette`, `PaletteCommand`,
+  `showCommandPalette` and `fuzzyMatch`; Planchette imports them from
+  the barrel. The `GhostCommandPalette` name and the providers come with
+  N60.
 - Keyboard: `/` filters the focused list; `j` and `k` move; `Enter` opens;
   `l` logs, `s` shell, `r` restart (opens the confirmation dialog); `?` shows
   the contextual map; `Cmd/Ctrl-1..9` switch tabs; `Esc` goes back; bindings

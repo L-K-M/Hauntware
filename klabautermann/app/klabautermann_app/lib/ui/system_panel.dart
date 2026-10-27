@@ -19,6 +19,7 @@ import 'drive_health.dart';
 import 'firewall.dart';
 import 'gpus.dart';
 import 'interfaces.dart';
+import 'listening_ports.dart';
 import 'mounts.dart';
 import 'oom_kills.dart';
 import 'power.dart';
@@ -44,6 +45,7 @@ enum SystemSection {
   temperatures,
   gpus,
   oomKills,
+  ports,
   boots,
   driveHealth,
   updates,
@@ -258,6 +260,11 @@ class _SystemPanelState extends State<SystemPanel> {
               ?gpus,
               OomKillsSection(
                 key: const ValueKey(SystemSection.oomKills),
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
+              ),
+              ListeningPortsSection(
+                key: const ValueKey(SystemSection.ports),
                 monitoring: widget.monitoring,
                 serverId: widget.serverId,
               ),
