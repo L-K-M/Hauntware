@@ -165,6 +165,40 @@ void main() {
       await pumpEventQueue();
       expect(forwards.forwardsFor('srv-1').single.ended, PortForwardEnd.closed);
     });
+
+    test('a second open of a live forward reuses it', () {
+      final engine = FakeEngineClient();
+      addTearDown(engine.close);
+      final forwards = PortForwardsController(engine);
+      addTearDown(forwards.dispose);
+
+      final id = forwards.open('srv-1', host: '127.0.0.1', port: 8080);
+      expect(forwards.open('srv-1', host: '127.0.0.1', port: 8080), id);
+      expect(engine.sentOfType<OpenPortForward>(), hasLength(1));
+      expect(
+        forwards.open('srv-1', host: '127.0.0.1', port: 8081),
+        isNot(id),
+        reason: 'another target',
+      );
+    });
+
+    test(
+      'a forward opened after the engine stopped is announced ended',
+      () async {
+        final engine = FakeEngineClient();
+        final forwards = PortForwardsController(engine);
+        addTearDown(forwards.dispose);
+        await engine.close();
+        await pumpEventQueue();
+
+        final heard = <PortForwardEnd?>[];
+        forwards.addListener(
+          () => heard.add(forwards.forwardsFor('srv-1').lastOrNull?.ended),
+        );
+        forwards.open('srv-1', host: 'db', port: 5432);
+        expect(heard, [PortForwardEnd.closed]);
+      },
+    );
   });
 
   testWidgets('the Apps sub-tab forwards a port, opens it once it listens, '

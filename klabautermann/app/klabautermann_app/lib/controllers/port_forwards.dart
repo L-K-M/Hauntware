@@ -34,9 +34,19 @@ final class PortForwardsController extends ChangeNotifier {
   ];
 
   /// Asks the engine to forward [host]:[port] on [serverId] to a loopback
-  /// port; returns the forward's id. An ended forward to the same target
-  /// gives way to it.
+  /// port; returns the forward's id. A forward to the same target that is
+  /// still open is reused, as when a button is tapped twice; an ended one
+  /// gives way to the new one.
   String open(String serverId, {required String host, required int port}) {
+    for (final forward in _forwards.values) {
+      if (forward.ended == null &&
+          forward.serverId == serverId &&
+          forward.host == host &&
+          forward.port == port) {
+        return forward.forwardId;
+      }
+    }
+
     final forwardId = 'forward-${_count++}';
     _forwards.removeWhere(
       (_, f) =>
@@ -52,11 +62,12 @@ final class PortForwardsController extends ChangeNotifier {
       port: port,
     );
     _forwards[forwardId] = opening;
-    notifyListeners();
     if (_stopped) {
       _end(opening, PortForwardEnd.closed);
+      notifyListeners();
       return forwardId;
     }
+    notifyListeners();
     try {
       _engine.send(
         OpenPortForward(

@@ -205,9 +205,21 @@ class _AppsPanelState extends State<AppsPanel> {
     }
   }
 
-  void _forward(String host, int port) {
+  /// Forwards a container's port and opens it in the browser once it
+  /// listens, or now when that forward already does.
+  void _forwardAndOpen(String host, int port) {
     final id = _forwards.open(widget.serverId, host: host, port: port);
-    if (HandOffScope.maybeOf(context) != null) _openWhenReady.add(id);
+    if (HandOffScope.maybeOf(context) == null) return;
+    final listening = _forwards
+        .forwardsFor(widget.serverId)
+        .where((f) => f.forwardId == id && f.ended == null)
+        .firstOrNull
+        ?.localPort;
+    if (listening != null) {
+      unawaited(_openLocal(listening));
+      return;
+    }
+    _openWhenReady.add(id);
   }
 
   Future<void> _openLocal(int port) async {
@@ -236,7 +248,9 @@ class _AppsPanelState extends State<AppsPanel> {
       builder: (context) => const _ForwardDialog(),
     );
     if (target == null || !mounted) return;
-    _forward(target.$1, target.$2);
+    // Any TCP service may be the target, so its row's Open button, not
+    // the browser, is the way in.
+    _forwards.open(widget.serverId, host: target.$1, port: target.$2);
   }
 
   @override
@@ -295,7 +309,7 @@ class _AppsPanelState extends State<AppsPanel> {
               Text(l10n.appsNone)
             else
               for (final app in apps)
-                _ContainerAppsTile(app: app, onForward: _forward),
+                _ContainerAppsTile(app: app, onForward: _forwardAndOpen),
           ],
         );
       },
@@ -502,6 +516,7 @@ class _ForwardDialogState extends State<_ForwardDialog> {
               autocorrect: false,
               enableSuggestions: false,
               keyboardType: TextInputType.url,
+              onSubmitted: (_) => _submit(),
               decoration: InputDecoration(
                 labelText: l10n.appsForwardHost,
                 errorText: _problem == PortForwardTargetProblem.badHost
