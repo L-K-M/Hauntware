@@ -2,12 +2,14 @@ import 'package:flutter/foundation.dart';
 
 /// FL-08's layouts for the fleet board, the desktop workspace's view of
 /// every server while none is open (03 §10.3): [auto] picks [cards] for
-/// a small fleet and [grid] from [kFleetGridFrom] servers on, and [rows]
-/// leaves the rail's rows alone, with the workspace's invitation.
+/// a small fleet and [grid] from [kFleetGridFrom] servers on, [tree] is
+/// FL-11's connection tree, and [rows] leaves the rail's rows alone, with
+/// the workspace's invitation.
 enum FleetDensity {
   auto,
   cards,
   grid,
+  tree,
   rows;
 
   /// The layout [name] names, or [auto] for null or a name this version

@@ -16,6 +16,7 @@ import 'charts/charts.dart';
 import 'fleet_rail.dart' show linkStatusWord;
 import 'fleet_row_state.dart';
 import 'fleet_rows.dart' show fleetRowAge, fleetStatusStrings;
+import 'fleet_tree.dart';
 import 'server_header.dart' show LinkDot;
 import 'threshold_scope.dart';
 
@@ -110,6 +111,10 @@ class FleetBoard extends StatelessWidget {
           Expanded(child: invitation),
         ],
       );
+    }
+
+    if (shown == FleetDensity.tree) {
+      return FleetTree(fleet: fleet, monitoring: monitoring, header: picker);
     }
 
     final compact = shown == FleetDensity.grid;

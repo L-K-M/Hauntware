@@ -7174,11 +7174,21 @@ As built in M6 (N63b, FL-08), the desktop and tablet workspace shows the
 fleet board while no server is open: every server as a card (state word,
 address, pressure bar with its shares in figures, age) or as a grid tile
 (name, dot, bar), opened by a tap and named to screen readers as its row
-is. A picker above it chooses Auto, Cards, Grid or Rows, kept per device in
+is. A picker above it chooses Auto, Cards, Grid, Tree or Rows, kept per device in
 `settings.json` under `klabautermann.fleet.density`. Auto shows cards
 below 12 servers and the grid from 12 on; Rows keeps the rail's rows and
 the workspace's invitation. The phone's fleet list is its home and keeps
 rows: cards and a grid are layouts for a wide workspace.
+
+As built in M6 (N63c, FL-11), the board's Tree layout is the connection
+tree: every server as a node that opens to its compose stacks (each with
+its running count) and its standalone containers, and each stack to its
+containers. A server node reads its containers through the Docker tab's
+container watch while it is open and gives the watch back when it closes;
+it says when the list is being read, failed, or no engine answers. A
+container opens in the server's Docker tab and the inspector, a server
+through its node's open button. On the phone the server screen's tabs are
+the drill-down: fleet, server, Docker, stack, container.
 
 As built in M2 (`app/klabautermann_app/lib/ui/fleet_rows.dart`,
 `fleet_row_state.dart`), the desktop rail and the phone list share one

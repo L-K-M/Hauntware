@@ -328,6 +328,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'auto': 'Auto',
       'cards': 'Cards',
       'grid': 'Grid',
+      'tree': 'Tree',
       'other': 'Rows',
     });
     return '$_temp0';
@@ -336,6 +337,29 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get fleetDensityNotSaved =>
       'The layout changed but could not be saved. It lasts until Klabautermann quits.';
+
+  @override
+  String fleetTreeOpenServer(String server) {
+    return 'Open $server';
+  }
+
+  @override
+  String get fleetTreeReading => 'Reading containers…';
+
+  @override
+  String get fleetTreeReadFailed =>
+      'The containers could not be read. The Docker tab says why.';
+
+  @override
+  String get fleetTreeNoDocker => 'No Docker engine answers on this server.';
+
+  @override
+  String get fleetTreeNoContainers => 'No containers.';
+
+  @override
+  String fleetTreeStackUp(int up, int total) {
+    return '$up of $total running';
+  }
 
   @override
   String fleetTileShare(String label, int percent) {
