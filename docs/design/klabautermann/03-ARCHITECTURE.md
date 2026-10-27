@@ -250,7 +250,8 @@ cron zone rules · D59 capability cache · D60 threshold announcements ·
 D61 host-key pins and re-pin ·
 D62 sync state files and the keystore port · D63 pull-only sync in the
 engine · D64 a server's confirmation covers its route · D65 spike S3
-and admin validation · D66 spike S4 and Docker-scoped sudo rules.
+and admin validation · D66 spike S4 and Docker-scoped sudo rules · D67
+spike S6 and the privileged write · D68 spike S8 and update checks.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -1284,6 +1285,58 @@ Proposals awaiting the owner close the section; they are not decisions.
   - writing in place with `tee <target>`, which keeps every attribute but
     leaves a half-written file when the link drops, and no hash
     re-check can make it atomic.
+- **D68. Spike S8 settles the update check (M6 N06).** The spike sent
+  manifest `HEAD`s to Docker Hub, GHCR and Quay, called DistributionInspect
+  on Docker 29.8 with the containerd image store, and read a local
+  registry behind basic auth (evidence in
+  `klabautermann/docs/evidence/s8/`).
+
+  What it showed:
+  - A `HEAD` leaves Docker Hub's `ratelimit-remaining` unchanged, but is
+    refused with `429` once the source address has spent its quota. The
+    window is one hour (`ratelimit-limit: 100;w=3600`), not six.
+  - DistributionInspect resolves the tag with a `HEAD` and then `GET`s
+    the manifest, so each call spends one pull.
+  - All three public registries answer a multi-platform tag with its
+    index digest. Docker Hub needs its anonymous token, GHCR names a
+    Bearer realm in its first `401`, and Quay answers without a token.
+  - After a pull, the local `RepoDigests` entry and `Descriptor` carry the
+    index digest. A push from the containerd store with one platform
+    present stores that platform's manifest instead, while `RepoDigests`
+    keeps the index digest. `GET /images/{name}/json?manifests=1` (API
+    1.48) lists the children, and the pushed digest is the available one.
+  - A private registry answers `401` with a `Basic` challenge.
+    `docker buildx imagetools inspect` reads the CLI's credentials and
+    returns the digest, resolving with a `HEAD`. `docker manifest inspect
+    -v` gives a single manifest's digest, but for an index it lists only
+    the children, never the index digest, and it needs `--insecure` for
+    a plain-HTTP registry.
+
+  The check therefore runs as follows:
+  1. On the host, `curl -sI` with the realm's anonymous token where the
+     first answer names a Bearer realm.
+  2. On a `Basic` challenge or a `401` after the token, buildx
+     `imagetools inspect`. Without the plugin it says the host's Docker
+     CLI cannot read the registry.
+  3. A tag is current when the registry digest equals the repository's
+     `RepoDigests` entry, the image's `Descriptor` digest, or an
+     available child from `manifests=1` (on daemons below API 1.48, the
+     first two only).
+  4. A `429` reads "Docker Hub's limit for this host's address is used
+     up". The check waits for the reported window before it runs again,
+     and never falls back to DistributionInspect.
+  5. A `HEAD` without `Docker-Content-Digest` reads as "this registry does
+     not say" rather than a `GET`.
+  6. DistributionInspect stays the last resort, offered only with its
+     quota warning when the host has no `curl` and no CLI route.
+
+  *Rejected:*
+  - DistributionInspect as the default: it spends a pull per check and
+    needs credentials the device does not hold before REG-02;
+  - comparing `RepoDigests` alone: it reports an update for every image
+    pushed from a containerd store that holds only some platforms;
+  - `docker manifest inspect -v` as the CLI fallback: it cannot name an
+    index's digest, so a multi-platform tag would never compare.
 
 ### Persistence, alerts and tiers
 
@@ -4386,13 +4439,14 @@ TLS. The section checks when it shows, after an edit and on request.
   `CreatedBy` masked. Digest update detection (IMG-05): local `RepoDigests`
   against the registry digest from a manifest `HEAD`
   (`Docker-Content-Digest`), which does not count against Docker Hub pull
-  limits while `GET` does [R: r5 §1.10]; the default runner is `curl -sI` on
-  the host after the anonymous token flow (host network and proxy; nothing
-  about the device is disclosed); a device-side `HEAD` is opt-in (+E);
-  `GET /distribution/{name}/json` is the last resort with a quota warning;
-  results cached 6 h per repository and tag; index digests compared on the
-  containerd image store [U]; private registries through the host CLI [U:
-  spike S8]. Prune unused images through the DKE-05 preview.
+  limits while `GET` does [R: r5 §1.10; spike S8, D68]; the default
+  runner is `curl -sI` on the host after the registry's anonymous token
+  flow (host network and proxy; nothing about the device is disclosed); a
+  device-side `HEAD` is opt-in (+E); `GET /distribution/{name}/json` is
+  the last resort with a quota warning; results cached 6 h per repository
+  and tag; on the containerd image store the registry digest also matches
+  an available child of the local index (D68); private registries through
+  the host's `docker buildx imagetools inspect` (D68). Prune unused images through the DKE-05 preview.
 - **v1.x.** Update shelf; safe update (pull first, record previous digests,
   recreate, wait for health, roll back automatically, all run host-side as a
   detached operation, with host-side deploy history); semver advisories;
