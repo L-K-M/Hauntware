@@ -8,6 +8,7 @@ import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../hand_off_actions.dart'
     show FileHandOff, FolderHandOffs, folderHandOffsShown;
+import '../time_display.dart';
 import 'log_export.dart';
 import 'log_level.dart';
 import 'log_query.dart';
@@ -453,6 +454,7 @@ class _LogsPanelState extends State<LogsPanel> {
     final query = _panel.query;
     final picked = await _sheet<LogBootChoice>(
       (context) => LogBootPicker(
+        serverId: widget.serverId,
         boots: widget.monitoring.queryHost(widget.serverId, const BootsQuery()),
         query: query,
       ),
@@ -877,7 +879,14 @@ typedef LogBootChoice = ({JournalBootEntry? past, bool current});
 /// ones, newest first, each with when its entries start and end. It pops
 /// a [LogBootChoice].
 class LogBootPicker extends StatelessWidget {
-  const LogBootPicker({super.key, required this.boots, required this.query});
+  const LogBootPicker({
+    super.key,
+    required this.serverId,
+    required this.boots,
+    required this.query,
+  });
+
+  final String serverId;
 
   final Future<HostResult> boots;
   final LogQuery query;
@@ -932,7 +941,7 @@ class LogBootPicker extends StatelessWidget {
                       ..sort((a, b) => b.offset.compareTo(a.offset)))
                   choice(
                     l10n.logsPanelBootPast(-boot.offset),
-                    subtitle: _span(context, l10n, boot),
+                    subtitle: _span(context, l10n, serverId, boot),
                     selected: past?.id == boot.id,
                     value: (past: boot, current: false),
                   ),
@@ -952,18 +961,19 @@ class LogBootPicker extends StatelessWidget {
     );
   }
 
-  /// When [boot]'s entries start and end, in local time; null when the
-  /// server did not say.
+  /// When [boot]'s entries start and end, as the time display shows
+  /// [serverId]'s times; null when the server did not say.
   static String? _span(
     BuildContext context,
     AppLocalizations l10n,
+    String serverId,
     JournalBootEntry boot,
   ) {
     final first = boot.firstEntry, last = boot.lastEntry;
     if (first == null || last == null) return null;
     return l10n.logsPanelBootSpan(
-      localTimeText(context, l10n, first),
-      localTimeText(context, l10n, last),
+      serverTimeText(context, l10n, serverId, first),
+      serverTimeText(context, l10n, serverId, last),
     );
   }
 }
@@ -1087,7 +1097,7 @@ class _LogFilePickerState extends State<LogFilePicker> {
           Text(
             l10n.logsPanelFileDetails(
               ghostFormatBinarySize(file.bytes),
-              localTimeText(context, l10n, file.modified),
+              serverTimeText(context, l10n, widget.serverId, file.modified),
             ),
           ),
           if (compressed) Text(l10n.logsPanelFileCompressed),
@@ -1116,14 +1126,16 @@ Widget _sheetNote(BuildContext context, String text) => Padding(
   child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
 );
 
-/// [time] as a short date and a time of day, in local time.
-String localTimeText(
+/// [time], which [serverId] reported, as a short date and a time of day
+/// as the time display shows it (A11Y-07).
+String serverTimeText(
   BuildContext context,
   AppLocalizations l10n,
+  String serverId,
   DateTime time,
 ) {
   final localizations = MaterialLocalizations.of(context);
-  final local = time.toLocal();
+  final local = displayTime(context, serverId, time);
   return l10n.activityTime(
     localizations.formatShortDate(local),
     localizations.formatTimeOfDay(TimeOfDay.fromDateTime(local)),

@@ -7913,6 +7913,22 @@ wrapping keeps it. A changed size or mode keeps the lines in sight where
 they were. Each row is one screen-reader node, so a reader steps line by
 line.
 
+As built in M6 (N67, A11Y-07): Settings > General can show server times
+in the server's zone instead of this device's, a device setting in
+`settings.json` (`klabautermann.display.serverTimes`), offered in the
+desktop settings window too. A `TimeDisplayScope` above every route gives
+each server screen the fixed offset its probe last read
+(`HostProfile.serverZone`, §6.1), so a time across a daylight-saving
+change from that reading shows the reading's offset; the full zone rules
+stay with cron next runs (D58). Until a server's zone is read, its times show
+in this device's zone. The setting covers the dates and times server
+panels show and the history, coverage and container usage charts' time
+axes. Container log rows keep this device's zone, since their text is
+what search and export read; times this device made (alerts, operations,
+the admin mode expiry, the log range picker) stay in its zone, and the
+Jobs tab keeps its own run-time zones (D58). Relative times, such
+as image ages and "updated 2 minutes ago", read the same either way.
+
 ### 10.9 Theme
 
 MVP: `ghost_theme` (F4b, D9) builds the light and dark themes, installs

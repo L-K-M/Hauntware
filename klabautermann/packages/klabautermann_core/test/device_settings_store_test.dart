@@ -732,6 +732,23 @@ void main() {
       expect((damaged.logTextSize, damaged.logWrap), (null, false));
     });
 
+    test('keeps server times across reloads and reads a damaged value as '
+        "the device's zone (A11Y-07)", () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.serverTimes, isFalse);
+      await store.setServerTimes(true);
+      expect((await DeviceSettingsStore.open(file)).serverTimes, isTrue);
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.display.serverTimes': 'yes',
+      });
+      expect((await DeviceSettingsStore.open(file)).serverTimes, isFalse);
+    });
+
     test('keeps the app lock off until turned on, across reloads, and a '
         'damaged value never drops it (SAF-20)', () async {
       writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});

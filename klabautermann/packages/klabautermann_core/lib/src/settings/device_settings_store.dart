@@ -38,6 +38,7 @@ const String _deviceNameKey = 'klabautermann.audit.deviceName';
 const String _appLockKey = 'klabautermann.appLock';
 const String _logTextSizeKey = 'klabautermann.logs.textSize';
 const String _logWrapKey = 'klabautermann.logs.wrap';
+const String _serverTimesKey = 'klabautermann.display.serverTimes';
 
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
 const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
@@ -501,6 +502,18 @@ final class DeviceSettingsStore {
   Future<void> setLogDisplay(int textSize, bool wrap) async {
     _values[_logTextSizeKey] = textSize;
     _values[_logWrapKey] = wrap;
+    await _save();
+  }
+
+  /// Whether server times show in the server's zone rather than this
+  /// device's (A11Y-07), `klabautermann.display.serverTimes`; anything but
+  /// `true` reads as the device's zone.
+  bool get serverTimes => _values[_serverTimesKey] == true;
+
+  /// Stores [serverTimes] and writes the document; throws as
+  /// [setCadence] does.
+  Future<void> setServerTimes(bool serverTimes) async {
+    _values[_serverTimesKey] = serverTimes;
     await _save();
   }
 

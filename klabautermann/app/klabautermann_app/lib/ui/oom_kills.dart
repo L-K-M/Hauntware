@@ -10,6 +10,7 @@ import 'logs/log_level.dart';
 import 'logs/log_query.dart';
 import 'logs/log_view.dart';
 import 'logs/logs_panel_controller.dart';
+import 'time_display.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 import 'system_view.dart' show uptimeText;
 
@@ -126,7 +127,8 @@ class _OomKillsSectionState extends State<OomKillsSection> {
       if (!read.logRead)
         PanelNotice(icon: Icons.lock_outline, text: l10n.systemOomLogDenied),
       // The newest first, as the kills that matter now.
-      for (final kill in read.kills.reversed) _KillLine(kill: kill),
+      for (final kill in read.kills.reversed)
+        _KillLine(kill: kill, serverId: widget.serverId),
     ],
     _ => [
       PanelNotice(
@@ -159,9 +161,10 @@ class _OomKillsSectionState extends State<OomKillsSection> {
 /// One killed process: its command and PID, when, how much memory it
 /// held and whether a cgroup's limit ran out, read as one node.
 class _KillLine extends StatelessWidget {
-  const _KillLine({required this.kill});
+  const _KillLine({required this.kill, required this.serverId});
 
   final OomKill kill;
+  final String serverId;
 
   @override
   Widget build(BuildContext context) {
@@ -171,7 +174,9 @@ class _KillLine extends StatelessWidget {
       color: theme.colorScheme.onSurfaceVariant,
     );
     final when = switch ((kill.at, kill.sinceBoot)) {
-      (final at?, _) => l10n.systemOomKilledAt(at.toLocal()),
+      (final at?, _) => l10n.systemOomKilledAt(
+        displayTime(context, serverId, at),
+      ),
       (null, final sinceBoot?) => l10n.systemOomAfterBoot(
         uptimeText(l10n, sinceBoot),
       ),
