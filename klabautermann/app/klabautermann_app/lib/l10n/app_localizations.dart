@@ -8308,6 +8308,66 @@ abstract class AppLocalizations {
   /// **'The path cannot contain line breaks or NUL characters.'**
   String get dockerSocketPathUnsafe;
 
+  /// Docker tab engine strip (CN-16): label before the docker program the server's relays and compose commands run. 'docker' is the program's name, kept lowercase.
+  ///
+  /// In en, this message translates to:
+  /// **'docker program'**
+  String get dockerProgramLabel;
+
+  /// Docker tab engine strip (CN-16): shown as the docker program when no path is set, so the server runs the docker its PATH finds.
+  ///
+  /// In en, this message translates to:
+  /// **'docker on the PATH'**
+  String get dockerProgramDefault;
+
+  /// Docker tab engine strip (CN-16): button that opens the dialog to type the docker program's path.
+  ///
+  /// In en, this message translates to:
+  /// **'Change…'**
+  String get dockerProgramChange;
+
+  /// Docker tab engine strip (CN-16): what assistive technology reads for the Change… button beside the docker program.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the docker program'**
+  String get dockerProgramChangeLabel;
+
+  /// Docker tab engine strip (CN-16): button that clears the docker program path, so the server runs the docker its PATH finds.
+  ///
+  /// In en, this message translates to:
+  /// **'Use docker on the PATH'**
+  String get dockerProgramReset;
+
+  /// Title of the dialog that asks for the docker program's path (CN-16).
+  ///
+  /// In en, this message translates to:
+  /// **'docker program'**
+  String get dockerProgramTitle;
+
+  /// Body of the docker program dialog (CN-16).
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann runs this docker for relays and compose commands on this server. Set it when docker is outside the PATH of a non-interactive session, as with Snap\'s /snap/bin/docker.'**
+  String get dockerProgramBody;
+
+  /// Label of the docker program dialog's path field (CN-16).
+  ///
+  /// In en, this message translates to:
+  /// **'Program path'**
+  String get dockerProgramField;
+
+  /// Hint in the docker program dialog's path field (CN-16): an example absolute path.
+  ///
+  /// In en, this message translates to:
+  /// **'/snap/bin/docker'**
+  String get dockerProgramHint;
+
+  /// Top toast (CN-16) when the docker program applied but could not be saved to the settings file.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save the docker program, so it applies only until Klabautermann quits.'**
+  String get dockerProgramNotSaved;
+
   /// Appearance tab: heading of the preset grid.
   ///
   /// In en, this message translates to:
@@ -10209,6 +10269,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The output was longer than 1 MiB; the rest was dropped.'**
   String get dockerCommandTruncated;
+
+  /// Server header: warning that the Docker socket forward runs through a Dropbear release affected by CVE-2025-14282 (CN-15). The CVE identifier stays as is.
+  ///
+  /// In en, this message translates to:
+  /// **'Dropbear {release}: CVE-2025-14282'**
+  String dockerDropbearCve(String release);
+
+  /// Tooltip of the server header's Dropbear warning (CN-15): what the vulnerability means for the Docker socket forward and how to fix it.
+  ///
+  /// In en, this message translates to:
+  /// **'This server runs Dropbear {release}, where a forwarded connection reaches the engine socket as if it came from root (CVE-2025-14282). Update Dropbear to 2025.89 or later.'**
+  String dockerDropbearCveDetail(String release);
 
   /// Tooltip of the button on a container's details that opens a shell in the container (CTX-07).
   ///
@@ -13509,6 +13581,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Restart'**
   String get keyActionRestart;
+
+  /// A mount's details: opens the disk space explorer on the mount (DSK-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Explore space'**
+  String get diskExplorerOpen;
+
+  /// Disk space explorer title: the mount point it explores.
+  ///
+  /// In en, this message translates to:
+  /// **'Space on {mount}'**
+  String diskExplorerTitle(String mount);
+
+  /// Disk space explorer: reads the shown folder again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get diskExplorerRefresh;
+
+  /// Disk space explorer: shows the folder above, never above the mount point.
+  ///
+  /// In en, this message translates to:
+  /// **'Up a folder'**
+  String get diskExplorerUp;
+
+  /// Disk space explorer, in admin mode: reads folders as root.
+  ///
+  /// In en, this message translates to:
+  /// **'Read as root'**
+  String get diskExplorerAsRoot;
+
+  /// Disk space explorer: what reading as root changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Counts what the login user may not read.'**
+  String get diskExplorerAsRootDetail;
+
+  /// Disk space explorer: a folder is being read with du.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading {path}… A large folder takes a while.'**
+  String diskExplorerReading(String path);
+
+  /// Disk space explorer: reads a folder that failed again.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get diskExplorerRetry;
+
+  /// Disk space explorer: the shown folder's total size.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} in this folder'**
+  String diskExplorerTotal(String size);
+
+  /// Disk space explorer: du could not read part of the folder; admin mode is off.
+  ///
+  /// In en, this message translates to:
+  /// **'Some folders here could not be read as the login user, so the sizes are at least this. Turn on admin mode to read them as root.'**
+  String get diskExplorerIncomplete;
+
+  /// Disk space explorer: du could not read part of the folder; admin mode is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Some folders here could not be read as the login user, so the sizes are at least this. Read as root to count them.'**
+  String get diskExplorerIncompleteAdmin;
+
+  /// Disk space explorer: du could not read part of the folder as root.
+  ///
+  /// In en, this message translates to:
+  /// **'Some folders here could not be read even as root, so the sizes are at least this.'**
+  String get diskExplorerIncompleteAsRoot;
+
+  /// Disk space explorer: the folder holds more entries than listed.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the {count} largest entries.'**
+  String diskExplorerTruncated(int count);
+
+  /// Disk space explorer: a folder with no entries.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder is empty.'**
+  String get diskExplorerEmpty;
+
+  /// Disk space explorer: an entry's size and its share of the folder.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} · {percent} %'**
+  String diskExplorerEntrySize(String size, int percent);
+
+  /// Disk space explorer failure: no link.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected, so nothing was read.'**
+  String get diskExplorerNoLink;
+
+  /// Disk space explorer failure: an elevated read without admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading as root needs admin mode.'**
+  String get diskExplorerAdminRequired;
+
+  /// Disk space explorer failure: sudo refused.
+  ///
+  /// In en, this message translates to:
+  /// **'Elevation was refused, so nothing was read.'**
+  String get diskExplorerRefused;
+
+  /// Disk space explorer failure: the folder is gone.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder is not there any more.'**
+  String get diskExplorerNotFound;
+
+  /// Disk space explorer failure: permission denied.
+  ///
+  /// In en, this message translates to:
+  /// **'The login user may not read this folder. Turn on admin mode to read it as root.'**
+  String get diskExplorerDenied;
+
+  /// Disk space explorer failure: du missing or unreadable output.
+  ///
+  /// In en, this message translates to:
+  /// **'du is not installed on this server, or printed something else.'**
+  String get diskExplorerUnreadable;
+
+  /// Disk space explorer failure: link failed or the read timed out (kDiskUsageTimeout).
+  ///
+  /// In en, this message translates to:
+  /// **'The read failed or ran past its 3 minutes. Try a folder further down.'**
+  String get diskExplorerTransport;
 
   /// Command palette: the path of the app's menu commands.
   ///

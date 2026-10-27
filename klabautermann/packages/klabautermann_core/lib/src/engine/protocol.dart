@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         AccountsSnapshot,
+        DiskUsageListing,
         OnCalendarResult,
         TimerDetail,
         AnacronJob,
@@ -83,6 +84,7 @@ import 'package:seance_core/seance_core.dart' show DangerFinding, Snippet;
 import '../catalog/klabautermann_records.dart' show SyncedRule;
 import '../certificates/tls_check.dart' show TlsEndpoint, TlsEndpointCheck;
 import '../history/history_store.dart' show HistoryRange, HistoryTier;
+import '../docker/dropbear.dart' show DropbearRelease;
 import '../docker/docker_ladder.dart'
     show
         DockerNoRouteReason,
@@ -1386,6 +1388,28 @@ final class ReadUserCrontabs extends EngineRequest {
 
   final String serverId;
   final String requestId;
+}
+
+/// Reads one folder of [serverId] for the disk space explorer (DSK-07,
+/// 03 §7.3): its total and its entries, largest first, on the folder's
+/// own filesystem; read-only and never cached. As the login user, or with
+/// [elevated] as root through admin mode, which reads what the login user
+/// may not, so the sizes are complete. One [DiskUsageReport] with
+/// [requestId] answers it.
+final class ReadDiskUsage extends EngineRequest {
+  const ReadDiskUsage(
+    this.serverId,
+    this.path, {
+    required this.requestId,
+    this.elevated = false,
+  });
+
+  final String serverId;
+
+  /// Absolute and normalized, without a trailing slash unless it is `/`.
+  final String path;
+  final String requestId;
+  final bool elevated;
 }
 
 /// Reads one timer's triggers on [serverId] for its details (JOB-02, 03
@@ -3040,6 +3064,51 @@ enum UserCrontabsFailure {
 
   /// The link failed while reading.
   transport,
+}
+
+/// Why a [ReadDiskUsage] read nothing.
+enum DiskUsageReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// An elevated read while admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// The path is not absolute and normalized.
+  invalidPath,
+
+  /// The folder is not there.
+  notFound,
+
+  /// The login user may not read the folder.
+  denied,
+
+  /// `du` is not installed, or printed something else.
+  unreadable,
+
+  /// The link failed, or the read ran past its time.
+  transport,
+}
+
+/// The answer to [ReadDiskUsage]: [path]'s listing, or why nothing was
+/// read.
+final class DiskUsageReport extends EngineEvent {
+  const DiskUsageReport({
+    required this.serverId,
+    required this.requestId,
+    required this.path,
+    this.listing,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+  final String path;
+  final DiskUsageListing? listing;
+  final DiskUsageReportFailure? failure;
 }
 
 /// Why a [ReadTimerDetail] read nothing.
@@ -5404,11 +5473,17 @@ final class DockerEndpointRoute {
     required this.runtime,
     required this.rootEquivalence,
     this.mode,
+    this.peerCredentialsExposedBy,
     this.dockerProgram = 'docker',
   });
 
   final DockerRank rank;
   final String socketPath;
+
+  /// The Dropbear release a socket forward runs through when it is one
+  /// where the engine sees forwarded connections as root (CN-15,
+  /// CVE-2025-14282); null on other servers and on relays.
+  final DropbearRelease? peerCredentialsExposedBy;
 
   /// The program compose commands run for `docker` on this server: its
   /// [SetDockerProgram] path, or `docker` on the exec `PATH` (CN-16).

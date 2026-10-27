@@ -100,6 +100,8 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         AccountsSnapshot,
         CpuPercentages,
         CronSnapshot,
+        DiskUsageEntry,
+        DiskUsageListing,
         DiskRate,
         FsMount,
         FsSnapshot,
@@ -334,6 +336,9 @@ export 'src/docker/docker_ladder.dart'
         dockerProgramPathProblem,
         dockerSocketPathProblem;
 export 'src/docker/docker_access.dart' show dockerAccessFacts;
+// CN-15: the Dropbear release a socket forward runs through, when it
+// exposes forwarded connections' peer credentials.
+export 'src/docker/dropbear.dart' show DropbearRelease;
 // When an update check reads a registry again (IMG-05, D68).
 export 'src/docker/image_updates.dart'
     show kImageUpdateBackoff, kImageUpdateFresh;

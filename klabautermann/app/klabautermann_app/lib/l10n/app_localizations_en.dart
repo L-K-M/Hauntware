@@ -6617,6 +6617,38 @@ class AppLocalizationsEn extends AppLocalizations {
       'The path cannot contain line breaks or NUL characters.';
 
   @override
+  String get dockerProgramLabel => 'docker program';
+
+  @override
+  String get dockerProgramDefault => 'docker on the PATH';
+
+  @override
+  String get dockerProgramChange => 'Change…';
+
+  @override
+  String get dockerProgramChangeLabel => 'Change the docker program';
+
+  @override
+  String get dockerProgramReset => 'Use docker on the PATH';
+
+  @override
+  String get dockerProgramTitle => 'docker program';
+
+  @override
+  String get dockerProgramBody =>
+      'Klabautermann runs this docker for relays and compose commands on this server. Set it when docker is outside the PATH of a non-interactive session, as with Snap\'s /snap/bin/docker.';
+
+  @override
+  String get dockerProgramField => 'Program path';
+
+  @override
+  String get dockerProgramHint => '/snap/bin/docker';
+
+  @override
+  String get dockerProgramNotSaved =>
+      'Klabautermann could not save the docker program, so it applies only until Klabautermann quits.';
+
+  @override
   String get appearanceThemeTitle => 'Theme';
 
   @override
@@ -8128,6 +8160,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerCommandTruncated =>
       'The output was longer than 1 MiB; the rest was dropped.';
+
+  @override
+  String dockerDropbearCve(String release) {
+    return 'Dropbear $release: CVE-2025-14282';
+  }
+
+  @override
+  String dockerDropbearCveDetail(String release) {
+    return 'This server runs Dropbear $release, where a forwarded connection reaches the engine socket as if it came from root (CVE-2025-14282). Update Dropbear to 2025.89 or later.';
+  }
 
   @override
   String get dockerShellOpen => 'Open a shell';
@@ -10651,6 +10693,90 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get keyActionRestart => 'Restart';
+
+  @override
+  String get diskExplorerOpen => 'Explore space';
+
+  @override
+  String diskExplorerTitle(String mount) {
+    return 'Space on $mount';
+  }
+
+  @override
+  String get diskExplorerRefresh => 'Read again';
+
+  @override
+  String get diskExplorerUp => 'Up a folder';
+
+  @override
+  String get diskExplorerAsRoot => 'Read as root';
+
+  @override
+  String get diskExplorerAsRootDetail =>
+      'Counts what the login user may not read.';
+
+  @override
+  String diskExplorerReading(String path) {
+    return 'Reading $path… A large folder takes a while.';
+  }
+
+  @override
+  String get diskExplorerRetry => 'Try again';
+
+  @override
+  String diskExplorerTotal(String size) {
+    return '$size in this folder';
+  }
+
+  @override
+  String get diskExplorerIncomplete =>
+      'Some folders here could not be read as the login user, so the sizes are at least this. Turn on admin mode to read them as root.';
+
+  @override
+  String get diskExplorerIncompleteAdmin =>
+      'Some folders here could not be read as the login user, so the sizes are at least this. Read as root to count them.';
+
+  @override
+  String get diskExplorerIncompleteAsRoot =>
+      'Some folders here could not be read even as root, so the sizes are at least this.';
+
+  @override
+  String diskExplorerTruncated(int count) {
+    return 'Showing the $count largest entries.';
+  }
+
+  @override
+  String get diskExplorerEmpty => 'This folder is empty.';
+
+  @override
+  String diskExplorerEntrySize(String size, int percent) {
+    return '$size · $percent %';
+  }
+
+  @override
+  String get diskExplorerNoLink => 'Not connected, so nothing was read.';
+
+  @override
+  String get diskExplorerAdminRequired => 'Reading as root needs admin mode.';
+
+  @override
+  String get diskExplorerRefused =>
+      'Elevation was refused, so nothing was read.';
+
+  @override
+  String get diskExplorerNotFound => 'This folder is not there any more.';
+
+  @override
+  String get diskExplorerDenied =>
+      'The login user may not read this folder. Turn on admin mode to read it as root.';
+
+  @override
+  String get diskExplorerUnreadable =>
+      'du is not installed on this server, or printed something else.';
+
+  @override
+  String get diskExplorerTransport =>
+      'The read failed or ran past its 3 minutes. Try a folder further down.';
 
   @override
   String get paletteActions => 'Actions';
