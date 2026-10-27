@@ -33,6 +33,7 @@ import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/server_editor_controller.dart';
+import 'controllers/overview_layout.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
 import 'controllers/threshold_controller.dart';
@@ -42,6 +43,7 @@ import 'services/hand_off.dart' show HandOffLauncher;
 import 'theme/app_theme.dart';
 import 'ui/actions/action_entry.dart' show OperationsScope;
 import 'ui/actions/action_preview.dart' show ActionResultToasts;
+import 'ui/overview_cards.dart' show OverviewLayoutScope;
 import 'ui/quick_actions.dart' show PinnedServicesScope;
 import 'ui/fleet_board.dart' show FleetDensityScope;
 import 'ui/adaptive_shell.dart';
@@ -87,6 +89,7 @@ class KlabautermannApp extends StatelessWidget {
     this.thresholds,
     this.cadence,
     this.pinnedServices,
+    this.overviewLayout,
     this.fleetDensity,
     this.cadenceCaps,
     this.deviceName,
@@ -137,6 +140,10 @@ class KlabautermannApp extends StatelessWidget {
   /// OV-08's pinned services, for the Overview's quick actions and the
   /// unit pages' pins; null in tests that leave them out.
   final PinnedServicesController? pinnedServices;
+
+  /// OV-06's Overview cards; null in tests that leave them out, which see
+  /// the standard layout.
+  final OverviewLayoutController? overviewLayout;
 
   /// FL-08's fleet board layout, for the desktop workspace while no
   /// server is open; null in tests that leave it out, which keep the
@@ -353,6 +360,13 @@ class KlabautermannApp extends StatelessWidget {
               ),
               null => withDensity,
             };
+            final withLayout = switch (overviewLayout) {
+              final layout? => OverviewLayoutScope(
+                layout: layout,
+                child: withPins,
+              ),
+              null => withPins,
+            };
             final scoped = DockerNoticeScope(
               notice: dockerNotice,
               child: AnnouncementScope(
@@ -361,9 +375,9 @@ class KlabautermannApp extends StatelessWidget {
                 child: switch (thresholds) {
                   final thresholds? => ThresholdScope(
                     thresholds: thresholds,
-                    child: withPins,
+                    child: withLayout,
                   ),
-                  null => withPins,
+                  null => withLayout,
                 },
               ),
             );

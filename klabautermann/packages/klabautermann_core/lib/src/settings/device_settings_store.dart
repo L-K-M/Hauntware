@@ -47,6 +47,7 @@ const String _tlsEndpointsKey = 'klabautermann.certificates.endpoints';
 const String _cadenceKey = 'klabautermann.sampling.cadence';
 const String _pinnedServicesKey = 'klabautermann.overview.pinnedServices';
 const String _fleetDensityKey = 'klabautermann.fleet.density';
+const String _overviewCardsKey = 'klabautermann.overview.cards';
 const String _cadenceCapsKey = 'klabautermann.sampling.caps';
 const String _attentionKey = 'klabautermann.attention.acknowledged';
 
@@ -387,6 +388,33 @@ final class DeviceSettingsStore {
       entries[serverId] = [...pins];
     }
     _values[_pinnedServicesKey] = entries;
+    await _save();
+  }
+
+  /// The Overview's cards as this device arranged them (OV-06),
+  /// `klabautermann.overview.cards`: the app's names for them in order,
+  /// and those hidden. Null when there is none or it is not an object of
+  /// two string lists; an item that is not a string is left out.
+  ({List<String> order, List<String> hidden})? get overviewCards =>
+      switch (_values[_overviewCardsKey]) {
+        {
+          'order': final List<Object?> order,
+          'hidden': final List<Object?> hidden,
+        } =>
+          (
+            order: order.whereType<String>().toList(),
+            hidden: hidden.whereType<String>().toList(),
+          ),
+        _ => null,
+      };
+
+  /// Stores the Overview's card [order] and [hidden] cards and writes the
+  /// document; throws as [setCadence] does.
+  Future<void> setOverviewCards(List<String> order, List<String> hidden) async {
+    _values[_overviewCardsKey] = {
+      'order': [...order],
+      'hidden': [...hidden],
+    };
     await _save();
   }
 

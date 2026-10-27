@@ -589,6 +589,22 @@ void main() {
       });
     });
 
+    test('keeps the Overview\'s card order and hidden cards across '
+        'reloads, and reads a damaged entry as none (OV-06)', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.overview.cards': {'order': 'cpu'},
+      });
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.overviewCards, isNull);
+      await store.setOverviewCards(['memory', 'cpu'], ['swap']);
+      final reloaded = (await DeviceSettingsStore.open(file)).overviewCards!;
+      expect(reloaded.order, ['memory', 'cpu']);
+      expect(reloaded.hidden, ['swap']);
+    });
+
     test('keeps the fleet board layout\'s name across reloads, and reads a '
         'damaged one as none (FL-08)', () async {
       writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});

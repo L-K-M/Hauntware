@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/docker_controller.dart';
 import '../controllers/monitoring_controller.dart';
+import '../controllers/overview_layout.dart';
 import '../l10n/app_localizations.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart';
@@ -15,6 +16,7 @@ import 'docker/containers_view.dart' show containerNameOf;
 import 'failed_units_summary.dart';
 import 'fleet_row_state.dart' show kFleetRowStaleAfter;
 import 'freshness.dart';
+import 'overview_cards.dart';
 import 'history_card.dart';
 import 'quick_actions.dart';
 import 'slowness.dart';
@@ -220,99 +222,91 @@ class OverviewPanel extends StatelessWidget {
       builder: (context, box) {
         final wide =
             box.maxWidth >= MediaQuery.textScalerOf(context).scale(_wideWidth);
-        Widget column(List<Widget> children) => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: _gap,
-          children: children,
-        );
-        Widget row(Widget start, Widget end) => Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          spacing: _gap,
-          children: [
-            Expanded(child: start),
-            Expanded(child: end),
-          ],
-        );
-        final disks = partTwo.disks(context);
-        final host = partTwo.host(context);
-        final dockerCard = docker.shown
-            ? _DockerCard(
-                docker: docker,
-                controller: monitoring.docker,
-                serverId: serverId,
-              )
-            : null;
+        final layout =
+            OverviewLayoutScope.maybeOf(context)?.value ??
+            OverviewLayout.standard;
         return SingleChildScrollView(
           padding: EdgeInsets.all(wide ? 20 : 16),
-          child: column([
-            // The live stream's line heads the panel: a pause or a lost
-            // link holds every card, and the slow cards add their age.
-            if (head != null)
-              PanelNotice(
-                icon: head.stale ? Icons.history : Icons.schedule,
-                text: freshnessText(l10n, head),
-              ),
-            partTwo.health(
-              context,
-              scope,
-              onDoctor: () => showDoctor(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: _gap,
+            children: [
+              // The live stream's line heads the panel: a pause or a lost
+              // link holds every card, and the slow cards add their age.
+              if (head != null)
+                PanelNotice(
+                  icon: head.stale ? Icons.history : Icons.schedule,
+                  text: freshnessText(l10n, head),
+                ),
+              partTwo.health(
                 context,
-                monitoring: monitoring,
-                serverId: serverId,
+                scope,
+                onDoctor: () => showDoctor(
+                  context,
+                  monitoring: monitoring,
+                  serverId: serverId,
+                ),
               ),
-            ),
-            // OV-08, where this device has anything to offer.
-            if (quickActionsShown(context, serverId))
-              QuickActionsCard(serverId: serverId),
-            if (unavailable != null)
-              PanelNotice(
-                icon: unavailable.reason == CollectorUnavailableReason.timeout
-                    ? Icons.timer_off_outlined
-                    : Icons.error_outline,
-                text: l10n.overviewUnavailable(unavailable.reason.name),
-                detail: unavailable.detail,
-              )
-            else if (cards == null)
-              PanelNotice(
-                icon: Icons.hourglass_empty,
-                text: l10n.overviewWaiting,
+              if (unavailable != null)
+                PanelNotice(
+                  icon: unavailable.reason == CollectorUnavailableReason.timeout
+                      ? Icons.timer_off_outlined
+                      : Icons.error_outline,
+                  text: l10n.overviewUnavailable(unavailable.reason.name),
+                  detail: unavailable.detail,
+                )
+              else if (cards == null)
+                PanelNotice(
+                  icon: Icons.hourglass_empty,
+                  text: l10n.overviewWaiting,
+                ),
+              // TRI-02 answers the question the cards below are read for.
+              ?cards?.slowness(context),
+              // OV-06: the cards in this device's order, those a server
+              // cannot show left out.
+              ...arrangedOverviewCards(
+                layout.shown,
+                wide: wide,
+                gap: _gap,
+                card: (card) => switch (card) {
+                  // OV-08, where this device has anything to offer.
+                  OverviewCard.quickActions
+                      when quickActionsShown(context, serverId) =>
+                    QuickActionsCard(serverId: serverId),
+                  OverviewCard.quickActions => null,
+                  OverviewCard.cpu => cards?.cpu(context),
+                  OverviewCard.load => cards?.load(context),
+                  OverviewCard.memory => cards?.memory(context),
+                  OverviewCard.swap => cards?.swap(context),
+                  OverviewCard.pressure => cards?.pressure(context),
+                  OverviewCard.disks => partTwo.disks(context),
+                  OverviewCard.network => cards?.network(context),
+                  OverviewCard.host => partTwo.host(context),
+                  OverviewCard.docker =>
+                    docker.shown
+                        ? _DockerCard(
+                            docker: docker,
+                            controller: monitoring.docker,
+                            serverId: serverId,
+                          )
+                        : null,
+                  // OV-07: what keeps the server busy, read while this shows.
+                  OverviewCard.topLists => TopListsCard(
+                    monitoring: monitoring,
+                    serverId: serverId,
+                    visible: visible,
+                  ),
+                  OverviewCard.history => HistoryCard(
+                    reads: monitoring.rollups,
+                    serverId: serverId,
+                  ),
+                },
               ),
-            // TRI-02 answers the question the cards below are read for.
-            ?cards?.slowness(context),
-            if (cards != null && wide) ...[
-              row(
-                column([
-                  cards.cpu(context),
-                  cards.load(context),
-                  cards.pressure(context),
-                ]),
-                column([cards.memory(context), cards.swap(context)]),
-              ),
-              row(disks, column([cards.network(context), host, ?dockerCard])),
-            ] else if (wide)
-              row(disks, dockerCard == null ? host : column([host, dockerCard]))
-            else ...[
-              if (cards != null) ...[
-                cards.cpu(context),
-                cards.load(context),
-                cards.memory(context),
-                cards.swap(context),
-                cards.pressure(context),
-              ],
-              disks,
-              ?cards?.network(context),
-              host,
-              ?dockerCard,
+              ?coverage,
+              if (OverviewLayoutScope.maybeOf(context) case final controller?)
+                EditOverviewCardsButton(layout: controller),
             ],
-            // OV-07: what keeps the server busy, read while this shows.
-            TopListsCard(
-              monitoring: monitoring,
-              serverId: serverId,
-              visible: visible,
-            ),
-            HistoryCard(reads: monitoring.rollups, serverId: serverId),
-            ?coverage,
-          ]),
+          ),
         );
       },
     );

@@ -20,6 +20,7 @@ import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
 import 'controllers/attention.dart';
 import 'controllers/cadence_controller.dart';
+import 'controllers/overview_layout.dart';
 import 'controllers/pinned_services.dart';
 import 'controllers/fleet_density.dart';
 import 'controllers/container_columns.dart';
@@ -373,6 +374,15 @@ Future<void> main(List<String> args) async {
     save: settings.setPinnedServices,
   );
 
+  // OV-06's Overview cards, kept per device in settings.json.
+  final overviewLayout = OverviewLayoutController(
+    layout: switch (settings.overviewCards) {
+      (:final order, :final hidden) => OverviewLayout.decode(order, hidden),
+      null => null,
+    },
+    save: settings.setOverviewCards,
+  );
+
   // FL-08's fleet board layout, kept per device in settings.json.
   final fleetDensity = FleetDensityController(
     density: FleetDensity.parse(settings.fleetDensity),
@@ -494,6 +504,7 @@ Future<void> main(List<String> args) async {
       thresholds: thresholds,
       cadence: cadence,
       pinnedServices: pinnedServices,
+      overviewLayout: overviewLayout,
       fleetDensity: fleetDensity,
       cadenceCaps: cadenceCaps,
       deviceName: deviceName,
