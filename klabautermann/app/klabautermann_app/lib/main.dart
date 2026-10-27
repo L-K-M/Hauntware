@@ -52,6 +52,7 @@ import 'services/window_state.dart';
 import 'settings_window_app.dart';
 import 'ui/alerts.dart' show alertNotificationText;
 import 'ui/already_running_app.dart';
+import 'ui/workspace_navigation.dart' show WorkspaceNavigation;
 
 /// The composition root (03 §10.1): the settings-window branch, the
 /// instance lock, the macOS titlebar, then the device settings store, the
@@ -456,6 +457,7 @@ Future<void> main(List<String> args) async {
       toolbarBand: toolbarBand,
       appVersion: appVersion,
       handOff: handOff,
+      navigation: WorkspaceNavigation(fleet),
     ),
   );
 }
