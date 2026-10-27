@@ -126,7 +126,10 @@ class _MacCommandHostState extends State<MacCommandHost>
     final state = AppScope.of(context);
     if (identical(state, _state)) return;
     _state?.removeListener(_schedule);
-    _state = state..addListener(_schedule);
+    _state?.undoHistory.removeListener(_schedule);
+    _state = state
+      ..addListener(_schedule)
+      ..undoHistory.addListener(_schedule);
     _schedule();
   }
 
@@ -143,6 +146,7 @@ class _MacCommandHostState extends State<MacCommandHost>
     HardwareKeyboard.instance.removeHandler(_afterKey);
     GestureBinding.instance.pointerRouter.removeGlobalRoute(_afterPointer);
     _state?.removeListener(_schedule);
+    _state?.undoHistory.removeListener(_schedule);
     super.dispose();
   }
 
@@ -327,14 +331,22 @@ class _MacCommandHostState extends State<MacCommandHost>
   }) {
     const off = CommandState.disabled;
     const on = CommandState.available;
+    final free = content && modalRoutes.open.value == 0;
+    // The app's own history, where no text field has one of its own.
+    final history = state.undoHistory;
+    final undoName = free ? history.undoName : null;
+    final redoName = free ? history.redoName : null;
+    final appUndo = undoName == null
+        ? off
+        : CommandState(enabled: true, title: 'Undo $undoName');
+    final appRedo = redoName == null
+        ? off
+        : CommandState(enabled: true, title: 'Redo $redoName');
     final terminal = _activeTerminal(state);
-    if (content &&
-        modalRoutes.open.value == 0 &&
-        terminal != null &&
-        terminal.terminalFocused) {
+    if (free && terminal != null && terminal.terminalFocused) {
       return {
-        AppCommand.undo: off,
-        AppCommand.redo: off,
+        AppCommand.undo: appUndo,
+        AppCommand.redo: appRedo,
         AppCommand.cut: off,
         AppCommand.copy: terminal.hasSelection ? on : off,
         AppCommand.paste: on,
@@ -348,9 +360,10 @@ class _MacCommandHostState extends State<MacCommandHost>
       return action != null && action.isEnabled(intent) ? on : off;
     }
 
+    final textField = _editsText(focus);
     return {
-      AppCommand.undo: can(_undo),
-      AppCommand.redo: can(_redo),
+      AppCommand.undo: textField ? can(_undo) : appUndo,
+      AppCommand.redo: textField ? can(_redo) : appRedo,
       AppCommand.cut: can(_cut),
       AppCommand.copy: can(CopySelectionTextIntent.copy),
       AppCommand.paste: can(_paste),
@@ -514,7 +527,7 @@ class _MacCommandHostState extends State<MacCommandHost>
           await duplicateServerInteractively(context, state, server);
         }
       case AppCommand.togglePin:
-        if (server != null) await state.toggleServerPin(server.id);
+        if (server != null) await toggleServerPinUndoably(state, server);
       case AppCommand.copySshCommand:
         if (server != null) await _copySshCommand(server);
       case AppCommand.deleteServer:
@@ -536,6 +549,13 @@ class _MacCommandHostState extends State<MacCommandHost>
 
   Future<void> _runEdit(AppState state, AppCommand command) async {
     final terminal = _activeTerminal(state);
+    final focus = FocusManager.instance.primaryFocus?.context;
+    final textField = _editsText(focus);
+    if (!textField &&
+        (command == AppCommand.undo || command == AppCommand.redo)) {
+      await _stepHistory(state, command);
+      return;
+    }
     if (modalRoutes.open.value == 0 &&
         terminal != null &&
         terminal.terminalFocused) {
@@ -552,7 +572,6 @@ class _MacCommandHostState extends State<MacCommandHost>
       }
       return;
     }
-    final focus = FocusManager.instance.primaryFocus?.context;
     if (focus == null || !focus.mounted) return;
     void invoke<T extends Intent>(T intent) {
       final action = Actions.maybeFind<T>(focus, intent: intent);
@@ -575,6 +594,34 @@ class _MacCommandHostState extends State<MacCommandHost>
         invoke(_selectAll);
       default:
         break;
+    }
+  }
+
+  /// Whether [focus] keeps a text undo history of its own: a text field,
+  /// or the built-in editor, both of which answer [UndoTextIntent].
+  static bool _editsText(BuildContext? focus) =>
+      focus != null &&
+      focus.mounted &&
+      Actions.maybeFind<UndoTextIntent>(focus, intent: _undo) != null;
+
+  /// Edit ▸ Undo and Redo outside text fields: the app's own history.
+  Future<void> _stepHistory(AppState state, AppCommand command) async {
+    final history = state.undoHistory;
+    final name = command == AppCommand.undo
+        ? history.undoName
+        : history.redoName;
+    if (name == null) return;
+    try {
+      if (command == AppCommand.undo) {
+        await history.undo();
+      } else {
+        await history.redo();
+      }
+    } catch (error) {
+      if (mounted) {
+        final verb = command == AppCommand.undo ? 'undo' : 'redo';
+        showTopToastIn(context, message: 'Couldn’t $verb $name — $error');
+      }
     }
   }
 

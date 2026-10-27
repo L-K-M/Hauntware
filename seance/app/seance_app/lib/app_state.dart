@@ -26,6 +26,7 @@ import 'services/remote_git_controller.dart';
 import 'services/secrets_recovery.dart';
 import 'services/server_duplication.dart';
 import 'services/shell_location.dart';
+import 'services/undo_history.dart';
 import 'services/xterm_engine.dart';
 import 'theme/app_appearance.dart';
 import 'ui/built_in_text_editor.dart';
@@ -1278,6 +1279,9 @@ class AppState extends ChangeNotifier {
     settings.paneUtilityWidth = utilityWidth;
     await services.saveSettings();
   }
+
+  /// What Edit ▸ Undo takes back outside text fields (AppUndoHistory).
+  final AppUndoHistory undoHistory = AppUndoHistory();
 
   /// Whether the wide layout shows its server list (View ▸ Hide Sidebar).
   bool get sidebarVisible => !services.settings.sidebarHidden;
@@ -2747,6 +2751,7 @@ class AppState extends ChangeNotifier {
     // it was holding open go.
     _keepAlive.stop();
     chat.dispose();
+    undoHistory.dispose();
     apkUpdater?.dispose();
     // Drop the callback before the service goes: it closes over `sessions`,
     // so a probe service that outlived this state would keep reading a list

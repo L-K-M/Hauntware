@@ -1,9 +1,13 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
 import '../family_hues.dart';
 import '../main.dart';
+import '../services/undo_history.dart';
 import '../theme.dart' show SeanceTheme;
 import 'top_toast.dart';
 
@@ -188,11 +192,25 @@ class _SnippetsPaneState extends State<SnippetsPane> {
     await showSnippetEditor(context, state, existing);
   }
 
+  /// On a Mac the snippet goes at once and Edit ▸ Undo, or the toast's
+  /// Undo, brings it back, as Finder and Notes delete; elsewhere a dialog
+  /// asks first.
   Future<void> _delete(
     BuildContext context,
     AppState state,
     Snippet snippet,
   ) async {
+    if (Theme.of(context).platform == TargetPlatform.macOS) {
+      await deleteSnippetUndoably(state, snippet);
+      if (!context.mounted) return;
+      showTopToastIn(
+        context,
+        message: 'Deleted “${snippet.title}”',
+        actionLabel: 'Undo',
+        onAction: () => unawaited(state.undoHistory.undo()),
+      );
+      return;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -209,8 +227,24 @@ class _SnippetsPaneState extends State<SnippetsPane> {
         ],
       ),
     );
-    if (ok == true) await state.deleteSnippet(snippet.id);
+    if (ok == true) await deleteSnippetUndoably(state, snippet);
   }
+}
+
+/// Deletes [snippet] and records it for Edit ▸ Undo, which saves it back.
+Future<void> deleteSnippetUndoably(AppState state, Snippet snippet) async {
+  await state.deleteSnippet(snippet.id);
+  state.undoHistory.record(
+    UndoableChange(
+      name: 'Delete Snippet',
+      // A fresh stamp, so the restored copy outranks the deletion's
+      // tombstone wherever it already synced.
+      undo: () => state.saveSnippet(
+        snippet.copyWith(updatedAt: DateTime.now().millisecondsSinceEpoch),
+      ),
+      redo: () => state.deleteSnippet(snippet.id),
+    ),
+  );
 }
 
 /// Frequently-run commands (from the local, opt-in history) that aren't
@@ -361,6 +395,20 @@ class _SnippetEditorState extends State<_SnippetEditor> {
     text: widget.existing?.body ?? '',
   );
 
+  /// A snippet needs both a title and a command; Save waits for them
+  /// rather than closing on a draft it would drop.
+  bool get _complete =>
+      _title.text.trim().isNotEmpty && _body.text.trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _title.addListener(_changed);
+    _body.addListener(_changed);
+  }
+
+  void _changed() => setState(() {});
+
   @override
   void dispose() {
     _title.dispose();
@@ -369,12 +417,9 @@ class _SnippetEditorState extends State<_SnippetEditor> {
   }
 
   Future<void> _save() async {
+    if (!_complete) return;
     final title = _title.text.trim();
     final body = _body.text;
-    if (title.isEmpty || body.trim().isEmpty) {
-      Navigator.of(context).pop();
-      return;
-    }
     final now = DateTime.now().millisecondsSinceEpoch;
     final existing = widget.existing;
     final snippet = existing == null
@@ -386,12 +431,42 @@ class _SnippetEditorState extends State<_SnippetEditor> {
             updatedAt: now,
           )
         : existing.copyWith(title: title, body: body, updatedAt: now);
-    await widget.state.saveSnippet(snippet);
+    final state = widget.state;
+    await state.saveSnippet(snippet);
+    int stamp() => DateTime.now().millisecondsSinceEpoch;
+    state.undoHistory.record(
+      existing == null
+          ? UndoableChange(
+              name: 'New Snippet',
+              undo: () => state.deleteSnippet(snippet.id),
+              redo: () =>
+                  state.saveSnippet(snippet.copyWith(updatedAt: stamp())),
+            )
+          : UndoableChange(
+              name: 'Edit Snippet',
+              undo: () =>
+                  state.saveSnippet(existing.copyWith(updatedAt: stamp())),
+              redo: () =>
+                  state.saveSnippet(snippet.copyWith(updatedAt: stamp())),
+            ),
+    );
     if (mounted) Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Return in the title saves, as a sheet's default button does; the
+    // command takes newlines, so ⌘Return (Ctrl+Return) saves from there.
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.enter, meta: true): _save,
+        const SingleActivator(LogicalKeyboardKey.enter, control: true): _save,
+      },
+      child: _dialog(context),
+    );
+  }
+
+  Widget _dialog(BuildContext context) {
     return AlertDialog(
       title: Text(widget.existing == null ? 'New snippet' : 'Edit snippet'),
       content: SizedBox(
@@ -402,6 +477,8 @@ class _SnippetEditorState extends State<_SnippetEditor> {
             TextField(
               controller: _title,
               autofocus: true,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _save(),
               decoration: const InputDecoration(labelText: 'Title'),
             ),
             const SizedBox(height: 12),
@@ -425,7 +502,10 @@ class _SnippetEditorState extends State<_SnippetEditor> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(onPressed: _save, child: const Text('Save')),
+        FilledButton(
+          onPressed: _complete ? _save : null,
+          child: const Text('Save'),
+        ),
       ],
     );
   }

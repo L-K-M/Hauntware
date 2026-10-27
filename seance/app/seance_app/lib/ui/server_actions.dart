@@ -8,6 +8,7 @@ import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
 import '../services/mac_commands.dart';
+import '../services/undo_history.dart';
 import '../theme.dart';
 import 'server_editor.dart';
 import 'top_toast.dart';
@@ -69,6 +70,16 @@ Future<void> duplicateServerInteractively(
     if (context.mounted) showTopToastIn(context, message: message);
     return;
   }
+  // Undo removes the copy; Redo makes another, whose id the next Undo
+  // removes.
+  var latest = copy;
+  state.undoHistory.record(
+    UndoableChange(
+      name: 'Duplicate Server',
+      undo: () => state.deleteServer(latest.id),
+      redo: () async => latest = await state.duplicateServer(server),
+    ),
+  );
   if (!context.mounted) return;
   showTopToastIn(
     context,
@@ -81,6 +92,23 @@ Future<void> duplicateServerInteractively(
     onAction: () {
       if (context.mounted) showServerEditor(context, state, copy);
     },
+  );
+}
+
+/// Pins [server] to the top of the list, or unpins it, as an undoable
+/// change (Edit ▸ Undo Pin to Top).
+Future<void> toggleServerPinUndoably(
+  AppState state,
+  ServerConfig server,
+) async {
+  final pinning = !state.isServerPinned(server.id);
+  await state.toggleServerPin(server.id);
+  state.undoHistory.record(
+    UndoableChange(
+      name: pinning ? 'Pin to Top' : 'Unpin',
+      undo: () => state.toggleServerPin(server.id),
+      redo: () => state.toggleServerPin(server.id),
+    ),
   );
 }
 

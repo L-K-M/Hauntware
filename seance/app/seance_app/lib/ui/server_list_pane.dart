@@ -627,7 +627,7 @@ class _ServerListPaneState extends State<ServerListPane> {
       onEdit: () => _editServer(context, state, server),
       onDuplicate: () => _duplicateServer(context, state, server),
       onDelete: () => _deleteServer(context, state, server),
-      onTogglePin: () => state.toggleServerPin(server.id),
+      onTogglePin: () => toggleServerPinUndoably(state, server),
       // Disconnect every live terminal; reconnect the lone dead one.
       onDisconnect: live.isEmpty
           ? null

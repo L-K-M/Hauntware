@@ -172,6 +172,11 @@ final class CommandCenter: NSObject, NSMenuItemValidation, NSToolbarItemValidati
       return true
     case #selector(runItem(_:)):
       guard let name = item.representedObject as? String else { return false }
+      if name == "showMainWindow" {
+        // The window list names the window while it is open; this item
+        // brings it back once it is closed.
+        item.isHidden = mainWindow?.isVisible ?? false
+      }
       let state = state(name)
       if let title = state.title { item.title = title }
       if let checked = state.checked { item.state = checked ? .on : .off }
@@ -340,10 +345,9 @@ final class CommandCenter: NSObject, NSMenuItemValidation, NSToolbarItemValidati
       $0.addItem(command("previousTab", "Show Previous Tab", key: "[", modifiers: [.command, .shift]))
       $0.addItem(command("nextTab", "Show Next Tab", key: "]", modifiers: [.command, .shift]))
       $0.addItem(.separator())
-      $0.addItem(command("showMainWindow", appName))
-      $0.addItem(.separator())
       $0.addItem(withTitle: "Bring All to Front",
         action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
+      $0.addItem(command("showMainWindow", appName))
     }
     add(windowMenu, to: bar)
     NSApp.windowsMenu = windowMenu
