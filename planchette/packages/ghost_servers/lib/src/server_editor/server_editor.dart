@@ -405,6 +405,9 @@ class _ServerEditorState extends State<_ServerEditor> {
             const SizedBox(height: 16),
             DropdownButtonFormField<AuthMethod>(
               initialValue: _auth,
+              // The field's width bounds the label, which wraps at large
+              // text sizes instead of overflowing a narrow phone.
+              isExpanded: true,
               decoration: InputDecoration(labelText: _strings.authentication),
               items: [
                 DropdownMenuItem(
@@ -702,9 +705,11 @@ class _ServerEditorState extends State<_ServerEditor> {
           const SizedBox(width: 8),
           ServerBadge(tint: _tint, mark: _mark),
           const SizedBox(width: 12),
-          Text(
-            _strings.appearance,
-            style: Theme.of(context).textTheme.titleSmall,
+          Expanded(
+            child: Text(
+              _strings.appearance,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
           ),
         ],
       ),
