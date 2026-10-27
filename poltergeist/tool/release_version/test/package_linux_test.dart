@@ -223,6 +223,8 @@ void main() {
         'write_copyright ${_shellQuote(out.path)}',
         environment: {
           'DEB_COPYRIGHT_TITLE': 'Fake: a title line',
+          'PRODUCT_NAME': 'Fake',
+          'PACKAGE_NAME': 'fake',
           'VERSION': '9.9.9',
           'LICENSE_FILE': license.path,
         },
@@ -230,10 +232,14 @@ void main() {
 
       expect(result.exitCode, 0, reason: result.stderr as String);
       final text = out.readAsStringSync();
-      expect(text, startsWith('Fake: a title line\n'));
+      expect(text, startsWith('$_dep5Format\n'));
+      expect(text, contains('Comment: Fake: a title line'));
       expect(text, contains('Upstream-Version: 9.9.9'));
-      expect(text, contains('License: Unlicense'));
-      expect(text, contains('FAKE LICENSE TEXT\nline two\n'));
+      // The standalone license paragraph: the text as continuation lines.
+      expect(
+        text,
+        contains('\n\nLicense: Unlicense\n FAKE LICENSE TEXT\n line two\n'),
+      );
     });
 
     test('embeds the repository LICENSE as shipped', () async {
@@ -251,13 +257,18 @@ void main() {
         'write_copyright ${_shellQuote(out.path)}',
         environment: {
           'DEB_COPYRIGHT_TITLE': 'Poltergeist',
+          'PRODUCT_NAME': 'Poltergeist',
+          'PACKAGE_NAME': 'poltergeist',
           'VERSION': '0.1.0',
           'LICENSE_FILE': license.path,
         },
       );
 
       expect(result.exitCode, 0, reason: result.stderr as String);
-      expect(out.readAsStringSync(), contains(license.readAsStringSync()));
+      expect(
+        out.readAsStringSync(),
+        contains(_dep5Text(license.readAsStringSync())),
+      );
     });
 
     test('the .deb build writes its copyright through the writer', () {
@@ -284,6 +295,143 @@ void main() {
         ),
       );
     });
+  });
+
+  // Planchette and Séance keep their own copies of the two marked
+  // writers; the wrappers run the shared packager's. Every package must
+  // scope the Unlicense to its own code and ship the bundle's NOTICES
+  // readable next to it.
+  group('every packager ships the license and the notices', () {
+    const die = 'die() { echo "package-linux: \$*" >&2; exit 1; }\n';
+
+    for (final product in _packagerProducts) {
+      final source = _packagerSource(product);
+
+      test('$product scopes the license and points to the notices', () async {
+        final license = _repositoryFile('LICENSE');
+        final sandbox = Directory.systemTemp.createTempSync(
+          'poltergeist-copyright-test-',
+        );
+        addTearDown(() {
+          if (sandbox.existsSync()) sandbox.deleteSync(recursive: true);
+        });
+        final out = File(p.join(sandbox.path, 'copyright'));
+
+        final result = await _sourceAndCall(
+          _markerBlock(source, 'copyright file writer'),
+          'write_copyright ${_shellQuote(out.path)}',
+          environment: {
+            'DEB_COPYRIGHT_TITLE': 'Title',
+            'PRODUCT_NAME': 'Product',
+            'PACKAGE_NAME': product,
+            'VERSION': '9.9.9',
+            'LICENSE_FILE': license.path,
+          },
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        // Machine-readable (DEP-5): a header, a Files paragraph for the
+        // package's own code, one for the Flutter bundle, which compiles
+        // in the third-party components, and a standalone paragraph with
+        // each license's text.
+        final paragraphs = _dep5Paragraphs(out.readAsStringSync());
+        expect(paragraphs.map((fields) => fields.keys.first), [
+          'Format',
+          'Files',
+          'Files',
+          'License',
+          'License',
+        ]);
+        expect(paragraphs[0]['Upstream-Version'], '9.9.9');
+        expect(
+          paragraphs[0]['Comment'],
+          contains('Third-Party-Notices.txt next to this file.'),
+        );
+        expect(paragraphs[1], containsPair('Files', '*'));
+        expect(paragraphs[1], containsPair('License', 'Unlicense'));
+        expect(paragraphs[2], containsPair('Files', 'usr/lib/$product/*'));
+        expect(
+          paragraphs[2],
+          containsPair('License', 'Unlicense and LicenseRef-Bundled-Flutter'),
+        );
+        expect(
+          '${paragraphs[3]['License']}\n',
+          'Unlicense\n${_dep5Text(license.readAsStringSync())}',
+        );
+        expect(
+          paragraphs[4]['License'],
+          allOf(
+            startsWith('LicenseRef-Bundled-Flutter\n'),
+            contains('Third-Party-Notices.txt next to this file.'),
+          ),
+        );
+      });
+
+      test("$product ships the bundle's NOTICES readable", () async {
+        final sandbox = Directory.systemTemp.createTempSync(
+          'poltergeist-notices-test-',
+        );
+        addTearDown(() {
+          if (sandbox.existsSync()) sandbox.deleteSync(recursive: true);
+        });
+        // Flutter writes NOTICES.Z gzip-compressed.
+        final notices = 'pdfium_dart\n\nMIT\n${'-' * 80}\nPDFium\n\nBSD\n';
+        File(p.join(sandbox.path, 'bundle/data/flutter_assets/NOTICES.Z'))
+          ..createSync(recursive: true)
+          ..writeAsBytesSync(gzip.encode(notices.codeUnits));
+        final out = File(p.join(sandbox.path, 'Third-Party-Notices.txt'));
+
+        final result = await _sourceAndCall(
+          _markerBlock(source, 'third-party notices writer'),
+          '${die}write_third_party_notices '
+          '${_shellQuote(p.join(sandbox.path, 'bundle'))} '
+          '${_shellQuote(out.path)}',
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(out.readAsStringSync(), notices);
+      });
+
+      test('$product refuses a bundle without NOTICES', () async {
+        final sandbox = Directory.systemTemp.createTempSync(
+          'poltergeist-notices-test-',
+        );
+        addTearDown(() {
+          if (sandbox.existsSync()) sandbox.deleteSync(recursive: true);
+        });
+        Directory(
+          p.join(sandbox.path, 'bundle/data/flutter_assets'),
+        ).createSync(recursive: true);
+
+        final result = await _sourceAndCall(
+          _markerBlock(source, 'third-party notices writer'),
+          '${die}write_third_party_notices '
+          '${_shellQuote(p.join(sandbox.path, 'bundle'))} '
+          '${_shellQuote(p.join(sandbox.path, 'out.txt'))}',
+        );
+
+        expect(result.exitCode, isNot(0));
+        expect(result.stderr, contains('NOTICES.Z not found'));
+      });
+
+      test('$product writes both into its doc directory', () {
+        final doc = source.contains('package-linux-common.sh"')
+            ? r'$PACKAGE_NAME'
+            : product;
+        expect(
+          source,
+          allOf(
+            contains(
+              'write_copyright "\$DEBROOT/usr/share/doc/$doc/copyright"',
+            ),
+            contains(
+              'write_third_party_notices "\$BUNDLE" '
+              '"\$DEBROOT/usr/share/doc/$doc/Third-Party-Notices.txt"',
+            ),
+          ),
+        );
+      });
+    }
   });
 }
 
@@ -352,6 +500,46 @@ final _packagerProducts = _packagerExecutables.keys;
 final _sharedPackager = File(
   p.join(_repositoryRoot.parent.path, 'scripts/package-linux-common.sh'),
 );
+
+/// The first line of a machine-readable Debian copyright file.
+const _dep5Format =
+    'Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/';
+
+/// [text] as DEP-5 continuation lines: each line indented by one space,
+/// an empty line written as " .".
+String _dep5Text(String text) {
+  final lines = [
+    for (final line in text.trimRight().split('\n'))
+      line.trim().isEmpty ? ' .' : ' $line',
+  ];
+  return '${lines.join('\n')}\n';
+}
+
+/// The paragraphs of a DEP-5 file, each as its fields in order.
+List<Map<String, String>> _dep5Paragraphs(String text) => [
+  for (final paragraph in text.trimRight().split('\n\n'))
+    _dep5Fields(paragraph),
+];
+
+/// A DEP-5 paragraph's fields; a value keeps its continuation lines,
+/// joined by newlines. Fails on a line that is neither.
+Map<String, String> _dep5Fields(String paragraph) {
+  final fields = <String, String>{};
+  String? field;
+  for (final line in paragraph.split('\n')) {
+    if (line.startsWith(' ')) {
+      if (field == null) throw FormatException('no field to continue', line);
+      fields[field] = '${fields[field]}\n$line';
+      continue;
+    }
+
+    final colon = line.indexOf(': ');
+    if (colon <= 0) throw FormatException('not a DEP-5 field', line);
+    field = line.substring(0, colon);
+    fields[field] = line.substring(colon + 2);
+  }
+  return fields;
+}
 
 /// [product]'s packager source, followed by the shared packager's when the
 /// product's script is a wrapper over it: the code that runs either way.

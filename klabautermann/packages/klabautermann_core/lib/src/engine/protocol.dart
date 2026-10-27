@@ -9,6 +9,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         BackupEntry,
         CpuPercentages,
         BootEnd,
+        CpuTopology,
         CronSnapshot,
         DiskRate,
         EngineMode,
@@ -25,6 +26,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         KillSignal,
         LoadAvg,
         LogFileEntry,
+        ListeningPortsRead,
         OomKillsRead,
         LoggedCronRun,
         NetRate,
@@ -36,6 +38,8 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         RestartCheck,
         SmartDisk,
+        FirewallRead,
+        SshdPosture,
         SystemctlVerb,
         SystemdUnit,
         TempsSnapshot,
@@ -73,6 +77,7 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show DangerFinding;
 
 import '../catalog/klabautermann_records.dart' show SyncedRule;
+import '../certificates/tls_check.dart' show TlsEndpoint, TlsEndpointCheck;
 import '../history/history_store.dart' show HistoryRange, HistoryTier;
 import '../docker/docker_ladder.dart'
     show
@@ -301,6 +306,9 @@ import '../operations/plan_types.dart';
 /// A container's processes then joined v3 the same way (03 §7.12 CTR-10,
 /// M6 plan N17): [DockerContainerTopQuery], answered by
 /// [DockerContainerTopPayload] with each command line masked.
+///
+/// Per-server polling caps then joined v3 the same way (02 SAF-19, M6
+/// plan N64): [SetServerCadenceCap].
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -522,6 +530,18 @@ final class SetCadenceProfile extends EngineRequest {
   const SetCadenceProfile(this.profile);
 
   final CadenceProfile profile;
+}
+
+/// Caps [serverId]'s cadence at [cap]'s 03 §6.4 column (SAF-19), such as
+/// the cellular saver for a server behind a metered link; null lifts the
+/// cap. The slower of the cap and [SetCadenceProfile]'s column wins, so a
+/// cap never speeds a server up. Caps outlive the fleet: a server that
+/// leaves and returns keeps its own.
+final class SetServerCadenceCap extends EngineRequest {
+  const SetServerCadenceCap(this.serverId, this.cap);
+
+  final String serverId;
+  final CadenceProfile? cap;
 }
 
 /// Opens a log stream on [spec]'s server (03 §10.1, §7.6): its records
@@ -747,6 +767,12 @@ final class OomKillsQuery extends HostQuerySpec {
   const OomKillsQuery();
 }
 
+/// The listening TCP and bound UDP sockets with their processes and
+/// those processes' units and containers (NET-04), as [ListeningPorts].
+final class ListeningPortsQuery extends HostQuerySpec {
+  const ListeningPortsQuery();
+}
+
 /// How the boots before the current one ended (BOOT-02), as [BootEnds]:
 /// the last [kBootEndsRead] of them, read from their journals.
 final class BootEndsQuery extends HostQuerySpec {
@@ -757,6 +783,11 @@ final class BootEndsQuery extends HostQuerySpec {
 /// [Kernels].
 final class KernelsQuery extends HostQuerySpec {
   const KernelsQuery();
+}
+
+/// The processor's model and topology (CPU-07), as [CpuTopologyRead].
+final class CpuTopologyQuery extends HostQuerySpec {
+  const CpuTopologyQuery();
 }
 
 /// The network interfaces and socket counts (NET-02, NET-03), as
@@ -779,6 +810,16 @@ final class RedactLines extends EngineRequest {
 
   final String requestId;
   final List<String> lines;
+}
+
+/// Checks each of [endpoints]' TLS certificate from this device (CRT-01,
+/// 03 §7.10): a handshake per endpoint, at once, without SSH. One
+/// [TlsEndpointsChecked] with [requestId] answers it.
+final class CheckTlsEndpoints extends EngineRequest {
+  const CheckTlsEndpoints(this.requestId, this.endpoints);
+
+  final String requestId;
+  final List<TlsEndpoint> endpoints;
 }
 
 /// Watches [lists] on [serverId]'s engine (03 §7.12 DKE-02, CST-01), as
@@ -1275,6 +1316,27 @@ final class ReadPackages extends EngineRequest {
 /// memory maps. One [RestartReport] with [requestId] answers it.
 final class ReadRestarts extends EngineRequest {
   const ReadRestarts(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s firewall rules (NET-06, 03 §7.4): in admin mode
+/// only, since ufw, firewalld, nft and iptables-save all need root. One
+/// [FirewallReport] with [requestId] answers it.
+final class ReadFirewall extends EngineRequest {
+  const ReadFirewall(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s effective sshd configuration for the app's own
+/// connection (SEC-01, 03 §7.10): in admin mode only, since `sshd -T`
+/// loads the host keys. One [SshdPostureReport] with [requestId] answers
+/// it.
+final class ReadSshdPosture extends EngineRequest {
+  const ReadSshdPosture(this.serverId, {required this.requestId});
 
   final String serverId;
   final String requestId;
@@ -2132,6 +2194,13 @@ final class OomKills extends HostPayload {
   final OomKillsRead read;
 }
 
+/// [ListeningPortsQuery]'s sockets.
+final class ListeningPorts extends HostPayload {
+  const ListeningPorts(this.read);
+
+  final ListeningPortsRead read;
+}
+
 /// [BootEndsQuery]'s ends by boot ID; a boot it did not read is absent.
 final class BootEnds extends HostPayload {
   BootEnds(Map<String, BootEnd> ends) : ends = Map.unmodifiable(ends);
@@ -2144,6 +2213,13 @@ final class Kernels extends HostPayload {
   const Kernels(this.check);
 
   final KernelCheck check;
+}
+
+/// [CpuTopologyQuery]'s processor.
+final class CpuTopologyRead extends HostPayload {
+  const CpuTopologyRead(this.topology);
+
+  final CpuTopology topology;
 }
 
 /// [InterfacesQuery]'s interfaces and sockets.
@@ -2191,6 +2267,15 @@ final class RedactedLines extends EngineEvent {
 
   final String requestId;
   final String text;
+}
+
+/// [CheckTlsEndpoints]' checks, in its order.
+final class TlsEndpointsChecked extends EngineEvent {
+  TlsEndpointsChecked(this.requestId, Iterable<TlsEndpointCheck> checks)
+    : checks = List.unmodifiable(checks);
+
+  final String requestId;
+  final List<TlsEndpointCheck> checks;
 }
 
 /// What the engine knows of [serverId]'s Docker endpoint (03 §5.8, §5.9),
@@ -2803,6 +2888,83 @@ final class RestartReport extends EngineEvent {
   final String requestId;
   final RestartCheck? check;
   final RestartReportFailure? failure;
+}
+
+/// Why a [ReadFirewall] read nothing.
+enum FirewallReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// The read printed something else.
+  unreadable,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// Why a [ReadSshdPosture] read nothing.
+enum SshdPostureFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// No sshd binary was found.
+  missing,
+
+  /// `sshd -T` refused, as for a broken configuration; the report's
+  /// detail carries its error.
+  refused,
+
+  /// The read printed something else.
+  unreadable,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadFirewall].
+final class FirewallReport extends EngineEvent {
+  const FirewallReport({
+    required this.serverId,
+    required this.requestId,
+    this.read,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+  final FirewallRead? read;
+  final FirewallReportFailure? failure;
+}
+
+/// The answer to [ReadSshdPosture].
+final class SshdPostureReport extends EngineEvent {
+  const SshdPostureReport({
+    required this.serverId,
+    required this.requestId,
+    this.posture,
+    this.failure,
+    this.detail,
+  });
+
+  final String serverId;
+  final String requestId;
+  final SshdPosture? posture;
+  final SshdPostureFailure? failure;
+
+  /// sshd's error lines for [SshdPostureFailure.refused].
+  final String? detail;
 }
 
 /// Why a [ReadPackages] checked nothing.
@@ -4052,6 +4214,13 @@ final class DockerSystemDfQuery extends DockerQuerySpec {
   const DockerSystemDfQuery();
 }
 
+/// DKE-06's security review and DKE-07's log rotation lint, on demand:
+/// the list, then an inspect of each container, up to
+/// [kDockerReviewMax]. Answered by [DockerReviewPayload].
+final class DockerReviewQuery extends DockerQuerySpec {
+  const DockerReviewQuery();
+}
+
 /// One file of the compose project [project] (03 §7.16 STK-04, M11):
 /// a config file or an environment file its containers recorded, or the
 /// `.env` in its working directory, read over SFTP once the project's
@@ -4122,6 +4291,10 @@ enum DockerWatchList {
 
   /// The network list (03 §7.15 DNW-01), as [DockerNetworksPayload].
   networks,
+
+  /// The engine's events while the app follows them (03 §7.12 DKE-03),
+  /// as [DockerEventsPayload].
+  events,
 }
 
 /// The most watches one server holds [E]: a Docker view holds one or two.
@@ -4238,12 +4411,199 @@ final class DockerNetworksPayload extends DockerPayload {
   final List<NetworkSummary> networks;
 }
 
+/// The events timeline (DKE-03): the newest `kDockerEventsKept` entries,
+/// oldest first, events and the gaps between streams alike.
+final class DockerEventsPayload extends DockerPayload {
+  DockerEventsPayload(Iterable<DockerTimelineEntry> entries)
+    : entries = List.unmodifiable(entries);
+
+  final List<DockerTimelineEntry> entries;
+}
+
+/// One line of the events timeline.
+@immutable
+sealed class DockerTimelineEntry {
+  const DockerTimelineEntry(this.at);
+
+  /// When it happened, in UTC: the event's time, or when a gap began.
+  final DateTime at;
+}
+
+/// One engine event.
+final class DockerTimelineEvent extends DockerTimelineEntry {
+  const DockerTimelineEvent({
+    required DateTime at,
+    required this.type,
+    required this.action,
+    this.actorId,
+    this.name,
+    this.image,
+    this.exitCode,
+  }) : super(at);
+
+  /// `container`, `image`, `volume` or `network`.
+  final String type;
+
+  /// `start`, `die`, `health_status: unhealthy`, `pull`, ...
+  final String action;
+  final String? actorId;
+
+  /// The container's, volume's or network's name; an image's reference.
+  final String? name;
+
+  /// A container's image.
+  final String? image;
+
+  /// A container's exit code, on `die`.
+  final int? exitCode;
+}
+
+/// A span the app did not follow the events: the stream was lost from
+/// [at] until [until]. With [resumed] the stream asked the engine for the
+/// events of the span, which it keeps only in a bounded buffer; without
+/// it the span's events are not shown.
+final class DockerTimelineGap extends DockerTimelineEntry {
+  const DockerTimelineGap({
+    required DateTime at,
+    required this.until,
+    required this.resumed,
+  }) : super(at);
+
+  final DateTime until;
+  final bool resumed;
+}
+
 /// `/system/df`'s totals per type (02 OV-05), read in the shape the
 /// negotiated version gates; a type the daemon did not cover is null.
 final class DockerSystemDfPayload extends DockerPayload {
   const DockerSystemDfPayload(this.df);
 
   final SystemDf df;
+}
+
+/// The most containers a [DockerReviewQuery] inspects, one request
+/// each; the rest are counted in [DockerReviewPayload.omitted].
+const kDockerReviewMax = 200;
+
+/// What DKE-06 and DKE-07 flag in a container's configuration, from
+/// the most to the least severe.
+enum ContainerRisk {
+  /// `HostConfig.Privileged`: every device and capability of the host.
+  privileged,
+
+  /// An engine socket bind-mounted in, which is root on the host
+  /// (03 §8.1), or a host folder that holds one (`/`, `/run`,
+  /// `/var/run`); its path is the finding's detail.
+  socketMount,
+
+  /// `NetworkMode` host.
+  hostNetwork,
+
+  /// `PidMode` host.
+  hostPid,
+
+  /// `CapAdd`; the capabilities are the detail.
+  addedCapabilities,
+
+  /// A database's port published on every address; the port is the
+  /// detail.
+  databasePublished,
+
+  /// No `User`, or root, on an engine that maps neither (rootless or a
+  /// user namespace remap).
+  rootUser,
+
+  /// The `json-file` log driver without `max-size`, which never rotates
+  /// (r5 §1.6).
+  logsUnrotated,
+
+  /// An image named without a tag or digest, or by `latest`; the
+  /// reference is the detail.
+  latestTag,
+
+  /// No health check from the image or the container, or one turned
+  /// off.
+  noHealthcheck,
+
+  /// Restart policy `no`, on a container that is not removed when it
+  /// stops and not a compose one-off run.
+  noRestartPolicy;
+
+  /// How much the risk matters: [ContainerRiskLevel.high] where the
+  /// container can take the host, [ContainerRiskLevel.medium] where it
+  /// widens what a break-in reaches or fills the disk.
+  ContainerRiskLevel get level => switch (this) {
+    privileged ||
+    socketMount ||
+    hostNetwork ||
+    hostPid ||
+    addedCapabilities ||
+    databasePublished => ContainerRiskLevel.high,
+    rootUser || logsUnrotated => ContainerRiskLevel.medium,
+    latestTag || noHealthcheck || noRestartPolicy => ContainerRiskLevel.low,
+  };
+}
+
+enum ContainerRiskLevel { high, medium, low }
+
+/// One [ContainerRisk] a container carries, with what it names: a path,
+/// capabilities, a port or an image reference.
+@immutable
+final class ContainerFinding {
+  const ContainerFinding(this.risk, {this.detail});
+
+  final ContainerRisk risk;
+  final String? detail;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ContainerFinding && other.risk == risk && other.detail == detail;
+
+  @override
+  int get hashCode => Object.hash(risk, detail);
+
+  @override
+  String toString() => 'ContainerFinding($risk, $detail)';
+}
+
+/// One container's review: its findings, most severe first, empty when
+/// it carries none.
+@immutable
+final class ContainerReview {
+  const ContainerReview({
+    required this.containerId,
+    required this.name,
+    required this.state,
+    this.project,
+    required this.findings,
+  });
+
+  final String containerId;
+  final String name;
+
+  /// The list's `State`, such as `running` or `exited`.
+  final String? state;
+
+  /// The compose project, when the container belongs to one.
+  final String? project;
+
+  final List<ContainerFinding> findings;
+}
+
+/// A [DockerReviewQuery]'s answer: each container read, in the list's
+/// order. A container removed between the list and its inspect is left
+/// out; [omitted] counts those past [kDockerReviewMax], [unreadable]
+/// those whose inspect the daemon refused.
+final class DockerReviewPayload extends DockerPayload {
+  const DockerReviewPayload(
+    this.reviews, {
+    this.omitted = 0,
+    this.unreadable = 0,
+  });
+
+  final List<ContainerReview> reviews;
+  final int omitted;
+  final int unreadable;
 }
 
 /// The containers grouped by compose project (STK-01), from the same
@@ -4475,6 +4835,11 @@ final class ContainerListStats {
     this.cpuPercent,
     this.memoryUsed,
     this.memoryLimit,
+    this.networkRx,
+    this.networkTx,
+    this.blockRead,
+    this.blockWrite,
+    this.pids,
   });
 
   final String containerId;
@@ -4489,6 +4854,21 @@ final class ContainerListStats {
   /// Bytes in use less `inactive_file` (cgroup v2) or the cache (v1).
   final int? memoryUsed;
   final int? memoryLimit;
+
+  /// Bytes received and sent over every interface since the container
+  /// started (CTR-08), as `docker stats` totals them; null when the
+  /// container has no network or the daemon reported none.
+  final int? networkRx;
+  final int? networkTx;
+
+  /// Bytes read and written on block devices since it started; null
+  /// where the cgroup reports no I/O accounting (`blkio_stats` empty, as
+  /// on some cgroup v2 hosts).
+  final int? blockRead;
+  final int? blockWrite;
+
+  /// The processes and threads in its cgroup.
+  final int? pids;
 }
 
 /// The query read nothing, for [failure]; [detail] is the daemon's own
@@ -4909,6 +5289,46 @@ final class ContainerAction extends ActionIntent {
   final String containerId;
   final ContainerVerb verb;
   final KillSignal? signal;
+}
+
+/// What [ContainerBulkAction] does to each container it names (CTR-07).
+enum ContainerBulkVerb {
+  start,
+  stop,
+  restart,
+
+  /// Removal without its anonymous volumes and without `force`, so only
+  /// a container that is not up.
+  remove;
+
+  /// Whether a container in [state], as the Engine API names it, takes
+  /// this verb, as its own actions offer it: start for one that is not
+  /// up, stop for one running or restarting, restart for one running,
+  /// remove for one not up. Paused and removing ones take none.
+  bool appliesTo(String? state) => switch (this) {
+    start || remove => const {'created', 'exited', 'dead'}.contains(state),
+    stop => state == 'running' || state == 'restarting',
+    restart => state == 'running',
+  };
+}
+
+/// The most containers one [ContainerBulkAction] names [E]: each takes
+/// a request to plan and one to re-validate.
+const kContainerBulkMax = 100;
+
+/// One verb on several containers (CTR-07), as one plan with a step per
+/// container in [containerIds]' order, each by its full id. The engine
+/// leaves out a container whose state does not take [verb]
+/// ([ContainerBulkVerb.appliesTo]) and refuses when none is left.
+final class ContainerBulkAction extends ActionIntent {
+  ContainerBulkAction(
+    super.serverId, {
+    required Iterable<String> containerIds,
+    required this.verb,
+  }) : containerIds = List.unmodifiable(containerIds);
+
+  final List<String> containerIds;
+  final ContainerBulkVerb verb;
 }
 
 /// Runs [argv] once in [containerId] without a TTY (03 §7.13, CTX-08), as
@@ -5991,7 +6411,8 @@ enum SampleStream {
   gpu,
 }
 
-/// The 03 §6.4 cadence columns [SetCadenceProfile] picks among.
+/// The 03 §6.4 cadence columns [SetCadenceProfile] picks among, from the
+/// fastest to the slowest; [SetServerCadenceCap] relies on that order.
 enum CadenceProfile {
   /// The Desktop column; the engine starts with it.
   desktop,

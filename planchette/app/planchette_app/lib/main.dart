@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 import 'package:path/path.dart' as paths;
 import 'package:path_provider/path_provider.dart';
@@ -24,6 +25,8 @@ import 'ui/document_windows_root.dart';
 
 Future<void> main(List<String> arguments) async {
   PlanchetteBinding.ensureInitialized();
+  // The licenses page lists the APK's Maven libraries too (Android).
+  registerPlatformLicenses();
   if (Platform.isAndroid) {
     await runAndroidApp();
     return;

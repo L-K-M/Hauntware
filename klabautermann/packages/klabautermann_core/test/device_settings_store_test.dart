@@ -17,7 +17,9 @@ const _deviceNameKey = 'klabautermann.audit.deviceName';
 const _overridesKey = 'klabautermann.docker.endpointOverrides';
 const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const _monitorSetKey = 'klabautermann.monitorSet';
+const _containerColumnsKey = 'klabautermann.docker.containerColumns';
 const _safetyKey = 'klabautermann.safety';
+const _attentionKey = 'klabautermann.attention.acknowledged';
 
 final _uuidV4 = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -233,6 +235,45 @@ void main() {
       expect(cleared.stackFolders, isEmpty);
       expect(
         (document()['klabautermann.docker.stackFolders'] as Map).keys,
+        containsAll(['srv-9', 'srv-8']),
+        reason: "other servers' entries stay as read",
+      );
+    });
+
+    test('keeps TLS endpoints per server across reloads; malformed '
+        'entries are skipped, and none removes one (CRT-01)', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.certificates.endpoints': {
+          'srv-9': 'not-a-list',
+          'srv-8': ['https://example.com', 7],
+        },
+      });
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.tlsEndpoints, isEmpty);
+      await store.setTlsEndpoints('srv-1', const [
+        TlsEndpoint('example.com', 443),
+        TlsEndpoint('2001:db8::1', 8443),
+      ]);
+      expect(
+        (document()['klabautermann.certificates.endpoints'] as Map)['srv-1'],
+        ['example.com:443', '[2001:db8::1]:8443'],
+      );
+      final reopened = await DeviceSettingsStore.open(file);
+      expect(reopened.tlsEndpoints, {
+        'srv-1': const [
+          TlsEndpoint('example.com', 443),
+          TlsEndpoint('2001:db8::1', 8443),
+        ],
+      });
+
+      await reopened.setTlsEndpoints('srv-1', const []);
+      final cleared = await DeviceSettingsStore.open(file);
+      expect(cleared.tlsEndpoints, isEmpty);
+      expect(
+        (document()['klabautermann.certificates.endpoints'] as Map).keys,
         containsAll(['srv-9', 'srv-8']),
         reason: "other servers' entries stay as read",
       );
@@ -633,6 +674,40 @@ void main() {
       expect((await DeviceSettingsStore.open(file)).monitorSet, isEmpty);
     });
 
+    test('keeps the chosen container columns in order across reloads; a '
+        'value that is not a list reads as none (CTR-08)', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.containerColumns, isNull);
+      await store.setContainerColumns(['memory', 'state', 'pids']);
+      expect((await DeviceSettingsStore.open(file)).containerColumns, [
+        'memory',
+        'state',
+        'pids',
+      ]);
+      expect(document()[_containerColumnsKey], ['memory', 'state', 'pids']);
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _containerColumnsKey: 'memory',
+      });
+      final damaged = await DeviceSettingsStore.open(file);
+      expect(damaged.issue, isNull);
+      expect(damaged.containerColumns, isNull);
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _containerColumnsKey: ['memory', 7, null, 'cpu'],
+      });
+      expect((await DeviceSettingsStore.open(file)).containerColumns, [
+        'memory',
+        'cpu',
+      ]);
+    });
+
     for (final (name, value, expected) in [
       ('a string', 'srv-a', null),
       ('a map', {'srv-a': true}, null),
@@ -746,6 +821,36 @@ void main() {
 
       writeDocument({...document(), _safetyKey: 'on'});
       expect((await DeviceSettingsStore.open(file)).safety, isNull);
+    });
+
+    test('keeps the acknowledged problems across reloads (TRI-03); a '
+        'value that is not an object reads as none', () async {
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.attention, isNull);
+      await store.setAttention({
+        'srv-a': {
+          'failedUnit:nginx.service': {
+            'at': '2026-10-26T12:00:00.000Z',
+            'note': 'restarts tonight',
+          },
+        },
+      });
+
+      final reopened = await DeviceSettingsStore.open(file);
+      expect(reopened.attention, {
+        'srv-a': {
+          'failedUnit:nginx.service': {
+            'at': '2026-10-26T12:00:00.000Z',
+            'note': 'restarts tonight',
+          },
+        },
+      });
+
+      writeDocument({
+        ...document(),
+        _attentionKey: ['srv-a'],
+      });
+      expect((await DeviceSettingsStore.open(file)).attention, isNull);
     });
 
     test('saves the appearance as it was passed', () async {

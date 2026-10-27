@@ -31,7 +31,8 @@ fi
 # wrapper script, so the check follows its exec line to the real binary:
 # the binary must exist after the /usr -> /app remap, and every library it
 # links must resolve. ldd on the wrapper itself proves nothing — it is not
-# an ELF.
+# an ELF. The command is also the package name, so the doc directory the
+# .deb ships must hold the copyright file and the third-party notices.
 # shellcheck disable=SC2016  # expanded by the sandbox's sh, not here
 FLATPAK_SMOKE_CHECK='
 fail() { echo "flatpak smoke check: $*" >&2; exit 1; }
@@ -47,6 +48,9 @@ libs="$(ldd "$target" 2>&1)" || fail "ldd cannot read $target: $libs"
 bad="$(printf "%s\n" "$libs" | grep "not found" || true)"
 [ -z "$bad" ] || fail "unresolved libraries in $target:
 $bad"
+for notice in copyright Third-Party-Notices.txt; do
+  [ -s "$2/share/doc/$1/$notice" ] || fail "missing $2/share/doc/$1/$notice"
+done
 '
 
 # Extracts <deb> into <work>/stage with Debian's /usr remapped to /app and
@@ -62,10 +66,11 @@ flatpak_stage_deb() {
   cp -a "$work/debroot/usr/." "$work/stage/"
 
   # Shipped text files (wrappers, launchers, python) hardcode /usr; inside
-  # flatpak the prefix is /app.
+  # flatpak the prefix is /app. The doc directory stays verbatim: its
+  # license texts quote paths such as #!/usr/bin/env.
   while IFS= read -r f; do
     sed -i '/^#!/!s|/usr/|/app/|g' "$f"
-  done < <(grep -rIl '/usr/' "$work/stage" 2>/dev/null || true)
+  done < <(find "$work/stage" -path "$work/stage/share/doc" -prune -o -type f -exec grep -Il '/usr/' {} + 2>/dev/null || true)
   while IFS= read -r f; do
     sed -i -e 's|Exec=/usr/bin/|Exec=|g' -e 's|Exec=/opt/[^/]*/bin/|Exec=|g' -e 's|Exec=/app/bin/|Exec=|g' -e '/^TryExec=/d' "$f"
   done < <(find "$work/stage/share/applications" -type f -name '*.desktop' 2>/dev/null)

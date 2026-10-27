@@ -241,6 +241,11 @@ final class DockerController {
   ValueListenable<DockerNetworkList> networksFor(String serverId) =>
       _server(serverId).networks;
 
+  /// What [serverId]'s events watch last delivered of the events
+  /// timeline (DKE-03), or why it could not be read.
+  ValueListenable<DockerEventList> eventsFor(String serverId) =>
+      _server(serverId).events;
+
   /// [serverId]'s last disk use measurement ([measureDiskUse]).
   ValueListenable<DockerDiskUse> diskUseFor(String serverId) =>
       _server(serverId).diskUse;
@@ -394,6 +399,13 @@ final class DockerController {
   /// or a [DockerQueryFailed]. Nothing of the answer stays here.
   Future<DockerPayload> readContainerTop(String serverId, String containerId) =>
       _ask(serverId, DockerContainerTopQuery(containerId));
+
+  /// DKE-06's security review and DKE-07's log rotation lint of every
+  /// container on [serverId], up to [kDockerReviewMax]: a
+  /// [DockerReviewPayload] or a [DockerQueryFailed]. Nothing of the
+  /// answer stays here.
+  Future<DockerPayload> reviewContainers(String serverId) =>
+      _ask(serverId, const DockerReviewQuery());
 
   /// Sends [spec] once and completes with the engine's answer, as
   /// [readStackFile] describes.
@@ -570,6 +582,57 @@ final class DockerController {
   void _unwatchNetworks(String serverId, _DockerServer server) {
     final watchId = server.networksWatchId;
     server.networksWatchId = null;
+    if (watchId == null || _stopped) return;
+    _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+  }
+
+  /// An Events view shows [serverId]; [unwatchEvents] says it no longer
+  /// does. The first view starts the server's events watch (DKE-03).
+  void watchEvents(String serverId) {
+    if (!_listed(serverId)) return;
+    final server = _server(serverId);
+    server.eventViews++;
+    if (server.eventViews > 1) return;
+
+    _watchEvents(serverId, server);
+  }
+
+  /// The last view to hide ends the server's events watch.
+  void unwatchEvents(String serverId) {
+    final server = _servers[serverId];
+    if (server == null || server.eventViews == 0) return;
+    server.eventViews--;
+    if (server.eventViews > 0) return;
+
+    _unwatchEvents(serverId, server);
+  }
+
+  /// Watches [serverId]'s events anew after a failure, under a new id,
+  /// as [retryContainers] does.
+  void retryEvents(String serverId) {
+    final server = _servers[serverId];
+    if (server == null || server.eventsWatchId == null) return;
+
+    _unwatchEvents(serverId, server);
+    _watchEvents(serverId, server);
+  }
+
+  void _watchEvents(String serverId, _DockerServer server) {
+    if (_stopped) return;
+
+    final watchId = server.eventsWatchId ??= 'events-${_count++}';
+    _send(
+      DockerWatch(
+        serverId: serverId,
+        watchId: watchId,
+        lists: const {DockerWatchList.events},
+      ),
+    );
+  }
+
+  void _unwatchEvents(String serverId, _DockerServer server) {
+    final watchId = server.eventsWatchId;
+    server.eventsWatchId = null;
     if (watchId == null || _stopped) return;
     _send(DockerUnwatch(serverId: serverId, watchId: watchId));
   }
@@ -1006,6 +1069,9 @@ final class DockerController {
         if (list == DockerWatchList.networks) {
           server.networks.value = server.networks.value.took(payload, at);
         }
+        if (list == DockerWatchList.events) {
+          server.events.value = server.events.value.took(payload);
+        }
         if (list == DockerWatchList.stacks) {
           server.stacks.value = server.stacks.value.took(payload, at);
           // The grouping holds every container the list read.
@@ -1289,6 +1355,30 @@ final class DockerNetworkList {
       };
 }
 
+/// What a server's events watch delivered of the events timeline
+/// (03 §7.12 DKE-03).
+@immutable
+final class DockerEventList {
+  const DockerEventList({this.entries, this.failure});
+
+  /// The timeline, oldest first; null until the watch delivered one.
+  final List<DockerTimelineEntry>? entries;
+
+  /// Why the watch failed while [entries] keeps the timeline before; null
+  /// once one is delivered.
+  final DockerQueryFailed? failure;
+
+  /// This timeline with [payload] taken in.
+  DockerEventList took(DockerPayload payload) => switch (payload) {
+    DockerEventsPayload(:final entries) => DockerEventList(entries: entries),
+    final DockerQueryFailed failure => DockerEventList(
+      entries: entries,
+      failure: failure,
+    ),
+    _ => this,
+  };
+}
+
 /// A server's disk use measurement (02 OV-05): the last `/system/df`
 /// read, and whether one is under way or why the last one failed.
 @immutable
@@ -1472,6 +1562,9 @@ final class _DockerServer {
   final ValueNotifier<DockerNetworkList> networks = ValueNotifier(
     const DockerNetworkList(),
   );
+  final ValueNotifier<DockerEventList> events = ValueNotifier(
+    const DockerEventList(),
+  );
   final ValueNotifier<DockerDiskUse> diskUse = ValueNotifier(
     const DockerDiskUse(),
   );
@@ -1532,6 +1625,12 @@ final class _DockerServer {
   /// The network watch the engine holds, while any Networks view shows.
   String? networksWatchId;
 
+  /// How many Events views show the server.
+  int eventViews = 0;
+
+  /// The events watch the engine holds, while any Events view shows.
+  String? eventsWatchId;
+
   /// How many Stacks views show the server.
   int stackViews = 0;
 
@@ -1563,6 +1662,7 @@ final class _DockerServer {
     images.dispose();
     volumes.dispose();
     networks.dispose();
+    events.dispose();
     diskUse.dispose();
     stacks.dispose();
     for (final container in inspected.values) {

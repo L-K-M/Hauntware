@@ -7,6 +7,7 @@ import 'package:seance_app/services/download_provenance.dart';
 import 'package:seance_app/services/external_file_opener.dart';
 import 'package:seance_app/services/managed_remote_file_store.dart';
 import 'package:seance_app/services/remote_files_controller.dart';
+import 'package:seance_app/services/shell_location.dart';
 import 'package:seance_core/seance_core.dart';
 
 void main() {
@@ -15,7 +16,7 @@ void main() {
     final shellDirectory = ValueNotifier<String?>(null);
     final controller = RemoteFilesController(
       () async => remote,
-      shellDirectory: shellDirectory,
+      shellDirectory: _located(shellDirectory),
       managedFileStore: _store(),
       serverId: 'server',
       editSessionId: 'session',
@@ -33,12 +34,39 @@ void main() {
     shellDirectory.dispose();
   });
 
+  test('a title change leaves a manual navigation alone', () async {
+    final remote = _FakeRemoteFileSystem();
+    final shellDirectory = ValueNotifier<String?>('/var/log');
+    final terminalTitle = ValueNotifier<String?>(null);
+    final controller = RemoteFilesController(
+      () async => remote,
+      shellDirectory: _located(shellDirectory),
+      terminalTitle: terminalTitle,
+      managedFileStore: _store(),
+      serverId: 'server',
+      editSessionId: 'session',
+    );
+    await controller.initialize();
+    await controller.navigate('/home/test');
+
+    // `vim` titling the tab and handing it back: the shell never moved.
+    terminalTitle.value = 'notes.txt - VIM';
+    terminalTitle.value = 'root@server: /var/log';
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.currentPath, '/home/test');
+
+    controller.dispose();
+    shellDirectory.dispose();
+    terminalTitle.dispose();
+  });
+
   test('follows absolute OSC directory metadata when enabled', () async {
     final remote = _FakeRemoteFileSystem();
     final shellDirectory = ValueNotifier<String?>(null);
     final controller = RemoteFilesController(
       () async => remote,
-      shellDirectory: shellDirectory,
+      shellDirectory: _located(shellDirectory),
       managedFileStore: _store(),
       serverId: 'server',
       editSessionId: 'session',
@@ -67,7 +95,7 @@ void main() {
     final terminalTitle = ValueNotifier<String?>('root@server: ~/docker');
     final controller = RemoteFilesController(
       () async => remote,
-      shellDirectory: shellDirectory,
+      shellDirectory: _located(shellDirectory),
       terminalTitle: terminalTitle,
       managedFileStore: _store(),
       serverId: 'server',
@@ -120,6 +148,9 @@ void main() {
       shellMoved.dispose();
     });
 
+    /// A controller over a shell that is read from the moment it connects,
+    /// as the session reads it for its tab before any pane opens. The pane
+    /// reads it again as it opens, so the first two answers are those.
     RemoteFilesController controller() {
       final reader = RemoteShellDirectory((command, {timeout}) async {
         reads++;
@@ -131,22 +162,26 @@ void main() {
           _ => const RemoteCommandResult(exitCode: 4),
         };
       });
+      final location = ShellLocation(
+        reported: shellDirectory,
+        mayHaveMoved: shellMoved,
+        titleChanged: terminalTitle,
+      )..readWith(reader);
+      addTearDown(location.dispose);
       final controller = RemoteFilesController(
         () async => remote,
-        shellDirectory: shellDirectory,
+        shellDirectory: location,
         terminalTitle: terminalTitle,
         managedFileStore: _store(),
         serverId: 'server',
         editSessionId: 'session',
-        shellReader: reader,
-        shellMayHaveMoved: shellMoved,
       );
       addTearDown(controller.dispose);
       return controller;
     }
 
     test('opens where the shell is and follows it after Enter', () async {
-      answers = ['/var/log', '/home/test/docker'];
+      answers = ['/var/log', '/var/log', '/home/test/docker'];
       final files = controller();
 
       await files.initialize();
@@ -155,59 +190,70 @@ void main() {
 
       shellMoved.value++;
       await _until(() => files.currentPath == '/home/test/docker');
-      expect(reads, 2);
+      expect(reads, 3);
     });
 
-    test('a burst of Enters reads once', () async {
+    test('opening reads the shell again', () async {
+      // A key binding that runs `cd` moves the shell without a cue.
       answers = ['/home/test', '/var/log'];
       final files = controller();
-      await files.initialize();
+      await _until(() => reads == 1);
 
-      for (var i = 0; i < 5; i++) {
-        shellMoved.value++;
-      }
-      await _until(() => files.currentPath == '/var/log');
-      await _pastDebounce();
-      expect(reads, 2);
+      await files.initialize();
+      expect(files.currentPath, '/var/log');
     });
 
     test('an unchanged answer leaves a manual navigation alone', () async {
-      answers = ['/var/log', '/var/log'];
+      answers = ['/var/log', '/var/log', '/var/log'];
       final files = controller();
       await files.initialize();
       await files.navigate('/home/test');
 
       shellMoved.value++;
       await _pastDebounce();
-      expect(reads, 2);
+      expect(reads, 3);
       expect(files.currentPath, '/home/test');
     });
 
     test(
-      'reads nothing while follow is off, then reads when it is back on',
+      'stays put while follow is off, then goes where the shell went',
       () async {
-        answers = ['/home/test', '/var/log'];
+        answers = ['/home/test', '/home/test', '/var/log'];
         final files = controller();
         await files.initialize();
 
         files.setFollowTerminal(false);
         shellMoved.value++;
+        await _until(() => reads == 3);
         await _pastDebounce();
-        expect(reads, 1);
+        expect(files.currentPath, '/home/test');
 
         files.setFollowTerminal(true);
         await _until(() => files.currentPath == '/var/log');
-        expect(reads, 2);
       },
     );
 
-    test('reads nothing before the pane opens', () async {
+    test('following again reads the shell again', () async {
+      answers = ['/home/test', '/home/test', '/var/log'];
       final files = controller();
+      await files.initialize();
+
+      files.setFollowTerminal(false);
+      files.setFollowTerminal(true);
+      await _until(() => files.currentPath == '/var/log');
+      expect(reads, 3);
+    });
+
+    test('opens where the shell went before the pane opened', () async {
+      // The read as the pane opens finds nothing; the last answer stands.
+      answers = ['/home/test', '/var/log', null];
+      final files = controller();
+      await _until(() => reads == 1);
 
       shellMoved.value++;
-      await _pastDebounce();
-      expect(reads, 0);
-      expect(files.initialized, isFalse);
+      await _until(() => reads == 2);
+      await files.initialize();
+      expect(files.currentPath, '/var/log');
     });
 
     test('reads nothing while OSC 7 answers', () async {
@@ -235,11 +281,11 @@ void main() {
     test('a title change is a cue to read again, not a destination', () async {
       // `git clone … && cd repo`: the cd lands after the read that followed
       // its Enter, and only the title says so.
-      answers = ['/home/test', '/home/test', '/var/log'];
+      answers = ['/home/test', '/home/test', '/home/test', '/var/log'];
       final files = controller();
       await files.initialize();
       shellMoved.value++;
-      await _until(() => reads == 2);
+      await _until(() => reads == 3);
 
       terminalTitle.value = 'root@server: /home/test/docker';
       await _until(() => files.currentPath == '/var/log');
@@ -252,11 +298,15 @@ void main() {
 
       await files.initialize();
       expect(files.currentPath, '/var/log');
-      expect(reads, 1);
+      expect(reads, isPositive);
     });
 
     test('once the server cannot answer, the title leads again', () async {
-      answers = ['/home/test', const RemoteCommandResult(exitCode: 3)];
+      answers = [
+        '/home/test',
+        '/home/test',
+        const RemoteCommandResult(exitCode: 3),
+      ];
       final files = controller();
       await files.initialize();
       expect(files.reportedShellDirectory, '/home/test');
@@ -267,7 +317,7 @@ void main() {
 
       shellMoved.value++;
       await _pastDebounce();
-      expect(reads, 2);
+      expect(reads, 3);
     });
 
     test('no answer leaves the pane at home without an error', () async {
@@ -279,31 +329,16 @@ void main() {
       expect(files.reportedShellDirectory, isNull);
     });
 
-    test('reads one at a time, and once more for an Enter meanwhile', () async {
-      final slow = Completer<RemoteCommandResult>();
-      answers = [null, slow.future, '/var/log'];
-      final files = controller();
-      await files.initialize();
-
-      shellMoved.value++;
-      await _until(() => reads == 2);
-      shellMoved.value++;
-      await _pastDebounce();
-      expect(reads, 2, reason: 'no second read while one is in flight');
-
-      slow.complete(_shellAnswer('/home/test/docker'));
-      await _until(() => files.currentPath == '/var/log');
-      expect(reads, 3);
-    });
-
-    test('an Enter during the first read asks once more after it', () async {
+    test('opening during a read asks once more after it', () async {
+      // The read in flight may have looked before the shell moved.
       final first = Completer<RemoteCommandResult>();
       answers = [first.future, '/var/log'];
       final files = controller();
 
       final opening = files.initialize();
-      await _until(() => reads == 1);
-      shellMoved.value++; // `cd /var/log` typed right after connecting
+      // Home is known just before the pane asks where the shell is.
+      await _until(() => files.homePath != null);
+      expect(reads, 1);
       first.complete(_shellAnswer('/home/test'));
       await opening;
 
@@ -321,6 +356,21 @@ void main() {
 
       slow.complete(_shellAnswer('/var/log'));
       await _until(() => files.currentPath == '/var/log');
+    });
+
+    test('a late answer where the pane already is still repaints', () async {
+      // The pane's "waiting for the shell" hint reads the reported directory.
+      final slow = Completer<RemoteCommandResult>();
+      answers = [slow.future];
+      final files = controller();
+      await files.initialize();
+      expect(files.reportedShellDirectory, isNull);
+      var repaints = 0;
+      files.addListener(() => repaints++);
+
+      slow.complete(_shellAnswer('/home/test'));
+      await _until(() => repaints > 0);
+      expect(files.reportedShellDirectory, '/home/test');
     });
 
     test('a late first answer keeps the pane loading until it lists', () async {
@@ -347,7 +397,7 @@ void main() {
     });
 
     test('once read, a title change alone moves nothing', () async {
-      answers = ['/var/log', '/var/log'];
+      answers = ['/var/log', '/var/log', '/var/log'];
       final files = controller();
       await files.initialize();
       await files.navigate('/home/test');
@@ -355,7 +405,7 @@ void main() {
       // A program titling the tab: the read that follows finds the shell
       // where it was.
       terminalTitle.value = 'root@server: /home/test/docker';
-      await _until(() => reads == 2);
+      await _until(() => reads == 3);
       await _pastDebounce();
       expect(files.currentPath, '/home/test');
       expect(files.reportedShellDirectory, '/var/log');
@@ -367,7 +417,7 @@ void main() {
     final shellDirectory = ValueNotifier<String?>(null);
     final controller = RemoteFilesController(
       () async => remote,
-      shellDirectory: shellDirectory,
+      shellDirectory: _located(shellDirectory),
       managedFileStore: _store(),
       serverId: 'server',
       editSessionId: 'session',
@@ -398,7 +448,7 @@ void main() {
     final shellDirectory = ValueNotifier<String?>(null);
     final controller = RemoteFilesController(
       () async => remote,
-      shellDirectory: shellDirectory,
+      shellDirectory: _located(shellDirectory),
       managedFileStore: _store(),
       serverId: 'server',
       editSessionId: 'session',
@@ -422,7 +472,7 @@ void main() {
     final shellDirectory = ValueNotifier<String?>(null);
     final controller = RemoteFilesController(
       () async => remote,
-      shellDirectory: shellDirectory,
+      shellDirectory: _located(shellDirectory),
       managedFileStore: _store(),
       serverId: 'server',
       editSessionId: 'session',
@@ -454,7 +504,7 @@ void main() {
     final shellDirectory = ValueNotifier<String?>(null);
     final controller = RemoteFilesController(
       () async => remote,
-      shellDirectory: shellDirectory,
+      shellDirectory: _located(shellDirectory),
       managedFileStore: _store(),
       serverId: 'server',
       editSessionId: 'session',
@@ -481,7 +531,7 @@ void main() {
       final shellDirectory = ValueNotifier<String?>(null);
       final controller = RemoteFilesController(
         () async => remote,
-        shellDirectory: shellDirectory,
+        shellDirectory: _located(shellDirectory),
         managedFileStore: _store(),
         serverId: 'server',
         editSessionId: 'session',
@@ -511,7 +561,7 @@ void main() {
       final shellDirectory = ValueNotifier<String?>(null);
       final controller = RemoteFilesController(
         () async => remote,
-        shellDirectory: shellDirectory,
+        shellDirectory: _located(shellDirectory),
         managedFileStore: _store(),
         serverId: 'server',
         editSessionId: 'session',
@@ -549,7 +599,7 @@ void main() {
     final store = _store();
     final controller = RemoteFilesController(
       () async => remote,
-      shellDirectory: shellDirectory,
+      shellDirectory: _located(shellDirectory),
       managedFileStore: store,
       serverId: 'server',
       editSessionId: 'session',
@@ -578,7 +628,7 @@ void main() {
       final store = _store();
       final controller = RemoteFilesController(
         () async => remote,
-        shellDirectory: shellDirectory,
+        shellDirectory: _located(shellDirectory),
         managedFileStore: store,
         serverId: 'server',
         editSessionId: 'session',
@@ -616,7 +666,7 @@ void main() {
       List<String>? savedBookmarks;
       final controller = RemoteFilesController(
         () async => remote,
-        shellDirectory: shellDirectory,
+        shellDirectory: _located(shellDirectory),
         managedFileStore: _store(),
         serverId: 'server',
         editSessionId: 'session',
@@ -663,7 +713,7 @@ void main() {
       final shellDirectory = ValueNotifier<String?>(null);
       final controller = RemoteFilesController(
         () async => remote,
-        shellDirectory: shellDirectory,
+        shellDirectory: _located(shellDirectory),
         managedFileStore: _store(),
         serverId: 'server',
         editSessionId: 'session',
@@ -704,7 +754,7 @@ void main() {
     final shellDirectory = ValueNotifier<String?>(null);
     final controller = RemoteFilesController(
       () async => remote,
-      shellDirectory: shellDirectory,
+      shellDirectory: _located(shellDirectory),
       managedFileStore: _store(),
       serverId: 'server',
       editSessionId: 'session',
@@ -749,7 +799,7 @@ void main() {
       shellDirectory = ValueNotifier<String?>(null);
       controller = RemoteFilesController(
         () async => remote,
-        shellDirectory: shellDirectory,
+        shellDirectory: _located(shellDirectory),
         managedFileStore: _store(),
         serverId: 'server',
         editSessionId: 'session',
@@ -864,7 +914,7 @@ void main() {
       marked = [];
       controller = RemoteFilesController(
         () async => remote,
-        shellDirectory: shellDirectory,
+        shellDirectory: _located(shellDirectory),
         managedFileStore: _store(),
         serverId: 'server',
         editSessionId: 'session',
@@ -931,7 +981,7 @@ void main() {
     test('a failed mark still opens the checkout', () async {
       final failing = RemoteFilesController(
         () async => remote,
-        shellDirectory: shellDirectory,
+        shellDirectory: _located(shellDirectory),
         managedFileStore: _store(),
         serverId: 'server',
         editSessionId: 'other',
@@ -965,7 +1015,7 @@ void main() {
     final shellDirectory = ValueNotifier<String?>(null);
     final controller = RemoteFilesController(
       () async => remote,
-      shellDirectory: shellDirectory,
+      shellDirectory: _located(shellDirectory),
       managedFileStore: _store(),
       serverId: 'server',
       editSessionId: 'session',
@@ -1005,7 +1055,7 @@ void main() {
       final shellDirectory = ValueNotifier<String?>(null);
       final controller = RemoteFilesController(
         () async => remote,
-        shellDirectory: shellDirectory,
+        shellDirectory: _located(shellDirectory),
         managedFileStore: _store(),
         serverId: 'server',
         editSessionId: 'session',
@@ -1047,7 +1097,7 @@ void main() {
     final activeCommand = ValueNotifier<String?>(null);
     final controller = RemoteFilesController(
       () async => remote,
-      shellDirectory: shellDirectory,
+      shellDirectory: _located(shellDirectory),
       activeCommand: activeCommand,
       managedFileStore: _store(),
       serverId: 'server',
@@ -1088,7 +1138,7 @@ void main() {
     final store = _store();
     final controller = RemoteFilesController(
       () async => remote,
-      shellDirectory: shellDirectory,
+      shellDirectory: _located(shellDirectory),
       managedFileStore: store,
       serverId: 'server',
       editSessionId: 'session',
@@ -1140,7 +1190,7 @@ void main() {
       final shellDirectory = ValueNotifier<String?>(null);
       final controller = RemoteFilesController(
         () async => remote,
-        shellDirectory: shellDirectory,
+        shellDirectory: _located(shellDirectory),
         managedFileStore: _store(),
         serverId: 'server',
         editSessionId: 'session',
@@ -1184,7 +1234,7 @@ void main() {
       final shellDirectory = ValueNotifier<String?>(null);
       final controller = RemoteFilesController(
         () async => remote,
-        shellDirectory: shellDirectory,
+        shellDirectory: _located(shellDirectory),
         managedFileStore: _store(),
         serverId: 'server',
         editSessionId: 'session',
@@ -1224,7 +1274,7 @@ void main() {
     final shellDirectory = ValueNotifier<String?>(null);
     final controller = RemoteFilesController(
       () async => remote,
-      shellDirectory: shellDirectory,
+      shellDirectory: _located(shellDirectory),
       managedFileStore: _store(),
       serverId: 'server',
       editSessionId: 'session',
@@ -1241,6 +1291,13 @@ void main() {
     controller.dispose();
     shellDirectory.dispose();
   });
+}
+
+/// [osc7] as the controller sees it, with nothing read beside the shell.
+ShellLocation _located(ValueListenable<String?> osc7) {
+  final location = ShellLocation(reported: osc7);
+  addTearDown(location.dispose);
+  return location;
 }
 
 /// What [RemoteShellDirectory]'s script prints when the shell is in [path].

@@ -255,6 +255,54 @@ void main() {
     expect(payload.failure, HostQueryFailure.failed);
   });
 
+  test('the listening ports read runs its command and parses', () async {
+    link = _RunLink(
+      (_) => _ok(
+        '$kPortsToolMarker ss\n'
+        'tcp LISTEN 0 4096 0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=812,fd=3))\n'
+        '$kPortsCgroupMarker 812\n0::/system.slice/ssh.service\n',
+      ),
+    );
+    final read =
+        ((await ask(const ListeningPortsQuery())).payload as ListeningPorts)
+            .read;
+    expect(read.sockets.single.port, 22);
+    expect(read.owners[812]!.unit, 'ssh.service');
+    expect(
+      link!.commands.single,
+      HostCommands.commandLine(
+        HostCommands.listeningPorts(),
+        quote: quoteShellWord,
+      ),
+    );
+
+    events.clear();
+    link = _RunLink((_) => _ok('sh: syntax error\n'));
+    final failed =
+        (await ask(const ListeningPortsQuery())).payload as HostQueryFailed;
+    expect(failed.failure, HostQueryFailure.failed);
+  });
+
+  test('the processor read runs its command and parses', () async {
+    link = _RunLink(
+      (_) => _ok(
+        '$kCpuNprocMarker\n2\n$kCpuLscpuMarker\n$kCpuInfoMarker\n'
+        'processor\t: 0\nprocessor\t: 1\n',
+      ),
+    );
+    final read =
+        (await ask(const CpuTopologyQuery())).payload as CpuTopologyRead;
+    expect(read.topology.usableCpus, 2);
+    expect(read.topology.logicalCpus, 2);
+    expect(
+      link!.commands.single,
+      HostCommands.commandLine(
+        HostCommands.cpuTopology(),
+        quote: quoteShellWord,
+      ),
+    );
+  });
+
   test('the interface read runs its command and parses', () async {
     link = _RunLink(
       (_) => _ok(
@@ -275,6 +323,13 @@ void main() {
         quote: quoteShellWord,
       ),
     );
+  });
+
+  test('a processor read that printed something else fails', () async {
+    link = _RunLink((_) => _ok('sh: nproc: not found\n'));
+    final payload =
+        (await ask(const CpuTopologyQuery())).payload as HostQueryFailed;
+    expect(payload.failure, HostQueryFailure.failed);
   });
 
   test('an interface read that printed something else fails', () async {

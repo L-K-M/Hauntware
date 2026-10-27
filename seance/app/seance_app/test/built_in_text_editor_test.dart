@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_fonts/ghost_fonts.dart' show BundledMonoFont;
 import 'package:seance_app/services/managed_remote_file_store.dart';
 import 'package:seance_app/services/remote_files_controller.dart';
+import 'package:seance_app/services/shell_location.dart';
 import 'package:seance_app/ui/built_in_text_editor.dart';
 import 'package:seance_app/ui/editor_syntax.dart';
 import 'package:seance_core/seance_core.dart';
@@ -1245,7 +1246,7 @@ Future<RemoteFilesController> _driftController(
   });
   final controller = RemoteFilesController(
     () async => remote,
-    shellDirectory: ValueNotifier<String?>(null),
+    shellDirectory: ShellLocation(reported: ValueNotifier<String?>(null)),
     managedFileStore: ManagedRemoteFileStore(
       indexFile: File('${directory.path}/index.json'),
       checkoutRoot: Directory('${directory.path}/checkouts'),

@@ -169,9 +169,12 @@ final class SamplingScheduler {
   /// [Subscribe] naming it, a repeat included (03 §10.1).
   void subscribed(Subscribe request) {
     final serverId = request.serverId;
-    if (_subscriptions.profile == CadenceProfile.cellularSaver) {
+    final profile = _subscriptions.profileFor(serverId);
+    if (profile == CadenceProfile.cellularSaver) {
       final owed = request.streams.where(
-        (s) => _onDemand(s) && _subscriptions.streamsFor(serverId).contains(s),
+        (s) =>
+            _onDemand(profile, s) &&
+            _subscriptions.streamsFor(serverId).contains(s),
       );
       if (owed.isNotEmpty) _server(serverId).owed.addAll(owed);
     }
@@ -190,7 +193,8 @@ final class SamplingScheduler {
 
     // A new run reads every periodic stream at once, but not these.
     if (streams.contains(SampleStream.identity)) server.identityReadOn = null;
-    server.owed.addAll(streams.where(_onDemand));
+    final profile = _subscriptions.profileFor(serverId);
+    server.owed.addAll(streams.where((s) => _onDemand(profile, s)));
     final run = server.run;
     if (run == null) return;
 
@@ -287,13 +291,13 @@ final class SamplingScheduler {
     _follow(server, run, streams);
   }
 
-  /// Follows a new [SamplingSubscriptions.profile]: periods change at
-  /// the next aligned tick, a stream not read yet stays due at once, and
-  /// owed on-demand reads lapse once the profile reads those streams on
-  /// its own.
+  /// Follows a new [SamplingSubscriptions.profile] or server cap: periods
+  /// change at the next aligned tick, a stream not read yet stays due at
+  /// once, and owed on-demand reads lapse once the profile reads those
+  /// streams on its own.
   void profileChanged() {
-    final profile = _subscriptions.profile;
     for (final server in _servers.values) {
+      final profile = _profileOf(server);
       if (profile != CadenceProfile.cellularSaver) server.owed.clear();
       final run = server.run;
       if (run == null) continue;
@@ -309,7 +313,8 @@ final class SamplingScheduler {
           } else if (!run.unread.contains(stream)) {
             run.due[stream] = _aligned(run.epoch, period, now);
           }
-        } else if (_onDemand(stream) && !server.owed.contains(stream)) {
+        } else if (_onDemand(profile, stream) &&
+            !server.owed.contains(stream)) {
           run.due.remove(stream);
         }
       }
@@ -355,9 +360,14 @@ final class SamplingScheduler {
         _Server(ServerSamplePipeline(serverId: serverId, sequence: _sequence)),
   );
 
-  bool _onDemand(SampleStream stream) =>
+  /// The 6.4 column [server] samples at: the app's, or its cap's when
+  /// that is slower.
+  CadenceProfile _profileOf(_Server server) =>
+      _subscriptions.profileFor(server.pipeline.serverId);
+
+  bool _onDemand(CadenceProfile profile, SampleStream stream) =>
       stream != SampleStream.identity &&
-      samplingPeriod(stream, _subscriptions.profile) == null;
+      samplingPeriod(stream, profile) == null;
 
   // -- runs -----------------------------------------------------------
 
@@ -417,7 +427,9 @@ final class SamplingScheduler {
       if (run.due.containsKey(stream)) continue;
       final read = switch (stream) {
         SampleStream.identity => !identical(server.identityReadOn, run.link),
-        _ when _onDemand(stream) => server.owed.contains(stream),
+        _ when _onDemand(_profileOf(server), stream) => server.owed.contains(
+          stream,
+        ),
         _ => true,
       };
       if (read) {
@@ -556,7 +568,12 @@ final class SamplingScheduler {
     // A stopped session's link closed; the conditions say why.
     if (sampler.session.state is SamplerStopped) return;
     if (!_canTick(run, sampler)) {
-      final next = _next(run, sampler, (stream) => _losable(run, stream));
+      final profile = _profileOf(server);
+      final next = _next(
+        run,
+        sampler,
+        (stream) => _losable(profile, run, stream),
+      );
       if (next != null) _arm(sampler, next, () => _lose(server, run, sampler));
       return;
     }
@@ -588,7 +605,8 @@ final class SamplingScheduler {
       return;
     }
 
-    final next = _next(run, sampler, (s) => !_held(run, sampler, s));
+    final profile = _profileOf(server);
+    final next = _next(run, sampler, (s) => !_held(profile, run, sampler, s));
     final wake = switch ((probeAt, opsAt)) {
       (final p?, final o?) => p < o ? p : o,
       (final p, final o) => p ?? o,
@@ -645,17 +663,20 @@ final class SamplingScheduler {
   /// Whether [stream] waits for [sampler]'s outstanding tick to settle
   /// rather than go out in a tick the session skips: a first reading, or
   /// one owed once, is no cadence tick, and skipping it would lose it.
-  bool _held(_Run run, _Sampler sampler, SampleStream stream) =>
+  bool _held(
+    CadenceProfile profile,
+    _Run run,
+    _Sampler sampler,
+    SampleStream stream,
+  ) =>
       sampler.busy &&
-      (run.unread.contains(stream) ||
-          samplingPeriod(stream, _subscriptions.profile) == null);
+      (run.unread.contains(stream) || samplingPeriod(stream, profile) == null);
 
   /// Whether [stream] is a reading lost when it comes due while its
   /// sampler cannot tick: a cadence reading, not a first one or one owed
   /// once, which wait for the sampler instead.
-  bool _losable(_Run run, SampleStream stream) =>
-      !run.unread.contains(stream) &&
-      samplingPeriod(stream, _subscriptions.profile) != null;
+  bool _losable(CadenceProfile profile, _Run run, SampleStream stream) =>
+      !run.unread.contains(stream) && samplingPeriod(stream, profile) != null;
 
   /// Reports the streams a tick would read now as readings lost to a
   /// sampler that restarts or waits for the probe (03 §6.2: a missed
@@ -670,12 +691,12 @@ final class SamplingScheduler {
     }
 
     final now = _elapsed();
-    final profile = _subscriptions.profile;
+    final profile = _profileOf(server);
     final lost = {
       for (final MapEntry(key: stream, value: due) in run.due.entries)
         if (_kindOf(stream) == sampler.kind &&
             due <= now &&
-            _losable(run, stream))
+            _losable(profile, run, stream))
           stream,
     };
     lost.removeWhere(
@@ -710,11 +731,12 @@ final class SamplingScheduler {
     }
 
     final now = _elapsed();
+    final profile = _profileOf(server);
     final read = {
       for (final MapEntry(key: stream, value: due) in run.due.entries)
         if (_kindOf(stream) == sampler.kind &&
             due <= now &&
-            !_held(run, sampler, stream))
+            !_held(profile, run, sampler, stream))
           stream,
     };
     if (read.isNotEmpty && !sampler.busy) {
@@ -729,7 +751,7 @@ final class SamplingScheduler {
     }
 
     for (final stream in read) {
-      final period = samplingPeriod(stream, _subscriptions.profile);
+      final period = samplingPeriod(stream, profile);
       // A read owed once stays owed until a reply carries it.
       run.due[stream] = period == null
           ? now + _owedReadRetry
@@ -768,7 +790,7 @@ final class SamplingScheduler {
       case SamplerReplied(:final reply):
         _answered(server, run);
         for (final stream in read) {
-          if (samplingPeriod(stream, _subscriptions.profile) != null) continue;
+          if (samplingPeriod(stream, _profileOf(server)) != null) continue;
           if (reply.section(sampleStreamCollector(stream).wireName) == null) {
             continue;
           }

@@ -382,10 +382,10 @@ abstract class AppLocalizations {
   /// **'Version unknown'**
   String get aboutVersionUnknown;
 
-  /// The app's licence line in the About dialog. Klabautermann and Unlicense are names: never translated.
+  /// The app's licence line in the About dialog: the Unlicense covers only the app's own code, and View licenses is the dialog's button. Klabautermann and Unlicense are names: never translated.
   ///
   /// In en, this message translates to:
-  /// **'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.'**
+  /// **'Klabautermann\'s own code is public domain (Unlicense). It includes third-party components that keep their own licenses, listed under View licenses.'**
   String get aboutLicence;
 
   /// No description provided for @statusConnected.
@@ -1402,6 +1402,156 @@ abstract class AppLocalizations {
   /// **'Command line'**
   String get processesCommandLineTitle;
 
+  /// Heading of the facts a process's details read from the server (PRC-04, PRC-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get processesDetailTitle;
+
+  /// Shown while a process's details are read from the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading details…'**
+  String get processesDetailReading;
+
+  /// Button that reads a process's details from the server again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get processesDetailReadAgain;
+
+  /// Shown when a process's details could not be read.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server denied reading this process.} missing{The server lacks a tool this read needs.} other{Reading this process\'s details failed.}}'**
+  String processesDetailFailed(String failure);
+
+  /// Shown when a process ended before its details were read: it exited, or its PID was reused by another process.
+  ///
+  /// In en, this message translates to:
+  /// **'{end, select, gone{This process has exited.} reused{Its process ID now belongs to another process, so nothing was read.} other{This process has ended.}}'**
+  String processesDetailEnded(String end);
+
+  /// Shown in a process's details when the reading has no start time, which the read needs to make sure it reads the same process.
+  ///
+  /// In en, this message translates to:
+  /// **'The server did not report when this process started, so its details are not read.'**
+  String get processesDetailNoStart;
+
+  /// Label of the systemd unit a process runs in.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit'**
+  String get processesDetailUnit;
+
+  /// Value of a process's unit when it runs outside any systemd unit.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get processesDetailNoUnit;
+
+  /// Label of the container a process runs in.
+  ///
+  /// In en, this message translates to:
+  /// **'Container'**
+  String get processesDetailContainer;
+
+  /// The container a process runs in: its runtime and short ID.
+  ///
+  /// In en, this message translates to:
+  /// **'{runtime, select, docker{Docker} podman{Podman} containerd{containerd} crio{CRI-O} other{Container}} {id}'**
+  String processesDetailContainerValue(String runtime, String id);
+
+  /// Label of a process's working directory.
+  ///
+  /// In en, this message translates to:
+  /// **'Working directory'**
+  String get processesDetailCwd;
+
+  /// Value of a process fact the login user may not read.
+  ///
+  /// In en, this message translates to:
+  /// **'Not readable as this user'**
+  String get processesDetailNotReadable;
+
+  /// Label of a process's thread count.
+  ///
+  /// In en, this message translates to:
+  /// **'Threads'**
+  String get processesDetailThreads;
+
+  /// Label of how much of a process's memory is swapped out.
+  ///
+  /// In en, this message translates to:
+  /// **'Swap'**
+  String get processesDetailSwap;
+
+  /// Label of a process's context switch counts.
+  ///
+  /// In en, this message translates to:
+  /// **'Context switches'**
+  String get processesDetailSwitches;
+
+  /// A process's voluntary and involuntary context switches.
+  ///
+  /// In en, this message translates to:
+  /// **'{voluntary} voluntary, {involuntary} involuntary'**
+  String processesDetailSwitchesValue(int voluntary, int involuntary);
+
+  /// Label of how many files a process holds open.
+  ///
+  /// In en, this message translates to:
+  /// **'Open files'**
+  String get processesDetailOpenFiles;
+
+  /// How many files a process holds open, out of its soft limit.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of {limit}'**
+  String processesDetailOpenFilesOf(int count, int limit);
+
+  /// Label of the most processes the process's user may run (its soft limit).
+  ///
+  /// In en, this message translates to:
+  /// **'Process limit'**
+  String get processesDetailProcessLimit;
+
+  /// Value of a limit the process does not have.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlimited'**
+  String get processesDetailUnlimited;
+
+  /// Heading of a process's environment variables in its details.
+  ///
+  /// In en, this message translates to:
+  /// **'Environment'**
+  String get processesEnvironmentTitle;
+
+  /// Shown when a process has no environment variables.
+  ///
+  /// In en, this message translates to:
+  /// **'No environment variables.'**
+  String get processesEnvironmentNone;
+
+  /// Shown when the login user may not read a process's environment.
+  ///
+  /// In en, this message translates to:
+  /// **'The environment is not readable as this user.'**
+  String get processesEnvironmentDenied;
+
+  /// Shown under a process's environment when it was cut at the read's limit.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the first {count} variables were read.'**
+  String processesEnvironmentCapped(int count);
+
+  /// Screen-reader label of one of a process's environment variables: its name and its value, or the value's mask in words.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {value}'**
+  String processesEnvironmentEntry(String name, String value);
+
   /// Note above a process's arguments when some are masked secrets (SAF-07): a reveal is temporary and stays on this device.
   ///
   /// In en, this message translates to:
@@ -1996,6 +2146,150 @@ abstract class AppLocalizations {
   /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the kernel check.} missing{The server lacks the tools the kernel check runs.} other{The kernel check failed.}}'**
   String systemKernelFailed(String failure);
 
+  /// System tab: the heading of the processor section (CPU-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Processor'**
+  String get systemProcessorTitle;
+
+  /// System tab, Processor: shown while the processor is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the processor…'**
+  String get systemProcessorReading;
+
+  /// System tab, Processor: the button that reads the processor again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemProcessorReadAgain;
+
+  /// System tab, Processor: the label of the processor's model name, or its vendor where the server names no model.
+  ///
+  /// In en, this message translates to:
+  /// **'Model'**
+  String get systemProcessorModel;
+
+  /// System tab, Processor: why the model is unknown after a read that succeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'This processor does not report a model name, as is common on ARM boards.'**
+  String get systemProcessorNoModel;
+
+  /// System tab, Processor: the label of the number of physical processor packages.
+  ///
+  /// In en, this message translates to:
+  /// **'Sockets'**
+  String get systemProcessorSockets;
+
+  /// System tab, Processor: the label of the number of physical cores across all sockets.
+  ///
+  /// In en, this message translates to:
+  /// **'Cores'**
+  String get systemProcessorCores;
+
+  /// System tab, Processor: the label of how many hardware threads one core runs; 2 with simultaneous multithreading.
+  ///
+  /// In en, this message translates to:
+  /// **'Threads per core'**
+  String get systemProcessorThreadsPerCore;
+
+  /// System tab, Processor: the label of how many CPUs the kernel counts.
+  ///
+  /// In en, this message translates to:
+  /// **'Logical CPUs'**
+  String get systemProcessorLogical;
+
+  /// System tab, Processor: the label of how many CPUs the login's processes may run on: fewer than the logical CPUs when the processes are pinned to some of them, as in a container given a CPU set. A CPU time quota does not lower it.
+  ///
+  /// In en, this message translates to:
+  /// **'Usable CPUs'**
+  String get systemProcessorUsable;
+
+  /// System tab, Processor: why the processor read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the processor read.} missing{The server lacks the tools the processor read runs.} other{The processor read failed.}}'**
+  String systemProcessorFailed(String failure);
+
+  /// System tab: the heading of the listening ports section (NET-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Listening ports'**
+  String get systemPortsTitle;
+
+  /// System tab, Listening ports: shown while the ports are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the listening ports…'**
+  String get systemPortsReading;
+
+  /// System tab, Listening ports: the button that reads the ports again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemPortsReadAgain;
+
+  /// System tab, Listening ports: why the port read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the port read.} missing{The server lacks the tools the port read runs.} other{The port read failed.}}'**
+  String systemPortsFailed(String failure);
+
+  /// System tab, Listening ports: shown when neither listing tool is installed. ss and netstat are command names, never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'The server has neither ss nor netstat, so its ports cannot be listed.'**
+  String get systemPortsNoTool;
+
+  /// System tab, Listening ports: shown when the login user could not see which process holds some sockets.
+  ///
+  /// In en, this message translates to:
+  /// **'Some ports belong to other users\' processes, whose names only root may see.'**
+  String get systemPortsHidden;
+
+  /// System tab, Listening ports: shown when no socket listens.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing listens on this server.'**
+  String get systemPortsNone;
+
+  /// System tab, Listening ports: a port that accepts connections on all of the server's addresses.
+  ///
+  /// In en, this message translates to:
+  /// **'{protocol, select, tcp{TCP} udp{UDP} other{{protocol}}} {port} on every address'**
+  String systemPortsEvery(String protocol, int port);
+
+  /// System tab, Listening ports: a port that accepts connections only on the listed addresses, such as 127.0.0.1.
+  ///
+  /// In en, this message translates to:
+  /// **'{protocol, select, tcp{TCP} udp{UDP} other{{protocol}}} {port} on {addresses}'**
+  String systemPortsOn(String protocol, int port, String addresses);
+
+  /// System tab, Listening ports: a process holding the port, by its command name and process ID.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (PID {pid})'**
+  String systemPortsProcess(String name, int pid);
+
+  /// System tab, Listening ports: shown under a port whose process the login user may not see.
+  ///
+  /// In en, this message translates to:
+  /// **'Held by another user\'s process'**
+  String get systemPortsOwnerHidden;
+
+  /// System tab, Listening ports: the systemd unit the process runs in, such as nginx.service.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit {unit}'**
+  String systemPortsUnit(String unit);
+
+  /// System tab, Listening ports: the container the process runs in, by its short ID.
+  ///
+  /// In en, this message translates to:
+  /// **'Container {id}'**
+  String systemPortsContainer(String id);
+
   /// System tab: the heading of the network interfaces section (NET-02, NET-03).
   ///
   /// In en, this message translates to:
@@ -2228,6 +2522,436 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 more drive was not read.} other{{count} more drives were not read.}}'**
   String systemDriveHealthNotRead(int count);
+
+  /// System tab: the heading of the firewall section (NET-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Firewall'**
+  String get systemFirewallTitle;
+
+  /// System tab, Firewall: why the read waits for admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on admin mode to read the firewall: every firewall tool needs root to list its rules.'**
+  String get systemFirewallAdminNeeded;
+
+  /// System tab, Firewall: the button that reads the rules.
+  ///
+  /// In en, this message translates to:
+  /// **'Read firewall rules'**
+  String get systemFirewallRead;
+
+  /// System tab, Firewall: the button that reads the rules again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemFirewallReadAgain;
+
+  /// System tab, Firewall: shown while the rules are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the firewall rules…'**
+  String get systemFirewallReading;
+
+  /// System tab, Firewall: why a read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so the firewall could not be read.} adminRequired{Admin mode ended before the firewall was read.} elevationRefused{Elevation was refused, so the firewall was not read.} unreadable{The firewall tools answered in a way this app cannot read.} transport{The connection failed while the firewall was read.} other{The firewall could not be read.}}'**
+  String systemFirewallFailed(String reason);
+
+  /// System tab, Firewall: the read found no firewall tool.
+  ///
+  /// In en, this message translates to:
+  /// **'No firewall tool was found on this server: none of ufw, firewalld, nft or iptables is installed.'**
+  String get systemFirewallNoTool;
+
+  /// System tab, Firewall: the heading of ufw's rules; a product name.
+  ///
+  /// In en, this message translates to:
+  /// **'ufw'**
+  String get systemFirewallUfw;
+
+  /// System tab, Firewall: the heading of firewalld's zones; a product name.
+  ///
+  /// In en, this message translates to:
+  /// **'firewalld'**
+  String get systemFirewallFirewalld;
+
+  /// System tab, Firewall: the heading of the nftables chains; a product name.
+  ///
+  /// In en, this message translates to:
+  /// **'nftables'**
+  String get systemFirewallNftables;
+
+  /// System tab, Firewall: the heading of the IPv4 iptables chains.
+  ///
+  /// In en, this message translates to:
+  /// **'iptables (IPv4)'**
+  String get systemFirewallIptables;
+
+  /// System tab, Firewall: the heading of the IPv6 iptables chains.
+  ///
+  /// In en, this message translates to:
+  /// **'ip6tables (IPv6)'**
+  String get systemFirewallIp6tables;
+
+  /// System tab, Firewall: whether ufw is enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'{active, select, true{Active} other{Inactive: ufw filters nothing}}'**
+  String systemFirewallActive(String active);
+
+  /// System tab, Firewall: whether firewalld runs.
+  ///
+  /// In en, this message translates to:
+  /// **'{running, select, true{Running} other{Not running}}'**
+  String systemFirewallRunning(String running);
+
+  /// System tab, Firewall: ufw's default policy per direction, each as ufw names it (deny, allow, reject, disabled).
+  ///
+  /// In en, this message translates to:
+  /// **'By default: incoming {incoming}, outgoing {outgoing}, routed {routed}'**
+  String systemFirewallUfwDefaults(
+    String incoming,
+    String outgoing,
+    String routed,
+  );
+
+  /// System tab, Firewall: one ufw rule, its parts as ufw prints them, such as 22/tcp: ALLOW IN from Anywhere.
+  ///
+  /// In en, this message translates to:
+  /// **'{to}: {action} from {from}'**
+  String systemFirewallUfwRule(String to, String action, String from);
+
+  /// System tab, Firewall: a tool that holds no rules.
+  ///
+  /// In en, this message translates to:
+  /// **'No rules.'**
+  String get systemFirewallNoRules;
+
+  /// System tab, Firewall: the firewalld zone new interfaces join.
+  ///
+  /// In en, this message translates to:
+  /// **'{zone} (default zone)'**
+  String systemFirewallZoneDefault(String zone);
+
+  /// System tab, Firewall: the interfaces bound to a firewalld zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Interfaces: {interfaces}'**
+  String systemFirewallZoneInterfaces(String interfaces);
+
+  /// System tab, Firewall: the source addresses bound to a firewalld zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Sources: {sources}'**
+  String systemFirewallZoneSources(String sources);
+
+  /// System tab, Firewall: the services a firewalld zone lets in.
+  ///
+  /// In en, this message translates to:
+  /// **'Services allowed: {services}'**
+  String systemFirewallZoneServices(String services);
+
+  /// System tab, Firewall: the ports a firewalld zone lets in beside its services.
+  ///
+  /// In en, this message translates to:
+  /// **'Ports allowed: {ports}'**
+  String systemFirewallZonePorts(String ports);
+
+  /// System tab, Firewall: a firewalld zone that allows no service.
+  ///
+  /// In en, this message translates to:
+  /// **'none'**
+  String get systemFirewallNone;
+
+  /// System tab, Firewall: zones that apply to no traffic, not listed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 other zone has no interface or source.} other{{count} other zones have no interface or source.}}'**
+  String systemFirewallZonesIdle(int count);
+
+  /// System tab, Firewall: one chain, named by its family, table and name, with its default policy as the tool prints it (accept, drop) and how many rules it holds.
+  ///
+  /// In en, this message translates to:
+  /// **'{chain}: policy {policy}, {rules, plural, =0{no rules} =1{1 rule} other{{rules} rules}}'**
+  String systemFirewallChain(String chain, String policy, int rules);
+
+  /// System tab, Firewall: a chain without a default policy, which only other chains jump to.
+  ///
+  /// In en, this message translates to:
+  /// **'none'**
+  String get systemFirewallNoPolicy;
+
+  /// System tab: the heading of the SSH server section (SEC-01).
+  ///
+  /// In en, this message translates to:
+  /// **'SSH server'**
+  String get systemSshdTitle;
+
+  /// System tab, SSH server: why the read waits for admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on admin mode to read the SSH server\'s settings: sshd needs root to print them.'**
+  String get systemSshdAdminNeeded;
+
+  /// System tab, SSH server: the button that reads the settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Read SSH server settings'**
+  String get systemSshdRead;
+
+  /// System tab, SSH server: the button that reads the settings again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemSshdReadAgain;
+
+  /// System tab, SSH server: shown while the settings are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the SSH server\'s settings…'**
+  String get systemSshdReading;
+
+  /// System tab, SSH server: why a read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so the SSH server\'s settings could not be read.} adminRequired{Admin mode ended before the SSH server\'s settings were read.} elevationRefused{Elevation was refused, so the SSH server\'s settings were not read.} missing{No sshd was found on this server.} refused{sshd refused to print its settings, as for an error in its configuration.} unreadable{sshd\'s settings could not be read.} transport{The connection failed while the SSH server\'s settings were read.} other{The SSH server\'s settings could not be read.}}'**
+  String systemSshdFailed(String reason);
+
+  /// System tab, SSH server: the settings apply the Match blocks for the user and the device's address, but not those for the server's local address and port.
+  ///
+  /// In en, this message translates to:
+  /// **'Match blocks for the server\'s own address or port are not applied: this sshd is too old to be told them.'**
+  String get systemSshdMatchRemote;
+
+  /// System tab, SSH server: the settings ignore every Match block in the configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'No Match blocks are applied: these are sshd\'s settings before any Match block, as the read could not name this connection.'**
+  String get systemSshdMatchNone;
+
+  /// System tab, SSH server: the label of the ports sshd listens on.
+  ///
+  /// In en, this message translates to:
+  /// **'Ports'**
+  String get systemSshdPorts;
+
+  /// System tab, SSH server: the label of the addresses and ports sshd listens on.
+  ///
+  /// In en, this message translates to:
+  /// **'Listens on'**
+  String get systemSshdListen;
+
+  /// System tab, SSH server: the label of whether root may log in (PermitRootLogin).
+  ///
+  /// In en, this message translates to:
+  /// **'Root login'**
+  String get systemSshdRootLogin;
+
+  /// System tab, SSH server: whether root may log in.
+  ///
+  /// In en, this message translates to:
+  /// **'{value, select, yes{Allowed} no{Not allowed} keysOnly{With a key only} forcedCommandsOnly{Forced commands only} other{Unknown}}'**
+  String systemSshdRoot(String value);
+
+  /// System tab, SSH server: the label of whether passwords are accepted (PasswordAuthentication).
+  ///
+  /// In en, this message translates to:
+  /// **'Password login'**
+  String get systemSshdPassword;
+
+  /// System tab, SSH server: the label of whether keyboard-interactive login is accepted, as for one-time codes (KbdInteractiveAuthentication).
+  ///
+  /// In en, this message translates to:
+  /// **'Keyboard-interactive login'**
+  String get systemSshdKeyboard;
+
+  /// System tab, SSH server: the label of whether public keys are accepted (PubkeyAuthentication).
+  ///
+  /// In en, this message translates to:
+  /// **'Key login'**
+  String get systemSshdPubkey;
+
+  /// System tab, SSH server: whether a login method is accepted.
+  ///
+  /// In en, this message translates to:
+  /// **'{state, select, true{On} false{Off} other{Unknown}}'**
+  String systemSshdEnabled(String state);
+
+  /// System tab, SSH server: the label of the login methods every login must pass, in sshd's notation (AuthenticationMethods).
+  ///
+  /// In en, this message translates to:
+  /// **'Required login methods'**
+  String get systemSshdMethods;
+
+  /// System tab, SSH server: the label of the server's host key types.
+  ///
+  /// In en, this message translates to:
+  /// **'Host keys'**
+  String get systemSshdHostKeys;
+
+  /// System tab, SSH server: the label of the user key types sshd accepts (PubkeyAcceptedAlgorithms).
+  ///
+  /// In en, this message translates to:
+  /// **'Accepted user key types'**
+  String get systemSshdUserKeys;
+
+  /// System tab, SSH server: the label of how many sessions one connection may open at once (MaxSessions); the app needs several.
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions per connection'**
+  String get systemSshdMaxSessions;
+
+  /// System tab, SSH server: the label of whether ports may be forwarded (AllowTcpForwarding).
+  ///
+  /// In en, this message translates to:
+  /// **'TCP forwarding'**
+  String get systemSshdTcpForwarding;
+
+  /// System tab, SSH server: the label of whether Unix sockets may be forwarded (AllowStreamLocalForwarding).
+  ///
+  /// In en, this message translates to:
+  /// **'Socket forwarding'**
+  String get systemSshdSocketForwarding;
+
+  /// System tab, SSH server: whether forwarding is allowed, and in which direction.
+  ///
+  /// In en, this message translates to:
+  /// **'{value, select, all{Allowed} local{Local only} remote{Remote only} no{Off} other{Unknown}}'**
+  String systemSshdForwarding(String value);
+
+  /// System tab, SSH server: the label of where forwarded connections may go, in sshd's notation (PermitOpen); any means anywhere.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarding targets'**
+  String get systemSshdPermitOpen;
+
+  /// System tab, SSH server: the label of whether sshd lets the app reach Docker's socket by forwarding it.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker over SSH'**
+  String get systemSshdDocker;
+
+  /// System tab, SSH server: no sshd setting blocks the forwarding of Docker's socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Not blocked by sshd\'s settings'**
+  String get systemSshdDockerAllowed;
+
+  /// System tab, SSH server: the sshd settings that block the forwarding of Docker's socket; settings lists their names as in sshd_config.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked by {settings}'**
+  String systemSshdDockerBlocked(String settings);
+
+  /// System tab, SSH server: why Docker may still be blocked when no setting blocks it.
+  ///
+  /// In en, this message translates to:
+  /// **'A key\'s options in authorized_keys, such as restrict, can block it too; sshd does not show those.'**
+  String get systemSshdDockerNote;
+
+  /// System tab: the heading of the section that checks the TLS certificates of endpoints the user lists (CRT-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Certificates'**
+  String get systemCertificatesTitle;
+
+  /// System tab, Certificates: shown while the server has no endpoints listed.
+  ///
+  /// In en, this message translates to:
+  /// **'List the host names and ports whose certificates this device should check, such as this server\'s web sites.'**
+  String get systemCertificatesNone;
+
+  /// System tab, Certificates: the list was changed but writing settings.json failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The endpoints could not be saved on this device; they are kept until the app quits.'**
+  String get systemCertificatesNotSaved;
+
+  /// System tab, Certificates: the button that checks every listed endpoint again.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get systemCertificatesCheck;
+
+  /// System tab, Certificates: the button that opens the list of endpoints to check.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit endpoints…'**
+  String get systemCertificatesEdit;
+
+  /// System tab, Certificates: an endpoint's line while its check runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get systemCertificatesChecking;
+
+  /// System tab, Certificates: an endpoint's line before any check answered, as after the engine stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked yet'**
+  String get systemCertificatesNotChecked;
+
+  /// System tab, Certificates: why an endpoint's check read no certificate, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, lookup{The host name did not resolve from this device.} connect{This device could not connect.} timeout{No answer within 10 seconds.} handshake{The endpoint answered, but not with TLS.} other{The check failed.}}'**
+  String systemCertificatesFailed(String reason);
+
+  /// System tab, Certificates: when an endpoint's certificate expires and how many whole days are left.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires {date}, {days, plural, =0{today} =1{in 1 day} other{in {days} days}}'**
+  String systemCertificatesExpires(DateTime date, int days);
+
+  /// System tab, Certificates: an endpoint presents a certificate that has expired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired {date}'**
+  String systemCertificatesExpired(DateTime date);
+
+  /// System tab, Certificates: the device's trust store rejected the certificate.
+  ///
+  /// In en, this message translates to:
+  /// **'This device does not trust this certificate for the host name: it may be self-signed, expired or issued for another name.'**
+  String get systemCertificatesUntrusted;
+
+  /// System tab, Certificates: who issued an endpoint's certificate, as the certificate names it.
+  ///
+  /// In en, this message translates to:
+  /// **'Issued by {issuer}'**
+  String systemCertificatesIssuer(String issuer);
+
+  /// System tab, Certificates: the title of the dialog that lists the endpoints.
+  ///
+  /// In en, this message translates to:
+  /// **'Endpoints to check'**
+  String get systemCertificatesEditTitle;
+
+  /// System tab, Certificates: how to list endpoints.
+  ///
+  /// In en, this message translates to:
+  /// **'One per line: a host name or address, with :port for a port other than 443. At most {max}.'**
+  String systemCertificatesHelper(int max);
+
+  /// System tab, Certificates: why the list was not taken, by problem.
+  ///
+  /// In en, this message translates to:
+  /// **'{problem, select, notEndpoint{Each line needs a host name or address, with an optional :port.} tooMany{List at most {max} endpoints.} other{These endpoints cannot be checked.}}'**
+  String systemCertificatesProblem(String problem, int max);
+
+  /// System tab, Certificates: closes the endpoints dialog without changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get systemCertificatesCancel;
+
+  /// System tab, Certificates: keeps the listed endpoints and checks them.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get systemCertificatesSave;
 
   /// System tab: heading of the section listing the server's accounts and who is logged in (ACC-01, ACC-02).
   ///
@@ -2641,6 +3365,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{part} ({severity})'**
   String chartWithSeverity(String part, String severity);
+
+  /// A value past its careful threshold (OV-11), below warning: shown with an info icon in the usual colour.
+  ///
+  /// In en, this message translates to:
+  /// **'careful'**
+  String get chartSeverityCareful;
 
   /// A value past its warning threshold, shown in the warning colour with a warning icon.
   ///
@@ -4045,6 +4775,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No swap is set up.'**
   String get overviewSwapNone;
+
+  /// Overview: the heading of TRI-02's card, what in the latest reading slows the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Why is it slow?'**
+  String get overviewSlowTitle;
+
+  /// Overview, Why is it slow: no signal in the latest reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing in the latest reading points to a slowdown.'**
+  String get overviewSlowNone;
+
+  /// Overview, Why is it slow: PSI cpu some over 10 s reached 20 %. percent is the share, such as "35%".
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks waited for a CPU {percent} of the last 10 seconds: the processor is the bottleneck.'**
+  String overviewSlowCpuWait(String percent);
+
+  /// Overview, Why is it slow: without PSI, the load per core reached 1.5.
+  ///
+  /// In en, this message translates to:
+  /// **'The load is {load} per core: more tasks want to run than there are cores.'**
+  String overviewSlowLoadHigh(double load);
+
+  /// Overview, Why is it slow: steal reached 10 % of CPU time. percent is the share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'The hypervisor gave {percent} of the CPU time to other guests.'**
+  String overviewSlowSteal(String percent);
+
+  /// Overview, Why is it slow: PSI io some over 10 s reached 10 %. percent is the share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks stalled on storage {percent} of the last 10 seconds: the disks are the bottleneck.'**
+  String overviewSlowIoStall(String percent);
+
+  /// Overview, Why is it slow: without PSI, iowait reached 10 % of CPU time. percent is the share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'Cores sat idle {percent} of the time waiting for storage.'**
+  String overviewSlowIowait(String percent);
+
+  /// Overview, Why is it slow: a disk's mean time per request reached 50 ms. device is the disk's kernel name, such as sda.
+  ///
+  /// In en, this message translates to:
+  /// **'{device} takes {ms} ms per request: it is slow or saturated.'**
+  String overviewSlowSlowDisk(String device, int ms);
+
+  /// Overview, Why is it slow: a disk was busy 90 % of the time. device is the disk's kernel name; percent the share, such as "95%".
+  ///
+  /// In en, this message translates to:
+  /// **'{device} is busy {percent} of the time: requests queue behind each other.'**
+  String overviewSlowBusyDisk(String device, String percent);
+
+  /// Overview, Why is it slow: PSI memory some over 10 s reached 5 %. percent is the share, such as "12%".
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks stalled waiting for memory {percent} of the last 10 seconds: the server is short of RAM.'**
+  String overviewSlowMemoryStall(String percent);
+
+  /// Overview, Why is it slow: swap is half full while under 10 % of memory is available. percent is swap's used share, such as "80%".
+  ///
+  /// In en, this message translates to:
+  /// **'Swap is {percent} full and little memory is free: the server pages to disk.'**
+  String overviewSlowSwapHeavy(String percent);
+
+  /// Overview, Why is it slow: where to look next, under the signals.
+  ///
+  /// In en, this message translates to:
+  /// **'Processes sorts what runs by CPU and memory; System lists recent out-of-memory kills.'**
+  String get overviewSlowWhere;
 
   /// Heading of the Overview's pressure card (CPU-05, MEM-04): Linux pressure stall information.
   ///
@@ -6191,7 +6993,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} ContainerBulkAction{Containers action} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -6656,11 +7458,179 @@ abstract class AppLocalizations {
   /// **'Networks'**
   String get dockerTabNetworks;
 
+  /// Docker tab: the sub-tab with the engine's events timeline (DKE-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Events'**
+  String get dockerTabEvents;
+
+  /// Docker tab, Events: what the timeline covers.
+  ///
+  /// In en, this message translates to:
+  /// **'Events show from when Klabautermann started following them. The engine keeps only a limited buffer, so events while the stream was lost may be missing.'**
+  String get dockerEventsBuffer;
+
+  /// Docker tab, Events: shown before the watch delivered the timeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the events stream…'**
+  String get dockerEventsWaiting;
+
+  /// Docker tab, Events: why the watch failed, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} connectionFailed{The connection to the engine failed while following its events.} other{The engine\'s events could not be followed.}}'**
+  String dockerEventsFailed(String reason);
+
+  /// Docker tab, Events: the filter chip that shows every event type.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get dockerEventsAll;
+
+  /// Docker tab, Events: a filter chip for one event type.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, container{Containers} image{Images} volume{Volumes} network{Networks} other{Other}}'**
+  String dockerEventsKind(String kind);
+
+  /// Docker tab, Events: the search field's hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by name, action or image'**
+  String get dockerEventsSearch;
+
+  /// Docker tab, Events: the timeline holds no event.
+  ///
+  /// In en, this message translates to:
+  /// **'No events yet. They appear here as the engine reports them.'**
+  String get dockerEventsNone;
+
+  /// Docker tab, Events: the filter or search hides every event.
+  ///
+  /// In en, this message translates to:
+  /// **'No event matches the filter.'**
+  String get dockerEventsNoMatch;
+
+  /// Docker tab, Events: one event, what it happened to and the engine's action as it names it (start, die, health_status: unhealthy, pull).
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {action}'**
+  String dockerEventsLine(String name, String action);
+
+  /// Docker tab, Events: a container event's image.
+  ///
+  /// In en, this message translates to:
+  /// **'image {image}'**
+  String dockerEventsImage(String image);
+
+  /// Docker tab, Events: the code a container exited with.
+  ///
+  /// In en, this message translates to:
+  /// **'exit code {code}'**
+  String dockerEventsExitCode(int code);
+
+  /// Docker tab, Events: a span while the events stream was lost; from and until are times of day.
+  ///
+  /// In en, this message translates to:
+  /// **'{resumed, select, true{Not followed from {from} to {until}. The engine sent the events it still held, so some may be missing.} other{Not followed from {from} to {until}. Events in this span are not shown.}}'**
+  String dockerEventsGap(String from, String until, String resumed);
+
   /// Docker tab: the sub-tab listing compose stacks.
   ///
   /// In en, this message translates to:
   /// **'Stacks'**
   String get dockerTabStacks;
+
+  /// Docker tab: the sub-tab with the containers' security review (DKE-06, DKE-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get dockerTabReview;
+
+  /// Docker Review sub-tab: what a review does, above its button.
+  ///
+  /// In en, this message translates to:
+  /// **'Reads each container\'s configuration and flags settings that give a container power over the host, expose a database, or let its logs fill the disk. Each container is read once per review.'**
+  String get dockerReviewIntro;
+
+  /// Docker Review sub-tab: the button that starts the first review.
+  ///
+  /// In en, this message translates to:
+  /// **'Review containers'**
+  String get dockerReviewRun;
+
+  /// Docker Review sub-tab: the button that reviews again after a review.
+  ///
+  /// In en, this message translates to:
+  /// **'Review again'**
+  String get dockerReviewAgain;
+
+  /// Docker Review sub-tab: while each container is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading each container\'s configuration…'**
+  String get dockerReviewReading;
+
+  /// Docker Review sub-tab: no container carries a finding.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =0{The engine has no containers to review.} =1{The one container carries no finding.} other{None of the {total} containers carries a finding.}}'**
+  String dockerReviewNone(int total);
+
+  /// Docker Review sub-tab: how many containers carry findings, of all read.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers with findings: {flagged} of {total}'**
+  String dockerReviewFlagged(int flagged, int total);
+
+  /// Docker Review sub-tab: containers past the review's cap, which were not read.
+  ///
+  /// In en, this message translates to:
+  /// **'{omitted, plural, =1{1 more container was not read: a review reads at most {max}.} other{{omitted} more containers were not read: a review reads at most {max}.}}'**
+  String dockerReviewOmitted(int omitted, int max);
+
+  /// Docker Review sub-tab: containers whose inspect the engine refused, which the review leaves out.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{The engine refused to inspect 1 container, so it is not reviewed.} other{The engine refused to inspect {count} containers, so they are not reviewed.}}'**
+  String dockerReviewUnreadable(int count);
+
+  /// Docker Review sub-tab: a container's heading when it belongs to a compose stack.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} in {stack}'**
+  String dockerReviewContainerInStack(String name, String stack);
+
+  /// Docker Review sub-tab: one finding's heading, its level then what it is.
+  ///
+  /// In en, this message translates to:
+  /// **'{level}: {risk}'**
+  String dockerReviewFinding(String level, String risk);
+
+  /// Docker Review sub-tab: a finding's severity, by ContainerRiskLevel name.
+  ///
+  /// In en, this message translates to:
+  /// **'{level, select, high{High} medium{Medium} low{Low} other{Finding}}'**
+  String dockerReviewLevel(String level);
+
+  /// Docker Review sub-tab: what a finding is, by ContainerRisk name.
+  ///
+  /// In en, this message translates to:
+  /// **'{risk, select, privileged{Privileged} socketMount{Engine socket mounted} hostNetwork{Host network} hostPid{Host processes visible} addedCapabilities{Added capabilities} databasePublished{Database on every address} rootUser{Runs as root} logsUnrotated{Logs never rotate} latestTag{Floating image tag} noHealthcheck{No health check} noRestartPolicy{No restart policy} other{Finding}}'**
+  String dockerReviewRisk(String risk);
+
+  /// Docker Review sub-tab: why a finding matters, by ContainerRisk name.
+  ///
+  /// In en, this message translates to:
+  /// **'{risk, select, privileged{It has every device and capability of the host, so a break-in reaches the host.} socketMount{Whoever controls the container controls the engine, which is root on the host.} hostNetwork{It shares the host\'s network and reaches every service listening on it.} hostPid{It sees, and can signal, every process on the host.} addedCapabilities{It holds capabilities beyond the engine\'s default set.} databasePublished{Its database port is published on every address, not only on localhost or a private network.} rootUser{Its processes run as root, and the engine maps root to root on the host.} logsUnrotated{It logs with json-file and no max-size, so its log file grows until the disk is full.} latestTag{A new pull can bring a different image. Pin a version or a digest.} noHealthcheck{The engine cannot tell when it stops working while it still runs.} noRestartPolicy{It stays stopped after a crash or a reboot.} other{It may put the host at risk.}}'**
+  String dockerReviewRiskWhy(String risk);
+
+  /// Docker Review sub-tab: why the review failed, by DockerQueryFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server\'s capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to list or inspect the containers.} connectionFailed{The connection to the engine failed during the review.} cancelled{The review stopped before it finished.} other{The containers could not be reviewed.}}'**
+  String dockerReviewFailed(String reason);
 
   /// Docker tab: heading of the strip with the engine's runtime, API version, version and operating system (DKE-01).
   ///
@@ -7184,11 +8154,179 @@ abstract class AppLocalizations {
   /// **'Memory'**
   String get dockerContainersColumnMemory;
 
+  /// Containers table column: bytes received and sent since the container started, from its list stats (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get dockerContainersColumnNetwork;
+
+  /// Containers table column: bytes read from and written to disk since the container started (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Block I/O'**
+  String get dockerContainersColumnBlockIo;
+
+  /// Containers table column: the processes and threads in the container (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'PIDs'**
+  String get dockerContainersColumnPids;
+
+  /// Containers table column: the container's first address on a network (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'IP'**
+  String get dockerContainersColumnIp;
+
+  /// Containers table column: how long ago a running container started, read from its status (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Started'**
+  String get dockerContainersColumnStarted;
+
+  /// Containers table: two byte totals, received then sent, or read then written, as docker stats shows them.
+  ///
+  /// In en, this message translates to:
+  /// **'{first} / {second}'**
+  String dockerContainersIo(String first, String second);
+
+  /// Containers tab: the button that opens the column chooser (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Columns'**
+  String get dockerContainersColumns;
+
+  /// Column chooser: its title.
+  ///
+  /// In en, this message translates to:
+  /// **'Columns'**
+  String get dockerContainersColumnsTitle;
+
+  /// Column chooser: the tooltip on a column's drag handle.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to reorder'**
+  String get dockerContainersColumnsDrag;
+
+  /// Column chooser: puts back the default columns.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get dockerContainersColumnsReset;
+
+  /// Column chooser: closes it without a change.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerContainersColumnsCancel;
+
+  /// Column chooser: shows the checked columns in their order.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get dockerContainersColumnsDone;
+
+  /// Containers tab: the chosen columns show, but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The columns could not be saved. They stay until Klabautermann quits.'**
+  String get dockerContainersColumnsNotSaved;
+
+  /// Containers tab: the chip that puts a checkbox on each row and heading, to act on several containers at once (CTR-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get dockerContainersSelect;
+
+  /// Containers table: the checkbox column's name, which a screen reader says before each row's selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Selection'**
+  String get dockerContainersColumnSelect;
+
+  /// Containers table: whether a row is selected, as a screen reader hears its checkbox cell. selected is true or false.
+  ///
+  /// In en, this message translates to:
+  /// **'{selected, select, true{Selected} other{Not selected}}'**
+  String dockerContainersRowSelected(String selected);
+
+  /// Containers table: the row action that selects the container.
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get dockerContainersSelectOne;
+
+  /// Containers table: the row action that clears the container's selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Deselect'**
+  String get dockerContainersDeselect;
+
+  /// Containers tab: the action on a compose project's heading that selects every container under it.
+  ///
+  /// In en, this message translates to:
+  /// **'Select its containers'**
+  String get dockerContainersSelectProject;
+
+  /// Containers tab: the action on a compose project's heading that clears the selection of every container under it.
+  ///
+  /// In en, this message translates to:
+  /// **'Deselect its containers'**
+  String get dockerContainersDeselectProject;
+
+  /// Containers tab: a heading's counts with how many of its containers are selected, as a screen reader hears it. summary is dockerContainersGroupSummary's text; selection is all, some or none.
+  ///
+  /// In en, this message translates to:
+  /// **'{summary}, {selection, select, all{all selected} some{some selected} other{none selected}}'**
+  String dockerContainersGroupSelection(String summary, String selection);
+
+  /// Containers tab: how many containers are selected, at the start of the bulk bar (CTR-07).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{None selected} =1{1 selected} other{{count} selected}}'**
+  String dockerContainersSelectedCount(int count);
+
+  /// Containers tab: a bulk bar button, with how many of the selected containers the verb takes; a stopped container takes no stop. verb is start, stop, restart or remove.
+  ///
+  /// In en, this message translates to:
+  /// **'{verb, select, start{Start} stop{Stop} restart{Restart} remove{Remove} other{Act}} ({count})'**
+  String dockerContainersBulkVerb(String verb, int count);
+
+  /// Containers tab: the bulk bar button that selects every container the search and filters show.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all shown'**
+  String get dockerContainersSelectAll;
+
+  /// Containers tab: the bulk bar button that clears the selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear selection'**
+  String get dockerContainersSelectNone;
+
+  /// Containers tab: why the bulk buttons are off when too many containers are selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at most {max} containers to act on them at once.'**
+  String dockerContainersBulkMax(int max);
+
   /// A container's state in words. state is the Engine API's state name; a state outside this list shows as the engine gave it instead.
   ///
   /// In en, this message translates to:
   /// **'{state, select, created{Created} running{Running} paused{Paused} restarting{Restarting} removing{Removing} exited{Exited} dead{Dead} other{Unknown}}'**
   String dockerContainerState(String state);
+
+  /// Containers list: a container's state with its flag (CTR-09), as a screen reader hears the state cell. state is dockerContainerState's text; flag is restartLoop (the daemon is restarting it after it exited) or failed (it exited with a code a stop does not leave).
+  ///
+  /// In en, this message translates to:
+  /// **'{state} ({flag, select, restartLoop{restart loop} failed{failed} other{flagged}})'**
+  String dockerContainerStateFlagged(String state, String flag);
+
+  /// Containers list: the tooltip on a flagged container's state (CTR-09). flag is restartLoop or failed; code is the exit code in the container's status, which only failed shows.
+  ///
+  /// In en, this message translates to:
+  /// **'{flag, select, restartLoop{The engine is starting it again after it exited, as a restart policy does in a loop. The details show how often it restarted.} failed{Its last run exited with code {code}, which a stop does not leave.} other{Exit code {code}}}'**
+  String dockerContainerFlagTooltip(String flag, int code);
 
   /// A container's health check status (CTR-04), beside an icon.
   ///
@@ -7543,6 +8681,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Comment'**
   String get dockerImageHistoryComment;
+
+  /// Container details: the section of web pages the container's labels point at (CTR-11).
+  ///
+  /// In en, this message translates to:
+  /// **'Links'**
+  String get dockerLinksTitle;
+
+  /// Container details, Links: where a link came from, under its address.
+  ///
+  /// In en, this message translates to:
+  /// **'{source, select, dockhand{From a Dockhand label} dozzle{From a Dozzle label} traefik{A Traefik route} caddy{A Caddy site} other{From a label}}'**
+  String dockerLinksFrom(String source);
+
+  /// Container details, Links: where a link came from, for one container port.
+  ///
+  /// In en, this message translates to:
+  /// **'{source, select, dockhand{From a Dockhand label, port {port}} other{From a label, port {port}}}'**
+  String dockerLinksFromPort(String source, String port);
+
+  /// Container details, Links: the tooltip and screen-reader label of the button that opens a link.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {name} in the browser'**
+  String dockerLinksOpen(String name);
+
+  /// Container details, Links: shown when the system refused to open a link.
+  ///
+  /// In en, this message translates to:
+  /// **'The link could not be opened in a browser.'**
+  String get dockerLinksNotOpened;
 
   /// Container details: the section listing the processes running inside the container (CTR-10).
   ///
@@ -7909,6 +9077,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Changes made outside {manager} can be overwritten by it. The label {label} marks it.'**
   String dockerDetailsManagedByNote(String manager, String label);
+
+  /// Container details: the heading of TRI-04's diagnosis, what the container's state says went wrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnosis'**
+  String get dockerDiagnosisTitle;
+
+  /// Container details, Diagnosis: what went wrong, by ContainerDiagnosisKind name.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, oomLimit{Out of memory} oomHost{Out of memory on the host} killed{Killed} segfault{Crashed} notExecutable{Command not executable} commandNotFound{Command not found} runtimeError{The engine could not start it} exitedWithError{Exited with an error} exitsAtOnce{Exits right after starting} restartLoop{Restart loop} unhealthy{Health check failing} other{Something went wrong}}'**
+  String dockerDiagnosisKind(String kind);
+
+  /// Container details, Diagnosis: what the finding means and where to look, by ContainerDiagnosisKind name.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, oomLimit{The kernel stopped it, most likely for going over its memory limit. Raise the limit or find what keeps growing.} oomHost{The kernel stopped it while the host ran out of memory. It has no memory limit of its own.} killed{It ended with SIGKILL (exit code 137) without running out of memory: a docker kill, a stop that ran past its timeout, or another process.} segfault{It ended with a segmentation fault (exit code 139), a crash inside the program.} notExecutable{Exit code 126: the command exists but cannot run. Check its permissions and its interpreter line.} commandNotFound{Exit code 127: the entrypoint or command names a program the image does not have.} runtimeError{The engine reported this error for it:} exitedWithError{Its process ended with an error. Its last log lines usually say why.} exitsAtOnce{It exited with code 0 and its restart policy starts it again: its main process does not stay in the foreground.} restartLoop{Its restart policy has started it again after each exit since it was last started by hand. Its logs show what each run ended with.} unhealthy{Its health check keeps failing. Health checks shows what each check printed.} other{Its state says something went wrong.}}'**
+  String dockerDiagnosisWhy(String kind);
+
+  /// Container details, Diagnosis: the memory limit an out-of-memory container went over.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory limit: {limit}'**
+  String dockerDiagnosisMemoryLimit(String limit);
+
+  /// Container details, Diagnosis: the exit code of a container that exited with an error.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit code: {code}'**
+  String dockerDiagnosisExitCode(int code);
+
+  /// Container details, Diagnosis: how often the restart policy has started the container again.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Restarting now} =1{Restarted once} other{Restarted {count} times}}'**
+  String dockerDiagnosisRestarts(int count);
 
   /// Container details: heading of the section with the container's state, health, restart policy, image and times.
   ///
@@ -10921,6 +12125,330 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Checked {time}'**
   String systemUpdatesCheckedAt(DateTime time);
+
+  /// The health card's button that opens the doctor checklist (TRI-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Run the doctor'**
+  String get doctorOpen;
+
+  /// Title of the doctor checklist (TRI-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Doctor'**
+  String get doctorTitle;
+
+  /// Doctor: what the checklist is.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only checks of this server, each with what to do about a finding. Nothing on the server changes.'**
+  String get doctorIntro;
+
+  /// Doctor: the summary line while a check still reads.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get doctorRunning;
+
+  /// Doctor: how many checks found a problem and how many a warning.
+  ///
+  /// In en, this message translates to:
+  /// **'{problems, plural, =0{No problems} =1{1 problem} other{{problems} problems}}, {warnings, plural, =0{no warnings} =1{1 warning} other{{warnings} warnings}}'**
+  String doctorSummary(int problems, int warnings);
+
+  /// Doctor: runs the on-demand reads again.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get doctorAgain;
+
+  /// Doctor: closes the checklist.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get doctorClose;
+
+  /// Doctor: a check's name, by kind.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, diskSpace{Disk space} inodes{Inodes} failedUnits{Failed units} securityUpdates{Security updates} rebootRequired{Reboot} timeSync{Time sync} certificates{Certificates} dockerDiskUse{Docker disk use} danglingImages{Dangling images} other{Check}}'**
+  String doctorCheck(String kind);
+
+  /// Doctor: what to do about a check's finding, by kind.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, diskSpace{Remove old logs, caches and unused images, or grow the filesystem. Disks on the System tab lists every mount.} inodes{Many small files use up inodes: look for caches, mail queues or session files and remove what is no longer needed.} failedUnits{Open Services to read each unit\'s log, and restart it once the cause is fixed.} securityUpdates{Install them from Updates on the System tab or with the package manager.} rebootRequired{Reboot from Power on the System tab when it suits, so the updated kernel or libraries run.} timeSync{Turn time sync on (for example with timedatectl set-ntp true) and make sure the NTP server can be reached.} certificates{Renew or replace the certificate before it expires. Certificates on the System tab shows each endpoint.} dockerDiskUse{Remove unused images, stopped containers and build cache from the Docker tab.} danglingImages{Rebuilds leave untagged images behind. Remove them from Images with the Dangling filter.} other{}}'**
+  String doctorHint(String kind);
+
+  /// Doctor: a check whose reading is missing.
+  ///
+  /// In en, this message translates to:
+  /// **'Not known: the reading failed or has not arrived.'**
+  String get doctorUnknown;
+
+  /// Doctor: a check whose on-demand read is under way.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading…'**
+  String get doctorChecking;
+
+  /// Doctor, disk space: nothing past the warning level.
+  ///
+  /// In en, this message translates to:
+  /// **'Every filesystem is under {percent} full.'**
+  String doctorSpaceOk(String percent);
+
+  /// Doctor, disk space: mounts past the warning level follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'Filling up, the fullest at {percent}:'**
+  String doctorSpaceFull(String percent);
+
+  /// Doctor, inodes: nothing past the warning level.
+  ///
+  /// In en, this message translates to:
+  /// **'Every filesystem uses under {percent} of its inodes.'**
+  String doctorInodesOk(String percent);
+
+  /// Doctor, inodes: mounts past the warning level follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'Running out of inodes, the fullest at {percent}:'**
+  String doctorInodesFull(String percent);
+
+  /// Doctor, failed units: none.
+  ///
+  /// In en, this message translates to:
+  /// **'No unit has failed.'**
+  String get doctorUnitsOk;
+
+  /// Doctor, failed units: the units follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 unit has failed:} other{{count} units have failed:}}'**
+  String doctorUnitsFailed(int count);
+
+  /// Doctor, security updates: how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 security update is pending.} other{{count} security updates are pending.}}'**
+  String doctorSecurityPending(int count);
+
+  /// Doctor, security updates: updates the manager cannot classify.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 update is pending, and the package manager does not say whether it fixes a security issue.} other{{count} updates are pending, and the package manager does not say which fix security issues.}}'**
+  String doctorUpdatesUnclassified(int count);
+
+  /// Doctor, security updates: none, with the other updates pending.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No updates are pending.} =1{No security updates are pending; 1 other update is.} other{No security updates are pending; {count} other updates are.}}'**
+  String doctorSecurityNone(int count);
+
+  /// Doctor, reboot: none needed.
+  ///
+  /// In en, this message translates to:
+  /// **'No reboot is needed.'**
+  String get doctorRebootNo;
+
+  /// Doctor, reboot: needed; the packages follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'A reboot is needed. Packages that asked for it, where the host says:'**
+  String get doctorRebootYes;
+
+  /// Doctor, time sync: in step.
+  ///
+  /// In en, this message translates to:
+  /// **'The clock is synchronized.'**
+  String get doctorTimeOk;
+
+  /// Doctor, time sync: the kernel is not synchronized or time sync is off.
+  ///
+  /// In en, this message translates to:
+  /// **'The clock is not synchronized.'**
+  String get doctorTimeNotSynced;
+
+  /// Doctor, time sync: not synchronized, with how far it is from this device ("2 minutes ahead of this device").
+  ///
+  /// In en, this message translates to:
+  /// **'The clock is not synchronized; it reads {skew}.'**
+  String doctorTimeNotSyncedSkew(String skew);
+
+  /// Doctor, time sync: the host believes it is synchronized but is off this device's clock ("2 minutes ahead of this device").
+  ///
+  /// In en, this message translates to:
+  /// **'The clock reads {skew}.'**
+  String doctorClockOff(String skew);
+
+  /// Doctor, certificates: nothing to check.
+  ///
+  /// In en, this message translates to:
+  /// **'No endpoints are listed for this server.'**
+  String get doctorCertificatesNone;
+
+  /// Doctor, certificates: how to set the check up.
+  ///
+  /// In en, this message translates to:
+  /// **'List endpoints under Certificates on the System tab to check them here.'**
+  String get doctorCertificatesSetUp;
+
+  /// Doctor, certificates: all fine.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{The endpoint presents a valid certificate.} other{All {count} endpoints present valid certificates.}}'**
+  String doctorCertificatesOk(int count);
+
+  /// Doctor, certificates: the endpoints follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'Failing, untrusted, expired or expiring within 14 days:'**
+  String get doctorCertificatesBad;
+
+  /// Doctor, Docker disk use: the reclaimable size from docker system df.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker could free {size} of unused data.'**
+  String doctorDockerReclaimable(String size);
+
+  /// Doctor, dangling images: none.
+  ///
+  /// In en, this message translates to:
+  /// **'No dangling images.'**
+  String get doctorDanglingNone;
+
+  /// Doctor, dangling images: how many and their size.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 dangling image takes {size}.} other{{count} dangling images take {size}.}}'**
+  String doctorDangling(int count, String size);
+
+  /// Fleet list: the attention notice (TRI-03), counting the unacknowledged problems.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 problem needs attention} other{{count} problems need attention}}'**
+  String attentionNotice(int count);
+
+  /// Fleet list: opens the attention queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Show'**
+  String get attentionShow;
+
+  /// Title of the attention queue (TRI-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Attention'**
+  String get attentionTitle;
+
+  /// Attention queue: what it lists and how acknowledging works.
+  ///
+  /// In en, this message translates to:
+  /// **'Problems across the fleet, from what this device has read this run. Acknowledging one hides it until it clears; acknowledgements stay on this device.'**
+  String get attentionIntro;
+
+  /// Attention queue: no unacknowledged problem.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing needs attention.'**
+  String get attentionNone;
+
+  /// Attention queue: heading over the acknowledged problems.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Acknowledged (1)} other{Acknowledged ({count})}}'**
+  String attentionAcknowledgedHeading(int count);
+
+  /// Attention queue: closes it.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get attentionClose;
+
+  /// Attention queue: when a problem was acknowledged, in this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledged {time}'**
+  String attentionAcknowledgedAt(DateTime time);
+
+  /// Attention queue: acknowledges a problem, after an optional note.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge'**
+  String get attentionAcknowledge;
+
+  /// Attention queue: takes an acknowledgement back.
+  ///
+  /// In en, this message translates to:
+  /// **'Reopen'**
+  String get attentionReopen;
+
+  /// Attention queue: opens the problem's server.
+  ///
+  /// In en, this message translates to:
+  /// **'Open server'**
+  String get attentionOpenServer;
+
+  /// Attention queue: the engine will not dial the server until the user decides (D46).
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting is blocked until you decide, for example about a changed host key.'**
+  String get attentionBlocked;
+
+  /// Attention queue: the link failed or waits before dialling again.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot be reached: the last attempt failed.'**
+  String get attentionUnreachable;
+
+  /// Attention queue: an in-app alert is raised, with its metric's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Alert raised: {metric}'**
+  String attentionAlert(String metric);
+
+  /// Attention queue: a failed systemd unit.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit failed: {unit}'**
+  String attentionFailedUnit(String unit);
+
+  /// Attention queue: a mount's space at the critical level.
+  ///
+  /// In en, this message translates to:
+  /// **'{mount} is {percent} full'**
+  String attentionDiskFull(String mount, String percent);
+
+  /// Attention queue: a mount's inodes at the critical level.
+  ///
+  /// In en, this message translates to:
+  /// **'{mount} uses {percent} of its inodes'**
+  String attentionInodesFull(String mount, String percent);
+
+  /// Attention queue: a container whose health check fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Container unhealthy: {container}'**
+  String attentionUnhealthy(String container);
+
+  /// Attention queue: title of the note dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge the problem'**
+  String get attentionNoteTitle;
+
+  /// Attention queue: the note field's label.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get attentionNoteLabel;
+
+  /// Attention queue: closes the note dialog without acknowledging.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get attentionCancel;
 }
 
 class _AppLocalizationsDelegate

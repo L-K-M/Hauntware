@@ -15,7 +15,9 @@ import 'containers_panel.dart';
 import 'docker_endpoint.dart';
 import 'docker_endpoint_picker.dart';
 import 'images_panel.dart';
+import 'events_panel.dart';
 import 'networks_panel.dart';
+import 'review_panel.dart';
 import 'stacks_panel.dart';
 import 'volumes_panel.dart';
 
@@ -33,13 +35,16 @@ class DockerNoticeScope extends InheritedNotifier<DockerNoticeController> {
       context.dependOnInheritedWidgetOfExactType<DockerNoticeScope>()?.notifier;
 }
 
-/// The Docker tab's sub-tabs in 03 §10.2's order.
+/// The Docker tab's sub-tabs in 03 §10.2's order, then the security
+/// review (DKE-06).
 enum DockerSubTab {
   containers,
   images,
   stacks,
   volumes,
-  networks;
+  networks,
+  events,
+  review;
 
   String label(AppLocalizations l10n) => switch (this) {
     containers => l10n.dockerTabContainers,
@@ -47,15 +52,18 @@ enum DockerSubTab {
     stacks => l10n.dockerTabStacks,
     volumes => l10n.dockerTabVolumes,
     networks => l10n.dockerTabNetworks,
+    events => l10n.dockerTabEvents,
+    review => l10n.dockerTabReview,
   };
 }
 
 /// The Docker tab once [serverId]'s endpoint is ready (03 §10.2): SAF-08's
 /// notice until it is dismissed on this device, the engine strip
 /// (DKE-01), and the sub-tabs: Containers ([ContainersPanel]), Images
-/// ([ImagesPanel]), Stacks ([StacksPanel]), Volumes ([VolumesPanel]) and
-/// Networks ([NetworksPanel]). While [visible], the tab
-/// counts as a view of the server's Docker engine
+/// ([ImagesPanel]), Stacks ([StacksPanel]), Volumes ([VolumesPanel]),
+/// Networks ([NetworksPanel]), Events ([EventsPanel]) and Review
+/// ([ReviewPanel]). While [visible], the tab counts as a view of the
+/// server's Docker engine
 /// ([DockerController.openView]), so a ready endpoint's details are read,
 /// and each sub-tab watches its list while it shows: the stacks only
 /// then, since asking for them runs compose checks on the host.
@@ -196,11 +204,21 @@ class _DockerPanelState extends State<DockerPanel> {
                               visible:
                                   widget.visible && tabs.index == tab.index,
                             ),
+                            DockerSubTab.events => EventsPanel(
+                              monitoring: widget.monitoring,
+                              serverId: widget.serverId,
+                              visible:
+                                  widget.visible && tabs.index == tab.index,
+                            ),
                             DockerSubTab.stacks => StacksPanel(
                               monitoring: widget.monitoring,
                               serverId: widget.serverId,
                               visible:
                                   widget.visible && tabs.index == tab.index,
+                            ),
+                            DockerSubTab.review => ReviewPanel(
+                              docker: _docker,
+                              serverId: widget.serverId,
                             ),
                           },
                       ],

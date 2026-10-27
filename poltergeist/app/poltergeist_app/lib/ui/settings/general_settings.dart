@@ -148,6 +148,20 @@ class _GeneralSectionState extends State<GeneralSection> {
           onChanged: (value) =>
               unawaited(_commitCheckForUpdates(value)),
         ),
+        // The notices of everything Poltergeist includes: Flutter's
+        // NOTICES (PDFium's among them), plus the APK's Maven libraries on
+        // Android (ghost_licenses).
+        ListTile(
+          key: const ValueKey('settings.licenses'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.openSourceLicensesLabel),
+          subtitle: Text(l10n.openSourceLicensesSubtitle),
+          onTap: () => showLicensePage(
+            context: context,
+            applicationName: l10n.appTitle,
+            applicationLegalese: l10n.openSourceLicensesLegalese,
+          ),
+        ),
       ],
     );
   }

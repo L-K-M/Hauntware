@@ -5,6 +5,7 @@ import 'dart:ui' show AppExitType, PlatformDispatcher;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show ServicesBinding;
+import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -15,6 +16,8 @@ import 'controllers/alert_notifications.dart';
 import 'controllers/alert_rules_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
+import 'controllers/attention.dart';
+import 'controllers/container_columns.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/device_name.dart';
 import 'controllers/pin_publication_controller.dart';
@@ -28,6 +31,7 @@ import 'controllers/prompt_controller.dart';
 import 'controllers/server_editor_controller.dart';
 import 'controllers/server_prefs_controller.dart';
 import 'controllers/stack_folders.dart';
+import 'controllers/tls_endpoints.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
 import 'l10n/app_localizations.dart';
@@ -56,6 +60,8 @@ import 'ui/already_running_app.dart';
 /// are the engine's (03 §4.10, D63).
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // The licenses page lists the APK's Maven libraries too (Android).
+  registerPlatformLicenses();
 
   // The desktop settings window's engine runs this same entrypoint (D32).
   // It is a second Flutter engine whose isolate shares nothing with this
@@ -197,10 +203,29 @@ Future<void> main(List<String> args) async {
     stored: settings.stackFolders,
     save: settings.setStackFolders,
   );
+  // CRT-01's endpoints per server, device-local in settings.json, since
+  // the check runs from this device.
+  final tlsEndpoints = TlsEndpoints(
+    stored: settings.tlsEndpoints,
+    save: settings.setTlsEndpoints,
+  );
+  // TRI-03's acknowledgements, device-local in settings.json (02 TRI-03).
+  final attentionAcks = AttentionAcks(
+    stored: settings.attention,
+    save: settings.setAttention,
+  );
+  // The Containers tab's chosen columns (CTR-08), device-local.
+  final containerColumns = ContainerColumnChoice(
+    stored: settings.containerColumns,
+    save: settings.setContainerColumns,
+  );
   final monitoring = MonitoringController(
     engine,
+    attentionAcks: attentionAcks,
     dockerEndpointChoices: dockerEndpointChoices,
     stackFolders: stackFolders,
+    tlsEndpoints: tlsEndpoints,
+    containerColumns: containerColumns,
   );
   // The host-key and keyboard-interactive prompts the engine raises while
   // it connects, shown one at a time over every route.
