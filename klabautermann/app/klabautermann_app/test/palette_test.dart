@@ -1,13 +1,16 @@
 // PLT-07: the command palette over the app's commands, the fleet, the
-// selected server's tabs and its containers (03 §10.6).
+// selected server's tabs, containers, units and stacks (03 §10.6).
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
+import 'package:klabautermann_app/ui/docker/stacks_panel.dart'
+    show StackOverview;
 import 'package:klabautermann_app/ui/menus/app_commands.dart';
 import 'package:klabautermann_app/ui/server_surfaces.dart' show ServerPanel;
 import 'package:klabautermann_app/ui/system_panel.dart';
 import 'package:klabautermann_app/ui/workspace_navigation.dart';
+import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/docker.dart';
 import 'support/fake_engine.dart';
@@ -109,6 +112,83 @@ void main() {
     },
     variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
+
+  testWidgets('unit and stack rows open the unit and the stack in their tabs', (
+    tester,
+  ) async {
+    final harness = await pumpApp(tester, servers: twoServers, palette: true);
+    await tester.tap(find.text('web-1'));
+    await tester.pumpAndSettle();
+    SystemdUnit unit(String name, String description) => SystemdUnit(
+      unit: name,
+      load: 'loaded',
+      active: 'active',
+      sub: 'running',
+      description: description,
+    );
+    final units = [
+      unit('cron.service', 'Regular background jobs'),
+      unit('nginx.service', 'A high performance web server'),
+      // A misread text row names no unit, so the palette leaves it out.
+      unit('●', 'misread'),
+    ];
+    harness.engine
+      ..emit(
+        Sample(
+          serverId: 'srv-1',
+          stream: SampleStream.units,
+          seq: 1,
+          at: DateTime.utc(2026, 10, 26, 12),
+          result: UnitsResult(
+            UnitsSnapshot(
+              units: units,
+              failed: const [],
+              format: UnitListFormat.json,
+            ),
+          ),
+        ),
+      )
+      ..emit(dockerReady('srv-1'))
+      ..emit(
+        dockerStackList('srv-1', [
+          dockerStack('api', const []),
+          dockerStack('web', const []),
+        ], at: DateTime.utc(2026, 10, 26, 12)),
+      );
+    await tester.pumpAndSettle();
+
+    final palette = find.byType(Dialog);
+    Finder inPalette(String text) =>
+        find.descendant(of: palette, matching: find.text(text));
+
+    await _openPalette(tester);
+    await tester.enterText(find.byKey(_query), ':units');
+    await tester.pump();
+    expect(inPalette('cron.service'), findsOne);
+    expect(inPalette('●'), findsNothing);
+    await tester.enterText(find.byKey(_query), ':units nginx');
+    await tester.pump();
+    expect(inPalette('A high performance web server'), findsOne);
+    await tester.tap(inPalette('nginx.service'));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+    expect(
+      find.byTooltip('Close unit details'),
+      findsOne,
+      reason: "the Services tab opened the unit's page",
+    );
+
+    await _openPalette(tester);
+    await tester.enterText(find.byKey(_query), ':stacks web');
+    await tester.pump();
+    await tester.tap(inPalette('web').last);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<StackOverview>(find.byType(StackOverview)).project,
+      'web',
+      reason: 'the Stacks sub-tab shows the stack, not the first',
+    );
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   testWidgets(
     'a tab asked for on another server shows once its workspace does',

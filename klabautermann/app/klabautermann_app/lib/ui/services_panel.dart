@@ -21,6 +21,7 @@ import 'services_view.dart';
 import 'server_surfaces.dart' show ServerPanel;
 import 'sortable_table.dart';
 import 'unit_details.dart';
+import 'workspace_navigation.dart';
 
 /// The panel width from which the unit table adds its load and description
 /// columns and a unit's page opens under the table instead of in its
@@ -121,11 +122,25 @@ class _ServicesPanelState extends State<ServicesPanel> {
   final _closeFocus = FocusNode();
   FocusNode? _returnFocus;
 
+  /// Where the command palette asks for a unit to open.
+  WorkspaceNavigation? _navigation;
+
   @override
   void initState() {
     super.initState();
     _attach();
     _followUser();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final navigation = WorkspaceNavigationScope.maybeOf(context);
+    if (identical(navigation, _navigation)) return;
+    _navigation?.removeListener(_onNavigation);
+    _navigation = navigation?..addListener(_onNavigation);
+    // The palette's request may be what built this panel.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onNavigation());
   }
 
   @override
@@ -143,10 +158,13 @@ class _ServicesPanelState extends State<ServicesPanel> {
     _followUser();
     _open = null;
     _returnFocus = null;
+    // A request may have selected the server this panel now shows.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onNavigation());
   }
 
   @override
   void dispose() {
+    _navigation?.removeListener(_onNavigation);
     widget.monitoring.unsubscribe(widget.serverId, _userSubscription);
     _units.removeListener(_onUnits);
     _listFocus.dispose();
@@ -193,6 +211,18 @@ class _ServicesPanelState extends State<ServicesPanel> {
   void _openUnit(SystemdUnit unit) {
     if (_open?.name == unit.unit || unitStatesOf(unit).type == null) return;
     setState(() => _open = (name: unit.unit, key: GlobalKey()));
+  }
+
+  /// Opens the unit the command palette asked for, once this server's.
+  void _onNavigation() {
+    if (!mounted) return;
+    final unit = _navigation?.takeUnit(widget.serverId);
+    if (unit == null) return;
+
+    // The palette lists the system manager's units.
+    _setScope(UnitScope.system);
+    if (_open?.name == unit) return;
+    setState(() => _open = (name: unit, key: GlobalKey()));
   }
 
   void _close() {

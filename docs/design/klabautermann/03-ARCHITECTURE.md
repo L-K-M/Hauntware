@@ -7702,8 +7702,15 @@ there from its own page too.
   workspace tab; a container row also opens the Docker tab and hands
   the container to the inspector. `WorkspaceNavigation` carries those
   requests: the desktop shell takes the container and the workspace's
-  tabs consume the panel request once shown. Units and stacks come
-  with N60c.
+  tabs consume the panel request once shown. As built (M6 N60c), the
+  palette also lists the system units the selected server's held unit
+  list names (a row the host misread names no unit and is left out) and
+  the compose stacks its held stack list names. A unit row opens the
+  Services tab on the system manager's units with the unit's page open;
+  a stack row opens the Docker tab's Stacks sub-tab with the stack
+  selected, or on a page of its own in a narrow pane. The panels take
+  their unit or stack from `WorkspaceNavigation` (`takeUnit`,
+  `takeStack`) once they show the requested server.
 - Keyboard: `/` filters the focused list; `j` and `k` move; `Enter` opens;
   `l` logs, `s` shell, `r` restart (opens the confirmation dialog); `?` shows
   the contextual map; `Cmd/Ctrl-1..9` switch tabs; `Esc` goes back; bindings

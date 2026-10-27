@@ -10,6 +10,7 @@ import '../../controllers/docker_notice_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../server_header.dart' show HeaderedBody;
+import '../workspace_navigation.dart';
 import 'container_logs.dart';
 import 'containers_panel.dart';
 import 'docker_endpoint.dart';
@@ -92,12 +93,32 @@ class _DockerPanelState extends State<DockerPanel> {
   /// The server [DockerController.openView] was told of, if any.
   String? _held;
 
+  /// Where the command palette asks for a stack to open, and the last
+  /// such stack, handed to the Stacks sub-tab.
+  WorkspaceNavigation? _navigation;
+  StackRequest? _stackRequest;
+  int _stackSerial = 0;
+
+  /// Reaches the sub-tabs' controller, which sits under this widget.
+  final _subTabs = GlobalKey();
+
   DockerController get _docker => widget.monitoring.docker;
 
   @override
   void initState() {
     super.initState();
     _sync();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final navigation = WorkspaceNavigationScope.maybeOf(context);
+    if (identical(navigation, _navigation)) return;
+    _navigation?.removeListener(_onNavigation);
+    _navigation = navigation?..addListener(_onNavigation);
+    // The palette's request may be what built this panel.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onNavigation());
   }
 
   @override
@@ -108,12 +129,30 @@ class _DockerPanelState extends State<DockerPanel> {
       'new controllers come with a new tree (KlabautermannApp, D44)',
     );
     _sync();
+    if (widget.serverId == oldWidget.serverId) return;
+    _stackRequest = null;
+    // A request may have selected the server this panel now shows.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onNavigation());
   }
 
   @override
   void dispose() {
+    _navigation?.removeListener(_onNavigation);
     _release();
     super.dispose();
+  }
+
+  /// Shows the stack the command palette asked for, once this server's,
+  /// under the Stacks sub-tab.
+  void _onNavigation() {
+    if (!mounted) return;
+    final project = _navigation?.takeStack(widget.serverId);
+    if (project == null) return;
+
+    setState(() => _stackRequest = (project: project, serial: ++_stackSerial));
+    if (_subTabs.currentContext case final context?) {
+      DefaultTabController.of(context).index = DockerSubTab.stacks.index;
+    }
   }
 
   void _sync() {
@@ -172,6 +211,7 @@ class _DockerPanelState extends State<DockerPanel> {
             ),
             Expanded(
               child: Builder(
+                key: _subTabs,
                 builder: (context) {
                   final tabs = DefaultTabController.of(context);
                   return ListenableBuilder(
@@ -213,6 +253,7 @@ class _DockerPanelState extends State<DockerPanel> {
                             DockerSubTab.stacks => StacksPanel(
                               monitoring: widget.monitoring,
                               serverId: widget.serverId,
+                              request: _stackRequest,
                               visible:
                                   widget.visible && tabs.index == tab.index,
                             ),
