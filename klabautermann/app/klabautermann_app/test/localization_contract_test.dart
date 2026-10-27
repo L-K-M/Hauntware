@@ -36,6 +36,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/accounts.dart': {"', '", r"'${account.uid}'", "''", "','"},
   // An account read's request id, matched in the engine's answer.
   'lib/controllers/account_reads.dart': {r"'accounts-${_count++}'"},
+  // A timer detail read's request id, matched in the engine's answer.
+  'lib/controllers/timer_detail_reads.dart': {r"'timer-detail-${_count++}'"},
   'lib/app.dart': {
     // The settings route's Navigator name.
     "'/settings'",

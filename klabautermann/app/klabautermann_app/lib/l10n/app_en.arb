@@ -4807,9 +4807,25 @@
   "@jobsSourceTimer": {
     "description": "Source of a job that is a systemd timer unit."
   },
-  "jobsTimerTriggersUnread": "Triggers are not read in this version.",
+  "jobsTimerTriggersUnread": "In its details",
   "@jobsTimerTriggersUnread": {
-    "description": "Schedule of a systemd timer: this version reads no timer's OnCalendar or monotonic triggers or its RandomizedDelaySec, so they are unknown; its next run comes from systemd's own timer list."
+    "description": "Schedule column of a systemd timer: the timer list carries no OnCalendar or monotonic triggers; its details read them (JOB-02)."
+  },
+  "jobsTimerTriggersReading": "Reading the timer's triggers…",
+  "@jobsTimerTriggersReading": {
+    "description": "Timer details: systemctl show and systemd-analyze calendar are running for the timer's triggers and next runs."
+  },
+  "jobsTimerTriggersNoLink": "Not connected, so the triggers were not read.",
+  "@jobsTimerTriggersNoLink": {
+    "description": "Timer details: no link to read the triggers over."
+  },
+  "jobsTimerTriggersUnreadable": "systemd did not say what starts this timer.",
+  "@jobsTimerTriggersUnreadable": {
+    "description": "Timer details: systemctl is missing or the unit name is not a timer's."
+  },
+  "jobsTimerTriggersFailed": "The triggers could not be read. Close and open the details to try again.",
+  "@jobsTimerTriggersFailed": {
+    "description": "Timer details: the link failed or the read timed out."
   },
   "jobsDetailsWritten": "As written",
   "@jobsDetailsWritten": {
