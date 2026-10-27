@@ -7568,8 +7568,19 @@ there from its own page too.
   into `ghost_ui` (`src/ghost_command_palette.dart`, with its tests), so
   its public names stay `CommandPalette`, `PaletteCommand`,
   `showCommandPalette` and `fuzzyMatch`; Planchette imports them from
-  the barrel. The `GhostCommandPalette` name and the providers come with
-  N60.
+  the barrel.
+  As built (M6 N60, PLT-07), the names stay, so no rename touches
+  Planchette. View > Command Palette… (`Cmd/Ctrl-K`, desktop only) lists
+  the app's menu commands, every fleet server, the selected server's
+  tabs and the containers its held list names, each provider under a
+  path of its own. A query starting `:` narrows to the paths it matches
+  (`paletteScope`), so `:containers api` searches only the containers. A
+  server row selects it; a tab row selects its server and switches its
+  workspace tab; a container row also opens the Docker tab and hands
+  the container to the inspector. `WorkspaceNavigation` carries those
+  requests: the desktop shell takes the container and the workspace's
+  tabs consume the panel request once shown. Units, stacks and the
+  keyboard model below come with N60b.
 - Keyboard: `/` filters the focused list; `j` and `k` move; `Enter` opens;
   `l` logs, `s` shell, `r` restart (opens the confirmation dialog); `?` shows
   the contextual map; `Cmd/Ctrl-1..9` switch tabs; `Esc` goes back; bindings

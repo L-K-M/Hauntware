@@ -91,6 +91,9 @@ const String kFleetImportSshConfigCommandId = 'fleet.importSshConfig';
 /// File ▸ Quit on Linux and Windows.
 const String kAppQuitCommandId = 'app.quit';
 
+/// View ▸ Command Palette… (PLT-07, 03 §10.6), on desktops.
+const String kAppCommandPaletteCommandId = 'app.commandPalette';
+
 /// The commands the app has a real action for today, for [platform]: no
 /// placeholders for commands that do not exist yet.
 ///
@@ -113,6 +116,10 @@ const String kAppQuitCommandId = 'app.quit';
 ///   application menu, and a phone has no quit. No shortcut, as in
 ///   Poltergeist.
 ///
+/// - Command Palette…, on desktops with [onOpenPalette], opens the palette
+///   over every command, server, tab and held container: ⌘K on macOS and
+///   Ctrl+K elsewhere (03 §10.6). In View.
+///
 /// The window commands (Minimize, Zoom, Bring All to Front) and Enter
 /// Full Screen are AppKit's own rows on macOS (`buildAppMenus`); Linux and
 /// Windows have no counterparts in the app yet.
@@ -122,6 +129,7 @@ List<AppCommand> buildAppCommands({
   required VoidCallback onOpenSettings,
   required String? appVersion,
   Future<void> Function()? requestClose,
+  Future<void> Function(BuildContext context)? onOpenPalette,
 }) {
   final desktop = switch (platform) {
     TargetPlatform.macOS ||
@@ -142,6 +150,19 @@ List<AppCommand> buildAppCommands({
           menu: AppMenuId.help,
           order: 10,
           appMenuOnMac: true,
+        ),
+      ),
+    if (desktop && onOpenPalette != null)
+      AppCommand(
+        id: kAppCommandPaletteCommandId,
+        label: (l10n) => l10n.paletteCommand,
+        activators: (platform) => platform == TargetPlatform.macOS
+            ? const [SingleActivator(LogicalKeyboardKey.keyK, meta: true)]
+            : const [SingleActivator(LogicalKeyboardKey.keyK, control: true)],
+        run: onOpenPalette,
+        menuPlacement: const CommandMenuPlacement(
+          menu: AppMenuId.view,
+          order: 10,
         ),
       ),
     if (fleet.canImportSshConfig)

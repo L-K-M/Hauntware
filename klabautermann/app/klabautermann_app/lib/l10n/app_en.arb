@@ -12102,5 +12102,47 @@
   "attentionCancel": "Cancel",
   "@attentionCancel": {
     "description": "Attention queue: closes the note dialog without acknowledging."
+  },
+  "paletteCommand": "Command Palette…",
+  "@paletteCommand": {
+    "description": "View menu: opens the command palette (PLT-07), ⌘K or Ctrl+K."
+  },
+  "paletteActions": "Actions",
+  "@paletteActions": {
+    "description": "Command palette: the path of the app's menu commands."
+  },
+  "paletteServers": "Servers",
+  "@paletteServers": {
+    "description": "Command palette: the path of the fleet's servers."
+  },
+  "paletteTabs": "{server} tabs",
+  "@paletteTabs": {
+    "description": "Command palette: the path of the selected server's tabs.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteContainers": "{server} containers",
+  "@paletteContainers": {
+    "description": "Command palette: the path of the selected server's containers.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteContainerDescription": "{state} · {image}",
+  "@paletteContainerDescription": {
+    "description": "Command palette: a container row's second line, its state and image.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      },
+      "image": {
+        "type": "String"
+      }
+    }
   }
 }
