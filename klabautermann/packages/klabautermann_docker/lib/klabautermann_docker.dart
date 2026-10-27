@@ -104,6 +104,7 @@ export 'src/http_types.dart'
 export 'src/image_digest.dart'
     show
         ImageDigestComparison,
+        ImageUpdateIssue,
         ImageUpdateStatus,
         RegistryManifestHead,
         RepoDigest,
@@ -192,6 +193,13 @@ export 'src/models/stats.dart'
 export 'src/models/system_df.dart'
     show DiskUsageTotals, SystemDf, SystemDfType, parseSystemDf;
 export 'src/models/volume.dart' show VolumeSummary, parseVolumeSummaries;
+export 'src/registry_reference.dart'
+    show
+        RegistryAuthScheme,
+        RegistryChallenge,
+        RegistryRateLimit,
+        RegistryReference,
+        dockerHubRegistry;
 export 'src/stdcopy.dart'
     show
         BoundedLogRing,
