@@ -83,4 +83,29 @@ void main() {
     );
     expect(cadence.value, CadencePreset.desktop);
   });
+
+  test('picking the same preset after a failed save tries it again', () async {
+    var fail = true;
+    final saved = <String>[];
+    final cadence = CadenceController(
+      save: (name) async {
+        if (fail) throw const FileSystemException('disk full');
+        saved.add(name);
+      },
+    );
+    addTearDown(cadence.dispose);
+    var notified = 0;
+    cadence.addListener(() => notified++);
+
+    await expectLater(
+      cadence.setCadence(CadencePreset.phone),
+      throwsA(isA<CadenceNotSavedException>()),
+    );
+    fail = false;
+    await cadence.setCadence(CadencePreset.phone);
+    await cadence.setCadence(CadencePreset.phone);
+
+    expect(saved, ['phone'], reason: 'retried once, then a no-op');
+    expect(notified, 1, reason: 'the value changed once');
+  });
 }

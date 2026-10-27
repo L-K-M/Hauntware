@@ -38,7 +38,7 @@ enum CadencePreset {
 /// the settings link in the desktop settings window.
 abstract interface class CadenceSettings
     implements ValueListenable<CadencePreset> {
-  /// Picks [preset]; a no-op when it is already in force. A change
+  /// Picks [preset]; a no-op when it is in force and saved. A change
   /// applied but not saved throws [CadenceNotSavedException], in the app
   /// and, over the link, in the window; any other throw means it did not
   /// apply.
@@ -67,9 +67,14 @@ final class CadenceController extends ChangeNotifier
   CadenceController({
     CadencePreset preset = CadencePreset.automatic,
     this._save,
-  }) : _value = preset;
+  }) : _value = preset,
+       _saved = preset;
 
   CadencePreset _value;
+
+  /// The preset last known to be in `settings.json`: after a failed save,
+  /// picking the same preset again tries the save again.
+  CadencePreset _saved;
   final Future<void> Function(String name)? _save;
 
   @override
@@ -77,11 +82,14 @@ final class CadenceController extends ChangeNotifier
 
   @override
   Future<void> setCadence(CadencePreset preset) async {
-    if (preset == _value) return;
-    _value = preset;
-    notifyListeners();
+    if (preset == _value && preset == _saved) return;
+    if (preset != _value) {
+      _value = preset;
+      notifyListeners();
+    }
     try {
       await _save?.call(preset.name);
+      _saved = preset;
     } on Exception catch (error, stackTrace) {
       Error.throwWithStackTrace(
         CadenceNotSavedException('The polling budget was not saved: $error'),
