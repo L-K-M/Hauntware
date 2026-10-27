@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show FileSystemException;
 import 'dart:ui' show AppExitResponse;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +12,7 @@ import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/app_lock_controller.dart';
+import 'package:klabautermann_app/controllers/account_size.dart';
 import 'package:klabautermann_app/controllers/cadence_controller.dart';
 import 'package:klabautermann_app/controllers/sync_secrets_controller.dart';
 import 'package:klabautermann_app/controllers/threshold_controller.dart';
@@ -176,6 +178,7 @@ void main() {
     ThresholdSettings? thresholds,
     CadenceSettings? cadence,
     CadenceCapSettings? cadenceCaps,
+    ValueListenable<AccountSize?>? accountSize,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
@@ -189,6 +192,7 @@ void main() {
       thresholds: thresholds,
       cadence: cadence,
       cadenceCaps: cadenceCaps,
+      accountSize: accountSize,
       control: _control,
       link: _appLink,
       requestAppExit: () async => AppExitResponse.exit,
@@ -347,6 +351,7 @@ void main() {
     late ThresholdController thresholds;
     late CadenceController cadence;
     late CadenceCapsController cadenceCaps;
+    late ValueNotifier<AccountSize?> accountSize;
     late SettingsWindowHost host;
 
     setUp(() async {
@@ -396,6 +401,8 @@ void main() {
       addTearDown(cadence.dispose);
       cadenceCaps = CadenceCapsController();
       addTearDown(cadenceCaps.dispose);
+      accountSize = ValueNotifier(null);
+      addTearDown(accountSize.dispose);
       host = newHost(
         appearance,
         announcements,
@@ -407,6 +414,7 @@ void main() {
         thresholds,
         cadence,
         cadenceCaps,
+        accountSize,
       );
     });
 
@@ -823,6 +831,36 @@ void main() {
       expect(syncApplied, [false, true], reason: 'at once, then the change');
       expect(remote.syncSecrets.value, isTrue);
       expect(windowSwitch(), isTrue);
+    });
+
+    testWidgets('the Sync tab shows the account size the app last heard '
+        '(SYN-09)', (tester) async {
+      final remote = await pumpBothWindows(
+        tester,
+        appearance,
+        tab: SettingsTab.sync,
+      );
+      Finder inWindow(Finder finder) =>
+          find.descendant(of: find.byType(SettingsWindowApp), matching: finder);
+      expect(remote.accountSize.value, isNull);
+      expect(inWindow(find.text('Account size')), findsNothing);
+
+      await tester.runAsync(() async {
+        accountSize.value = AccountSize(
+          prefixBytes: 2048,
+          budgetBytes: 1 << 20,
+          warnBytes: 838861,
+          rows: const [
+            AccountSizeRow(prefix: 'snippet', records: 3, bytes: 900),
+          ],
+        );
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+
+      expect(remote.accountSize.value?.prefixBytes, 2048);
+      expect(inWindow(find.text('Account size')), findsOneWidget);
+      expect(inWindow(find.text('3 records, 900 B')), findsOneWidget);
     });
 
     testWidgets('the Servers tab\'s switches change the app\'s monitor set '

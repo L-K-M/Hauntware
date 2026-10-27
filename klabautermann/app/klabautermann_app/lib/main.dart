@@ -19,6 +19,7 @@ import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
 import 'controllers/attention.dart';
 import 'controllers/cadence_controller.dart';
+import 'controllers/pinned_services.dart';
 import 'controllers/fleet_density.dart';
 import 'controllers/container_columns.dart';
 import 'controllers/coverage_controller.dart';
@@ -353,6 +354,15 @@ Future<void> main(List<String> args) async {
   applyCadence();
   cadence.addListener(applyCadence);
 
+  // OV-08's pinned services, kept per device in settings.json.
+  final pinnedServices = PinnedServicesController(
+    pins: {
+      for (final MapEntry(:key, :value) in settings.pinnedServices.entries)
+        key: [for (final pin in value) ?PinnedService.parse(pin)],
+    },
+    save: settings.setPinnedServices,
+  );
+
   // FL-08's fleet board layout, kept per device in settings.json.
   final fleetDensity = FleetDensityController(
     density: FleetDensity.parse(settings.fleetDensity),
@@ -457,6 +467,7 @@ Future<void> main(List<String> args) async {
     appLock: appLock,
     syncSecrets: syncSecrets,
     pinPublication: pinPublication,
+    accountSize: sync.accountSize,
     cadence: cadence,
     cadenceCaps: cadenceCaps,
   );
@@ -471,6 +482,7 @@ Future<void> main(List<String> args) async {
       announcements: announcements,
       thresholds: thresholds,
       cadence: cadence,
+      pinnedServices: pinnedServices,
       fleetDensity: fleetDensity,
       cadenceCaps: cadenceCaps,
       deviceName: deviceName,

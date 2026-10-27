@@ -37,7 +37,13 @@ import 'package:seance_core/seance_core.dart'
     show DecryptedRecord, EncryptedRecord, RecordKind;
 
 import '../engine/protocol.dart'
-    show CadenceProfile, ServerPrefs, ServerPrefsChanged, SyncPrefixBudget;
+    show
+        CadenceProfile,
+        ServerPrefs,
+        ServerPrefsChanged,
+        SyncPrefixBudget,
+        SyncRecordUsage,
+        syncRecordPrefixOf;
 import '../settings/device_settings_store.dart' show writeFileAtomically;
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
 import 'sync_state_file.dart';
@@ -543,17 +549,28 @@ final class KlabautermannRecordHandler implements RecordHandler {
 }
 
 /// The account budget the `klabautermann:` records take: the sealed blobs
-/// of every live one in [records].
-SyncPrefixBudget prefixBudgetOf(Iterable<EncryptedRecord> records) =>
-    SyncPrefixBudget(
-      records
-          .where(
-            (record) =>
-                !record.deleted &&
-                record.id.startsWith('$klabautermannRecordPrefix:'),
-          )
-          .fold(0, (sum, record) => sum + record.blob.length),
-    );
+/// of every live one in [records], and every live record's count and
+/// bytes by id prefix for the account size view (SYN-09).
+SyncPrefixBudget prefixBudgetOf(Iterable<EncryptedRecord> records) {
+  var used = 0;
+  final counts = <String, int>{};
+  final bytes = <String, int>{};
+  for (final record in records) {
+    if (record.deleted) continue;
+    final size = record.blob.length;
+    if (record.id.startsWith('$klabautermannRecordPrefix:')) used += size;
+    final prefix = syncRecordPrefixOf(record.id);
+    counts[prefix] = (counts[prefix] ?? 0) + 1;
+    bytes[prefix] = (bytes[prefix] ?? 0) + size;
+  }
+  return SyncPrefixBudget(
+    used,
+    byPrefix: {
+      for (final MapEntry(:key, :value) in counts.entries)
+        key: SyncRecordUsage(records: value, bytes: bytes[key]!),
+    },
+  );
+}
 
 /// The [ServerPrefsChanged] events that take an app holding [sent] to
 /// [prefs], and what it holds after them. [sent] maps each server id to

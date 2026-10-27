@@ -459,6 +459,13 @@ void main() {
         record('klabautermann:pref:b', 100 * 1024, deleted: true),
       ]);
       expect((under.usedBytes, under.warns), (800 * 1024, false));
+      expect(under.byPrefix, {
+        'klabautermann:pref': const SyncRecordUsage(
+          records: 1,
+          bytes: 800 * 1024,
+        ),
+        'bookmark': const SyncRecordUsage(records: 1, bytes: 200 * 1024),
+      }, reason: 'live records only, by prefix (SYN-09)');
 
       final over = prefixBudgetOf([
         record('klabautermann:pref:a', 800 * 1024),
@@ -466,6 +473,14 @@ void main() {
       ]);
       expect((over.warns, over.full), (true, false));
     });
+  });
+
+  test('the account size view groups a record by its type within the '
+      'klabautermann prefix and by its first segment otherwise', () {
+    expect(syncRecordPrefixOf('klabautermann:rule:1f2e'), 'klabautermann:rule');
+    expect(syncRecordPrefixOf('klabautermann:odd'), 'klabautermann:odd');
+    expect(syncRecordPrefixOf('serverConfig:9a:b'), 'serverConfig');
+    expect(syncRecordPrefixOf('loner'), 'loner');
   });
 
   test('the app hears every server\'s preferences once, then changes, and '

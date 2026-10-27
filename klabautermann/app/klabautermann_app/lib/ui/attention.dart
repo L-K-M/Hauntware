@@ -23,8 +23,9 @@ const double _phoneMaxWidth = 600;
 /// mount, unit and container lists this run holds. [builder] gets the
 /// scan and rebuilds as any of them changes; problems that cleared lose
 /// their acknowledgements after the frame.
-class _AttentionWatch extends StatelessWidget {
-  const _AttentionWatch({
+class AttentionWatch extends StatelessWidget {
+  const AttentionWatch({
+    super.key,
     required this.fleet,
     required this.monitoring,
     required this.builder,
@@ -73,6 +74,17 @@ class _AttentionWatch extends StatelessWidget {
       },
     );
   }
+}
+
+/// How many of [scan]'s problems on each server are still open, not
+/// acknowledged in [acks]; a server without one is left out (FL-10).
+Map<String, int> openProblemsByServer(AttentionScan scan, AttentionAcks acks) {
+  final counts = <String, int>{};
+  for (final item in scan.items) {
+    if (acks.ackFor(item) != null) continue;
+    counts.update(item.serverId, (n) => n + 1, ifAbsent: () => 1);
+  }
+  return counts;
 }
 
 /// What the queue reads of one server from [MonitoringController].
@@ -128,7 +140,7 @@ class AttentionNotice extends StatelessWidget {
   final void Function(FleetServer server)? onOpenServer;
 
   @override
-  Widget build(BuildContext context) => _AttentionWatch(
+  Widget build(BuildContext context) => AttentionWatch(
     fleet: fleet,
     monitoring: monitoring,
     builder: (context, scan) {
@@ -239,7 +251,7 @@ class AttentionView extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final acks = monitoring.attentionAcks;
-    return _AttentionWatch(
+    return AttentionWatch(
       fleet: fleet,
       monitoring: monitoring,
       builder: (context, scan) {

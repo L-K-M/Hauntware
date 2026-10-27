@@ -2366,7 +2366,14 @@ are retracted (sealed `removed`) when a server becomes excluded; "server
 absent: pending" is distinct from "server removed"; unknown `type` values
 are kept verbatim and skipped; writes are batched with `batchForPush`.
 Account budget for the prefix: at most 1 MiB in total, warn at 80 %, shown
-in the account size view (SYN-09). There is no record class whose count
+in the account size view (SYN-09). As built in M6 (N67, SYN-09), every
+succeeded sync operation reports the prefix's bytes and every live
+record's count and bytes by id prefix (a `klabautermann:` record's type,
+any other record's first segment), as this device last pulled them;
+Settings > Sync lists them, the largest first, under what the prefix takes
+of its budget, with a warning from 80 % and at 100 %. The view shows
+nothing until an operation succeeds in the app's run, and nothing while no
+account is enrolled. There is no record class whose count
 grows with time or events without a bound (no audit entries). The sync
 server deletes records only with the whole account
 (`seance/packages/seance_sync_server/lib/src/sqlite_storage.dart:159,293-299`
@@ -3342,6 +3349,15 @@ unless the user enables admin mode for that panel.
   steal explained), PSI (absence is normal), model and topology, OOM kills
   linked to journal entries, configurable cards, top lists, quick actions,
   threshold bands, bottom dock.
+
+  As built in M6 (N61c, OV-08), the Overview's quick actions card offers
+  a terminal in Séance and the server's files in Poltergeist where those
+  apps take the hand-off (X-03, X-10), a reboot, and a restart of each
+  service pinned from its page in the Services tab, at most five per
+  server, kept per device in `settings.json` under
+  `klabautermann.overview.pinnedServices`. Each action runs through the
+  preview and confirmation it has in its own tab (SAF-04), and the card
+  is left out when this device can offer none of them.
 - **As built (M6 N42c).** CPU-07's model and topology are a host query,
   `CpuTopologyQuery`, shown in the System tab's Processor section beside
   the identity, since they do not change while the Overview samples. It
@@ -7208,6 +7224,20 @@ and in the pressure bar. The optional `HealthMark` overlay (`ok`,
 `attention`, `critical`, `stale`, drawn with an icon and text) is not in
 the MVP (D55). v1 adds density modes, the summary strip, attention-first
 sort and the faults-only filter.
+
+As built in M6 (N63a), the fleet list on the desktop rail and the phone
+opens with FL-09's summary strip under the filter field, followed by
+FL-10's two toggles while any server needs attention or a toggle is on.
+Both scroll with the rows, so a short window or large text never
+squeezes the rows out. The strip shows how many servers answer (link up or probe
+online) out of all, how many have an open problem in TRI-03's attention
+queue, and the mean CPU and summed memory of the servers whose reading
+is fresh by the rows' stale rule. "Needs attention" keeps only the
+servers with an open, unacknowledged problem and says so when none has
+one. "Attention first" moves them up within each section, most problems
+first, leaving every other server in fleet order. Both toggles last for
+the list's life, and both lists read the same queue as the attention
+notice.
 
 As built in M6 (N63b, FL-08), the desktop and tablet workspace shows the
 fleet board while no server is open: every server as a card (state word,

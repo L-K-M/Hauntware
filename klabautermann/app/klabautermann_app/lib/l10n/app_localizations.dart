@@ -568,6 +568,54 @@ abstract class AppLocalizations {
   /// **'Stale · {age}'**
   String fleetRowStaleAge(String age);
 
+  /// Overview (OV-08): the heading of the quick actions card.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick actions'**
+  String get quickActionsTitle;
+
+  /// Overview quick actions (OV-08): opens the server's files in Poltergeist.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse files in Poltergeist'**
+  String get quickActionsFiles;
+
+  /// Overview quick actions (OV-08): restarts a service pinned from its page in the Services tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart {unit}'**
+  String quickActionsRestart(String unit);
+
+  /// Overview quick actions (OV-08): reboots the server, through the same preview as the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Reboot'**
+  String get quickActionsReboot;
+
+  /// A unit's page (OV-08): tooltip of the pin that adds a restart button for the unit to the Overview.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin to the Overview\'s quick actions'**
+  String get quickActionsPin;
+
+  /// A unit's page (OV-08): tooltip of the pin while the unit is pinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin from the Overview\'s quick actions'**
+  String get quickActionsUnpin;
+
+  /// A unit's page (OV-08): tooltip of the disabled pin when the server holds as many pins as it takes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{One service is already pinned, the most this server takes} other{{count} services are already pinned, the most this server takes}}'**
+  String quickActionsPinFull(int count);
+
+  /// A unit's page (OV-08): toast when a pin applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The pin changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get quickActionsPinNotSaved;
+
   /// The fleet board (FL-08): the label before its layout picker, shown in the desktop workspace while no server is open.
   ///
   /// In en, this message translates to:
@@ -5865,6 +5913,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Every device runs Séance {release} or later'**
   String settingsPinPublication(String release);
+
+  /// Settings, Sync: heading of the account size view (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Account size'**
+  String get settingsAccountSizeTitle;
+
+  /// Settings, Sync: how much of their budget Klabautermann's synced records use (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann\'s records take {used} of their {budget} in the sync account.'**
+  String settingsAccountSizeUsed(String used, String budget);
+
+  /// Settings, Sync: warning once Klabautermann's records take 80 % of their budget (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'They are close to the limit. Remove alert rules or server preferences you no longer need.'**
+  String get settingsAccountSizeWarn;
+
+  /// Settings, Sync: warning once Klabautermann's records take their whole budget (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'They have reached the limit, so new changes may not sync. Remove alert rules or server preferences you no longer need.'**
+  String get settingsAccountSizeFull;
+
+  /// Settings, Sync: explanation above the account size view's rows (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Every kind of record in the account, as this device last pulled it. The account is shared with Séance, so its records count too.'**
+  String get settingsAccountSizeDetail;
+
+  /// Settings, Sync: one record prefix's count and size in the account size view (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'{records, plural, =1{1 record} other{{records} records}}, {size}'**
+  String settingsAccountSizeRow(int records, String size);
 
   /// What the host key sharing switch does, under it.
   ///
@@ -12981,6 +13065,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get attentionCancel;
+
+  /// Fleet summary strip (FL-09): servers whose link is up or whose probe answered, out of all.
+  ///
+  /// In en, this message translates to:
+  /// **'{online} of {total} online'**
+  String fleetSummaryOnline(int online, int total);
+
+  /// Fleet summary strip (FL-09): servers with an open problem in the attention queue.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 needs attention} other{{count} need attention}}'**
+  String fleetSummaryAttention(int count);
+
+  /// Fleet summary strip (FL-09): the mean CPU busy share of the servers reporting fresh readings.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU {percent}%'**
+  String fleetSummaryCpu(int percent);
+
+  /// Fleet summary strip (FL-09): memory used and installed, summed over the servers reporting fresh readings.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory {used} of {total}'**
+  String fleetSummaryMemory(String used, String total);
+
+  /// Fleet list filter chip (FL-10): shows only servers with an open problem; the count is how many have one.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Needs attention} other{Needs attention ({count})}}'**
+  String fleetFaultsOnly(int count);
+
+  /// Fleet list chip (FL-10): sorts servers with open problems to the top, most first.
+  ///
+  /// In en, this message translates to:
+  /// **'Attention first'**
+  String get fleetAttentionFirst;
+
+  /// Fleet list (FL-10): shown when the faults-only filter leaves no server.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing needs attention.'**
+  String get fleetNoFaults;
+
+  /// Fleet list (FL-10): turns the faults-only filter off.
+  ///
+  /// In en, this message translates to:
+  /// **'Show all servers'**
+  String get fleetShowAll;
 
   /// Server header button and page title (AUT-01): Séance's synced snippets, run on this server.
   ///

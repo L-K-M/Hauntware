@@ -320,6 +320,41 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get quickActionsTitle => 'Quick actions';
+
+  @override
+  String get quickActionsFiles => 'Browse files in Poltergeist';
+
+  @override
+  String quickActionsRestart(String unit) {
+    return 'Restart $unit';
+  }
+
+  @override
+  String get quickActionsReboot => 'Reboot';
+
+  @override
+  String get quickActionsPin => 'Pin to the Overview\'s quick actions';
+
+  @override
+  String get quickActionsUnpin => 'Unpin from the Overview\'s quick actions';
+
+  @override
+  String quickActionsPinFull(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count services are already pinned, the most this server takes',
+      one: 'One service is already pinned, the most this server takes',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get quickActionsPinNotSaved =>
+      'The pin changed but could not be saved. It lasts until Klabautermann quits.';
+
+  @override
   String get fleetDensityLabel => 'Layout';
 
   @override
@@ -4589,6 +4624,37 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String settingsPinPublication(String release) {
     return 'Every device runs Séance $release or later';
+  }
+
+  @override
+  String get settingsAccountSizeTitle => 'Account size';
+
+  @override
+  String settingsAccountSizeUsed(String used, String budget) {
+    return 'Klabautermann\'s records take $used of their $budget in the sync account.';
+  }
+
+  @override
+  String get settingsAccountSizeWarn =>
+      'They are close to the limit. Remove alert rules or server preferences you no longer need.';
+
+  @override
+  String get settingsAccountSizeFull =>
+      'They have reached the limit, so new changes may not sync. Remove alert rules or server preferences you no longer need.';
+
+  @override
+  String get settingsAccountSizeDetail =>
+      'Every kind of record in the account, as this device last pulled it. The account is shared with Séance, so its records count too.';
+
+  @override
+  String settingsAccountSizeRow(int records, String size) {
+    String _temp0 = intl.Intl.pluralLogic(
+      records,
+      locale: localeName,
+      other: '$records records',
+      one: '1 record',
+    );
+    return '$_temp0, $size';
   }
 
   @override
@@ -10303,6 +10369,52 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get attentionCancel => 'Cancel';
+
+  @override
+  String fleetSummaryOnline(int online, int total) {
+    return '$online of $total online';
+  }
+
+  @override
+  String fleetSummaryAttention(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count need attention',
+      one: '1 needs attention',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String fleetSummaryCpu(int percent) {
+    return 'CPU $percent%';
+  }
+
+  @override
+  String fleetSummaryMemory(String used, String total) {
+    return 'Memory $used of $total';
+  }
+
+  @override
+  String fleetFaultsOnly(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Needs attention ($count)',
+      zero: 'Needs attention',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetAttentionFirst => 'Attention first';
+
+  @override
+  String get fleetNoFaults => 'Nothing needs attention.';
+
+  @override
+  String get fleetShowAll => 'Show all servers';
 
   @override
   String get snippetsTitle => 'Snippets';

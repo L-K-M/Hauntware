@@ -18,6 +18,7 @@ import 'controllers/alert_rules_controller.dart';
 import 'controllers/snippets_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/cadence_controller.dart';
+import 'controllers/pinned_services.dart';
 import 'controllers/fleet_density.dart';
 import 'controllers/app_lock_controller.dart';
 import 'controllers/pin_publication_controller.dart';
@@ -40,6 +41,7 @@ import 'services/hand_off.dart' show HandOffLauncher;
 import 'theme/app_theme.dart';
 import 'ui/actions/action_entry.dart' show OperationsScope;
 import 'ui/actions/action_preview.dart' show ActionResultToasts;
+import 'ui/quick_actions.dart' show PinnedServicesScope;
 import 'ui/fleet_board.dart' show FleetDensityScope;
 import 'ui/adaptive_shell.dart';
 import 'ui/admin_mode_chip.dart' show AdminScope;
@@ -82,6 +84,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.announcements,
     this.thresholds,
     this.cadence,
+    this.pinnedServices,
     this.fleetDensity,
     this.cadenceCaps,
     this.deviceName,
@@ -127,6 +130,10 @@ class KlabautermannApp extends StatelessWidget {
   /// The polling budget (SAF-19) in Settings; null in tests that leave it
   /// out.
   final CadenceController? cadence;
+
+  /// OV-08's pinned services, for the Overview's quick actions and the
+  /// unit pages' pins; null in tests that leave them out.
+  final PinnedServicesController? pinnedServices;
 
   /// FL-08's fleet board layout, for the desktop workspace while no
   /// server is open; null in tests that leave it out, which keep the
@@ -331,6 +338,13 @@ class KlabautermannApp extends StatelessWidget {
               ),
               null => banded,
             };
+            final withPins = switch (pinnedServices) {
+              final pins? => PinnedServicesScope(
+                pins: pins,
+                child: withDensity,
+              ),
+              null => withDensity,
+            };
             final scoped = DockerNoticeScope(
               notice: dockerNotice,
               child: AnnouncementScope(
@@ -339,9 +353,9 @@ class KlabautermannApp extends StatelessWidget {
                 child: switch (thresholds) {
                   final thresholds? => ThresholdScope(
                     thresholds: thresholds,
-                    child: withDensity,
+                    child: withPins,
                   ),
-                  null => withDensity,
+                  null => withPins,
                 },
               ),
             );
@@ -492,6 +506,7 @@ class KlabautermannApp extends StatelessWidget {
               appLock: appLock,
               syncSecrets: syncSecrets,
               pinPublication: pinPublication,
+              accountSize: sync?.accountSize,
             ),
           },
         );

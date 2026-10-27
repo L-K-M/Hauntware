@@ -12,6 +12,7 @@
 import 'package:flutter/services.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 
+import '../../controllers/account_size.dart';
 import '../../controllers/announcement_controller.dart'
     show AnnouncementNotSavedException;
 import '../../controllers/threshold_controller.dart'
@@ -141,6 +142,10 @@ enum SettingsLinkKey {
   /// The host key sharing assertion, an object of [release] and
   /// [asserted], or null when the app holds none.
   pinPublication,
+
+  /// The sync account's size as [encodeAccountSize] writes it, or null
+  /// before a sync operation succeeded (SYN-09).
+  accountSize,
   release,
   asserted,
 
@@ -296,6 +301,43 @@ PlatformException encodeLinkError(Object error) => PlatformException(
   },
   message: '$error',
 );
+
+/// [size] for the link: its bytes, budget and warning point, then each
+/// row's prefix, records and bytes.
+List<Object> encodeAccountSize(AccountSize size) => [
+  size.prefixBytes,
+  size.budgetBytes,
+  size.warnBytes,
+  [
+    for (final row in size.rows) [row.prefix, row.records, row.bytes],
+  ],
+];
+
+/// The inverse of [encodeAccountSize]; null for null or a value it did
+/// not write.
+AccountSize? decodeAccountSize(Object? value) => switch (value) {
+  [
+    final int prefixBytes,
+    final int budgetBytes,
+    final int warnBytes,
+    final List<Object?> rows,
+  ] =>
+    AccountSize(
+      prefixBytes: prefixBytes,
+      budgetBytes: budgetBytes,
+      warnBytes: warnBytes,
+      rows: [
+        for (final row in rows)
+          if (row case [
+            final String prefix,
+            final int records,
+            final int bytes,
+          ])
+            AccountSizeRow(prefix: prefix, records: records, bytes: bytes),
+      ],
+    ),
+  _ => null,
+};
 
 /// A settings window call the app refused because it is locked (SAF-20):
 /// the window covers itself then, and changes nothing until the app is
