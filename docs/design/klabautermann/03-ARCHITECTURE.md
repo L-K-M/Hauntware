@@ -7212,6 +7212,20 @@ and in the pressure bar. The optional `HealthMark` overlay (`ok`,
 the MVP (D55). v1 adds density modes, the summary strip, attention-first
 sort and the faults-only filter.
 
+As built in M6 (N63a), the fleet list on the desktop rail and the phone
+opens with FL-09's summary strip under the filter field, followed by
+FL-10's two toggles while any server needs attention or a toggle is on.
+Both scroll with the rows, so a short window or large text never
+squeezes the rows out. The strip shows how many servers answer (link up or probe
+online) out of all, how many have an open problem in TRI-03's attention
+queue, and the mean CPU and summed memory of the servers whose reading
+is fresh by the rows' stale rule. "Needs attention" keeps only the
+servers with an open, unacknowledged problem and says so when none has
+one. "Attention first" moves them up within each section, most problems
+first, leaving every other server in fleet order. Both toggles last for
+the list's life, and both lists read the same queue as the attention
+notice.
+
 As built in M6 (N63b, FL-08), the desktop and tablet workspace shows the
 fleet board while no server is open: every server as a card (state word,
 address, pressure bar with its shares in figures, age) or as a grid tile
