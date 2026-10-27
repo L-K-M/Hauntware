@@ -799,6 +799,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fleetServerLeftDismiss => 'Dismiss';
 
   @override
+  String get fleetSplitChooseServer => 'Choose a server to see it here.';
+
+  @override
   String get processesWaiting => 'Waiting for the first process list.';
 
   @override

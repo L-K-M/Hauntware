@@ -1282,6 +1282,12 @@ abstract class AppLocalizations {
   /// **'Dismiss'**
   String get fleetServerLeftDismiss;
 
+  /// Shown beside the fleet list on a tablet while no server is selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a server to see it here.'**
+  String get fleetSplitChooseServer;
+
   /// The Processes tab before the server sent its first process list (PRC-01).
   ///
   /// In en, this message translates to:

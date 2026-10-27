@@ -7553,6 +7553,19 @@ steps with "confirm all shown". iOS and Android say plainly that sampling
 stops in the background (PLT-04) and show the return banner. Tablets use a
 two-pane layout (PLT-05, v1).
 
+As built in M6 (N62, PLT-05, `phone_shell.dart`), a window whose shorter
+side is at least 600 dp and that is narrower than the desktop breakpoint
+splits: the fleet list keeps a 320 dp column, with the selected row
+marked, and the selected server's screen (the same bottom bar, More and
+sheets) fills the rest; with nothing selected the pane asks for a server,
+and an empty fleet's invitation takes the whole window. Tapping a server
+selects it in place. The shorter side keeps a phone held sideways in the
+stack, so turning it never leaves a pushed screen over the split; a tall
+enough desktop window splits too. A server that leaves the fleet clears
+the pane with everything it opened, and the list says so as on a phone
+(SYN-08). Selection is the fleet's, so a tablet turned into the desktop
+layout keeps the same server open.
+
 As built in M2 (`app/klabautermann_app/lib/ui/server_detail_page.dart`,
 `phone_shell.dart`), the pushed screen's More destination lists
 Processes, Services, Jobs, System and Access in the desktop strip's
