@@ -12439,6 +12439,76 @@
   "@attentionCancel": {
     "description": "Attention queue: closes the note dialog without acknowledging."
   },
+  "fleetSummaryOnline": "{online} of {total} online",
+  "@fleetSummaryOnline": {
+    "description": "Fleet summary strip (FL-09): servers whose link is up or whose probe answered, out of all.",
+    "placeholders": {
+      "online": {
+        "type": "int",
+        "example": "3"
+      },
+      "total": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "fleetSummaryAttention": "{count, plural, =1{1 needs attention} other{{count} need attention}}",
+  "@fleetSummaryAttention": {
+    "description": "Fleet summary strip (FL-09): servers with an open problem in the attention queue.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "fleetSummaryCpu": "CPU {percent}%",
+  "@fleetSummaryCpu": {
+    "description": "Fleet summary strip (FL-09): the mean CPU busy share of the servers reporting fresh readings.",
+    "placeholders": {
+      "percent": {
+        "type": "int",
+        "example": "23"
+      }
+    }
+  },
+  "fleetSummaryMemory": "Memory {used} of {total}",
+  "@fleetSummaryMemory": {
+    "description": "Fleet summary strip (FL-09): memory used and installed, summed over the servers reporting fresh readings.",
+    "placeholders": {
+      "used": {
+        "type": "String",
+        "example": "12.3 GiB"
+      },
+      "total": {
+        "type": "String",
+        "example": "32.0 GiB"
+      }
+    }
+  },
+  "fleetFaultsOnly": "{count, plural, =0{Needs attention} other{Needs attention ({count})}}",
+  "@fleetFaultsOnly": {
+    "description": "Fleet list filter chip (FL-10): shows only servers with an open problem; the count is how many have one.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "fleetAttentionFirst": "Attention first",
+  "@fleetAttentionFirst": {
+    "description": "Fleet list chip (FL-10): sorts servers with open problems to the top, most first."
+  },
+  "fleetNoFaults": "Nothing needs attention.",
+  "@fleetNoFaults": {
+    "description": "Fleet list (FL-10): shown when the faults-only filter leaves no server."
+  },
+  "fleetShowAll": "Show all servers",
+  "@fleetShowAll": {
+    "description": "Fleet list (FL-10): turns the faults-only filter off."
+  },
   "snippetsTitle": "Snippets",
   "@snippetsTitle": {
     "description": "Server header button and page title (AUT-01): Séance's synced snippets, run on this server."

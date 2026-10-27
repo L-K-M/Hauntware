@@ -13126,6 +13126,54 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get attentionCancel;
 
+  /// Fleet summary strip (FL-09): servers whose link is up or whose probe answered, out of all.
+  ///
+  /// In en, this message translates to:
+  /// **'{online} of {total} online'**
+  String fleetSummaryOnline(int online, int total);
+
+  /// Fleet summary strip (FL-09): servers with an open problem in the attention queue.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 needs attention} other{{count} need attention}}'**
+  String fleetSummaryAttention(int count);
+
+  /// Fleet summary strip (FL-09): the mean CPU busy share of the servers reporting fresh readings.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU {percent}%'**
+  String fleetSummaryCpu(int percent);
+
+  /// Fleet summary strip (FL-09): memory used and installed, summed over the servers reporting fresh readings.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory {used} of {total}'**
+  String fleetSummaryMemory(String used, String total);
+
+  /// Fleet list filter chip (FL-10): shows only servers with an open problem; the count is how many have one.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Needs attention} other{Needs attention ({count})}}'**
+  String fleetFaultsOnly(int count);
+
+  /// Fleet list chip (FL-10): sorts servers with open problems to the top, most first.
+  ///
+  /// In en, this message translates to:
+  /// **'Attention first'**
+  String get fleetAttentionFirst;
+
+  /// Fleet list (FL-10): shown when the faults-only filter leaves no server.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing needs attention.'**
+  String get fleetNoFaults;
+
+  /// Fleet list (FL-10): turns the faults-only filter off.
+  ///
+  /// In en, this message translates to:
+  /// **'Show all servers'**
+  String get fleetShowAll;
+
   /// Server header button and page title (AUT-01): Séance's synced snippets, run on this server.
   ///
   /// In en, this message translates to:
