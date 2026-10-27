@@ -51,6 +51,32 @@ DockerParseResult<RegistryManifestHead> parseRegistryHead({
 /// The verdict of an update check (03 §7.14 IMG-05).
 enum ImageUpdateStatus { upToDate, updateAvailable, unknown }
 
+/// Why an update check could not decide (03 §7.14 IMG-05, D68).
+enum ImageUpdateIssue {
+  /// No registry answer to compare with.
+  noResult,
+
+  /// The registry wants credentials (`401`): a private registry, read
+  /// through the host CLI instead.
+  unauthorized,
+
+  /// The registry does not know the repository or tag (`404`).
+  notFound,
+
+  /// The source address has spent its quota (`429`).
+  rateLimited,
+
+  /// Any other non-success status.
+  failed,
+
+  /// The registry answered without `Docker-Content-Digest`.
+  noDigest,
+
+  /// The image has no local digest for the repository, e.g. it was built
+  /// on the host and never pulled or pushed.
+  noLocalDigest,
+}
+
 /// One `repo@digest` split (03 §7.14 IMG-05).
 @immutable
 final class RepoDigest {
@@ -75,120 +101,97 @@ final class ImageDigestComparison {
     required this.status,
     required this.repository,
     this.tag,
+    this.issue,
     this.localDigest,
     this.remoteDigest,
-    this.warnings = const [],
   });
 
   final ImageUpdateStatus status;
   final String repository;
   final String? tag;
 
-  /// The matching local digest, when one matched the registry.
+  /// Set exactly when [status] is [ImageUpdateStatus.unknown].
+  final ImageUpdateIssue? issue;
+
+  /// The matching local digest, or the one the registry no longer has.
   final String? localDigest;
 
   /// The registry digest, when the HEAD reported one.
   final String? remoteDigest;
-  final List<String> warnings;
 
   bool get hasUpdate => status == ImageUpdateStatus.updateAvailable;
 }
 
-/// Compares the local `RepoDigests` of an image against a registry HEAD
-/// result (03 §7.14 IMG-05). Pure: the caller supplies the local digests
-/// and the already-parsed HEAD.
+/// Compares an image's local digests with a registry HEAD result (03
+/// §7.14 IMG-05, D68). Pure: the caller supplies the local digests and
+/// the parsed HEAD.
 ///
-/// The containerd image store may report an index digest locally while
-/// the registry HEAD returns a manifest digest (or the reverse); that
-/// case is reported as a warning on an [ImageUpdateStatus.unknown] result
-/// rather than a false update.
+/// The tag is current when the registry digest equals one of:
+/// - the `RepoDigests` entry for [repository] (its familiar name);
+/// - [descriptorDigest], the image's `Descriptor` on the containerd
+///   store;
+/// - one of [availableChildDigests], the index children present locally
+///   (`GET /images/{name}/json?manifests=1`, API 1.48). A push from the
+///   containerd store with only some platforms stores a platform's
+///   manifest while `RepoDigests` keeps the index digest, so without
+///   this a pushed image would always read as updated.
+///
+/// Older daemons give only the first two, which is enough on the classic
+/// store, where a push records the pushed digest.
 ImageDigestComparison compareImageDigest({
   required List<String> repoDigests,
   required String repository,
   String? tag,
   required RegistryManifestHead? remote,
+  String? descriptorDigest,
+  List<String> availableChildDigests = const [],
 }) {
-  final warnings = <String>[];
-  final local = <String>[];
-  for (final d in repoDigests) {
-    final parsed = RepoDigest.tryParse(d);
-    if (parsed == null) {
-      warnings.add('unparseable RepoDigest $d');
-      continue;
-    }
-    if (parsed.repository == repository) local.add(parsed.digest);
-  }
-
-  if (remote == null) {
-    warnings.add('no registry HEAD result for $repository');
-    return ImageDigestComparison(
-      status: ImageUpdateStatus.unknown,
-      repository: repository,
-      tag: tag,
-      warnings: warnings,
-    );
-  }
-  final remoteDigest = remote.digest;
-  if (remoteDigest == null) {
-    warnings.add('registry HEAD for $repository carried no digest');
-    return ImageDigestComparison(
-      status: ImageUpdateStatus.unknown,
-      repository: repository,
-      tag: tag,
-      warnings: warnings,
-    );
-  }
-  if (local.isEmpty) {
-    warnings.add('no local RepoDigests for $repository');
-    return ImageDigestComparison(
-      status: ImageUpdateStatus.unknown,
-      repository: repository,
-      tag: tag,
-      remoteDigest: remoteDigest,
-      warnings: warnings,
-    );
-  }
-  for (final d in local) {
-    if (d == remoteDigest) {
-      return ImageDigestComparison(
-        status: ImageUpdateStatus.upToDate,
+  ImageDigestComparison unknown(ImageUpdateIssue issue, {String? remote}) =>
+      ImageDigestComparison(
+        status: ImageUpdateStatus.unknown,
         repository: repository,
         tag: tag,
-        localDigest: d,
-        remoteDigest: remoteDigest,
+        issue: issue,
+        remoteDigest: remote,
       );
-    }
+
+  if (remote == null) return unknown(ImageUpdateIssue.noResult);
+  if (!remote.isSuccess) {
+    return unknown(switch (remote.statusCode) {
+      401 || 403 => ImageUpdateIssue.unauthorized,
+      404 => ImageUpdateIssue.notFound,
+      429 => ImageUpdateIssue.rateLimited,
+      _ => ImageUpdateIssue.failed,
+    });
   }
-  // An index/manifest mismatch looks like an update but is not; report it
-  // as unknown so the caller does not show a false amber indicator.
-  if (_looksLikeIndexMismatch(remote.mediaType, local, remoteDigest)) {
-    warnings.add(
-      'local and registry digests differ but the media type is an index; '
-      'containerd store comparison is unverified (03 §7.14)',
-    );
+  final remoteDigest = remote.digest;
+  if (remoteDigest == null) return unknown(ImageUpdateIssue.noDigest);
+
+  final named = [
+    for (final d in repoDigests)
+      if (RepoDigest.tryParse(d) case final parsed?
+          when parsed.repository == repository)
+        parsed.digest,
+  ];
+  final local = {...named, ?descriptorDigest};
+  if (local.isEmpty) {
+    return unknown(ImageUpdateIssue.noLocalDigest, remote: remoteDigest);
+  }
+  if (local.contains(remoteDigest) ||
+      availableChildDigests.contains(remoteDigest)) {
     return ImageDigestComparison(
-      status: ImageUpdateStatus.unknown,
+      status: ImageUpdateStatus.upToDate,
       repository: repository,
       tag: tag,
-      localDigest: local.first,
+      localDigest: remoteDigest,
       remoteDigest: remoteDigest,
-      warnings: warnings,
     );
   }
   return ImageDigestComparison(
     status: ImageUpdateStatus.updateAvailable,
     repository: repository,
     tag: tag,
-    localDigest: local.first,
+    localDigest: named.firstOrNull ?? descriptorDigest,
     remoteDigest: remoteDigest,
   );
 }
-
-bool _looksLikeIndexMismatch(
-  String? mediaType,
-  List<String> local,
-  String remoteDigest,
-) =>
-    mediaType != null &&
-    mediaType.contains('index') &&
-    !local.contains(remoteDigest);

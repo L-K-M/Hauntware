@@ -9,6 +9,7 @@ import '../hws/collector.dart' show ArgValidators;
 import '../hws/request.dart' show ShellQuote;
 import '../parse/packages.dart' show PackageManager;
 import '../parse/accounts.dart' show kAccountsGroupMarker, kAccountsWhoMarker;
+import '../parse/registry_heads.dart';
 import 'proc_stat.dart';
 
 /// The first systemd major whose `systemd-analyze calendar` takes
@@ -1386,6 +1387,122 @@ fi
   /// A `-d` type as `--scan-open` prints it: `sat`, `nvme`,
   /// `megaraid,0`, `sat+megaraid,1`.
   static final _smartTypePattern = RegExp(r'^[a-z0-9][a-z0-9_,+-]{0,31}$');
+
+  /// IMG-05's registry read (03 §7.14, D68): for each of [targets], a
+  /// manifest `HEAD` by `curl` on the host, so it goes out through the
+  /// host's network and proxy and spends no Docker Hub quota. Where the
+  /// first answer names a `Bearer` realm over `https`, the script fetches
+  /// that realm's anonymous pull token and asks again; the token goes to
+  /// `curl` on a pipe (`-H @-`), never in an argument another process
+  /// could list. Where the registry still wants credentials, `docker
+  /// buildx imagetools inspect` resolves the reference with the host
+  /// CLI's own credentials. `parseRegistryHeads` reads the output.
+  static List<String> registryHeads(List<RegistryHeadTarget> targets) {
+    if (targets.isEmpty || targets.length > kRegistryHeadsMax) {
+      throw HostCommandError(
+        'between 1 and $kRegistryHeadsMax images',
+        argument: '${targets.length}',
+      );
+    }
+    return [
+      'sh',
+      '-c',
+      _registryHeadsScript,
+      'hws-registry',
+      for (final target in targets) ...[
+        _checked(_registryHost, target.registry),
+        _checked(_registryRepository, target.repository),
+        _checked(_registryTag, target.tag),
+        _checked(_registryReference, target.reference),
+      ],
+    ];
+  }
+
+  // Plain HTTP only for a registry on the host itself, as Docker allows.
+  // curl's own header limit bounds a `HEAD`; `head -c` bounds the token
+  // body and buildx's output. The token is read from the realm's JSON
+  // with sed, since jq is rarely installed.
+  static const _registryHeadsScript =
+      r'''command -v curl >/dev/null 2>&1 || { echo "'''
+      '$kRegistryNoCurlMarker'
+      r'''"; exit 0; }
+a=application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json,application/vnd.oci.image.manifest.v1+json
+b=; docker buildx version >/dev/null 2>&1 && b=1
+while [ $# -ge 4 ]; do
+r=$1; p=$2; t=$3; f=$4; shift 4
+case $r in localhost|localhost:*|127.0.0.1|127.0.0.1:*) s=http;; *) s=https;; esac
+u="$s://$r/v2/$p/manifests/$t"
+echo "'''
+      '$kRegistryImageMarker'
+      r''' $f"
+h=$(curl -sS -I --max-time 20 -H "Accept: $a" "$u" 2>&1); e=$?
+c=$(printf '%s\n' "$h" | tr -d '\r' | grep -i '^www-authenticate: *bearer' | head -n 1)
+if [ -n "$c" ]; then
+m=$(printf '%s' "$c" | sed -n 's/.*realm="\([^"]*\)".*/\1/p')
+v=$(printf '%s' "$c" | sed -n 's/.*service="\([^"]*\)".*/\1/p')
+case $m in https://*)
+k=$(curl -sS --max-time 20 -G --data-urlencode "service=$v" --data-urlencode "scope=repository:$p:pull" "$m" 2>/dev/null | head -c 16384 | sed -n 's/.*"\(access_\)\{0,1\}token" *: *"\([^"]*\)".*/\2/p' | head -n 1)
+if [ -n "$k" ]; then
+h=$(printf 'Authorization: Bearer %s\n' "$k" | curl -sS -I --max-time 20 -H @- -H "Accept: $a" "$u" 2>&1); e=$?
+fi;;
+esac
+fi
+echo "'''
+      '$kRegistryHeadMarker'
+      r''' $e"
+printf '%s\n' "$h" | tr -d '\r' | grep -iE '^(HTTP/|docker-content-digest:|content-type:|ratelimit-|www-authenticate:)'
+x=$(printf '%s\n' "$h" | tr -d '\r' | grep '^HTTP/' | tail -n 1 | cut -d ' ' -f 2)
+if [ "$x" = 401 ] || [ "$x" = 403 ]; then
+if [ -n "$b" ]; then
+o=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$f" 2>&1); y=$?
+echo "'''
+      '$kRegistryCliMarker'
+      r''' $y"
+printf '%s\n' "$o" | head -c '''
+      '$kRegistryCliMaxBytes'
+      r'''; echo
+else echo "'''
+      '$kRegistryCliMarker'
+      r''' missing"; fi
+fi
+done
+exit 0''';
+
+  static String _checked(String? Function(String) validator, String value) {
+    _check(validator, value);
+    return value;
+  }
+
+  static String? _registryHost(String value) =>
+      _registryHostPattern.hasMatch(value) ? null : 'not a registry host';
+
+  static String? _registryRepository(String value) =>
+      value.split('/').every(_registryPathComponent.hasMatch)
+      ? null
+      : 'not a repository path';
+
+  static String? _registryTag(String value) =>
+      _registryTagPattern.hasMatch(value) ? null : 'not an image tag';
+
+  static String? _registryReference(String value) =>
+      _registryReferencePattern.hasMatch(value)
+      ? null
+      : 'not an image reference';
+
+  static final _registryHostPattern = RegExp(r'^[a-zA-Z0-9.-]+(?::[0-9]+)?$');
+  static final _registryPathComponent = RegExp(
+    r'^[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*$',
+  );
+  static final _registryTagPattern = RegExp(r'^\w[\w.-]{0,127}$');
+
+  /// docker_plans' reference shape: an optional host, lower-case path
+  /// components and a tag; no digest, since a pinned image is not checked.
+  static final _registryReferencePattern = RegExp(
+    r'^(?:[a-zA-Z0-9.-]+(?::[0-9]+)?/)?'
+    r'[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*'
+    r'(?:/[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*)*'
+    r'(?::\w[\w.-]{0,127})?$',
+  );
 
   /// `crontab -l -u <user>` for the jobs view's user switch (03 §7.7).
   static List<String> crontabList(String user) {

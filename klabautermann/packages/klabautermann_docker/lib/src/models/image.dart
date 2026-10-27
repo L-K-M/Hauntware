@@ -141,11 +141,22 @@ final class ImageInspect {
     this.variant,
     this.size,
     this.config,
+    this.descriptorDigest,
+    this.availableChildDigests = const [],
   });
 
   final String id;
   final List<String> repoTags;
   final List<String> repoDigests;
+
+  /// `Descriptor.digest` on the containerd image store: the digest the
+  /// image was pulled by, often an index (D68). Null on the classic store.
+  final String? descriptorDigest;
+
+  /// The digests of the index children present locally, from `Manifests`
+  /// when the inspect asked for `manifests=1` (API 1.48, D68): image
+  /// manifests only, attestations left out.
+  final List<String> availableChildDigests;
   final String? parent;
   final String? comment;
   final String? author;
@@ -169,6 +180,7 @@ final class ImageInspect {
 
   static ImageInspect parse(JsonReader r) {
     final config = r.map('Config');
+    final descriptor = r.map('Descriptor');
     return ImageInspect(
       id: r.string('Id') ?? '',
       repoTags: r.stringList('RepoTags'),
@@ -184,8 +196,24 @@ final class ImageInspect {
       config: config == null
           ? null
           : ImageConfig.parse(JsonReader(config, r.warnings)),
+      descriptorDigest: descriptor == null
+          ? null
+          : JsonReader(descriptor, r.warnings).string('digest'),
+      availableChildDigests: [
+        for (final entry in r.list('Manifests') ?? const <Object?>[])
+          if (entry is Map) ?_availableImageChild(asStringMap(entry)),
+      ],
     );
   }
+}
+
+/// One `Manifests` entry's digest when it is an image present locally.
+String? _availableImageChild(Map<String, Object?> entry) {
+  if (entry['Kind'] != 'image' || entry['Available'] != true) return null;
+  final descriptor = entry['Descriptor'];
+  if (descriptor is! Map) return null;
+  final digest = descriptor['digest'];
+  return digest is String ? digest : null;
 }
 
 /// Parses one `GET /images/{name}/json` document; never throws.
