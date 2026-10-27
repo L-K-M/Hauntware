@@ -178,6 +178,31 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('lays out on a narrow phone at 200% text without '
+      'overflowing', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(() {
+      tester.view.reset();
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+    });
+    await openEditor(tester);
+    expect(tester.takeException(), isNull);
+
+    final scrollable = find
+        .descendant(
+          of: find.byType(SingleChildScrollView),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    for (var i = 0; i < 12; i++) {
+      await tester.drag(scrollable, const Offset(0, -300));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'scroll $i');
+    }
+  });
+
   group('Return', () {
     testWidgets('in a one-line field saves the server', (tester) async {
       await openEditor(tester);

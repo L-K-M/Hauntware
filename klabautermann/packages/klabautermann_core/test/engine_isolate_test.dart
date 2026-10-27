@@ -211,6 +211,25 @@ void main() {
       expect(answer.checks.single.failure, TlsCheckFailure.connect);
     });
 
+    test('a port forward needs links, and closing an unknown one changes '
+        'nothing (03 §5.11)', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client
+        ..send(const ClosePortForward('f-0'))
+        ..send(
+          const OpenPortForward(
+            serverId: 'nope',
+            forwardId: 'f-1',
+            host: '127.0.0.1',
+            port: 8080,
+          ),
+        );
+      final answer = (await next(events)) as RequestRejected;
+      expect(answer.reason, 'links are off in this engine');
+    });
+
     test('a host query needs links', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);

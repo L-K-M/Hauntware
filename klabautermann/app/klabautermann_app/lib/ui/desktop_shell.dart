@@ -11,6 +11,7 @@ import 'fleet_rail.dart';
 import 'inspector_pane.dart';
 import 'server_workspace.dart';
 import 'sidebar_kit.dart' show SidebarThemeTokens;
+import 'workspace_dock.dart';
 import 'workspace_navigation.dart';
 
 /// The desktop three-pane shell of 03 §10.2, shown at widths of 960 px
@@ -18,7 +19,8 @@ import 'workspace_navigation.dart';
 /// container the inspector shows, which the workspace's Containers
 /// sub-tab opens ([ContainerInspectionScope]), and the container whose
 /// logs the Docker tab shows, which the inspector or a row opens
-/// ([ContainerLogsScope]).
+/// ([ContainerLogsScope]), and the workspace's bottom dock (OV-10,
+/// [WorkspaceDockScope]).
 class DesktopShell extends StatefulWidget {
   const DesktopShell({
     super.key,
@@ -63,6 +65,9 @@ class _DesktopShellState extends State<DesktopShell> {
   /// selected server too.
   final _logs = ValueNotifier<InspectedContainer?>(null);
 
+  /// The workspace's dock, whose items outlive a change of server.
+  final _dock = WorkspaceDock();
+
   @override
   void initState() {
     super.initState();
@@ -89,6 +94,7 @@ class _DesktopShellState extends State<DesktopShell> {
     widget.fleet.removeListener(_onFleetChanged);
     _inspection.dispose();
     _logs.dispose();
+    _dock.dispose();
     super.dispose();
   }
 
@@ -117,6 +123,11 @@ class _DesktopShellState extends State<DesktopShell> {
       if (container != null && container.serverId != selected) {
         shown.value = null;
       }
+    }
+    // A server that left the fleet takes its dock items, shells included.
+    final known = {for (final server in widget.fleet.servers) server.id};
+    for (final serverId in {for (final item in _dock.items) item.serverId}) {
+      if (!known.contains(serverId)) _dock.forgetServer(serverId);
     }
   }
 
@@ -147,52 +158,55 @@ class _DesktopShellState extends State<DesktopShell> {
                 inspection: _inspection,
                 child: ContainerLogsScope(
                   logs: _logs,
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: DesktopShell.railWidth,
-                        child: _BelowTopInset(
-                          inset: top,
-                          color: SidebarThemeTokens.of(
-                            context,
-                          ).sidebarBackground,
-                          child: FleetRail(
-                            fleet: fleet,
-                            monitoring: monitoring,
-                            onOpenSettings: widget.onOpenSettings,
-                            onAddServer: widget.onAddServer,
-                            sync: widget.sync,
+                  child: WorkspaceDockScope(
+                    dock: _dock,
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: DesktopShell.railWidth,
+                          child: _BelowTopInset(
+                            inset: top,
+                            color: SidebarThemeTokens.of(
+                              context,
+                            ).sidebarBackground,
+                            child: FleetRail(
+                              fleet: fleet,
+                              monitoring: monitoring,
+                              onOpenSettings: widget.onOpenSettings,
+                              onAddServer: widget.onAddServer,
+                              sync: widget.sync,
+                            ),
                           ),
                         ),
-                      ),
-                      VerticalDivider(width: 1, color: colors.outlineVariant),
-                      Expanded(
-                        child: _BelowTopInset(
-                          inset: top,
-                          child: CoverageHeader(
-                            placement: CoveragePlacement.desktopWorkspace,
-                            coverage: widget.coverage,
-                            fleet: fleet,
-                            child: ServerWorkspace(
+                        VerticalDivider(width: 1, color: colors.outlineVariant),
+                        Expanded(
+                          child: _BelowTopInset(
+                            inset: top,
+                            child: CoverageHeader(
+                              placement: CoveragePlacement.desktopWorkspace,
+                              coverage: widget.coverage,
+                              fleet: fleet,
+                              child: ServerWorkspace(
+                                fleet: fleet,
+                                monitoring: monitoring,
+                              ),
+                            ),
+                          ),
+                        ),
+                        VerticalDivider(width: 1, color: colors.outlineVariant),
+                        SizedBox(
+                          width: DesktopShell.inspectorWidth,
+                          child: _BelowTopInset(
+                            inset: top,
+                            color: colors.surfaceContainerLow,
+                            child: InspectorPane(
                               fleet: fleet,
                               monitoring: monitoring,
                             ),
                           ),
                         ),
-                      ),
-                      VerticalDivider(width: 1, color: colors.outlineVariant),
-                      SizedBox(
-                        width: DesktopShell.inspectorWidth,
-                        child: _BelowTopInset(
-                          inset: top,
-                          color: colors.surfaceContainerLow,
-                          child: InspectorPane(
-                            fleet: fleet,
-                            monitoring: monitoring,
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

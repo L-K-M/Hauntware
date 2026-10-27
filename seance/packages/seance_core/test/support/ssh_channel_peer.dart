@@ -33,6 +33,10 @@ const peerRefusalAdministrativelyProhibited =
 const peerRefusalConnectFailed =
     SSH_Message_Channel_Open_Failure.codeConnectFailed;
 
+/// The identification line the fixture's server sends, which a link
+/// reports in [SshLinkSeen.serverIdentification].
+const peerIdentification = 'SSH-2.0-SeanceTestPeer';
+
 /// A connected [SshLink] with the wire fixture behind it, so a test can set
 /// peer knobs before opening a channel and assert against observed traffic
 /// afterwards.

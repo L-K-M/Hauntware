@@ -7744,6 +7744,12 @@ abstract class AppLocalizations {
   /// **'No Engine API route: the chosen socket path is not valid'**
   String get dockerTransportInvalidChoice;
 
+  /// The server header's Docker transport label (03 §5.9, E4) when the docker program path set for the server (CN-16) is not an absolute path.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: the docker program path is not valid'**
+  String get dockerTransportInvalidProgram;
+
   /// Server header: the server allows few SSH sessions, so Docker shares them sparingly (03 §5.2).
   ///
   /// In en, this message translates to:
@@ -7887,6 +7893,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The socket path chosen for this server is not a valid absolute path. Choose another socket below.'**
   String get dockerGateInvalidChoice;
+
+  /// Docker tab, shown instead of its panels under accessPanelHiddenTitle: the docker program path set for the server (CN-16) is not valid.
+  ///
+  /// In en, this message translates to:
+  /// **'The docker program path set for this server is not a valid absolute path.'**
+  String get dockerGateInvalidProgram;
 
   /// Docker tab: asks again for the Docker endpoint or the engine details after a failure.
   ///
@@ -10185,6 +10197,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Show details'**
   String get dockerShellHide;
+
+  /// Tooltip of the desktop workspace's button that opens the bottom dock, with the server's logs when it holds nothing of the server yet (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Show the dock'**
+  String get dockShow;
+
+  /// Tooltip of the button that collapses the desktop workspace's bottom dock to its tabs (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Hide the dock'**
+  String get dockHide;
+
+  /// Screen-reader label of the bottom dock's top edge, which a drag or the arrow keys resize (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Dock height. Use the up and down arrow keys to resize it.'**
+  String get dockResize;
+
+  /// Bottom dock: the tab of the server's journal, followed as the Logs tab reads it (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Logs'**
+  String get dockLogs;
+
+  /// Bottom dock: the tab of a run's output, named for the unit, cron line or snippet that ran (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Output: {name}'**
+  String dockRunOutput(String name);
+
+  /// Bottom dock: the tab of a shell in a container (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Shell: {container}'**
+  String dockShell(String container);
+
+  /// Tooltip of the button on a bottom dock tab that closes it, ending its follow or shell (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Close {name}'**
+  String dockClose(String name);
 
   /// Title of the page that shows a shell in a container (CTX-07).
   ///
@@ -13480,6 +13534,36 @@ abstract class AppLocalizations {
   /// **'{state} · {image}'**
   String paletteContainerDescription(String state, String image);
 
+  /// Overview: button at its end that opens the sheet to reorder and hide its cards (OV-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Arrange cards…'**
+  String get overviewEditCards;
+
+  /// Title of the sheet that arranges the Overview's cards (OV-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Overview cards'**
+  String get overviewCardsTitle;
+
+  /// The sheet that arranges the Overview's cards: under its title.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag a card to move it, or switch it off to hide it on every server. A card a server cannot show stays out there.'**
+  String get overviewCardsHint;
+
+  /// The sheet that arranges the Overview's cards: puts every card back in its default place, shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get overviewCardsReset;
+
+  /// Toast when the Overview's card arrangement applied but could not be written to this device's settings.
+  ///
+  /// In en, this message translates to:
+  /// **'The card arrangement applies now but was not saved, so it lasts until Klabautermann restarts.'**
+  String get overviewCardsNotSaved;
+
   /// Export sheet: switch that adds the server's name and host name to a status card (PLT-08).
   ///
   /// In en, this message translates to:
@@ -13605,6 +13689,210 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{name}-inspect.json'**
   String dockerDetailsRawFileName(String name);
+
+  /// Docker sub-tab (DKE-08): each running container's web addresses and ports, with port forwards.
+  ///
+  /// In en, this message translates to:
+  /// **'Apps'**
+  String get dockerTabApps;
+
+  /// Apps sub-tab, above its content (NET-11, 03 §5.11): what a port forward exposes and when it closes.
+  ///
+  /// In en, this message translates to:
+  /// **'A forward listens on 127.0.0.1 on this device while it is open, and any app on this device can reach it. Forwards close when you leave this server\'s Docker tab.'**
+  String get appsForwardNote;
+
+  /// Apps sub-tab button that opens the dialog for a forward to any host and port the server reaches (NET-11).
+  ///
+  /// In en, this message translates to:
+  /// **'Forward a port…'**
+  String get appsForwardPort;
+
+  /// Apps sub-tab heading over the open and ended port forwards.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwards'**
+  String get appsForwardsTitle;
+
+  /// Apps sub-tab when the container list failed and none was read before.
+  ///
+  /// In en, this message translates to:
+  /// **'The container list could not be read.'**
+  String get appsListFailed;
+
+  /// Apps sub-tab when no running container has a link or a TCP port.
+  ///
+  /// In en, this message translates to:
+  /// **'No running container publishes a TCP port or names a web address.'**
+  String get appsNone;
+
+  /// Button on a container port row that forwards it to this device and opens it in the browser (DKE-08, DKE-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Forward'**
+  String get appsForward;
+
+  /// What assistive technology reads for a port row's Forward button.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward {port}'**
+  String appsForwardLabel(String port);
+
+  /// A published container port: the host address and port Docker publishes it on, then the container port. '*' as the address means every interface.
+  ///
+  /// In en, this message translates to:
+  /// **'{address} → {port}/tcp'**
+  String appsPortPublished(String address, String port);
+
+  /// A container port Docker does not publish; a forward reaches it at the container's address (DKE-09).
+  ///
+  /// In en, this message translates to:
+  /// **'{port}/tcp, not published'**
+  String appsPortUnpublished(String port);
+
+  /// An ended port forward: its target, then why it ended (one of the appsForwardEnd texts).
+  ///
+  /// In en, this message translates to:
+  /// **'{target}: {reason}'**
+  String appsForwardEnded(String target, String reason);
+
+  /// An open port forward: the local port on this device, then the target as the server reaches it.
+  ///
+  /// In en, this message translates to:
+  /// **'127.0.0.1:{localPort} → {target}'**
+  String appsForwardListening(String localPort, String target);
+
+  /// A port forward the engine has not reported listening yet.
+  ///
+  /// In en, this message translates to:
+  /// **'{target}: opening a local port…'**
+  String appsForwardOpening(String target);
+
+  /// Under an open forward whose last connection the server refused (03 §5.3).
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused to forward the last connection. AllowTcpForwarding may be off in its sshd_config.'**
+  String get appsForwardForwardingDisabled;
+
+  /// Under an open forward whose last connection could not open its channel.
+  ///
+  /// In en, this message translates to:
+  /// **'The last connection did not reach {target}.'**
+  String appsForwardConnectFailed(String target);
+
+  /// Under an open forward: how many connections it relays now.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No connections} =1{1 connection} other{{count} connections}}'**
+  String appsForwardConnections(int count);
+
+  /// Tooltip of an open forward's open button.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the forward to {target} in the browser'**
+  String appsForwardOpen(String target);
+
+  /// Tooltip of an open forward's stop button.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop forwarding {target}'**
+  String appsForwardStop(String target);
+
+  /// Tooltip of an ended forward's dismiss button.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss the forward to {target}'**
+  String appsForwardDismiss(String target);
+
+  /// Why a port forward ended, after its target in appsForwardEnded (03 §5.11).
+  ///
+  /// In en, this message translates to:
+  /// **'stopped'**
+  String get appsForwardEndClosed;
+
+  /// Why a port forward ended, after its target in appsForwardEnded (03 §5.11).
+  ///
+  /// In en, this message translates to:
+  /// **'not connected to the server'**
+  String get appsForwardEndNoLink;
+
+  /// Why a port forward ended, after its target in appsForwardEnded (03 §5.11).
+  ///
+  /// In en, this message translates to:
+  /// **'the connection to the server was lost'**
+  String get appsForwardEndLinkLost;
+
+  /// Why a port forward ended, after its target in appsForwardEnded (03 §5.11).
+  ///
+  /// In en, this message translates to:
+  /// **'this device could not open a local port'**
+  String get appsForwardEndBindFailed;
+
+  /// Why a port forward ended, after its target in appsForwardEnded (03 §5.11).
+  ///
+  /// In en, this message translates to:
+  /// **'the host or port is not valid'**
+  String get appsForwardEndInvalidTarget;
+
+  /// Why a port forward ended, after its target in appsForwardEnded (03 §5.11).
+  ///
+  /// In en, this message translates to:
+  /// **'too many forwards are open'**
+  String get appsForwardEndTooMany;
+
+  /// Why a port forward ended, after its target in appsForwardEnded (03 §5.11).
+  ///
+  /// In en, this message translates to:
+  /// **'the server was removed or now names another machine'**
+  String get appsForwardEndForgotten;
+
+  /// Title of the dialog for a forward to any host and port (NET-11).
+  ///
+  /// In en, this message translates to:
+  /// **'Forward a port'**
+  String get appsForwardDialogTitle;
+
+  /// Body of the forward dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann forwards this host and port, as the server reaches them, to a port on this device.'**
+  String get appsForwardDialogBody;
+
+  /// Forward dialog field: the host as the server reaches it.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get appsForwardHost;
+
+  /// Forward dialog field: the port.
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get appsForwardPortField;
+
+  /// Forward dialog error when the host is empty or holds a space or control character.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a host name or address without spaces.'**
+  String get appsForwardHostProblem;
+
+  /// Forward dialog error when the port is not a number from 1 to 65535.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a port from 1 to 65535.'**
+  String get appsForwardPortProblem;
+
+  /// Forward dialog button that closes it without forwarding.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get appsForwardCancel;
+
+  /// Forward dialog button that starts the forward.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward'**
+  String get appsForwardStart;
 }
 
 class _AppLocalizationsDelegate

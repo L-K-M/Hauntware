@@ -432,6 +432,7 @@ final class _SshLink implements SshLink {
   SshLinkSeen get seen => SshLinkSeen(
     learnedSessionLimit: _learnedSessionLimit,
     forwardingRefused: _forwardingRefused,
+    serverIdentification: _clientOrNull?.remoteVersion,
   );
 
   void _setState(SshLinkState next) {

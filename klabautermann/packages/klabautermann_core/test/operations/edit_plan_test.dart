@@ -569,6 +569,7 @@ void main() {
         (name, path) async => (
           project: failure == null ? project : null,
           socketPath: failure == null ? socket : null,
+          dockerProgram: null,
           failure: failure,
         );
 
