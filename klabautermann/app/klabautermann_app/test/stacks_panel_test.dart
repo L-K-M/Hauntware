@@ -127,10 +127,13 @@ const _cli = DockerComposeCli(
 );
 
 final class _Panel {
-  _Panel(this.engine, this.visible);
+  _Panel(this.engine, this.visible, this.request);
 
   final FakeEngineClient engine;
   final ValueNotifier<bool> visible;
+
+  /// The palette's stack request the panel is built with.
+  final ValueNotifier<StackRequest?> request;
 
   List<DockerWatch> get watches => engine.sentOfType<DockerWatch>().cast();
   List<DockerUnwatch> get unwatches =>
@@ -173,9 +176,11 @@ Future<_Panel> _pump(
   final engine = FakeEngineClient();
   final monitoring = MonitoringController(engine, now: () => _now);
   final visible = ValueNotifier(true);
+  final request = ValueNotifier<StackRequest?>(null);
   addTearDown(() async {
     monitoring.dispose();
     visible.dispose();
+    request.dispose();
     await engine.close();
   });
 
@@ -198,12 +203,13 @@ Future<_Panel> _pump(
           body: RepaintBoundary(
             child: ColoredBox(
               color: theme.colorScheme.surface,
-              child: ValueListenableBuilder(
-                valueListenable: visible,
-                builder: (context, shows, _) => StacksPanel(
+              child: ListenableBuilder(
+                listenable: Listenable.merge([visible, request]),
+                builder: (context, _) => StacksPanel(
                   monitoring: monitoring,
                   serverId: _serverId,
-                  visible: shows,
+                  visible: visible.value,
+                  request: request.value,
                 ),
               ),
             ),
@@ -213,7 +219,7 @@ Future<_Panel> _pump(
     ),
   );
   await tester.pumpAndSettle();
-  return _Panel(engine, visible);
+  return _Panel(engine, visible, request);
 }
 
 Finder _row(String name) => find.byKey(ValueKey('stacks.row.$name'));
@@ -627,6 +633,41 @@ void main() {
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a palette request selects its stack, again after another '
+      'was chosen (PLT-07)', (tester) async {
+    final panel = await _pump(tester);
+    await panel.list(tester);
+    panel.request.value = (project: 'metrics', serial: 1);
+    await tester.pumpAndSettle();
+    expect(_inOverview(find.text('metrics')), findsOneWidget);
+
+    await tester.tap(_row('blog'));
+    await tester.pumpAndSettle();
+    expect(_inOverview(find.text('blog')), findsOneWidget);
+
+    // The same stack asked for again: only the serial tells it apart.
+    panel.request.value = (project: 'metrics', serial: 2);
+    await tester.pumpAndSettle();
+    expect(_inOverview(find.text('metrics')), findsOneWidget);
+  });
+
+  testWidgets('a palette request opens its stack on a page of its own on a '
+      'phone (PLT-07)', (tester) async {
+    final panel = await _pump(
+      tester,
+      size: _phone,
+      platform: TargetPlatform.android,
+    );
+    await panel.list(tester);
+    panel.request.value = (project: 'metrics', serial: 1);
+    await tester.pumpAndSettle();
+    expect(find.byType(StackOverviewPage), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('metrics')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('at twice the text size a desktop panel lists the stacks '

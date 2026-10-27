@@ -12983,6 +12983,24 @@
       }
     }
   },
+  "paletteUnits": "{server} units",
+  "@paletteUnits": {
+    "description": "Command palette: the path of the selected server's systemd units.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteStacks": "{server} stacks",
+  "@paletteStacks": {
+    "description": "Command palette: the path of the selected server's compose stacks.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
   "paletteContainerDescription": "{state} · {image}",
   "@paletteContainerDescription": {
     "description": "Command palette: a container row's second line, its state and image.",

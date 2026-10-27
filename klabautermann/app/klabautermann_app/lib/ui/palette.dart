@@ -3,6 +3,8 @@ import 'dart:async' show unawaited;
 import 'package:flutter/widgets.dart'
     show BuildContext, SingleActivator, TargetPlatform;
 import 'package:ghost_ui/ghost_ui.dart' show PaletteCommand;
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show SampleStream, UnitsResult;
 
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
@@ -12,6 +14,7 @@ import 'docker/containers_panel.dart' show containerStateText;
 import 'docker/containers_view.dart' show containerNameOf;
 import 'menus/app_commands.dart';
 import 'server_surfaces.dart' show ServerPanel;
+import 'services_view.dart' show unitDescriptionOf, unitStatesOf;
 import 'workspace_navigation.dart';
 
 /// The command palette's rows (PLT-07, 03 §10.6), each provider's under a
@@ -19,7 +22,8 @@ import 'workspace_navigation.dart';
 /// app's [actions] but the palette's own and the tab commands, every
 /// fleet server, and, while
 /// the window shows the desktop workspace, the selected server's tabs
-/// and the containers its held list names.
+/// and the containers, system units and compose stacks its held lists
+/// name.
 List<PaletteCommand> paletteCommands({
   required AppLocalizations l10n,
   required TargetPlatform platform,
@@ -35,6 +39,20 @@ List<PaletteCommand> paletteCommands({
   final containers = selected == null
       ? null
       : monitoring.docker.containersFor(selected.id).value.containers;
+  final units = switch (selected == null
+      ? null
+      : monitoring.sampleFor(selected.id, SampleStream.units).value?.result) {
+    final UnitsResult result => result.units.units,
+    _ => null,
+  };
+  final stacks = selected == null
+      ? null
+      : monitoring.docker
+            .stacksFor(selected.id)
+            .value
+            .stacks
+            ?.grouping
+            .projects;
   return [
     // The tab commands' rows would repeat the tabs' own, below.
     for (final action in actions)
@@ -86,6 +104,30 @@ List<PaletteCommand> paletteCommands({
             null => containerStateText(l10n, container.state),
           },
           run: () => navigation.openContainer(selected.id, container),
+        ),
+    if (selected != null)
+      for (final unit in units ?? const [])
+        // A row the host misread names no unit the tab could open.
+        if (unitStatesOf(unit).type != null)
+          switch (unitDescriptionOf(unit)) {
+            final description? => PaletteCommand(
+              label: unit.unit,
+              path: l10n.paletteUnits(selected.displayName),
+              description: description,
+              run: () => navigation.openUnit(selected.id, unit.unit),
+            ),
+            null => PaletteCommand(
+              label: unit.unit,
+              path: l10n.paletteUnits(selected.displayName),
+              run: () => navigation.openUnit(selected.id, unit.unit),
+            ),
+          },
+    if (selected != null)
+      for (final project in stacks ?? const [])
+        PaletteCommand(
+          label: project.name,
+          path: l10n.paletteStacks(selected.displayName),
+          run: () => navigation.openStack(selected.id, project.name),
         ),
   ];
 }

@@ -10795,6 +10795,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String paletteUnits(String server) {
+    return '$server units';
+  }
+
+  @override
+  String paletteStacks(String server) {
+    return '$server stacks';
+  }
+
+  @override
   String paletteContainerDescription(String state, String image) {
     return '$state · $image';
   }

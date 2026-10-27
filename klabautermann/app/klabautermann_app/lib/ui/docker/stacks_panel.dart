@@ -33,6 +33,10 @@ const double _listWidth = 280;
 /// text never pushes the list out of sight.
 const double _headerShare = 0.4;
 
+/// A stack the command palette asked to open (PLT-07); [serial] tells
+/// two requests for the same stack apart.
+typedef StackRequest = ({String project, int serial});
+
 /// The Stacks sub-tab (03 §7.16 STK-01, STK-02, STK-05, STK-10): every
 /// compose project the engine groups the containers into, each with its
 /// source verdict ("verified source", "unverified source" with why, or
@@ -52,11 +56,16 @@ class StacksPanel extends StatefulWidget {
     required this.monitoring,
     required this.serverId,
     required this.visible,
+    this.request,
   });
 
   final MonitoringController monitoring;
   final String serverId;
   final bool visible;
+
+  /// The stack last asked for, which the panel selects, or opens on a
+  /// page of its own in the narrow layout, when it arrives.
+  final StackRequest? request;
 
   @override
   State<StacksPanel> createState() => _StacksPanelState();
@@ -70,12 +79,16 @@ class _StacksPanelState extends State<StacksPanel> {
   /// when unset or gone. It outlives sub-tab switches.
   String? _selected;
 
+  /// The stack asked for, whose page the narrow layout has yet to open.
+  String? _pendingPage;
+
   DockerController get _docker => widget.monitoring.docker;
 
   @override
   void initState() {
     super.initState();
     _sync();
+    _follow(widget.request);
   }
 
   @override
@@ -85,8 +98,16 @@ class _StacksPanelState extends State<StacksPanel> {
       // Another server's stacks.
       _release();
       _selected = null;
+      _pendingPage = null;
     }
     _sync();
+    if (widget.request != oldWidget.request) _follow(widget.request);
+  }
+
+  void _follow(StackRequest? request) {
+    if (request == null) return;
+    _selected = request.project;
+    _pendingPage = request.project;
   }
 
   @override
@@ -231,8 +252,18 @@ class _StacksPanelState extends State<StacksPanel> {
     }
 
     if (!wide) {
+      // A requested stack opens on its page once the list shows.
+      if (_pendingPage case final project?) {
+        _pendingPage = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _openPage(project);
+        });
+      }
       return _list(stacks, selected: null, onOpen: _openPage);
     }
+
+    // The wide layout shows the requested stack as [_selected].
+    _pendingPage = null;
 
     final selected = switch (_selected) {
       final name? when stackNamed(stacks, name) != null => name,

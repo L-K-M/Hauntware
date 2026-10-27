@@ -13738,6 +13738,18 @@ abstract class AppLocalizations {
   /// **'{server} containers'**
   String paletteContainers(String server);
 
+  /// Command palette: the path of the selected server's systemd units.
+  ///
+  /// In en, this message translates to:
+  /// **'{server} units'**
+  String paletteUnits(String server);
+
+  /// Command palette: the path of the selected server's compose stacks.
+  ///
+  /// In en, this message translates to:
+  /// **'{server} stacks'**
+  String paletteStacks(String server);
+
   /// Command palette: a container row's second line, its state and image.
   ///
   /// In en, this message translates to:
