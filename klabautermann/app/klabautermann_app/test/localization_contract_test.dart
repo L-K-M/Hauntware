@@ -96,6 +96,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/log_display.dart': {
     r"'The log display was not saved: $error'",
   },
+  // A pin's stored form (`<scope>/<unit>`) and the not-saved diagnostic;
+  // the unit page shows its own ARB toast (quickActionsPinNotSaved).
+  'lib/controllers/pinned_services.dart': {
+    r"'${scope.name}/$unit'",
+    "'/'",
+    r"'The pinned services were not saved: $error'",
+  },
   // The not-saved diagnostic; the fleet board prints it and shows its own
   // ARB text (fleetDensityNotSaved).
   'lib/controllers/fleet_density.dart': {
@@ -927,6 +934,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
   // debugPrint of a failed theme change; the toast is ARB text.
+  // The Poltergeist link's root folder, and the pin's diagnostic.
+  'lib/ui/quick_actions.dart': {"'/'", r"'$error'"},
   'lib/ui/fleet_board.dart': {r"'$error'"},
   'lib/ui/settings_page.dart': {r"'$error'"},
   'lib/ui/thresholds_tab.dart': {r"'$error'"},

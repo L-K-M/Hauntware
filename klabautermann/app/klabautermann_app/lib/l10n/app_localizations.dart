@@ -568,6 +568,54 @@ abstract class AppLocalizations {
   /// **'Stale · {age}'**
   String fleetRowStaleAge(String age);
 
+  /// Overview (OV-08): the heading of the quick actions card.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick actions'**
+  String get quickActionsTitle;
+
+  /// Overview quick actions (OV-08): opens the server's files in Poltergeist.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse files in Poltergeist'**
+  String get quickActionsFiles;
+
+  /// Overview quick actions (OV-08): restarts a service pinned from its page in the Services tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart {unit}'**
+  String quickActionsRestart(String unit);
+
+  /// Overview quick actions (OV-08): reboots the server, through the same preview as the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Reboot'**
+  String get quickActionsReboot;
+
+  /// A unit's page (OV-08): tooltip of the pin that adds a restart button for the unit to the Overview.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin to the Overview\'s quick actions'**
+  String get quickActionsPin;
+
+  /// A unit's page (OV-08): tooltip of the pin while the unit is pinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin from the Overview\'s quick actions'**
+  String get quickActionsUnpin;
+
+  /// A unit's page (OV-08): tooltip of the disabled pin when the server holds as many pins as it takes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{One service is already pinned, the most this server takes} other{{count} services are already pinned, the most this server takes}}'**
+  String quickActionsPinFull(int count);
+
+  /// A unit's page (OV-08): toast when a pin applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The pin changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get quickActionsPinNotSaved;
+
   /// The fleet board (FL-08): the label before its layout picker, shown in the desktop workspace while no server is open.
   ///
   /// In en, this message translates to:
@@ -1281,6 +1329,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dismiss'**
   String get fleetServerLeftDismiss;
+
+  /// Shown beside the fleet list on a tablet while no server is selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a server to see it here.'**
+  String get fleetSplitChooseServer;
 
   /// The Processes tab before the server sent its first process list (PRC-01).
   ///
