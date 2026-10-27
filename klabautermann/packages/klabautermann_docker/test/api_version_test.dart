@@ -229,6 +229,11 @@ void main() {
       expect(gates(51).hasImageContainersCount, isTrue);
     });
 
+    test('image inspect manifests from 1.48', () {
+      expect(gates(47).hasImageManifests, isFalse);
+      expect(gates(48).hasImageManifests, isTrue);
+    });
+
     test('event shape v2 from 1.52', () {
       expect(gates(51).usesEventV2, isFalse);
       expect(gates(52).usesEventV2, isTrue);

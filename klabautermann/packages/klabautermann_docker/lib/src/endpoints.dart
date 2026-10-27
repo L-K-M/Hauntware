@@ -450,15 +450,18 @@ extension DockerEndpoints on DockerClient {
     );
   }
 
-  /// `GET /images/{name}/json` (03 §7.14 IMG-01, IMG-04).
+  /// `GET /images/{name}/json` (03 §7.14 IMG-01, IMG-04); [manifests]
+  /// adds the index children (IMG-05), from API 1.48 only.
   Future<DockerParseResult<ImageInspect>> inspectImage(
     String name, {
+    bool manifests = false,
     Duration? timeout,
     DockerCancelToken? cancelToken,
   }) async {
     final res = await request(
       'GET',
       '/images/${_seg(name)}/json',
+      query: {if (manifests && gates.hasImageManifests) 'manifests': '1'},
       timeout: timeout,
       cancelToken: cancelToken,
     );

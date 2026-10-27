@@ -67,9 +67,11 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         EnvVar,
         ExternalManager,
         HealthStatus,
+        ImageDigestComparison,
         ImageSummary,
         MaskedValue,
         NetworkSummary,
+        RegistryRateLimit,
         SystemDf,
         VolumeSummary;
 import 'package:meta/meta.dart';
@@ -309,6 +311,10 @@ import '../operations/plan_types.dart';
 ///
 /// Per-server polling caps then joined v3 the same way (02 SAF-19, M6
 /// plan N64): [SetServerCadenceCap].
+///
+/// Update checks then joined v3 the same way (03 §7.14 IMG-05, M6 plan
+/// N15): [DockerImageUpdatesQuery], answered by
+/// [DockerImageUpdatesPayload].
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -4242,6 +4248,16 @@ final class DockerImageHistoryQuery extends DockerQuerySpec {
   final String image;
 }
 
+/// IMG-05's digest update check for every tagged image (D68): rows read
+/// within six hours are kept unless [refresh]. Answered by
+/// [DockerImageUpdatesPayload].
+final class DockerImageUpdatesQuery extends DockerQuerySpec {
+  const DockerImageUpdatesQuery({this.refresh = false});
+
+  /// Reads every reference again, as the Check now action does.
+  final bool refresh;
+}
+
 /// Disk use by type (02 OV-05): `/system/df` without `verbose`, which
 /// the daemon computes by walking images, containers, volumes and the
 /// build cache, so the app asks for it only on demand. Answered by
@@ -4424,6 +4440,58 @@ final class ImageLayer {
   final int? size;
   final String? comment;
   final List<String> tags;
+}
+
+/// How an update check read the registry digest (D68).
+enum ImageUpdateRoute {
+  /// A manifest `HEAD` by curl on the host.
+  registry,
+
+  /// `docker buildx imagetools inspect` with the host CLI's credentials.
+  hostCli,
+}
+
+/// One reference's update check (IMG-05).
+@immutable
+final class ImageUpdateRow {
+  const ImageUpdateRow({
+    required this.reference,
+    required this.imageId,
+    required this.comparison,
+    required this.checkedAt,
+    this.route,
+    this.cliMissing = false,
+    this.rateLimit,
+  });
+
+  /// The tag as the image list names it, e.g. `alpine:3.22`.
+  final String reference;
+  final String imageId;
+  final ImageDigestComparison comparison;
+  final DateTime checkedAt;
+
+  /// Null when no digest came back.
+  final ImageUpdateRoute? route;
+
+  /// The registry wants credentials and the host has no buildx plugin.
+  final bool cliMissing;
+
+  /// Docker Hub's count for the host's address, when it sent one.
+  final RegistryRateLimit? rateLimit;
+}
+
+/// The update check (IMG-05): a row per tagged image that has been
+/// checked, fresh or kept from an earlier check.
+final class DockerImageUpdatesPayload extends DockerPayload {
+  DockerImageUpdatesPayload(
+    Iterable<ImageUpdateRow> rows, {
+    this.curlMissing = false,
+  }) : rows = List.unmodifiable(rows);
+
+  final List<ImageUpdateRow> rows;
+
+  /// The host has no `curl`, so this check read no registry.
+  final bool curlMissing;
 }
 
 /// The image list (IMG-01), labels masked by key.

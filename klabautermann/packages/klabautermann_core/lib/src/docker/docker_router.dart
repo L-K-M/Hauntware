@@ -66,6 +66,7 @@ import 'container_logs.dart';
 import 'container_review.dart';
 import 'docker_ladder.dart';
 import 'docker_watch.dart';
+import 'image_updates.dart';
 import 'inspect_masking.dart';
 import 'stack_sources.dart';
 
@@ -168,6 +169,10 @@ final class DockerRouter {
   /// socket itself. Kept apart from the sessions, which a disconnect
   /// ends, so a choice holds across links until the server is forgotten.
   final Map<String, DockerEndpointSocket> _choices = {};
+
+  /// Each server's update checks (IMG-05), kept like the choices so a
+  /// reconnect does not read every registry again inside six hours.
+  final Map<String, ImageUpdateCache> _imageUpdates = {};
 
   /// The session of each open container log stream, by stream id.
   final Map<String, _Session> _logOwners = {};
@@ -503,6 +508,7 @@ final class DockerRouter {
     for (final serverId in serverIds) {
       _profiles.remove(serverId);
       _choices.remove(serverId);
+      _imageUpdates.remove(serverId);
       disconnect(serverId);
     }
   }
@@ -627,32 +633,44 @@ final class DockerRouter {
     session.resolving = false;
     switch (outcome) {
       case _Ready(:final endpoint):
-        endpoint.stacks = StackSources(
-          socketPath: endpoint.route.socketPath,
-          run: (command, {required timeout, required maxOutputBytes}) async {
-            // A background check does not wait for a session the samplers
-            // hold at the link's learned limit, nor borrow one (M6). Other
-            // checks and the pooled connection give theirs back, so a check
-            // behind them queues for its slot instead.
-            if (leavesNoSession(
-              learnedSessionLimit: link.seen.learnedSessionLimit,
-              inUse: _samplerSessions?.call(session.serverId) ?? 0,
-            )) {
-              throw const StackCheckWaiting();
-            }
-            return await _shortAction(
-              session,
-              link,
-              () => link.run(
-                command,
-                timeout: timeout,
-                maxOutputBytes: maxOutputBytes,
-              ),
-            );
-          },
-          openFileSystem: link.openFileSystem,
-          admin: () => _adminFor?.call(session.serverId),
-        );
+        Future<RemoteCommandResult> run(
+          String command, {
+          required Duration timeout,
+          required int maxOutputBytes,
+        }) async {
+          // A background check does not wait for a session the samplers
+          // hold at the link's learned limit, nor borrow one (M6). Other
+          // checks and the pooled connection give theirs back, so a check
+          // behind them queues for its slot instead.
+          if (leavesNoSession(
+            learnedSessionLimit: link.seen.learnedSessionLimit,
+            inUse: _samplerSessions?.call(session.serverId) ?? 0,
+          )) {
+            throw const StackCheckWaiting();
+          }
+          return await _shortAction(
+            session,
+            link,
+            () => link.run(
+              command,
+              timeout: timeout,
+              maxOutputBytes: maxOutputBytes,
+            ),
+          );
+        }
+
+        endpoint
+          ..hostRun = run
+          ..imageUpdates = _imageUpdates.putIfAbsent(
+            session.serverId,
+            ImageUpdateCache.new,
+          )
+          ..stacks = StackSources(
+            socketPath: endpoint.route.socketPath,
+            run: run,
+            openFileSystem: link.openFileSystem,
+            admin: () => _adminFor?.call(session.serverId),
+          );
         session
           ..endpoint = endpoint
           ..retries = 0;
@@ -935,6 +953,17 @@ final class DockerRouter {
           return read(
             DockerImageHistoryPayload(maskImageHistory(history.value)),
             history.warnings,
+          );
+        case DockerImageUpdatesQuery(:final refresh):
+          return read(
+            await checkImageUpdates(
+              client: client,
+              run: endpoint.hostRun,
+              cache: endpoint.imageUpdates,
+              now: _now(),
+              refresh: refresh,
+            ),
+            const [],
           );
         case DockerComposeQuery():
           return read(switch (await endpoint.stacks.detectCli()) {
@@ -1454,6 +1483,12 @@ final class _Endpoint implements ContainerLogTarget {
 
   /// The stack checks over the link this endpoint was found on.
   late final StackSources stacks;
+
+  /// Runs a short command over that link, as the stack checks do.
+  late final StackCommandRunner hostRun;
+
+  /// The server's update checks, kept by the router across endpoints.
+  late final ImageUpdateCache imageUpdates;
 
   /// The client at [api], over a pool opened again after an idle close.
   DockerClient get client =>

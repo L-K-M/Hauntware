@@ -22,6 +22,7 @@ export 'src/api_version.dart'
         apiVersionVolumePruneAll,
         apiVersionEventV2,
         apiVersionImageContainers,
+        apiVersionImageManifests,
         apiVersionLogsContentType,
         apiVersionSystemDf152,
         apiVersionSystemDf153,

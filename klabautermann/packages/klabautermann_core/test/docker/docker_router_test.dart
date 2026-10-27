@@ -1087,6 +1087,50 @@ void main() {
       final cli = (await h.result(id) as DockerComposePayload).composeCli;
       expect((cli.pluginVersion, cli.standaloneVersion), (null, null));
     });
+
+    test('an update check reads the registry on the host once, and keeps '
+        'its rows for the next query (IMG-05)', () async {
+      const index =
+          'sha256:a100000000000000000000000000000000000000000000000000000000000000';
+      final h = _Harness();
+      h.forwarding
+        ..daemons[_rootful] = (EngineDaemon()
+          ..routes['/v1.52/images/json'] = jsonEncode([
+            {
+              'Id': 'sha256:i1',
+              'RepoTags': ['alpine:3.22'],
+              'RepoDigests': ['alpine@$index'],
+            },
+          ])
+          ..routes['/v1.52/images/sha256%3Ai1/json'] = jsonEncode({
+            'Id': 'sha256:i1',
+            'RepoDigests': ['alpine@$index'],
+          }))
+        ..answer = (command) => command.contains('hws-registry')
+            ? Future.value(
+                const RemoteCommandResult(
+                  stdout:
+                      '== image alpine:3.22\n== head 0\nHTTP/2 200 \n'
+                      'docker-content-digest: $index\n',
+                  exitCode: 0,
+                ),
+              )
+            : null;
+      await h.open();
+      await h.resolve(_profile([_rootful]));
+
+      for (var round = 0; round < 2; round++) {
+        final id = h.query(const DockerImageUpdatesQuery());
+        final rows = (await h.result(id) as DockerImageUpdatesPayload).rows;
+        expect(rows.single.reference, 'alpine:3.22');
+        expect(rows.single.comparison.status, ImageUpdateStatus.upToDate);
+      }
+      expect(h.forwarding.commands, hasLength(1));
+      expect(
+        h.forwarding.daemons[_rootful]!.requests,
+        contains(contains('/images/sha256%3Ai1/json?manifests=1')),
+      );
+    });
   });
 
   group('session ends', () {
