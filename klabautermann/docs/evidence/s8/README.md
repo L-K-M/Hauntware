@@ -69,7 +69,11 @@ registry, account and random password; no credential is in either file.
    digest. Its error after a logout shows that it resolves with a `HEAD`.
    `docker manifest inspect` needs `--insecure` for a plain-HTTP
    registry; without it, it says "no such manifest", and with `-v` it
-   prints the digest.
+   prints a single manifest's digest. For an index it prints only the
+   children: a follow-up run pushed a one-child index
+   (`docker manifest create` and `push`, digest `36df10af…`) to a second
+   local registry, and `-v` listed the child `dc92f017…` while buildx and
+   a `HEAD` both named `36df10af…`.
 
 ## What it does not cover
 

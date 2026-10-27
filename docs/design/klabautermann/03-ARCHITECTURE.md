@@ -1308,14 +1308,16 @@ Proposals awaiting the owner close the section; they are not decisions.
   - A private registry answers `401` with a `Basic` challenge.
     `docker buildx imagetools inspect` reads the CLI's credentials and
     returns the digest, resolving with a `HEAD`. `docker manifest inspect
-    -v` does too, but needs `--insecure` for a plain-HTTP registry.
+    -v` gives a single manifest's digest, but for an index it lists only
+    the children, never the index digest, and it needs `--insecure` for
+    a plain-HTTP registry.
 
   The check therefore runs as follows:
   1. On the host, `curl -sI` with the realm's anonymous token where the
      first answer names a Bearer realm.
   2. On a `Basic` challenge or a `401` after the token, buildx
-     `imagetools inspect`, then `docker manifest inspect -v`. With neither
-     plugin it says the host's Docker CLI cannot read the registry.
+     `imagetools inspect`. Without the plugin it says the host's Docker
+     CLI cannot read the registry.
   3. A tag is current when the registry digest equals the repository's
      `RepoDigests` entry, the image's `Descriptor` digest, or an
      available child from `manifests=1` (on daemons below API 1.48, the
@@ -1332,7 +1334,9 @@ Proposals awaiting the owner close the section; they are not decisions.
   - DistributionInspect as the default: it spends a pull per check and
     needs credentials the device does not hold before REG-02;
   - comparing `RepoDigests` alone: it reports an update for every image
-    pushed from a containerd store that holds only some platforms.
+    pushed from a containerd store that holds only some platforms;
+  - `docker manifest inspect -v` as the CLI fallback: it cannot name an
+    index's digest, so a multi-platform tag would never compare.
 
 ### Persistence, alerts and tiers
 
@@ -4406,8 +4410,7 @@ TLS. The section checks when it shows, after an edit and on request.
   the last resort with a quota warning; results cached 6 h per repository
   and tag; on the containerd image store the registry digest also matches
   an available child of the local index (D68); private registries through
-  the host's `docker buildx imagetools inspect` or `docker manifest
-  inspect -v` (D68). Prune unused images through the DKE-05 preview.
+  the host's `docker buildx imagetools inspect` (D68). Prune unused images through the DKE-05 preview.
 - **v1.x.** Update shelf; safe update (pull first, record previous digests,
   recreate, wait for health, roll back automatically, all run host-side as a
   detached operation, with host-side deploy history); semver advisories;
