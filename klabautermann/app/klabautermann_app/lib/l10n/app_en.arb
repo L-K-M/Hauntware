@@ -12753,6 +12753,210 @@
   "@paletteCommand": {
     "description": "View menu: opens the command palette (PLT-07), ⌘K or Ctrl+K."
   },
+  "viewPanelCommand": "Go to {panel}",
+  "@viewPanelCommand": {
+    "description": "View menu: shows a tab of the selected server's workspace (PLT-06), ⌘1 to ⌘8 or Ctrl+1 to Ctrl+8. The tab's name.",
+    "placeholders": {
+      "panel": {
+        "type": "String",
+        "example": "Overview"
+      }
+    }
+  },
+  "keyboardMapCommand": "Keyboard Shortcuts",
+  "@keyboardMapCommand": {
+    "description": "Help menu: lists the keys the app takes (PLT-06), ⌘/ or Ctrl+/."
+  },
+  "keyboardMapTitle": "Keyboard shortcuts",
+  "@keyboardMapTitle": {
+    "description": "Keyboard map dialog title (PLT-06)."
+  },
+  "keyboardMapList": "In this list",
+  "@keyboardMapList": {
+    "description": "Keyboard map: heading of the focused list's keys."
+  },
+  "keyboardMapEverywhere": "Everywhere",
+  "@keyboardMapEverywhere": {
+    "description": "Keyboard map: heading of the keys every window takes."
+  },
+  "keyboardMapClose": "Close",
+  "@keyboardMapClose": {
+    "description": "Keyboard map: closes the dialog."
+  },
+  "keyboardMapEscapeKeys": "Esc",
+  "@keyboardMapEscapeKeys": {
+    "description": "Keyboard map: the Escape key's name."
+  },
+  "keyboardMapEscape": "Close the dialog, sheet or page on top",
+  "@keyboardMapEscape": {
+    "description": "Keyboard map: what Escape does."
+  },
+  "keyboardMapMoveKeys": "↑ ↓  or  J K",
+  "@keyboardMapMoveKeys": {
+    "description": "Keyboard map: the keys that move between rows."
+  },
+  "keyboardMapMove": "Move between rows",
+  "@keyboardMapMove": {
+    "description": "Keyboard map: what the arrow keys and J and K do in a list."
+  },
+  "keyboardMapOpenKeys": "Enter",
+  "@keyboardMapOpenKeys": {
+    "description": "Keyboard map: the key that opens the active row."
+  },
+  "keyboardMapOpen": "Open the row",
+  "@keyboardMapOpen": {
+    "description": "Keyboard map: what Enter does in a list."
+  },
+  "keyboardMapRowActionsKeys": "Shift+F10",
+  "@keyboardMapRowActionsKeys": {
+    "description": "Keyboard map: the keys that open a row's actions (the context-menu key does too)."
+  },
+  "keyboardMapRowActions": "Show the row's actions",
+  "@keyboardMapRowActions": {
+    "description": "Keyboard map: what Shift+F10 does in a list."
+  },
+  "keyboardMapFilter": "Filter the list",
+  "@keyboardMapFilter": {
+    "description": "Keyboard map: what / does in a list with a filter field."
+  },
+  "keyboardMapShow": "Show these shortcuts",
+  "@keyboardMapShow": {
+    "description": "Keyboard map: what ? does in a list."
+  },
+  "keyActionLogs": "Show logs",
+  "@keyActionLogs": {
+    "description": "Single-key verb (L) in a list: opens the row's logs (PLT-06)."
+  },
+  "keyActionShell": "Open a shell",
+  "@keyActionShell": {
+    "description": "Single-key verb (S) in the containers list: opens a shell in the container (PLT-06)."
+  },
+  "keyActionRestart": "Restart",
+  "@keyActionRestart": {
+    "description": "Single-key verb (R) in a list: asks to restart the row's container or unit, with its confirmation (PLT-06)."
+  },
+  "diskExplorerOpen": "Explore space",
+  "@diskExplorerOpen": {
+    "description": "A mount's details: opens the disk space explorer on the mount (DSK-07)."
+  },
+  "diskExplorerTitle": "Space on {mount}",
+  "@diskExplorerTitle": {
+    "description": "Disk space explorer title: the mount point it explores.",
+    "placeholders": {
+      "mount": {
+        "type": "String",
+        "example": "/var"
+      }
+    }
+  },
+  "diskExplorerRefresh": "Read again",
+  "@diskExplorerRefresh": {
+    "description": "Disk space explorer: reads the shown folder again."
+  },
+  "diskExplorerUp": "Up a folder",
+  "@diskExplorerUp": {
+    "description": "Disk space explorer: shows the folder above, never above the mount point."
+  },
+  "diskExplorerAsRoot": "Read as root",
+  "@diskExplorerAsRoot": {
+    "description": "Disk space explorer, in admin mode: reads folders as root."
+  },
+  "diskExplorerAsRootDetail": "Counts what the login user may not read.",
+  "@diskExplorerAsRootDetail": {
+    "description": "Disk space explorer: what reading as root changes."
+  },
+  "diskExplorerReading": "Reading {path}… A large folder takes a while.",
+  "@diskExplorerReading": {
+    "description": "Disk space explorer: a folder is being read with du.",
+    "placeholders": {
+      "path": {
+        "type": "String",
+        "example": "/var"
+      }
+    }
+  },
+  "diskExplorerRetry": "Try again",
+  "@diskExplorerRetry": {
+    "description": "Disk space explorer: reads a folder that failed again."
+  },
+  "diskExplorerTotal": "{size} in this folder",
+  "@diskExplorerTotal": {
+    "description": "Disk space explorer: the shown folder's total size.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "4.2 GB"
+      }
+    }
+  },
+  "diskExplorerIncomplete": "Some folders here could not be read as the login user, so the sizes are at least this. Turn on admin mode to read them as root.",
+  "@diskExplorerIncomplete": {
+    "description": "Disk space explorer: du could not read part of the folder; admin mode is off."
+  },
+  "diskExplorerIncompleteAdmin": "Some folders here could not be read as the login user, so the sizes are at least this. Read as root to count them.",
+  "@diskExplorerIncompleteAdmin": {
+    "description": "Disk space explorer: du could not read part of the folder; admin mode is on."
+  },
+  "diskExplorerIncompleteAsRoot": "Some folders here could not be read even as root, so the sizes are at least this.",
+  "@diskExplorerIncompleteAsRoot": {
+    "description": "Disk space explorer: du could not read part of the folder as root."
+  },
+  "diskExplorerTruncated": "Showing the {count} largest entries.",
+  "@diskExplorerTruncated": {
+    "description": "Disk space explorer: the folder holds more entries than listed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1000"
+      }
+    }
+  },
+  "diskExplorerEmpty": "This folder is empty.",
+  "@diskExplorerEmpty": {
+    "description": "Disk space explorer: a folder with no entries."
+  },
+  "diskExplorerEntrySize": "{size} · {percent} %",
+  "@diskExplorerEntrySize": {
+    "description": "Disk space explorer: an entry's size and its share of the folder.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "1.2 GB"
+      },
+      "percent": {
+        "type": "int",
+        "example": "42"
+      }
+    }
+  },
+  "diskExplorerNoLink": "Not connected, so nothing was read.",
+  "@diskExplorerNoLink": {
+    "description": "Disk space explorer failure: no link."
+  },
+  "diskExplorerAdminRequired": "Reading as root needs admin mode.",
+  "@diskExplorerAdminRequired": {
+    "description": "Disk space explorer failure: an elevated read without admin mode."
+  },
+  "diskExplorerRefused": "Elevation was refused, so nothing was read.",
+  "@diskExplorerRefused": {
+    "description": "Disk space explorer failure: sudo refused."
+  },
+  "diskExplorerNotFound": "This folder is not there any more.",
+  "@diskExplorerNotFound": {
+    "description": "Disk space explorer failure: the folder is gone."
+  },
+  "diskExplorerDenied": "The login user may not read this folder. Turn on admin mode to read it as root.",
+  "@diskExplorerDenied": {
+    "description": "Disk space explorer failure: permission denied."
+  },
+  "diskExplorerUnreadable": "du is not installed on this server, or printed something else.",
+  "@diskExplorerUnreadable": {
+    "description": "Disk space explorer failure: du missing or unreadable output."
+  },
+  "diskExplorerTransport": "The read failed or ran past its 3 minutes. Try a folder further down.",
+  "@diskExplorerTransport": {
+    "description": "Disk space explorer failure: link failed or the read timed out (kDiskUsageTimeout)."
+  },
   "paletteActions": "Actions",
   "@paletteActions": {
     "description": "Command palette: the path of the app's menu commands."

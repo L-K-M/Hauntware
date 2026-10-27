@@ -36,6 +36,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/accounts.dart': {"', '", r"'${account.uid}'", "''", "','"},
   // An account read's request id, matched in the engine's answer.
   'lib/controllers/account_reads.dart': {r"'accounts-${_count++}'"},
+  'lib/controllers/disk_usage_reads.dart': {r"'disk-usage-${_count++}'"},
+  // A folder's path on the server, built from its parent and its name.
+  'lib/ui/disk_explorer.dart': {"'/'", r"'/$name'", r"'$_path/$name'"},
   // A timer detail read's request id, matched in the engine's answer.
   'lib/controllers/timer_detail_reads.dart': {r"'timer-detail-${_count++}'"},
   'lib/app.dart': {
@@ -96,9 +99,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The not-saved diagnostic; the General tab prints it and shows its own
   // ARB text (settingsLogDisplayNotSaved).
   // Forward ids the app mints for the engine (NET-11).
-  'lib/controllers/port_forwards.dart': {
-    r"'forward-${_count++}'",
-  },
+  'lib/controllers/port_forwards.dart': {r"'forward-${_count++}'"},
   // The Apps sub-tab's Docker list values (state, network mode, port
   // type, bound addresses), the loopback address and scheme a forward
   // opens at, and host:port notation, none of them prose (DKE-08).
@@ -894,6 +895,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'fleet.importSshConfig'",
     "'app.quit'",
     "'app.commandPalette'",
+    "'app.keyboardShortcuts'",
+    r"'view.panel.${panel.name}'",
   },
   'lib/ui/menus/app_menu_host.dart': {
     // A FocusNode debug label.
@@ -985,6 +988,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${widget.tableId}.column.${column.id}'",
     r"'${widget.tableId}.rowActions.$key'",
     r"'${widget.tableId}.row.$key'",
+    // The keys `/` and `?`, bound and named as the keyboard shows them.
+    "'/'",
+    "'?'",
   },
   // What systemd-detect-virt prints for no virtualization, compared with
   // the probe's answer; the System tab shows ARB text for it

@@ -1330,7 +1330,7 @@ void main() {
 
       await panel.all(tester, _container);
       expect(tester.takeException(), isNull);
-      await expectDetails(['1.7 TiB of 2 TiB']);
+      await expectDetails(['1.7 TiB of 2 TiB', 'Explore space']);
 
       await panel.sample(
         tester,

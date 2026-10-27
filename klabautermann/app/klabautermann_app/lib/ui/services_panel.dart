@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:ghost_ui/ghost_ui.dart' show ghostIsDesktopPlatform;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -9,6 +10,7 @@ import '../controllers/log_reads.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
+import 'actions/action_preview.dart' show startAction;
 import 'actions/host_actions.dart';
 import 'quick_actions.dart' show PinServiceButton;
 import 'failed_units_summary.dart';
@@ -410,6 +412,34 @@ class _ServicesPanelState extends State<ServicesPanel> {
         sort: _sort,
         onSort: (sort) => setState(() => _sort = sort),
         onRowActivated: _openUnit,
+        // `l` opens the unit's page, which leads with its logs on a
+        // desktop; `r` restarts it through the action's confirmation
+        // (PLT-06).
+        keyActions: [
+          TableKeyAction(
+            key: LogicalKeyboardKey.keyL,
+            label: l10n.keyActionLogs,
+            run: _openUnit,
+          ),
+          if (actionsAllowedAt(
+            context,
+            widget.serverId,
+            ActionEntryPoint.unitVerb,
+          ))
+            TableKeyAction(
+              key: LogicalKeyboardKey.keyR,
+              label: l10n.keyActionRestart,
+              run: (unit) => startAction(
+                context,
+                UnitAction(
+                  widget.serverId,
+                  unit: unit.unit,
+                  verb: SystemctlVerb.restart,
+                  scope: _scope,
+                ),
+              ),
+            ),
+        ],
         // SVC-03's verbs where actions are allowed (M4 E21). Without them
         // the table keeps no slot, as before.
         rowActions:

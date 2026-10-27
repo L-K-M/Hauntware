@@ -3614,6 +3614,30 @@ the guarded kill needs it.
   when it shows and on request, and lists each swap partition or file
   with how much is used of its size and its priority, the device used
   first at the top.
+- **As built (M6 N32).** DSK-07 reads one folder at a time:
+  `HostCommands.diskUsage` runs `du -x -k -a -d 1` over the folder (the
+  same flags on GNU, BusyBox and BSD `du`), sorts it largest first and
+  keeps the folder's total and at most 1,000 entries (`kDiskUsageEntries`
+  [E]), marking each `d` for a folder that is not a symlink, then the
+  first 2 KiB of what `du` said on stderr. `parseDiskUsage` reads that
+  into a listing in bytes, incomplete when `du` could not read something
+  under the folder and cut short at 1,000 entries; without the folder's
+  own total, the errors say whether it is gone, denied or `du` missing.
+  `ReadDiskUsage` runs it as the login user over the link or, with
+  `elevated`, through admin mode's executor, under a 3 minute timeout
+  (`kDiskUsageTimeout`); one `DiskUsageReport` answers it. A mount's
+  details in the System tab's Disks section open "Explore space" on the
+  mount point, a page that lists a folder's entries with their share of
+  it, opens a folder on a tap and steps back up, never above the mount
+  point. Each folder is read once, when it first opens, with Read again
+  for a fresh read; in admin mode "Read as root" reads the same folders
+  as root. It says when sizes are a lower bound and how to count the
+  rest. *Not built:* streaming `ncdu -x -o -` or `gdu -o-`, which export
+  the whole tree in one run. On a large filesystem that export passes
+  the 1 MiB a host read keeps, and reading it needs a streamed parser,
+  so the explorer reads each folder as it opens instead, the fallback
+  this row names. The explorer is read-only; deleting stays with
+  DSK-08 (v1.x).
 - **v1.x.** "Open in Poltergeist" for deletion (DSK-08), layout (`lsblk -J
   -b`, LVM JSON reports with sudo), ZFS, mdraid, network mounts with
   stale-mount detection, cleanup suggestions with sizes and previews, fill
@@ -7816,12 +7840,35 @@ there from its own page too.
   workspace tab; a container row also opens the Docker tab and hands
   the container to the inspector. `WorkspaceNavigation` carries those
   requests: the desktop shell takes the container and the workspace's
-  tabs consume the panel request once shown. Units, stacks and the
-  keyboard model below come with N60b.
+  tabs consume the panel request once shown. Units and stacks come
+  with N60c.
 - Keyboard: `/` filters the focused list; `j` and `k` move; `Enter` opens;
   `l` logs, `s` shell, `r` restart (opens the confirmation dialog); `?` shows
   the contextual map; `Cmd/Ctrl-1..9` switch tabs; `Esc` goes back; bindings
   through `GhostChordScope`.
+  As built (M6 N60b, PLT-06, A11Y-10): the single keys belong to the
+  focused list, so a text field keeps its letters. `SortableTable` takes
+  `j` and `k` beside the arrows, `/` focuses the list's filter field
+  (`filterFocus`: Containers, Images, Volumes, Networks, Processes), `?`
+  opens the keyboard map, and `keyActions` bind single-key verbs to the
+  active row, each enabled only where its menu verb is: on Containers
+  `l` opens the logs, `s` a shell while the container runs (in the
+  desktop workspace's dock, else on a page) and `r` a restart through
+  its confirmation; on Services `l` opens the unit's
+  page, which leads with its logs on a desktop, and `r` restarts it. A
+  key whose verb does not apply passes on. View gains "Go to <tab>" with
+  `Cmd/Ctrl-1` to `8` in `ServerPanel` order (eight tabs, so 9 is
+  unused), disabled until a server is selected and doing nothing in a
+  narrow window's phone shell; Help gains Keyboard Shortcuts
+  (`Cmd/Ctrl-/`). The keyboard map lists the focused list's keys, then
+  the window's, read from the command registry with Esc, so it cannot
+  drift from the menus. `EscapeGoesBack` over the navigator binds Esc to
+  an intent of its own (a page route's disabled `DismissIntent` action
+  would stop the search above it): it dismisses what Esc always
+  dismissed, and otherwise pops the page that holds focus, such as the
+  phone's server screen or Settings; a dialog Esc does not dismiss
+  stays. Every row verb was already reachable from the keyboard through
+  Shift+F10 and the context-menu key (A11Y-10).
 - MVP: every list and confirmation is keyboard-operable with visible focus.
 
 ### 10.7 Charts

@@ -13468,6 +13468,252 @@ abstract class AppLocalizations {
   /// **'Command Palette…'**
   String get paletteCommand;
 
+  /// View menu: shows a tab of the selected server's workspace (PLT-06), ⌘1 to ⌘8 or Ctrl+1 to Ctrl+8. The tab's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to {panel}'**
+  String viewPanelCommand(String panel);
+
+  /// Help menu: lists the keys the app takes (PLT-06), ⌘/ or Ctrl+/.
+  ///
+  /// In en, this message translates to:
+  /// **'Keyboard Shortcuts'**
+  String get keyboardMapCommand;
+
+  /// Keyboard map dialog title (PLT-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Keyboard shortcuts'**
+  String get keyboardMapTitle;
+
+  /// Keyboard map: heading of the focused list's keys.
+  ///
+  /// In en, this message translates to:
+  /// **'In this list'**
+  String get keyboardMapList;
+
+  /// Keyboard map: heading of the keys every window takes.
+  ///
+  /// In en, this message translates to:
+  /// **'Everywhere'**
+  String get keyboardMapEverywhere;
+
+  /// Keyboard map: closes the dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get keyboardMapClose;
+
+  /// Keyboard map: the Escape key's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Esc'**
+  String get keyboardMapEscapeKeys;
+
+  /// Keyboard map: what Escape does.
+  ///
+  /// In en, this message translates to:
+  /// **'Close the dialog, sheet or page on top'**
+  String get keyboardMapEscape;
+
+  /// Keyboard map: the keys that move between rows.
+  ///
+  /// In en, this message translates to:
+  /// **'↑ ↓  or  J K'**
+  String get keyboardMapMoveKeys;
+
+  /// Keyboard map: what the arrow keys and J and K do in a list.
+  ///
+  /// In en, this message translates to:
+  /// **'Move between rows'**
+  String get keyboardMapMove;
+
+  /// Keyboard map: the key that opens the active row.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter'**
+  String get keyboardMapOpenKeys;
+
+  /// Keyboard map: what Enter does in a list.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the row'**
+  String get keyboardMapOpen;
+
+  /// Keyboard map: the keys that open a row's actions (the context-menu key does too).
+  ///
+  /// In en, this message translates to:
+  /// **'Shift+F10'**
+  String get keyboardMapRowActionsKeys;
+
+  /// Keyboard map: what Shift+F10 does in a list.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the row\'s actions'**
+  String get keyboardMapRowActions;
+
+  /// Keyboard map: what / does in a list with a filter field.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter the list'**
+  String get keyboardMapFilter;
+
+  /// Keyboard map: what ? does in a list.
+  ///
+  /// In en, this message translates to:
+  /// **'Show these shortcuts'**
+  String get keyboardMapShow;
+
+  /// Single-key verb (L) in a list: opens the row's logs (PLT-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Show logs'**
+  String get keyActionLogs;
+
+  /// Single-key verb (S) in the containers list: opens a shell in the container (PLT-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Open a shell'**
+  String get keyActionShell;
+
+  /// Single-key verb (R) in a list: asks to restart the row's container or unit, with its confirmation (PLT-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Restart'**
+  String get keyActionRestart;
+
+  /// A mount's details: opens the disk space explorer on the mount (DSK-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Explore space'**
+  String get diskExplorerOpen;
+
+  /// Disk space explorer title: the mount point it explores.
+  ///
+  /// In en, this message translates to:
+  /// **'Space on {mount}'**
+  String diskExplorerTitle(String mount);
+
+  /// Disk space explorer: reads the shown folder again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get diskExplorerRefresh;
+
+  /// Disk space explorer: shows the folder above, never above the mount point.
+  ///
+  /// In en, this message translates to:
+  /// **'Up a folder'**
+  String get diskExplorerUp;
+
+  /// Disk space explorer, in admin mode: reads folders as root.
+  ///
+  /// In en, this message translates to:
+  /// **'Read as root'**
+  String get diskExplorerAsRoot;
+
+  /// Disk space explorer: what reading as root changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Counts what the login user may not read.'**
+  String get diskExplorerAsRootDetail;
+
+  /// Disk space explorer: a folder is being read with du.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading {path}… A large folder takes a while.'**
+  String diskExplorerReading(String path);
+
+  /// Disk space explorer: reads a folder that failed again.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get diskExplorerRetry;
+
+  /// Disk space explorer: the shown folder's total size.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} in this folder'**
+  String diskExplorerTotal(String size);
+
+  /// Disk space explorer: du could not read part of the folder; admin mode is off.
+  ///
+  /// In en, this message translates to:
+  /// **'Some folders here could not be read as the login user, so the sizes are at least this. Turn on admin mode to read them as root.'**
+  String get diskExplorerIncomplete;
+
+  /// Disk space explorer: du could not read part of the folder; admin mode is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Some folders here could not be read as the login user, so the sizes are at least this. Read as root to count them.'**
+  String get diskExplorerIncompleteAdmin;
+
+  /// Disk space explorer: du could not read part of the folder as root.
+  ///
+  /// In en, this message translates to:
+  /// **'Some folders here could not be read even as root, so the sizes are at least this.'**
+  String get diskExplorerIncompleteAsRoot;
+
+  /// Disk space explorer: the folder holds more entries than listed.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the {count} largest entries.'**
+  String diskExplorerTruncated(int count);
+
+  /// Disk space explorer: a folder with no entries.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder is empty.'**
+  String get diskExplorerEmpty;
+
+  /// Disk space explorer: an entry's size and its share of the folder.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} · {percent} %'**
+  String diskExplorerEntrySize(String size, int percent);
+
+  /// Disk space explorer failure: no link.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected, so nothing was read.'**
+  String get diskExplorerNoLink;
+
+  /// Disk space explorer failure: an elevated read without admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading as root needs admin mode.'**
+  String get diskExplorerAdminRequired;
+
+  /// Disk space explorer failure: sudo refused.
+  ///
+  /// In en, this message translates to:
+  /// **'Elevation was refused, so nothing was read.'**
+  String get diskExplorerRefused;
+
+  /// Disk space explorer failure: the folder is gone.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder is not there any more.'**
+  String get diskExplorerNotFound;
+
+  /// Disk space explorer failure: permission denied.
+  ///
+  /// In en, this message translates to:
+  /// **'The login user may not read this folder. Turn on admin mode to read it as root.'**
+  String get diskExplorerDenied;
+
+  /// Disk space explorer failure: du missing or unreadable output.
+  ///
+  /// In en, this message translates to:
+  /// **'du is not installed on this server, or printed something else.'**
+  String get diskExplorerUnreadable;
+
+  /// Disk space explorer failure: link failed or the read timed out (kDiskUsageTimeout).
+  ///
+  /// In en, this message translates to:
+  /// **'The read failed or ran past its 3 minutes. Try a folder further down.'**
+  String get diskExplorerTransport;
+
   /// Command palette: the path of the app's menu commands.
   ///
   /// In en, this message translates to:

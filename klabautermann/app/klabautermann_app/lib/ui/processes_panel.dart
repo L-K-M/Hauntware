@@ -77,6 +77,9 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
   );
   final _filter = TextEditingController();
 
+  /// The filter field, which `/` in the table focuses (PLT-06).
+  final _filterFocus = FocusNode();
+
   /// Whether the rows show as PRC-03's tree, children under their parent
   /// in the sort's order, rather than one sorted list.
   bool _tree = false;
@@ -91,6 +94,7 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
   @override
   void dispose() {
     _filter.dispose();
+    _filterFocus.dispose();
     super.dispose();
   }
 
@@ -264,6 +268,7 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
         final body = wide
             ? SortableTable<ProcessRow>(
                 tableId: SampleStream.procs.name,
+                filterFocus: _filterFocus,
                 columns: columns,
                 rows: rows,
                 rowKey: (row) => row.pid,
@@ -324,6 +329,7 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
 
   Widget _filterField(AppLocalizations l10n) => TextField(
     controller: _filter,
+    focusNode: _filterFocus,
     onChanged: (_) => setState(() {}),
     decoration: InputDecoration(
       prefixIcon: const Icon(Icons.search),

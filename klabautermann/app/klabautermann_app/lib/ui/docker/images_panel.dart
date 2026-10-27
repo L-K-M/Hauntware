@@ -72,6 +72,9 @@ class _ImagesPanelState extends State<ImagesPanel> {
     TableSortDirection.ascending,
   );
   final _search = TextEditingController();
+
+  /// The filter field, which `/` in the table focuses (PLT-06).
+  final _searchFocus = FocusNode();
   ImageFilter _filter = ImageFilter.all;
 
   /// The server whose image watch this panel holds, if any.
@@ -113,6 +116,7 @@ class _ImagesPanelState extends State<ImagesPanel> {
   void dispose() {
     _release();
     _search.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -375,6 +379,7 @@ class _ImagesPanelState extends State<ImagesPanel> {
 
     return SortableTable<ImageEntry>(
       tableId: DockerWatchList.images.name,
+      filterFocus: _searchFocus,
       columns: columns,
       rows: entries,
       rowKey: _rowKey,
@@ -406,6 +411,7 @@ class _ImagesPanelState extends State<ImagesPanel> {
         constraints: const BoxConstraints(maxWidth: 420),
         child: TextField(
           controller: _search,
+          focusNode: _searchFocus,
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             prefixIcon: const Icon(Icons.search),

@@ -57,6 +57,7 @@ import 'ui/alerts.dart' show AlertScope;
 import 'ui/app_lock_gate.dart';
 import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
 import 'ui/hand_off_actions.dart' show HandOffScope;
+import 'ui/keyboard_map.dart';
 import 'ui/macos_toolbar_band.dart';
 import 'ui/menus/app_commands.dart';
 import 'ui/menus/app_menu_host.dart';
@@ -353,7 +354,10 @@ class KlabautermannApp extends StatelessWidget {
           // the announcement switch, and the Docker tab its notice, on
           // every route, the phone's pushed server screen included.
           builder: (context, child) {
-            final banded = withMacosToolbarBand(toolbarBand, child: child!);
+            final banded = withMacosToolbarBand(
+              toolbarBand,
+              child: EscapeGoesBack(child: child!),
+            );
             final withDensity = switch (fleetDensity) {
               final density? => FleetDensityScope(
                 density: density,
@@ -509,26 +513,50 @@ class KlabautermannApp extends StatelessWidget {
                                 navigation: navigation,
                               ),
                             ),
+                      onOpenPanel: navigation == null
+                          ? null
+                          : (context, panel) {
+                              // A narrow window's phone shell has no
+                              // workspace tabs to switch.
+                              final selected = fleet.selectedServer;
+                              if (selected == null ||
+                                  !showsDesktopShell(context)) {
+                                return;
+                              }
+                              navigation.openPanel(selected.id, panel);
+                            },
+                      onShowKeyboardMap: (context) => showKeyboardMap(context),
                     );
                     return AppMenuHost(
                       listenable: fleet,
                       commands: commands,
                       // The add verbs follow the enrollment (P16).
-                      child: ListenableBuilder(
-                        listenable: Listenable.merge([?sync]),
-                        builder: (context, _) => AdaptiveShell(
-                          fleet: fleet,
-                          monitoring: monitoring,
-                          navigation: navigation,
-                          coverage: coverage,
-                          onOpenSettings: openSettings,
-                          sync: sync,
-                          onAddServer: switch (_serverEditing) {
-                            final editing? when editing.enabled =>
-                              () =>
-                                  unawaited(openServerEditor(context, editing)),
-                            _ => null,
-                          },
+                      child: KeyboardMapScope(
+                        commandKeys: (context) => commandKeyboardMap(
+                          AppLocalizations.of(context),
+                          platform,
+                          [
+                            for (final command in commands)
+                              if (command.enabled()) command,
+                          ],
+                        ),
+                        child: ListenableBuilder(
+                          listenable: Listenable.merge([?sync]),
+                          builder: (context, _) => AdaptiveShell(
+                            fleet: fleet,
+                            monitoring: monitoring,
+                            navigation: navigation,
+                            coverage: coverage,
+                            onOpenSettings: openSettings,
+                            sync: sync,
+                            onAddServer: switch (_serverEditing) {
+                              final editing? when editing.enabled =>
+                                () => unawaited(
+                                  openServerEditor(context, editing),
+                                ),
+                              _ => null,
+                            },
+                          ),
                         ),
                       ),
                     );
