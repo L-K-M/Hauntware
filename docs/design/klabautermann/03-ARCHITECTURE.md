@@ -4054,6 +4054,19 @@ TLS. The section checks when it shows, after an edit and on request.
   installed kernel; doctor checklist; "why is it slow"; attention queue
   (acknowledgements device-local); container diagnose without an LLM.
 
+  As built (M6 N53c), the doctor (TRI-01) opens from the overview's
+  Health card as a checklist (`ui/doctor.dart`), read-only, each finding
+  with what to do about it. Disk space and inodes (a mount at 80 % warns,
+  at 90 % is a problem, as on the fleet rows), failed units, the clock
+  (not synchronized, or off this device's by 2 s or more) and dangling
+  images read what the Overview holds; the package check (security
+  updates, reboot needed), the listed endpoints' certificates (failing,
+  untrusted, expired, or within 14 days of expiry) and Docker's
+  reclaimable space (a warning from 1 GiB) are read as it opens and on
+  request. The Docker checks show only with a Docker endpoint. Open
+  ports and unrotated container logs join the list once the listening
+  ports (N34) and the container review (N21a) are on main.
+
   As built (M6 N53b), "why is it slow" (TRI-02) is a card under the
   overview's Health card, from the live core reading alone
   (`ui/slowness.dart`): tasks waiting for a CPU 20 % of the last 10 s
@@ -4281,6 +4294,26 @@ TLS. The section checks when it shows, after an edit and on request.
   show as text where the app has none. CTR-11's mute labels
   (`dockhand.notify`) wait for per-container notifications, which v1
   does not send.
+- **As built (M6 N21a).** The security review (DKE-06) and log rotation
+  lint (DKE-07) run on request from the Docker tab's Review sub-tab as
+  one `DockerReviewQuery`: `/info`, the list, then one inspect per
+  container, sequentially and at most `kDockerReviewMax` (200), the rest
+  counted. `docker/container_review.dart` judges each container before
+  its inspect is masked and sends only findings, never values.
+  - Findings, most severe first: privileged; an engine socket
+    (`docker.sock`, `podman.sock`, `containerd.sock`) bind-mounted;
+    host network; host PID; `CapAdd`; a database's default port
+    published on every address (the port is matched, not the image
+    name); root (no `User`, `root` or `0`, left out on a rootless or
+    `userns` engine); `json-file` without `max-size`; an image named
+    without a tag or digest, or `latest`; no or a `NONE` health check; no
+    restart policy, unless the container is auto-removed or a compose
+    one-off.
+  - Docker copies the daemon's `log-opts` into each container's
+    `LogConfig` at create, so a daemon-wide `max-size` reads as set.
+    Whether the log file grows needs its size, which only root can
+    read under `/var/lib/docker`; the lint flags the configuration
+    alone until an admin-mode size read joins it.
 
 - **As built (M6 N20).** DKE-03's timeline comes from the events stream
   the watcher already holds for the lists (5.7), so it costs no channel

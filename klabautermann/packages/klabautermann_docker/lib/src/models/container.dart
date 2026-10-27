@@ -392,6 +392,7 @@ final class ContainerHostConfig {
     this.nanoCpus,
     this.pidMode,
     this.autoRemove = false,
+    this.capAdd = const [],
   });
 
   final String? networkMode;
@@ -404,6 +405,9 @@ final class ContainerHostConfig {
   final int? nanoCpus;
   final String? pidMode;
   final bool autoRemove;
+
+  /// The capabilities added past the runtime's default set (DKE-06).
+  final List<String> capAdd;
 
   static ContainerHostConfig parse(JsonReader r) {
     final restart = r.map('RestartPolicy');
@@ -423,6 +427,7 @@ final class ContainerHostConfig {
       nanoCpus: r.integer('NanoCpus'),
       pidMode: r.string('PidMode'),
       autoRemove: r.boolean('AutoRemove') ?? false,
+      capAdd: r.stringList('CapAdd'),
     );
   }
 }
@@ -444,6 +449,7 @@ final class ContainerConfig {
     this.cmd = const [],
     this.entrypoint = const [],
     this.labels = const {},
+    this.healthcheck = const [],
   });
 
   final String? hostname;
@@ -459,6 +465,11 @@ final class ContainerConfig {
   final List<String> entrypoint;
   final Map<String, MaskedValue> labels;
 
+  /// `Healthcheck.Test`, the image's merged with the container's: empty
+  /// when neither sets one, `["NONE"]` when the container turns the
+  /// image's off (DKE-06).
+  final List<String> healthcheck;
+
   static ContainerConfig parse(JsonReader r) => ContainerConfig(
     hostname: r.string('Hostname'),
     image: r.string('Image'),
@@ -472,6 +483,10 @@ final class ContainerConfig {
     cmd: r.stringList('Cmd'),
     entrypoint: r.stringList('Entrypoint'),
     labels: maskedLabels(r.stringMap('Labels')),
+    healthcheck: switch (r.map('Healthcheck')) {
+      final check? => JsonReader(check, r.warnings).stringList('Test'),
+      null => const [],
+    },
   );
 }
 
