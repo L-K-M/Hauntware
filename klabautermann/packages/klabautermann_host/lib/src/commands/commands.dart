@@ -387,7 +387,7 @@ const kMountsSwapsMarker = '== swaps';
 const kDiskUsageErrorsMarker = '== du errors';
 
 /// The most entries one [HostCommands.diskUsage] read lists, largest
-/// first: a folder of mail or cache files can hold far more than a
+/// first [E]: a folder of mail or cache files can hold far more than a
 /// list is useful for.
 const kDiskUsageEntries = 1000;
 
