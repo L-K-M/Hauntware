@@ -6,7 +6,8 @@ import 'package:seance_core/catalog.dart' show syncLocalDirectory;
 import 'package:seance_core/seance_core.dart' show uuidV4;
 
 import '../certificates/tls_check.dart' show TlsEndpoint;
-import '../docker/docker_ladder.dart' show dockerSocketPathProblem;
+import '../docker/docker_ladder.dart'
+    show dockerProgramPathProblem, dockerSocketPathProblem;
 import '../engine/protocol.dart'
     show DockerEndpointCustom, DockerEndpointDetected, DockerEndpointSocket;
 
@@ -56,6 +57,7 @@ const String _attentionKey = 'klabautermann.attention.acknowledged';
 const String _overrideChoiceField = 'choice';
 const String _overrideSocketField = 'socketPath';
 const String _overrideEndpointField = 'endpoint';
+const String _overrideProgramField = 'program';
 const String _overrideDetected = 'detected';
 const String _overrideCustom = 'custom';
 
@@ -64,15 +66,25 @@ const String _overrideCustom = 'custom';
 typedef DeviceSettingsWriter =
     Future<void> Function(File target, List<int> bytes);
 
-/// One server's engine socket chosen on this device (CN-09, D54), with
-/// the endpoint it was chosen for, so a server that now names another
-/// machine (SYN-08) loses it even when the change happened while the app
-/// was not running.
+/// One server's Docker endpoint settings on this device: the engine
+/// socket chosen (CN-09, D54) and the `docker` program (CN-16), with the
+/// endpoint they were set for, so a server that now names another
+/// machine (SYN-08) loses them even when the change happened while the
+/// app was not running. At least one of [choice] and [program] is set.
 @immutable
 final class DockerEndpointOverride {
-  const DockerEndpointOverride(this.choice, {required this.endpoint});
+  const DockerEndpointOverride(
+    this.choice, {
+    required this.endpoint,
+    this.program,
+  }) : assert(choice != null || program != null);
 
-  final DockerEndpointSocket choice;
+  /// The socket chosen; null when the engine finds the socket itself.
+  final DockerEndpointSocket? choice;
+
+  /// The `docker` program's absolute path; null for the `docker` on the
+  /// exec `PATH`.
+  final String? program;
 
   /// The server's endpoint as the app keys it when the choice was made;
   /// opaque to the store, which only compares it.
@@ -82,10 +94,11 @@ final class DockerEndpointOverride {
   bool operator ==(Object other) =>
       other is DockerEndpointOverride &&
       other.choice == choice &&
+      other.program == program &&
       other.endpoint == endpoint;
 
   @override
-  int get hashCode => Object.hash(choice, endpoint);
+  int get hashCode => Object.hash(choice, program, endpoint);
 }
 
 /// What went wrong with `settings.json` when the store opened.
@@ -638,19 +651,23 @@ final class DeviceSettingsStore {
     await _save();
   }
 
-  /// The engine socket chosen for each server on this device (CN-09,
-  /// D54), by server id: `klabautermann.docker.endpointOverrides`. A
-  /// server without an entry finds its socket itself. Entries read
-  /// leniently: one that is not an object, names no known choice, holds
-  /// a path [dockerSocketPathProblem] refuses or no endpoint is skipped,
-  /// as is a value that is not an object, rather than failing the file.
+  /// The engine socket and `docker` program set for each server on this
+  /// device (CN-09, D54, CN-16), by server id:
+  /// `klabautermann.docker.endpointOverrides`. A server without an entry
+  /// finds its socket itself and runs the `docker` on the exec `PATH`.
+  /// Entries read leniently: one that is not an object, names an unknown
+  /// choice, holds a socket path [dockerSocketPathProblem] or a program
+  /// [dockerProgramPathProblem] refuses, sets neither, or has no endpoint
+  /// is skipped, as is a value that is not an object, rather than failing
+  /// the file.
   Map<String, DockerEndpointOverride> get dockerEndpointOverrides => {
     for (final MapEntry(:key, :value) in _rawEndpointOverrides.entries)
       if (_readOverride(value) case final override?) key: override,
   };
 
-  /// Stores [override] as [serverId]'s choice, or removes it when null
-  /// (the engine finds the socket itself), and writes the document. The
+  /// Stores [override] as [serverId]'s settings, or removes them when
+  /// null (the engine finds the socket itself and runs the `docker` on
+  /// the exec `PATH`), and writes the document. The
   /// other servers' entries stay as they were read, a newer build's
   /// included. Throws when the write fails or this session is
   /// read-only; the value stays in memory either way.
@@ -662,12 +679,16 @@ final class DeviceSettingsStore {
     if (override == null) {
       entries.remove(serverId);
     } else {
+      final choice = override.choice;
       entries[serverId] = {
-        _overrideChoiceField: switch (override.choice) {
-          DockerEndpointDetected() => _overrideDetected,
-          DockerEndpointCustom() => _overrideCustom,
+        if (choice != null) ...{
+          _overrideChoiceField: switch (choice) {
+            DockerEndpointDetected() => _overrideDetected,
+            DockerEndpointCustom() => _overrideCustom,
+          },
+          _overrideSocketField: choice.socketPath,
         },
-        _overrideSocketField: override.choice.socketPath,
+        _overrideProgramField: ?override.program,
         _overrideEndpointField: override.endpoint,
       };
     }
@@ -712,20 +733,37 @@ final class DeviceSettingsStore {
       };
 
   static DockerEndpointOverride? _readOverride(Object? value) {
-    if (value case {
-      _overrideChoiceField: final String choice,
-      _overrideSocketField: final String path,
-      _overrideEndpointField: final String endpoint,
-    } when dockerSocketPathProblem(path) == null) {
-      final socket = switch (choice) {
-        _overrideDetected => DockerEndpointDetected(path),
-        _overrideCustom => DockerEndpointCustom(path),
-        _ => null,
-      };
-      if (socket == null) return null;
-      return DockerEndpointOverride(socket, endpoint: endpoint);
+    if (value is! Map<String, Object?>) return null;
+    final endpoint = value[_overrideEndpointField];
+    if (endpoint is! String) return null;
+
+    final DockerEndpointSocket? socket;
+    switch ((value[_overrideChoiceField], value[_overrideSocketField])) {
+      case (null, null):
+        socket = null;
+      case (final String choice, final String path)
+          when dockerSocketPathProblem(path) == null:
+        socket = switch (choice) {
+          _overrideDetected => DockerEndpointDetected(path),
+          _overrideCustom => DockerEndpointCustom(path),
+          _ => null,
+        };
+        if (socket == null) return null;
+      default:
+        return null;
     }
-    return null;
+
+    final program = value[_overrideProgramField];
+    if (program != null &&
+        (program is! String || dockerProgramPathProblem(program) != null)) {
+      return null;
+    }
+    if (socket == null && program == null) return null;
+    return DockerEndpointOverride(
+      socket,
+      endpoint: endpoint,
+      program: program as String?,
+    );
   }
 
   /// The folders STK-08's scan searches on each server, by server id:

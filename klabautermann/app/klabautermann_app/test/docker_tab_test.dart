@@ -1090,6 +1090,46 @@ void main() {
       expect(_choicesSent(harness), hasLength(1));
     });
 
+    testWidgets('sets the docker program once it is an absolute path, and '
+        'goes back to the PATH (CN-16)', (tester) async {
+      const snap = '/snap/bin/docker';
+      final choices = DockerEndpointChoices();
+      addTearDown(choices.dispose);
+      final harness = await _openPicker(tester, choices);
+      List<SetDockerProgram> sent() =>
+          harness.engine.sentOfType<SetDockerProgram>().cast();
+      expect(_inDocker(find.text('docker on the PATH')), findsOneWidget);
+      expect(find.text('Use docker on the PATH'), findsNothing);
+
+      await tester.tap(_inDocker(find.text('Change…')));
+      await tester.pumpAndSettle();
+      final field = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(field, 'docker');
+      await tester.tap(find.text('Use'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Enter an absolute path, starting with /.'),
+        findsOneWidget,
+      );
+      expect(sent(), isEmpty);
+
+      await tester.enterText(field, snap);
+      await tester.tap(find.text('Use'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(sent().single.program, snap);
+      expect(_inDocker(find.text(snap)), findsOneWidget);
+      expect(_choicesSent(harness), isEmpty, reason: 'the socket stays');
+
+      await tester.tap(_inDocker(find.text('Use docker on the PATH')));
+      await tester.pumpAndSettle();
+      expect(sent().map((p) => p.program), [snap, null]);
+      expect(_inDocker(find.text('docker on the PATH')), findsOneWidget);
+    });
+
     testWidgets('a failed endpoint offers the picker under its reason', (
       tester,
     ) async {
@@ -1188,6 +1228,7 @@ void main() {
           'srv-1': DockerEndpointOverride(
             DockerEndpointCustom('/srv/a/rather/long/path/to/engine.sock'),
             endpoint: '',
+            program: '/volume1/@appstore/ContainerManager/usr/bin/docker',
           ),
         },
       );
