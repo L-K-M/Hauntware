@@ -2,6 +2,7 @@ import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 
 import 'package:app_links/app_links.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:ghost_keystore/app_lock.dart';
@@ -64,6 +65,17 @@ Future<void> main(List<String> args) async {
           stack: stack,
           library: 'seance link intake',
         ),
+      ),
+    );
+  }
+  // Séance is deliberately unsandboxed on macOS and so carries no file
+  // entitlements, which file_picker otherwise demands before every open or
+  // save panel ("Either the Read-Only or Read-Write entitlement is
+  // required"): without this, uploads, downloads and exports all fail.
+  if (!kIsWeb && Platform.isMacOS) {
+    unawaited(
+      FilePicker.skipEntitlementsChecks().catchError(
+        (Object error) => debugPrint('File panels may refuse: $error'),
       ),
     );
   }

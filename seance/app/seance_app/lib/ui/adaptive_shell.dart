@@ -91,10 +91,12 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
                       : TitlebarControls.overHeader,
                 )
               : null,
-          list: state.sidebarVisible
+          // Only the Mac's View menu hides them, so only the Mac honours
+          // the choice: elsewhere nothing could bring them back.
+          list: !macWindow || state.sidebarVisible
               ? PaneVisibility.shown
               : PaneVisibility.hidden,
-          utility: state.inspectorVisible
+          utility: !macWindow || state.inspectorVisible
               ? PaneVisibility.shown
               : PaneVisibility.hidden,
           // A Mac window keeps its terminal and sets the side panes aside
