@@ -32,6 +32,7 @@ import '../admin/sshd_posture.dart';
 import '../admin/user_crontabs.dart';
 import '../certificates/tls_check.dart';
 import '../alerts/alert_evaluator.dart';
+import '../forwards/port_forwards.dart';
 import '../history/history_store.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
@@ -128,8 +129,9 @@ final class EngineStart {
   /// has no link supervisor, sampling scheduler, log streams or Docker
   /// sessions: [Connect], [OpenLogStream], [DockerQuery], [DockerWatch]
   /// and [SetDockerEndpoint] get [RequestRejected] and nothing dials,
-  /// samples or reads, [CloseStream], [DockerUnwatch], [Disconnect],
-  /// [RefreshSubscription] and [SetAppActivity] change nothing,
+  /// samples or reads, and [OpenPortForward] gets one too; [CloseStream],
+  /// [DockerUnwatch], [Disconnect], [RefreshSubscription],
+  /// [ClosePortForward] and [SetAppActivity] change nothing,
   /// subscriptions are only recorded, and no [Prompt] is ever open. The app's composition root leaves
   /// them off; tests turn them on.
   final bool linksEnabled;
@@ -252,6 +254,8 @@ void engineMain(
   // Container shells over the Docker endpoints (03 §7.13); none while
   // links are off.
   ExecSessions? terminals;
+  // NET-11 and DKE-09's port forwards (03 §5.11): none while links are off.
+  PortForwards? forwards;
   // Admin mode per server (03 §8.2), over the links; none while links are
   // off. The safety policy the app last sent; until then every server is
   // observe-only (SAF-01).
@@ -400,6 +404,7 @@ void engineMain(
               scheduler?.update(event.serverId);
               logs?.update(event.serverId);
               docker?.update(event.serverId);
+              forwards?.update(event.serverId);
               if (event.status is LinkReady || event.status is LinkDegraded) {
                 if (readyLinks.add(event.serverId)) {
                   linkGenerations.update(
@@ -728,6 +733,7 @@ void engineMain(
       adminFor: (serverId) => admin?.session(serverId),
       quotas: channelQuotas,
     );
+    forwards = PortForwards(linkFor: links.link, emit: uiPort.send);
     terminals = ExecSessions(
       open: router.openExec,
       control: <T>(serverId, call) =>
@@ -872,6 +878,7 @@ void engineMain(
           id,
     };
     terminals?.forget(forgotten);
+    forwards?.forget(forgotten);
     docker
       ?..forget(forgotten)
       ..retain(fleetIds);
@@ -1298,6 +1305,15 @@ void engineMain(
         terminals?.endInput(terminalId);
       case CloseTerminal(:final terminalId):
         terminals?.close(terminalId);
+      case OpenPortForward():
+        switch (forwards) {
+          case null:
+            reject(message, 'links are off in this engine');
+          case final forwards:
+            unawaited(forwards.open(message));
+        }
+      case ClosePortForward(:final forwardId):
+        forwards?.close(forwardId);
       case SetDockerEndpoint():
         switch (docker) {
           case null:
@@ -2100,6 +2116,7 @@ void engineMain(
         ]);
         unawaited(logs?.close());
         unawaited(docker?.close());
+        forwards?.dispose();
         commands.close();
         Isolate.exit();
       case EngineRequest():
