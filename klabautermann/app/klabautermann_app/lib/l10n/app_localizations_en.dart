@@ -1784,6 +1784,146 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemFirewallTitle => 'Firewall';
+
+  @override
+  String get systemFirewallAdminNeeded =>
+      'Turn on admin mode to read the firewall: every firewall tool needs root to list its rules.';
+
+  @override
+  String get systemFirewallRead => 'Read firewall rules';
+
+  @override
+  String get systemFirewallReadAgain => 'Read again';
+
+  @override
+  String get systemFirewallReading => 'Reading the firewall rules…';
+
+  @override
+  String systemFirewallFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink':
+          'The server is not connected, so the firewall could not be read.',
+      'adminRequired': 'Admin mode ended before the firewall was read.',
+      'elevationRefused':
+          'Elevation was refused, so the firewall was not read.',
+      'unreadable':
+          'The firewall tools answered in a way this app cannot read.',
+      'transport': 'The connection failed while the firewall was read.',
+      'other': 'The firewall could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemFirewallNoTool =>
+      'No firewall tool was found on this server: none of ufw, firewalld, nft or iptables is installed.';
+
+  @override
+  String get systemFirewallUfw => 'ufw';
+
+  @override
+  String get systemFirewallFirewalld => 'firewalld';
+
+  @override
+  String get systemFirewallNftables => 'nftables';
+
+  @override
+  String get systemFirewallIptables => 'iptables (IPv4)';
+
+  @override
+  String get systemFirewallIp6tables => 'ip6tables (IPv6)';
+
+  @override
+  String systemFirewallActive(String active) {
+    String _temp0 = intl.Intl.selectLogic(active, {
+      'true': 'Active',
+      'other': 'Inactive: ufw filters nothing',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemFirewallRunning(String running) {
+    String _temp0 = intl.Intl.selectLogic(running, {
+      'true': 'Running',
+      'other': 'Not running',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemFirewallUfwDefaults(
+    String incoming,
+    String outgoing,
+    String routed,
+  ) {
+    return 'By default: incoming $incoming, outgoing $outgoing, routed $routed';
+  }
+
+  @override
+  String systemFirewallUfwRule(String to, String action, String from) {
+    return '$to: $action from $from';
+  }
+
+  @override
+  String get systemFirewallNoRules => 'No rules.';
+
+  @override
+  String systemFirewallZoneDefault(String zone) {
+    return '$zone (default zone)';
+  }
+
+  @override
+  String systemFirewallZoneInterfaces(String interfaces) {
+    return 'Interfaces: $interfaces';
+  }
+
+  @override
+  String systemFirewallZoneSources(String sources) {
+    return 'Sources: $sources';
+  }
+
+  @override
+  String systemFirewallZoneServices(String services) {
+    return 'Services allowed: $services';
+  }
+
+  @override
+  String systemFirewallZonePorts(String ports) {
+    return 'Ports allowed: $ports';
+  }
+
+  @override
+  String get systemFirewallNone => 'none';
+
+  @override
+  String systemFirewallZonesIdle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count other zones have no interface or source.',
+      one: '1 other zone has no interface or source.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemFirewallChain(String chain, String policy, int rules) {
+    String _temp0 = intl.Intl.pluralLogic(
+      rules,
+      locale: localeName,
+      other: '$rules rules',
+      one: '1 rule',
+      zero: 'no rules',
+    );
+    return '$chain: policy $policy, $_temp0';
+  }
+
+  @override
+  String get systemFirewallNoPolicy => 'none';
+
+  @override
   String get systemSshdTitle => 'SSH server';
 
   @override
@@ -3415,6 +3555,69 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get overviewSwapNone => 'No swap is set up.';
+
+  @override
+  String get overviewSlowTitle => 'Why is it slow?';
+
+  @override
+  String get overviewSlowNone =>
+      'Nothing in the latest reading points to a slowdown.';
+
+  @override
+  String overviewSlowCpuWait(String percent) {
+    return 'Tasks waited for a CPU $percent of the last 10 seconds: the processor is the bottleneck.';
+  }
+
+  @override
+  String overviewSlowLoadHigh(double load) {
+    final intl.NumberFormat loadNumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 2,
+        );
+    final String loadString = loadNumberFormat.format(load);
+
+    return 'The load is $loadString per core: more tasks want to run than there are cores.';
+  }
+
+  @override
+  String overviewSlowSteal(String percent) {
+    return 'The hypervisor gave $percent of the CPU time to other guests.';
+  }
+
+  @override
+  String overviewSlowIoStall(String percent) {
+    return 'Tasks stalled on storage $percent of the last 10 seconds: the disks are the bottleneck.';
+  }
+
+  @override
+  String overviewSlowIowait(String percent) {
+    return 'Cores sat idle $percent of the time waiting for storage.';
+  }
+
+  @override
+  String overviewSlowSlowDisk(String device, int ms) {
+    return '$device takes $ms ms per request: it is slow or saturated.';
+  }
+
+  @override
+  String overviewSlowBusyDisk(String device, String percent) {
+    return '$device is busy $percent of the time: requests queue behind each other.';
+  }
+
+  @override
+  String overviewSlowMemoryStall(String percent) {
+    return 'Tasks stalled waiting for memory $percent of the last 10 seconds: the server is short of RAM.';
+  }
+
+  @override
+  String overviewSlowSwapHeavy(String percent) {
+    return 'Swap is $percent full and little memory is free: the server pages to disk.';
+  }
+
+  @override
+  String get overviewSlowWhere =>
+      'Processes sorts what runs by CPU and memory; System lists recent out-of-memory kills.';
 
   @override
   String get overviewPressureTitle => 'Pressure';
@@ -6169,6 +6372,120 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerContainersColumnMemory => 'Memory';
 
   @override
+  String get dockerContainersColumnNetwork => 'Network';
+
+  @override
+  String get dockerContainersColumnBlockIo => 'Block I/O';
+
+  @override
+  String get dockerContainersColumnPids => 'PIDs';
+
+  @override
+  String get dockerContainersColumnIp => 'IP';
+
+  @override
+  String get dockerContainersColumnStarted => 'Started';
+
+  @override
+  String dockerContainersIo(String first, String second) {
+    return '$first / $second';
+  }
+
+  @override
+  String get dockerContainersColumns => 'Columns';
+
+  @override
+  String get dockerContainersColumnsTitle => 'Columns';
+
+  @override
+  String get dockerContainersColumnsDrag => 'Drag to reorder';
+
+  @override
+  String get dockerContainersColumnsReset => 'Reset';
+
+  @override
+  String get dockerContainersColumnsCancel => 'Cancel';
+
+  @override
+  String get dockerContainersColumnsDone => 'Done';
+
+  @override
+  String get dockerContainersColumnsNotSaved =>
+      'The columns could not be saved. They stay until Klabautermann quits.';
+
+  @override
+  String get dockerContainersSelect => 'Select';
+
+  @override
+  String get dockerContainersColumnSelect => 'Selection';
+
+  @override
+  String dockerContainersRowSelected(String selected) {
+    String _temp0 = intl.Intl.selectLogic(selected, {
+      'true': 'Selected',
+      'other': 'Not selected',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerContainersSelectOne => 'Select';
+
+  @override
+  String get dockerContainersDeselect => 'Deselect';
+
+  @override
+  String get dockerContainersSelectProject => 'Select its containers';
+
+  @override
+  String get dockerContainersDeselectProject => 'Deselect its containers';
+
+  @override
+  String dockerContainersGroupSelection(String summary, String selection) {
+    String _temp0 = intl.Intl.selectLogic(selection, {
+      'all': 'all selected',
+      'some': 'some selected',
+      'other': 'none selected',
+    });
+    return '$summary, $_temp0';
+  }
+
+  @override
+  String dockerContainersSelectedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count selected',
+      one: '1 selected',
+      zero: 'None selected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerContainersBulkVerb(String verb, int count) {
+    String _temp0 = intl.Intl.selectLogic(verb, {
+      'start': 'Start',
+      'stop': 'Stop',
+      'restart': 'Restart',
+      'remove': 'Remove',
+      'other': 'Act',
+    });
+    return '$_temp0 ($count)';
+  }
+
+  @override
+  String get dockerContainersSelectAll => 'Select all shown';
+
+  @override
+  String get dockerContainersSelectNone => 'Clear selection';
+
+  @override
+  String dockerContainersBulkMax(int max) {
+    return 'Select at most $max containers to act on them at once.';
+  }
+
+  @override
   String dockerContainerState(String state) {
     String _temp0 = intl.Intl.selectLogic(state, {
       'created': 'Created',
@@ -6519,6 +6836,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerImageHistoryComment => 'Comment';
 
   @override
+  String get dockerLinksTitle => 'Links';
+
+  @override
+  String dockerLinksFrom(String source) {
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'dockhand': 'From a Dockhand label',
+      'dozzle': 'From a Dozzle label',
+      'traefik': 'A Traefik route',
+      'caddy': 'A Caddy site',
+      'other': 'From a label',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerLinksFromPort(String source, String port) {
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'dockhand': 'From a Dockhand label, port $port',
+      'other': 'From a label, port $port',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerLinksOpen(String name) {
+    return 'Open $name in the browser';
+  }
+
+  @override
+  String get dockerLinksNotOpened =>
+      'The link could not be opened in a browser.';
+
+  @override
   String get dockerProcessesTitle => 'Processes';
 
   @override
@@ -6850,6 +7200,79 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String dockerDetailsManagedByNote(String manager, String label) {
     return 'Changes made outside $manager can be overwritten by it. The label $label marks it.';
+  }
+
+  @override
+  String get dockerDiagnosisTitle => 'Diagnosis';
+
+  @override
+  String dockerDiagnosisKind(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'oomLimit': 'Out of memory',
+      'oomHost': 'Out of memory on the host',
+      'killed': 'Killed',
+      'segfault': 'Crashed',
+      'notExecutable': 'Command not executable',
+      'commandNotFound': 'Command not found',
+      'runtimeError': 'The engine could not start it',
+      'exitedWithError': 'Exited with an error',
+      'exitsAtOnce': 'Exits right after starting',
+      'restartLoop': 'Restart loop',
+      'unhealthy': 'Health check failing',
+      'other': 'Something went wrong',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerDiagnosisWhy(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'oomLimit':
+          'The kernel stopped it, most likely for going over its memory limit. Raise the limit or find what keeps growing.',
+      'oomHost':
+          'The kernel stopped it while the host ran out of memory. It has no memory limit of its own.',
+      'killed':
+          'It ended with SIGKILL (exit code 137) without running out of memory: a docker kill, a stop that ran past its timeout, or another process.',
+      'segfault':
+          'It ended with a segmentation fault (exit code 139), a crash inside the program.',
+      'notExecutable':
+          'Exit code 126: the command exists but cannot run. Check its permissions and its interpreter line.',
+      'commandNotFound':
+          'Exit code 127: the entrypoint or command names a program the image does not have.',
+      'runtimeError': 'The engine reported this error for it:',
+      'exitedWithError':
+          'Its process ended with an error. Its last log lines usually say why.',
+      'exitsAtOnce':
+          'It exited with code 0 and its restart policy starts it again: its main process does not stay in the foreground.',
+      'restartLoop':
+          'Its restart policy has started it again after each exit since it was last started by hand. Its logs show what each run ended with.',
+      'unhealthy':
+          'Its health check keeps failing. Health checks shows what each check printed.',
+      'other': 'Its state says something went wrong.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerDiagnosisMemoryLimit(String limit) {
+    return 'Memory limit: $limit';
+  }
+
+  @override
+  String dockerDiagnosisExitCode(int code) {
+    return 'Exit code: $code';
+  }
+
+  @override
+  String dockerDiagnosisRestarts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Restarted $count times',
+      one: 'Restarted once',
+      zero: 'Restarting now',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -7217,6 +7640,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerLogsEmpty => 'This container has no log lines.';
+
+  @override
+  String get dockerLogsRangeChoose => 'Choose start and end…';
+
+  @override
+  String dockerLogsRangeBetween(String since, String until) {
+    return '$since to $until';
+  }
+
+  @override
+  String get dockerLogsRangeTitle => 'Time range';
+
+  @override
+  String get dockerLogsRangeFrom => 'From';
+
+  @override
+  String get dockerLogsRangeTo => 'To';
+
+  @override
+  String get dockerLogsRangeOrder => 'The start must come before the end.';
+
+  @override
+  String get dockerLogsRangeCancel => 'Cancel';
+
+  @override
+  String get dockerLogsRangeApply => 'Apply';
+
+  @override
+  String get dockerLogsLiveRange =>
+      'A range with an end has no new lines to follow.';
 
   @override
   String dockerLogsDriverUnreadable(String reason, String driver) {
