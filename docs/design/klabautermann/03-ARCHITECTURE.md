@@ -5630,6 +5630,19 @@ CI.
   LLM provider without consent. Copied secrets are marked sensitive on the
   clipboard where the platform supports it [U].
 
+As built in M6 (N67c, PLT-08), every export goes through LOG-10's sheet
+(`log_export.dart`): copy, save, or the share sheet where the platform has
+one (Android, iOS, macOS), redacted by the engine unless the user includes
+secrets, never falling back to the unredacted text. Besides logs and the
+diagnostic bundle, it carries two snapshots. The Overview's Share status
+gives a status card: plain lines from the server's last readings (OS,
+uptime, CPU, load, memory, the five fullest mounts, failed units and
+container counts) with the time of the newest reading. It leaves out the
+server's name and host name unless the user turns on Name the server.
+A container's Raw JSON exports the masked inspect it shows, so a revealed
+value never leaves in it. Both are read when the sheet opens and do not
+change under it.
+
 ### 8.10 Audit log (SAF-11, SAF-13)
 
 - **Device (MVP).** Append-only JSONL per server with device ID, server,

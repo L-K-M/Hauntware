@@ -1,4 +1,5 @@
 import 'dart:async' show Timer, unawaited;
+import 'dart:convert' show LineSplitter;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart' show klabautermannThemeStyle;
 import '../actions/action_entry.dart';
+import '../logs/log_export.dart' show showExportSheet;
 import '../actions/docker_actions.dart'
     show ContainerActionButtons, containerActionsShown;
 import '../processes_panel.dart' show kRevealDuration;
@@ -609,7 +611,11 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
           containerId: widget.container.id,
           up: containerIsUp(row),
         ),
-      _RawJson(container: container),
+      _RawJson(
+        monitoring: widget.monitoring,
+        container: container,
+        name: containerNameOf(row),
+      ),
     ];
   }
 
@@ -1094,11 +1100,33 @@ class _ManagedByBadge extends StatelessWidget {
 }
 
 /// The inspect as raw JSON, folded until opened, from the masked model
-/// ([containerDetailsJson]).
+/// ([containerDetailsJson]), and exported from there (PLT-08) through
+/// LOG-10's sheet, redacted unless the user includes secrets.
 class _RawJson extends StatelessWidget {
-  const _RawJson({required this.container});
+  const _RawJson({
+    required this.monitoring,
+    required this.container,
+    required this.name,
+  });
 
+  final MonitoringController monitoring;
   final ContainerDetails container;
+
+  /// The container's name, for the file's.
+  final String name;
+
+  void _export(BuildContext context, String json) {
+    final l10n = AppLocalizations.of(context);
+    unawaited(
+      showExportSheet(
+        context,
+        monitoring: monitoring,
+        lines: const LineSplitter().convert(json),
+        fileName: l10n.dockerDetailsRawFileName(name),
+        title: l10n.dockerDetailsRawExportTitle,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1121,20 +1149,36 @@ class _RawJson extends StatelessWidget {
       children: [
         // Built only once opened.
         Builder(
-          builder: (context) => DecoratedBox(
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.all(12),
-              child: SelectableText(
-                containerDetailsJson(container),
-                style: theme.textTheme.bodySmall?.merge(_monoStyle),
-              ),
-            ),
-          ),
+          builder: (context) {
+            final json = containerDetailsJson(container);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.all(12),
+                    child: SelectableText(
+                      json,
+                      style: theme.textTheme.bodySmall?.merge(_monoStyle),
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton.icon(
+                    onPressed: () => _export(context, json),
+                    icon: const Icon(Icons.ios_share),
+                    label: Text(l10n.logsExport),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
