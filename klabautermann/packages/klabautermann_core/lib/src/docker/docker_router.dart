@@ -66,6 +66,7 @@ import 'container_logs.dart';
 import 'container_review.dart';
 import 'docker_ladder.dart';
 import 'docker_watch.dart';
+import 'dropbear.dart';
 import 'image_updates.dart';
 import 'inspect_masking.dart';
 import 'stack_sources.dart';
@@ -835,6 +836,9 @@ final class DockerRouter {
             ? EngineRuntime.podman
             : EngineRuntime.docker,
         mode: route.mode,
+        peerCredentialsExposedBy: route.rank == DockerRank.streamlocal
+            ? _peerCredentialsExposedBy(link)
+            : null,
         dockerProgram: program ?? 'docker',
       );
       try {
@@ -1412,6 +1416,15 @@ final class DockerRouter {
     if (lowSession && session.endpoint?.route.rank != DockerRank.streamlocal) {
       session.watcher?.yieldStream();
     }
+  }
+
+  /// The Dropbear release behind [link] when it is one of CVE-2025-14282's
+  /// (CN-15).
+  static DropbearRelease? _peerCredentialsExposedBy(SshLink link) {
+    final release = DropbearRelease.fromIdentification(
+      link.seen.serverIdentification,
+    );
+    return release != null && release.exposesPeerCredentials ? release : null;
   }
 
   /// What the ladder reads of a profile: the sockets, the relays' tools

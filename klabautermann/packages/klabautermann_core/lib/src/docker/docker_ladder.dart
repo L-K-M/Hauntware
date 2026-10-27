@@ -4,7 +4,8 @@
 /// ```text
 ///   candidates: override, then the probe's sockets in 03 §5.4 order
 ///   each ─▶ rank 1: open direct-streamlocal ─▶ route
-///            └─ refused ─▶ one exec probe (test -S, test -w)
+///            └─ refused, or a Dropbear before 2024.84 (CN-15)
+///                 ─▶ one exec probe (test -S, test -w)
 ///                 ├─ missing ─▶ next candidate
 ///                 ├─ denied, admin mode on ─▶ rank 3: sudo and the
 ///                 │    engine CLI's dial-stdio ─▶ route
@@ -40,6 +41,7 @@ import 'package:seance_core/seance_core.dart'
         quoteShellWord;
 
 import '../admin/admin_mode.dart' show AdminSession;
+import 'dropbear.dart';
 import 'duplex_adapters.dart';
 
 /// A rung of 03 §5.9's ladder that M3 builds. Rank 3 (the sudo relay)
@@ -359,12 +361,19 @@ abstract final class DockerLadder {
     if (excluding.contains(candidate.route(DockerRank.streamlocal))) {
       return const DockerRouteNone._(DockerNoRouteReason.noSocket);
     }
-    try {
-      final duplex = await link.openUnixStream(path);
-      await duplex.close();
-      return candidate.route(DockerRank.streamlocal);
-    } on ChannelOpenException catch (e) {
-      if (e.refusal != ChannelRefusal.forwardDisabled) rethrow;
+    // CN-15: a Dropbear older than 2024.84 has no Unix stream forwarding,
+    // so its refusal is known before asking.
+    final dropbear = DropbearRelease.fromIdentification(
+      link.seen.serverIdentification,
+    );
+    if (dropbear == null || dropbear.forwardsUnixStreams) {
+      try {
+        final duplex = await link.openUnixStream(path);
+        await duplex.close();
+        return candidate.route(DockerRank.streamlocal);
+      } on ChannelOpenException catch (e) {
+        if (e.refusal != ChannelRefusal.forwardDisabled) rethrow;
+      }
     }
 
     final probe = await _probe(link, path);

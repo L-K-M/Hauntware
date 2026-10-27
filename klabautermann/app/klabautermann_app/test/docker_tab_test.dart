@@ -424,6 +424,34 @@ void main() {
       );
       expect(_inHeader(find.text('Low-session mode')), findsOneWidget);
     });
+
+    testWidgets('warns when the socket forward runs through a Dropbear with '
+        'CVE-2025-14282 (CN-15)', (tester) async {
+      final harness = await _openWeb1(tester);
+      await _emit(tester, harness, dockerReady('srv-1'));
+      expect(_inHeader(find.textContaining('CVE-2025-14282')), findsNothing);
+
+      await _emit(
+        tester,
+        harness,
+        dockerReady(
+          'srv-1',
+          peerCredentialsExposedBy: const DropbearRelease(2024, 86),
+        ),
+      );
+      expect(
+        _inHeader(find.text('Dropbear 2024.86: CVE-2025-14282')),
+        findsOneWidget,
+      );
+      expect(
+        find.byTooltip(
+          'This server runs Dropbear 2024.86, where a forwarded connection '
+          'reaches the engine socket as if it came from root '
+          '(CVE-2025-14282). Update Dropbear to 2025.89 or later.',
+        ),
+        findsOneWidget,
+      );
+    });
   });
 
   group('the Docker tab', () {
@@ -1062,6 +1090,46 @@ void main() {
       expect(_choicesSent(harness), hasLength(1));
     });
 
+    testWidgets('sets the docker program once it is an absolute path, and '
+        'goes back to the PATH (CN-16)', (tester) async {
+      const snap = '/snap/bin/docker';
+      final choices = DockerEndpointChoices();
+      addTearDown(choices.dispose);
+      final harness = await _openPicker(tester, choices);
+      List<SetDockerProgram> sent() =>
+          harness.engine.sentOfType<SetDockerProgram>().cast();
+      expect(_inDocker(find.text('docker on the PATH')), findsOneWidget);
+      expect(find.text('Use docker on the PATH'), findsNothing);
+
+      await tester.tap(_inDocker(find.text('Change…')));
+      await tester.pumpAndSettle();
+      final field = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(field, 'docker');
+      await tester.tap(find.text('Use'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Enter an absolute path, starting with /.'),
+        findsOneWidget,
+      );
+      expect(sent(), isEmpty);
+
+      await tester.enterText(field, snap);
+      await tester.tap(find.text('Use'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(sent().single.program, snap);
+      expect(_inDocker(find.text(snap)), findsOneWidget);
+      expect(_choicesSent(harness), isEmpty, reason: 'the socket stays');
+
+      await tester.tap(_inDocker(find.text('Use docker on the PATH')));
+      await tester.pumpAndSettle();
+      expect(sent().map((p) => p.program), [snap, null]);
+      expect(_inDocker(find.text('docker on the PATH')), findsOneWidget);
+    });
+
     testWidgets('a failed endpoint offers the picker under its reason', (
       tester,
     ) async {
@@ -1160,6 +1228,7 @@ void main() {
           'srv-1': DockerEndpointOverride(
             DockerEndpointCustom('/srv/a/rather/long/path/to/engine.sock'),
             endpoint: '',
+            program: '/volume1/@appstore/ContainerManager/usr/bin/docker',
           ),
         },
       );

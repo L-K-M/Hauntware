@@ -334,6 +334,39 @@ void main() {
         });
       });
 
+      test('a docker program round-trips alone or beside a socket '
+          '(CN-16)', () async {
+        writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+        const programOnly = DockerEndpointOverride(
+          null,
+          endpoint: 'nas:22',
+          program: '/usr/local/bin/docker',
+        );
+        const both = DockerEndpointOverride(
+          DockerEndpointCustom('/srv/engine.sock'),
+          endpoint: 'db-1:2222',
+          program: '/snap/bin/docker',
+        );
+
+        final store = await DeviceSettingsStore.open(file);
+        await store.setDockerEndpointOverride('srv-1', programOnly);
+        await store.setDockerEndpointOverride('srv-2', both);
+
+        expect((await DeviceSettingsStore.open(file)).dockerEndpointOverrides, {
+          'srv-1': programOnly,
+          'srv-2': both,
+        });
+        expect(document()[_overridesKey], {
+          'srv-1': {'program': '/usr/local/bin/docker', 'endpoint': 'nas:22'},
+          'srv-2': {
+            'choice': 'custom',
+            'socketPath': '/srv/engine.sock',
+            'program': '/snap/bin/docker',
+            'endpoint': 'db-1:2222',
+          },
+        });
+      });
+
       test('malformed entries are skipped, and kept as they were when '
           'another server\'s changes', () async {
         final malformed = <String, Object?>{
@@ -358,6 +391,10 @@ void main() {
             'socketPath': '/run/docker.sock',
           },
           'number-path': {'choice': 'custom', 'socketPath': 7, 'endpoint': 'a'},
+          'neither': {'endpoint': 'a:22'},
+          'relative-program': {'program': 'docker', 'endpoint': 'a:22'},
+          'number-program': {'program': 7, 'endpoint': 'a:22'},
+          'choice-without-path': {'choice': 'custom', 'endpoint': 'a:22'},
         };
         writeDocument({
           _versionKey: 1,

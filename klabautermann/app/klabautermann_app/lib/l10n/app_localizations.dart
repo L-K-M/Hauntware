@@ -8308,6 +8308,66 @@ abstract class AppLocalizations {
   /// **'The path cannot contain line breaks or NUL characters.'**
   String get dockerSocketPathUnsafe;
 
+  /// Docker tab engine strip (CN-16): label before the docker program the server's relays and compose commands run. 'docker' is the program's name, kept lowercase.
+  ///
+  /// In en, this message translates to:
+  /// **'docker program'**
+  String get dockerProgramLabel;
+
+  /// Docker tab engine strip (CN-16): shown as the docker program when no path is set, so the server runs the docker its PATH finds.
+  ///
+  /// In en, this message translates to:
+  /// **'docker on the PATH'**
+  String get dockerProgramDefault;
+
+  /// Docker tab engine strip (CN-16): button that opens the dialog to type the docker program's path.
+  ///
+  /// In en, this message translates to:
+  /// **'Change…'**
+  String get dockerProgramChange;
+
+  /// Docker tab engine strip (CN-16): what assistive technology reads for the Change… button beside the docker program.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the docker program'**
+  String get dockerProgramChangeLabel;
+
+  /// Docker tab engine strip (CN-16): button that clears the docker program path, so the server runs the docker its PATH finds.
+  ///
+  /// In en, this message translates to:
+  /// **'Use docker on the PATH'**
+  String get dockerProgramReset;
+
+  /// Title of the dialog that asks for the docker program's path (CN-16).
+  ///
+  /// In en, this message translates to:
+  /// **'docker program'**
+  String get dockerProgramTitle;
+
+  /// Body of the docker program dialog (CN-16).
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann runs this docker for relays and compose commands on this server. Set it when docker is outside the PATH of a non-interactive session, as with Snap\'s /snap/bin/docker.'**
+  String get dockerProgramBody;
+
+  /// Label of the docker program dialog's path field (CN-16).
+  ///
+  /// In en, this message translates to:
+  /// **'Program path'**
+  String get dockerProgramField;
+
+  /// Hint in the docker program dialog's path field (CN-16): an example absolute path.
+  ///
+  /// In en, this message translates to:
+  /// **'/snap/bin/docker'**
+  String get dockerProgramHint;
+
+  /// Top toast (CN-16) when the docker program applied but could not be saved to the settings file.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save the docker program, so it applies only until Klabautermann quits.'**
+  String get dockerProgramNotSaved;
+
   /// Appearance tab: heading of the preset grid.
   ///
   /// In en, this message translates to:
@@ -10209,6 +10269,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The output was longer than 1 MiB; the rest was dropped.'**
   String get dockerCommandTruncated;
+
+  /// Server header: warning that the Docker socket forward runs through a Dropbear release affected by CVE-2025-14282 (CN-15). The CVE identifier stays as is.
+  ///
+  /// In en, this message translates to:
+  /// **'Dropbear {release}: CVE-2025-14282'**
+  String dockerDropbearCve(String release);
+
+  /// Tooltip of the server header's Dropbear warning (CN-15): what the vulnerability means for the Docker socket forward and how to fix it.
+  ///
+  /// In en, this message translates to:
+  /// **'This server runs Dropbear {release}, where a forwarded connection reaches the engine socket as if it came from root (CVE-2025-14282). Update Dropbear to 2025.89 or later.'**
+  String dockerDropbearCveDetail(String release);
 
   /// Tooltip of the button on a container's details that opens a shell in the container (CTX-07).
   ///
