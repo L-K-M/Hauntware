@@ -3115,7 +3115,11 @@ units are a stream of their own, apart from the Services panel's `units`
 (D45, 10.1). As built, Settings > General picks the profile per
 device: Automatic (Desktop on a computer, Phone on a phone or tablet),
 Desktop, Phone or Cellular saver, kept in `settings.json` under
-`klabautermann.sampling.cadence`; per-server caps are not built yet.
+`klabautermann.sampling.cadence`. Settings > Servers caps a server at
+the Phone or Cellular saver column, or lifts its cap, kept per device
+under `klabautermann.sampling.caps` by server id and sent to the engine as
+`SetServerCadenceCap` at start and on every change; a cap outlives the
+fleet, as the engine's does.
 Rates
 are computed in the engine isolate (D43) from counter deltas over the
 host's uptime between two replies that carry them, with wrap detection
@@ -5131,6 +5135,17 @@ arrives with E22's Docker actions.
   loss re-seals nothing and a pending record has no source. The engine
   sends every live snippet, by title, as `SnippetsChanged` at start and
   after a round that changed them, as it sends `AlertRulesChanged`.
+- **As built (M6 N65c).** The server header's Snippets button, shown
+  where actions are allowed, opens the account's snippets, searchable by
+  title and command. Choosing one asks for each `{{name}}` placeholder
+  once, shows the filled command, and continues only when every value is
+  in, so a blank never turns `rm -rf /{{dir}}` into `rm -rf /`. The
+  filled command is the `RunSnippet` action: `sh -c` as the login user,
+  planned like JOB-19's run now. The preview, the linter and the audit
+  show it masked by 8.9's rules, the danger findings come from the
+  preview's linter, and its output shows in the run-now sheet. Admin
+  mode never applies: a snippet that needs root says so in its own
+  words, as in Séance's terminal.
 - **v1.x.** Custom probes, run on many with a concurrency cap; assistant
   features (explain a log excerpt, suggest a fix, diagnostics the user
   chooses to attach, explain a container) after `ChatController` is
@@ -7189,6 +7204,16 @@ and in the pressure bar. The optional `HealthMark` overlay (`ok`,
 the MVP (D55). v1 adds density modes, the summary strip, attention-first
 sort and the faults-only filter.
 
+As built in M6 (N63b, FL-08), the desktop and tablet workspace shows the
+fleet board while no server is open: every server as a card (state word,
+address, pressure bar with its shares in figures, age) or as a grid tile
+(name, dot, bar), opened by a tap and named to screen readers as its row
+is. A picker above it chooses Auto, Cards, Grid or Rows, kept per device in
+`settings.json` under `klabautermann.fleet.density`. Auto shows cards
+below 12 servers and the grid from 12 on; Rows keeps the rail's rows and
+the workspace's invitation. The phone's fleet list is its home and keeps
+rows: cards and a grid are layouts for a wide workspace.
+
 As built in M2 (`app/klabautermann_app/lib/ui/fleet_rows.dart`,
 `fleet_row_state.dart`), the desktop rail and the phone list share one
 row over the kit's `SidebarRow`, resolved through `ghost_servers`'
@@ -7424,7 +7449,10 @@ reading, in two columns from the System tab's 600 px panel width:
   rows, the Overview's gauges, the health card's disk alarms and the
   announcer read. Careful keeps the series colour and says so by an info
   icon and in words; only warning and critical raise disk alarms or are
-  announced. The user's levels follow in N61b.
+  announced. Settings > Alerts sets each metric's three levels (N61b),
+  whole percents from 1 to 100 in rising order, kept per device in
+  `settings.json` under `klabautermann.overview.thresholds`; the desktop
+  settings window sets them over the link.
 - Every figure goes through the chart formatters' IEC units, and a
   test keeps the decimal `ghostFormatFileSize` and `ghostFormatByteRate`
   out of `lib/`. A figure the container withholds (D50) reads unknown

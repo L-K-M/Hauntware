@@ -628,6 +628,30 @@ abstract class AppLocalizations {
   /// **'Nothing to rank yet.'**
   String get topListsEmpty;
 
+  /// The fleet board (FL-08): the label before its layout picker, shown in the desktop workspace while no server is open.
+  ///
+  /// In en, this message translates to:
+  /// **'Layout'**
+  String get fleetDensityLabel;
+
+  /// The fleet board (FL-08): one layout in its picker. Auto shows cards for a small fleet and a grid for a large one; Rows leaves the rail's rows alone.
+  ///
+  /// In en, this message translates to:
+  /// **'{density, select, auto{Auto} cards{Cards} grid{Grid} other{Rows}}'**
+  String fleetDensity(String density);
+
+  /// The fleet board: toast when the picked layout applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The layout changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get fleetDensityNotSaved;
+
+  /// A fleet board card: one pressure bar cell's share in figures, e.g. 'CPU 23 %'. label is fleetRowCpu, fleetRowMemory or fleetRowDisk.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} {percent} %'**
+  String fleetTileShare(String label, int percent);
+
   /// The CPU cell of a fleet row's pressure bar (FL-07), as its summary names it.
   ///
   /// In en, this message translates to:
@@ -5598,6 +5622,36 @@ abstract class AppLocalizations {
   /// **'The refresh rate could not be changed.'**
   String get settingsCadenceNotChanged;
 
+  /// Settings, Servers: the heading of the per-server polling caps (SAF-19).
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh limits'**
+  String get settingsCadenceCapsTitle;
+
+  /// Settings, Servers: what a per-server polling cap does (SAF-19, 03 §6.4).
+  ///
+  /// In en, this message translates to:
+  /// **'Read a server no more often than the chosen rate, for example one on a metered link. A limit never makes a server refresh faster than the rate in General.'**
+  String get settingsCadenceCapsDetail;
+
+  /// Settings, Servers: the menu choice that lifts a server's polling cap.
+  ///
+  /// In en, this message translates to:
+  /// **'No limit'**
+  String get settingsCadenceNoCap;
+
+  /// Settings, Servers: toast when a server's polling cap applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The refresh limit changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get settingsCadenceCapNotSaved;
+
+  /// Settings, Servers: toast when a server's polling cap change failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The refresh limit could not be changed.'**
+  String get settingsCadenceCapNotChanged;
+
   /// Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level.
   ///
   /// In en, this message translates to:
@@ -5609,6 +5663,94 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'While a server\'s Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.'**
   String get settingsAnnounceBandsDetail;
+
+  /// Settings, Alerts: the heading of OV-11's threshold levels.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage bands'**
+  String get settingsThresholdsTitle;
+
+  /// Settings, Alerts: what the usage bands do.
+  ///
+  /// In en, this message translates to:
+  /// **'The levels the fleet rows, the Overview and its health card judge each metric by. Careful shows an info icon, warning and critical also take their colour, and only warning and critical are announced.'**
+  String get settingsThresholdsDetail;
+
+  /// Settings, Alerts, threshold dialog: the careful level's field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Careful from'**
+  String get settingsThresholdCareful;
+
+  /// Settings, Alerts, threshold dialog: the warning level's field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning from'**
+  String get settingsThresholdWarning;
+
+  /// Settings, Alerts, threshold dialog: the critical level's field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical from'**
+  String get settingsThresholdCritical;
+
+  /// Settings, Alerts, threshold dialog: the unit after each level's number.
+  ///
+  /// In en, this message translates to:
+  /// **'%'**
+  String get settingsThresholdPercentSuffix;
+
+  /// Settings, Alerts, threshold dialog: why the levels typed cannot be saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Each level must be a whole percent from 1 to 100, and each one higher than the one before.'**
+  String get settingsThresholdsInvalid;
+
+  /// Settings, Alerts, threshold dialog: fills in the default levels (70, 80 and 90 %).
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get settingsThresholdDefault;
+
+  /// Settings, Alerts, threshold dialog: closes it without a change.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get settingsThresholdCancel;
+
+  /// Settings, Alerts, threshold dialog: applies the levels typed.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get settingsThresholdSave;
+
+  /// Settings, Alerts: toast when new levels applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The levels changed but could not be saved. They last until Klabautermann quits.'**
+  String get settingsThresholdsNotSaved;
+
+  /// Settings, Alerts: toast when the levels change failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The levels could not be changed.'**
+  String get settingsThresholdsNotChanged;
+
+  /// Settings, Alerts: a metric whose usage bands are set (OV-11); disk covers space and inodes.
+  ///
+  /// In en, this message translates to:
+  /// **'{metric, select, cpu{CPU} memory{Memory} other{Disk}}'**
+  String settingsThresholdMetric(String metric);
+
+  /// Settings, Alerts: a metric's three levels, each a formatted percent (chartPercent).
+  ///
+  /// In en, this message translates to:
+  /// **'Careful from {careful}, warning from {warning}, critical from {critical}'**
+  String settingsThresholdLevels(
+    String careful,
+    String warning,
+    String critical,
+  );
 
   /// Toast when the threshold announcement switch applied but settings.json could not be written.
   ///
@@ -12857,6 +12999,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get attentionCancel;
+
+  /// Server header button and page title (AUT-01): Séance's synced snippets, run on this server.
+  ///
+  /// In en, this message translates to:
+  /// **'Snippets'**
+  String get snippetsTitle;
+
+  /// Snippets page title (AUT-01): the server the chosen snippet runs on.
+  ///
+  /// In en, this message translates to:
+  /// **'Snippets on {server}'**
+  String snippetsPageTitle(String server);
+
+  /// Snippets page (AUT-01): the search field's label; it matches titles and commands.
+  ///
+  /// In en, this message translates to:
+  /// **'Search snippets'**
+  String get snippetsSearch;
+
+  /// Snippets page (AUT-01): shown when the account carries no snippet.
+  ///
+  /// In en, this message translates to:
+  /// **'No snippets yet. Snippets you save in Séance appear here once this device syncs with the same account.'**
+  String get snippetsEmpty;
+
+  /// Snippets page (AUT-01): shown when the search leaves no snippet.
+  ///
+  /// In en, this message translates to:
+  /// **'No snippet matches your search.'**
+  String get snippetsNoMatch;
+
+  /// Snippets page (AUT-01): stands in for a snippet Séance saved without a title.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled snippet'**
+  String get snippetsUntitled;
+
+  /// Placeholder dialog title (AUT-01): the snippet whose placeholders the user fills before the preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in {title}'**
+  String snippetsFillTitle(String title);
+
+  /// Placeholder dialog (AUT-01): explains the fields above the command.
+  ///
+  /// In en, this message translates to:
+  /// **'Each value replaces its placeholder in the command. Nothing runs until you confirm the preview.'**
+  String get snippetsFillHint;
+
+  /// Placeholder dialog (AUT-01): label of the filled command shown under the fields.
+  ///
+  /// In en, this message translates to:
+  /// **'Command'**
+  String get snippetsFillCommand;
+
+  /// Placeholder dialog (AUT-01): shown while a placeholder is still empty, so a blank value never runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in every value to continue.'**
+  String get snippetsFillRequired;
+
+  /// Placeholder dialog (AUT-01): opens the action preview of the filled command.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get snippetsContinue;
+
+  /// Placeholder dialog (AUT-01): closes it without running anything.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get snippetsCancel;
 
   /// View menu: opens the command palette (PLT-07), ⌘K or Ctrl+K.
   ///

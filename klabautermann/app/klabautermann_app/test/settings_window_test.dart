@@ -13,6 +13,7 @@ import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/app_lock_controller.dart';
 import 'package:klabautermann_app/controllers/cadence_controller.dart';
 import 'package:klabautermann_app/controllers/sync_secrets_controller.dart';
+import 'package:klabautermann_app/controllers/threshold_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/device_name.dart';
@@ -28,6 +29,8 @@ import 'package:klabautermann_app/services/settings_window/settings_window_link.
 import 'package:klabautermann_app/settings_window_app.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/settings_page.dart';
+import 'package:klabautermann_app/ui/charts/charts.dart' show ChartThresholds;
+import 'package:klabautermann_app/ui/threshold_scope.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
     show MonitorEligibility, SafetyPolicy, ServerSafety;
 
@@ -170,7 +173,9 @@ void main() {
     SyncSecretsSettings? syncSecrets,
     DeviceNameSettings? deviceName,
     AppLockSettings? appLock,
+    ThresholdSettings? thresholds,
     CadenceSettings? cadence,
+    CadenceCapSettings? cadenceCaps,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
@@ -181,7 +186,9 @@ void main() {
       safety: safety ?? newSafety(),
       syncSecrets: syncSecrets ?? newSyncSecrets(),
       appLock: appLock,
+      thresholds: thresholds,
       cadence: cadence,
+      cadenceCaps: cadenceCaps,
       control: _control,
       link: _appLink,
       requestAppExit: () async => AppExitResponse.exit,
@@ -337,7 +344,9 @@ void main() {
     late FakeDeviceAuthenticator device;
     late AppLockController appLock;
     late List<bool> appLockSaved;
+    late ThresholdController thresholds;
     late CadenceController cadence;
+    late CadenceCapsController cadenceCaps;
     late SettingsWindowHost host;
 
     setUp(() async {
@@ -381,8 +390,12 @@ void main() {
       );
       await appLock.refreshAvailability();
       addTearDown(appLock.dispose);
+      thresholds = ThresholdController();
+      addTearDown(thresholds.dispose);
       cadence = CadenceController();
       addTearDown(cadence.dispose);
+      cadenceCaps = CadenceCapsController();
+      addTearDown(cadenceCaps.dispose);
       host = newHost(
         appearance,
         announcements,
@@ -391,7 +404,9 @@ void main() {
         syncSecrets,
         deviceName,
         appLock,
+        thresholds,
         cadence,
+        cadenceCaps,
       );
     });
 
@@ -658,6 +673,50 @@ void main() {
       expect(windowSwitch(), isTrue);
     });
 
+    testWidgets('the Alerts tab\'s usage bands change the app\'s through '
+        'the link (OV-11)', (tester) async {
+      final remote = await pumpBothWindows(
+        tester,
+        appearance,
+        tab: SettingsTab.alerts,
+      );
+      Finder inWindow(Finder finder) =>
+          find.descendant(of: find.byType(SettingsWindowApp), matching: finder);
+      const defaults = 'Careful from 70%, warning from 80%, critical from 90%';
+      expect(remote.thresholds, isNotNull);
+      expect(inWindow(find.text(defaults)), findsNWidgets(3));
+
+      await tester.tap(inWindow(find.text('Disk')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Careful from'),
+        '50',
+      );
+      await tester.tap(find.text('Save'));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      const changed = ChartThresholds(careful: 50, warning: 80, critical: 90);
+      expect(thresholds.value[ThresholdMetric.disk], changed);
+      expect(remote.thresholds!.value[ThresholdMetric.disk], changed);
+
+      // A change in the app reaches the showing window too.
+      await tester.runAsync(() async {
+        await thresholds.setThresholds(
+          ThresholdMetric.cpu,
+          const ChartThresholds(careful: 60, warning: 70, critical: 80),
+        );
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(
+        inWindow(
+          find.text('Careful from 60%, warning from 70%, critical from 80%'),
+        ),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('the General tab\'s polling budget changes the app\'s '
         'through the link (SAF-19)', (tester) async {
       final remote = await pumpBothWindows(
@@ -787,7 +846,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.text('alpha'));
+      await tester.tap(find.widgetWithText(SwitchListTile, 'alpha'));
       await tester.runAsync(pumpEventQueue);
       await tester.pumpAndSettle();
 
@@ -795,6 +854,39 @@ void main() {
       expect(remote.monitorSet.value.first.monitored, isTrue);
       expect(switchOf('alpha').value, isTrue);
       expect(find.text('1 of 10 servers monitored'), findsOneWidget);
+    });
+
+    testWidgets('the Servers tab\'s refresh limits change the app\'s caps '
+        'through the link (SAF-19)', (tester) async {
+      final remote = await pumpWindow(tester, SettingsTab.servers);
+      final bravoCap = find.descendant(
+        of: find.widgetWithText(ListTile, 'bravo'),
+        matching: find.byType(DropdownButton<CadenceCap?>),
+      );
+      await tester.ensureVisible(bravoCap);
+      await tester.pumpAndSettle();
+      expect(remote.cadenceCaps?.value, isEmpty);
+
+      await tester.tap(bravoCap);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cellular saver').last);
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      expect(cadenceCaps.value, {'srv-2': CadenceCap.cellularSaver});
+      expect(remote.cadenceCaps?.value, {'srv-2': CadenceCap.cellularSaver});
+
+      // A change in the app reaches the showing window too.
+      await tester.runAsync(() async {
+        await cadenceCaps.setCap('srv-2', null);
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(remote.cadenceCaps?.value, isEmpty);
+      expect(
+        find.descendant(of: bravoCap, matching: find.text('No limit')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('the Safety tab changes the app\'s policy through the link, '
@@ -1060,6 +1152,14 @@ void main() {
       expect(
         roundTrip(const AnnouncementNotSavedException('disk full')),
         isA<AnnouncementNotSavedException>().having(
+          (error) => error.message,
+          'message',
+          'disk full',
+        ),
+      );
+      expect(
+        roundTrip(const ThresholdsNotSavedException('disk full')),
+        isA<ThresholdsNotSavedException>().having(
           (error) => error.message,
           'message',
           'disk full',

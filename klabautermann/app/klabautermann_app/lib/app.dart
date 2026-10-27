@@ -15,8 +15,10 @@ import 'controllers/admin_controller.dart';
 import 'controllers/alert_center.dart';
 import 'controllers/alert_notifications.dart';
 import 'controllers/alert_rules_controller.dart';
+import 'controllers/snippets_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/cadence_controller.dart';
+import 'controllers/fleet_density.dart';
 import 'controllers/app_lock_controller.dart';
 import 'controllers/pin_publication_controller.dart';
 import 'controllers/safety_controller.dart';
@@ -31,16 +33,19 @@ import 'controllers/prompt_controller.dart';
 import 'controllers/server_editor_controller.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
+import 'controllers/threshold_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/hand_off.dart' show HandOffLauncher;
 import 'theme/app_theme.dart';
 import 'ui/actions/action_entry.dart' show OperationsScope;
 import 'ui/actions/action_preview.dart' show ActionResultToasts;
+import 'ui/fleet_board.dart' show FleetDensityScope;
 import 'ui/adaptive_shell.dart';
 import 'ui/admin_mode_chip.dart' show AdminScope;
 import 'ui/alert_notifications.dart' show AlertNotificationsScope;
 import 'ui/alert_rules.dart' show AlertRulesScope;
+import 'ui/snippets.dart' show SnippetsScope;
 import 'ui/alerts.dart' show AlertScope;
 import 'ui/app_lock_gate.dart';
 import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
@@ -56,6 +61,7 @@ import 'ui/server_surfaces.dart' show AppActivityReporter;
 import 'ui/settings_page.dart';
 import 'ui/startup_issue_notice.dart';
 import 'ui/threshold_announcer.dart' show AnnouncementScope;
+import 'ui/threshold_scope.dart' show ThresholdScope;
 import 'ui/workspace_navigation.dart';
 
 /// The settings route's name: Settings on phones, and on a desktop whose
@@ -74,7 +80,10 @@ class KlabautermannApp extends StatelessWidget {
     required this.appearance,
     required this.coverage,
     required this.announcements,
+    this.thresholds,
     this.cadence,
+    this.fleetDensity,
+    this.cadenceCaps,
     this.deviceName,
     this.safety,
     this.appLock,
@@ -83,6 +92,7 @@ class KlabautermannApp extends StatelessWidget {
     this.admin,
     this.alerts,
     this.alertRules,
+    this.snippets,
     this.alertNotifications,
     this.operations,
     required this.dockerNotice,
@@ -118,6 +128,15 @@ class KlabautermannApp extends StatelessWidget {
   /// out.
   final CadenceController? cadence;
 
+  /// FL-08's fleet board layout, for the desktop workspace while no
+  /// server is open; null in tests that leave it out, which keep the
+  /// workspace's invitation.
+  final FleetDensityController? fleetDensity;
+
+  /// The per-server caps (SAF-19) in Settings > Servers; null in tests
+  /// that leave them out.
+  final CadenceCapsController? cadenceCaps;
+
   /// The safety preferences the engine enforces (M4 plan M4); like
   /// [appearance], they outlive an engine run. Null in tests that leave
   /// safety out: Settings then shows its placeholder and the server header
@@ -127,6 +146,11 @@ class KlabautermannApp extends StatelessWidget {
   /// The app lock (SAF-20), whose screen covers every route while locked;
   /// null in tests that leave it out.
   final AppLockController? appLock;
+
+  /// OV-11's threshold bands; like [appearance], they outlive an engine
+  /// run. Null in tests that leave them out, where every metric takes the
+  /// default bands and the Alerts settings tab is a placeholder.
+  final ThresholdController? thresholds;
 
   /// The device name the host syslog line gives (M5 plan Q6); like
   /// [appearance], it outlives an engine run. Null in tests that leave it
@@ -155,6 +179,10 @@ class KlabautermannApp extends StatelessWidget {
   /// run's like [fleet]. Null in tests that leave it out, where no surface
   /// offers the rules page.
   final AlertRulesController? alertRules;
+
+  /// Séance's synced snippets (AUT-01), one engine run's like [fleet].
+  /// Null in tests that leave it out, where no surface offers them.
+  final SnippetsController? snippets;
 
   /// Raised alerts' system notifications (ALR-01), one engine run's like
   /// [fleet]. Null in tests that leave it out, where no surface offers
@@ -295,12 +323,26 @@ class KlabautermannApp extends StatelessWidget {
           // the announcement switch, and the Docker tab its notice, on
           // every route, the phone's pushed server screen included.
           builder: (context, child) {
+            final banded = withMacosToolbarBand(toolbarBand, child: child!);
+            final withDensity = switch (fleetDensity) {
+              final density? => FleetDensityScope(
+                density: density,
+                child: banded,
+              ),
+              null => banded,
+            };
             final scoped = DockerNoticeScope(
               notice: dockerNotice,
               child: AnnouncementScope(
                 announce: announcements,
                 openSettings: (context) => unawaited(_openSettings(context)),
-                child: withMacosToolbarBand(toolbarBand, child: child!),
+                child: switch (thresholds) {
+                  final thresholds? => ThresholdScope(
+                    thresholds: thresholds,
+                    child: withDensity,
+                  ),
+                  null => withDensity,
+                },
               ),
             );
             final withOperations = switch (operations) {
@@ -329,12 +371,19 @@ class KlabautermannApp extends StatelessWidget {
               final rules? => AlertRulesScope(rules: rules, child: withEditing),
               null => withEditing,
             };
-            final withNotifications = switch (alertNotifications) {
-              final notifications? => AlertNotificationsScope(
-                notifications: notifications,
+            final withSnippets = switch (snippets) {
+              final snippets? => SnippetsScope(
+                snippets: snippets,
                 child: withRules,
               ),
               null => withRules,
+            };
+            final withNotifications = switch (alertNotifications) {
+              final notifications? => AlertNotificationsScope(
+                notifications: notifications,
+                child: withSnippets,
+              ),
+              null => withSnippets,
             };
             final withAlerts = switch (alerts) {
               final alerts? => AlertScope(
@@ -433,7 +482,9 @@ class KlabautermannApp extends StatelessWidget {
             kSettingsRoute: (_) => SettingsPage(
               appearance: appearance,
               announcements: announcements,
+              thresholds: thresholds,
               cadence: cadence,
+              cadenceCaps: cadenceCaps,
               deviceName: deviceName,
               appVersion: appVersion,
               monitorSet: fleet.monitorSettings,

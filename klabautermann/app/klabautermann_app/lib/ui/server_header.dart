@@ -20,6 +20,7 @@ import 'hand_off_actions.dart';
 import 'admin_mode_chip.dart';
 import 'alert_rules.dart' show AlertRulesButton;
 import 'server_safety.dart';
+import 'snippets.dart' show SnippetsButton;
 
 /// The server header of 03 §10.2 and §10.5: the server's name, unless the
 /// phone's app bar carries it, its link state, the coverage chip, the
@@ -93,6 +94,7 @@ class ServerHeader extends StatelessWidget {
               monitoring: monitoring,
             ),
             AlertRulesButton(server: server, fleet: fleet),
+            SnippetsButton(serverId: server.id, serverName: server.displayName),
             AdminModeChip(serverId: server.id),
             OpenInSeanceButton(serverId: server.id),
             DetachedOperationsChip(
@@ -287,7 +289,7 @@ class ServerLinkState extends StatelessWidget {
                   ),
                 )
                 case final dot?)
-              _LinkDot(dot),
+              LinkDot(dot),
             Icon(
               fleetStatusIcon(indicator.glyph) ?? Icons.link_off,
               size: 16,
@@ -309,8 +311,10 @@ class ServerLinkState extends StatelessWidget {
 /// The indicator's dot on its own, as the sidebar kit draws it in a row's
 /// mark, which keeps its painter private: solid for live truth, a ring for
 /// a probe's observation, a bar through it for a refusal.
-class _LinkDot extends StatelessWidget {
-  const _LinkDot(this.dot);
+/// [dot] drawn on its own, outside a sidebar row: the server header's and
+/// the fleet board's tiles.
+class LinkDot extends StatelessWidget {
+  const LinkDot(this.dot, {super.key});
 
   final SidebarStatusDot dot;
 
