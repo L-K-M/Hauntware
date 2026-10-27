@@ -7638,7 +7638,7 @@ abstract class AppLocalizations {
   /// **'{tool, select, portainer{Portainer} dockhand{Dockhand} dockge{Dockge} dozzle{Dozzle} beszel{Beszel} uptimeKuma{Uptime Kuma} netdata{Netdata} wud{What\'s Up Docker} other{Another tool}}'**
   String dockerReviewTool(String tool);
 
-  /// Docker Review sub-tab: the container another tool runs in, and its state.
+  /// Docker Review sub-tab: the container another tool runs in, and its state as the Containers sub-tab words it.
   ///
   /// In en, this message translates to:
   /// **'Container {name}, {state}'**

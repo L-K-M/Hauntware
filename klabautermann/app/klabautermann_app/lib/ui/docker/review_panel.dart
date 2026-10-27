@@ -6,7 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/docker_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
-import 'containers_panel.dart' show DockerNotice;
+import 'containers_panel.dart' show DockerNotice, containerStateText;
 
 /// DKE-06's security review and DKE-07's log rotation lint: on request,
 /// each container's configuration read on [serverId] and what it puts at
@@ -314,9 +314,10 @@ class _ToolRow extends StatelessWidget {
                   ),
                 ),
                 Text(switch (tool.state) {
+                  // In the Containers sub-tab's words, not the daemon's.
                   final state? => l10n.dockerReviewToolContainer(
                     tool.name,
-                    state,
+                    containerStateText(l10n, state),
                   ),
                   null => l10n.dockerReviewToolContainerName(tool.name),
                 }, style: theme.textTheme.bodySmall),

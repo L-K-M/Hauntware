@@ -315,6 +315,8 @@ void main() {
     expect(tool('fmartinou/whats-up-docker'), HostTool.wud);
     expect(tool('registry:5000/team/dockhand:1.0'), HostTool.dockhand);
     expect(tool('jenkins/agent'), isNull);
+    expect(tool('myportainer/agent'), isNull);
+    expect(tool('registry.example.com/portainer/agent:2'), HostTool.portainer);
     expect(tool('nginx:1.27'), isNull);
     expect(tool(''), isNull);
   });

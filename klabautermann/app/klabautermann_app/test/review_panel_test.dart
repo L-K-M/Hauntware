@@ -138,7 +138,7 @@ void main() {
 
     expect(find.text('Other tools on this host'), findsOne);
     expect(find.text('Uptime Kuma'), findsOne);
-    expect(find.text('Container kuma, running'), findsOne);
+    expect(find.text('Container kuma, Running'), findsOne);
     expect(find.text('0.0.0.0:3001->3001/tcp'), findsOne);
     expect(find.text('Portainer'), findsOne);
     expect(find.text('It publishes no port.'), findsOne);

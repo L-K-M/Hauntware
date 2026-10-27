@@ -158,7 +158,11 @@ HostTool? hostToolOf(ContainerSummary summary) {
   if (colon >= 0) name = name.substring(0, colon);
   if (name == 'agent') {
     final owner = slash < 0 ? '' : reference.substring(0, slash);
-    return owner.endsWith('portainer') ? HostTool.portainer : null;
+    // The owner whole or as the last path segment: `myportainer/agent`
+    // is someone else's agent.
+    return owner == 'portainer' || owner.endsWith('/portainer')
+        ? HostTool.portainer
+        : null;
   }
   return _toolImages[name];
 }

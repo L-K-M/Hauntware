@@ -7321,7 +7321,7 @@
   },
   "dockerReviewToolContainer": "Container {name}, {state}",
   "@dockerReviewToolContainer": {
-    "description": "Docker Review sub-tab: the container another tool runs in, and its state.",
+    "description": "Docker Review sub-tab: the container another tool runs in, and its state as the Containers sub-tab words it.",
     "placeholders": {
       "name": {
         "type": "String"
