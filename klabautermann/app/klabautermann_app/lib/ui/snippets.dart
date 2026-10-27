@@ -177,6 +177,7 @@ class _SnippetsPageState extends State<SnippetsPage> {
       showCronRunOutput(
         context,
         operations: operations,
+        serverId: widget.serverId,
         planId: planId,
         title: preview.targetName,
       ),

@@ -88,6 +88,7 @@ import '../docker/docker_ladder.dart'
         DockerRank,
         DockerRootEquivalence,
         DockerRouteLabel,
+        dockerProgramPathProblem,
         dockerSocketPathProblem;
 import '../operations/plan_types.dart';
 
@@ -321,6 +322,14 @@ import '../operations/plan_types.dart';
 /// plan N65): the engine sends [SnippetsChanged] unasked, and the
 /// [RunSnippet] intent runs one, reporting its output as [RunCronJob]
 /// does.
+///
+/// CN-16's docker program then joined v3 the same way: [SetDockerProgram]
+/// names the `docker` a server's relays and compose commands run,
+/// [DockerEndpointRoute] gained `dockerProgram` and
+/// [DockerEndpointFailure] gained `invalidProgram`.
+/// Port forwards then joined v3 the same way (03 §5.11 NET-11, DKE-09, M6
+/// plan N22): [OpenPortForward] and [ClosePortForward], answered by
+/// [PortForwardState].
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -899,6 +908,81 @@ final class SetDockerEndpoint extends EngineRequest {
 
   final String serverId;
   final DockerEndpointChoice choice;
+}
+
+/// Sets the program [serverId]'s Docker relays and compose commands run
+/// for `docker` (CN-16): the app's per-server path from `settings.json`
+/// (03 §4.10), or null for the `docker` on the exec `PATH`, sent as
+/// [SetDockerEndpoint] is. It serves a CLI the non-login `PATH` lacks,
+/// such as Snap's `/snap/bin/docker` or a NAS's `/usr/local/bin/docker`.
+/// The engine keeps it until another arrives or the server leaves the
+/// fleet, and a session that holds an endpoint resolves again with it at
+/// once; the same program again changes nothing. A path
+/// [dockerProgramPathProblem] refuses fails the endpoint with
+/// [DockerEndpointFailure.invalidProgram]. Ignored for a server outside
+/// the fleet.
+final class SetDockerProgram extends EngineRequest {
+  const SetDockerProgram({required this.serverId, this.program});
+
+  final String serverId;
+  final String? program;
+}
+
+/// The most port forwards the engine holds open at once [E] (03 §5.11):
+/// each is a listening socket on the device.
+const int kPortForwardsMax = 16;
+
+/// Why a forward's target cannot be used (NET-11, DKE-09).
+enum PortForwardTargetProblem {
+  /// The host is empty, longer than a DNS name may be, or holds a space or
+  /// a control character.
+  badHost,
+
+  /// The port is outside 1 to 65535.
+  badPort,
+}
+
+/// Why [host] and [port] cannot be a forward's target, or null when the
+/// engine forwards to them as given. The app checks a typed target with
+/// it, and the engine every [OpenPortForward].
+PortForwardTargetProblem? portForwardTargetProblem(String host, int port) {
+  if (port < 1 || port > 65535) return PortForwardTargetProblem.badPort;
+  if (host.isEmpty ||
+      host.length > 253 ||
+      host.runes.any((r) => r <= 0x20 || r == 0x7f)) {
+    return PortForwardTargetProblem.badHost;
+  }
+  return null;
+}
+
+/// Opens a port forward (NET-11, DKE-09, 03 §5.11): a listener on the
+/// device's `127.0.0.1` at a port the system picks, each connection to it
+/// relayed over [serverId]'s link to [host]:[port] as the server sees
+/// them (a container's address for an unpublished port). Answered by
+/// [PortForwardState]s under [forwardId], the app's own id: one that
+/// listens, or one that ended at once and says why. Only an explicit
+/// user action opens one.
+final class OpenPortForward extends EngineRequest {
+  const OpenPortForward({
+    required this.serverId,
+    required this.forwardId,
+    required this.host,
+    required this.port,
+  });
+
+  final String serverId;
+  final String forwardId;
+  final String host;
+  final int port;
+}
+
+/// Ends [forwardId]'s forward: its listener and every connection close,
+/// and a final [PortForwardState] says [PortForwardEnd.closed]. An
+/// unknown id is ignored.
+final class ClosePortForward extends EngineRequest {
+  const ClosePortForward(this.forwardId);
+
+  final String forwardId;
 }
 
 /// Previews an operation: the engine answers [ActionPlanned], or
@@ -1667,6 +1751,74 @@ final class ServerPrefs {
     hostAuditLine: hostAuditLine ?? this.hostAuditLine,
     stackScanDirs: stackScanDirs,
   );
+}
+
+/// Why a port forward ended (03 §5.11).
+enum PortForwardEnd {
+  /// The app closed it, or the engine stopped.
+  closed,
+
+  /// The server had no link to forward over.
+  noLink,
+
+  /// The server's link went, and its channels with it.
+  linkLost,
+
+  /// The system would not open a listener on `127.0.0.1`.
+  bindFailed,
+
+  /// The target is one [portForwardTargetProblem] refuses.
+  invalidTarget,
+
+  /// [kPortForwardsMax] forwards were open.
+  tooMany,
+
+  /// The app's forward id was already open.
+  duplicateId,
+
+  /// The server left the fleet, or its endpoint now names another machine
+  /// (SYN-08).
+  serverForgotten,
+}
+
+/// Why the last connection through a forward could not be relayed; the
+/// forward keeps listening.
+enum PortForwardFailure {
+  /// The server refused the `direct-tcpip` channel: `AllowTcpForwarding`
+  /// is off, or the server refused it otherwise (03 §5.3).
+  forwardingDisabled,
+
+  /// The channel did not open: the target refused or did not answer, or
+  /// the link failed.
+  connectFailed,
+}
+
+/// A port forward's state (03 §5.11), after each change: listening on
+/// `127.0.0.1:`[localPort] with [connections] open, the last connection's
+/// [failure] if it failed, or [ended] with the reason, its last state.
+final class PortForwardState extends EngineEvent {
+  const PortForwardState({
+    required this.serverId,
+    required this.forwardId,
+    required this.host,
+    required this.port,
+    this.localPort,
+    this.connections = 0,
+    this.failure,
+    this.ended,
+  });
+
+  final String serverId;
+  final String forwardId;
+  final String host;
+  final int port;
+
+  /// The listener's port on `127.0.0.1`; null once ended or before it
+  /// listened.
+  final int? localPort;
+  final int connections;
+  final PortForwardFailure? failure;
+  final PortForwardEnd? ended;
 }
 
 /// Whether pins the user confirms publish (D15, M5 plan M07): [release]
@@ -5175,6 +5327,10 @@ enum DockerEndpointFailure {
   /// The endpoint choice names a socket path [dockerSocketPathProblem]
   /// refuses, so the ladder did not run.
   invalidChoice,
+
+  /// The server's `docker` program is a path [dockerProgramPathProblem]
+  /// refuses, so the ladder did not run (CN-16).
+  invalidProgram,
 }
 
 /// The route a [DockerEndpointState] names (03 §5.4, §5.9; SAF-08).
@@ -5187,6 +5343,7 @@ final class DockerEndpointRoute {
     required this.rootEquivalence,
     this.mode,
     this.peerCredentialsExposedBy,
+    this.dockerProgram = 'docker',
   });
 
   final DockerRank rank;
@@ -5196,6 +5353,10 @@ final class DockerEndpointRoute {
   /// where the engine sees forwarded connections as root (CN-15,
   /// CVE-2025-14282); null on other servers and on relays.
   final DropbearRelease? peerCredentialsExposedBy;
+
+  /// The program compose commands run for `docker` on this server: its
+  /// [SetDockerProgram] path, or `docker` on the exec `PATH` (CN-16).
+  final String dockerProgram;
 
   /// The engine as its API names it: Podman when `_ping` carries
   /// `Libpod-API-Version` or `/version` names a Podman component, even

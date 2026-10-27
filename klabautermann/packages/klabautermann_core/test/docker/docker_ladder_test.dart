@@ -409,6 +409,47 @@ void main() {
       expect(link.started, isEmpty);
     });
 
+    test('a docker program override relays where the probe found no '
+        'docker on the exec PATH (CN-16)', () async {
+      const snap = '/snap/bin/docker';
+      final link = ForwardingLink()..probeAnswers[_rootful] = _disabled;
+      final profile = _profile(
+        [_rootful],
+        tools: const {'docker': null, 'podman': null, 'socat': null},
+      );
+
+      final route =
+          await DockerLadder.resolve(link, profile, dockerProgram: snap)
+              as DockerRoute;
+
+      expect(route.rank, DockerRank.cliRelay);
+      expect(route.relayArgv, [
+        snap,
+        '--host',
+        'unix://$_rootful',
+        'system',
+        'dial-stdio',
+      ]);
+      await _ping(link, route);
+      expect(link.started, [
+        HostCommands.commandLine(route.relayArgv, quote: quoteShellWord),
+      ]);
+    });
+
+    test('a docker program override leaves the podman CLI as it was', () async {
+      final link = ForwardingLink()..probeAnswers[_podman] = _disabled;
+
+      final route =
+          await DockerLadder.resolve(
+                link,
+                _profile([_podman], tools: _podmanCli),
+                dockerProgram: '/opt/bin/docker',
+              )
+              as DockerRoute;
+
+      expect(route.relayArgv.first, 'podman');
+    });
+
     test('a CLI the probe did not report is not tried', () async {
       final link = ForwardingLink()..probeAnswers[_rootful] = _disabled;
 
@@ -617,6 +658,22 @@ void main() {
           reason: bad,
         );
       }
+    });
+
+    test('a docker program with a line break or NUL is refused', () {
+      for (final bad in ['docker', '/a\nb', '/a\rb', '/a\u0000b']) {
+        expect(dockerProgramPathProblem(bad), isNotNull, reason: bad);
+        expect(
+          DockerLadder.resolve(
+            ForwardingLink(),
+            _profile(const []),
+            dockerProgram: bad,
+          ),
+          throwsArgumentError,
+          reason: bad,
+        );
+      }
+      expect(dockerProgramPathProblem('/snap/bin/docker'), isNull);
     });
 
     test('the probe passes a hostile path to the shell unchanged', () async {

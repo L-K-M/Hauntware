@@ -243,6 +243,14 @@ DockerSocketPathProblem? dockerSocketPathProblem(String path) {
   }
 }
 
+/// Why [path] cannot name a server's `docker` program (CN-16), or null
+/// when the relays and compose commands run it as written. The rules are
+/// [dockerSocketPathProblem]'s, since the program is an argv word as the
+/// socket path is; the app checks a typed path with it, and the engine
+/// every program it is sent.
+DockerSocketPathProblem? dockerProgramPathProblem(String path) =>
+    dockerSocketPathProblem(path);
+
 /// Opens one duplex over [route] on [link]: a streamlocal channel, or a
 /// fresh relay process per connection (03 §5.9). The sudo relay starts
 /// through [admin]'s elevation and fails without it, as when admin mode
@@ -291,16 +299,23 @@ abstract final class DockerLadder {
   /// A socket the user cannot write is reached through the sudo relay
   /// while [adminMode] is on (rank 3).
   ///
-  /// Throws an [ArgumentError] when [override] is not an absolute path
-  /// free of NUL and line breaks.
+  /// [dockerProgram], the server's `docker` program path override
+  /// (CN-16), names the CLI the relays run in place of the `docker` on
+  /// the exec `PATH`, which counts as present whether the probe found a
+  /// `docker` or not.
+  ///
+  /// Throws an [ArgumentError] when [override] or [dockerProgram] is not
+  /// an absolute path free of NUL and line breaks.
   static Future<DockerRouteResult> resolve(
     SshLink link,
     HostProfile profile, {
     String? override,
+    String? dockerProgram,
     Set<DockerRoute> excluding = const {},
     bool adminMode = false,
   }) async {
     if (override != null) validateAbsolutePath(override);
+    if (dockerProgram != null) validateAbsolutePath(dockerProgram);
 
     final candidates = _candidates(profile, override);
     if (candidates.isEmpty) {
@@ -319,6 +334,7 @@ abstract final class DockerLadder {
         profile,
         candidate,
         excluding,
+        dockerProgram: dockerProgram,
         adminMode: adminMode,
       );
       switch (outcome) {
@@ -338,6 +354,7 @@ abstract final class DockerLadder {
     HostProfile profile,
     _Candidate candidate,
     Set<DockerRoute> excluding, {
+    required String? dockerProgram,
     required bool adminMode,
   }) async {
     final path = candidate.path;
@@ -367,7 +384,7 @@ abstract final class DockerLadder {
         return const DockerRouteNone._(DockerNoRouteReason.noSocket);
       case (access: _SocketAccess.denied, netcat: _)
           when adminMode && _hasSudo(profile):
-        return _sudoRelay(profile, candidate, excluding);
+        return _sudoRelay(profile, candidate, excluding, dockerProgram);
       case (access: _SocketAccess.denied, netcat: _):
         return DockerRouteNone._(
           _hasSudo(profile)
@@ -375,7 +392,13 @@ abstract final class DockerLadder {
               : DockerNoRouteReason.socketDenied,
         );
       case (access: _SocketAccess.reachable, netcat: final netcat):
-        return _relay(profile, candidate, excluding, netcat: netcat);
+        return _relay(
+          profile,
+          candidate,
+          excluding,
+          dockerProgram,
+          netcat: netcat,
+        );
     }
   }
 
@@ -386,24 +409,22 @@ abstract final class DockerLadder {
   static DockerRouteResult _relay(
     HostProfile profile,
     _Candidate candidate,
-    Set<DockerRoute> excluding, {
+    Set<DockerRoute> excluding,
+    String? dockerProgram, {
     required bool netcat,
   }) {
     final path = candidate.path;
     final host = validateSocketPath(path);
     final relays = [
-      for (final cli in _relayClis(candidate.runtime))
-        if (profile.toolPresent(cli.binary) == true)
-          candidate.route(
-            DockerRank.cliRelay,
-            relayArgv: [
-              cli.binary,
-              cli.hostOption,
-              host,
-              'system',
-              'dial-stdio',
-            ],
-          ),
+      for (final (:binary, :hostOption) in _presentClis(
+        profile,
+        candidate.runtime,
+        dockerProgram,
+      ))
+        candidate.route(
+          DockerRank.cliRelay,
+          relayArgv: [binary, hostOption, host, 'system', 'dial-stdio'],
+        ),
       if (profile.toolPresent('socat') == true && _socatSafePath.hasMatch(path))
         candidate.route(
           DockerRank.socketRelay,
@@ -424,13 +445,17 @@ abstract final class DockerLadder {
     HostProfile profile,
     _Candidate candidate,
     Set<DockerRoute> excluding,
+    String? dockerProgram,
   ) {
     final host = validateSocketPath(candidate.path);
-    for (final cli in _relayClis(candidate.runtime)) {
-      if (profile.toolPresent(cli.binary) != true) continue;
+    for (final (:binary, :hostOption) in _presentClis(
+      profile,
+      candidate.runtime,
+      dockerProgram,
+    )) {
       final route = candidate.route(
         DockerRank.sudoRelay,
-        relayArgv: [cli.binary, cli.hostOption, host, 'system', 'dial-stdio'],
+        relayArgv: [binary, hostOption, host, 'system', 'dial-stdio'],
       );
       if (!excluding.contains(route)) return route;
     }
@@ -519,6 +544,21 @@ abstract final class DockerLadder {
         EngineRuntime.podman => const [_RelayCli.podman, _RelayCli.docker],
         null => const [_RelayCli.docker, _RelayCli.podman],
       };
+
+  /// The relay CLIs for [runtime] the server can run, in order, each by
+  /// the program it runs: [dockerProgram] for `docker` when the user set
+  /// one, else a CLI the probe saw on the exec `PATH`.
+  static List<({String binary, String hostOption})> _presentClis(
+    HostProfile profile,
+    EngineRuntime? runtime,
+    String? dockerProgram,
+  ) => [
+    for (final cli in _relayClis(runtime))
+      if (cli == _RelayCli.docker && dockerProgram != null)
+        (binary: dockerProgram, hostOption: cli.hostOption)
+      else if (profile.toolPresent(cli.binary) == true)
+        (binary: cli.binary, hostOption: cli.hostOption),
+  ];
 }
 
 /// The exec probe's script; `$1` is the socket path. Each line is an exit

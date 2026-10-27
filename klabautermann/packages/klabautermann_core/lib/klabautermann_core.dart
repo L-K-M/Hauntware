@@ -319,11 +319,14 @@ export 'src/docker/docker_ladder.dart'
         DockerRank,
         DockerRootEquivalence,
         DockerRouteLabel;
-// CN-09's endpoint choice (D54): the check a typed or stored socket path
-// gets before it is kept or sent, and the Access tab's Docker facts
-// (CN-24) from a server's DockerEndpointState.
+// CN-09's endpoint choice (D54) and CN-16's docker program: the checks a
+// typed or stored path gets before it is kept or sent, and the Access
+// tab's Docker facts (CN-24) from a server's DockerEndpointState.
 export 'src/docker/docker_ladder.dart'
-    show DockerSocketPathProblem, dockerSocketPathProblem;
+    show
+        DockerSocketPathProblem,
+        dockerProgramPathProblem,
+        dockerSocketPathProblem;
 export 'src/docker/docker_access.dart' show dockerAccessFacts;
 // CN-15: the Dropbear release a socket forward runs through, when it
 // exposes forwarded connections' peer credentials.

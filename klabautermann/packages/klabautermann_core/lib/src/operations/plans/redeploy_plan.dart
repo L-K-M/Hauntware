@@ -86,6 +86,7 @@ Future<PlanAttempt> planRedeploy(
     steps: (files) => [
       ShellStep(
         composePull(
+          binary: files.dockerProgram,
           socketPath: files.socketPath,
           project: files.project,
           projectDirectory: files.projectDirectory,
@@ -95,6 +96,7 @@ Future<PlanAttempt> planRedeploy(
       ),
       ShellStep(
         composeUp(
+          binary: files.dockerProgram,
           socketPath: files.socketPath,
           project: files.project,
           projectDirectory: files.projectDirectory,
@@ -155,6 +157,7 @@ Future<PlanAttempt> planStackCompose(
       ShellStep(
         switch (intent.verb) {
           StackComposeVerb.pullService => composePull(
+            binary: files.dockerProgram,
             socketPath: files.socketPath,
             project: files.project,
             projectDirectory: files.projectDirectory,
@@ -163,6 +166,7 @@ Future<PlanAttempt> planStackCompose(
             services: [service!],
           ),
           StackComposeVerb.recreateService => composeUp(
+            binary: files.dockerProgram,
             socketPath: files.socketPath,
             project: files.project,
             projectDirectory: files.projectDirectory,
@@ -173,6 +177,7 @@ Future<PlanAttempt> planStackCompose(
             services: [service!],
           ),
           StackComposeVerb.scaleService => composeUp(
+            binary: files.dockerProgram,
             socketPath: files.socketPath,
             project: files.project,
             projectDirectory: files.projectDirectory,
@@ -183,6 +188,7 @@ Future<PlanAttempt> planStackCompose(
             services: [service],
           ),
           StackComposeVerb.down => composeDown(
+            binary: files.dockerProgram,
             socketPath: files.socketPath,
             project: files.project,
             projectDirectory: files.projectDirectory,
@@ -195,9 +201,11 @@ Future<PlanAttempt> planStackCompose(
   );
 }
 
-/// The compose files a stack's labels record and the socket the engine
-/// listens on: every step names them all.
+/// The compose files a stack's labels record, the socket the engine
+/// listens on and the `docker` program (CN-16): every step names them
+/// all.
 typedef _ComposeFiles = ({
+  String dockerProgram,
   String socketPath,
   String project,
   String? projectDirectory,
@@ -317,6 +325,7 @@ Future<PlanAttempt> planHostPull(
   }
 
   final argv = dockerPull(
+    binary: c.route.dockerProgram,
     socketPath: c.route.socketPath,
     reference: reference,
   ).argv;
@@ -399,6 +408,7 @@ Future<PlanAttempt> _composePlan(
   final List<PlanStep> planSteps;
   try {
     final files = (
+      dockerProgram: c.route.dockerProgram,
       socketPath: c.route.socketPath,
       project: project.name,
       projectDirectory: project.workingDir,
@@ -406,6 +416,7 @@ Future<PlanAttempt> _composePlan(
       envFiles: project.environmentFiles,
     );
     hashArgv = composeConfig(
+      binary: files.dockerProgram,
       socketPath: files.socketPath,
       project: files.project,
       projectDirectory: files.projectDirectory,
@@ -416,6 +427,7 @@ Future<PlanAttempt> _composePlan(
     planSteps = [
       ShellStep(
         composeConfig(
+          binary: files.dockerProgram,
           socketPath: files.socketPath,
           project: files.project,
           projectDirectory: files.projectDirectory,

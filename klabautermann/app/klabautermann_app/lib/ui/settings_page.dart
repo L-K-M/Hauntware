@@ -19,6 +19,7 @@ import '../controllers/pin_publication_controller.dart';
 import '../controllers/safety_controller.dart';
 import '../controllers/sync_secrets_controller.dart';
 import '../controllers/threshold_controller.dart';
+import '../controllers/time_display.dart';
 import '../l10n/app_localizations.dart';
 import '../services/settings_window/settings_window_link.dart';
 import 'about_dialog.dart';
@@ -49,6 +50,7 @@ class SettingsPage extends StatefulWidget {
     this.cadence,
     this.cadenceCaps,
     this.logDisplay,
+    this.timeDisplay,
     this.deviceName,
     this.safety,
     this.appLock,
@@ -78,6 +80,10 @@ class SettingsPage extends StatefulWidget {
   /// The log text size and wrapping (A11Y-12) in General; null in tests
   /// that leave it out, where General shows neither.
   final LogDisplaySettings? logDisplay;
+
+  /// Which zone server times show in (A11Y-07), in General; null in tests
+  /// that leave it out, where General does not offer it.
+  final TimeDisplaySettings? timeDisplay;
 
   /// Null in tests that leave it out, where General shows no device name.
   final DeviceNameSettings? deviceName;
@@ -174,6 +180,7 @@ class _SettingsPageState extends State<SettingsPage>
                 announcements: widget.announcements,
                 cadence: widget.cadence,
                 logDisplay: widget.logDisplay,
+                timeDisplay: widget.timeDisplay,
                 deviceName: widget.deviceName,
                 appVersion: widget.appVersion,
               ),
@@ -215,6 +222,7 @@ class GeneralTab extends StatelessWidget {
     required this.announcements,
     this.cadence,
     this.logDisplay,
+    this.timeDisplay,
     this.deviceName,
     required this.appVersion,
   });
@@ -226,6 +234,9 @@ class GeneralTab extends StatelessWidget {
 
   /// As [SettingsPage.logDisplay].
   final LogDisplaySettings? logDisplay;
+
+  /// As [SettingsPage.timeDisplay].
+  final TimeDisplaySettings? timeDisplay;
 
   /// As [SettingsPage.deviceName].
   final DeviceNameSettings? deviceName;
@@ -299,13 +310,42 @@ class GeneralTab extends StatelessWidget {
     }
   }
 
+  /// As [_set], for the time display.
+  Future<void> _setTimeDisplay(
+    BuildContext context,
+    TimeDisplaySettings timeDisplay,
+    TimeDisplay display,
+  ) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await timeDisplay.setTimeDisplay(display);
+    } on TimeDisplayNotSavedException catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsServerTimesNotSaved);
+      }
+    } on Exception catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsServerTimesNotChanged);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final cadence = this.cadence;
     final logDisplay = this.logDisplay;
+    final timeDisplay = this.timeDisplay;
     return ListenableBuilder(
-      listenable: Listenable.merge([announcements, ?cadence, ?logDisplay]),
+      listenable: Listenable.merge([
+        announcements,
+        ?cadence,
+        ?logDisplay,
+        ?timeDisplay,
+      ]),
       builder: (context, _) => ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -370,6 +410,20 @@ class GeneralTab extends StatelessWidget {
               subtitle: Text(l10n.settingsLogWrapDetail),
             ),
           ],
+          if (timeDisplay != null)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: timeDisplay.value == TimeDisplay.server,
+              onChanged: (server) => unawaited(
+                _setTimeDisplay(
+                  context,
+                  timeDisplay,
+                  server ? TimeDisplay.server : TimeDisplay.device,
+                ),
+              ),
+              title: Text(l10n.settingsServerTimes),
+              subtitle: Text(l10n.settingsServerTimesDetail),
+            ),
           if (cadence != null) ...[
             const SizedBox(height: 24),
             Semantics(

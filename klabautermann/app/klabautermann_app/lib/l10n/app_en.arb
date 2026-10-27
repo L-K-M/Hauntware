@@ -5506,6 +5506,22 @@
   "@settingsLogDisplayNotChanged": {
     "description": "Settings, General: toast when the log text size or wrapping change failed."
   },
+  "settingsServerTimes": "Show server times in the server's zone",
+  "@settingsServerTimes": {
+    "description": "Settings, General: switch that shows the times a server reports in that server's time zone instead of this device's (A11Y-07)."
+  },
+  "settingsServerTimesDetail": "Times on a server's screens use the zone it reported when it connected. Until then, and with this off, they use this device's zone.",
+  "@settingsServerTimesDetail": {
+    "description": "Settings, General: explanation under the server times switch (A11Y-07)."
+  },
+  "settingsServerTimesNotSaved": "The time display changed but could not be saved. It lasts until Klabautermann quits.",
+  "@settingsServerTimesNotSaved": {
+    "description": "Settings, General: toast when the server times switch applied but settings.json could not be written."
+  },
+  "settingsServerTimesNotChanged": "The time display could not be changed.",
+  "@settingsServerTimesNotChanged": {
+    "description": "Settings, General: toast when the server times switch failed to change."
+  },
   "settingsThresholdsTitle": "Usage bands",
   "@settingsThresholdsTitle": {
     "description": "Settings, Alerts: the heading of OV-11's threshold levels."
@@ -7346,6 +7362,10 @@
   "@dockerTransportInvalidChoice": {
     "description": "The server header's Docker transport label (03 §5.9, E4) when the socket path chosen for the server is not an absolute path."
   },
+  "dockerTransportInvalidProgram": "No Engine API route: the docker program path is not valid",
+  "@dockerTransportInvalidProgram": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the docker program path set for the server (CN-16) is not an absolute path."
+  },
   "dockerLowSession": "Low-session mode",
   "@dockerLowSession": {
     "description": "Server header: the server allows few SSH sessions, so Docker shares them sparingly (03 §5.2)."
@@ -7447,6 +7467,10 @@
   "dockerGateInvalidChoice": "The socket path chosen for this server is not a valid absolute path. Choose another socket below.",
   "@dockerGateInvalidChoice": {
     "description": "Docker tab, shown instead of its panels under accessPanelHiddenTitle: the chosen socket path is not valid; the socket picker follows below."
+  },
+  "dockerGateInvalidProgram": "The docker program path set for this server is not a valid absolute path.",
+  "@dockerGateInvalidProgram": {
+    "description": "Docker tab, shown instead of its panels under accessPanelHiddenTitle: the docker program path set for the server (CN-16) is not valid."
   },
   "dockerRetry": "Try again",
   "@dockerRetry": {
@@ -9704,6 +9728,52 @@
   "dockerShellHide": "Show details",
   "@dockerShellHide": {
     "description": "Tooltip of the inspector button that swaps a container shell back for the container's details, closing the shell (CTX-07)."
+  },
+  "dockShow": "Show the dock",
+  "@dockShow": {
+    "description": "Tooltip of the desktop workspace's button that opens the bottom dock, with the server's logs when it holds nothing of the server yet (OV-10)."
+  },
+  "dockHide": "Hide the dock",
+  "@dockHide": {
+    "description": "Tooltip of the button that collapses the desktop workspace's bottom dock to its tabs (OV-10)."
+  },
+  "dockResize": "Dock height. Use the up and down arrow keys to resize it.",
+  "@dockResize": {
+    "description": "Screen-reader label of the bottom dock's top edge, which a drag or the arrow keys resize (OV-10)."
+  },
+  "dockLogs": "Logs",
+  "@dockLogs": {
+    "description": "Bottom dock: the tab of the server's journal, followed as the Logs tab reads it (OV-10)."
+  },
+  "dockRunOutput": "Output: {name}",
+  "@dockRunOutput": {
+    "description": "Bottom dock: the tab of a run's output, named for the unit, cron line or snippet that ran (OV-10).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "backup.service"
+      }
+    }
+  },
+  "dockShell": "Shell: {container}",
+  "@dockShell": {
+    "description": "Bottom dock: the tab of a shell in a container (OV-10).",
+    "placeholders": {
+      "container": {
+        "type": "String",
+        "example": "web"
+      }
+    }
+  },
+  "dockClose": "Close {name}",
+  "@dockClose": {
+    "description": "Tooltip of the button on a bottom dock tab that closes it, ending its follow or shell (OV-10).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Shell: web"
+      }
+    }
   },
   "dockerShellTitle": "Shell in {container}",
   "@dockerShellTitle": {
@@ -12664,6 +12734,26 @@
         "type": "String"
       }
     }
+  },
+  "overviewEditCards": "Arrange cards…",
+  "@overviewEditCards": {
+    "description": "Overview: button at its end that opens the sheet to reorder and hide its cards (OV-06)."
+  },
+  "overviewCardsTitle": "Overview cards",
+  "@overviewCardsTitle": {
+    "description": "Title of the sheet that arranges the Overview's cards (OV-06)."
+  },
+  "overviewCardsHint": "Drag a card to move it, or switch it off to hide it on every server. A card a server cannot show stays out there.",
+  "@overviewCardsHint": {
+    "description": "The sheet that arranges the Overview's cards: under its title."
+  },
+  "overviewCardsReset": "Reset",
+  "@overviewCardsReset": {
+    "description": "The sheet that arranges the Overview's cards: puts every card back in its default place, shown."
+  },
+  "overviewCardsNotSaved": "The card arrangement applies now but was not saved, so it lasts until Klabautermann restarts.",
+  "@overviewCardsNotSaved": {
+    "description": "Toast when the Overview's card arrangement applied but could not be written to this device's settings."
   },
   "exportNameServer": "Name the server",
   "@exportNameServer": {

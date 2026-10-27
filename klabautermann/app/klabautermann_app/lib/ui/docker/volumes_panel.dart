@@ -15,6 +15,7 @@ import '../actions/docker_actions.dart'
 import '../sortable_table.dart';
 import 'containers_panel.dart' show DockerNotice;
 import 'containers_view.dart' show searchTerms;
+import '../time_display.dart';
 import 'docker_cells.dart';
 import 'volumes_view.dart';
 
@@ -498,7 +499,7 @@ class _VolumesPanelState extends State<VolumesPanel> {
       if (at == null) return null;
       return (
         dockerAgeText(l10n, now.difference(at)),
-        l10n.dockerImagesDate(at.toLocal()),
+        l10n.dockerImagesDate(displayTime(context, widget.serverId, at)),
       );
     }
 

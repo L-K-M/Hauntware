@@ -61,7 +61,8 @@ final class ChannelOpenException implements Exception {
   String toString() => message;
 }
 
-/// What the link has learned about the peer from refused opens.
+/// What the link has learned about the peer, from refused channel opens
+/// and from the version exchange.
 final class SshLinkSeen {
   const SshLinkSeen({
     this.learnedSessionLimit,

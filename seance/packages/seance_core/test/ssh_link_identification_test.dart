@@ -15,16 +15,17 @@ void main() {
       );
       addTearDown(link.link.close);
 
-      expect(link.link.seen.serverIdentification, 'SSH-2.0-SeanceTestPeer');
+      expect(link.link.seen.serverIdentification, peerIdentification);
       expect(
         (link.link.state as SshLinkReady).seen.serverIdentification,
-        'SSH-2.0-SeanceTestPeer',
+        peerIdentification,
       );
     },
   );
 
   test('what was seen compares by every field', () {
     const banner = 'SSH-2.0-dropbear_2024.86';
+    expect(const SshLinkSeen(), const SshLinkSeen());
     expect(
       const SshLinkSeen(serverIdentification: banner),
       const SshLinkSeen(serverIdentification: banner),
@@ -32,6 +33,14 @@ void main() {
     expect(
       const SshLinkSeen(serverIdentification: banner),
       isNot(const SshLinkSeen()),
+    );
+    expect(
+      const SshLinkSeen(learnedSessionLimit: 2),
+      isNot(const SshLinkSeen(learnedSessionLimit: 2, forwardingRefused: true)),
+    );
+    expect(
+      const SshLinkSeen(learnedSessionLimit: 2),
+      isNot(const SshLinkSeen(learnedSessionLimit: 3)),
     );
   });
 }
