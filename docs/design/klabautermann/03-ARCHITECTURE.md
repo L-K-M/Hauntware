@@ -2920,6 +2920,21 @@ c2 found these defects in 3.0.2. The last column gives their state on the
   `invalidTarget`, `duplicateId`, `tooMany` (16 open [E]), `noLink` or
   `bindFailed`. Any process on the device can reach a listening port
   while it is open, which the app says where it offers one (NET-11).
+- **As built (M6 N22b, DKE-08).** The Docker tab's Apps sub-tab lists
+  each running container's label links (CTR-11's `labelLinks`), opened
+  in the system browser, and its TCP ports once each: a published port
+  forwards to the server's loopback (or the address it is bound to) at
+  its host port, an unpublished one to the container's address (DKE-09;
+  loopback for host networking), and a UDP port is left out, since
+  `direct-tcpip` carries TCP only. Forward opens the page at
+  `http://127.0.0.1:<local port>` once the engine reports it listening.
+  "Forward a port…" takes any host and port the server reaches
+  (NET-11), checked with `portForwardTargetProblem`. The app's
+  `PortForwardsController` lists each forward with its local port,
+  connections and last failure, keeps an ended one with its reason
+  until dismissed, and closes the server's forwards when the sub-tab is
+  disposed or shows another server; the sub-tab says above its content
+  that any app on the device can reach an open forward.
 - **Privileged files (SAF-12, v1).** SFTP runs as the login user. Root-owned
   files use the elevation prelude in front of commands (`cat`, temp file plus
   `tee` in the same directory, `chown --reference`, `chmod --reference`,
