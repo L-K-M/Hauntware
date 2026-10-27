@@ -30,7 +30,7 @@ typedef StackEditLookup =
 List<String> stackCandidateCheck({
   required ComposeProject project,
   required String socketPath,
-  String dockerProgram = 'docker',
+  required String dockerProgram,
   required String path,
   required String temp,
 }) {
