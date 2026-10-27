@@ -37,6 +37,7 @@ import 'package:seance_core/seance_core.dart'
         Secret,
         SecretVault,
         ServerConfig,
+        Snippet,
         duplicateServerConfig,
         duplicateServerLabel,
         nextUpdatedAt,
@@ -52,6 +53,7 @@ import 'engine_vault.dart';
 import 'keystore_channel.dart';
 import 'klabautermann_records.dart';
 import 'server_drafts.dart';
+import 'snippet_mirror.dart';
 import 'sync_credentials.dart';
 import 'sync_enrollment_file.dart';
 import 'sync_state_file.dart';
@@ -117,6 +119,7 @@ final class EngineSync {
     required String Function(String name) path,
     required this._account,
     required this._klabautermannRecords,
+    required this._snippets,
   }) : _records = PersistentLocalRecordStore(path: path(_syncRecordsFileName)),
        _servers = FileServerConfigStore(
          path: path(_serversFileName),
@@ -126,6 +129,7 @@ final class EngineSync {
       store: _klabautermannRecords,
       servers: _servers,
     );
+    _snippetHandler = SnippetMirrorHandler(_snippets);
   }
 
   /// Opens the sync state files in [supportDirectory] (none of the catalog
@@ -174,6 +178,7 @@ final class EngineSync {
         supportDirectory,
         access: access,
       ),
+      snippets: await SnippetMirror.open(supportDirectory, access: access),
     );
   }
 
@@ -194,6 +199,8 @@ final class EngineSync {
   final EngineVault _vault;
   final KlabautermannRecordStore _klabautermannRecords;
   late final KlabautermannRecordHandler _handler;
+  final SnippetMirror _snippets;
+  late final SnippetMirrorHandler _snippetHandler;
   final HostKeyMutationGate _hostKeyMutations = HostKeyMutationGate();
   SyncAccountInfo? _account;
 
@@ -237,6 +244,7 @@ final class EngineSync {
       (pinVerdictsFileName, _pinVerdicts.issue),
       (syncTripwiresFileName, _tripwires.issue),
       (klabautermannRecordsFileName, _klabautermannRecords.issue),
+      (snippetMirrorFileName, _snippets.issue),
     ])
       if (issue != null)
         SyncStoreIssue(
@@ -336,6 +344,9 @@ final class EngineSync {
   /// its scope names.
   Future<List<SyncedRule>> rules() async => _klabautermannRecords.rules();
 
+  /// Séance's synced snippets (03 §7.21, AUT-01), by title.
+  List<Snippet> snippets() => _snippets.snippets();
+
   /// Signs in to the account [request] names (03 §4.3 step 1), re-keys the
   /// vault through its journal, and applies the pulled records.
   Future<SyncStatus> enroll(EnrollSync request) async {
@@ -381,7 +392,7 @@ final class EngineSync {
           credentials: credentials,
           state: enrollment,
           records: _records,
-          handlers: [_handler],
+          handlers: [_handler, _snippetHandler],
         ).login(
           api: api,
           baseUrl: baseUrl,
@@ -803,7 +814,7 @@ final class EngineSync {
   /// on (03 §4.5); the vault's key is the account key.
   RecordCoordinator _coordinator(List<int> key) => RecordCoordinator(
     records: _records,
-    handlers: [_handler],
+    handlers: [_handler, _snippetHandler],
     hostKeys: _hostKeys,
     hostKeyMutations: _hostKeyMutations,
     crypto: RecordCrypto(RecordCodec(key)),

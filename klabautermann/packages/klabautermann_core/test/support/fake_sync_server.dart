@@ -118,6 +118,34 @@ final class FakeSyncServer {
     _records[id] = sealed.withSeq(++_seq);
   }
 
+  /// Seals [data] as Séance's `snippet:` record [id] and seeds it,
+  /// stamped [updatedAt].
+  Future<void> seedSnippet(
+    String id,
+    Map<String, Object?> data, {
+    int updatedAt = 1,
+  }) async {
+    final sealed = await RecordCrypto(RecordCodec(keys.vaultKey)).seal(
+      DecryptedRecord(
+        id: id,
+        kind: RecordKind.snippet,
+        updatedAt: updatedAt,
+        deviceId: 'seance-device',
+        data: data,
+      ),
+    );
+    _records[id] = sealed.withSeq(++_seq);
+  }
+
+  /// Seeds the deletion of [id] from a Séance device, stamped [updatedAt].
+  void seedTombstone(String id, {required int updatedAt}) {
+    _records[id] = EncryptedRecord.tombstone(
+      id: id,
+      updatedAt: updatedAt,
+      deviceId: 'seance-device',
+    ).withSeq(++_seq);
+  }
+
   /// The [SyncTransportFactory] over this server.
   SyncTransport transport(String baseUrl, {String? token}) {
     transports++;
