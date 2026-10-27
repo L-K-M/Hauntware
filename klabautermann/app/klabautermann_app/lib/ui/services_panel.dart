@@ -10,6 +10,7 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import 'actions/host_actions.dart';
+import 'quick_actions.dart' show PinServiceButton;
 import 'failed_units_summary.dart';
 import 'logs/log_level.dart';
 import 'logs/log_view.dart';
@@ -573,6 +574,8 @@ class _UnitPage extends StatelessWidget {
               child: Text(name, style: theme.textTheme.titleMedium),
             ),
           ),
+          // OV-08: pins the unit's restart to the Overview.
+          PinServiceButton(serverId: serverId, unit: name, scope: scope),
           // SVC-07 (v1): the unit's file and drop-ins.
           IconButton(
             tooltip: l10n.unitFileShow,

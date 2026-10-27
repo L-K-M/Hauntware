@@ -10,6 +10,7 @@ import 'package:klabautermann_app/ui/docker/stacks_panel.dart'
     show StackOverview;
 import 'package:klabautermann_app/ui/hand_off_actions.dart';
 import 'package:klabautermann_app/ui/logs/logs_panel.dart' show LogFilePicker;
+import 'package:klabautermann_app/ui/server_header.dart' show ServerHeader;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show HostResult, VarLogFiles;
 import 'package:klabautermann_host/klabautermann_host.dart' show LogFileEntry;
@@ -131,7 +132,7 @@ void main() {
       final launcher = _Launcher({HandOffTarget.seance});
       await _openServer(tester, launcher, id: _catalogId);
 
-      await tester.tap(find.text('Open terminal in Séance'));
+      await tester.tap(_inHeader(find.text('Open terminal in Séance')));
       await tester.pumpAndSettle();
 
       expect(launcher.opened, [
@@ -143,7 +144,7 @@ void main() {
       final launcher = _Launcher({HandOffTarget.seance}, opens: false);
       await _openServer(tester, launcher, id: _catalogId);
 
-      await tester.tap(find.text('Open terminal in Séance'));
+      await tester.tap(_inHeader(find.text('Open terminal in Séance')));
       await tester.pumpAndSettle();
 
       expect(find.text('Séance did not open the link.'), findsOneWidget);
@@ -401,3 +402,8 @@ final class _Launcher implements HandOffLauncher {
     return opens;
   }
 }
+
+/// [finder] within the server header: the Overview's quick actions offer
+/// the same hand-off (OV-08).
+Finder _inHeader(Finder finder) =>
+    find.descendant(of: find.byType(ServerHeader), matching: finder);

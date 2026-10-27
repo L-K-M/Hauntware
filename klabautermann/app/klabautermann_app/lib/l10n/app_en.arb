@@ -301,6 +301,44 @@
       }
     }
   },
+  "quickActionsTitle": "Quick actions",
+  "@quickActionsTitle": {
+    "description": "Overview (OV-08): the heading of the quick actions card."
+  },
+  "quickActionsFiles": "Browse files in Poltergeist",
+  "@quickActionsFiles": {
+    "description": "Overview quick actions (OV-08): opens the server's files in Poltergeist."
+  },
+  "quickActionsRestart": "Restart {unit}",
+  "@quickActionsRestart": {
+    "description": "Overview quick actions (OV-08): restarts a service pinned from its page in the Services tab.",
+    "placeholders": {
+      "unit": {"type": "String", "example": "nginx.service"}
+    }
+  },
+  "quickActionsReboot": "Reboot",
+  "@quickActionsReboot": {
+    "description": "Overview quick actions (OV-08): reboots the server, through the same preview as the System tab."
+  },
+  "quickActionsPin": "Pin to the Overview's quick actions",
+  "@quickActionsPin": {
+    "description": "A unit's page (OV-08): tooltip of the pin that adds a restart button for the unit to the Overview."
+  },
+  "quickActionsUnpin": "Unpin from the Overview's quick actions",
+  "@quickActionsUnpin": {
+    "description": "A unit's page (OV-08): tooltip of the pin while the unit is pinned."
+  },
+  "quickActionsPinFull": "{count, plural, =1{One service is already pinned, the most this server takes} other{{count} services are already pinned, the most this server takes}}",
+  "@quickActionsPinFull": {
+    "description": "A unit's page (OV-08): tooltip of the disabled pin when the server holds as many pins as it takes.",
+    "placeholders": {
+      "count": {"type": "int", "example": "5"}
+    }
+  },
+  "quickActionsPinNotSaved": "The pin changed but could not be saved. It lasts until Klabautermann quits.",
+  "@quickActionsPinNotSaved": {
+    "description": "A unit's page (OV-08): toast when a pin applied but settings.json could not be written."
+  },
   "fleetDensityLabel": "Layout",
   "@fleetDensityLabel": {
     "description": "The fleet board (FL-08): the label before its layout picker, shown in the desktop workspace while no server is open."
