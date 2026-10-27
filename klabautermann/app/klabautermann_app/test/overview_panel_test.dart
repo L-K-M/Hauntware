@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/overview_layout.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart'
     show ChartSeverity, ChartThresholds, StackedBar;
 import 'package:klabautermann_app/ui/cpu_hints.dart';
+import 'package:klabautermann_app/ui/overview_cards.dart';
 import 'package:klabautermann_app/ui/overview_panel.dart';
 import 'package:klabautermann_app/ui/server_surfaces.dart';
 import 'package:klabautermann_app/ui/threshold_scope.dart';
@@ -213,6 +215,7 @@ Future<_Panel> _pump(
   Brightness brightness = Brightness.light,
   bool visible = true,
   ValueNotifier<bool>? announce,
+  OverviewLayoutController? layout,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -245,11 +248,14 @@ Future<_Panel> _pump(
               child: ValueListenableBuilder(
                 valueListenable: shown,
                 builder: (context, visible, _) {
-                  final overview = OverviewPanel(
+                  final cards = OverviewPanel(
                     monitoring: monitoring,
                     serverId: _serverId,
                     visible: visible,
                   );
+                  final overview = layout == null
+                      ? cards
+                      : OverviewLayoutScope(layout: layout, child: cards);
                   if (announce == null) return overview;
                   return AnnouncementScope(
                     announce: announce,
@@ -270,6 +276,11 @@ Future<_Panel> _pump(
 
 Iterable<StackedBar> _bars(WidgetTester tester) =>
     tester.widgetList<StackedBar>(find.byType(StackedBar));
+
+/// The card headed [title].
+Finder _card(String title) => find.byWidgetPredicate(
+  (widget) => widget is PanelSection && widget.title == title,
+);
 
 /// [matching] inside the card headed [title].
 Finder _inCard(String title, Finder matching) => find.descendant(
@@ -344,6 +355,73 @@ void main() {
     await tester.tap(find.text('Threshold announcements: on'));
     await tester.pumpAndSettle();
     expect(find.text('Announce threshold changes'), findsOneWidget);
+  });
+
+  group('OV-06', () {
+    testWidgets('a hidden card is left out and the rest follow the '
+        "device's order", (tester) async {
+      final layout = OverviewLayoutController(
+        layout: OverviewLayout(
+          order: [
+            OverviewCard.memory,
+            ...OverviewCard.values.where((c) => c != OverviewCard.memory),
+          ],
+          hidden: {OverviewCard.cpu},
+        ),
+      );
+      addTearDown(layout.dispose);
+      final panel = await _pump(tester, size: _phone, layout: layout);
+      await panel.sample(tester, _core());
+
+      expect(_card('CPU'), findsNothing);
+      expect(
+        tester.getTopLeft(_card('Memory')).dy,
+        lessThan(tester.getTopLeft(_card('Load')).dy),
+      );
+    });
+
+    testWidgets('a wide panel splits half-width cards between two columns, '
+        'the first half on the left', (tester) async {
+      final panel = await _pump(tester);
+      await panel.sample(tester, _core());
+      final cpu = tester.getTopLeft(_card('CPU'));
+      final load = tester.getTopLeft(_card('Load'));
+      expect(load.dx, cpu.dx, reason: 'one column');
+      expect(load.dy, greaterThan(cpu.dy));
+      expect(
+        tester.getTopLeft(_card('Network')).dx,
+        greaterThan(cpu.dx),
+        reason: 'the second half, on the right',
+      );
+    });
+
+    testWidgets('the sheet switches a card off, moves none, and Reset '
+        'brings it back', (tester) async {
+      final layout = OverviewLayoutController();
+      addTearDown(layout.dispose);
+      final panel = await _pump(tester, size: _phone, layout: layout);
+      await panel.sample(tester, _core());
+
+      await tester.scrollUntilVisible(
+        find.text('Arrange cards…'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Arrange cards…'));
+      await tester.pumpAndSettle();
+      final sheet = find.byType(OverviewCardsSheet);
+      await tester.tap(find.descendant(of: sheet, matching: find.text('Swap')));
+      await tester.pumpAndSettle();
+      expect(layout.value.hidden, {OverviewCard.swap});
+      expect(layout.value.order, OverviewLayout.standard.order);
+      expect(_card('Swap'), findsNothing);
+
+      await tester.tap(
+        find.descendant(of: sheet, matching: find.text('Reset')),
+      );
+      await tester.pumpAndSettle();
+      expect(layout.value, OverviewLayout.standard);
+    });
   });
 
   testWidgets('OV-01 words CPU, load, memory and swap in IEC units', (

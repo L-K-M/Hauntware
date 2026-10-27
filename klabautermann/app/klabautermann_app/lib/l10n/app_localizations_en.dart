@@ -8114,6 +8114,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerShellHide => 'Show details';
 
   @override
+  String get dockShow => 'Show the dock';
+
+  @override
+  String get dockHide => 'Hide the dock';
+
+  @override
+  String get dockResize =>
+      'Dock height. Use the up and down arrow keys to resize it.';
+
+  @override
+  String get dockLogs => 'Logs';
+
+  @override
+  String dockRunOutput(String name) {
+    return 'Output: $name';
+  }
+
+  @override
+  String dockShell(String container) {
+    return 'Shell: $container';
+  }
+
+  @override
+  String dockClose(String name) {
+    return 'Close $name';
+  }
+
+  @override
   String dockerShellTitle(String container) {
     return 'Shell in $container';
   }
@@ -10622,6 +10650,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String paletteContainerDescription(String state, String image) {
     return '$state · $image';
   }
+
+  @override
+  String get overviewEditCards => 'Arrange cards…';
+
+  @override
+  String get overviewCardsTitle => 'Overview cards';
+
+  @override
+  String get overviewCardsHint =>
+      'Drag a card to move it, or switch it off to hide it on every server. A card a server cannot show stays out there.';
+
+  @override
+  String get overviewCardsReset => 'Reset';
+
+  @override
+  String get overviewCardsNotSaved =>
+      'The card arrangement applies now but was not saved, so it lasts until Klabautermann restarts.';
 
   @override
   String get exportNameServer => 'Name the server';
