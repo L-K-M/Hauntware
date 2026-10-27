@@ -98,10 +98,10 @@ void main() {
     await boot(tester);
     final sent = await pumpHost(tester);
     // Titled before the menu can be opened: comfortable is the default.
-    expect(
-      published(sent)['toggleDensity'],
-      {'enabled': true, 'title': 'Use Compact Sidebar Rows'},
-    );
+    expect(published(sent)['toggleDensity'], {
+      'enabled': true,
+      'title': 'Use Compact Sidebar Rows',
+    });
 
     await fromNative(tester, 'run', 'toggleDensity');
     await tester.pump();
@@ -147,10 +147,13 @@ void main() {
     expect(published(sent)['closeTab']?['enabled'], false);
     expect(published(sent)['save']?['enabled'], false);
     expect(published(sent)['disconnect']?['enabled'], false);
-    expect(sent.last, isMethodCall(
-      'setWindowTitle',
-      arguments: {'title': 'Séance', 'subtitle': ''},
-    ));
+    expect(
+      sent.last,
+      isMethodCall(
+        'setWindowTitle',
+        arguments: {'title': 'Séance', 'subtitle': ''},
+      ),
+    );
 
     final context = tester.element(find.byType(Scaffold));
     unawaited(

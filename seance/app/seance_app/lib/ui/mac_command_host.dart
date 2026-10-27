@@ -250,9 +250,7 @@ class _MacCommandHostState extends State<MacCommandHost>
         content && editorState != null,
         title: editorState?.canUpload ?? false ? 'Save and Upload' : 'Save',
       ),
-      AppCommand.saveLocally: on(
-        content && (editorState?.canUpload ?? false),
-      ),
+      AppCommand.saveLocally: on(content && (editorState?.canUpload ?? false)),
       AppCommand.exportText: on(content && session != null),
       AppCommand.importSshConfig: on(free),
       ..._editStates(state, content: shown),
@@ -713,8 +711,11 @@ class _MacCommandHostState extends State<MacCommandHost>
           : 'You have $count files with unsaved changes. Do you want to '
                 'review these changes before quitting?',
       informative: 'If you don’t review them, your changes will be lost.',
-      buttons: [count == 1 ? 'Review…' : 'Review Changes…', 'Cancel',
-          'Discard Changes'],
+      buttons: [
+        count == 1 ? 'Review…' : 'Review Changes…',
+        'Cancel',
+        'Discard Changes',
+      ],
       destructive: discard,
     );
     switch (answer?.button) {

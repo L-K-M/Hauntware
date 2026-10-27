@@ -83,6 +83,9 @@ class MainFlutterWindow: NSWindow {
         result(nil)
       case "showAlert":
         self.showAlert(call.arguments as? [String: Any] ?? [:], result: result)
+      case "popUpMenu":
+        let items = (call.arguments as? [String: Any])?["items"] as? [[String: Any]] ?? []
+        result(ContextMenu(items).popUp())
       case "setDockBadge":
         NSApp.dockTile.badgeLabel = call.arguments as? String
         result(nil)
@@ -420,6 +423,66 @@ class MainFlutterWindow: NSWindow {
       alert.beginSheetModal(for: self, completionHandler: answer)
     } else {
       answer(alert.runModal())
+    }
+  }
+}
+
+/// A context menu Dart describes (`showMacContextMenu`): built as an
+/// NSMenu, opened at the pointer, and answered with the chosen row's id
+/// once it closes, or nil when dismissed.
+private final class ContextMenu: NSObject {
+  private let menu = NSMenu()
+  private var chosen: String?
+
+  init(_ items: [[String: Any]]) {
+    super.init()
+    build(items, into: menu)
+  }
+
+  func popUp() -> String? {
+    // Returns when the menu closes; the choice landed in `choose` first.
+    menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    return chosen
+  }
+
+  @objc private func choose(_ sender: NSMenuItem) {
+    chosen = sender.representedObject as? String
+  }
+
+  private func build(_ items: [[String: Any]], into menu: NSMenu) {
+    menu.autoenablesItems = false
+    for spec in items {
+      if spec["separator"] as? Bool == true {
+        menu.addItem(.separator())
+        continue
+      }
+      let item = NSMenuItem(title: spec["title"] as? String ?? "", action: nil, keyEquivalent: "")
+      if let children = spec["items"] as? [[String: Any]] {
+        let submenu = NSMenu(title: item.title)
+        build(children, into: submenu)
+        item.submenu = submenu
+      } else {
+        item.action = #selector(choose(_:))
+        item.target = self
+        item.representedObject = spec["id"] as? String
+      }
+      item.isEnabled = spec["enabled"] as? Bool ?? true
+      if spec["checked"] as? Bool == true { item.state = .on }
+      if let key = spec["key"] as? String {
+        item.keyEquivalent = key
+        var mask: NSEvent.ModifierFlags = []
+        for name in spec["modifiers"] as? [String] ?? [] {
+          switch name {
+          case "command": mask.insert(.command)
+          case "shift": mask.insert(.shift)
+          case "option": mask.insert(.option)
+          case "control": mask.insert(.control)
+          default: break
+          }
+        }
+        item.keyEquivalentModifierMask = mask
+      }
+      menu.addItem(item)
     }
   }
 }

@@ -356,6 +356,7 @@ class SidebarKitScope extends InheritedWidget {
     this.background,
     this.layout = SidebarKitLayout.rail,
     this.density = SidebarKitDensity.comfortable,
+    this.presentMenu,
     required super.child,
   }) : assert(
          // The list is the comfortable phone home; a compact home is the
@@ -377,6 +378,11 @@ class SidebarKitScope extends InheritedWidget {
   /// page surface). The status dot's cut-out ring takes this colour, so
   /// a wrong one draws a visible halo instead of a cut.
   final Color? background;
+
+  /// Shows a row's verbs in the host's own menu instead of the kit's (a
+  /// native macOS context menu), answering whether it did; null, or a
+  /// false answer, keeps the kit's menu.
+  final Future<bool> Function(List<SidebarMenuEntry> entries)? presentMenu;
 
   static SidebarKitStrings of(BuildContext context) => _scope(context).strings;
 
@@ -401,7 +407,8 @@ class SidebarKitScope extends InheritedWidget {
       !identical(oldWidget.strings, strings) ||
       oldWidget.background != background ||
       oldWidget.layout != layout ||
-      oldWidget.density != density;
+      oldWidget.density != density ||
+      oldWidget.presentMenu != presentMenu;
 }
 
 /// The colour behind the rail's rows (see [SidebarKitScope.background]).
@@ -1426,7 +1433,21 @@ class _SidebarRowState extends State<SidebarRow> with _KeyboardFocusRing {
   /// menu once it has mounted, or Shift+F10 would open a menu the keyboard
   /// could not operate: the arrows would still walk the rows behind it.
   void _openMenu({Offset? position, bool focusFirst = false}) {
-    if (widget.menuEntries == null) return;
+    final entries = widget.menuEntries;
+    if (entries == null) return;
+    final present = SidebarKitScope._scope(context).presentMenu;
+    if (present != null) {
+      unawaited(
+        present(_tidy(entries())).then((shown) {
+          if (!shown && mounted) _openKitMenu(position, focusFirst);
+        }),
+      );
+      return;
+    }
+    _openKitMenu(position, focusFirst);
+  }
+
+  void _openKitMenu(Offset? position, bool focusFirst) {
     _menu.open(position: position);
     if (!focusFirst) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2214,6 +2235,21 @@ class SidebarBottomBar extends StatefulWidget {
 class _SidebarBottomBarState extends State<SidebarBottomBar> {
   final _addMenu = MenuController();
 
+  /// The "+" menu: the host's own ([SidebarKitScope.presentMenu]) when it
+  /// has one, the kit's otherwise.
+  void _toggleAdd(List<SidebarMenuEntry> entries) {
+    final present = SidebarKitScope._scope(context).presentMenu;
+    if (present == null) {
+      _addMenu.isOpen ? _addMenu.close() : _addMenu.open();
+      return;
+    }
+    unawaited(
+      present(_tidy(entries)).then((shown) {
+        if (!shown && mounted) _addMenu.open();
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final chrome = _chrome(context);
@@ -2237,9 +2273,7 @@ class _SidebarBottomBarState extends State<SidebarBottomBar> {
               key: widget.addKey,
               icon: Icons.add,
               tooltip: strings.addMenu,
-              onPressed: entries.isEmpty
-                  ? null
-                  : () => _addMenu.isOpen ? _addMenu.close() : _addMenu.open(),
+              onPressed: entries.isEmpty ? null : () => _toggleAdd(entries),
             ),
           ),
           const SizedBox(width: 4),

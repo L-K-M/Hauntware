@@ -36,10 +36,22 @@ class SettingsWindowApp extends StatefulWidget {
   State<SettingsWindowApp> createState() => _SettingsWindowAppState();
 }
 
+/// The macOS window's pane toolbar (SettingsPaneToolbar in the runner):
+/// it asks for a pane with `select` and hears the one shown as `shown`.
+const MethodChannel _paneChannel = MethodChannel('seance/settings_pane');
+
 class _SettingsWindowAppState extends State<SettingsWindowApp> {
   /// Hands a request to quit the application to the app's isolate, which
   /// decides it: see [RemoteSettingsBackend.requestAppExit].
   AppLifecycleListener? _exitRequests;
+
+  /// The tabs the screen is asked to show: the app's requests, and on
+  /// macOS the toolbar's.
+  final StreamController<SettingsTab> _tabRequests =
+      StreamController.broadcast();
+  StreamSubscription<SettingsTab>? _appRequests;
+
+  bool get _nativePanes => Platform.isMacOS;
 
   @override
   void initState() {
@@ -49,13 +61,31 @@ class _SettingsWindowAppState extends State<SettingsWindowApp> {
       _exitRequests = AppLifecycleListener(
         onExitRequested: backend.requestAppExit,
       );
+      _appRequests = backend.tabRequests.listen(_tabRequests.add);
+    }
+    if (_nativePanes) {
+      _paneChannel.setMethodCallHandler((call) async {
+        final tab = SettingsTab.values.asNameMap()[call.arguments];
+        if (call.method == 'select' && tab != null) _tabRequests.add(tab);
+        return null;
+      });
     }
   }
 
   @override
   void dispose() {
     _exitRequests?.dispose();
+    unawaited(_appRequests?.cancel());
+    unawaited(_tabRequests.close());
+    if (_nativePanes) _paneChannel.setMethodCallHandler(null);
     super.dispose();
+  }
+
+  void _tabShown(SettingsTab tab) {
+    if (!_nativePanes) return;
+    unawaited(
+      _paneChannel.invokeMethod<void>('shown', tab.name).catchError((_) {}),
+    );
   }
 
   @override

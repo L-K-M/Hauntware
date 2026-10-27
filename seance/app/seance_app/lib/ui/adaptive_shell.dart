@@ -268,7 +268,8 @@ AdaptivePaneWidths? allocateAdaptivePaneWidths({
   // over its edges.
   return AdaptivePaneWidths(
     list: listWidth,
-    terminal: availableWidth - listWidth - utilityWidth - AdaptiveShell.seamWidth * 2,
+    terminal:
+        availableWidth - listWidth - utilityWidth - AdaptiveShell.seamWidth * 2,
     utility: utilityWidth,
   );
 }
@@ -298,7 +299,9 @@ AdaptivePaneWidths? _allocateOneSide({
       AdaptiveShell.minimumTerminalWidth -
       AdaptiveShell.resizeHandleWidth;
   if (room < minimum) return null;
-  final side = request.clamp(minimum, maximum < room ? maximum : room).toDouble();
+  final side = request
+      .clamp(minimum, maximum < room ? maximum : room)
+      .toDouble();
   final terminal = availableWidth - side - AdaptiveShell.seamWidth;
   return isList
       ? AdaptivePaneWidths(list: side, terminal: terminal, utility: 0)

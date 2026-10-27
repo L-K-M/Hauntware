@@ -14,6 +14,7 @@ import 'package:xterm/xterm.dart';
 import '../app_state.dart';
 import '../family_hues.dart';
 import '../main.dart';
+import '../services/mac_context_menu.dart';
 import '../services/missing_credential.dart';
 import '../services/terminal_search.dart';
 import '../services/web_links.dart';
@@ -795,7 +796,28 @@ class _TabChip extends StatelessWidget {
     this.onRename,
   });
 
+  /// On a Mac the menu is a native one; the kit's is the fallback.
   Future<void> _showMenu(BuildContext context, Offset globalPosition) async {
+    if (Theme.of(context).platform != TargetPlatform.macOS) {
+      return _showMaterialMenu(context, globalPosition);
+    }
+    final shown = await showMacContextMenu([
+      MacMenuItem('Rename Tab…', onSelected: onRename),
+      const MacMenuItem.separator(),
+      MacMenuItem(
+        'Close Tab',
+        shortcut: const SingleActivator(LogicalKeyboardKey.keyW, meta: true),
+        onSelected: onClose,
+      ),
+    ]);
+    if (shown || !context.mounted) return;
+    return _showMaterialMenu(context, globalPosition);
+  }
+
+  Future<void> _showMaterialMenu(
+    BuildContext context,
+    Offset globalPosition,
+  ) async {
     // Positioning needs the overlay's box; give up rather than crash if the
     // chip is being torn down as the menu opens.
     final overlay = Overlay.of(context).context.findRenderObject();
@@ -901,7 +923,26 @@ class _EditorTabChip extends StatelessWidget {
     required this.onClose,
   });
 
+  /// On a Mac the menu is a native one; the kit's is the fallback.
   Future<void> _showMenu(BuildContext context, Offset globalPosition) async {
+    if (Theme.of(context).platform != TargetPlatform.macOS) {
+      return _showMaterialMenu(context, globalPosition);
+    }
+    final shown = await showMacContextMenu([
+      MacMenuItem(
+        'Close Tab',
+        shortcut: const SingleActivator(LogicalKeyboardKey.keyW, meta: true),
+        onSelected: onClose,
+      ),
+    ]);
+    if (shown || !context.mounted) return;
+    return _showMaterialMenu(context, globalPosition);
+  }
+
+  Future<void> _showMaterialMenu(
+    BuildContext context,
+    Offset globalPosition,
+  ) async {
     final overlay = Overlay.of(context).context.findRenderObject();
     if (overlay is! RenderBox) return;
     final config = tab.server;
@@ -1582,8 +1623,20 @@ class _SessionViewState extends State<_SessionView>
     BuildContext context,
     Offset globalPosition,
   ) async {
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    if (Theme.of(context).platform != TargetPlatform.macOS) {
+      return _showMaterialContextMenu(context, globalPosition);
+    }
+    final shown = await _showMacContextMenu();
+    if (shown || !context.mounted) return;
+    return _showMaterialContextMenu(context, globalPosition);
+  }
+
+  Future<void> _showMaterialContextMenu(
+    BuildContext context,
+    Offset globalPosition,
+  ) async {
     final hasSelection = _terminalController.selection != null;
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final palette = FamilyPalette.of(context);
     // The same chords _handleKeyEvent binds: ⌘ on Apple platforms,
     // Ctrl+Shift elsewhere, where plain Ctrl belongs to the shell.
@@ -1664,6 +1717,62 @@ class _SessionViewState extends State<_SessionView>
       case 'shortcuts':
         if (context.mounted) await showKeyboardShortcuts(context);
     }
+  }
+}
+
+extension on _SessionViewState {
+  /// The right-click menu as a native one, its rows the Edit menu's.
+  Future<bool> _showMacContextMenu() {
+    final hasSelection = _terminalController.selection != null;
+    SingleActivator command(LogicalKeyboardKey key) =>
+        SingleActivator(key, meta: true);
+    return showMacContextMenu([
+      MacMenuItem(
+        'Copy',
+        shortcut: command(LogicalKeyboardKey.keyC),
+        onSelected: hasSelection ? () => terminalCopy(widget.tab) : null,
+      ),
+      MacMenuItem(
+        'Paste',
+        shortcut: command(LogicalKeyboardKey.keyV),
+        onSelected: () => unawaited(terminalPaste(widget.tab)),
+      ),
+      const MacMenuItem.separator(),
+      MacMenuItem(
+        'Select All',
+        shortcut: command(LogicalKeyboardKey.keyA),
+        onSelected: () => terminalSelectAll(widget.tab),
+      ),
+      MacMenuItem(
+        'Find…',
+        shortcut: command(LogicalKeyboardKey.keyF),
+        onSelected: () {
+          if (mounted) _openFind();
+        },
+      ),
+      MacMenuItem(
+        'Use Selection for Find',
+        shortcut: command(LogicalKeyboardKey.keyE),
+        onSelected: hasSelection ? useSelectionForFind : null,
+      ),
+      const MacMenuItem.separator(),
+      MacMenuItem(
+        'Clear Scrollback',
+        shortcut: const SingleActivator(
+          LogicalKeyboardKey.keyK,
+          meta: true,
+          alt: true,
+        ),
+        onSelected: clearScrollback,
+      ),
+      const MacMenuItem.separator(),
+      MacMenuItem(
+        'Keyboard Shortcuts',
+        onSelected: () {
+          if (mounted) unawaited(showKeyboardShortcuts(context));
+        },
+      ),
+    ]);
   }
 }
 
