@@ -2895,6 +2895,31 @@ c2 found these defects in 3.0.2. The last column gives their state on the
   in-app web view without a loopback listener where spike S7 shows that
   works [U]; otherwise a random `127.0.0.1` port on explicit action, closed
   with its view. Needs `AllowTcpForwarding` (default yes).
+- **Spike S7 (M6 N05).** No in-app web view a channel can feed reaches
+  every platform. `webview_flutter` has no Linux or Windows
+  implementation and exposes no request interception, so its page loads
+  its own URLs over the network [R: `webview_flutter` 4.14.1 `pubspec.yaml`
+  lists only android, ios and macos; `NavigationDelegate` can allow or
+  stop a navigation but not answer it]. Feeding pages from a channel would need a
+  custom-scheme handler per platform (`WKURLSchemeHandler`, Android's
+  `shouldInterceptRequest`), plus rewriting every absolute URL a page
+  requests, and there is no equivalent on the Linux and Windows
+  toolkits. Port access therefore takes the fallback on every platform:
+  a forward is a listener on `127.0.0.1` at a port the system picks,
+  opened only by an explicit action and closed with its view, and the
+  page opens in the system browser.
+- **As built (M6 N22a).** `OpenPortForward(serverId, forwardId, host,
+  port)` makes the engine bind the listener (`forwards/port_forwards.dart`);
+  each connection to it opens one `direct-tcpip` channel to the target
+  as the server sees it. `PortForwardState` reports the local port, open
+  connections, the last connection's failure (`forwardingDisabled` when
+  the server refused the channel, `connectFailed` otherwise; the forward
+  keeps listening) and the end: `closed` on `ClosePortForward` or engine
+  stop, `linkLost` once the server has no link, `serverForgotten` when
+  it leaves the fleet or changes endpoint (SYN-08), or at once
+  `invalidTarget`, `duplicateId`, `tooMany` (16 open [E]), `noLink` or
+  `bindFailed`. Any process on the device can reach a listening port
+  while it is open, which the app says where it offers one (NET-11).
 - **Privileged files (SAF-12, v1).** SFTP runs as the login user. Root-owned
   files use the elevation prelude in front of commands (`cat`, temp file plus
   `tee` in the same directory, `chown --reference`, `chmod --reference`,
