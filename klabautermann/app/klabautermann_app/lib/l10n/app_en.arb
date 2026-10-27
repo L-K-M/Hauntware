@@ -351,13 +351,51 @@
   "@topListsEmpty": {
     "description": "Overview top lists (OV-07): shown when no process or container reported the figure, as before a second CPU reading."
   },
+  "quickActionsTitle": "Quick actions",
+  "@quickActionsTitle": {
+    "description": "Overview (OV-08): the heading of the quick actions card."
+  },
+  "quickActionsFiles": "Browse files in Poltergeist",
+  "@quickActionsFiles": {
+    "description": "Overview quick actions (OV-08): opens the server's files in Poltergeist."
+  },
+  "quickActionsRestart": "Restart {unit}",
+  "@quickActionsRestart": {
+    "description": "Overview quick actions (OV-08): restarts a service pinned from its page in the Services tab.",
+    "placeholders": {
+      "unit": {"type": "String", "example": "nginx.service"}
+    }
+  },
+  "quickActionsReboot": "Reboot",
+  "@quickActionsReboot": {
+    "description": "Overview quick actions (OV-08): reboots the server, through the same preview as the System tab."
+  },
+  "quickActionsPin": "Pin to the Overview's quick actions",
+  "@quickActionsPin": {
+    "description": "A unit's page (OV-08): tooltip of the pin that adds a restart button for the unit to the Overview."
+  },
+  "quickActionsUnpin": "Unpin from the Overview's quick actions",
+  "@quickActionsUnpin": {
+    "description": "A unit's page (OV-08): tooltip of the pin while the unit is pinned."
+  },
+  "quickActionsPinFull": "{count, plural, =1{One service is already pinned, the most this server takes} other{{count} services are already pinned, the most this server takes}}",
+  "@quickActionsPinFull": {
+    "description": "A unit's page (OV-08): tooltip of the disabled pin when the server holds as many pins as it takes.",
+    "placeholders": {
+      "count": {"type": "int", "example": "5"}
+    }
+  },
+  "quickActionsPinNotSaved": "The pin changed but could not be saved. It lasts until Klabautermann quits.",
+  "@quickActionsPinNotSaved": {
+    "description": "A unit's page (OV-08): toast when a pin applied but settings.json could not be written."
+  },
   "fleetDensityLabel": "Layout",
   "@fleetDensityLabel": {
     "description": "The fleet board (FL-08): the label before its layout picker, shown in the desktop workspace while no server is open."
   },
-  "fleetDensity": "{density, select, auto{Auto} cards{Cards} grid{Grid} other{Rows}}",
+  "fleetDensity": "{density, select, auto{Auto} cards{Cards} grid{Grid} tree{Tree} other{Rows}}",
   "@fleetDensity": {
-    "description": "The fleet board (FL-08): one layout in its picker. Auto shows cards for a small fleet and a grid for a large one; Rows leaves the rail's rows alone.",
+    "description": "The fleet board (FL-08): one layout in its picker. Auto shows cards for a small fleet and a grid for a large one; Tree is the connection tree (FL-11); Rows leaves the rail's rows alone.",
     "placeholders": {
       "density": {"type": "String", "example": "grid"}
     }
@@ -365,6 +403,37 @@
   "fleetDensityNotSaved": "The layout changed but could not be saved. It lasts until Klabautermann quits.",
   "@fleetDensityNotSaved": {
     "description": "The fleet board: toast when the picked layout applied but settings.json could not be written."
+  },
+  "fleetTreeOpenServer": "Open {server}",
+  "@fleetTreeOpenServer": {
+    "description": "Connection tree (FL-11): tooltip of a server node's button that opens the server's workspace.",
+    "placeholders": {
+      "server": {"type": "String", "example": "web-1"}
+    }
+  },
+  "fleetTreeReading": "Reading containers…",
+  "@fleetTreeReading": {
+    "description": "Connection tree (FL-11): under an opened server node until its container list arrives."
+  },
+  "fleetTreeReadFailed": "The containers could not be read. The Docker tab says why.",
+  "@fleetTreeReadFailed": {
+    "description": "Connection tree (FL-11): under an opened server node when its container list failed before any was read."
+  },
+  "fleetTreeNoDocker": "No Docker engine answers on this server.",
+  "@fleetTreeNoDocker": {
+    "description": "Connection tree (FL-11): under an opened server node when the Docker endpoint search failed."
+  },
+  "fleetTreeNoContainers": "No containers.",
+  "@fleetTreeNoContainers": {
+    "description": "Connection tree (FL-11): under an opened server node whose engine lists no container."
+  },
+  "fleetTreeStackUp": "{up} of {total} running",
+  "@fleetTreeStackUp": {
+    "description": "Connection tree (FL-11): a compose stack node's subtitle, its running containers out of all.",
+    "placeholders": {
+      "up": {"type": "int", "example": "2"},
+      "total": {"type": "int", "example": "3"}
+    }
   },
   "fleetTileShare": "{label} {percent} %",
   "@fleetTileShare": {
@@ -893,6 +962,10 @@
   "fleetServerLeftDismiss": "Dismiss",
   "@fleetServerLeftDismiss": {
     "description": "Button that hides the notice that a server left the fleet."
+  },
+  "fleetSplitChooseServer": "Choose a server to see it here.",
+  "@fleetSplitChooseServer": {
+    "description": "Shown beside the fleet list on a tablet while no server is selected."
   },
   "processesWaiting": "Waiting for the first process list.",
   "@processesWaiting": {
@@ -5562,6 +5635,50 @@
     "description": "Switch asserting that every device on the account runs a Séance release that checks shared host keys; while on, host keys the user confirms are shared.",
     "placeholders": {
       "release": {"type": "String", "example": "2026.11.0"}
+    }
+  },
+  "settingsAccountSizeTitle": "Account size",
+  "@settingsAccountSizeTitle": {
+    "description": "Settings, Sync: heading of the account size view (SYN-09)."
+  },
+  "settingsAccountSizeUsed": "Klabautermann's records take {used} of their {budget} in the sync account.",
+  "@settingsAccountSizeUsed": {
+    "description": "Settings, Sync: how much of their budget Klabautermann's synced records use (SYN-09).",
+    "placeholders": {
+      "used": {
+        "type": "String",
+        "example": "12 KiB"
+      },
+      "budget": {
+        "type": "String",
+        "example": "1 MiB"
+      }
+    }
+  },
+  "settingsAccountSizeWarn": "They are close to the limit. Remove alert rules or server preferences you no longer need.",
+  "@settingsAccountSizeWarn": {
+    "description": "Settings, Sync: warning once Klabautermann's records take 80 % of their budget (SYN-09)."
+  },
+  "settingsAccountSizeFull": "They have reached the limit, so new changes may not sync. Remove alert rules or server preferences you no longer need.",
+  "@settingsAccountSizeFull": {
+    "description": "Settings, Sync: warning once Klabautermann's records take their whole budget (SYN-09)."
+  },
+  "settingsAccountSizeDetail": "Every kind of record in the account, as this device last pulled it. The account is shared with Séance, so its records count too.",
+  "@settingsAccountSizeDetail": {
+    "description": "Settings, Sync: explanation above the account size view's rows (SYN-09)."
+  },
+  "settingsAccountSizeRow": "{records, plural, =1{1 record} other{{records} records}}, {size}",
+  "@settingsAccountSizeRow": {
+    "description": "Settings, Sync: one record prefix's count and size in the account size view (SYN-09).",
+    "placeholders": {
+      "records": {
+        "type": "int",
+        "example": "3"
+      },
+      "size": {
+        "type": "String",
+        "example": "4.2 KiB"
+      }
     }
   },
   "settingsPinPublicationDetail": "While on, host keys you confirm are shared with your other devices, so they can check a server the first time they connect. Turning it off stops sharing; keys already shared stay.",

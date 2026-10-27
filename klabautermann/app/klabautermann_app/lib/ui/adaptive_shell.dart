@@ -15,9 +15,9 @@ const double kDesktopShellMinWidth = 960;
 bool showsDesktopShell(BuildContext context) =>
     MediaQuery.sizeOf(context).width >= kDesktopShellMinWidth;
 
-/// Picks the shell for the window's width (03 §10.2, §10.5). Widths
-/// between the phone and desktop breakpoints use the phone stack until
-/// the v1 tablet two-pane lands.
+/// Picks the shell for the window's width (03 §10.2, §10.5). Under the
+/// desktop breakpoint [PhoneShell] stacks on a phone and splits on a
+/// tablet (PLT-05).
 class AdaptiveShell extends StatelessWidget {
   const AdaptiveShell({
     super.key,

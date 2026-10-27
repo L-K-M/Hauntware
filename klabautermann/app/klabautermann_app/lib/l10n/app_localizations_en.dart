@@ -360,6 +360,41 @@ class AppLocalizationsEn extends AppLocalizations {
   String get topListsEmpty => 'Nothing to rank yet.';
 
   @override
+  String get quickActionsTitle => 'Quick actions';
+
+  @override
+  String get quickActionsFiles => 'Browse files in Poltergeist';
+
+  @override
+  String quickActionsRestart(String unit) {
+    return 'Restart $unit';
+  }
+
+  @override
+  String get quickActionsReboot => 'Reboot';
+
+  @override
+  String get quickActionsPin => 'Pin to the Overview\'s quick actions';
+
+  @override
+  String get quickActionsUnpin => 'Unpin from the Overview\'s quick actions';
+
+  @override
+  String quickActionsPinFull(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count services are already pinned, the most this server takes',
+      one: 'One service is already pinned, the most this server takes',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get quickActionsPinNotSaved =>
+      'The pin changed but could not be saved. It lasts until Klabautermann quits.';
+
+  @override
   String get fleetDensityLabel => 'Layout';
 
   @override
@@ -368,6 +403,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'auto': 'Auto',
       'cards': 'Cards',
       'grid': 'Grid',
+      'tree': 'Tree',
       'other': 'Rows',
     });
     return '$_temp0';
@@ -376,6 +412,29 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get fleetDensityNotSaved =>
       'The layout changed but could not be saved. It lasts until Klabautermann quits.';
+
+  @override
+  String fleetTreeOpenServer(String server) {
+    return 'Open $server';
+  }
+
+  @override
+  String get fleetTreeReading => 'Reading containers…';
+
+  @override
+  String get fleetTreeReadFailed =>
+      'The containers could not be read. The Docker tab says why.';
+
+  @override
+  String get fleetTreeNoDocker => 'No Docker engine answers on this server.';
+
+  @override
+  String get fleetTreeNoContainers => 'No containers.';
+
+  @override
+  String fleetTreeStackUp(int up, int total) {
+    return '$up of $total running';
+  }
 
   @override
   String fleetTileShare(String label, int percent) {
@@ -813,6 +872,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fleetServerLeftDismiss => 'Dismiss';
+
+  @override
+  String get fleetSplitChooseServer => 'Choose a server to see it here.';
 
   @override
   String get processesWaiting => 'Waiting for the first process list.';
@@ -4602,6 +4664,37 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String settingsPinPublication(String release) {
     return 'Every device runs Séance $release or later';
+  }
+
+  @override
+  String get settingsAccountSizeTitle => 'Account size';
+
+  @override
+  String settingsAccountSizeUsed(String used, String budget) {
+    return 'Klabautermann\'s records take $used of their $budget in the sync account.';
+  }
+
+  @override
+  String get settingsAccountSizeWarn =>
+      'They are close to the limit. Remove alert rules or server preferences you no longer need.';
+
+  @override
+  String get settingsAccountSizeFull =>
+      'They have reached the limit, so new changes may not sync. Remove alert rules or server preferences you no longer need.';
+
+  @override
+  String get settingsAccountSizeDetail =>
+      'Every kind of record in the account, as this device last pulled it. The account is shared with Séance, so its records count too.';
+
+  @override
+  String settingsAccountSizeRow(int records, String size) {
+    String _temp0 = intl.Intl.pluralLogic(
+      records,
+      locale: localeName,
+      other: '$records records',
+      one: '1 record',
+    );
+    return '$_temp0, $size';
   }
 
   @override

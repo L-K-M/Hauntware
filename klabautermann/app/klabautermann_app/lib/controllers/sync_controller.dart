@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'account_size.dart';
 import 'pin_publication_controller.dart' show PinPublicationSettings;
 
 /// The sync account concern (03 §4.3, §10.1): the account this device is
@@ -34,6 +35,12 @@ final class SyncController extends ChangeNotifier {
 
   /// The enrolled account, or null.
   SyncAccountInfo? get account => _account;
+
+  /// The account's size after the latest operation that succeeded in this
+  /// engine run (SYN-09); null before one, and while no account is
+  /// enrolled.
+  ValueListenable<AccountSize?> get accountSize => _accountSize;
+  final _accountSize = ValueNotifier<AccountSize?>(null);
 
   /// Whether a sign-in or round is under way.
   bool get busy => _waiting.isNotEmpty;
@@ -86,6 +93,11 @@ final class SyncController extends ChangeNotifier {
     if (event is! SyncStatus) return;
 
     _account = event.account;
+    if (_account == null) {
+      _accountSize.value = null;
+    } else if (event.prefixBudget case final budget?) {
+      _accountSize.value = accountSizeOf(budget);
+    }
     if (event.phase == SyncPhase.running) {
       notifyListeners();
       return;
@@ -125,6 +137,18 @@ final class SyncController extends ChangeNotifier {
     }
     _waiting.clear();
     unawaited(_events.cancel());
+    _accountSize.dispose();
     super.dispose();
   }
 }
+
+/// [budget] for the account size view.
+AccountSize accountSizeOf(SyncPrefixBudget budget) => AccountSize(
+  prefixBytes: budget.usedBytes,
+  budgetBytes: kSyncPrefixBudgetBytes,
+  warnBytes: (kSyncPrefixBudgetBytes * kSyncPrefixWarnFraction).ceil(),
+  rows: [
+    for (final MapEntry(:key, :value) in budget.byPrefix.entries)
+      AccountSizeRow(prefix: key, records: value.records, bytes: value.bytes),
+  ],
+);

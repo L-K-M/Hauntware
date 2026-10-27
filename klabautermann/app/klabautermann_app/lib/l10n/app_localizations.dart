@@ -628,16 +628,64 @@ abstract class AppLocalizations {
   /// **'Nothing to rank yet.'**
   String get topListsEmpty;
 
+  /// Overview (OV-08): the heading of the quick actions card.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick actions'**
+  String get quickActionsTitle;
+
+  /// Overview quick actions (OV-08): opens the server's files in Poltergeist.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse files in Poltergeist'**
+  String get quickActionsFiles;
+
+  /// Overview quick actions (OV-08): restarts a service pinned from its page in the Services tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart {unit}'**
+  String quickActionsRestart(String unit);
+
+  /// Overview quick actions (OV-08): reboots the server, through the same preview as the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Reboot'**
+  String get quickActionsReboot;
+
+  /// A unit's page (OV-08): tooltip of the pin that adds a restart button for the unit to the Overview.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin to the Overview\'s quick actions'**
+  String get quickActionsPin;
+
+  /// A unit's page (OV-08): tooltip of the pin while the unit is pinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin from the Overview\'s quick actions'**
+  String get quickActionsUnpin;
+
+  /// A unit's page (OV-08): tooltip of the disabled pin when the server holds as many pins as it takes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{One service is already pinned, the most this server takes} other{{count} services are already pinned, the most this server takes}}'**
+  String quickActionsPinFull(int count);
+
+  /// A unit's page (OV-08): toast when a pin applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The pin changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get quickActionsPinNotSaved;
+
   /// The fleet board (FL-08): the label before its layout picker, shown in the desktop workspace while no server is open.
   ///
   /// In en, this message translates to:
   /// **'Layout'**
   String get fleetDensityLabel;
 
-  /// The fleet board (FL-08): one layout in its picker. Auto shows cards for a small fleet and a grid for a large one; Rows leaves the rail's rows alone.
+  /// The fleet board (FL-08): one layout in its picker. Auto shows cards for a small fleet and a grid for a large one; Tree is the connection tree (FL-11); Rows leaves the rail's rows alone.
   ///
   /// In en, this message translates to:
-  /// **'{density, select, auto{Auto} cards{Cards} grid{Grid} other{Rows}}'**
+  /// **'{density, select, auto{Auto} cards{Cards} grid{Grid} tree{Tree} other{Rows}}'**
   String fleetDensity(String density);
 
   /// The fleet board: toast when the picked layout applied but settings.json could not be written.
@@ -645,6 +693,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The layout changed but could not be saved. It lasts until Klabautermann quits.'**
   String get fleetDensityNotSaved;
+
+  /// Connection tree (FL-11): tooltip of a server node's button that opens the server's workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {server}'**
+  String fleetTreeOpenServer(String server);
+
+  /// Connection tree (FL-11): under an opened server node until its container list arrives.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading containers…'**
+  String get fleetTreeReading;
+
+  /// Connection tree (FL-11): under an opened server node when its container list failed before any was read.
+  ///
+  /// In en, this message translates to:
+  /// **'The containers could not be read. The Docker tab says why.'**
+  String get fleetTreeReadFailed;
+
+  /// Connection tree (FL-11): under an opened server node when the Docker endpoint search failed.
+  ///
+  /// In en, this message translates to:
+  /// **'No Docker engine answers on this server.'**
+  String get fleetTreeNoDocker;
+
+  /// Connection tree (FL-11): under an opened server node whose engine lists no container.
+  ///
+  /// In en, this message translates to:
+  /// **'No containers.'**
+  String get fleetTreeNoContainers;
+
+  /// Connection tree (FL-11): a compose stack node's subtitle, its running containers out of all.
+  ///
+  /// In en, this message translates to:
+  /// **'{up} of {total} running'**
+  String fleetTreeStackUp(int up, int total);
 
   /// A fleet board card: one pressure bar cell's share in figures, e.g. 'CPU 23 %'. label is fleetRowCpu, fleetRowMemory or fleetRowDisk.
   ///
@@ -1305,6 +1389,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dismiss'**
   String get fleetServerLeftDismiss;
+
+  /// Shown beside the fleet list on a tablet while no server is selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a server to see it here.'**
+  String get fleetSplitChooseServer;
 
   /// The Processes tab before the server sent its first process list (PRC-01).
   ///
@@ -5883,6 +5973,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Every device runs Séance {release} or later'**
   String settingsPinPublication(String release);
+
+  /// Settings, Sync: heading of the account size view (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Account size'**
+  String get settingsAccountSizeTitle;
+
+  /// Settings, Sync: how much of their budget Klabautermann's synced records use (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann\'s records take {used} of their {budget} in the sync account.'**
+  String settingsAccountSizeUsed(String used, String budget);
+
+  /// Settings, Sync: warning once Klabautermann's records take 80 % of their budget (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'They are close to the limit. Remove alert rules or server preferences you no longer need.'**
+  String get settingsAccountSizeWarn;
+
+  /// Settings, Sync: warning once Klabautermann's records take their whole budget (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'They have reached the limit, so new changes may not sync. Remove alert rules or server preferences you no longer need.'**
+  String get settingsAccountSizeFull;
+
+  /// Settings, Sync: explanation above the account size view's rows (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Every kind of record in the account, as this device last pulled it. The account is shared with Séance, so its records count too.'**
+  String get settingsAccountSizeDetail;
+
+  /// Settings, Sync: one record prefix's count and size in the account size view (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'{records, plural, =1{1 record} other{{records} records}}, {size}'**
+  String settingsAccountSizeRow(int records, String size);
 
   /// What the host key sharing switch does, under it.
   ///

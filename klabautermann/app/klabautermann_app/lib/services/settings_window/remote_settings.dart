@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 
+import '../../controllers/account_size.dart';
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/cadence_controller.dart';
 import '../../controllers/app_lock_controller.dart';
@@ -106,6 +107,9 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     (asserted) => invoke(SettingsLinkMethod.setPinPublication.name, asserted),
   );
 
+  /// The Sync tab's account size (SYN-09), from the latest snapshot.
+  final ValueNotifier<AccountSize?> accountSize = ValueNotifier(null);
+
   /// The app's version for the about row, from the latest snapshot; null
   /// when the app could not tell.
   String? get appVersion => _appVersion;
@@ -153,6 +157,9 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
         snapshot[SettingsLinkKey.pinPublication.name] as Map<Object?, Object?>?,
       ),
     );
+    accountSize.value = decodeAccountSize(
+      snapshot[SettingsLinkKey.accountSize.name],
+    );
     monitorSet._apply(
       decodeMonitorCandidates(
         snapshot[SettingsLinkKey.monitorSet.name]! as List<Object?>,
@@ -177,6 +184,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     _thresholds.dispose();
     syncSecrets.dispose();
     pinPublication.dispose();
+    accountSize.dispose();
     monitorSet.dispose();
     safety.dispose();
     appLock.dispose();

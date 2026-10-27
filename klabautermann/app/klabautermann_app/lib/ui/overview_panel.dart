@@ -16,6 +16,7 @@ import 'failed_units_summary.dart';
 import 'fleet_row_state.dart' show kFleetRowStaleAfter;
 import 'freshness.dart';
 import 'history_card.dart';
+import 'quick_actions.dart';
 import 'slowness.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 import 'system_view.dart';
@@ -260,6 +261,9 @@ class OverviewPanel extends StatelessWidget {
                 serverId: serverId,
               ),
             ),
+            // OV-08, where this device has anything to offer.
+            if (quickActionsShown(context, serverId))
+              QuickActionsCard(serverId: serverId),
             if (unavailable != null)
               PanelNotice(
                 icon: unavailable.reason == CollectorUnavailableReason.timeout
