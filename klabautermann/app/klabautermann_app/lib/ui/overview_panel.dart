@@ -10,6 +10,7 @@ import '../l10n/app_localizations.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart';
 import 'cpu_hints.dart';
+import 'doctor.dart';
 import 'docker/containers_view.dart' show containerNameOf;
 import 'failed_units_summary.dart';
 import 'fleet_row_state.dart' show kFleetRowStaleAfter;
@@ -249,7 +250,15 @@ class OverviewPanel extends StatelessWidget {
                 icon: head.stale ? Icons.history : Icons.schedule,
                 text: freshnessText(l10n, head),
               ),
-            partTwo.health(context, scope),
+            partTwo.health(
+              context,
+              scope,
+              onDoctor: () => showDoctor(
+                context,
+                monitoring: monitoring,
+                serverId: serverId,
+              ),
+            ),
             if (unavailable != null)
               PanelNotice(
                 icon: unavailable.reason == CollectorUnavailableReason.timeout
@@ -753,8 +762,13 @@ final class _PartTwo {
 
   /// OV-02: failed units through K34's summary and, with a Docker
   /// endpoint, the unhealthy containers, then the mounts past a level, and
-  /// the link to A11Y-15's switch in Settings (D60).
-  Widget health(BuildContext context, AnnouncementScope? scope) {
+  /// the doctor (TRI-01) and the link to A11Y-15's switch in Settings
+  /// (D60).
+  Widget health(
+    BuildContext context,
+    AnnouncementScope? scope, {
+    required VoidCallback onDoctor,
+  }) {
     final l10n = AppLocalizations.of(context);
     final stale = healthFreshness.stale;
     final unitsFailed = switch (slow.failed.value?.result) {
@@ -791,6 +805,14 @@ final class _PartTwo {
               stale: docker.stale,
             ),
         ..._diskHealth(context, l10n, stale),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton.icon(
+            onPressed: onDoctor,
+            icon: const Icon(Icons.medical_services_outlined),
+            label: Text(l10n.doctorOpen),
+          ),
+        ),
         if (scope != null)
           Align(
             alignment: AlignmentDirectional.centerStart,

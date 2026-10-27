@@ -15,6 +15,7 @@ import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/editor_document.dart';
 import 'package:seance_app/services/external_file_opener.dart';
 import 'package:seance_app/services/remote_files_controller.dart';
+import 'package:seance_app/services/shell_location.dart';
 import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/ui/files_pane.dart';
 import 'package:seance_app/ui/terminal_pane.dart';
@@ -88,7 +89,9 @@ void main() {
       await state!.saveServer(server);
       files = RemoteFilesController(
         () async => remote,
-        shellDirectory: session.engine.workingDirectory,
+        shellDirectory: ShellLocation(
+          reported: session.engine.workingDirectory,
+        ),
         managedFileStore: services!.managedRemoteFiles,
         serverId: session.serverId,
         editSessionId: session.editSessionId,
