@@ -4347,6 +4347,19 @@ TLS. The section checks when it shows, after an edit and on request.
   page keeps the newest 10,000 merged lines. A chip per container hides
   or shows its lines, which stay read, and names its stream's state
   when it is not running; the page has LOG-10's export.
+- **As built (M6 N19d).** CTX-05: `line_reading.dart` in the engine
+  package reads a container line's own text. Its severity comes from a
+  JSON key (`level`, `severity`, `lvl`, `loglevel`, `levelname`,
+  `log.level`, `@l`, with pino's numbers), a logfmt `level=`, a level
+  word in capitals first or after up to four prefix words that hold a
+  digit or are a zone's capitals (a timestamp, PostgreSQL's prefix), or
+  an exception's own line; a level word after a message's words is not
+  read. A stack trace's continuation lines (indented frames, `Caused
+  by:`) take the level of the line that opened them, up to 200 lines
+  back, so the trace reads as one. A JSON object line's keys, nested
+  ones dotted, are fields a tap shows beneath it, as a journal row's
+  are. The container and stack log views read lines through one cached
+  reader per view.
 - **As built (M4 E15).** `operations/plans/docker_plans.dart` plans
   CTR-02's verbs, CTR-06's removal, IMG-02 and STK-03 (7.14, 7.16) over
   the server's Docker endpoint (`DockerRouter.useEndpoint`).
@@ -7658,8 +7671,9 @@ on its background, moved toward black or white as little as needed. SGR
 colours 1 to 6 and 9 to 14 take the family's glyph hues, 8 its graphite;
 0, 7 and 15 stay black, light grey and white. The caller supplies a line's
 level; journal priorities 0 to 3 are errors, 4 warnings, 5 and 6 plain, 7
-debug, each with a spoken gutter icon. Levels are never guessed from text
-(CTX-05, v1). Its goldens draw with flutter_test's font rather than the
+debug, each with a spoken gutter icon. A container line's level is what
+it says of itself (CTX-05, as built in N19d below), never a word inside
+its message. Its goldens draw with flutter_test's font rather than the
 bundled font of 11.1 until they share K05a's approach.
 
 Journal rows and search (LOG-01, LOG-05, as built in M2): `LogBuffer`

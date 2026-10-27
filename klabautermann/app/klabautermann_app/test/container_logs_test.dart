@@ -294,10 +294,11 @@ void main() {
     await _openLogs(tester);
     await harness.running(tester);
 
-    // A screen reader hears the stream's name for its mark.
+    // A screen reader hears the stream's name for its mark, after the
+    // level the line names of itself (CTX-05).
     expect(
       find.bySemanticsLabel(
-        RegExp(r'^2026-10-15 14:30:01 standard error FATAL:'),
+        RegExp(r'^Error\s+2026-10-15 14:30:01 standard error FATAL:'),
       ),
       findsOne,
     );
@@ -379,6 +380,30 @@ void main() {
     expect(harness.opens, hasLength(2));
     expect(harness.opens.last.spec.afterCursor, isNull);
     expect(_line('FATAL:'), findsNothing);
+  });
+
+  testWidgets('a JSON line shows its keys beneath it on a tap (CTX-05)', (
+    tester,
+  ) async {
+    final harness = await _pump(tester);
+    await _openLogs(tester);
+    await harness.status(tester, const LogStreamRunning());
+    await harness.emit(
+      tester,
+      containerLogBatch(harness.streamId, [
+        containerLine(
+          '{"level":"error","msg":"boom","http":{"status":500}}',
+          at: DateTime(2026, 10, 15, 14, 30, 3),
+        ),
+      ]),
+    );
+    expect(_line('msg=boom'), findsNothing);
+    expect(find.byIcon(Icons.error_outline), findsOne);
+
+    await tester.tap(_line('"msg":"boom"'));
+    await tester.pumpAndSettle();
+    expect(_line('msg=boom'), findsOne);
+    expect(_line('http.status=500'), findsOne);
   });
 
   testWidgets('a time range reads anew: a span back from now follows, a '

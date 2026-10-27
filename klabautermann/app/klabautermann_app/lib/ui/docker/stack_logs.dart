@@ -5,6 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/log_streams.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../logs/container_lines.dart';
 import '../logs/log_export.dart' show showLogExport;
 import '../logs/log_search.dart';
 import '../logs/log_view.dart';
@@ -71,6 +72,12 @@ class StackLogsController extends ChangeNotifier {
 
   final LogViewController logs = LogViewController();
   late final LogSearch search = LogSearch(logs);
+
+  /// The lines' levels and JSON fields (CTX-05), past each line's name.
+  late final ContainerLineReader lines = ContainerLineReader(
+    logs,
+    skipWords: 1,
+  );
 
   final Set<int> _hidden = {};
   late final List<_Stream> _streamsOf = [
@@ -392,7 +399,12 @@ class _StackLogsPageState extends State<StackLogsPage> {
                 ),
               ),
               Expanded(
-                child: LogView(controller: _logs.logs, search: _logs.search),
+                child: LogView(
+                  controller: _logs.logs,
+                  search: _logs.search,
+                  levelOf: _logs.lines.levelOf,
+                  fieldsOf: _logs.lines.fieldsOf,
+                ),
               ),
             ],
           ),

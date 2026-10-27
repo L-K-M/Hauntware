@@ -53,6 +53,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 export 'src/fleet/monitor_set.dart'
     show MonitorEligibility, kMonitorSetLimit, monitorEligibilityOf;
 // The log viewer's line store and SGR reader (03 §10.8).
+export 'src/logs/line_reading.dart';
 export 'src/logs/log_buffer.dart';
 export 'src/logs/sgr.dart';
 // The app's settings.json (03 §4.10), and the atomic writer the app's

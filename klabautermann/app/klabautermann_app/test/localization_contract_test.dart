@@ -532,6 +532,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'  '",
     r"'${variable.name}=${variable.value.display}'",
   },
+  'lib/ui/logs/container_lines.dart': {
+    // The space after a word a view puts before a line's own text.
+    "' '",
+  },
   'lib/ui/docker/stack_logs.dart': {
     // A merged line: the container's name in its colour as SGR escapes,
     // then the line as the container wrote it.
