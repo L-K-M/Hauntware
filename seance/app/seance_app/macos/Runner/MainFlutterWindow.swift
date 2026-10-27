@@ -15,6 +15,9 @@ class MainFlutterWindow: NSWindow {
   /// transition starts rather than after its animation.
   private var inFullScreen = false
 
+  /// The titlebar's title visibility before full screen showed the title.
+  private var titleVisibilityOutsideFullScreen: NSWindow.TitleVisibility = .hidden
+
   /// The Dart side installs the unified toolbar after launch
   /// (macos_titlebar.dart), possibly after a restored window already
   /// entered full screen, so every toolbar the window receives takes the
@@ -252,6 +255,15 @@ class MainFlutterWindow: NSWindow {
   private func setInFullScreen(_ value: Bool) {
     guard value != inFullScreen else { return }
     inFullScreen = value
+    // Full screen has no Flutter header to carry the title, so the toolbar
+    // shows the window's own title and subtitle, which Dart keeps on the
+    // active session; leaving puts back what the titlebar had.
+    if value {
+      titleVisibilityOutsideFullScreen = titleVisibility
+      titleVisibility = .visible
+    } else {
+      titleVisibility = titleVisibilityOutsideFullScreen
+    }
     windowChannel?.invokeMethod("toolbarBandChanged", arguments: !value)
   }
 
