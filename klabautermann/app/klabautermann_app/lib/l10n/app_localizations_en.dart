@@ -4015,8 +4015,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get jobsSourceTimer => 'systemd timer';
 
   @override
-  String get jobsTimerTriggersUnread =>
-      'Triggers are not read in this version.';
+  String get jobsTimerTriggersUnread => 'In its details';
+
+  @override
+  String get jobsTimerTriggersReading => 'Reading the timer\'s triggers…';
+
+  @override
+  String get jobsTimerTriggersNoLink =>
+      'Not connected, so the triggers were not read.';
+
+  @override
+  String get jobsTimerTriggersUnreadable =>
+      'systemd did not say what starts this timer.';
+
+  @override
+  String get jobsTimerTriggersFailed =>
+      'The triggers could not be read. Close and open the details to try again.';
 
   @override
   String get jobsDetailsWritten => 'As written';
