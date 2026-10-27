@@ -8,9 +8,11 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:planchette_editor/planchette_editor.dart' show EditorZoom;
 import 'package:seance_core/seance_core.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../app_state.dart';
 import '../main.dart';
@@ -237,11 +239,13 @@ class _MacCommandHostState extends State<MacCommandHost>
     );
 
     return {
+      AppCommand.checkForUpdates: on(free),
       AppCommand.settings: on(true),
       AppCommand.newServer: on(free),
       AppCommand.newTab: on(free && active != null),
       AppCommand.newLocalShell: on(free && state.localShellAvailable),
       AppCommand.closeTab: on(content && active != null),
+      AppCommand.closeWindow: on(content),
       AppCommand.save: on(
         content && editorState != null,
         title: editorState?.canUpload ?? false ? 'Save and Upload' : 'Save',
@@ -425,6 +429,8 @@ class _MacCommandHostState extends State<MacCommandHost>
     final server = active == null ? null : state.configFor(active.serverId);
     final terminal = _activeTerminal(state);
     switch (command) {
+      case AppCommand.checkForUpdates:
+        await _checkForUpdates(state);
       case AppCommand.settings:
         openSettings();
       case AppCommand.newServer:
@@ -438,6 +444,8 @@ class _MacCommandHostState extends State<MacCommandHost>
         await state.newLocalTab();
       case AppCommand.closeTab:
         if (active != null) await confirmAndCloseTab(context, state, active.id);
+      case AppCommand.closeWindow:
+        await windowManager.close();
       case AppCommand.save || AppCommand.saveLocally:
         final editor = active is EditorTab
             ? active.editorKey.currentState
@@ -630,6 +638,35 @@ class _MacCommandHostState extends State<MacCommandHost>
     } catch (error) {
       if (mounted) showTopToastIn(context, message: 'Not exported — $error');
     }
+  }
+
+  /// Séance ▸ Check for Updates…: asks GitHub now and says what it found.
+  Future<void> _checkForUpdates(AppState state) async {
+    final String version;
+    try {
+      version = (await PackageInfo.fromPlatform()).version;
+    } catch (error) {
+      if (mounted) showTopToastIn(context, message: 'No version to check.');
+      return;
+    }
+    final info = await state.checkForUpdateNow(version);
+    if (info == null) {
+      await showMacAlert(
+        message: 'No update found',
+        informative:
+            'Séance couldn’t find a release newer than $version. If this '
+            'Mac is offline, try again later.',
+        buttons: const ['OK'],
+      );
+      return;
+    }
+    const open = 0;
+    final answer = await showMacAlert(
+      message: 'Séance ${info.latestVersion} is available',
+      informative: 'You have $version. The release page has the download.',
+      buttons: const ['Open Release Page', 'Later'],
+    );
+    if (answer?.button == open) await launchUrl(info.releasesUrl);
   }
 
   // -- quitting ------------------------------------------------------------

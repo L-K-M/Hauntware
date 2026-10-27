@@ -26,11 +26,17 @@ final class SettingsWindowHost: NSObject, NSWindowDelegate {
   private static let defaultSize = NSSize(width: 760, height: 640)
   private static let minimumSize = NSSize(width: 520, height: 420)
 
+  /// The key AppKit saves the window's frame under.
+  private static let frameName = "SeanceSettingsWindow"
+
   private weak var mainWindow: NSWindow?
   private let mainMessenger: FlutterBinaryMessenger
   private let control: FlutterMethodChannel
 
   private var window: NSWindow?
+
+  /// The window's pane switcher, kept for as long as the window.
+  private var paneToolbar: SettingsPaneToolbar?
 
   init(mainWindow: NSWindow, messenger: FlutterBinaryMessenger) {
     self.mainWindow = mainWindow
@@ -101,18 +107,24 @@ final class SettingsWindowHost: NSObject, NSWindowDelegate {
       defer: false)
     window.title = "Settings"
     window.contentViewController = controller
+    paneToolbar = SettingsPaneToolbar(
+      messenger: controller.engine.binaryMessenger, window: window)
     window.setContentSize(Self.defaultSize)
     window.contentMinSize = Self.minimumSize
     // Owned by `self.window`; released on close, which shuts its engine down.
     window.isReleasedWhenClosed = false
     window.tabbingMode = .disallowed
     window.delegate = self
-    if let main = mainWindow {
+    // Reopens where the user left it, across launches, as Settings windows
+    // do; the first time it opens over the app's window.
+    let restored = window.setFrameUsingName(Self.frameName)
+    window.setFrameAutosaveName(Self.frameName)
+    if !restored, let main = mainWindow {
       let frame = main.frame
       window.setFrameOrigin(NSPoint(
         x: frame.midX - window.frame.width / 2,
         y: frame.midY - window.frame.height / 2))
-    } else {
+    } else if !restored {
       window.center()
     }
     self.window = window
@@ -133,11 +145,96 @@ final class SettingsWindowHost: NSObject, NSWindowDelegate {
     else { return }
     closing.delegate = nil
     window = nil
+    paneToolbar = nil
     // Released after AppKit has finished closing it rather than from inside
     // its own close: that drops the last reference to the controller, whose
     // dealloc invalidates the text fields and whose engine then shuts down.
     DispatchQueue.main.async {
       closing.contentViewController = nil
     }
+  }
+}
+
+/// The Settings window's pane switcher: a preferences-style toolbar whose
+/// selected item names the pane, as in the system's own apps. The panes are
+/// `SettingsTab`'s cases in Dart; the window's title follows the pane.
+///
+/// Dart reports the pane it shows (`shown`), including one it opened on by
+/// request; a click here asks it to show another (`select`), over
+/// `seance/settings_pane` on the Settings engine.
+final class SettingsPaneToolbar: NSObject, NSToolbarDelegate {
+  static let channelName = "seance/settings_pane"
+
+  private struct Pane {
+    let identifier: NSToolbarItem.Identifier
+    let label: String
+    let symbol: String
+  }
+
+  private static let panes = [
+    Pane(identifier: .init("general"), label: "General", symbol: "gearshape"),
+    Pane(identifier: .init("appearance"), label: "Appearance", symbol: "paintpalette"),
+    Pane(identifier: .init("assistant"), label: "Assistant", symbol: "sparkles"),
+    Pane(identifier: .init("files"), label: "Files", symbol: "folder"),
+    Pane(identifier: .init("sync"), label: "Sync", symbol: "arrow.triangle.2.circlepath"),
+    Pane(identifier: .init("inbox"), label: "Inbox", symbol: "tray"),
+  ]
+
+  private let channel: FlutterMethodChannel
+  private weak var window: NSWindow?
+
+  init(messenger: FlutterBinaryMessenger, window: NSWindow) {
+    channel = FlutterMethodChannel(name: Self.channelName, binaryMessenger: messenger)
+    self.window = window
+    super.init()
+    channel.setMethodCallHandler { [weak self] call, result in
+      if call.method == "shown", let pane = call.arguments as? String {
+        self?.show(pane)
+      }
+      result(nil)
+    }
+    let toolbar = NSToolbar(identifier: "SeanceSettingsToolbar")
+    toolbar.delegate = self
+    toolbar.displayMode = .iconAndLabel
+    toolbar.allowsUserCustomization = false
+    window.toolbar = toolbar
+    window.toolbarStyle = .preference
+    show(Self.panes[0].identifier.rawValue)
+  }
+
+  private func show(_ pane: String) {
+    guard let match = Self.panes.first(where: { $0.identifier.rawValue == pane }) else { return }
+    window?.toolbar?.selectedItemIdentifier = match.identifier
+    window?.title = match.label
+  }
+
+  @objc private func select(_ sender: NSToolbarItem) {
+    show(sender.itemIdentifier.rawValue)
+    channel.invokeMethod("select", arguments: sender.itemIdentifier.rawValue)
+  }
+
+  func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+    Self.panes.map(\.identifier)
+  }
+
+  func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+    Self.panes.map(\.identifier)
+  }
+
+  func toolbarSelectableItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+    Self.panes.map(\.identifier)
+  }
+
+  func toolbar(
+    _ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier,
+    willBeInsertedIntoToolbar flag: Bool
+  ) -> NSToolbarItem? {
+    guard let pane = Self.panes.first(where: { $0.identifier == identifier }) else { return nil }
+    let item = NSToolbarItem(itemIdentifier: identifier)
+    item.label = pane.label
+    item.image = NSImage(systemSymbolName: pane.symbol, accessibilityDescription: pane.label)
+    item.target = self
+    item.action = #selector(select(_:))
+    return item
   }
 }

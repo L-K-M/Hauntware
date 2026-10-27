@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'services/settings_window.dart';
 import 'theme.dart';
@@ -84,8 +88,11 @@ class _SettingsWindowAppState extends State<SettingsWindowApp> {
               key: ValueKey(page.generation),
               backend: backend,
               initialTab: page.tab,
-              tabRequests: backend.tabRequests,
-              presentation: SettingsPresentation.window,
+              tabRequests: _tabRequests.stream,
+              onTabShown: _tabShown,
+              presentation: _nativePanes
+                  ? SettingsPresentation.toolbarWindow
+                  : SettingsPresentation.window,
             ),
     );
     // Drawn in the app's theme, from the snapshots: the window is part of

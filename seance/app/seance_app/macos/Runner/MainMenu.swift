@@ -152,8 +152,12 @@ final class CommandCenter: NSObject, NSMenuItemValidation, NSToolbarItemValidati
       guard let key = NSApp.keyWindow else { return false }
       if key === mainWindow {
         let tab = state("closeTab")
-        item.title = tab.enabled ? (tab.title ?? "Close Tab") : "Close Window"
-        return true
+        if tab.enabled {
+          item.title = tab.title ?? "Close Tab"
+          return true
+        }
+        item.title = "Close Window"
+        return state("closeWindow").enabled
       }
       item.title = "Close"
       return key.styleMask.contains(.closable)
@@ -162,6 +166,7 @@ final class CommandCenter: NSObject, NSMenuItemValidation, NSToolbarItemValidati
       // Only distinct from ⌘W while the main window has a tab to close;
       // otherwise the two would read the same.
       item.isHidden = !(key === mainWindow && state("closeTab").enabled)
+      if key === mainWindow { return state("closeWindow").enabled }
       return key.styleMask.contains(.closable)
     case #selector(openServerFromDock(_:)):
       return true
@@ -211,6 +216,8 @@ final class CommandCenter: NSObject, NSMenuItemValidation, NSToolbarItemValidati
     let appMenu = menu(appName) {
       $0.addItem(withTitle: "About \(appName)",
         action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+      $0.addItem(.separator())
+      $0.addItem(command("checkForUpdates", "Check for Updates…"))
       $0.addItem(.separator())
       $0.addItem(command("settings", "Settings…", key: ","))
       $0.addItem(.separator())

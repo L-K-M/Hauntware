@@ -2411,6 +2411,18 @@ class AppState extends ChangeNotifier {
   /// exists (and the user hasn't opted out), [updateInfo] is set so the UI can
   /// offer the release page, or on Android [installUpdate]. The check itself
   /// never downloads; any error (offline, rate-limited) is swallowed silently.
+  /// Checks for a newer release now, whatever the launch check's setting
+  /// says (Séance ▸ Check for Updates…). Null when none was found, which
+  /// includes a check that could not reach GitHub.
+  Future<UpdateInfo?> checkForUpdateNow(String currentVersion) async {
+    final info = await _updateChecker.check(currentVersion);
+    if (info != null) {
+      updateInfo = info;
+      notifyListeners();
+    }
+    return info;
+  }
+
   Future<void> checkForUpdate(String currentVersion) async {
     if (!services.settings.checkForUpdates) return;
     final info = await _updateChecker.check(currentVersion);

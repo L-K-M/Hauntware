@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../services/mac_commands.dart';
 import 'session_label.dart';
 
 /// Close [tabId] behind the guards its close button has always had: an
@@ -27,8 +28,11 @@ Future<void> confirmAndCloseTab(
   // deleted): a declined unsaved-buffer confirm aborts the whole close.
   final session = tab;
   for (final editor in state.editorTabsOwnedBy(session)) {
+    if (!context.mounted) return;
     if (!await _editorMayClose(context, editor)) return;
   }
+  if (!context.mounted) return;
+  if (!await _runningCommandMayEnd(context, session)) return;
   final localCopyCount =
       (session.files?.localCopies.length ?? 0) +
       session.retainedLocalCopies.length;
@@ -70,6 +74,9 @@ Future<void> confirmAndCloseTab(
 /// silently does nothing while unsaved text is at stake.
 Future<bool> _editorMayClose(BuildContext context, EditorTab tab) async {
   if (!tab.dirty.value) return true;
+  if (Theme.of(context).platform == TargetPlatform.macOS) {
+    return _macEditorMayClose(tab);
+  }
   final confirmed = await tab.editorKey.currentState?.confirmDiscard();
   if (confirmed != null) return confirmed;
   if (!context.mounted) return false;
@@ -93,4 +100,48 @@ Future<bool> _editorMayClose(BuildContext context, EditorTab tab) async {
     ),
   );
   return discard ?? false;
+}
+
+/// The Mac's document question for a dirty editor tab: Save (the default),
+/// Cancel, or Don't Save, as TextEdit asks. Save writes the buffer the way
+/// File ▸ Save does, uploading when the file can be, and closes only once
+/// nothing is left unsaved.
+Future<bool> _macEditorMayClose(EditorTab tab) async {
+  const save = 0;
+  const dontSave = 2;
+  final editor = tab.editorKey.currentState;
+  final answer = await showMacAlert(
+    message:
+        'Do you want to save the changes you made to '
+        '“${editorTabLabel(tab.remotePath)}”?',
+    informative: 'Your changes will be lost if you don’t save them.',
+    // Without a mounted editor there is nothing to save through.
+    buttons: [if (editor != null) 'Save', 'Cancel', 'Don’t Save'],
+    destructive: editor != null ? dontSave : 1,
+  );
+  final button = answer?.button;
+  if (editor == null) return button == 1;
+  if (button == dontSave) return true;
+  if (button != save) return false;
+  await editor.save(upload: editor.canUpload);
+  return !tab.dirty.value;
+}
+
+/// Terminal's question before a close ends a command still running in the
+/// tab (macOS; the shell's own prompt needs no asking). Elsewhere, and at
+/// a prompt, the tab closes as it always has.
+Future<bool> _runningCommandMayEnd(
+  BuildContext context,
+  TerminalSession session,
+) async {
+  if (Theme.of(context).platform != TargetPlatform.macOS) return true;
+  final command = session.metadata.value.runningCommand;
+  if (command == null || !session.isConnected) return true;
+  const terminate = 0;
+  final answer = await showMacAlert(
+    message: 'Do you want to terminate the running process in this tab?',
+    informative: 'Closing this tab ends “$command”.',
+    buttons: const ['Terminate', 'Cancel'],
+  );
+  return answer?.button == terminate;
 }

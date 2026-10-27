@@ -12,11 +12,16 @@ const MethodChannel macMenuChannel = MethodChannel('seance/menu');
 /// crosses the channel as its [name], which MainMenu.swift's items carry,
 /// so renaming one is a change on both sides.
 enum AppCommand {
+  checkForUpdates,
   settings,
   newServer,
   newTab,
   newLocalShell,
   closeTab,
+
+  /// Closes (hides) the main window; MainMenu.swift runs it natively and
+  /// asks Dart only whether it applies.
+  closeWindow,
   save,
   saveLocally,
   exportText,

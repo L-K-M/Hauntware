@@ -38,6 +38,10 @@ enum SettingsPresentation {
   /// The desktop settings window, whose own title bar names it and closes
   /// it: the tabs alone.
   window,
+
+  /// The macOS settings window, whose native toolbar switches the panes
+  /// (SettingsPaneToolbar in the runner): no tab bar at all.
+  toolbarWindow,
 }
 
 /// Settings: LLM provider (the assistant is always on — this only picks which
@@ -55,6 +59,10 @@ class SettingsScreen extends StatefulWidget {
   /// Settings is chosen again with a different tab.
   final Stream<SettingsTab>? tabRequests;
 
+  /// Told the tab the screen shows, when it opens and on every switch: the
+  /// macOS window's toolbar selects and titles it.
+  final ValueChanged<SettingsTab>? onTabShown;
+
   /// Test seam: the source of installed font families behind the terminal
   /// font picker. Defaults to the host's own collection, which a widget test
   /// must not depend on.
@@ -67,6 +75,7 @@ class SettingsScreen extends StatefulWidget {
     this.initialTab = SettingsTab.general,
     this.presentation = SettingsPresentation.route,
     this.tabRequests,
+    this.onTabShown,
     this.systemFonts,
   });
 
@@ -183,6 +192,13 @@ class _SettingsScreenState extends State<SettingsScreen>
     _syncUrl.text = s.syncBaseUrl ?? '';
     _syncUser.text = s.syncUsername ?? '';
     _listenForTabRequests();
+    _tabs.addListener(_reportTab);
+    _reportTab();
+  }
+
+  void _reportTab() {
+    if (_tabs.indexIsChanging) return;
+    widget.onTabShown?.call(SettingsTab.values[_tabs.index]);
   }
 
   void _listenForTabRequests() {
@@ -202,6 +218,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   void dispose() {
     unawaited(_tabRequests?.cancel());
+    _tabs.removeListener(_reportTab);
     _tabs.dispose();
     for (final c in [
       _baseUrl,
@@ -263,6 +280,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           toolbarHeight: 0,
           bottom: tabBar,
         ),
+        SettingsPresentation.toolbarWindow => null,
       },
       body: SelectedTabView(
         controller: _tabs,
