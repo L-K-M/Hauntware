@@ -7767,8 +7767,9 @@ there from its own page too.
   (`filterFocus`: Containers, Images, Volumes, Networks, Processes), `?`
   opens the keyboard map, and `keyActions` bind single-key verbs to the
   active row, each enabled only where its menu verb is: on Containers
-  `l` opens the logs, `s` a shell while the container runs and `r` a
-  restart through its confirmation; on Services `l` opens the unit's
+  `l` opens the logs, `s` a shell while the container runs (in the
+  desktop workspace's dock, else on a page) and `r` a restart through
+  its confirmation; on Services `l` opens the unit's
   page, which leads with its logs on a desktop, and `r` restarts it. A
   key whose verb does not apply passes on. View gains "Go to <tab>" with
   `Cmd/Ctrl-1` to `8` in `ServerPanel` order (eight tabs, so 9 is
