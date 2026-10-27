@@ -127,7 +127,7 @@ void main() {
       final ran = <String>[];
       final filter = await _pumpTable(tester, ran: ran);
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+      await tester.sendKeyEvent(LogicalKeyboardKey.slash, character: '/');
       await tester.pumpAndSettle();
       expect(filter.hasFocus, isTrue);
 
@@ -135,6 +135,17 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
       await tester.pumpAndSettle();
       expect(ran, isEmpty, reason: 'a field keeps its letters');
+    });
+
+    testWidgets('/ typed with Shift, as on a German layout, focuses the '
+        'filter too', (tester) async {
+      final filter = await _pumpTable(tester);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit7, character: '/');
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+      expect(filter.hasFocus, isTrue);
     });
 
     testWidgets("? shows the list's keys over the window's", (tester) async {
