@@ -7196,6 +7196,16 @@ and in the pressure bar. The optional `HealthMark` overlay (`ok`,
 the MVP (D55). v1 adds density modes, the summary strip, attention-first
 sort and the faults-only filter.
 
+As built in M6 (N63b, FL-08), the desktop and tablet workspace shows the
+fleet board while no server is open: every server as a card (state word,
+address, pressure bar with its shares in figures, age) or as a grid tile
+(name, dot, bar), opened by a tap and named to screen readers as its row
+is. A picker above it chooses Auto, Cards, Grid or Rows, kept per device in
+`settings.json` under `klabautermann.fleet.density`. Auto shows cards
+below 12 servers and the grid from 12 on; Rows keeps the rail's rows and
+the workspace's invitation. The phone's fleet list is its home and keeps
+rows: cards and a grid are layouts for a wide workspace.
+
 As built in M2 (`app/klabautermann_app/lib/ui/fleet_rows.dart`,
 `fleet_row_state.dart`), the desktop rail and the phone list share one
 row over the kit's `SidebarRow`, resolved through `ghost_servers`'
