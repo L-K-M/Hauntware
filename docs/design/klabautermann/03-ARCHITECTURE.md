@@ -3379,6 +3379,19 @@ unless the user enables admin mode for that panel.
   `klabautermann.overview.pinnedServices`. Each action runs through the
   preview and confirmation it has in its own tab (SAF-04), and the card
   is left out when this device can offer none of them.
+
+  As built in M6 (N61e, OV-06), the cards below the health card follow
+  this device's arrangement, kept in `settings.json` under
+  `klabautermann.overview.cards` as an order and a hidden list of card
+  names. Arrange cards at the Overview's end opens a sheet that moves a
+  card by drag or by its screen reader actions and switches it off or
+  on, each change applying at once; Reset restores the default. A name
+  this version does not know is skipped, and a card the stored order
+  lacks takes its default place, so cards added later appear. A card a
+  server cannot show (Docker without an endpoint, quick actions with
+  nothing to offer) stays out whatever the arrangement. On a wide panel
+  each run of half-width cards is split between two columns, the first
+  half on the left. The arrangement does not sync yet (v1.x).
 - **As built (M6 N42c).** CPU-07's model and topology are a host query,
   `CpuTopologyQuery`, shown in the System tab's Processor section beside
   the identity, since they do not change while the Overview samples. It

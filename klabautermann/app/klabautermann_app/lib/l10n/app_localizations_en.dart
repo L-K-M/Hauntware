@@ -10565,6 +10565,23 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get overviewEditCards => 'Arrange cards…';
+
+  @override
+  String get overviewCardsTitle => 'Overview cards';
+
+  @override
+  String get overviewCardsHint =>
+      'Drag a card to move it, or switch it off to hide it on every server. A card a server cannot show stays out there.';
+
+  @override
+  String get overviewCardsReset => 'Reset';
+
+  @override
+  String get overviewCardsNotSaved =>
+      'The card arrangement applies now but was not saved, so it lasts until Klabautermann restarts.';
+
+  @override
   String get exportNameServer => 'Name the server';
 
   @override

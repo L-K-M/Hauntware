@@ -96,6 +96,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/log_display.dart': {
     r"'The log display was not saved: $error'",
   },
+  // The Overview layout's not-saved diagnostic; the cards sheet shows its
+  // own ARB toast (overviewCardsNotSaved).
+  'lib/controllers/overview_layout.dart': {
+    r"'The Overview layout was not saved: $error'",
+  },
   // The not-saved diagnostic; the General tab prints it and shows its own
   // ARB text (settingsServerTimesNotSaved).
   'lib/controllers/time_display.dart': {
