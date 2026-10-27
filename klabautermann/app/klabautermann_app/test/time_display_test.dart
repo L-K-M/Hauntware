@@ -1,7 +1,9 @@
 // A11Y-07: server times in this device's zone or in the server's, kept per
 // device and set in Settings > General.
+import 'dart:async' show Completer;
 import 'dart:io' show FileSystemException;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
@@ -52,13 +54,45 @@ void main() {
     expect(saved, hasLength(1), reason: 'in force and saved');
   });
 
-  Widget scoped(TimeDisplayController display, Widget child) =>
-      TimeDisplayScope(
-        display: display,
-        serverZoneOffset: (serverId) =>
-            serverId == _server ? _serverOffset : null,
-        child: child,
-      );
+  test('overlapping changes save in order, so the last one stays', () async {
+    final saved = <bool>[];
+    final first = Completer<void>();
+    final display = TimeDisplayController(
+      save: (serverTimes) async {
+        // The first save is slow, as a busy disk or the link can be.
+        if (saved.isEmpty && serverTimes) await first.future;
+        saved.add(serverTimes);
+      },
+    );
+    addTearDown(display.dispose);
+
+    final toServer = display.setTimeDisplay(TimeDisplay.server);
+    final toDevice = display.setTimeDisplay(TimeDisplay.device);
+    first.complete();
+    await Future.wait([toServer, toDevice]);
+
+    expect(saved, [true, false]);
+    expect(display.value, TimeDisplay.device);
+  });
+
+  /// The probe's `date +%z` for [_serverOffset].
+  const serverZone = '+1245';
+
+  ValueNotifier<HostProfile?> profileOf(String? zone) =>
+      ValueNotifier(zone == null ? null : HostProfile(zoneOffset: zone));
+
+  Widget scoped(
+    TimeDisplayController display,
+    Widget child, {
+    Map<String, ValueListenable<HostProfile?>>? profiles,
+  }) {
+    final known = profiles ?? {_server: profileOf(serverZone)};
+    return TimeDisplayScope(
+      display: display,
+      serverProfile: (serverId) => known[serverId] ?? profileOf(null),
+      child: child,
+    );
+  }
 
   testWidgets('a server time reads the server\'s wall clock once picked and '
       'its zone is known, and this device\'s otherwise', (tester) async {
@@ -89,6 +123,35 @@ void main() {
       reason: 'the dependent rebuilt',
     );
     expect(unread, _at.toLocal(), reason: 'no zone read yet');
+  });
+
+  testWidgets('a server zone read after the screen built rebuilds it', (
+    tester,
+  ) async {
+    final display = TimeDisplayController(display: TimeDisplay.server);
+    final profile = profileOf(null);
+    addTearDown(() {
+      display.dispose();
+      profile.dispose();
+    });
+    late DateTime shown;
+    await tester.pumpWidget(
+      scoped(
+        display,
+        Builder(
+          builder: (context) {
+            shown = displayTime(context, _server, _at);
+            return const SizedBox();
+          },
+        ),
+        profiles: {_server: profile},
+      ),
+    );
+    expect(shown, _at.toLocal());
+
+    profile.value = HostProfile(zoneOffset: serverZone);
+    await tester.pump();
+    expect((shown.day, shown.hour, shown.minute), (28, 9, 15));
   });
 
   testWidgets('a chart\'s time axis reads the zone it is given', (

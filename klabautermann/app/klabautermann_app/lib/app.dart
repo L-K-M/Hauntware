@@ -418,8 +418,7 @@ class KlabautermannApp extends StatelessWidget {
             final withTimeDisplay = switch (timeDisplay) {
               final display? => TimeDisplayScope(
                 display: display,
-                serverZoneOffset: (serverId) =>
-                    monitoring.profileFor(serverId).value?.serverZone?.offset,
+                serverProfile: monitoring.profileFor,
                 child: withLogDisplay,
               ),
               null => withLogDisplay,

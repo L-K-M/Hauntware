@@ -53,11 +53,23 @@ final class TimeDisplayController extends ChangeNotifier
   TimeDisplay _saved;
   final Future<void> Function(bool serverTimes)? _save;
 
+  /// The last change's apply and save: a change waits for the one before
+  /// it, so overlapping saves land in order and the file ends with the
+  /// last one.
+  Future<void> _changes = Future<void>.value();
+
   @override
   TimeDisplay get value => _value;
 
   @override
-  Future<void> setTimeDisplay(TimeDisplay display) async {
+  Future<void> setTimeDisplay(TimeDisplay display) {
+    final change = _changes.then((_) => _apply(display));
+    // A failed save leaves the queue running; its caller sees the error.
+    _changes = change.then<void>((_) {}, onError: (Object _) {});
+    return change;
+  }
+
+  Future<void> _apply(TimeDisplay display) async {
     if (display == _value && display == _saved) return;
     if (display != _value) {
       _value = display;
