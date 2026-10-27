@@ -1,10 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:seance_core/seance_core.dart';
 
-/// Session-scoped git state for the sidebar's Git tab: follows the terminal's
-/// reported working directory (OSC 7, falling back to a conventional
-/// `user@host: dir` title) and re-probes when a git command finishes at the
-/// shell. All git execution goes through one [RemoteGit] over the session's
+/// Session-scoped git state for the sidebar's Git tab: follows the shell's
+/// working directory (OSC 7 or a read beside the shell, falling back to a
+/// conventional `user@host: dir` title) and re-probes when a git command
+/// finishes at the shell. All git execution goes through one [RemoteGit] over the session's
 /// exec channel — the interactive terminal is never touched, so a refresh
 /// can never disturb what the user is typing.
 class RemoteGitController extends ChangeNotifier {
@@ -56,19 +56,21 @@ class RemoteGitController extends ChangeNotifier {
   GitRepoStatus? get repo => result?.status;
   GitProbeKind? get probeKind => result?.kind;
 
-  /// Where the remote shell says it is. OSC 7 is authoritative;
-  /// Ubuntu/Debian's default Bash emits only an OSC 0 title such as
-  /// `root@host: ~/src`, whose `~` form is kept verbatim — the probe command
-  /// expands it on the remote side, so no local knowledge of $HOME is needed.
+  /// Where the remote shell is. [shellDirectory] (OSC 7, or a read beside a
+  /// shell that sends none) is authoritative; Ubuntu/Debian's default Bash
+  /// emits only an OSC 0 title such as `root@host: ~/src`, whose `~` form is
+  /// kept verbatim — the probe command expands it on the remote side, so no
+  /// local knowledge of $HOME is needed.
   ///
-  /// Both reports are ordinary terminal output, which anything the user views
-  /// can forge, and a new one is probed through the remote shell unasked. A
-  /// real directory name with a control character is rare and a forged one is
-  /// an attack, so such a report is ignored rather than handed to the shell.
+  /// OSC 7 and the title are ordinary terminal output, which anything the
+  /// user views can forge, and a new one is probed through the remote shell
+  /// unasked. A real directory name with a control character is rare and a
+  /// forged one is an attack, so such a report is ignored rather than handed
+  /// to the shell.
   String? get reportedDirectory {
-    final oscDirectory = shellDirectory.value;
-    if (_isAbsolutePath(oscDirectory) && !_hasControlCharacter(oscDirectory!)) {
-      return oscDirectory;
+    final located = shellDirectory.value;
+    if (_isAbsolutePath(located) && !_hasControlCharacter(located!)) {
+      return located;
     }
     final title = terminalTitle.value?.trim();
     if (title == null || _hasControlCharacter(title)) return null;

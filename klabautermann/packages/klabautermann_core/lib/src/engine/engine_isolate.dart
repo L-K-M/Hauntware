@@ -166,8 +166,9 @@ final class EngineStart {
 /// whether links are on. The engine first returns its command port, then
 /// answers requests on the client's port: [Hello] gets [EngineReady] and
 /// the fleet it started with in a [CatalogReplaced], [Subscribe],
-/// [Unsubscribe] and [SetCadenceProfile] update the sampling subscriptions,
-/// which the sampling scheduler runs over each server's ready link as
+/// [Unsubscribe], [SetCadenceProfile] and [SetServerCadenceCap] update the
+/// sampling subscriptions, which the sampling scheduler runs over each
+/// server's ready link as
 /// [Sample], [Gap], [SamplingState] and [HostProfileChanged] events
 /// (03 §6.4; links off, nothing samples), [RefreshSubscription] has it
 /// read one subscription's streams at once, a server's cached profile goes
@@ -1174,6 +1175,9 @@ void engineMain(
         }
       case SetCadenceProfile(:final profile):
         sampling.profile = profile;
+        scheduler?.profileChanged();
+      case SetServerCadenceCap(:final serverId, :final cap):
+        sampling.capServer(serverId, cap);
         scheduler?.profileChanged();
       case OpenLogStream(spec: LogStreamSpec(source: ContainerLogSource())):
         // The log router keeps every stream id; the Docker session reads.

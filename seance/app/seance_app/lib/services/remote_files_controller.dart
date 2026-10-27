@@ -7,6 +7,7 @@ import 'package:seance_core/seance_core.dart';
 import 'download_provenance.dart';
 import 'managed_remote_file.dart';
 import 'managed_remote_file_store.dart';
+import 'shell_location.dart';
 
 enum RemoteTransferDirection { upload, download }
 
@@ -44,7 +45,7 @@ class RemoteTransferItem {
 /// byte streams and local paths handed to it.
 class RemoteFilesController extends ChangeNotifier {
   final Future<RemoteFileSystem> Function() _openRemoteFileSystem;
-  final ValueListenable<String?> shellDirectory;
+  final ShellLocation shellDirectory;
   /// Marks every file this controller downloads as untrusted for the OS.
   final DownloadProvenance _provenance;
 
@@ -55,12 +56,6 @@ class RemoteFilesController extends ChangeNotifier {
   final String editSessionId;
   final Future<void> Function(List<String>)? saveBookmarks;
   final Future<void> Function(bool)? saveShowHidden;
-
-  /// Reads the shell's directory beside it while OSC 7 is absent.
-  final RemoteShellDirectory? _shellReader;
-
-  /// Ticks when the shell may have moved: the cue to read it again.
-  final Listenable? _shellMayHaveMoved;
 
   RemoteFilesController(
     this._openRemoteFileSystem, {
@@ -76,18 +71,15 @@ class RemoteFilesController extends ChangeNotifier {
     ValueListenable<String?>? activeCommand,
     Map<String, ManagedRemoteFile>? initialLocalCopies,
     DownloadProvenance? provenance,
-    this._shellReader,
-    this._shellMayHaveMoved,
   }) : terminalTitle = terminalTitle ?? const _EmptyStringListenable(),
        activeCommand = activeCommand ?? const _EmptyStringListenable(),
        _provenance = provenance ?? DownloadProvenance() {
     if (initialLocalCopies != null) localCopies.addAll(initialLocalCopies);
     showHidden = initialShowHidden;
     bookmarks.addAll(initialBookmarks.where(_isAbsolutePath));
-    shellDirectory.addListener(_followShellDirectory);
+    shellDirectory.addListener(_followShell);
     this.terminalTitle.addListener(_followTitle);
     this.activeCommand.addListener(_followActiveCommand);
-    _shellMayHaveMoved?.addListener(_scheduleShellRead);
   }
 
   RemoteFileSystem? _remoteFileSystem;
@@ -108,17 +100,6 @@ class RemoteFilesController extends ChangeNotifier {
   static const Duration _remoteSnapshotDebounceDelay = Duration(
     milliseconds: 350,
   );
-
-  /// The last answer from [_shellReader]. Kept through reads with no
-  /// answer: the shell is still somewhere, and the next cue asks again.
-  String? _readDirectory;
-  Timer? _shellReadDebounce;
-  Future<void>? _shellRead;
-  bool _shellReadAgain = false;
-
-  /// Gives the shell a moment to run the line before it is asked where it
-  /// is, and collapses a burst of Enters (a pasted script) into one read.
-  static const Duration _shellReadDelay = Duration(milliseconds: 300);
 
   /// How long the first listing waits to open where the shell is rather
   /// than at home; a later answer is still followed.
@@ -180,8 +161,8 @@ class RemoteFilesController extends ChangeNotifier {
       if (_disposed) return;
       // Open where the shell is rather than at home first, unless reading
       // it is slow.
-      if (_shellReadWanted) {
-        await _requestShellRead().timeout(
+      if (followTerminal) {
+        await shellDirectory.readNow().timeout(
           _initialShellReadWait,
           onTimeout: () {},
         );
@@ -385,17 +366,13 @@ class RemoteFilesController extends ChangeNotifier {
     _notify();
     if (!value) return;
     _followShellDirectory();
-    if (initialized && _shellReadWanted) unawaited(_requestShellRead());
+    if (initialized) unawaited(shellDirectory.readNow());
   }
 
-  /// OSC 7 is authoritative. Without it, the directory read beside the shell
-  /// beats a title: nothing clears a title, so one left by `docker exec` or
-  /// an ssh hop would otherwise pin the pane.
-  String? get reportedShellDirectory {
-    final oscDirectory = shellDirectory.value;
-    if (_isAbsolutePath(oscDirectory)) return oscDirectory;
-    return _readDirectory ?? _titleDirectory;
-  }
+  /// OSC 7, or the directory read beside a shell that sends none, beats a
+  /// title: nothing clears a title, so one left by `docker exec` or an ssh
+  /// hop would otherwise pin the pane.
+  String? get reportedShellDirectory => shellDirectory.value ?? _titleDirectory;
 
   /// Ubuntu/Debian's default Bash setup commonly emits only an OSC 0 title
   /// such as `root@host: ~/docker`, so resolve that against the SFTP home as
@@ -1301,69 +1278,16 @@ class RemoteFilesController extends ChangeNotifier {
     unawaited(navigate(path!));
   }
 
-  /// Once the shell has been read, a title is no longer what is reported,
-  /// but its change still says the shell may have moved: a `cd` that ran
-  /// well after its Enter (`git clone … && cd repo`) retitles the tab.
-  void _followTitle() {
-    if (_readDirectory == null) {
-      _followShellDirectory();
-    } else {
-      _scheduleShellRead();
-    }
-  }
-
-  /// A followed shell is read only while it sends no OSC 7.
-  bool get _shellReadWanted =>
-      (_shellReader?.available ?? false) &&
-      followTerminal &&
-      !_isAbsolutePath(shellDirectory.value);
-
-  void _scheduleShellRead() {
-    if (!_shellReadWanted) return;
-    if (!initialized) {
-      // The first read may already have looked: ask once more after it.
-      if (_shellRead != null) _shellReadAgain = true;
-      return;
-    }
-    _shellReadDebounce?.cancel();
-    _shellReadDebounce = Timer(_shellReadDelay, () {
-      if (_disposed || !_shellReadWanted) return;
-      unawaited(_requestShellRead());
-    });
-  }
-
-  /// One read at a time: an Enter during a read asks once more after it,
-  /// so a slow server never stacks channels.
-  Future<void> _requestShellRead() {
-    final inFlight = _shellRead;
-    if (inFlight != null) {
-      _shellReadAgain = true;
-      return inFlight;
-    }
-    return _shellRead = _readShell().whenComplete(() {
-      _shellRead = null;
-      if (!_shellReadAgain || _disposed) return;
-      _shellReadAgain = false;
-      if (_shellReadWanted) unawaited(_requestShellRead());
-    });
-  }
-
-  /// Follows the answer when it changed, as a new OSC 7 report would be: an
-  /// unchanged one leaves a manual navigation alone. Once the server cannot
-  /// answer any more, its last answer is dropped and the title leads again.
-  Future<void> _readShell() async {
-    final reader = _shellReader!;
-    final directory = await reader.read();
-    if (_disposed) return;
-    if (!reader.available) {
-      if (_readDirectory == null) return;
-      _readDirectory = null;
-    } else {
-      if (directory == null || directory == _readDirectory) return;
-      _readDirectory = directory;
-    }
+  /// Repaints even where the pane already is: the follow toggle's hint says
+  /// whether the shell has reported anything.
+  void _followShell() {
     _notify();
     _followShellDirectory();
+  }
+
+  /// A title leads only while [shellDirectory] knows nothing better.
+  void _followTitle() {
+    if (shellDirectory.value == null) _followShellDirectory();
   }
 
   RemoteFileSystem _requireRemote() {
@@ -1667,11 +1591,9 @@ class RemoteFilesController extends ChangeNotifier {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    shellDirectory.removeListener(_followShellDirectory);
+    shellDirectory.removeListener(_followShell);
     terminalTitle.removeListener(_followTitle);
     activeCommand.removeListener(_followActiveCommand);
-    _shellMayHaveMoved?.removeListener(_scheduleShellRead);
-    _shellReadDebounce?.cancel();
     _remoteSnapshotDebounce?.cancel();
     for (final transfer in transfers) {
       transfer.cancellation.cancel();
