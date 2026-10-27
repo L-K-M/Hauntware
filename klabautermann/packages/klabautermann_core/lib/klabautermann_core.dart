@@ -321,6 +321,9 @@ export 'src/docker/docker_ladder.dart'
 export 'src/docker/docker_ladder.dart'
     show DockerSocketPathProblem, dockerSocketPathProblem;
 export 'src/docker/docker_access.dart' show dockerAccessFacts;
+// When an update check reads a registry again (IMG-05, D68).
+export 'src/docker/image_updates.dart'
+    show kImageUpdateBackoff, kImageUpdateFresh;
 
 export 'package:klabautermann_host/klabautermann_host.dart'
     show ComposeFacts, DockerAccessFacts;

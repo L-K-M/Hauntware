@@ -8175,6 +8175,10 @@
   "@dockerImagesColumnUse": {
     "description": "Images table column: whether any container, running or not, was created from the image."
   },
+  "dockerImagesColumnUpdate": "Update",
+  "@dockerImagesColumnUpdate": {
+    "description": "Images table column: whether the image's registry has a newer digest for its tag (IMG-05)."
+  },
   "dockerImagesDangling": "Dangling",
   "@dockerImagesDangling": {
     "description": "Images list: the badge of a dangling image, one without a tag, which docker images shows as <none>."
@@ -8340,6 +8344,88 @@
   "dockerImagesNoneDangling": "No image is dangling.",
   "@dockerImagesNoneDangling": {
     "description": "Images list: the Dangling filter hides every image."
+  },
+  "dockerImagesFilterUpdates": "Updates",
+  "@dockerImagesFilterUpdates": {
+    "description": "Images list: a filter choice that lists only the images whose registry has a newer digest."
+  },
+  "dockerImagesNoneUpdates": "No image has an update.",
+  "@dockerImagesNoneUpdates": {
+    "description": "Images list: the Updates filter hides every image."
+  },
+  "dockerImagesUpdatesCheck": "Check for updates",
+  "@dockerImagesUpdatesCheck": {
+    "description": "Images list: the button that asks every tag's registry again, even within the six hours a check is kept."
+  },
+  "dockerImagesUpdatesChecking": "Checking for updates…",
+  "@dockerImagesUpdatesChecking": {
+    "description": "Images list: the update check button while a check runs."
+  },
+  "dockerImagesUpdatesFailed": "{reason, select, connectionFailed{The update check could not run on the server.} endpointUnavailable{The update check needs the Docker engine, which is not reachable.} daemonError{The engine refused or failed to list the images for the update check.} other{The update check failed.}}",
+  "@dockerImagesUpdatesFailed": {
+    "description": "Images list: why the update check could not run. reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerImagesUpdatesNoCurl": "This server has no curl, so no registry was asked. The engine can ask instead, but each tag it checks spends one of Docker Hub's pulls for the server's address.",
+  "@dockerImagesUpdatesNoCurl": {
+    "description": "Images list: the server has no curl for the update check; the button after it asks the Docker engine instead, at the cost it names."
+  },
+  "dockerImagesUpdatesThroughDaemon": "Check through the engine",
+  "@dockerImagesUpdatesThroughDaemon": {
+    "description": "Images list: the button that runs the update check through the Docker engine, spending a Docker Hub pull per tag."
+  },
+  "dockerImagesUpdatesRateLimited": "Docker Hub's limit for this server's address is used up. Those images are checked again after {time}.",
+  "@dockerImagesUpdatesRateLimited": {
+    "description": "Images list: Docker Hub refused the update check for the server's address; time is when the check asks again.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "14:30"
+      }
+    }
+  },
+  "dockerImagesUpdateNotChecked": "Not checked",
+  "@dockerImagesUpdateNotChecked": {
+    "description": "Images list: the update check has not read this image's registry yet, or the image has no tag."
+  },
+  "dockerImagesUpdateAvailable": "Update available",
+  "@dockerImagesUpdateAvailable": {
+    "description": "Images list: the registry has a newer digest for one of the image's tags."
+  },
+  "dockerImagesUpdateCurrent": "Current",
+  "@dockerImagesUpdateCurrent": {
+    "description": "Images list: the registry's digest for each of the image's tags matches the local one."
+  },
+  "dockerImagesUpdateUndecided": "Unknown",
+  "@dockerImagesUpdateUndecided": {
+    "description": "Images list: the update check could not compare one of the image's tags; the tooltip says why."
+  },
+  "dockerImagesUpdateUnknown": "Unknown: {reason}",
+  "@dockerImagesUpdateUnknown": {
+    "description": "Images list: the update check could not compare one of the image's tags, and why.",
+    "placeholders": {
+      "reason": {
+        "type": "String",
+        "example": "the registry does not know this tag"
+      }
+    }
+  },
+  "dockerImagesUpdateWhy": "{issue, select, noResult{the registry did not answer} unauthorized{the registry wants credentials the server's Docker CLI does not have} notFound{the registry does not know this tag} rateLimited{Docker Hub's limit for the server's address is used up} noDigest{this registry does not say which digest it holds} noLocalDigest{this image was not pulled from the registry} other{the registry refused the check}}",
+  "@dockerImagesUpdateWhy": {
+    "description": "Images list: why the update check could not compare a tag. issue is the check's issue name.",
+    "placeholders": {
+      "issue": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerImagesUpdateWhyNoBuildx": "the registry wants credentials, and the server's Docker CLI has no buildx plugin to read them",
+  "@dockerImagesUpdateWhyNoBuildx": {
+    "description": "Images list: why the update check could not compare a tag from a registry that wants credentials."
   },
   "dockerImagesFailed": "{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the images.} connectionFailed{The connection to the engine failed while listing the images.} other{The images could not be listed.}}",
   "@dockerImagesFailed": {

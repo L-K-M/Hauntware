@@ -8550,6 +8550,12 @@ abstract class AppLocalizations {
   /// **'Use'**
   String get dockerImagesColumnUse;
 
+  /// Images table column: whether the image's registry has a newer digest for its tag (IMG-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get dockerImagesColumnUpdate;
+
   /// Images list: the badge of a dangling image, one without a tag, which docker images shows as <none>.
   ///
   /// In en, this message translates to:
@@ -8699,6 +8705,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No image is dangling.'**
   String get dockerImagesNoneDangling;
+
+  /// Images list: a filter choice that lists only the images whose registry has a newer digest.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates'**
+  String get dockerImagesFilterUpdates;
+
+  /// Images list: the Updates filter hides every image.
+  ///
+  /// In en, this message translates to:
+  /// **'No image has an update.'**
+  String get dockerImagesNoneUpdates;
+
+  /// Images list: the button that asks every tag's registry again, even within the six hours a check is kept.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get dockerImagesUpdatesCheck;
+
+  /// Images list: the update check button while a check runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for updates…'**
+  String get dockerImagesUpdatesChecking;
+
+  /// Images list: why the update check could not run. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, connectionFailed{The update check could not run on the server.} endpointUnavailable{The update check needs the Docker engine, which is not reachable.} daemonError{The engine refused or failed to list the images for the update check.} other{The update check failed.}}'**
+  String dockerImagesUpdatesFailed(String reason);
+
+  /// Images list: the server has no curl for the update check; the button after it asks the Docker engine instead, at the cost it names.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no curl, so no registry was asked. The engine can ask instead, but each tag it checks spends one of Docker Hub\'s pulls for the server\'s address.'**
+  String get dockerImagesUpdatesNoCurl;
+
+  /// Images list: the button that runs the update check through the Docker engine, spending a Docker Hub pull per tag.
+  ///
+  /// In en, this message translates to:
+  /// **'Check through the engine'**
+  String get dockerImagesUpdatesThroughDaemon;
+
+  /// Images list: Docker Hub refused the update check for the server's address; time is when the check asks again.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker Hub\'s limit for this server\'s address is used up. Those images are checked again after {time}.'**
+  String dockerImagesUpdatesRateLimited(String time);
+
+  /// Images list: the update check has not read this image's registry yet, or the image has no tag.
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked'**
+  String get dockerImagesUpdateNotChecked;
+
+  /// Images list: the registry has a newer digest for one of the image's tags.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get dockerImagesUpdateAvailable;
+
+  /// Images list: the registry's digest for each of the image's tags matches the local one.
+  ///
+  /// In en, this message translates to:
+  /// **'Current'**
+  String get dockerImagesUpdateCurrent;
+
+  /// Images list: the update check could not compare one of the image's tags; the tooltip says why.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get dockerImagesUpdateUndecided;
+
+  /// Images list: the update check could not compare one of the image's tags, and why.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown: {reason}'**
+  String dockerImagesUpdateUnknown(String reason);
+
+  /// Images list: why the update check could not compare a tag. issue is the check's issue name.
+  ///
+  /// In en, this message translates to:
+  /// **'{issue, select, noResult{the registry did not answer} unauthorized{the registry wants credentials the server\'s Docker CLI does not have} notFound{the registry does not know this tag} rateLimited{Docker Hub\'s limit for the server\'s address is used up} noDigest{this registry does not say which digest it holds} noLocalDigest{this image was not pulled from the registry} other{the registry refused the check}}'**
+  String dockerImagesUpdateWhy(String issue);
+
+  /// Images list: why the update check could not compare a tag from a registry that wants credentials.
+  ///
+  /// In en, this message translates to:
+  /// **'the registry wants credentials, and the server\'s Docker CLI has no buildx plugin to read them'**
+  String get dockerImagesUpdateWhyNoBuildx;
 
   /// Images list: why the list could not be read. reason is the engine's failure name.
   ///
