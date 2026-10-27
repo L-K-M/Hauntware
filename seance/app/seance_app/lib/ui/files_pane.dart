@@ -17,6 +17,8 @@ import '../main.dart';
 import '../services/download_provenance.dart';
 import '../services/external_file_opener.dart';
 import '../services/file_export_service.dart';
+import '../services/mac_commands.dart';
+import '../services/mac_context_menu.dart';
 import '../services/managed_remote_file.dart';
 import '../services/remote_files_controller.dart';
 import '../services/xterm_engine.dart';
@@ -535,7 +537,13 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   void _rowPointerDown(RemoteFileEntry entry, PointerDownEvent event) {
     final controller = widget.controller;
     _setCursor(entry.path);
-    if (event.buttons & kSecondaryMouseButton != 0) {
+    // On a Mac, Control-click is the secondary click; the embedder delivers
+    // it as a primary press with Control held.
+    final controlClick =
+        Theme.of(context).platform == TargetPlatform.macOS &&
+        event.buttons & kPrimaryMouseButton != 0 &&
+        HardwareKeyboard.instance.isControlPressed;
+    if (event.buttons & kSecondaryMouseButton != 0 || controlClick) {
       // A right-click on an unselected row selects it first, like the
       // file managers: the menu then names what it acts on.
       if (!controller.selectedPaths.contains(entry.path)) {
@@ -705,6 +713,10 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     RemoteFileEntry entry,
     Offset globalPosition,
   ) async {
+    if (macNativeShell) {
+      final shown = await _showMacEntryMenu(entry);
+      if (shown || !mounted) return;
+    }
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final value = await showMenu<String>(
       context: context,
@@ -718,104 +730,131 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     _dispatchEntryVerb(entry, value);
   }
 
-  List<PopupMenuEntry<String>> _entryMenuItems(RemoteFileEntry entry) {
-    final palette = FamilyPalette.of(context);
+  /// A file row's verbs in menu order, null for a divider; [_EntryVerb.mac]
+  /// is the label in a Mac menu's title case.
+  List<_EntryVerb?> _entryVerbs(RemoteFileEntry entry) {
     final localCopy = widget.controller.localCopies[entry.path];
     final editors = entry.type == RemoteFileType.file
         ? _editorChoices(entry.path)
         : const <_EditorChoice>[];
     final selected = widget.controller.selectedPaths.contains(entry.path);
     return [
-      GhostMenuItem(
-        context: context,
-        value: 'open',
-        icon: entry.isDirectory ? Icons.folder_open : Icons.open_in_new,
-        iconColor: palette.glyph(FamilyHue.blue),
-        label: entry.isDirectory ? 'Open' : 'Open locally',
-      ),
-      GhostMenuItem(
-        context: context,
-        value: 'select',
-        icon: selected ? Icons.check_box : Icons.check_box_outline_blank,
-        iconColor: palette.glyph(FamilyHue.graphite),
-        label: selected ? 'Deselect' : 'Select',
+      entry.isDirectory
+          ? const _EntryVerb('open', 'Open', Icons.folder_open, FamilyHue.blue)
+          : const _EntryVerb(
+              'open',
+              'Open locally',
+              Icons.open_in_new,
+              FamilyHue.blue,
+              mac: 'Open Locally',
+            ),
+      _EntryVerb(
+        'select',
+        selected ? 'Deselect' : 'Select',
+        selected ? Icons.check_box : Icons.check_box_outline_blank,
+        FamilyHue.graphite,
       ),
       for (final editor in editors)
-        GhostMenuItem(
-          context: context,
-          value: 'open_with:${editor.id}',
-          icon: Icons.edit_outlined,
-          iconColor: palette.glyph(FamilyHue.graphite),
-          label: 'Open with ${editor.label}',
+        _EntryVerb(
+          'open_with:${editor.id}',
+          'Open with ${editor.label}',
+          Icons.edit_outlined,
+          FamilyHue.graphite,
+          mac: 'Open With ${editor.label}',
         ),
       if (localCopy != null)
-        GhostMenuItem(
-          context: context,
-          value: 'upload',
-          icon: Icons.edit_note,
-          iconColor: palette.glyph(FamilyHue.cyan),
-          label: 'Upload local changes',
+        const _EntryVerb(
+          'upload',
+          'Upload local changes',
+          Icons.edit_note,
+          FamilyHue.cyan,
+          mac: 'Upload Local Changes',
         ),
       if (entry.type == RemoteFileType.file ||
           (entry.isDirectory && _supportsDesktopDrop))
-        GhostMenuItem(
-          context: context,
-          value: 'download',
-          icon: Icons.download,
-          iconColor: palette.glyph(FamilyHue.cyan),
-          label: 'Download / Save as…',
+        const _EntryVerb(
+          'download',
+          'Download / Save as…',
+          Icons.download,
+          FamilyHue.cyan,
+          mac: 'Download / Save As…',
         ),
       if (entry.type == RemoteFileType.file && _supportsSharing)
-        GhostMenuItem(
-          context: context,
-          value: 'share',
-          icon: Icons.share,
-          iconColor: palette.glyph(FamilyHue.cyan),
-          label: 'Share…',
-        ),
-      const GhostMenuDivider(),
-      GhostMenuItem(
-        context: context,
-        value: 'copy_path',
-        icon: Icons.link,
-        iconColor: palette.glyph(FamilyHue.graphite),
-        label: 'Copy remote path',
+        const _EntryVerb('share', 'Share…', Icons.share, FamilyHue.cyan),
+      null,
+      const _EntryVerb(
+        'copy_path',
+        'Copy remote path',
+        Icons.link,
+        FamilyHue.graphite,
+        mac: 'Copy Remote Path',
       ),
       if (entry.isDirectory)
-        GhostMenuItem(
-          context: context,
-          value: 'terminal_here',
-          icon: Icons.terminal,
-          iconColor: palette.glyph(FamilyHue.graphite),
-          label: 'Open terminal here',
+        const _EntryVerb(
+          'terminal_here',
+          'Open terminal here',
+          Icons.terminal,
+          FamilyHue.graphite,
+          mac: 'Open Terminal Here',
         ),
-      GhostMenuItem(
-        context: context,
-        value: 'rename',
-        icon: Icons.edit,
-        iconColor: palette.glyph(FamilyHue.graphite),
-        // A flagged (undecodable) name cannot build a valid wire path —
-        // rename stays visible but inert, matching the row's semantics.
+      // A flagged (undecodable) name cannot build a valid wire path —
+      // rename stays visible but inert, matching the row's semantics.
+      _EntryVerb(
+        'rename',
+        'Rename…',
+        Icons.edit,
+        FamilyHue.graphite,
         enabled: !ghostFileNameIsFlagged(entry.name),
-        label: 'Rename…',
       ),
-      GhostMenuItem(
-        context: context,
-        value: 'properties',
-        icon: Icons.info_outline,
-        iconColor: palette.glyph(FamilyHue.graphite),
-        label: 'Properties…',
+      const _EntryVerb(
+        'properties',
+        'Properties…',
+        Icons.info_outline,
+        FamilyHue.graphite,
       ),
-      const GhostMenuDivider(),
-      GhostMenuItem(
-        context: context,
-        value: 'delete',
-        icon: Icons.delete_outline,
-        iconColor: palette.glyph(FamilyHue.red),
-        label: 'Delete…',
+      null,
+      const _EntryVerb(
+        'delete',
+        'Delete…',
+        Icons.delete_outline,
+        FamilyHue.red,
       ),
     ];
   }
+
+  List<PopupMenuEntry<String>> _entryMenuItems(RemoteFileEntry entry) {
+    final palette = FamilyPalette.of(context);
+    return [
+      for (final verb in _entryVerbs(entry))
+        if (verb == null)
+          const GhostMenuDivider()
+        else
+          GhostMenuItem(
+            context: context,
+            value: verb.value,
+            icon: verb.icon,
+            iconColor: palette.glyph(verb.hue),
+            label: verb.label,
+            enabled: verb.enabled,
+          ),
+    ];
+  }
+
+  /// The row's verbs as a native Mac menu at the pointer.
+  Future<bool> _showMacEntryMenu(RemoteFileEntry entry) => showMacContextMenu([
+    for (final verb in _entryVerbs(entry))
+      if (verb == null)
+        const MacMenuItem.separator()
+      else
+        MacMenuItem(
+          verb.mac ?? verb.label,
+          onSelected: verb.enabled
+              ? () {
+                  if (mounted) _dispatchEntryVerb(entry, verb.value);
+                }
+              : null,
+        ),
+  ]);
 
   void _dispatchEntryVerb(RemoteFileEntry entry, String value) {
     if (value.startsWith('open_with:')) {
@@ -2256,6 +2295,27 @@ class _HeaderButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// One verb of a file row's menu (see `_entryVerbs`).
+class _EntryVerb {
+  const _EntryVerb(
+    this.value,
+    this.label,
+    this.icon,
+    this.hue, {
+    this.mac,
+    this.enabled = true,
+  });
+
+  final String value;
+  final String label;
+  final IconData icon;
+  final FamilyHue hue;
+
+  /// The label in a Mac menu's title case, when it differs from [label].
+  final String? mac;
+  final bool enabled;
 }
 
 class _EditorChoice {

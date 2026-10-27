@@ -287,9 +287,7 @@ final class CommandCenter: NSObject, NSMenuItemValidation, NSToolbarItemValidati
     }, to: bar)
 
     add(menu("View") {
-      $0.addItem(withTitle: "Show Toolbar",
-        action: #selector(NSWindow.toggleToolbarShown(_:)), keyEquivalent: "t")
-        .keyEquivalentModifierMask = [.command, .option]
+      // No Hide Toolbar: the window's header is drawn to sit under it.
       $0.addItem(withTitle: "Customize Toolbar…",
         action: #selector(NSWindow.runToolbarCustomizationPalette(_:)), keyEquivalent: "")
       $0.addItem(.separator())

@@ -60,6 +60,10 @@ final class SeanceToolbar: NSObject, NSToolbarDelegate {
     toolbar.displayMode = .iconOnly
     toolbar.allowsUserCustomization = true
     toolbar.autosavesConfiguration = true
+    // Labels would make the band taller than the header drawn under it.
+    if #available(macOS 15.0, *) {
+      toolbar.allowsDisplayModeCustomization = false
+    }
     window.toolbar = toolbar
     window.toolbarStyle = .unified
   }
