@@ -208,7 +208,9 @@ class _EngineFacts extends StatelessWidget {
                   Flexible(
                     child: Text(
                       l10n.dockerDropbearCve(release.toString()),
-                      style: style?.copyWith(color: theme.colorScheme.error),
+                      style: (style ?? const TextStyle()).copyWith(
+                        color: theme.colorScheme.error,
+                      ),
                     ),
                   ),
                 ],

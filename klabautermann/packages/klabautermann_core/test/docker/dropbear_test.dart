@@ -17,6 +17,10 @@ void main() {
     expect(of('SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13'), isNull);
     expect(of('SSH-2.0-dropbear'), isNull);
     expect(of('SSH-2.0-dropbear_2024.86x'), isNull);
+    expect(
+      of('SSH-2.0-dropbear_2025.88-hardened'),
+      const DropbearRelease(2025, 88),
+    );
     expect(of(null), isNull);
   });
 

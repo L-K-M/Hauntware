@@ -6,9 +6,10 @@ library;
 import 'package:meta/meta.dart';
 
 /// Dropbear's identification line: `SSH-2.0-dropbear_2024.86`, or the
-/// `SSH-1.99-` form, with an optional comment after a space.
+/// `SSH-1.99-` form, with an optional comment after a space or a vendor
+/// suffix after a dash, as a fork's build may add.
 final RegExp _identification = RegExp(
-  r'^SSH-(?:2\.0|1\.99)-dropbear_(\d{4})\.(\d{1,3})(?:[ \r]|$)',
+  r'^SSH-(?:2\.0|1\.99)-dropbear_(\d{4})\.(\d{1,3})(?=[ \r-]|$)',
 );
 
 /// A Dropbear release by its year and the release within it, such as

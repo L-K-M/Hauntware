@@ -225,6 +225,7 @@ void main() {
       );
 
       final fixed = await routeThrough('SSH-2.0-dropbear_2025.89');
+      expect(fixed.rank, DockerRank.streamlocal);
       expect(fixed.peerCredentialsExposedBy, isNull);
     });
   });
