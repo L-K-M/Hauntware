@@ -6228,6 +6228,48 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerContainersColumnMemory => 'Memory';
 
   @override
+  String get dockerContainersColumnNetwork => 'Network';
+
+  @override
+  String get dockerContainersColumnBlockIo => 'Block I/O';
+
+  @override
+  String get dockerContainersColumnPids => 'PIDs';
+
+  @override
+  String get dockerContainersColumnIp => 'IP';
+
+  @override
+  String get dockerContainersColumnStarted => 'Started';
+
+  @override
+  String dockerContainersIo(String first, String second) {
+    return '$first / $second';
+  }
+
+  @override
+  String get dockerContainersColumns => 'Columns';
+
+  @override
+  String get dockerContainersColumnsTitle => 'Columns';
+
+  @override
+  String get dockerContainersColumnsDrag => 'Drag to reorder';
+
+  @override
+  String get dockerContainersColumnsReset => 'Reset';
+
+  @override
+  String get dockerContainersColumnsCancel => 'Cancel';
+
+  @override
+  String get dockerContainersColumnsDone => 'Done';
+
+  @override
+  String get dockerContainersColumnsNotSaved =>
+      'The columns could not be saved. They stay until Klabautermann quits.';
+
+  @override
   String get dockerContainersSelect => 'Select';
 
   @override
@@ -6648,6 +6690,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerImageHistoryComment => 'Comment';
+
+  @override
+  String get dockerLinksTitle => 'Links';
+
+  @override
+  String dockerLinksFrom(String source) {
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'dockhand': 'From a Dockhand label',
+      'dozzle': 'From a Dozzle label',
+      'traefik': 'A Traefik route',
+      'caddy': 'A Caddy site',
+      'other': 'From a label',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerLinksFromPort(String source, String port) {
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'dockhand': 'From a Dockhand label, port $port',
+      'other': 'From a label, port $port',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerLinksOpen(String name) {
+    return 'Open $name in the browser';
+  }
+
+  @override
+  String get dockerLinksNotOpened =>
+      'The link could not be opened in a browser.';
 
   @override
   String get dockerProcessesTitle => 'Processes';

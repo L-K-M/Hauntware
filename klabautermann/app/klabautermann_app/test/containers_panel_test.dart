@@ -1,6 +1,9 @@
+import 'dart:io' show FileSystemException;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
+import 'package:klabautermann_app/controllers/container_columns.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/operations_controller.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
@@ -175,6 +178,8 @@ Future<_Panel> _pump(
   Brightness brightness = Brightness.light,
   TargetPlatform platform = TargetPlatform.linux,
   double textScale = 1,
+  ContainerColumnChoice? columns,
+
   bool managed = false,
 }) async {
   tester.view.physicalSize = size;
@@ -183,7 +188,11 @@ Future<_Panel> _pump(
 
   _clock = _now;
   final engine = FakeEngineClient();
-  final monitoring = MonitoringController(engine, now: () => _clock);
+  final monitoring = MonitoringController(
+    engine,
+    now: () => _clock,
+    containerColumns: columns,
+  );
   final visible = ValueNotifier(true);
   final operations = OperationsController(engine);
   final safety = SafetyController(
@@ -264,6 +273,25 @@ Finder _header(String column) =>
 
 Finder _heading(String project) =>
     find.byKey(ValueKey('containers.row.group.$project'));
+
+/// Toggles [column]'s box in the column chooser, scrolled into view.
+Future<void> _check(WidgetTester tester, String column) async {
+  final tile = find.widgetWithText(CheckboxListTile, column);
+  await tester.scrollUntilVisible(
+    tile,
+    48,
+    scrollable: find
+        .descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
+  await tester.ensureVisible(tile);
+  await tester.pumpAndSettle();
+  await tester.tap(tile);
+  await tester.pumpAndSettle();
+}
 
 /// 03 §10.4's Containers sub-tab (CTR-01, CTR-04, CST-01) over the
 /// container watch.
@@ -405,6 +433,98 @@ void main() {
       find.bySemanticsLabel(RegExp(r'Name: web-worker\n.*CPU:', dotAll: true)),
       findsNothing,
     );
+  });
+
+  test('reads a stored column choice against the known columns (CTR-08)', () {
+    expect(chosenContainerColumns(null), kDefaultContainerColumns);
+    expect(chosenContainerColumns(['pids', 'gone', 'name', 'pids', 'state']), [
+      ContainerColumn.pids,
+      ContainerColumn.state,
+    ]);
+    expect(chosenContainerColumns([]), isEmpty);
+  });
+
+  testWidgets('the chooser shows, hides and orders the columns, and saves '
+      'the choice (CTR-08)', (tester) async {
+    final saved = <List<String>>[];
+    final columns = ContainerColumnChoice(
+      save: (names) async => saved.add(names),
+    );
+    final panel = await _pump(tester, columns: columns);
+    await panel.emit(
+      tester,
+      dockerContainerList(_serverId, [_containers.first], at: _now),
+    );
+    await panel.emit(
+      tester,
+      dockerStatsRound(_serverId, [
+        ContainerListStats(
+          containerId: _containers.first.id,
+          at: _now,
+          networkRx: 2048,
+          networkTx: 512,
+          pids: 7,
+        ),
+      ], at: _now),
+    );
+    expect(_header('image'), findsOneWidget);
+    expect(_header('pids'), findsNothing);
+
+    await tester.tap(find.text('Columns'));
+    await tester.pumpAndSettle();
+    await _check(tester, 'Image');
+    await _check(tester, 'PIDs');
+    await _check(tester, 'Network');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+
+    expect(saved.single, [
+      'state',
+      'health',
+      'status',
+      'ports',
+      'stack',
+      'cpu',
+      'memory',
+      'network',
+      'pids',
+    ]);
+    expect(_header('image'), findsNothing);
+    expect(_header('pids'), findsOneWidget);
+    expect(find.text('7'), findsOneWidget);
+    expect(find.text('2 KiB / 512 B'), findsOneWidget);
+    expect(
+      tester.getTopLeft(_header('network')).dx,
+      lessThan(tester.getTopLeft(_header('pids')).dx),
+    );
+
+    // Reset puts back the default.
+    await tester.tap(find.text('Columns'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Reset'));
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(saved.last, [
+      for (final column in kDefaultContainerColumns) column.name,
+    ]);
+  });
+
+  testWidgets('a choice that could not be saved still shows, and says so', (
+    tester,
+  ) async {
+    final columns = ContainerColumnChoice(
+      save: (_) async => throw const FileSystemException('read-only'),
+    );
+    final panel = await _pump(tester, columns: columns);
+    await panel.list(tester);
+    await tester.tap(find.text('Columns'));
+    await tester.pumpAndSettle();
+    await _check(tester, 'IP');
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(_header('ip'), findsOneWidget);
+    expect(find.textContaining('could not be saved'), findsOneWidget);
   });
 
   group('bulk actions (CTR-07)', () {

@@ -7545,6 +7545,68 @@
   "@dockerContainersColumnMemory": {
     "description": "Containers table column: the memory the container uses, from its list stats (CST-01)."
   },
+  "dockerContainersColumnNetwork": "Network",
+  "@dockerContainersColumnNetwork": {
+    "description": "Containers table column: bytes received and sent since the container started, from its list stats (CTR-08)."
+  },
+  "dockerContainersColumnBlockIo": "Block I/O",
+  "@dockerContainersColumnBlockIo": {
+    "description": "Containers table column: bytes read from and written to disk since the container started (CTR-08)."
+  },
+  "dockerContainersColumnPids": "PIDs",
+  "@dockerContainersColumnPids": {
+    "description": "Containers table column: the processes and threads in the container (CTR-08)."
+  },
+  "dockerContainersColumnIp": "IP",
+  "@dockerContainersColumnIp": {
+    "description": "Containers table column: the container's first address on a network (CTR-08)."
+  },
+  "dockerContainersColumnStarted": "Started",
+  "@dockerContainersColumnStarted": {
+    "description": "Containers table column: how long ago a running container started, read from its status (CTR-08)."
+  },
+  "dockerContainersIo": "{first} / {second}",
+  "@dockerContainersIo": {
+    "description": "Containers table: two byte totals, received then sent, or read then written, as docker stats shows them.",
+    "placeholders": {
+      "first": {
+        "type": "String",
+        "example": "1.2 MiB"
+      },
+      "second": {
+        "type": "String",
+        "example": "200 B"
+      }
+    }
+  },
+  "dockerContainersColumns": "Columns",
+  "@dockerContainersColumns": {
+    "description": "Containers tab: the button that opens the column chooser (CTR-08)."
+  },
+  "dockerContainersColumnsTitle": "Columns",
+  "@dockerContainersColumnsTitle": {
+    "description": "Column chooser: its title."
+  },
+  "dockerContainersColumnsDrag": "Drag to reorder",
+  "@dockerContainersColumnsDrag": {
+    "description": "Column chooser: the tooltip on a column's drag handle."
+  },
+  "dockerContainersColumnsReset": "Reset",
+  "@dockerContainersColumnsReset": {
+    "description": "Column chooser: puts back the default columns."
+  },
+  "dockerContainersColumnsCancel": "Cancel",
+  "@dockerContainersColumnsCancel": {
+    "description": "Column chooser: closes it without a change."
+  },
+  "dockerContainersColumnsDone": "Done",
+  "@dockerContainersColumnsDone": {
+    "description": "Column chooser: shows the checked columns in their order."
+  },
+  "dockerContainersColumnsNotSaved": "The columns could not be saved. They stay until Klabautermann quits.",
+  "@dockerContainersColumnsNotSaved": {
+    "description": "Containers tab: the chosen columns show, but settings.json could not be written."
+  },
   "dockerContainersSelect": "Select",
   "@dockerContainersSelect": {
     "description": "Containers tab: the chip that puts a checkbox on each row and heading, to act on several containers at once (CTR-07)."
@@ -8041,6 +8103,46 @@
   "dockerImageHistoryComment": "Comment",
   "@dockerImageHistoryComment": {
     "description": "Image history sheet: the label before a layer's comment, such as the builder that made it."
+  },
+  "dockerLinksTitle": "Links",
+  "@dockerLinksTitle": {
+    "description": "Container details: the section of web pages the container's labels point at (CTR-11)."
+  },
+  "dockerLinksFrom": "{source, select, dockhand{From a Dockhand label} dozzle{From a Dozzle label} traefik{A Traefik route} caddy{A Caddy site} other{From a label}}",
+  "@dockerLinksFrom": {
+    "description": "Container details, Links: where a link came from, under its address.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerLinksFromPort": "{source, select, dockhand{From a Dockhand label, port {port}} other{From a label, port {port}}}",
+  "@dockerLinksFromPort": {
+    "description": "Container details, Links: where a link came from, for one container port.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      },
+      "port": {
+        "type": "String",
+        "example": "8080"
+      }
+    }
+  },
+  "dockerLinksOpen": "Open {name} in the browser",
+  "@dockerLinksOpen": {
+    "description": "Container details, Links: the tooltip and screen-reader label of the button that opens a link.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "https://app.example.com"
+      }
+    }
+  },
+  "dockerLinksNotOpened": "The link could not be opened in a browser.",
+  "@dockerLinksNotOpened": {
+    "description": "Container details, Links: shown when the system refused to open a link."
   },
   "dockerProcessesTitle": "Processes",
   "@dockerProcessesTitle": {

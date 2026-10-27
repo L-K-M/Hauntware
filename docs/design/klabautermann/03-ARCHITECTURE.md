@@ -4188,6 +4188,16 @@ TLS. The section checks when it shows, after an edit and on request.
   stats (CST-01): one-shot stats for visible rows, at most 4 in flight, CPU
   % from the spec formula, memory as usage minus `inactive_file` on cgroup v2
   (minus `cache` on v1) [R: r5 §1.7]. Managed-by badges (DKE-10): 8.7.
+  Column chooser (CTR-08, M6 N16d): the same one-shot read gives the
+  network bytes in and out (summed over interfaces), the block bytes
+  read and written and the PIDs, totals since the container started as
+  `docker stats` shows them. The tab shows, hides and orders the columns
+  after the name (state, health, status, image, ports, stack, CPU,
+  memory, network, block I/O, PIDs, IP, started), stored by name under
+  `klabautermann.docker.containerColumns`; a name it does not know is
+  skipped. Started is read from the status's uptime, since the list
+  carries no start time, so it is as coarse as the status words.
+
   Restart-loop and exit flags (CTR-09): the list carries no
   `RestartCount` or `State.OOMKilled`, and inspecting every row on each
   change would cost a request per container, so a row flags what its
@@ -4244,6 +4254,23 @@ TLS. The section checks when it shows, after an edit and on request.
   through one `docker compose logs -f` in low-session mode); JSON and level
   parsing; redacted log export; stats detail charts, sorting, memory limit
   risk, top table.
+  Label links (M6 N17b, CTR-11) are read in the app from the inspected
+  labels, already masked by key (8.9), by `labelLinks` in
+  `klabautermann_docker`: `dockhand.url` (plain or `[Name](url)`),
+  `dockhand.port.<port>.url`, `dev.dozzle.url`, each Traefik router's
+  `Host(...)` names (scheme `https` with `tls=true`, a
+  `tls.certresolver` or a `websecure`/`https` entry point, else `http`;
+  skipped while `traefik.enable=false`, and `HostRegexp` never yields
+  one), and caddy-docker-proxy's `caddy` and `caddy_<n>` addresses
+  (HTTPS as Caddy serves it, but HTTP on an explicit port 80). A
+  masked value, another scheme, credentials, or a wildcard or a
+  placeholder in the host yields no link (a path or query may hold
+  them, as in `?$select=name`). The
+  links open through the hand-off launcher in the system browser, or
+  show as text where the app has none. CTR-11's mute labels
+  (`dockhand.notify`) wait for per-container notifications, which v1
+  does not send.
+
 - **As built (M6 N20).** DKE-03's timeline comes from the events stream
   the watcher already holds for the lists (5.7), so it costs no channel
   of its own. Each container, image, volume and network event the lists'
@@ -7345,6 +7372,12 @@ there from its own page too.
 - `GhostCommandPalette` in `ghost_ui`, extracted from Planchette's palette
   with Planchette switched (F5e); providers for servers, containers, units,
   stacks and actions; `Cmd/Ctrl-K` opens it and `:` jumps to a resource type.
+  As built (M6 N04, F5e-c), Planchette's palette moved byte for byte
+  into `ghost_ui` (`src/ghost_command_palette.dart`, with its tests), so
+  its public names stay `CommandPalette`, `PaletteCommand`,
+  `showCommandPalette` and `fuzzyMatch`; Planchette imports them from
+  the barrel. The `GhostCommandPalette` name and the providers come with
+  N60.
 - Keyboard: `/` filters the focused list; `j` and `k` move; `Enter` opens;
   `l` logs, `s` shell, `r` restart (opens the confirmation dialog); `?` shows
   the contextual map; `Cmd/Ctrl-1..9` switch tabs; `Esc` goes back; bindings
