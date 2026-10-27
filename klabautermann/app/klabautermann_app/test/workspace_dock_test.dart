@@ -138,4 +138,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(tab('Logs'), findsNothing);
   });
+
+  testWidgets('the dock\'s edge resizes from assistive technology, and a '
+      'short window gives the dock its share without overflowing', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await pumpApp(tester, size: const Size(1280, 800), servers: twoServers);
+    await tester.tap(find.text('web-1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Show the dock'));
+    await tester.pumpAndSettle();
+
+    final edge = find.semantics.byLabel(RegExp('^Dock height'));
+    double height() => tester
+        .getSize(
+          find
+              .descendant(
+                of: find.byType(WorkspaceDockPane),
+                matching: find.byType(IndexedStack),
+              )
+              .first,
+        )
+        .height;
+    final before = height();
+    tester.semantics.increase(edge);
+    await tester.pumpAndSettle();
+    expect(height(), greaterThan(before));
+
+    tester.view.physicalSize = const Size(1280, 300);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
 }

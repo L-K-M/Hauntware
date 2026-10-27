@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -103,12 +105,11 @@ class WorkspaceDockPane extends StatefulWidget {
 class _WorkspaceDockPaneState extends State<WorkspaceDockPane> {
   double _height = _defaultDockHeight;
 
+  /// [height] within the dock's bounds; a workspace too short for the
+  /// least height gives the dock its share instead, so nothing overflows.
   double _clamped(double height) {
     final most = widget.maxHeight * _maxDockShare;
-    return height.clamp(
-      _minDockHeight,
-      most < _minDockHeight ? _minDockHeight : most,
-    );
+    return height.clamp(math.min(_minDockHeight, most), most);
   }
 
   void _resizeBy(double delta) =>
@@ -143,29 +144,36 @@ class _WorkspaceDockPaneState extends State<WorkspaceDockPane> {
       ],
     );
     final height = _clamped(_height);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (mine.isNotEmpty) ...[
-          if (showing)
-            _ResizeEdge(onResize: _resizeBy)
-          else
-            const Divider(height: 1),
-          _DockTabs(
-            dock: dock,
-            serverId: serverId,
-            items: mine,
-            selected: selected,
+    // The edge and tabs count toward the dock's share too: on a short
+    // workspace the content gives way to them rather than overflowing.
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: widget.maxHeight * _maxDockShare),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (mine.isNotEmpty) ...[
+            if (showing)
+              _ResizeEdge(onResize: _resizeBy)
+            else
+              const Divider(height: 1),
+            _DockTabs(
+              dock: dock,
+              serverId: serverId,
+              items: mine,
+              selected: selected,
+            ),
+          ],
+          // Offstage keeps every item's state while this server's dock is
+          // collapsed or holds nothing.
+          Flexible(
+            child: Offstage(
+              offstage: !showing,
+              child: SizedBox(height: showing ? height : 0, child: content),
+            ),
           ),
         ],
-        // Offstage keeps every item's state while this server's dock is
-        // collapsed or holds nothing.
-        Offstage(
-          offstage: !showing,
-          child: SizedBox(height: showing ? height : 0, child: content),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -182,6 +190,8 @@ class _ResizeEdge extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Semantics(
       label: l10n.dockResize,
+      onIncrease: () => onResize(_keyboardResizeStep),
+      onDecrease: () => onResize(-_keyboardResizeStep),
       child: Focus(
         onKeyEvent: (node, event) {
           if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
