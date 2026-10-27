@@ -20,6 +20,7 @@ const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const _monitorSetKey = 'klabautermann.monitorSet';
 const _containerColumnsKey = 'klabautermann.docker.containerColumns';
 const _safetyKey = 'klabautermann.safety';
+const _attentionKey = 'klabautermann.attention.acknowledged';
 
 final _uuidV4 = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -835,6 +836,36 @@ void main() {
 
       writeDocument({...document(), _safetyKey: 'on'});
       expect((await DeviceSettingsStore.open(file)).safety, isNull);
+    });
+
+    test('keeps the acknowledged problems across reloads (TRI-03); a '
+        'value that is not an object reads as none', () async {
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.attention, isNull);
+      await store.setAttention({
+        'srv-a': {
+          'failedUnit:nginx.service': {
+            'at': '2026-10-26T12:00:00.000Z',
+            'note': 'restarts tonight',
+          },
+        },
+      });
+
+      final reopened = await DeviceSettingsStore.open(file);
+      expect(reopened.attention, {
+        'srv-a': {
+          'failedUnit:nginx.service': {
+            'at': '2026-10-26T12:00:00.000Z',
+            'note': 'restarts tonight',
+          },
+        },
+      });
+
+      writeDocument({
+        ...document(),
+        _attentionKey: ['srv-a'],
+      });
+      expect((await DeviceSettingsStore.open(file)).attention, isNull);
     });
 
     test('saves the appearance as it was passed', () async {

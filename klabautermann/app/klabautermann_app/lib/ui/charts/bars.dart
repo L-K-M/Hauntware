@@ -426,7 +426,7 @@ double? _reading(double? value) =>
 /// colour-vision deficiencies (light amber and orange nearly meet under
 /// deuteranopia), so the stripe shows which part crossed (A11Y-01).
 BarFill _fillOf(ChartSeverity severity) =>
-    severity == ChartSeverity.normal ? BarFill.solid : BarFill.severe;
+    severity.alarms ? BarFill.severe : BarFill.solid;
 
 String _withSeverity(
   String part,
@@ -434,6 +434,7 @@ String _withSeverity(
   ChartStrings strings,
 ) => switch (severity) {
   ChartSeverity.normal => part,
+  ChartSeverity.careful => strings.withSeverity(part, strings.severityCareful),
   ChartSeverity.warning => strings.withSeverity(part, strings.severityWarning),
   ChartSeverity.critical => strings.withSeverity(
     part,
@@ -451,6 +452,11 @@ Widget _severitySlot(ChartSeverity severity, ChartPalette palette) =>
       dimension: _severityIconSize,
       child: switch (severity) {
         ChartSeverity.normal => null,
+        ChartSeverity.careful => Icon(
+          Icons.info_rounded,
+          size: _severityIconSize,
+          color: palette.scaleText,
+        ),
         ChartSeverity.warning => Icon(
           Icons.warning_rounded,
           size: _severityIconSize,

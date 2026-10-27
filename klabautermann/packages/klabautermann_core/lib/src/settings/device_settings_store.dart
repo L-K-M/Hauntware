@@ -42,6 +42,7 @@ const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
 const String _containerColumnsKey = 'klabautermann.docker.containerColumns';
 const String _tlsEndpointsKey = 'klabautermann.certificates.endpoints';
 const String _cadenceKey = 'klabautermann.sampling.cadence';
+const String _attentionKey = 'klabautermann.attention.acknowledged';
 
 // The fields of one server's entry under [_endpointOverridesKey].
 const String _overrideChoiceField = 'choice';
@@ -647,6 +648,24 @@ final class DeviceSettingsStore {
   Future<void> setSafety(Map<String, Object?> safety) async {
     _values[_safetyKey] =
         jsonDecode(jsonEncode(safety)) as Map<String, Object?>;
+    await _save();
+  }
+
+  /// TRI-03's acknowledged problems as the app stored them: an opaque
+  /// JSON object the app encodes and decodes, or null when there is none
+  /// (or the stored value is not an object, which reads as none, every
+  /// problem unacknowledged, rather than failing the file). Device-local
+  /// (02 TRI-03).
+  Map<String, Object?>? get attention => switch (_values[_attentionKey]) {
+    final Map<String, Object?> json => Map.unmodifiable(json),
+    _ => null,
+  };
+
+  /// Stores a deep copy of [attention] and writes the document, as
+  /// [setSafety] does.
+  Future<void> setAttention(Map<String, Object?> attention) async {
+    _values[_attentionKey] =
+        jsonDecode(jsonEncode(attention)) as Map<String, Object?>;
     await _save();
   }
 

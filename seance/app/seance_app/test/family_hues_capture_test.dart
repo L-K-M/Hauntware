@@ -12,6 +12,7 @@ import 'package:seance_app/main.dart';
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/remote_files_controller.dart';
 import 'package:seance_app/services/remote_git_controller.dart';
+import 'package:seance_app/services/shell_location.dart';
 import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/theme.dart';
 import 'package:seance_app/ui/sidebar_panel.dart';
@@ -216,7 +217,7 @@ void main() {
     );
     final files = RemoteFilesController(
       () async => _HomeFileSystem(),
-      shellDirectory: session.engine.workingDirectory,
+      shellDirectory: ShellLocation(reported: session.engine.workingDirectory),
       managedFileStore: services!.managedRemoteFiles,
       serverId: session.serverId,
       editSessionId: session.editSessionId,

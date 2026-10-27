@@ -6,6 +6,7 @@ import '../controllers/monitoring_controller.dart';
 import '../controllers/sync_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'alerts.dart';
+import 'attention.dart';
 import 'coverage.dart';
 import 'endpoint_confirmation.dart';
 import 'fleet_rows.dart';
@@ -70,6 +71,11 @@ class FleetRail extends StatelessWidget {
                       children: [
                         AlertsNotice(
                           fleet: fleet,
+                          onOpenServer: (server) => fleet.select(server.id),
+                        ),
+                        AttentionNotice(
+                          fleet: fleet,
+                          monitoring: monitoring,
                           onOpenServer: (server) => fleet.select(server.id),
                         ),
                         EndpointsPendingNotice(fleet: fleet),

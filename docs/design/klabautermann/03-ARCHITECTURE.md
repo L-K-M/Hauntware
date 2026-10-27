@@ -4058,6 +4058,19 @@ TLS. The section checks when it shows, after an edit and on request.
   installed kernel; doctor checklist; "why is it slow"; attention queue
   (acknowledgements device-local); container diagnose without an LLM.
 
+  As built (M6 N53c), the doctor (TRI-01) opens from the overview's
+  Health card as a checklist (`ui/doctor.dart`), read-only, each finding
+  with what to do about it. Disk space and inodes (a mount at 80 % warns,
+  at 90 % is a problem, as on the fleet rows), failed units, the clock
+  (not synchronized, or off this device's by 2 s or more) and dangling
+  images read what the Overview holds; the package check (security
+  updates, reboot needed), the listed endpoints' certificates (failing,
+  untrusted, expired, or within 14 days of expiry) and Docker's
+  reclaimable space (a warning from 1 GiB) are read as it opens and on
+  request. The Docker checks show only with a Docker endpoint. Open
+  ports and unrotated container logs join the list once the listening
+  ports (N34) and the container review (N21a) are on main.
+
   As built (M6 N53b), "why is it slow" (TRI-02) is a card under the
   overview's Health card, from the live core reading alone
   (`ui/slowness.dart`): tasks waiting for a CPU 20 % of the last 10 s
@@ -4068,6 +4081,25 @@ TLS. The section checks when it shows, after an edit and on request.
   memory is available, each in a sentence. It points to Processes for
   the top processes and to System for recent out-of-memory kills, which
   stay their own reads.
+
+  As built (M6 N53d), the attention queue (TRI-03) reads cached results
+  only: each fleet server's link (blocked, or failed or backing off), its
+  raised alerts, and where this run holds them its failed units, mounts
+  at the fleet rows' critical level (space or inodes, 90 %) and
+  unhealthy containers. The fleet list counts the unacknowledged ones in
+  a notice that opens the queue (`ui/attention.dart`). Acknowledging
+  takes an optional note of up to 500 code points and hides the problem
+  until a reading shows it cleared, so the same problem coming back asks
+  again; a kind the run holds no reading for keeps its
+  acknowledgements, as do a link's while it is idle, connecting,
+  waiting for the user or closed without a failure, so a relaunch or a
+  retry between backoffs does not reopen them, and a server that leaves
+  the fleet loses them. Alerts last one run (7.19), so an alert raised
+  again after a relaunch asks again. They
+  stay on this device in `settings.json`
+  (`klabautermann.attention.acknowledged`: by server id, each problem's
+  kind and subject with when and the note; anything unreadable reads as
+  none).
 
   As built (M6 N37a, collector-set version 11), the slow `temps`
   collector reads each hwmon chip's `temp<N>_input` with its `_max`,
@@ -4281,6 +4313,26 @@ TLS. The section checks when it shows, after an edit and on request.
   show as text where the app has none. CTR-11's mute labels
   (`dockhand.notify`) wait for per-container notifications, which v1
   does not send.
+- **As built (M6 N21a).** The security review (DKE-06) and log rotation
+  lint (DKE-07) run on request from the Docker tab's Review sub-tab as
+  one `DockerReviewQuery`: `/info`, the list, then one inspect per
+  container, sequentially and at most `kDockerReviewMax` (200), the rest
+  counted. `docker/container_review.dart` judges each container before
+  its inspect is masked and sends only findings, never values.
+  - Findings, most severe first: privileged; an engine socket
+    (`docker.sock`, `podman.sock`, `containerd.sock`) bind-mounted;
+    host network; host PID; `CapAdd`; a database's default port
+    published on every address (the port is matched, not the image
+    name); root (no `User`, `root` or `0`, left out on a rootless or
+    `userns` engine); `json-file` without `max-size`; an image named
+    without a tag or digest, or `latest`; no or a `NONE` health check; no
+    restart policy, unless the container is auto-removed or a compose
+    one-off.
+  - Docker copies the daemon's `log-opts` into each container's
+    `LogConfig` at create, so a daemon-wide `max-size` reads as set.
+    Whether the log file grows needs its size, which only root can
+    read under `/var/lib/docker`; the lint flags the configuration
+    alone until an admin-mode size read joins it.
 
 - **As built (M6 N20).** DKE-03's timeline comes from the events stream
   the watcher already holds for the lists (5.7), so it costs no channel
@@ -6111,7 +6163,7 @@ shows there.
 | `ConfirmEndpoints(ids)` (K41, 4.7) | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |
 | `SetMonitorSet(ids)` (FL-21, K30) | no event: it changes what samples; `RequestRejected` naming the ids it skipped (outside the fleet or not eligible), or for more than 10 ids, which leaves the last set |
 | `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status), `ConnectRejected(serverId, reason)` (no config to dial with, D61, or an endpoint not confirmed, 4.7) |
-| `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
+| `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`, `SetServerCadenceCap(serverId, cap)` (SAF-19); app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)`, `SetDockerEndpoint(serverId, choice)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason, choice)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
@@ -6422,9 +6474,11 @@ the engine in `engine_isolate.dart` beside it):
   fields that change with every probe; a profile the device cache kept
   comes first, with `cachedAt` (D59). The same ids again replace a
   subscription's streams, and an empty set drops it. `SetCadenceProfile`
-  picks the 6.4 column (Desktop until the app sends one); a stream the
-  column reads on demand is read once per `Subscribe` naming it, a
-  repeat included, so a surface refreshes it by resending. While the
+  picks the 6.4 column (Desktop until the app sends one), and
+  `SetServerCadenceCap` caps one server at a slower column, the slower
+  of the two winning; a stream the column reads on demand is read once
+  per `Subscribe` naming it, a repeat included, so a surface refreshes
+  it by resending. While the
   server is `waitingForLink` or `pausedInBackground`, that reading waits
   until the link is ready and the app is in the foreground, and resends
   in the meantime add no further reading. `RefreshSubscription` (K40)
@@ -7228,6 +7282,13 @@ reading, in two columns from the System tab's 600 px panel width:
 - The CPU and memory gauges and the CPU sparkline warn at the fleet
   rows' 80 % and 90 % until OV-11, so a server's row and Overview
   agree; swap, load and the per-core figures carry no thresholds.
+- As built (M6 N61a, OV-11), those stand-ins became bands: careful from
+  70 %, warning from 80 % and critical from 90 % for CPU, memory and
+  disk, each metric's own through `ThresholdScope`, which the fleet
+  rows, the Overview's gauges, the health card's disk alarms and the
+  announcer read. Careful keeps the series colour and says so by an info
+  icon and in words; only warning and critical raise disk alarms or are
+  announced. The user's levels follow in N61b.
 - Every figure goes through the chart formatters' IEC units, and a
   test keeps the decimal `ghostFormatFileSize` and `ghostFormatByteRate`
   out of `lib/`. A figure the container withholds (D50) reads unknown

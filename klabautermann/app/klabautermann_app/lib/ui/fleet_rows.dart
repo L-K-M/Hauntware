@@ -22,6 +22,7 @@ import 'alerts.dart';
 import 'monitor_set_feedback.dart';
 import 'server_editing.dart';
 import 'sidebar_kit.dart';
+import 'threshold_scope.dart';
 
 /// `ghost_servers`' words for a row whose link is [link] (03 §10.10's
 /// adapter convention). Every session state takes the word for the status
@@ -590,17 +591,17 @@ class FleetServerRow extends StatelessWidget {
             PressureCell(
               label: l10n.fleetRowCpu,
               percent: reading.cpuPercent,
-              thresholds: kFleetRowThresholds,
+              thresholds: ThresholdScope.of(context, ThresholdMetric.cpu),
             ),
             PressureCell(
               label: l10n.fleetRowMemory,
               percent: reading.memoryPercent,
-              thresholds: kFleetRowThresholds,
+              thresholds: ThresholdScope.of(context, ThresholdMetric.memory),
             ),
             PressureCell(
               label: l10n.fleetRowDisk,
               percent: reading.diskPercent,
-              thresholds: kFleetRowThresholds,
+              thresholds: ThresholdScope.of(context, ThresholdMetric.disk),
             ),
           ];
     final freshness = reading == null

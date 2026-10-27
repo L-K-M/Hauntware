@@ -109,6 +109,26 @@ void main() {
       expect(subscriptions.profile, CadenceProfile.desktop);
     });
 
+    test('a server cap slows its server only, never speeds it up, and '
+        'outlives the fleet (SAF-19)', () {
+      subscriptions.capServer('srv-1', CadenceProfile.cellularSaver);
+      expect(subscriptions.profileFor('srv-1'), CadenceProfile.cellularSaver);
+      expect(subscriptions.profileFor('srv-2'), CadenceProfile.desktop);
+
+      subscriptions.capServer('srv-2', CadenceProfile.phone);
+      subscriptions.profile = CadenceProfile.cellularSaver;
+      expect(subscriptions.profileFor('srv-2'), CadenceProfile.cellularSaver);
+
+      subscriptions
+        ..fleet = {'srv-2'}
+        ..fleet = {'srv-1', 'srv-2'}
+        ..profile = CadenceProfile.desktop;
+      expect(subscriptions.profileFor('srv-1'), CadenceProfile.cellularSaver);
+
+      subscriptions.capServer('srv-1', null);
+      expect(subscriptions.profileFor('srv-1'), CadenceProfile.desktop);
+    });
+
     test('held stream sets cannot be edited from outside', () {
       final streams = {SampleStream.overview};
       subscriptions.subscribe(_subscribe('row', streams));
