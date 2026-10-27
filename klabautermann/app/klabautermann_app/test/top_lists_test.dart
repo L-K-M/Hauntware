@@ -106,6 +106,7 @@ void main() {
         result: ProcsResult([
           _process(10, 'nginx', cpu: 12.5, rss: 50 << 20),
           _process(11, 'postgres', cpu: 3, rss: 400 << 20),
+          ProcessRow(pid: 12, cpuPercent: 1),
         ]),
       ),
     );
@@ -115,6 +116,11 @@ void main() {
       ], at: _now),
     );
     await tester.pump();
+    expect(
+      find.text('Waiting for the first reading…'),
+      findsOneWidget,
+      reason: 'the running container has no stats round yet',
+    );
     final statsFor = engine
         .sentOfType<DockerWatch>()
         .cast<DockerWatch>()
@@ -131,6 +137,7 @@ void main() {
     expect(find.text('nginx (10)'), findsOneWidget);
     expect(find.text('12.5 %'), findsOneWidget);
     expect(find.text('web'), findsOneWidget);
+    expect(find.text('12'), findsOneWidget, reason: 'a nameless process');
     expect(
       tester.getTopLeft(find.text('nginx (10)')).dy,
       lessThan(tester.getTopLeft(find.text('postgres (11)')).dy),

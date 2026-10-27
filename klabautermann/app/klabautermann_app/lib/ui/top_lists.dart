@@ -190,9 +190,13 @@ class _TopListsCardState extends State<TopListsCard> {
             _ => null,
           };
           final list = containers.value;
-          final containerRows = list.containers == null
-              ? null
-              : topContainers(list.containers!, list.stats, _measure);
+          // Running containers without a stats round yet are still being
+          // read, not idle.
+          final containerRows = switch (list.containers) {
+            null => null,
+            final all when list.stats.isEmpty && all.any(containerIsUp) => null,
+            final all => topContainers(all, list.stats, _measure),
+          };
           final toggle = TextButton.icon(
             icon: Icon(_open ? Icons.expand_less : Icons.expand_more),
             label: Text(_open ? l10n.topListsHide : l10n.topListsShow),
@@ -290,11 +294,13 @@ class _TopList extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
+                      // A nameless process is labelled by its pid already.
                       switch (entry.pid) {
-                        final pid? => AppLocalizations.of(
-                          context,
-                        ).topListsProcess(entry.label, pid),
-                        null => entry.label,
+                        final pid? when '$pid' != entry.label =>
+                          AppLocalizations.of(
+                            context,
+                          ).topListsProcess(entry.label, pid),
+                        _ => entry.label,
                       },
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
