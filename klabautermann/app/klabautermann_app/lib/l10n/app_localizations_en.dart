@@ -10777,4 +10777,142 @@ class AppLocalizationsEn extends AppLocalizations {
   String dockerDetailsRawFileName(String name) {
     return '$name-inspect.json';
   }
+
+  @override
+  String get dockerTabApps => 'Apps';
+
+  @override
+  String get appsForwardNote =>
+      'A forward listens on 127.0.0.1 on this device while it is open, and any app on this device can reach it. Forwards close when you leave this server\'s Docker tab.';
+
+  @override
+  String get appsForwardPort => 'Forward a port…';
+
+  @override
+  String get appsForwardsTitle => 'Forwards';
+
+  @override
+  String get appsListFailed => 'The container list could not be read.';
+
+  @override
+  String get appsNone =>
+      'No running container publishes a TCP port or names a web address.';
+
+  @override
+  String get appsForward => 'Forward';
+
+  @override
+  String appsForwardLabel(String port) {
+    return 'Forward $port';
+  }
+
+  @override
+  String appsPortPublished(String address, String port) {
+    return '$address → $port/tcp';
+  }
+
+  @override
+  String appsPortUnpublished(String port) {
+    return '$port/tcp, not published';
+  }
+
+  @override
+  String appsForwardEnded(String target, String reason) {
+    return '$target: $reason';
+  }
+
+  @override
+  String appsForwardListening(String localPort, String target) {
+    return '127.0.0.1:$localPort → $target';
+  }
+
+  @override
+  String appsForwardOpening(String target) {
+    return '$target: opening a local port…';
+  }
+
+  @override
+  String get appsForwardForwardingDisabled =>
+      'The server refused to forward the last connection. AllowTcpForwarding may be off in its sshd_config.';
+
+  @override
+  String appsForwardConnectFailed(String target) {
+    return 'The last connection did not reach $target.';
+  }
+
+  @override
+  String appsForwardConnections(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count connections',
+      one: '1 connection',
+      zero: 'No connections',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String appsForwardOpen(String target) {
+    return 'Open the forward to $target in the browser';
+  }
+
+  @override
+  String appsForwardStop(String target) {
+    return 'Stop forwarding $target';
+  }
+
+  @override
+  String appsForwardDismiss(String target) {
+    return 'Dismiss the forward to $target';
+  }
+
+  @override
+  String get appsForwardEndClosed => 'stopped';
+
+  @override
+  String get appsForwardEndNoLink => 'not connected to the server';
+
+  @override
+  String get appsForwardEndLinkLost => 'the connection to the server was lost';
+
+  @override
+  String get appsForwardEndBindFailed =>
+      'this device could not open a local port';
+
+  @override
+  String get appsForwardEndInvalidTarget => 'the host or port is not valid';
+
+  @override
+  String get appsForwardEndTooMany => 'too many forwards are open';
+
+  @override
+  String get appsForwardEndForgotten =>
+      'the server was removed or now names another machine';
+
+  @override
+  String get appsForwardDialogTitle => 'Forward a port';
+
+  @override
+  String get appsForwardDialogBody =>
+      'Klabautermann forwards this host and port, as the server reaches them, to a port on this device.';
+
+  @override
+  String get appsForwardHost => 'Host';
+
+  @override
+  String get appsForwardPortField => 'Port';
+
+  @override
+  String get appsForwardHostProblem =>
+      'Enter a host name or address without spaces.';
+
+  @override
+  String get appsForwardPortProblem => 'Enter a port from 1 to 65535.';
+
+  @override
+  String get appsForwardCancel => 'Cancel';
+
+  @override
+  String get appsForwardStart => 'Forward';
 }

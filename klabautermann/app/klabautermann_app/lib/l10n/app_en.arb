@@ -12954,5 +12954,205 @@
         "type": "String"
       }
     }
+  },
+  "dockerTabApps": "Apps",
+  "@dockerTabApps": {
+    "description": "Docker sub-tab (DKE-08): each running container's web addresses and ports, with port forwards."
+  },
+  "appsForwardNote": "A forward listens on 127.0.0.1 on this device while it is open, and any app on this device can reach it. Forwards close when you leave this server's Docker tab.",
+  "@appsForwardNote": {
+    "description": "Apps sub-tab, above its content (NET-11, 03 §5.11): what a port forward exposes and when it closes."
+  },
+  "appsForwardPort": "Forward a port…",
+  "@appsForwardPort": {
+    "description": "Apps sub-tab button that opens the dialog for a forward to any host and port the server reaches (NET-11)."
+  },
+  "appsForwardsTitle": "Forwards",
+  "@appsForwardsTitle": {
+    "description": "Apps sub-tab heading over the open and ended port forwards."
+  },
+  "appsListFailed": "The container list could not be read.",
+  "@appsListFailed": {
+    "description": "Apps sub-tab when the container list failed and none was read before."
+  },
+  "appsNone": "No running container publishes a TCP port or names a web address.",
+  "@appsNone": {
+    "description": "Apps sub-tab when no running container has a link or a TCP port."
+  },
+  "appsForward": "Forward",
+  "@appsForward": {
+    "description": "Button on a container port row that forwards it to this device and opens it in the browser (DKE-08, DKE-09)."
+  },
+  "appsForwardLabel": "Forward {port}",
+  "@appsForwardLabel": {
+    "description": "What assistive technology reads for a port row's Forward button.",
+    "placeholders": {
+      "port": {
+        "type": "String"
+      }
+    }
+  },
+  "appsPortPublished": "{address} → {port}/tcp",
+  "@appsPortPublished": {
+    "description": "A published container port: the host address and port Docker publishes it on, then the container port. '*' as the address means every interface.",
+    "placeholders": {
+      "address": {
+        "type": "String"
+      },
+      "port": {
+        "type": "String"
+      }
+    }
+  },
+  "appsPortUnpublished": "{port}/tcp, not published",
+  "@appsPortUnpublished": {
+    "description": "A container port Docker does not publish; a forward reaches it at the container's address (DKE-09).",
+    "placeholders": {
+      "port": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardEnded": "{target}: {reason}",
+  "@appsForwardEnded": {
+    "description": "An ended port forward: its target, then why it ended (one of the appsForwardEnd texts).",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardListening": "127.0.0.1:{localPort} → {target}",
+  "@appsForwardListening": {
+    "description": "An open port forward: the local port on this device, then the target as the server reaches it.",
+    "placeholders": {
+      "localPort": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardOpening": "{target}: opening a local port…",
+  "@appsForwardOpening": {
+    "description": "A port forward the engine has not reported listening yet.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardForwardingDisabled": "The server refused to forward the last connection. AllowTcpForwarding may be off in its sshd_config.",
+  "@appsForwardForwardingDisabled": {
+    "description": "Under an open forward whose last connection the server refused (03 §5.3)."
+  },
+  "appsForwardConnectFailed": "The last connection did not reach {target}.",
+  "@appsForwardConnectFailed": {
+    "description": "Under an open forward whose last connection could not open its channel.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardConnections": "{count, plural, =0{No connections} =1{1 connection} other{{count} connections}}",
+  "@appsForwardConnections": {
+    "description": "Under an open forward: how many connections it relays now.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsForwardOpen": "Open the forward to {target} in the browser",
+  "@appsForwardOpen": {
+    "description": "Tooltip of an open forward's open button.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardStop": "Stop forwarding {target}",
+  "@appsForwardStop": {
+    "description": "Tooltip of an open forward's stop button.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardDismiss": "Dismiss the forward to {target}",
+  "@appsForwardDismiss": {
+    "description": "Tooltip of an ended forward's dismiss button.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardEndClosed": "stopped",
+  "@appsForwardEndClosed": {
+    "description": "Why a port forward ended, after its target in appsForwardEnded (03 §5.11)."
+  },
+  "appsForwardEndNoLink": "not connected to the server",
+  "@appsForwardEndNoLink": {
+    "description": "Why a port forward ended, after its target in appsForwardEnded (03 §5.11)."
+  },
+  "appsForwardEndLinkLost": "the connection to the server was lost",
+  "@appsForwardEndLinkLost": {
+    "description": "Why a port forward ended, after its target in appsForwardEnded (03 §5.11)."
+  },
+  "appsForwardEndBindFailed": "this device could not open a local port",
+  "@appsForwardEndBindFailed": {
+    "description": "Why a port forward ended, after its target in appsForwardEnded (03 §5.11)."
+  },
+  "appsForwardEndInvalidTarget": "the host or port is not valid",
+  "@appsForwardEndInvalidTarget": {
+    "description": "Why a port forward ended, after its target in appsForwardEnded (03 §5.11)."
+  },
+  "appsForwardEndTooMany": "too many forwards are open",
+  "@appsForwardEndTooMany": {
+    "description": "Why a port forward ended, after its target in appsForwardEnded (03 §5.11)."
+  },
+  "appsForwardEndForgotten": "the server was removed or now names another machine",
+  "@appsForwardEndForgotten": {
+    "description": "Why a port forward ended, after its target in appsForwardEnded (03 §5.11)."
+  },
+  "appsForwardDialogTitle": "Forward a port",
+  "@appsForwardDialogTitle": {
+    "description": "Title of the dialog for a forward to any host and port (NET-11)."
+  },
+  "appsForwardDialogBody": "Klabautermann forwards this host and port, as the server reaches them, to a port on this device.",
+  "@appsForwardDialogBody": {
+    "description": "Body of the forward dialog."
+  },
+  "appsForwardHost": "Host",
+  "@appsForwardHost": {
+    "description": "Forward dialog field: the host as the server reaches it."
+  },
+  "appsForwardPortField": "Port",
+  "@appsForwardPortField": {
+    "description": "Forward dialog field: the port."
+  },
+  "appsForwardHostProblem": "Enter a host name or address without spaces.",
+  "@appsForwardHostProblem": {
+    "description": "Forward dialog error when the host is empty or holds a space or control character."
+  },
+  "appsForwardPortProblem": "Enter a port from 1 to 65535.",
+  "@appsForwardPortProblem": {
+    "description": "Forward dialog error when the port is not a number from 1 to 65535."
+  },
+  "appsForwardCancel": "Cancel",
+  "@appsForwardCancel": {
+    "description": "Forward dialog button that closes it without forwarding."
+  },
+  "appsForwardStart": "Forward",
+  "@appsForwardStart": {
+    "description": "Forward dialog button that starts the forward."
   }
 }

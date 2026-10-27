@@ -10,6 +10,7 @@ import '../../controllers/docker_notice_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../server_header.dart' show HeaderedBody;
+import 'apps_panel.dart';
 import 'container_logs.dart';
 import 'containers_panel.dart';
 import 'docker_endpoint.dart';
@@ -43,6 +44,7 @@ enum DockerSubTab {
   stacks,
   volumes,
   networks,
+  apps,
   events,
   review;
 
@@ -52,6 +54,7 @@ enum DockerSubTab {
     stacks => l10n.dockerTabStacks,
     volumes => l10n.dockerTabVolumes,
     networks => l10n.dockerTabNetworks,
+    apps => l10n.dockerTabApps,
     events => l10n.dockerTabEvents,
     review => l10n.dockerTabReview,
   };
@@ -61,7 +64,8 @@ enum DockerSubTab {
 /// notice until it is dismissed on this device, the engine strip
 /// (DKE-01), and the sub-tabs: Containers ([ContainersPanel]), Images
 /// ([ImagesPanel]), Stacks ([StacksPanel]), Volumes ([VolumesPanel]),
-/// Networks ([NetworksPanel]), Events ([EventsPanel]) and Review
+/// Networks ([NetworksPanel]), Apps ([AppsPanel]), Events ([EventsPanel])
+/// and Review
 /// ([ReviewPanel]). While [visible], the tab counts as a view of the
 /// server's Docker engine
 /// ([DockerController.openView]), so a ready endpoint's details are read,
@@ -199,6 +203,12 @@ class _DockerPanelState extends State<DockerPanel> {
                                   widget.visible && tabs.index == tab.index,
                             ),
                             DockerSubTab.networks => NetworksPanel(
+                              monitoring: widget.monitoring,
+                              serverId: widget.serverId,
+                              visible:
+                                  widget.visible && tabs.index == tab.index,
+                            ),
+                            DockerSubTab.apps => AppsPanel(
                               monitoring: widget.monitoring,
                               serverId: widget.serverId,
                               visible:
