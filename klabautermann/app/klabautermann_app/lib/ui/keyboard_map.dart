@@ -160,7 +160,9 @@ class EscapeGoesBack extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Shortcuts(
     shortcuts: const {
-      SingleActivator(LogicalKeyboardKey.escape): _EscapeIntent(),
+      // A held Esc goes back once, not a page per repeat.
+      SingleActivator(LogicalKeyboardKey.escape, includeRepeats: false):
+          _EscapeIntent(),
     },
     child: Actions(actions: {_EscapeIntent: _EscapeAction()}, child: child),
   );

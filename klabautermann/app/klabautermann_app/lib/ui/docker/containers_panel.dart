@@ -22,6 +22,7 @@ import '../actions/docker_actions.dart'
         containerIntent,
         containerOffers;
 import '../sortable_table.dart';
+import '../workspace_dock.dart' show DockedShell, WorkspaceDockScope;
 import 'container_details.dart';
 import 'container_logs.dart';
 import 'container_terminal.dart' show openContainerShellPage;
@@ -549,12 +550,21 @@ class _ContainersPanelState extends State<ContainersPanel> {
                 ),
           null => false,
         },
-        run: (entry) => openContainerShellPage(
-          context,
-          monitoring: widget.monitoring,
-          serverId: widget.serverId,
-          container: containerOf(entry)!,
-        ),
+        run: (entry) {
+          final container = containerOf(entry)!;
+          // The desktop dock (OV-10) holds a shell, as the inspector's
+          // shell button does; elsewhere it opens on a page.
+          if (WorkspaceDockScope.maybeOf(context) case final dock?) {
+            dock.show(DockedShell(widget.serverId, container));
+            return;
+          }
+          openContainerShellPage(
+            context,
+            monitoring: widget.monitoring,
+            serverId: widget.serverId,
+            container: container,
+          );
+        },
       ),
       TableKeyAction(
         key: LogicalKeyboardKey.keyR,

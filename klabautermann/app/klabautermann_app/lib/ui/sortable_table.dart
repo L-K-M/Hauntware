@@ -406,9 +406,9 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
     SingleActivator(LogicalKeyboardKey.f10, shift: true, includeRepeats: false):
         _OpenRowActionsIntent(),
     SingleActivator(LogicalKeyboardKey.escape): _CloseMenuIntent(),
-    SingleActivator(LogicalKeyboardKey.slash, includeRepeats: false):
-        _FocusFilterIntent(),
-    // `?` is Shift+/ on some layouts and its own key on others.
+    // `/` and `?` are typed with Shift on some layouts and are keys of
+    // their own on others, so both match by the character typed.
+    CharacterActivator('/', includeRepeats: false): _FocusFilterIntent(),
     CharacterActivator('?', includeRepeats: false): _ShowKeyboardMapIntent(),
   };
 

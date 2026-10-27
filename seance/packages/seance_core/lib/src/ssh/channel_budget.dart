@@ -61,9 +61,14 @@ final class ChannelOpenException implements Exception {
   String toString() => message;
 }
 
-/// What the link has learned about the peer from refused opens.
+/// What the link has learned about the peer, from refused channel opens
+/// and from the version exchange.
 final class SshLinkSeen {
-  const SshLinkSeen({this.learnedSessionLimit, this.forwardingRefused = false});
+  const SshLinkSeen({
+    this.learnedSessionLimit,
+    this.forwardingRefused = false,
+    this.serverIdentification,
+  });
 
   /// The session-channel ceiling the server demonstrated, below the
   /// configured budget. `null` while the server has refused nothing.
@@ -72,19 +77,28 @@ final class SshLinkSeen {
   /// Set once a forwarding open has been refused on this link.
   final bool forwardingRefused;
 
+  /// The identification line the server sent before the key exchange
+  /// (RFC 4253 §4.2), such as `SSH-2.0-dropbear_2024.86`; null before the
+  /// handshake read it. Apps read the server software from it, for example
+  /// to work around a release's known gaps.
+  final String? serverIdentification;
+
   @override
   bool operator ==(Object other) =>
       other is SshLinkSeen &&
       other.learnedSessionLimit == learnedSessionLimit &&
-      other.forwardingRefused == forwardingRefused;
+      other.forwardingRefused == forwardingRefused &&
+      other.serverIdentification == serverIdentification;
 
   @override
-  int get hashCode => Object.hash(learnedSessionLimit, forwardingRefused);
+  int get hashCode =>
+      Object.hash(learnedSessionLimit, forwardingRefused, serverIdentification);
 
   @override
   String toString() =>
       'SshLinkSeen(learnedSessionLimit: $learnedSessionLimit, '
-      'forwardingRefused: $forwardingRefused)';
+      'forwardingRefused: $forwardingRefused, '
+      'serverIdentification: $serverIdentification)';
 }
 
 /// One held session-channel slot.

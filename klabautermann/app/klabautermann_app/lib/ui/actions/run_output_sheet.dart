@@ -6,11 +6,31 @@ import '../logs/log_level.dart';
 import '../logs/log_query.dart';
 import '../logs/log_view.dart';
 import '../logs/logs_panel_controller.dart';
+import '../workspace_dock.dart';
 
 /// JOB-08's output (03 §7.7): [unit]'s journal on [serverId], followed
-/// live in a bottom sheet from shortly before the run, through the Logs
-/// panel's reading. Closing the sheet closes the follow.
+/// live from shortly before the run, through the Logs panel's reading.
+/// The desktop shows it in the workspace's dock (OV-10); elsewhere it
+/// opens a bottom sheet, and closing the sheet closes the follow.
 Future<void> showRunOutput(
+  BuildContext context, {
+  required MonitoringController monitoring,
+  required String serverId,
+  required String unit,
+}) async {
+  if (WorkspaceDockScope.maybeOf(context) case final dock?) {
+    dock.show(DockedRunOutput(serverId, unit));
+    return;
+  }
+  await _showRunOutputSheet(
+    context,
+    monitoring: monitoring,
+    serverId: serverId,
+    unit: unit,
+  );
+}
+
+Future<void> _showRunOutputSheet(
   BuildContext context, {
   required MonitoringController monitoring,
   required String serverId,
@@ -46,23 +66,6 @@ class _RunOutput extends StatefulWidget {
 }
 
 class _RunOutputState extends State<_RunOutput> {
-  // The last quarter hour holds the run's start, which the engine reports
-  // only once the run ends; a follow reads on from the newest record.
-  late final LogsPanelController _reading =
-      LogsPanelController(
-          streams: widget.monitoring.logs,
-          serverId: widget.serverId,
-        )
-        ..apply(LogQuery(unit: widget.unit, range: LogTimeRange.last15Minutes))
-        ..setLive(true)
-        ..setVisible(true);
-
-  @override
-  void dispose() {
-    _reading.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -91,13 +94,56 @@ class _RunOutputState extends State<_RunOutput> {
             ],
           ),
           Expanded(
-            child: LogView(
-              controller: _reading.logs,
-              levelOf: LogLevel.ofJournalLine,
+            child: RunOutputLog(
+              monitoring: widget.monitoring,
+              serverId: widget.serverId,
+              unit: widget.unit,
             ),
           ),
         ],
       ),
     );
   }
+}
+
+/// [unit]'s journal on [serverId], followed from shortly before a run
+/// while this shows (JOB-08), without a heading: the sheet adds one and
+/// the dock's tab names it.
+class RunOutputLog extends StatefulWidget {
+  const RunOutputLog({
+    super.key,
+    required this.monitoring,
+    required this.serverId,
+    required this.unit,
+  });
+
+  final MonitoringController monitoring;
+  final String serverId;
+  final String unit;
+
+  @override
+  State<RunOutputLog> createState() => _RunOutputLogState();
+}
+
+class _RunOutputLogState extends State<RunOutputLog> {
+  // The last quarter hour holds the run's start, which the engine reports
+  // only once the run ends; a follow reads on from the newest record.
+  late final LogsPanelController _reading =
+      LogsPanelController(
+          streams: widget.monitoring.logs,
+          serverId: widget.serverId,
+        )
+        ..apply(LogQuery(unit: widget.unit, range: LogTimeRange.last15Minutes))
+        ..setLive(true)
+        ..setVisible(true);
+
+  @override
+  void dispose() {
+    _reading.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      LogView(controller: _reading.logs, levelOf: LogLevel.ofJournalLine);
 }
