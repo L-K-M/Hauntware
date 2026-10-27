@@ -91,6 +91,7 @@ class _SettingsWindowAppState extends State<SettingsWindowApp> {
                 cadence: remote.cadence,
                 cadenceCaps: remote.cadenceCaps,
                 logDisplay: remote.logDisplay,
+                timeDisplay: remote.timeDisplay,
                 deviceName: remote.deviceName,
                 appVersion: remote.appVersion,
                 monitorSet: remote.monitorSet,

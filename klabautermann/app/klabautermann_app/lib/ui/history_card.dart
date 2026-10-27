@@ -7,6 +7,7 @@ import '../controllers/history_reads.dart';
 import '../l10n/app_localizations.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart';
+import 'time_display.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 
 /// The metrics the History card offers: the percentages it charts on one
@@ -209,6 +210,10 @@ class _HistoryCardState extends State<HistoryCard> {
               end: readAt,
               span: _tier.span,
               max: 100,
+              zoneOffset: TimeDisplayScope.serverOffsetOf(
+                context,
+                widget.serverId,
+              ),
             ),
           ),
       ],

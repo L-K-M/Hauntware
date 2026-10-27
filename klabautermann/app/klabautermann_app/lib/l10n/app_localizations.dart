@@ -5796,6 +5796,30 @@ abstract class AppLocalizations {
   /// **'The log display could not be changed.'**
   String get settingsLogDisplayNotChanged;
 
+  /// Settings, General: switch that shows the times a server reports in that server's time zone instead of this device's (A11Y-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Show server times in the server\'s zone'**
+  String get settingsServerTimes;
+
+  /// Settings, General: explanation under the server times switch (A11Y-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Times on a server\'s screens use the zone it reported when it connected. Until then, and with this off, they use this device\'s zone.'**
+  String get settingsServerTimesDetail;
+
+  /// Settings, General: toast when the server times switch applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The time display changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get settingsServerTimesNotSaved;
+
+  /// Settings, General: toast when the server times switch failed to change.
+  ///
+  /// In en, this message translates to:
+  /// **'The time display could not be changed.'**
+  String get settingsServerTimesNotChanged;
+
   /// Settings, Alerts: the heading of OV-11's threshold levels.
   ///
   /// In en, this message translates to:

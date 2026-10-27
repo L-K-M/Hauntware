@@ -21,6 +21,8 @@ import '../../controllers/cadence_controller.dart'
     show CadenceCap, CadenceNotSavedException, CadencePreset;
 import '../../controllers/log_display.dart'
     show LogDisplay, LogDisplayNotSavedException, LogWrap;
+import '../../controllers/time_display.dart'
+    show TimeDisplay, TimeDisplayNotSavedException;
 import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart'
     show AppearanceNotSavedException;
@@ -82,6 +84,10 @@ enum SettingsLinkMethod {
   /// [encodeLogDisplay] writes it.
   setLogDisplay,
 
+  /// The General tab's time display (A11Y-07); the argument is a
+  /// [TimeDisplay] name.
+  setTimeDisplay,
+
   /// The General tab's device name (M5 plan Q6); the argument is a
   /// string, blank for the default.
   setDeviceName,
@@ -138,6 +144,9 @@ enum SettingsLinkKey {
   /// The log display as [encodeLogDisplay] writes it, or null when the app
   /// offers none.
   logDisplay,
+
+  /// The [TimeDisplay] name, or null when the app offers none.
+  timeDisplay,
   deviceName,
 
   /// Each metric's usage bands (OV-11), as [encodeThresholds] writes them.
@@ -267,6 +276,10 @@ enum SettingsLinkError {
   /// [LogDisplayNotSavedException].
   logDisplayNotSaved,
 
+  /// As [notSaved], for the time display: the window rebuilds the
+  /// [TimeDisplayNotSavedException].
+  timeDisplayNotSaved,
+
   /// The monitor set is full: the window rebuilds the
   /// [MonitorSetFullException], so the Servers tab words it as the app's
   /// rows do.
@@ -305,6 +318,8 @@ PlatformException encodeLinkError(Object error) => PlatformException(
       SettingsLinkError.announcementNotSaved.name,
     CadenceNotSavedException() => SettingsLinkError.cadenceNotSaved.name,
     LogDisplayNotSavedException() => SettingsLinkError.logDisplayNotSaved.name,
+    TimeDisplayNotSavedException() =>
+      SettingsLinkError.timeDisplayNotSaved.name,
     MonitorSetFullException() => SettingsLinkError.monitorSetFull.name,
     MonitorSetNotSavedException() => SettingsLinkError.monitorSetNotSaved.name,
     SafetyNotSavedException() => SettingsLinkError.safetyNotSaved.name,
@@ -332,6 +347,11 @@ LogDisplay decodeLogDisplay(Object? value) => switch (value) {
   ),
   _ => LogDisplay(),
 };
+
+/// The [TimeDisplay] [value] names; a value that names none reads as
+/// the device's zone.
+TimeDisplay decodeTimeDisplay(Object? value) =>
+    TimeDisplay.values.asNameMap()[value] ?? TimeDisplay.device;
 
 /// [size] for the link: its bytes, budget and warning point, then each
 /// row's prefix, records and bytes.
@@ -390,6 +410,9 @@ Exception decodeLinkError(PlatformException error) {
     ),
     SettingsLinkError.cadenceNotSaved => CadenceNotSavedException(message),
     SettingsLinkError.logDisplayNotSaved => LogDisplayNotSavedException(
+      message,
+    ),
+    SettingsLinkError.timeDisplayNotSaved => TimeDisplayNotSavedException(
       message,
     ),
     SettingsLinkError.monitorSetFull => const MonitorSetFullException(),

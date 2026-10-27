@@ -4539,6 +4539,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'The log display could not be changed.';
 
   @override
+  String get settingsServerTimes => 'Show server times in the server\'s zone';
+
+  @override
+  String get settingsServerTimesDetail =>
+      'Times on a server\'s screens use the zone it reported when it connected. Until then, and with this off, they use this device\'s zone.';
+
+  @override
+  String get settingsServerTimesNotSaved =>
+      'The time display changed but could not be saved. It lasts until Klabautermann quits.';
+
+  @override
+  String get settingsServerTimesNotChanged =>
+      'The time display could not be changed.';
+
+  @override
   String get settingsThresholdsTitle => 'Usage bands';
 
   @override
