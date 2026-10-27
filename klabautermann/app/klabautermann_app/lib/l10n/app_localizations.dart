@@ -616,6 +616,30 @@ abstract class AppLocalizations {
   /// **'The pin changed but could not be saved. It lasts until Klabautermann quits.'**
   String get quickActionsPinNotSaved;
 
+  /// The fleet board (FL-08): the label before its layout picker, shown in the desktop workspace while no server is open.
+  ///
+  /// In en, this message translates to:
+  /// **'Layout'**
+  String get fleetDensityLabel;
+
+  /// The fleet board (FL-08): one layout in its picker. Auto shows cards for a small fleet and a grid for a large one; Rows leaves the rail's rows alone.
+  ///
+  /// In en, this message translates to:
+  /// **'{density, select, auto{Auto} cards{Cards} grid{Grid} other{Rows}}'**
+  String fleetDensity(String density);
+
+  /// The fleet board: toast when the picked layout applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The layout changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get fleetDensityNotSaved;
+
+  /// A fleet board card: one pressure bar cell's share in figures, e.g. 'CPU 23 %'. label is fleetRowCpu, fleetRowMemory or fleetRowDisk.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} {percent} %'**
+  String fleetTileShare(String label, int percent);
+
   /// The CPU cell of a fleet row's pressure bar (FL-07), as its summary names it.
   ///
   /// In en, this message translates to:

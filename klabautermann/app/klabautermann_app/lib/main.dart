@@ -20,6 +20,7 @@ import 'controllers/app_lock_controller.dart';
 import 'controllers/attention.dart';
 import 'controllers/cadence_controller.dart';
 import 'controllers/pinned_services.dart';
+import 'controllers/fleet_density.dart';
 import 'controllers/container_columns.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/device_name.dart';
@@ -361,6 +362,12 @@ Future<void> main(List<String> args) async {
     },
     save: settings.setPinnedServices,
   );
+
+  // FL-08's fleet board layout, kept per device in settings.json.
+  final fleetDensity = FleetDensityController(
+    density: FleetDensity.parse(settings.fleetDensity),
+    save: settings.setFleetDensity,
+  );
   // Each server's cap (SAF-19), kept per device like the preset and sent
   // to the engine from the start; a cap outlives the fleet.
   final cadenceCaps = CadenceCapsController(
@@ -475,6 +482,7 @@ Future<void> main(List<String> args) async {
       thresholds: thresholds,
       cadence: cadence,
       pinnedServices: pinnedServices,
+      fleetDensity: fleetDensity,
       cadenceCaps: cadenceCaps,
       deviceName: deviceName,
       safety: safety,

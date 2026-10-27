@@ -589,6 +589,24 @@ void main() {
       });
     });
 
+    test('keeps the fleet board layout\'s name across reloads, and reads a '
+        'damaged one as none (FL-08)', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.fleetDensity, isNull);
+      await store.setFleetDensity('grid');
+      expect(document()['klabautermann.fleet.density'], 'grid');
+      expect((await DeviceSettingsStore.open(file)).fleetDensity, 'grid');
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.fleet.density': true,
+      });
+      expect((await DeviceSettingsStore.open(file)).fleetDensity, isNull);
+    });
+
     test('keeps each server\'s polling cap across reloads, lifts one on '
         'null and skips entries that are not names (SAF-19)', () async {
       writeDocument({

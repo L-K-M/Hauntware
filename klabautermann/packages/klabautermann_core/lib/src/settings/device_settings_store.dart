@@ -44,6 +44,7 @@ const String _thresholdsKey = 'klabautermann.overview.thresholds';
 const String _tlsEndpointsKey = 'klabautermann.certificates.endpoints';
 const String _cadenceKey = 'klabautermann.sampling.cadence';
 const String _pinnedServicesKey = 'klabautermann.overview.pinnedServices';
+const String _fleetDensityKey = 'klabautermann.fleet.density';
 const String _cadenceCapsKey = 'klabautermann.sampling.caps';
 const String _attentionKey = 'klabautermann.attention.acknowledged';
 
@@ -392,6 +393,20 @@ final class DeviceSettingsStore {
         final Map<String, Object?> entries => {...entries},
         _ => {},
       };
+
+  /// The device's fleet board layout (FL-08), `klabautermann.fleet.density`,
+  /// as the name the app stored, or null when there is none or it is not a
+  /// string; the app reads a name it does not know as its default.
+  String? get fleetDensity => switch (_values[_fleetDensityKey]) {
+    final String name => name,
+    _ => null,
+  };
+
+  /// Stores [name] and writes the document; throws as [setCadence] does.
+  Future<void> setFleetDensity(String name) async {
+    _values[_fleetDensityKey] = name;
+    await _save();
+  }
 
   /// Each server's polling cap (SAF-19), `klabautermann.sampling.caps`:
   /// the name the app stored for the slowest column it may sample at, by

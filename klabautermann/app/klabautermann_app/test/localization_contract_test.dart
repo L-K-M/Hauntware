@@ -98,6 +98,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'/'",
     r"'The pinned services were not saved: $error'",
   },
+  // The not-saved diagnostic; the fleet board prints it and shows its own
+  // ARB text (fleetDensityNotSaved).
+  'lib/controllers/fleet_density.dart': {
+    r"'The fleet layout was not saved: $error'",
+  },
   // The host syslog line's device name, written into host journals in
   // one form (M5 plan Q6).
   'lib/controllers/device_name.dart': {
@@ -926,6 +931,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // debugPrint of a failed theme change; the toast is ARB text.
   // The Poltergeist link's root folder, and the pin's diagnostic.
   'lib/ui/quick_actions.dart': {"'/'", r"'$error'"},
+  'lib/ui/fleet_board.dart': {r"'$error'"},
   'lib/ui/settings_page.dart': {r"'$error'"},
   'lib/ui/thresholds_tab.dart': {r"'$error'"},
   'lib/ui/sortable_table.dart': {
