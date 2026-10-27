@@ -5621,6 +5621,50 @@
       "release": {"type": "String", "example": "2026.11.0"}
     }
   },
+  "settingsAccountSizeTitle": "Account size",
+  "@settingsAccountSizeTitle": {
+    "description": "Settings, Sync: heading of the account size view (SYN-09)."
+  },
+  "settingsAccountSizeUsed": "Klabautermann's records take {used} of their {budget} in the sync account.",
+  "@settingsAccountSizeUsed": {
+    "description": "Settings, Sync: how much of their budget Klabautermann's synced records use (SYN-09).",
+    "placeholders": {
+      "used": {
+        "type": "String",
+        "example": "12 KiB"
+      },
+      "budget": {
+        "type": "String",
+        "example": "1 MiB"
+      }
+    }
+  },
+  "settingsAccountSizeWarn": "They are close to the limit. Remove alert rules or server preferences you no longer need.",
+  "@settingsAccountSizeWarn": {
+    "description": "Settings, Sync: warning once Klabautermann's records take 80 % of their budget (SYN-09)."
+  },
+  "settingsAccountSizeFull": "They have reached the limit, so new changes may not sync. Remove alert rules or server preferences you no longer need.",
+  "@settingsAccountSizeFull": {
+    "description": "Settings, Sync: warning once Klabautermann's records take their whole budget (SYN-09)."
+  },
+  "settingsAccountSizeDetail": "Every kind of record in the account, as this device last pulled it. The account is shared with Séance, so its records count too.",
+  "@settingsAccountSizeDetail": {
+    "description": "Settings, Sync: explanation above the account size view's rows (SYN-09)."
+  },
+  "settingsAccountSizeRow": "{records, plural, =1{1 record} other{{records} records}}, {size}",
+  "@settingsAccountSizeRow": {
+    "description": "Settings, Sync: one record prefix's count and size in the account size view (SYN-09).",
+    "placeholders": {
+      "records": {
+        "type": "int",
+        "example": "3"
+      },
+      "size": {
+        "type": "String",
+        "example": "4.2 KiB"
+      }
+    }
+  },
   "settingsPinPublicationDetail": "While on, host keys you confirm are shared with your other devices, so they can check a server the first time they connect. Turning it off stops sharing; keys already shared stay.",
   "@settingsPinPublicationDetail": {
     "description": "What the host key sharing switch does, under it."

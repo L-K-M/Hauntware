@@ -5956,6 +5956,42 @@ abstract class AppLocalizations {
   /// **'Every device runs Séance {release} or later'**
   String settingsPinPublication(String release);
 
+  /// Settings, Sync: heading of the account size view (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Account size'**
+  String get settingsAccountSizeTitle;
+
+  /// Settings, Sync: how much of their budget Klabautermann's synced records use (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann\'s records take {used} of their {budget} in the sync account.'**
+  String settingsAccountSizeUsed(String used, String budget);
+
+  /// Settings, Sync: warning once Klabautermann's records take 80 % of their budget (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'They are close to the limit. Remove alert rules or server preferences you no longer need.'**
+  String get settingsAccountSizeWarn;
+
+  /// Settings, Sync: warning once Klabautermann's records take their whole budget (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'They have reached the limit, so new changes may not sync. Remove alert rules or server preferences you no longer need.'**
+  String get settingsAccountSizeFull;
+
+  /// Settings, Sync: explanation above the account size view's rows (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Every kind of record in the account, as this device last pulled it. The account is shared with Séance, so its records count too.'**
+  String get settingsAccountSizeDetail;
+
+  /// Settings, Sync: one record prefix's count and size in the account size view (SYN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'{records, plural, =1{1 record} other{{records} records}}, {size}'**
+  String settingsAccountSizeRow(int records, String size);
+
   /// What the host key sharing switch does, under it.
   ///
   /// In en, this message translates to:

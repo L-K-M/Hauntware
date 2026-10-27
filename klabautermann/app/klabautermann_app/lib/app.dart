@@ -522,6 +522,7 @@ class KlabautermannApp extends StatelessWidget {
               appLock: appLock,
               syncSecrets: syncSecrets,
               pinPublication: pinPublication,
+              accountSize: sync?.accountSize,
             ),
           },
         );
