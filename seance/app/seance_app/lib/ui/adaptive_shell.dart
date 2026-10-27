@@ -1,7 +1,7 @@
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostPaneEdge, GhostResizeHandle;
 import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 import 'package:seance_core/seance_core.dart';
 
@@ -309,24 +309,26 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
         }
 
         final header = widget.header;
-        final utilityHandle = _ResizeHandle(
+        final utilityHandle = GhostResizeHandle(
           key: AdaptivePaneLayout.utilityResizeHandleKey,
           label: 'Resize utility panel',
           width: widths.utility,
           minimumWidth: AdaptiveShell.minimumUtilityWidth,
           maximumWidth: _maximumUtilityWidth(widths),
-          edge: _PaneEdge.trailing,
+          edge: GhostPaneEdge.trailing,
           widthAfterStep: (delta) => _widthAfterStep(
-            _PaneEdge.trailing,
+            GhostPaneEdge.trailing,
             currentWidths()!,
             constraints.maxWidth,
             delta,
           ),
           onStep: (delta) =>
-              _stepPane(_PaneEdge.trailing, currentWidths()!, delta),
+              _stepPane(GhostPaneEdge.trailing, currentWidths()!, delta),
           onStart: () => _startUtilityResize(currentWidths()!),
           onDelta: _resizeUtility,
           onEnd: _endUtilityResize,
+          handleWidth: AdaptiveShell.resizeHandleWidth,
+          valueText: _pixels,
         );
         // The terminal, its seam and the utility pane, with the utility
         // handle floated over that seam.
@@ -350,24 +352,26 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
           handle: utilityHandle,
           end: widths.utility,
         );
-        Widget listHandle = _ResizeHandle(
+        Widget listHandle = GhostResizeHandle(
           key: AdaptivePaneLayout.listResizeHandleKey,
           label: 'Resize server list',
           width: widths.list,
           minimumWidth: AdaptiveShell.minimumListWidth,
           maximumWidth: _maximumListWidth(widths),
-          edge: _PaneEdge.leading,
+          edge: GhostPaneEdge.leading,
           widthAfterStep: (delta) => _widthAfterStep(
-            _PaneEdge.leading,
+            GhostPaneEdge.leading,
             currentWidths()!,
             constraints.maxWidth,
             delta,
           ),
           onStep: (delta) =>
-              _stepPane(_PaneEdge.leading, currentWidths()!, delta),
+              _stepPane(GhostPaneEdge.leading, currentWidths()!, delta),
           onStart: () => _startListResize(currentWidths()!),
           onDelta: _resizeList,
           onEnd: _endListResize,
+          handleWidth: AdaptiveShell.resizeHandleWidth,
+          valueText: _pixels,
         );
         if (header == null) {
           return Scaffold(
@@ -483,8 +487,8 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
 
   /// Read bounds with each event, not from the handle's last frame: an
   /// immediate reversal after leaving a bound must not see the old width.
-  void _stepPane(_PaneEdge edge, AdaptivePaneWidths widths, double delta) {
-    final leading = edge == _PaneEdge.leading;
+  void _stepPane(GhostPaneEdge edge, AdaptivePaneWidths widths, double delta) {
+    final leading = edge == GhostPaneEdge.leading;
     final growing = (leading ? delta : -delta) > 0;
     final width = leading ? widths.list : widths.utility;
     final minimum = leading
@@ -511,12 +515,12 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
   /// a finished drag. Announce the resulting allocation, which may differ
   /// from the raw delta while the window clamps both requested widths.
   double _widthAfterStep(
-    _PaneEdge edge,
+    GhostPaneEdge edge,
     AdaptivePaneWidths widths,
     double availableWidth,
     double delta,
   ) {
-    final leading = edge == _PaneEdge.leading;
+    final leading = edge == GhostPaneEdge.leading;
     final requested = leading
         ? (widths.list + delta).clamp(
             AdaptiveShell.minimumListWidth,
@@ -617,10 +621,6 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
 }
 
 /// The owned pane's position in the direction-aware row.
-enum _PaneEdge { leading, trailing }
-
-const double _resizeKeyStep = 16;
-
 /// The one-pixel line between two panes (see [AdaptiveShell.seamWidth]).
 class _Seam extends StatelessWidget {
   const _Seam();
@@ -635,112 +635,4 @@ class _Seam extends StatelessWidget {
   );
 }
 
-/// A labelled, keyboard-adjustable divider with the same clamping and
-/// persistence boundary as a pointer drag. Physical arrow direction follows
-/// the divider; assistive increase/decrease follows the owned pane's width.
-class _ResizeHandle extends StatefulWidget {
-  final String label;
-  final double width;
-  final double minimumWidth;
-  final double maximumWidth;
-  final _PaneEdge edge;
-  final double Function(double delta) widthAfterStep;
-  final ValueChanged<double> onStep;
-  final VoidCallback onStart;
-  final ValueChanged<double> onDelta;
-  final VoidCallback onEnd;
-
-  const _ResizeHandle({
-    super.key,
-    required this.label,
-    required this.width,
-    required this.minimumWidth,
-    required this.maximumWidth,
-    required this.edge,
-    required this.widthAfterStep,
-    required this.onStep,
-    required this.onStart,
-    required this.onDelta,
-    required this.onEnd,
-  });
-
-  @override
-  State<_ResizeHandle> createState() => _ResizeHandleState();
-}
-
-class _ResizeHandleState extends State<_ResizeHandle> {
-  bool _focused = false;
-
-  double get _direction =>
-      Directionality.of(context) == TextDirection.rtl ? -1 : 1;
-
-  double get _grow => widget.edge == _PaneEdge.leading ? 1 : -1;
-
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
-    final keyboard = HardwareKeyboard.instance;
-    if (keyboard.isAltPressed ||
-        keyboard.isControlPressed ||
-        keyboard.isMetaPressed) {
-      return KeyEventResult.ignored;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-      widget.onStep(_resizeKeyStep * _direction);
-    } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-      widget.onStep(-_resizeKeyStep * _direction);
-    } else {
-      return KeyEventResult.ignored;
-    }
-    return KeyEventResult.handled;
-  }
-
-  String _value(double width) => '${width.round()} pixels';
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Semantics(
-      label: widget.label,
-      slider: true,
-      value: _value(widget.width),
-      increasedValue: _value(widget.widthAfterStep(_resizeKeyStep)),
-      decreasedValue: _value(widget.widthAfterStep(-_resizeKeyStep)),
-      onIncrease: widget.width < widget.maximumWidth
-          ? () => widget.onStep(_resizeKeyStep * _grow)
-          : null,
-      onDecrease: widget.width > widget.minimumWidth
-          ? () => widget.onStep(-_resizeKeyStep * _grow)
-          : null,
-      child: Focus(
-        onFocusChange: (focused) => setState(() => _focused = focused),
-        onKeyEvent: _onKey,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.resizeColumn,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onHorizontalDragStart: (_) => widget.onStart(),
-            onHorizontalDragUpdate: (d) =>
-                widget.onDelta(d.delta.dx * _direction),
-            onHorizontalDragEnd: (_) => widget.onEnd(),
-            onHorizontalDragCancel: widget.onEnd,
-            // The line itself is the layout's [_Seam] underneath; the
-            // handle draws only its focus ring over it.
-            child: SizedBox(
-              width: AdaptiveShell.resizeHandleWidth,
-              child: _focused
-                  ? Center(
-                      child: Container(
-                        width: 3,
-                        color: theme.colorScheme.primary,
-                      ),
-                    )
-                  : null,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+String _pixels(double width) => '${width.round()} pixels';
