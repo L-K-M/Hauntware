@@ -76,7 +76,7 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         VolumeSummary;
 import 'package:meta/meta.dart';
 // DangerLinter's findings are plain data: a severity and three values.
-import 'package:seance_core/seance_core.dart' show DangerFinding;
+import 'package:seance_core/seance_core.dart' show DangerFinding, Snippet;
 
 import '../catalog/klabautermann_records.dart' show SyncedRule;
 import '../certificates/tls_check.dart' show TlsEndpoint, TlsEndpointCheck;
@@ -3509,6 +3509,16 @@ final class AlertRulesChanged extends EngineEvent {
   const AlertRulesChanged(this.rules);
 
   final List<SyncedRule> rules;
+}
+
+/// Séance's snippets the account carries (03 §7.21, AUT-01) changed: a
+/// pulled `snippet:` record applied or a tombstone removed one. [snippets]
+/// is every live snippet, by title. As with [AlertRulesChanged], the
+/// engine sends it only on a change, starting from none.
+final class SnippetsChanged extends EngineEvent {
+  const SnippetsChanged(this.snippets);
+
+  final List<Snippet> snippets;
 }
 
 /// The answer to [ReadHistory]: [serverId]'s buckets in [tier], oldest

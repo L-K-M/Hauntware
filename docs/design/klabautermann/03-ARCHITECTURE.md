@@ -2443,6 +2443,7 @@ platform identities in 04, section 12.3):
 | `capabilities/<name>.json` | Cached probe results, 24 h TTL; named, written only by a process that holds the directory alone, and purged as D59 decides | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
 | `klabautermann_records.json` [E] | The `klabautermann:` records the coordinator applied (4.8, M5, M04): per record id, the `(updatedAt, deviceId)` it won with and its sealed payload, sealed removals, unknown types and newer versions included, so the tuple guard holds across restarts and §3.1's recovery re-seals them verbatim. A `pref` whose server is absent waits here. Kept like the sync state files. Never pushed while sync is pull-only | `klabautermann_core` | v1 |
+| `snippet_mirror.json` [E] | Séance's `snippet:` records the read-only handler applied (7.21, M6 N65b): per record id, the `(updatedAt, deviceId)` it won with and the snippet, or a removal a tombstone left, so an older copy pulled later cannot bring it back. Kept like the sync state files. Never sealed or pushed: Séance owns the records | `klabautermann_core` | v1 |
 | `operations_shown.json` [E] | Detached operations this device remembers (M4, E17b, 7.17): per server and operation id, the operation's directory, whether its result was shown and audited here, and, for one this device launched, the audit record's facts (action, target, redacted steps, tier, start). An entry goes once the operation's files are gone. Kept like the sync state files: written only with exclusive access, a damaged file set aside; losing it costs a result's launch facts and the reminder of a root cleanup, which the 7-day prune covers. Never synced | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample). Built in M6 N52a: `minute.ring` (2,880 slots) and `tenMinutes.ring` (4,320 slots) of 92 bytes, a slot per bucket with its start, provenance and per metric the count and the min, max and mean as 32-bit floats (about 0.66 MB per server), and `gaps.ring`, the last 256 gaps. The directory is the server's file stem; a file of another layout starts over | `klabautermann_core` | v1 |
 | `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |
@@ -5101,6 +5102,16 @@ arrives with E22's Docker actions.
 - **v1.** Run Séance snippets with placeholders, preview and danger lint
   (AUT-01; existing `snippet` records, no new kind); "copy as commands" on
   every action (AUT-02).
+- **As built (M6 N65b).** Klabautermann registers a read-only
+  `SnippetMirrorHandler` for the `snippet:` prefix in the configs phase.
+  It applies live records as Séance's coordinator does: a payload that is
+  not a snippet of its own record id trips. It also honours tombstones as
+  Séance does, since a snippet is non-secret settings; the never-honoured
+  `snippet:` tombstones of 4.4 hold for the library's stores, which
+  mirror no snippets. The handler never seals or pushes one, so a store
+  loss re-seals nothing and a pending record has no source. The engine
+  sends every live snippet, by title, as `SnippetsChanged` at start and
+  after a round that changed them, as it sends `AlertRulesChanged`.
 - **v1.x.** Custom probes, run on many with a concurrency cap; assistant
   features (explain a log excerpt, suggest a fix, diagnostics the user
   chooses to attach, explain a container) after `ChatController` is
@@ -6249,7 +6260,7 @@ shows there.
 
 | Requests (UI to engine) | Events (engine to UI) |
 |---|---|
-| `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus(phase, operation, account, failure, passphraseUnverified)` |
+| `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound` | `CatalogReplaced(entries)`, `SnippetsChanged(snippets)` when the round changed Séance's snippets (M6 N65b, also sent at start), `SyncStatus(phase, operation, account, failure, passphraseUnverified)` |
 | `ReadServerDraft(requestId, serverId)`; `SaveServer(requestId, draft, credential?)`, `DeleteServer(requestId, serverId)`, `SetServerPrefs(requestId, serverId, prefs?)`, `PutRule(requestId, ruleId, rule, target?)`, `RemoveRule(requestId, ruleId)` (M05) | `ServerDraftRead(requestId, draft?)`; `CatalogReplaced`, then `AlertRulesChanged(rules)` when a rule write changed the rules (M6 N50c), then `CatalogWritten(requestId, serverId?, credentialWritten)` or `CatalogWriteRefused(requestId, failure, detail?)`, then the round's `SyncStatus` |
 | `DuplicateServer(requestId, serverId)` (M09b): a new server from a synced one, its own id, timestamps and "copy" label, and its own copy of the credential, never a shared vault entry; a copy of a confirmed endpoint is confirmed | As `SaveServer`, with the copy's id in `CatalogWritten.serverId` |
 | `TestServerConnection(requestId, draft, credential)` (M09b): the editor's Test connection over the links' credentials, pins and prompts; a host key trusted during it holds for that attempt only; rejected while links are off | `Prompt`s as a connect sends them, then `ServerConnectionTested(requestId, ok, summary, notes, log)`, the summary, notes and redacted transcript as seance_core's `runConnectionTest` words them |

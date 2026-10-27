@@ -301,6 +301,9 @@ export 'package:seance_core/seance_core.dart' show AuthMethod;
 // The id a server added in the editor is saved under (FL-03), minted as
 // the catalog mints every record id.
 export 'package:seance_core/seance_core.dart' show uuidV4;
+// Séance's synced snippets (03 §7.21, AUT-01), which SnippetsChanged
+// carries and the Snippets view fills and runs.
+export 'package:seance_core/seance_core.dart' show Snippet;
 // A process row's masked arguments (03 §8.9): the Processes panel shows
 // their display and reveals one on request.
 export 'package:klabautermann_docker/klabautermann_docker.dart'
