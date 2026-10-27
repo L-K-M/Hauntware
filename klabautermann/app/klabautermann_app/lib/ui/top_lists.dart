@@ -296,7 +296,7 @@ class _TopList extends StatelessWidget {
                     child: Text(
                       // A nameless process is labelled by its pid already.
                       switch (entry.pid) {
-                        final pid? when '$pid' != entry.label =>
+                        final pid? when pid.toString() != entry.label =>
                           AppLocalizations.of(
                             context,
                           ).topListsProcess(entry.label, pid),
