@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:ghost_ui/ghost_ui.dart' show showCommandPalette;
 import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show
@@ -49,6 +50,7 @@ import 'ui/hand_off_actions.dart' show HandOffScope;
 import 'ui/macos_toolbar_band.dart';
 import 'ui/menus/app_commands.dart';
 import 'ui/menus/app_menu_host.dart';
+import 'ui/palette.dart';
 import 'ui/prompts/prompt_host.dart';
 import 'ui/server_editing.dart';
 import 'ui/server_safety.dart' show SafetyScope;
@@ -56,6 +58,7 @@ import 'ui/server_surfaces.dart' show AppActivityReporter;
 import 'ui/settings_page.dart';
 import 'ui/startup_issue_notice.dart';
 import 'ui/threshold_announcer.dart' show AnnouncementScope;
+import 'ui/workspace_navigation.dart';
 
 /// The settings route's name: Settings on phones, and on a desktop whose
 /// runner cannot open the settings window (D32).
@@ -96,6 +99,7 @@ class KlabautermannApp extends StatelessWidget {
     this.toolbarBand,
     this.appVersion,
     this.handOff,
+    this.navigation,
   });
 
   final FleetController fleet;
@@ -176,6 +180,10 @@ class KlabautermannApp extends StatelessWidget {
   /// Opens hand-offs to Séance and Poltergeist (X-03, X-04, X-10); null in
   /// tests that leave it out, where no hand-off is offered.
   final HandOffLauncher? handOff;
+
+  /// Where the command palette sends the desktop workspace (PLT-07);
+  /// without it the app offers no palette.
+  final WorkspaceNavigation? navigation;
 
   /// The sync account (03 §4.3), one engine run's like [fleet]; null in
   /// tests that leave sync out, which shows the sync control idle.
@@ -386,20 +394,39 @@ class KlabautermannApp extends StatelessWidget {
                     void openSettings() => unawaited(_openSettings(context));
                     // The desktop menus and their shortcuts (03 §10.2),
                     // from the one command registry.
+                    final platform = Theme.of(context).platform;
+                    final navigation = this.navigation;
+                    late final List<AppCommand> commands;
+                    commands = buildAppCommands(
+                      platform: platform,
+                      fleet: fleet,
+                      onOpenSettings: openSettings,
+                      appVersion: appVersion,
+                      onOpenPalette: navigation == null
+                          ? null
+                          : (context) => showCommandPalette(
+                              context,
+                              paletteCommands(
+                                l10n: AppLocalizations.of(context),
+                                platform: platform,
+                                context: context,
+                                actions: commands,
+                                fleet: fleet,
+                                monitoring: monitoring,
+                                navigation: navigation,
+                              ),
+                            ),
+                    );
                     return AppMenuHost(
                       listenable: fleet,
-                      commands: buildAppCommands(
-                        platform: Theme.of(context).platform,
-                        fleet: fleet,
-                        onOpenSettings: openSettings,
-                        appVersion: appVersion,
-                      ),
+                      commands: commands,
                       // The add verbs follow the enrollment (P16).
                       child: ListenableBuilder(
                         listenable: Listenable.merge([?sync]),
                         builder: (context, _) => AdaptiveShell(
                           fleet: fleet,
                           monitoring: monitoring,
+                          navigation: navigation,
                           coverage: coverage,
                           onOpenSettings: openSettings,
                           sync: sync,

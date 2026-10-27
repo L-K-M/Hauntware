@@ -5076,6 +5076,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get actionPreviewSteps => 'What will run';
 
   @override
+  String get actionPreviewCopyCommands => 'Copy as commands';
+
+  @override
+  String actionPreviewCommandsStdin(String size) {
+    return '# The next command reads $size of new content on stdin.';
+  }
+
+  @override
+  String actionPreviewCommandsApi(String request) {
+    return '# Docker Engine API: $request';
+  }
+
+  @override
+  String get actionPreviewCommandsCopied => 'Copied. Nothing ran.';
+
+  @override
+  String get actionPreviewCommandsNotCopied =>
+      'Not copied. The clipboard still holds its earlier text.';
+
+  @override
   String get actionPreviewRoot => 'root';
 
   @override
@@ -10112,4 +10132,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get attentionCancel => 'Cancel';
+
+  @override
+  String get paletteCommand => 'Command Palette…';
+
+  @override
+  String get paletteActions => 'Actions';
+
+  @override
+  String get paletteServers => 'Servers';
+
+  @override
+  String paletteTabs(String server) {
+    return '$server tabs';
+  }
+
+  @override
+  String paletteContainers(String server) {
+    return '$server containers';
+  }
+
+  @override
+  String paletteContainerDescription(String state, String image) {
+    return '$state · $image';
+  }
 }

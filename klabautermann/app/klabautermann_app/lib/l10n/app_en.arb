@@ -6139,6 +6139,38 @@
   "@actionPreviewSteps": {
     "description": "Heading above the exact commands and API requests in the action preview."
   },
+  "actionPreviewCopyCommands": "Copy as commands",
+  "@actionPreviewCopyCommands": {
+    "description": "Action preview: copies the exact commands the action runs, to read or script; copying runs nothing (AUT-02)."
+  },
+  "actionPreviewCommandsStdin": "# The next command reads {size} of new content on stdin.",
+  "@actionPreviewCommandsStdin": {
+    "description": "Copied action commands: a shell comment above a command that reads an edit's new content on stdin. Keep the leading # so the line stays a comment.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "1.2 KiB"
+      }
+    }
+  },
+  "actionPreviewCommandsApi": "# Docker Engine API: {request}",
+  "@actionPreviewCommandsApi": {
+    "description": "Copied action commands: a shell comment naming a Docker Engine API request the action sends, which a shell cannot run as it stands. Keep the leading # so the line stays a comment.",
+    "placeholders": {
+      "request": {
+        "type": "String",
+        "example": "POST /v1.52/containers/web/restart"
+      }
+    }
+  },
+  "actionPreviewCommandsCopied": "Copied. Nothing ran.",
+  "@actionPreviewCommandsCopied": {
+    "description": "Action preview: the commands are on the clipboard; the action itself has not run."
+  },
+  "actionPreviewCommandsNotCopied": "Not copied. The clipboard still holds its earlier text.",
+  "@actionPreviewCommandsNotCopied": {
+    "description": "Action preview: the clipboard refused the commands, so pasting now would paste something else."
+  },
   "actionPreviewRoot": "root",
   "@actionPreviewRoot": {
     "description": "Badge on a step that runs as root through admin mode (SAF-03). Lowercase on purpose: the account name."
@@ -12061,5 +12093,47 @@
   "attentionCancel": "Cancel",
   "@attentionCancel": {
     "description": "Attention queue: closes the note dialog without acknowledging."
+  },
+  "paletteCommand": "Command Palette…",
+  "@paletteCommand": {
+    "description": "View menu: opens the command palette (PLT-07), ⌘K or Ctrl+K."
+  },
+  "paletteActions": "Actions",
+  "@paletteActions": {
+    "description": "Command palette: the path of the app's menu commands."
+  },
+  "paletteServers": "Servers",
+  "@paletteServers": {
+    "description": "Command palette: the path of the fleet's servers."
+  },
+  "paletteTabs": "{server} tabs",
+  "@paletteTabs": {
+    "description": "Command palette: the path of the selected server's tabs.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteContainers": "{server} containers",
+  "@paletteContainers": {
+    "description": "Command palette: the path of the selected server's containers.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteContainerDescription": "{state} · {image}",
+  "@paletteContainerDescription": {
+    "description": "Command palette: a container row's second line, its state and image.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      },
+      "image": {
+        "type": "String"
+      }
+    }
   }
 }

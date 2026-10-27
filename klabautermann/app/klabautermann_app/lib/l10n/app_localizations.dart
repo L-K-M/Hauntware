@@ -6450,6 +6450,36 @@ abstract class AppLocalizations {
   /// **'What will run'**
   String get actionPreviewSteps;
 
+  /// Action preview: copies the exact commands the action runs, to read or script; copying runs nothing (AUT-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Copy as commands'**
+  String get actionPreviewCopyCommands;
+
+  /// Copied action commands: a shell comment above a command that reads an edit's new content on stdin. Keep the leading # so the line stays a comment.
+  ///
+  /// In en, this message translates to:
+  /// **'# The next command reads {size} of new content on stdin.'**
+  String actionPreviewCommandsStdin(String size);
+
+  /// Copied action commands: a shell comment naming a Docker Engine API request the action sends, which a shell cannot run as it stands. Keep the leading # so the line stays a comment.
+  ///
+  /// In en, this message translates to:
+  /// **'# Docker Engine API: {request}'**
+  String actionPreviewCommandsApi(String request);
+
+  /// Action preview: the commands are on the clipboard; the action itself has not run.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied. Nothing ran.'**
+  String get actionPreviewCommandsCopied;
+
+  /// Action preview: the clipboard refused the commands, so pasting now would paste something else.
+  ///
+  /// In en, this message translates to:
+  /// **'Not copied. The clipboard still holds its earlier text.'**
+  String get actionPreviewCommandsNotCopied;
+
   /// Badge on a step that runs as root through admin mode (SAF-03). Lowercase on purpose: the account name.
   ///
   /// In en, this message translates to:
@@ -12683,6 +12713,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get attentionCancel;
+
+  /// View menu: opens the command palette (PLT-07), ⌘K or Ctrl+K.
+  ///
+  /// In en, this message translates to:
+  /// **'Command Palette…'**
+  String get paletteCommand;
+
+  /// Command palette: the path of the app's menu commands.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions'**
+  String get paletteActions;
+
+  /// Command palette: the path of the fleet's servers.
+  ///
+  /// In en, this message translates to:
+  /// **'Servers'**
+  String get paletteServers;
+
+  /// Command palette: the path of the selected server's tabs.
+  ///
+  /// In en, this message translates to:
+  /// **'{server} tabs'**
+  String paletteTabs(String server);
+
+  /// Command palette: the path of the selected server's containers.
+  ///
+  /// In en, this message translates to:
+  /// **'{server} containers'**
+  String paletteContainers(String server);
+
+  /// Command palette: a container row's second line, its state and image.
+  ///
+  /// In en, this message translates to:
+  /// **'{state} · {image}'**
+  String paletteContainerDescription(String state, String image);
 }
 
 class _AppLocalizationsDelegate

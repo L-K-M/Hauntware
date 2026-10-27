@@ -112,6 +112,31 @@ void main() {
       expect(next, lessThan(replace), reason: 'label match first');
     });
 
+    test('a leading colon names a path scope', () {
+      expect(paletteScope('save'), (scope: null, query: 'save'));
+      expect(paletteScope(':file'), (scope: 'file', query: ''));
+      expect(paletteScope(':fi sa'), (scope: 'fi', query: 'sa'));
+    });
+
+    testWidgets('a colon jumps to a path, and the rest filters it', (
+      tester,
+    ) async {
+      await open(tester);
+      List<String> listed() => [
+        for (final command in commands)
+          if (find.text(command.label).evaluate().isNotEmpty) command.label,
+      ];
+
+      await type(tester, ':find');
+      expect(listed(), ['Find Next', 'Replace…']);
+
+      await type(tester, ':file sa');
+      expect(listed(), ['Save', 'Save As…'], reason: 'not Select All');
+
+      await type(tester, ':edit file');
+      expect(listed(), isEmpty, reason: 'no path match outside the scope');
+    });
+
     testWidgets('any label match outranks a menu-name match', (tester) async {
       // 'pe' is scattered in 'Replace…' and scores -1, the value menu-name
       // matches were given, so the two tied and menu order decided.

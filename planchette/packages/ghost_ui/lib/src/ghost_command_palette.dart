@@ -122,8 +122,20 @@ bool _isWordStart(String text, int index) =>
 bool _isWordCharacter(int unit) =>
     (unit >= 0x30 && unit <= 0x39) || (unit >= 0x61 && unit <= 0x7a);
 
+/// [query] split into a path scope and the rest: `:servers web` keeps the
+/// commands whose path matches `servers` and filters them by `web`. A
+/// query that does not start with a colon has no scope.
+({String? scope, String query}) paletteScope(String query) {
+  if (!query.startsWith(':')) return (scope: null, query: query);
+  final space = query.indexOf(' ');
+  return space < 0
+      ? (scope: query.substring(1), query: '')
+      : (scope: query.substring(1, space), query: query.substring(space + 1));
+}
+
 /// The palette itself: a filter field over the commands. Up and Down move
-/// the highlight, Enter or a click runs it, Escape closes.
+/// the highlight, Enter or a click runs it, Escape closes. A query that
+/// starts with a colon jumps to a path first ([paletteScope]).
 class CommandPalette extends StatefulWidget {
   const CommandPalette({super.key, required this.commands});
 
@@ -170,9 +182,11 @@ class _CommandPaletteState extends State<CommandPalette> {
     // "dedupe" matches Remove Duplicate Lines by keyword; typing "text"
     // lists the menu by path.
     final scored = <({_Row row, int tier, int score, int order})>[];
+    final (:scope, :query) = paletteScope(_query.text);
     for (var i = 0; i < widget.commands.length; i++) {
       final command = widget.commands[i];
-      final match = fuzzyMatch(_query.text, command.label);
+      if (scope != null && fuzzyMatch(scope, command.path) == null) continue;
+      final match = fuzzyMatch(query, command.label);
       if (match != null) {
         scored.add((
           row: (command: command, positions: match.positions, keyword: null),
@@ -184,7 +198,7 @@ class _CommandPaletteState extends State<CommandPalette> {
       }
       var keywordMatched = false;
       for (final keyword in command.keywords) {
-        if (fuzzyMatch(_query.text, keyword) != null) {
+        if (fuzzyMatch(query, keyword) != null) {
           scored.add((
             row: (command: command, positions: const [], keyword: keyword),
             tier: 1,
@@ -196,7 +210,7 @@ class _CommandPaletteState extends State<CommandPalette> {
         }
       }
       if (keywordMatched) continue;
-      if (fuzzyMatch(_query.text, command.path) != null) {
+      if (scope == null && fuzzyMatch(query, command.path) != null) {
         // Typing a menu's name lists that menu, after every label match and
         // with nothing highlighted, since the name is not in the label. A
         // flag, not a low score: a scattered label match can score below
@@ -214,7 +228,7 @@ class _CommandPaletteState extends State<CommandPalette> {
     scored.sort((a, b) {
       if (a.tier != b.tier) return a.tier.compareTo(b.tier);
       if (a.score != b.score) return b.score.compareTo(a.score);
-      if (_query.text.isNotEmpty && a.tier == 0) {
+      if (query.isNotEmpty && a.tier == 0) {
         final shorter = a.row.command.label.length.compareTo(
           b.row.command.label.length,
         );
