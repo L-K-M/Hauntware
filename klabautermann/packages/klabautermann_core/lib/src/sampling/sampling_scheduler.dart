@@ -618,13 +618,16 @@ final class SamplingScheduler {
           final sections = outcome is SamplerReplied
               ? outcome.reply.sections
               : const <HwsSection>[];
-          if (outcome is! SamplerReplied) {
-            read.missing.addAll(
-              probe
-                  ? [Collector.probe.wireName]
-                  : [for (final c in collectors) c.wireName],
-            );
-          }
+          // A tick's collector the reply has no section for gave no
+          // answer, as does the probe when no area came back. The probe's
+          // sections are its areas, named apart from the collector.
+          final answered = {for (final s in sections) s.collector};
+          read.missing.addAll([
+            if (probe && sections.isEmpty) Collector.probe.wireName,
+            if (!probe)
+              for (final c in collectors)
+                if (!answered.contains(c.wireName)) c.wireName,
+          ]);
           switch ((probe, kind)) {
             case (true, _):
               read.probe = sections;
@@ -640,6 +643,8 @@ final class SamplingScheduler {
         _schedule(server, run, sampler);
       }),
     );
+    // The pump returns after this call, so the other streams' timers are
+    // armed here while the request is out.
     _schedule(server, run, sampler);
   }
 

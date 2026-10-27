@@ -8145,7 +8145,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String diagnosticsFailed(String failure) {
     String _temp0 = intl.Intl.selectLogic(failure, {
       'noLink':
-          'The server is not connected, so its collectors cannot be read.',
+          'Klabautermann is not reading this server right now, so its collectors cannot be read. Open the server while it is connected and try again.',
       'other': 'The collectors could not be read.',
     });
     return '$_temp0';

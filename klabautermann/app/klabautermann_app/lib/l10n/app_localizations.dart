@@ -10227,7 +10227,7 @@ abstract class AppLocalizations {
   /// Diagnostic bundle sheet: why no bundle was read.
   ///
   /// In en, this message translates to:
-  /// **'{failure, select, noLink{The server is not connected, so its collectors cannot be read.} other{The collectors could not be read.}}'**
+  /// **'{failure, select, noLink{Klabautermann is not reading this server right now, so its collectors cannot be read. Open the server while it is connected and try again.} other{The collectors could not be read.}}'**
   String diagnosticsFailed(String failure);
 
   /// The suggested file name for a saved diagnostic bundle. Keep it a valid file name.

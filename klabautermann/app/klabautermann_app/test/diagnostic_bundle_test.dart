@@ -140,7 +140,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.text(
-        'The server is not connected, so its collectors cannot be read.',
+        'Klabautermann is not reading this server right now, so its '
+        'collectors cannot be read. Open the server while it is connected '
+        'and try again.',
       ),
       findsOne,
     );

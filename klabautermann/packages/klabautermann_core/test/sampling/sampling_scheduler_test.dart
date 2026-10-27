@@ -782,6 +782,21 @@ void main() {
       expect(bundle.missing, isEmpty);
     });
 
+    test('a collector the reply leaves out is missing, as is the probe '
+        'when no area comes back', () async {
+      subscribe({SampleStream.fs});
+      await settle();
+      final skipped = wireNames(_fast).first;
+      link.omitted.add(skipped);
+      final bundle = (await scheduler.readDiagnostics(_s1))!;
+
+      expect(
+        [for (final s in bundle.sections) s.collector],
+        [...wireNames(_fast).skip(1), ...wireNames(_slow)],
+      );
+      expect(bundle.missing, ['probe', skipped]);
+    });
+
     test('a sampler that does not answer leaves its collectors missing '
         'after the wait; a server that stops answers none', () async {
       subscribe({SampleStream.fs});
