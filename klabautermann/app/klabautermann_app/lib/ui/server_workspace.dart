@@ -15,6 +15,7 @@ import 'overview_panel.dart';
 import 'processes_panel.dart';
 import 'connect_rejected_banner.dart';
 import 'server_coverage.dart';
+import 'status_card.dart';
 import 'server_header.dart';
 import 'server_surfaces.dart';
 import 'fleet_board.dart';
@@ -264,6 +265,13 @@ class _PanelsState extends State<_Panels> {
                         monitoring: monitoring,
                         serverId: serverId,
                         visible: tabs.index == index,
+                      ),
+                      statusCard: StatusCardButton(
+                        monitoring: monitoring,
+                        serverId: serverId,
+                        serverName:
+                            widget.fleet.selectedServer?.displayName ??
+                            serverId,
                       ),
                     ),
                     ServerPanel.processes => ProcessesPanel(

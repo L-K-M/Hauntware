@@ -100,6 +100,7 @@ class OverviewPanel extends StatelessWidget {
     required this.serverId,
     required this.visible,
     this.coverage,
+    this.statusCard,
   });
 
   final MonitoringController monitoring;
@@ -111,6 +112,10 @@ class OverviewPanel extends StatelessWidget {
   /// The server's coverage card (03 §9.5 item 3), under the cards at the
   /// full width; the workspace and the phone's screen compose it.
   final Widget? coverage;
+
+  /// The way to the server's status card (PLT-08), last; the workspace
+  /// and the phone's screen compose it with the server's name.
+  final Widget? statusCard;
 
   /// What the panel listens to instead of the clock while nothing ages.
   static final Listenable _silent = Listenable.merge(const []);
@@ -314,6 +319,7 @@ class OverviewPanel extends StatelessWidget {
             ),
             HistoryCard(reads: monitoring.rollups, serverId: serverId),
             ?coverage,
+            ?statusCard,
           ]),
         );
       },
