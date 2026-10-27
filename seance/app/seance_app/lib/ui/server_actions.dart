@@ -71,12 +71,20 @@ Future<void> duplicateServerInteractively(
     return;
   }
   // Undo removes the copy; Redo makes another, whose id the next Undo
-  // removes.
+  // removes. A copy in use has tabs, perhaps with unsaved text or local
+  // edits, that only their own close guards may end: Undo waits for them.
   var latest = copy;
   state.undoHistory.record(
     UndoableChange(
       name: 'Duplicate Server',
-      undo: () => state.deleteServer(latest.id),
+      undo: () async {
+        if (state.tabsForServer(latest.id).isNotEmpty) {
+          throw UndoDeclined(
+            '“${latest.label}” has open tabs. Close them, then undo.',
+          );
+        }
+        await state.deleteServer(latest.id);
+      },
       redo: () async => latest = await state.duplicateServer(server),
     ),
   );
@@ -239,38 +247,35 @@ Future<String?> _pickSshConfigText(BuildContext context) async {
 }
 
 Future<String?> _pasteSshConfigText(BuildContext context) async {
+  // Not disposed: the dialog's field still builds through the route's
+  // dismissal animation, after showDialog has returned.
   final controller = TextEditingController();
-  try {
-    return await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Import SSH config'),
-        content: SizedBox(
-          width: 480,
-          child: TextField(
-            controller: controller,
-            maxLines: 12,
-            style: SeanceTheme.mono,
-            decoration: const InputDecoration(
-              hintText: 'Paste the contents of ~/.ssh/config …',
-              border: OutlineInputBorder(),
-            ),
+  return showDialog<String>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Import SSH config'),
+      content: SizedBox(
+        width: 480,
+        child: TextField(
+          controller: controller,
+          maxLines: 12,
+          style: SeanceTheme.mono,
+          decoration: const InputDecoration(
+            hintText: 'Paste the contents of ~/.ssh/config …',
+            border: OutlineInputBorder(),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Import'),
-          ),
-        ],
       ),
-    );
-  } finally {
-    // After the route's dismissal animation, which still builds the field.
-    WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
-  }
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, controller.text),
+          child: const Text('Import'),
+        ),
+      ],
+    ),
+  );
 }

@@ -11,8 +11,10 @@ class AppDelegate: FlutterAppDelegate {
     return false
   }
 
+  /// The Dock icon brings the main window back whenever it is closed,
+  /// even with Settings still open.
   override func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-    if !flag, let window = MainFlutterWindow.shared {
+    if let window = MainFlutterWindow.shared, !window.isVisible {
       window.commands?.run("showMainWindow")
       return false
     }

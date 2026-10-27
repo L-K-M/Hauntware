@@ -646,17 +646,19 @@ class _MacCommandHostState extends State<MacCommandHost>
 
   /// Server ▸ Connect to Server…: the list's filter, where typing narrows
   /// the servers and Return opens the first. The list comes back first if
-  /// it was hidden.
+  /// it was hidden; a window too narrow to show it says so rather than
+  /// doing nothing.
   Future<void> _connectToServer(AppState state) async {
     await WindowStateService.showMainWindow();
-    if (state.sidebarVisible) {
-      ServerListPane.revealFilter();
-      return;
-    }
+    if (state.sidebarVisible && ServerListPane.revealFilter()) return;
     await state.setSidebarVisible(true);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => ServerListPane.revealFilter(),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (ServerListPane.revealFilter() || !mounted) return;
+      showTopToastIn(
+        context,
+        message: 'Make the window wider to show the server list.',
+      );
+    });
   }
 
   Future<void> _copySshCommand(ServerConfig server) async {

@@ -202,13 +202,18 @@ class _SnippetsPaneState extends State<SnippetsPane> {
     Snippet snippet,
   ) async {
     if (macNativeShell) {
-      await deleteSnippetUndoably(state, snippet);
+      final change = await deleteSnippetUndoably(state, snippet);
       if (!context.mounted) return;
       showTopToastIn(
         context,
         message: 'Deleted “${snippet.title}”',
         actionLabel: 'Undo',
-        onAction: () => unawaited(state.undoHistory.undo()),
+        // This deletion only, while it is still the one Undo would take
+        // back: a later change has its own.
+        onAction: () {
+          final history = state.undoHistory;
+          if (history.isNextUndo(change)) unawaited(history.undo());
+        },
       );
       return;
     }
@@ -232,20 +237,38 @@ class _SnippetsPaneState extends State<SnippetsPane> {
   }
 }
 
-/// Deletes [snippet] and records it for Edit ▸ Undo, which saves it back.
-Future<void> deleteSnippetUndoably(AppState state, Snippet snippet) async {
+/// Deletes [snippet] and records it for Edit ▸ Undo, which saves it back,
+/// and returns the recorded change.
+Future<UndoableChange> deleteSnippetUndoably(
+  AppState state,
+  Snippet snippet,
+) async {
   await state.deleteSnippet(snippet.id);
-  state.undoHistory.record(
-    UndoableChange(
-      name: 'Delete Snippet',
-      // A fresh stamp, so the restored copy outranks the deletion's
-      // tombstone wherever it already synced.
-      undo: () => state.saveSnippet(
-        snippet.copyWith(updatedAt: DateTime.now().millisecondsSinceEpoch),
-      ),
-      redo: () => state.deleteSnippet(snippet.id),
-    ),
+  final stamps = _RestoreStamps(snippet.updatedAt);
+  final change = UndoableChange(
+    name: 'Delete Snippet',
+    undo: () => state.saveSnippet(snippet.copyWith(updatedAt: stamps.next())),
+    redo: () => state.deleteSnippet(snippet.id),
   );
+  state.undoHistory.record(change);
+  return change;
+}
+
+/// Stamps for a snippet written back by Undo or Redo. Each must outrank
+/// every version this device stamped before it, the deletion's tombstone
+/// included, which beats its row by one: [AppState.deleteSnippet] stamps
+/// max(now, prior + 1). A plain "now" would lose to a row from a device
+/// whose clock runs ahead, and the restored snippet would vanish again.
+final class _RestoreStamps {
+  _RestoreStamps(this._latest);
+
+  int _latest;
+
+  int next() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _latest = now > _latest + 1 ? now : _latest + 2;
+    return _latest;
+  }
 }
 
 /// Frequently-run commands (from the local, opt-in history) that aren't
@@ -434,21 +457,22 @@ class _SnippetEditorState extends State<_SnippetEditor> {
         : existing.copyWith(title: title, body: body, updatedAt: now);
     final state = widget.state;
     await state.saveSnippet(snippet);
-    int stamp() => DateTime.now().millisecondsSinceEpoch;
+    final stamps = _RestoreStamps(snippet.updatedAt);
     state.undoHistory.record(
       existing == null
           ? UndoableChange(
               name: 'New Snippet',
               undo: () => state.deleteSnippet(snippet.id),
               redo: () =>
-                  state.saveSnippet(snippet.copyWith(updatedAt: stamp())),
+                  state.saveSnippet(snippet.copyWith(updatedAt: stamps.next())),
             )
           : UndoableChange(
               name: 'Edit Snippet',
-              undo: () =>
-                  state.saveSnippet(existing.copyWith(updatedAt: stamp())),
+              undo: () => state.saveSnippet(
+                existing.copyWith(updatedAt: stamps.next()),
+              ),
               redo: () =>
-                  state.saveSnippet(snippet.copyWith(updatedAt: stamp())),
+                  state.saveSnippet(snippet.copyWith(updatedAt: stamps.next())),
             ),
     );
     if (mounted) Navigator.of(context).pop();

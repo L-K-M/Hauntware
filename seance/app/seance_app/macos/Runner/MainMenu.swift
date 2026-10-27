@@ -143,7 +143,7 @@ final class CommandCenter: NSObject, NSMenuItemValidation, NSToolbarItemValidati
       guard let name = item.representedObject as? String else { return false }
       if routesEditToDart {
         let state = state(name)
-        if let title = state.title { item.title = title }
+        item.title = state.title ?? Self.editTitles[name] ?? item.title
         return state.enabled
       }
       item.title = Self.editTitles[name] ?? item.title
@@ -173,6 +173,12 @@ final class CommandCenter: NSObject, NSMenuItemValidation, NSToolbarItemValidati
     case #selector(runItem(_:)):
       guard let name = item.representedObject as? String else { return false }
       if sheetUp && !Self.availableUnderSheet.contains(name) { return false }
+      // Commands on the window's content act on the main window, so they
+      // wait while another window (Settings, About) is key; the ones that
+      // bring the main window forward stay.
+      if !Self.appWide.contains(name), let key = NSApp.keyWindow, key !== mainWindow {
+        return false
+      }
       if name == "showMainWindow" {
         // The window list names the window while it is open; this item
         // brings it back once it is closed.
@@ -194,6 +200,14 @@ final class CommandCenter: NSObject, NSMenuItemValidation, NSToolbarItemValidati
   /// A native alert is up on the main window (Dart's dialogs count as
   /// modal on their own side): its commands wait, as under any sheet.
   private var sheetUp: Bool { mainWindow?.attachedSheet != nil }
+
+  /// Commands that are not about the main window's content: they stay
+  /// available whichever window is key, and those that need the main
+  /// window bring it forward.
+  private static let appWide: Set<String> = [
+    "settings", "help", "checkForUpdates", "keyboardShortcuts", "newServer",
+    "newLocalShell", "connectToServer", "importSshConfig", "showMainWindow",
+  ]
 
   /// What stays available while a sheet is up: the app's own windows and
   /// help, not the window's content.

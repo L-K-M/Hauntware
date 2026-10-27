@@ -15,6 +15,18 @@ final class UndoableChange {
   final Future<void> Function() redo;
 }
 
+/// A step a change declines to take right now, for a reason the user can
+/// clear ("close its tabs first"): the change stays where it was, so the
+/// same Undo works once they have.
+final class UndoDeclined implements Exception {
+  const UndoDeclined(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// The app's own undo history: what Edit ▸ Undo and Redo do outside text
 /// fields, which keep their own. Holds the user's changes to snippets and
 /// the server list, newest last, and only for this run of the app.
@@ -36,6 +48,11 @@ final class AppUndoHistory extends ChangeNotifier {
   /// The change Redo would apply again, or null when there is none.
   String? get redoName => _stepping ? null : _undone.lastOrNull?.name;
 
+  /// Whether [change] is the one Undo would take back now: a notice
+  /// offering to undo one change must not undo another.
+  bool isNextUndo(UndoableChange change) =>
+      !_stepping && identical(_done.lastOrNull, change);
+
   /// Records a change the user just made. Anything undone before it can
   /// no longer be redone, as everywhere else.
   void record(UndoableChange change) {
@@ -49,9 +66,11 @@ final class AppUndoHistory extends ChangeNotifier {
 
   Future<void> redo() => _step(_undone, _done, (change) => change.redo());
 
-  /// Applies the newest change in [from] and moves it to [to]. One that
-  /// throws is dropped from the history and the error passes on: a change
-  /// that did not apply cannot be stepped back over.
+  /// Applies the newest change in [from], moving it to [to] first, so a
+  /// change recorded while it applies lands after it. One that throws
+  /// leaves the history and the error passes on, since a change that did
+  /// not apply cannot be stepped back over; one that is [UndoDeclined]
+  /// goes back where it was.
   Future<void> _step(
     List<UndoableChange> from,
     List<UndoableChange> to,
@@ -59,11 +78,18 @@ final class AppUndoHistory extends ChangeNotifier {
   ) async {
     if (_stepping || from.isEmpty) return;
     final change = from.removeLast();
+    to.add(change);
     _stepping = true;
     notifyListeners();
     try {
       await apply(change);
-      to.add(change);
+    } on UndoDeclined {
+      to.remove(change);
+      from.add(change);
+      rethrow;
+    } catch (_) {
+      to.remove(change);
+      rethrow;
     } finally {
       _stepping = false;
       notifyListeners();
