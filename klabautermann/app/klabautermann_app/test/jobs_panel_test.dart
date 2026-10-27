@@ -26,7 +26,10 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         MonotonicBase,
         TimerLastRun,
         OnCalendarElapse,
+        ParseContext,
         mergeJobs,
+        parseOnCalendar,
+        parseTimerDetail,
         parseUserCrontab;
 
 import 'support/charts.dart'
@@ -266,7 +269,7 @@ void main() {
       'Runs at 2:30 AM',
       'Runs at 9:00 AM, on Monday to Friday (America/New_York time)',
       'anacron runs this directory; its timing is not shown in this version.',
-      'Triggers are not read in this version.',
+      'In its details',
       // Cron's run on Berlin's clock, a timer's at the probed offset,
       // which it names: after the DST change, Berlin's clock reads 1:12.
       'Sun, Oct 25 2:30 AM',
@@ -1385,6 +1388,91 @@ void main() {
         ),
       );
       expect(_inSheet('It ended as exit-code, exit status 2.'), findsOneWidget);
+    });
+    testWidgets("a timer's details read its triggers and next runs", (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await panel.all(tester);
+
+      await tester.tap(_row('timer|apt-daily.timer'));
+      await tester.pumpAndSettle();
+      expect(_inSheet("Reading the timer's triggers…"), findsOneWidget);
+      final read =
+          panel.engine.sentOfType<ReadTimerDetail>().single as ReadTimerDetail;
+      expect((read.serverId, read.unit), (_serverId, 'apt-daily.timer'));
+
+      final detail = parseTimerDetail(
+        'TimersCalendar={ OnCalendar=*-*-* 06,18:00:00 ; next_elapse=n/a }\n'
+        'TimersMonotonic={ OnBootUSec=15min ; next_elapse=n/a }\n'
+        'RandomizedDelayUSec=12h\n',
+        ParseContext.standard,
+      ).value;
+      final calendar = parseOnCalendar(
+        '  Normalized form: *-*-* 06,18:00:00\n'
+        '    Next elapse: Sun 2026-10-25 06:00:00 CET\n'
+        '       (in UTC): Sun 2026-10-25 05:00:00 UTC\n'
+        '       From now: 9h left\n'
+        '       Iter. #2: Sun 2026-10-25 18:00:00 CET\n'
+        '       (in UTC): Sun 2026-10-25 17:00:00 UTC\n'
+        '       From now: 21h left\n',
+      ).value;
+      await panel.emit(
+        tester,
+        TimerDetailReport(
+          serverId: _serverId,
+          requestId: read.requestId,
+          unit: read.unit,
+          user: false,
+          detail: detail,
+          calendars: {'*-*-* 06,18:00:00': calendar},
+        ),
+      );
+      expect(_inSheet('On calendar *-*-* 06,18:00:00'), findsWidgets);
+      expect(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.textContaining('after boot'),
+        ),
+        findsOneWidget,
+      );
+      expect(_inSheet('Sun 2026-10-25 18:00:00 CET'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.textContaining('late, at random'),
+        ),
+        findsOneWidget,
+      );
+      expect(_inSheet("Reading the timer's triggers…"), findsNothing);
+    });
+
+    testWidgets("a timer's details say why its triggers were not read", (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await panel.all(tester);
+      await tester.tap(_row('timer|apt-daily.timer'));
+      await tester.pumpAndSettle();
+      final read =
+          panel.engine.sentOfType<ReadTimerDetail>().single as ReadTimerDetail;
+      await panel.emit(
+        tester,
+        TimerDetailReport(
+          serverId: _serverId,
+          requestId: read.requestId,
+          unit: read.unit,
+          user: false,
+          failure: TimerDetailFailure.transport,
+        ),
+      );
+      expect(
+        _inSheet(
+          'The triggers could not be read. Close and open the details to '
+          'try again.',
+        ),
+        findsOneWidget,
+      );
     });
   });
 

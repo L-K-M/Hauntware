@@ -533,6 +533,29 @@ abstract final class HostCommands {
     return [...manager._head, '--no-ask-password', verb.wireName, '--', unit];
   }
 
+  /// `systemctl show` of one timer's triggers and randomized delay
+  /// (JOB-02, 03 §7.7, D57): the same read as the sampler's on-demand
+  /// `timer_detail` collector, run on a channel of its own; its output is
+  /// that collector's payload, which `parseTimerDetail` reads.
+  static List<String> timerDetail(
+    String unit, {
+    UnitManager manager = const UnitManager.system(),
+  }) {
+    _check(ArgValidators.timerUnit, unit);
+    return [
+      ...manager._head,
+      'show',
+      '-p',
+      'TimersCalendar',
+      '-p',
+      'TimersMonotonic',
+      '-p',
+      'RandomizedDelayUSec',
+      '--',
+      unit,
+    ];
+  }
+
   /// `systemctl cat -- <unit>`: the unit file and its drop-ins, each
   /// after a `# <path>` line (SVC-07, 03 §7.5).
   static List<String> unitFile(

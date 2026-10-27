@@ -7,11 +7,12 @@ import 'package:klabautermann_docker/klabautermann_docker.dart';
 import '../engine/protocol.dart';
 
 /// A verified project an edit of one of its files reads and plans
-/// against, and the socket its compose commands name; or why there is
-/// none.
+/// against, and the socket and `docker` program (CN-16) its compose
+/// commands name; or why there is none.
 typedef StackEditSource = ({
   ComposeProject? project,
   String? socketPath,
+  String? dockerProgram,
   StackFileFailure? failure,
 });
 
@@ -29,6 +30,7 @@ typedef StackEditLookup =
 List<String> stackCandidateCheck({
   required ComposeProject project,
   required String socketPath,
+  required String dockerProgram,
   required String path,
   required String temp,
 }) {
@@ -41,6 +43,7 @@ List<String> stackCandidateCheck({
       ? [temp]
       : recorded;
   return composeConfig(
+    binary: dockerProgram,
     socketPath: socketPath,
     project: project.name,
     projectDirectory: project.workingDir,

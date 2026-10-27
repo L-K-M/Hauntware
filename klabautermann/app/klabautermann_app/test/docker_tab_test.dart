@@ -151,6 +151,12 @@ final _failures = <(DockerEndpointState, String, String)>[
     'The socket path chosen for this server is not a valid absolute path. '
         'Choose another socket below.',
   ),
+  (
+    _failed(DockerEndpointFailure.invalidProgram),
+    'No Engine API route: the docker program path is not valid',
+    'The docker program path set for this server is not a valid absolute '
+        'path.',
+  ),
 ];
 
 const _rootful = '/var/run/docker.sock';
