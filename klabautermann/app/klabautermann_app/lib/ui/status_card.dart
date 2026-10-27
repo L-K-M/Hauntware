@@ -115,6 +115,11 @@ StatusCard statusCardOf(
         final T result => result,
         _ => null,
       };
+  final docker = monitoring.docker;
+  final containerList = docker.containersFor(serverId).value;
+  final containers = containerList.containers;
+  // The container counts are a reading too: a server with only Docker
+  // read yet still gets a card, under that list's time.
   final times = [
     for (final stream in const [
       SampleStream.core,
@@ -123,9 +128,8 @@ StatusCard statusCardOf(
       SampleStream.identity,
     ])
       ?monitoring.lastReadingFor(serverId, stream).value?.at,
+    if (containers != null) ?containerList.at,
   ];
-  final docker = monitoring.docker;
-  final containers = docker.containersFor(serverId).value.containers;
   return StatusCard(
     readAt: times.isEmpty ? null : times.reduce((a, b) => a.isAfter(b) ? a : b),
     serverName: serverName,

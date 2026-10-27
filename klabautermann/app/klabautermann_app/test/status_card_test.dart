@@ -116,6 +116,30 @@ void main() {
     expect(lines.where((line) => line.startsWith('Up for')), isEmpty);
   });
 
+  test('a server with only its containers read still gets a card', () {
+    final engine = FakeEngineClient();
+    final monitoring = MonitoringController(engine);
+    addTearDown(() async {
+      monitoring.dispose();
+      await engine.close();
+    });
+    // As the Overview holds it while it shows.
+    engine.emit(dockerReady(_serverId));
+    return pumpEventQueue().then((_) async {
+      monitoring.docker.watchSummary(_serverId);
+      engine.emit(
+        dockerContainerList(_serverId, [dockerContainer('a')], at: _now),
+      );
+      await pumpEventQueue();
+      final card = statusCardOf(monitoring, _serverId);
+      expect(card.readAt, _now);
+      expect(
+        card.lines(l10n, named: false),
+        contains('Containers: 1 of 1 running'),
+      );
+    });
+  });
+
   testWidgets('the button exports the last readings, redacted, and names '
       'the server once the switch is on', (tester) async {
     final engine = FakeEngineClient();
