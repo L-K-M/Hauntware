@@ -316,6 +316,9 @@ is on main:
   following, or between a chosen start and end, read once with Live
   stopped. The engine sends `since` and `until` and no `tail`, and a
   follow's resume starts after its newest line.
+- Container log export (M6 N19b, CTX-06): the container log view's
+  Export opens LOG-10's sheet, redacted unless Include secrets is on,
+  and copies, saves as `<container>.log` or shares the held rows.
 - Images in the app (M3, D16, 03 §7.14, §10.4): the Images sub-tab
   holds one `DockerWatch` of the images and containers per server while
   it shows, apart from the Containers view's, and sends `DockerUnwatch`

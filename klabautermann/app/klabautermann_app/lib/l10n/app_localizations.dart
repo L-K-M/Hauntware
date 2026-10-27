@@ -9684,6 +9684,12 @@ abstract class AppLocalizations {
   /// **'Apply'**
   String get dockerLogsRangeApply;
 
+  /// The suggested file name for a container's saved log export: the container's name. Keep it a valid file name.
+  ///
+  /// In en, this message translates to:
+  /// **'{container}.log'**
+  String dockerLogsExportFileName(String container);
+
   /// Tooltip of the off Live chip while a container's logs read a range with a chosen end.
   ///
   /// In en, this message translates to:

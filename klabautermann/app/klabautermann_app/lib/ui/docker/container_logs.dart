@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../logs/log_export.dart' show showLogExport;
 import '../logs/log_view.dart';
 import '../logs/logs_panel.dart';
 import '../logs/logs_panel_controller.dart';
@@ -103,6 +104,7 @@ void openContainerLogs(
             monitoring: monitoring,
             serverId: serverId,
             containerId: container.id,
+            name: containerNameOf(container),
             // The sheet covers the tab, so the tab cannot change.
             visible: true,
             headerScroll: scroll,
@@ -168,6 +170,7 @@ class _ContainerLogsPaneState extends State<ContainerLogsPane> {
         monitoring: widget.monitoring,
         serverId: widget.shown.serverId,
         containerId: widget.shown.container.id,
+        name: containerNameOf(widget.shown.container),
         visible: widget.visible,
         title: _Title(
           name: containerNameOf(widget.shown.container),
@@ -196,6 +199,7 @@ class ContainerLogsView extends StatefulWidget {
     required this.monitoring,
     required this.serverId,
     required this.containerId,
+    required this.name,
     required this.visible,
     required this.title,
     this.headerScroll,
@@ -204,6 +208,9 @@ class ContainerLogsView extends StatefulWidget {
   final MonitoringController monitoring;
   final String serverId;
   final String containerId;
+
+  /// The container's name, which names an exported file.
+  final String name;
   final bool visible;
   final Widget title;
 
@@ -271,6 +278,23 @@ class _ContainerLogsViewState extends State<ContainerLogsView> {
                     children: [
                       LogLiveChip(panel: _panel),
                       ContainerLogRangeButton(panel: _panel),
+                      ListenableBuilder(
+                        listenable: _panel.logs,
+                        builder: (context, _) => IconButton(
+                          tooltip: l10n.logsExport,
+                          icon: const Icon(Icons.ios_share),
+                          onPressed: _panel.logs.length == 0
+                              ? null
+                              : () => showLogExport(
+                                  context,
+                                  monitoring: widget.monitoring,
+                                  logs: _panel.logs,
+                                  fileName: l10n.dockerLogsExportFileName(
+                                    widget.name,
+                                  ),
+                                ),
+                        ),
+                      ),
                       if (!compact)
                         SizedBox(
                           width: scaler.scale(_searchWidth),
