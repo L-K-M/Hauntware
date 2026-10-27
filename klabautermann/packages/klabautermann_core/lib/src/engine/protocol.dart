@@ -1553,11 +1553,16 @@ final class SyncStatus extends EngineEvent {
 /// [kSyncPrefixWarnFraction] of it (SYN-09's account size view).
 @immutable
 final class SyncPrefixBudget {
-  const SyncPrefixBudget(this.usedBytes);
+  const SyncPrefixBudget(this.usedBytes, {this.byPrefix = const {}});
 
   /// The sealed blobs of every live `klabautermann:` record the account
   /// holds, as this device last pulled them.
   final int usedBytes;
+
+  /// Every live record the account holds, as this device last pulled it,
+  /// grouped by its id's prefix ([syncRecordPrefixOf]): the account size
+  /// view's rows (SYN-09).
+  final Map<String, SyncRecordUsage> byPrefix;
 
   /// Whether the records take [kSyncPrefixWarnFraction] of the budget or
   /// more.
@@ -1566,6 +1571,37 @@ final class SyncPrefixBudget {
 
   /// Whether the records take the whole budget or more.
   bool get full => usedBytes >= kSyncPrefixBudgetBytes;
+}
+
+/// How many live records of one id prefix the account holds and how many
+/// bytes their sealed blobs take (SYN-09).
+@immutable
+final class SyncRecordUsage {
+  const SyncRecordUsage({required this.records, required this.bytes});
+
+  final int records;
+  final int bytes;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SyncRecordUsage &&
+      other.records == records &&
+      other.bytes == bytes;
+
+  @override
+  int get hashCode => Object.hash(records, bytes);
+}
+
+/// The prefix the account size view groups a record [id] under (SYN-09):
+/// a `klabautermann:` record's type with the prefix
+/// (`klabautermann:pref`), any other record's first segment (`snippet`),
+/// or the whole id when it has no `:`.
+String syncRecordPrefixOf(String id) {
+  final first = id.indexOf(':');
+  if (first < 0) return id;
+  if (id.substring(0, first) != 'klabautermann') return id.substring(0, first);
+  final second = id.indexOf(':', first + 1);
+  return second < 0 ? id : id.substring(0, second);
 }
 
 /// The `klabautermann:` prefix's account budget [E] (03 §4.8).

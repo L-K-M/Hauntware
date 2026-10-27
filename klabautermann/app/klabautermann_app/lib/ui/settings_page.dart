@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
-import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
+import 'package:ghost_ui/ghost_ui.dart'
+    show ghostFormatBinarySize, showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show MonitorEligibility, kAdminExpiryChoices, kMonitorSetLimit;
 
+import '../controllers/account_size.dart';
 import '../controllers/announcement_controller.dart';
 import '../controllers/cadence_controller.dart';
 import '../controllers/app_lock_controller.dart';
@@ -49,6 +52,7 @@ class SettingsPage extends StatefulWidget {
     this.appLock,
     this.syncSecrets,
     this.pinPublication,
+    this.accountSize,
     this.initialTab = SettingsTab.general,
     this.tabRequests,
   });
@@ -84,6 +88,10 @@ class SettingsPage extends StatefulWidget {
 
   /// The host key sharing assertion; null in tests that leave it out.
   final PinPublicationSettings? pinPublication;
+
+  /// The sync account's size (SYN-09) in the Sync tab; null in tests that
+  /// leave it out, and its value null until a sync operation succeeded.
+  final ValueListenable<AccountSize?>? accountSize;
 
   /// The running build's version for the about row; null when the
   /// platform could not tell (`readAppVersion`).
@@ -172,6 +180,7 @@ class _SettingsPageState extends State<SettingsPage>
               SettingsTab.sync when widget.syncSecrets != null => SyncTab(
                 syncSecrets: widget.syncSecrets!,
                 pinPublication: widget.pinPublication,
+                accountSize: widget.accountSize,
               ),
               SettingsTab.safety when widget.safety != null => SafetyTab(
                 safety: widget.safety!,
@@ -445,11 +454,88 @@ class _DeviceNameFieldState extends State<DeviceNameField> {
 /// in Séance's words. While on, sync rounds add the passwords and keys
 /// other devices synced to this device's vault. Once a release is offered,
 /// the host key sharing assertion too (D15, M5 plan M07).
+/// SYN-09's account size view: what Klabautermann's records take of
+/// their budget, with a warning near and at it, and every prefix's
+/// records and bytes, the largest first.
+class _AccountSizeSection extends StatelessWidget {
+  const _AccountSizeSection({required this.size});
+
+  final AccountSize size;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final warning = size.full
+        ? l10n.settingsAccountSizeFull
+        : size.warns
+        ? l10n.settingsAccountSizeWarn
+        : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          header: true,
+          child: Text(
+            l10n.settingsAccountSizeTitle,
+            style: theme.textTheme.titleSmall,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          l10n.settingsAccountSizeUsed(
+            ghostFormatBinarySize(size.prefixBytes),
+            ghostFormatBinarySize(size.budgetBytes),
+          ),
+        ),
+        if (warning != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            warning,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Text(
+          l10n.settingsAccountSizeDetail,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        for (final row in size.rows)
+          MergeSemantics(
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: Text(row.prefix),
+              trailing: Text(
+                l10n.settingsAccountSizeRow(
+                  row.records,
+                  ghostFormatBinarySize(row.bytes),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class SyncTab extends StatelessWidget {
-  const SyncTab({super.key, required this.syncSecrets, this.pinPublication});
+  const SyncTab({
+    super.key,
+    required this.syncSecrets,
+    this.pinPublication,
+    this.accountSize,
+  });
 
   final SyncSecretsSettings syncSecrets;
   final PinPublicationSettings? pinPublication;
+
+  /// As [SettingsPage.accountSize].
+  final ValueListenable<AccountSize?>? accountSize;
 
   /// As [_set], for the host key sharing switch.
   Future<void> _assert(BuildContext context, bool asserted) async {
@@ -489,7 +575,7 @@ class SyncTab extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final pins = pinPublication;
     return ListenableBuilder(
-      listenable: Listenable.merge([syncSecrets, ?pins]),
+      listenable: Listenable.merge([syncSecrets, ?pins, ?accountSize]),
       builder: (context, _) => ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -528,6 +614,10 @@ class SyncTab extends StatelessWidget {
               title: Text(l10n.settingsPinPublication(release)),
               subtitle: Text(l10n.settingsPinPublicationDetail),
             ),
+          ],
+          if (accountSize?.value case final size?) ...[
+            const SizedBox(height: 24),
+            _AccountSizeSection(size: size),
           ],
         ],
       ),

@@ -2366,7 +2366,14 @@ are retracted (sealed `removed`) when a server becomes excluded; "server
 absent: pending" is distinct from "server removed"; unknown `type` values
 are kept verbatim and skipped; writes are batched with `batchForPush`.
 Account budget for the prefix: at most 1 MiB in total, warn at 80 %, shown
-in the account size view (SYN-09). There is no record class whose count
+in the account size view (SYN-09). As built in M6 (N67, SYN-09), every
+succeeded sync operation reports the prefix's bytes and every live
+record's count and bytes by id prefix (a `klabautermann:` record's type,
+any other record's first segment), as this device last pulled them;
+Settings > Sync lists them, the largest first, under what the prefix takes
+of its budget, with a warning from 80 % and at 100 %. The view shows
+nothing until an operation succeeds in the app's run, and nothing while no
+account is enrolled. There is no record class whose count
 grows with time or events without a bound (no audit entries). The sync
 server deletes records only with the whole account
 (`seance/packages/seance_sync_server/lib/src/sqlite_storage.dart:159,293-299`
