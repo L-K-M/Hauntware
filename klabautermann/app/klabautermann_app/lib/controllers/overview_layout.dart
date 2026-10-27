@@ -118,12 +118,24 @@ final class OverviewLayoutController extends ChangeNotifier
   OverviewLayout _saved;
   final Future<void> Function(List<String> order, List<String> hidden)? _save;
 
+  /// The last change's apply and save: a change waits for the one before
+  /// it, so overlapping saves land in order and the file ends with the
+  /// last one.
+  Future<void> _changes = Future<void>.value();
+
   @override
   OverviewLayout get value => _value;
 
   /// Puts [layout] in force and saves it. Throws
   /// [OverviewLayoutNotSavedException] when it applied but was not saved.
-  Future<void> setLayout(OverviewLayout layout) async {
+  Future<void> setLayout(OverviewLayout layout) {
+    final change = _changes.then((_) => _apply(layout));
+    // A failed save leaves the queue running; its caller sees the error.
+    _changes = change.then<void>((_) {}, onError: (Object _) {});
+    return change;
+  }
+
+  Future<void> _apply(OverviewLayout layout) async {
     if (layout == _value && layout == _saved) return;
     if (layout != _value) {
       _value = layout;

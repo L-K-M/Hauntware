@@ -66,6 +66,7 @@ void main() {
 
     failing = false;
     await controller.setLayout(hidden);
+    expect(saved.single.$1, OverviewLayout.standard.encodedOrder);
     expect(saved.single.$2, ['history']);
     await controller.setLayout(hidden);
     expect(saved, hasLength(1), reason: 'in force and saved');

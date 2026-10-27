@@ -603,6 +603,18 @@ void main() {
       final reloaded = (await DeviceSettingsStore.open(file)).overviewCards!;
       expect(reloaded.order, ['memory', 'cpu']);
       expect(reloaded.hidden, ['swap']);
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.overview.cards': {
+          'order': ['cpu', 7, 'memory'],
+          'hidden': [null, 'swap'],
+        },
+      });
+      final mixed = (await DeviceSettingsStore.open(file)).overviewCards!;
+      expect(mixed.order, ['cpu', 'memory'], reason: 'non-strings left out');
+      expect(mixed.hidden, ['swap']);
     });
 
     test('keeps the fleet board layout\'s name across reloads, and reads a '

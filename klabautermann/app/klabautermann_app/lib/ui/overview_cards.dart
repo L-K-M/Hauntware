@@ -165,13 +165,16 @@ class OverviewCardsSheet extends StatelessWidget {
             Flexible(
               child: ReorderableListView(
                 shrinkWrap: true,
+                // Each edit builds on the layout as it is then, not as the
+                // last build saw it, so two edits in one frame both stay.
                 onReorderItem: (from, to) {
-                  final order = [...current.order];
+                  final now = layout.value;
+                  final order = [...now.order];
                   order.insert(to, order.removeAt(from));
                   unawaited(
                     _set(
                       context,
-                      OverviewLayout(order: order, hidden: current.hidden),
+                      OverviewLayout(order: order, hidden: now.hidden),
                     ),
                   );
                 },
@@ -182,17 +185,20 @@ class OverviewCardsSheet extends StatelessWidget {
                       contentPadding: const EdgeInsetsDirectional.only(end: 40),
                       title: Text(overviewCardTitle(l10n, card)),
                       value: !current.hidden.contains(card),
-                      onChanged: (shown) => unawaited(
-                        _set(
-                          context,
-                          OverviewLayout(
-                            order: current.order,
-                            hidden: shown
-                                ? ({...current.hidden}..remove(card))
-                                : {...current.hidden, card},
+                      onChanged: (shown) {
+                        final now = layout.value;
+                        unawaited(
+                          _set(
+                            context,
+                            OverviewLayout(
+                              order: now.order,
+                              hidden: shown
+                                  ? ({...now.hidden}..remove(card))
+                                  : {...now.hidden, card},
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                 ],
               ),
