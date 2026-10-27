@@ -375,6 +375,56 @@ void main() {
       expect(list.value.containers, hasLength(1));
     });
 
+    test('a details view pins its container\'s stats and reads its '
+        'history; a container that goes takes it along (CST-03)', () async {
+      docker.watchContainers('srv-1');
+      docker.showStatsFor('srv-1', ['c-1']);
+      docker.pinStats('srv-1', 'c-2');
+      expect(watches().last.statsFor, {'c-2', 'c-1'});
+      docker.pinStats('srv-1', 'c-2');
+      final sent = watches().length;
+      docker.unpinStats('srv-1', 'c-2');
+      expect(watches(), hasLength(sent), reason: 'another view pins it');
+      docker.pinStats('srv-1', 'c-1');
+      expect(watches(), hasLength(sent), reason: 'its row already reads it');
+      docker.unpinStats('srv-1', 'c-1');
+      expect(watches(), hasLength(sent), reason: 'its row still reads it');
+
+      await emit(
+        dockerContainerList('srv-1', [
+          dockerContainer('c-1'),
+          dockerContainer('c-2'),
+        ], at: at),
+      );
+      for (var i = 0; i < 3; i++) {
+        await emit(
+          dockerStatsRound('srv-1', [
+            ContainerListStats(
+              containerId: 'c-2',
+              at: at.add(Duration(seconds: 5 * i)),
+              cpuPercent: 10.0 * i,
+              networkRx: 1000 * i,
+            ),
+          ], at: at),
+        );
+      }
+      final history = docker.usageFor('srv-1', 'c-2');
+      expect(history.cpu.length, 3);
+      expect(history.cpu.valueAt(0, 2), 20);
+      expect(history.network.valueAt(0, 2), 200, reason: '1000 B in 5 s');
+
+      docker.unpinStats('srv-1', 'c-2');
+      expect(watches().last.statsFor, {'c-1'});
+      await emit(
+        dockerContainerList('srv-1', [dockerContainer('c-1')], at: at),
+      );
+      expect(
+        docker.usageFor('srv-1', 'c-2').cpu.length,
+        0,
+        reason: 'a new, empty history',
+      );
+    });
+
     test('a retry watches anew under a new id', () async {
       docker.watchContainers('srv-1');
       docker.showStatsFor('srv-1', ['c-1']);

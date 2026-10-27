@@ -25,6 +25,7 @@ import 'package:klabautermann_app/services/settings_window/settings_window_link.
 import 'package:klabautermann_app/services/ssh_config_source.dart';
 import 'package:klabautermann_app/services/system_notifications.dart';
 import 'package:klabautermann_app/ui/alerts.dart' show alertNotificationText;
+import 'package:klabautermann_app/ui/workspace_navigation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
     show
         DeviceSettingsIssue,
@@ -122,6 +123,7 @@ final class AppHarness {
 /// over the fake engine, [alerts] the alert center, the alert rules and
 /// the alert notifications, posting to [notifications] (none: the device
 /// has none), and [operations] the operations one.
+/// [palette] adds the command palette's workspace navigation.
 /// [linkGrace] defaults to zero, which disconnects a server as its last
 /// view closes: the tree unmounts at the end of every test, and the test
 /// binding fails a test that leaves a grace timer pending.
@@ -151,6 +153,7 @@ Future<AppHarness> pumpApp(
   String? appVersion,
   HandOffLauncher? handOff,
   Duration linkGrace = Duration.zero,
+  bool palette = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -233,6 +236,7 @@ Future<AppHarness> pumpApp(
       toolbarBand: toolbarBand,
       appVersion: appVersion,
       handOff: handOff,
+      navigation: palette ? WorkspaceNavigation(harness.fleet) : null,
     ),
   );
   await tester.pumpAndSettle();

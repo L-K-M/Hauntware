@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:ghost_ui/ghost_ui.dart' show showCommandPalette;
 import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show
@@ -14,6 +15,7 @@ import 'controllers/admin_controller.dart';
 import 'controllers/alert_center.dart';
 import 'controllers/alert_notifications.dart';
 import 'controllers/alert_rules_controller.dart';
+import 'controllers/snippets_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/cadence_controller.dart';
 import 'controllers/fleet_density.dart';
@@ -31,6 +33,7 @@ import 'controllers/prompt_controller.dart';
 import 'controllers/server_editor_controller.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
+import 'controllers/threshold_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/hand_off.dart' show HandOffLauncher;
@@ -42,6 +45,7 @@ import 'ui/adaptive_shell.dart';
 import 'ui/admin_mode_chip.dart' show AdminScope;
 import 'ui/alert_notifications.dart' show AlertNotificationsScope;
 import 'ui/alert_rules.dart' show AlertRulesScope;
+import 'ui/snippets.dart' show SnippetsScope;
 import 'ui/alerts.dart' show AlertScope;
 import 'ui/app_lock_gate.dart';
 import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
@@ -49,6 +53,7 @@ import 'ui/hand_off_actions.dart' show HandOffScope;
 import 'ui/macos_toolbar_band.dart';
 import 'ui/menus/app_commands.dart';
 import 'ui/menus/app_menu_host.dart';
+import 'ui/palette.dart';
 import 'ui/prompts/prompt_host.dart';
 import 'ui/server_editing.dart';
 import 'ui/server_safety.dart' show SafetyScope;
@@ -56,6 +61,8 @@ import 'ui/server_surfaces.dart' show AppActivityReporter;
 import 'ui/settings_page.dart';
 import 'ui/startup_issue_notice.dart';
 import 'ui/threshold_announcer.dart' show AnnouncementScope;
+import 'ui/threshold_scope.dart' show ThresholdScope;
+import 'ui/workspace_navigation.dart';
 
 /// The settings route's name: Settings on phones, and on a desktop whose
 /// runner cannot open the settings window (D32).
@@ -73,8 +80,10 @@ class KlabautermannApp extends StatelessWidget {
     required this.appearance,
     required this.coverage,
     required this.announcements,
+    this.thresholds,
     this.cadence,
     this.fleetDensity,
+    this.cadenceCaps,
     this.deviceName,
     this.safety,
     this.appLock,
@@ -83,6 +92,7 @@ class KlabautermannApp extends StatelessWidget {
     this.admin,
     this.alerts,
     this.alertRules,
+    this.snippets,
     this.alertNotifications,
     this.operations,
     required this.dockerNotice,
@@ -96,6 +106,7 @@ class KlabautermannApp extends StatelessWidget {
     this.toolbarBand,
     this.appVersion,
     this.handOff,
+    this.navigation,
   });
 
   final FleetController fleet;
@@ -122,6 +133,10 @@ class KlabautermannApp extends StatelessWidget {
   /// workspace's invitation.
   final FleetDensityController? fleetDensity;
 
+  /// The per-server caps (SAF-19) in Settings > Servers; null in tests
+  /// that leave them out.
+  final CadenceCapsController? cadenceCaps;
+
   /// The safety preferences the engine enforces (M4 plan M4); like
   /// [appearance], they outlive an engine run. Null in tests that leave
   /// safety out: Settings then shows its placeholder and the server header
@@ -131,6 +146,11 @@ class KlabautermannApp extends StatelessWidget {
   /// The app lock (SAF-20), whose screen covers every route while locked;
   /// null in tests that leave it out.
   final AppLockController? appLock;
+
+  /// OV-11's threshold bands; like [appearance], they outlive an engine
+  /// run. Null in tests that leave them out, where every metric takes the
+  /// default bands and the Alerts settings tab is a placeholder.
+  final ThresholdController? thresholds;
 
   /// The device name the host syslog line gives (M5 plan Q6); like
   /// [appearance], it outlives an engine run. Null in tests that leave it
@@ -160,6 +180,10 @@ class KlabautermannApp extends StatelessWidget {
   /// offers the rules page.
   final AlertRulesController? alertRules;
 
+  /// Séance's synced snippets (AUT-01), one engine run's like [fleet].
+  /// Null in tests that leave it out, where no surface offers them.
+  final SnippetsController? snippets;
+
   /// Raised alerts' system notifications (ALR-01), one engine run's like
   /// [fleet]. Null in tests that leave it out, where no surface offers
   /// the switch.
@@ -176,6 +200,10 @@ class KlabautermannApp extends StatelessWidget {
   /// Opens hand-offs to Séance and Poltergeist (X-03, X-04, X-10); null in
   /// tests that leave it out, where no hand-off is offered.
   final HandOffLauncher? handOff;
+
+  /// Where the command palette sends the desktop workspace (PLT-07);
+  /// without it the app offers no palette.
+  final WorkspaceNavigation? navigation;
 
   /// The sync account (03 §4.3), one engine run's like [fleet]; null in
   /// tests that leave sync out, which shows the sync control idle.
@@ -296,17 +324,24 @@ class KlabautermannApp extends StatelessWidget {
           // every route, the phone's pushed server screen included.
           builder: (context, child) {
             final banded = withMacosToolbarBand(toolbarBand, child: child!);
+            final withDensity = switch (fleetDensity) {
+              final density? => FleetDensityScope(
+                density: density,
+                child: banded,
+              ),
+              null => banded,
+            };
             final scoped = DockerNoticeScope(
               notice: dockerNotice,
               child: AnnouncementScope(
                 announce: announcements,
                 openSettings: (context) => unawaited(_openSettings(context)),
-                child: switch (fleetDensity) {
-                  final density? => FleetDensityScope(
-                    density: density,
-                    child: banded,
+                child: switch (thresholds) {
+                  final thresholds? => ThresholdScope(
+                    thresholds: thresholds,
+                    child: withDensity,
                   ),
-                  null => banded,
+                  null => withDensity,
                 },
               ),
             );
@@ -336,12 +371,19 @@ class KlabautermannApp extends StatelessWidget {
               final rules? => AlertRulesScope(rules: rules, child: withEditing),
               null => withEditing,
             };
-            final withNotifications = switch (alertNotifications) {
-              final notifications? => AlertNotificationsScope(
-                notifications: notifications,
+            final withSnippets = switch (snippets) {
+              final snippets? => SnippetsScope(
+                snippets: snippets,
                 child: withRules,
               ),
               null => withRules,
+            };
+            final withNotifications = switch (alertNotifications) {
+              final notifications? => AlertNotificationsScope(
+                notifications: notifications,
+                child: withSnippets,
+              ),
+              null => withSnippets,
             };
             final withAlerts = switch (alerts) {
               final alerts? => AlertScope(
@@ -386,20 +428,39 @@ class KlabautermannApp extends StatelessWidget {
                     void openSettings() => unawaited(_openSettings(context));
                     // The desktop menus and their shortcuts (03 §10.2),
                     // from the one command registry.
+                    final platform = Theme.of(context).platform;
+                    final navigation = this.navigation;
+                    late final List<AppCommand> commands;
+                    commands = buildAppCommands(
+                      platform: platform,
+                      fleet: fleet,
+                      onOpenSettings: openSettings,
+                      appVersion: appVersion,
+                      onOpenPalette: navigation == null
+                          ? null
+                          : (context) => showCommandPalette(
+                              context,
+                              paletteCommands(
+                                l10n: AppLocalizations.of(context),
+                                platform: platform,
+                                context: context,
+                                actions: commands,
+                                fleet: fleet,
+                                monitoring: monitoring,
+                                navigation: navigation,
+                              ),
+                            ),
+                    );
                     return AppMenuHost(
                       listenable: fleet,
-                      commands: buildAppCommands(
-                        platform: Theme.of(context).platform,
-                        fleet: fleet,
-                        onOpenSettings: openSettings,
-                        appVersion: appVersion,
-                      ),
+                      commands: commands,
                       // The add verbs follow the enrollment (P16).
                       child: ListenableBuilder(
                         listenable: Listenable.merge([?sync]),
                         builder: (context, _) => AdaptiveShell(
                           fleet: fleet,
                           monitoring: monitoring,
+                          navigation: navigation,
                           coverage: coverage,
                           onOpenSettings: openSettings,
                           sync: sync,
@@ -421,7 +482,9 @@ class KlabautermannApp extends StatelessWidget {
             kSettingsRoute: (_) => SettingsPage(
               appearance: appearance,
               announcements: announcements,
+              thresholds: thresholds,
               cadence: cadence,
+              cadenceCaps: cadenceCaps,
               deviceName: deviceName,
               appVersion: appVersion,
               monitorSet: fleet.monitorSettings,

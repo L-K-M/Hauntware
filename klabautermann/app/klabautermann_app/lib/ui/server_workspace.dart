@@ -20,6 +20,7 @@ import 'server_surfaces.dart';
 import 'fleet_board.dart';
 import 'services_panel.dart';
 import 'system_panel.dart';
+import 'workspace_navigation.dart';
 
 /// The server workspace of 03 §10.2: a header over the panel tab strip.
 /// The panels themselves land with their subsystems (F4 onward); each tab
@@ -161,10 +162,20 @@ class _PanelsState extends State<_Panels> {
 
   /// The desktop shell's container logs, which show in the Docker tab.
   ValueNotifier<InspectedContainer?>? _logs;
+  WorkspaceNavigation? _navigation;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final navigation = WorkspaceNavigationScope.maybeOf(context);
+    if (!identical(navigation, _navigation)) {
+      _navigation?.removeListener(_onNavigation);
+      _navigation = navigation?..addListener(_onNavigation);
+      // A request that selected this server came before these tabs did.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _onNavigation();
+      });
+    }
     final logs = ContainerLogsScope.find(context);
     if (identical(logs, _logs)) return;
     _logs?.removeListener(_onLogsOpened);
@@ -172,7 +183,19 @@ class _PanelsState extends State<_Panels> {
   }
 
   @override
+  void didUpdateWidget(_Panels oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.serverId == oldWidget.serverId) return;
+    // These tabs now show another server, which a request may have
+    // selected; the tab controller changes after this build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _onNavigation();
+    });
+  }
+
+  @override
   void dispose() {
+    _navigation?.removeListener(_onNavigation);
     _logs?.removeListener(_onLogsOpened);
     _accessFocus.dispose();
     super.dispose();
@@ -185,6 +208,18 @@ class _PanelsState extends State<_Panels> {
     if (opened == null || opened.serverId != widget.serverId) return;
     DefaultTabController.of(context).index = ServerWorkspace._panels.indexOf(
       ServerPanel.docker,
+    );
+  }
+
+  /// Shows the tab the command palette asked for, once this server's.
+  void _onNavigation() {
+    final navigation = _navigation;
+    final request = navigation?.request;
+    if (navigation == null || request == null) return;
+    if (request.serverId != widget.serverId) return;
+    navigation.consumeRequest(request);
+    DefaultTabController.of(context).index = ServerWorkspace._panels.indexOf(
+      request.panel,
     );
   }
 

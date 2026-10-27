@@ -5562,6 +5562,36 @@ abstract class AppLocalizations {
   /// **'The refresh rate could not be changed.'**
   String get settingsCadenceNotChanged;
 
+  /// Settings, Servers: the heading of the per-server polling caps (SAF-19).
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh limits'**
+  String get settingsCadenceCapsTitle;
+
+  /// Settings, Servers: what a per-server polling cap does (SAF-19, 03 §6.4).
+  ///
+  /// In en, this message translates to:
+  /// **'Read a server no more often than the chosen rate, for example one on a metered link. A limit never makes a server refresh faster than the rate in General.'**
+  String get settingsCadenceCapsDetail;
+
+  /// Settings, Servers: the menu choice that lifts a server's polling cap.
+  ///
+  /// In en, this message translates to:
+  /// **'No limit'**
+  String get settingsCadenceNoCap;
+
+  /// Settings, Servers: toast when a server's polling cap applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The refresh limit changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get settingsCadenceCapNotSaved;
+
+  /// Settings, Servers: toast when a server's polling cap change failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The refresh limit could not be changed.'**
+  String get settingsCadenceCapNotChanged;
+
   /// Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level.
   ///
   /// In en, this message translates to:
@@ -5573,6 +5603,94 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'While a server\'s Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.'**
   String get settingsAnnounceBandsDetail;
+
+  /// Settings, Alerts: the heading of OV-11's threshold levels.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage bands'**
+  String get settingsThresholdsTitle;
+
+  /// Settings, Alerts: what the usage bands do.
+  ///
+  /// In en, this message translates to:
+  /// **'The levels the fleet rows, the Overview and its health card judge each metric by. Careful shows an info icon, warning and critical also take their colour, and only warning and critical are announced.'**
+  String get settingsThresholdsDetail;
+
+  /// Settings, Alerts, threshold dialog: the careful level's field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Careful from'**
+  String get settingsThresholdCareful;
+
+  /// Settings, Alerts, threshold dialog: the warning level's field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning from'**
+  String get settingsThresholdWarning;
+
+  /// Settings, Alerts, threshold dialog: the critical level's field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical from'**
+  String get settingsThresholdCritical;
+
+  /// Settings, Alerts, threshold dialog: the unit after each level's number.
+  ///
+  /// In en, this message translates to:
+  /// **'%'**
+  String get settingsThresholdPercentSuffix;
+
+  /// Settings, Alerts, threshold dialog: why the levels typed cannot be saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Each level must be a whole percent from 1 to 100, and each one higher than the one before.'**
+  String get settingsThresholdsInvalid;
+
+  /// Settings, Alerts, threshold dialog: fills in the default levels (70, 80 and 90 %).
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get settingsThresholdDefault;
+
+  /// Settings, Alerts, threshold dialog: closes it without a change.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get settingsThresholdCancel;
+
+  /// Settings, Alerts, threshold dialog: applies the levels typed.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get settingsThresholdSave;
+
+  /// Settings, Alerts: toast when new levels applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The levels changed but could not be saved. They last until Klabautermann quits.'**
+  String get settingsThresholdsNotSaved;
+
+  /// Settings, Alerts: toast when the levels change failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The levels could not be changed.'**
+  String get settingsThresholdsNotChanged;
+
+  /// Settings, Alerts: a metric whose usage bands are set (OV-11); disk covers space and inodes.
+  ///
+  /// In en, this message translates to:
+  /// **'{metric, select, cpu{CPU} memory{Memory} other{Disk}}'**
+  String settingsThresholdMetric(String metric);
+
+  /// Settings, Alerts: a metric's three levels, each a formatted percent (chartPercent).
+  ///
+  /// In en, this message translates to:
+  /// **'Careful from {careful}, warning from {warning}, critical from {critical}'**
+  String settingsThresholdLevels(
+    String careful,
+    String warning,
+    String critical,
+  );
 
   /// Toast when the threshold announcement switch applied but settings.json could not be written.
   ///
@@ -6449,6 +6567,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'What will run'**
   String get actionPreviewSteps;
+
+  /// Action preview: copies the exact commands the action runs, to read or script; copying runs nothing (AUT-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Copy as commands'**
+  String get actionPreviewCopyCommands;
+
+  /// Copied action commands: a shell comment above a command that reads an edit's new content on stdin. Keep the leading # so the line stays a comment.
+  ///
+  /// In en, this message translates to:
+  /// **'# The next command reads {size} of new content on stdin.'**
+  String actionPreviewCommandsStdin(String size);
+
+  /// Copied action commands: a shell comment naming a Docker Engine API request the action sends, which a shell cannot run as it stands. Keep the leading # so the line stays a comment.
+  ///
+  /// In en, this message translates to:
+  /// **'# Docker Engine API: {request}'**
+  String actionPreviewCommandsApi(String request);
+
+  /// Action preview: the commands are on the clipboard; the action itself has not run.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied. Nothing ran.'**
+  String get actionPreviewCommandsCopied;
+
+  /// Action preview: the clipboard refused the commands, so pasting now would paste something else.
+  ///
+  /// In en, this message translates to:
+  /// **'Not copied. The clipboard still holds its earlier text.'**
+  String get actionPreviewCommandsNotCopied;
 
   /// Badge on a step that runs as root through admin mode (SAF-03). Lowercase on purpose: the account name.
   ///
@@ -8327,6 +8475,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The columns could not be saved. They stay until Klabautermann quits.'**
   String get dockerContainersColumnsNotSaved;
+
+  /// Containers tab: the chip that lists the running containers in one list, the busiest first (CST-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Top'**
+  String get dockerContainersTop;
+
+  /// Containers tab: the Top chip's tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Running containers in one list, the busiest first'**
+  String get dockerContainersTopTooltip;
+
+  /// Containers table: a container's memory near its limit (CST-04), after a warning icon, in place of the bytes. share is the used share of the limit.
+  ///
+  /// In en, this message translates to:
+  /// **'{share} of limit'**
+  String dockerContainersMemoryRisk(double share);
+
+  /// Container details: the usage charts' heading (CST-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Usage'**
+  String get dockerUsageTitle;
+
+  /// Container details: where the usage charts' samples come from, as the chart legend names it.
+  ///
+  /// In en, this message translates to:
+  /// **'Read every 5 s while these details show'**
+  String get dockerUsageSource;
+
+  /// Container details: the usage charts have no reading yet.
+  ///
+  /// In en, this message translates to:
+  /// **'The first reading comes within a few seconds.'**
+  String get dockerUsageWaiting;
+
+  /// Container details: a container's memory at or above 90% of its limit (CST-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Memory is at {share} of its limit ({used} of {limit}); near the limit the kernel may kill it (OOM).'**
+  String dockerUsageMemoryRisk(double share, String used, String limit);
+
+  /// Container details: the CPU chart's title and series.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get dockerUsageCpu;
+
+  /// Container details: the memory chart's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get dockerUsageMemory;
+
+  /// Container details: the memory chart's used series.
+  ///
+  /// In en, this message translates to:
+  /// **'Used'**
+  String get dockerUsageMemoryUsed;
+
+  /// Container details: the memory chart's limit series.
+  ///
+  /// In en, this message translates to:
+  /// **'Limit'**
+  String get dockerUsageMemoryLimit;
+
+  /// Container details: the network chart's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get dockerUsageNetwork;
+
+  /// Container details: the network chart's received series.
+  ///
+  /// In en, this message translates to:
+  /// **'In'**
+  String get dockerUsageNetworkIn;
+
+  /// Container details: the network chart's sent series.
+  ///
+  /// In en, this message translates to:
+  /// **'Out'**
+  String get dockerUsageNetworkOut;
+
+  /// Container details: the block I/O chart's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Block I/O'**
+  String get dockerUsageBlockIo;
+
+  /// Container details: the block I/O chart's read series.
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get dockerUsageBlockRead;
+
+  /// Container details: the block I/O chart's written series.
+  ///
+  /// In en, this message translates to:
+  /// **'Written'**
+  String get dockerUsageBlockWrite;
+
+  /// Container details: the PIDs chart's title and series.
+  ///
+  /// In en, this message translates to:
+  /// **'PIDs'**
+  String get dockerUsagePids;
 
   /// Containers tab: the chip that puts a checkbox on each row and heading, to act on several containers at once (CTR-07).
   ///
@@ -12683,6 +12939,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get attentionCancel;
+
+  /// Server header button and page title (AUT-01): Séance's synced snippets, run on this server.
+  ///
+  /// In en, this message translates to:
+  /// **'Snippets'**
+  String get snippetsTitle;
+
+  /// Snippets page title (AUT-01): the server the chosen snippet runs on.
+  ///
+  /// In en, this message translates to:
+  /// **'Snippets on {server}'**
+  String snippetsPageTitle(String server);
+
+  /// Snippets page (AUT-01): the search field's label; it matches titles and commands.
+  ///
+  /// In en, this message translates to:
+  /// **'Search snippets'**
+  String get snippetsSearch;
+
+  /// Snippets page (AUT-01): shown when the account carries no snippet.
+  ///
+  /// In en, this message translates to:
+  /// **'No snippets yet. Snippets you save in Séance appear here once this device syncs with the same account.'**
+  String get snippetsEmpty;
+
+  /// Snippets page (AUT-01): shown when the search leaves no snippet.
+  ///
+  /// In en, this message translates to:
+  /// **'No snippet matches your search.'**
+  String get snippetsNoMatch;
+
+  /// Snippets page (AUT-01): stands in for a snippet Séance saved without a title.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled snippet'**
+  String get snippetsUntitled;
+
+  /// Placeholder dialog title (AUT-01): the snippet whose placeholders the user fills before the preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in {title}'**
+  String snippetsFillTitle(String title);
+
+  /// Placeholder dialog (AUT-01): explains the fields above the command.
+  ///
+  /// In en, this message translates to:
+  /// **'Each value replaces its placeholder in the command. Nothing runs until you confirm the preview.'**
+  String get snippetsFillHint;
+
+  /// Placeholder dialog (AUT-01): label of the filled command shown under the fields.
+  ///
+  /// In en, this message translates to:
+  /// **'Command'**
+  String get snippetsFillCommand;
+
+  /// Placeholder dialog (AUT-01): shown while a placeholder is still empty, so a blank value never runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in every value to continue.'**
+  String get snippetsFillRequired;
+
+  /// Placeholder dialog (AUT-01): opens the action preview of the filled command.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get snippetsContinue;
+
+  /// Placeholder dialog (AUT-01): closes it without running anything.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get snippetsCancel;
+
+  /// View menu: opens the command palette (PLT-07), ⌘K or Ctrl+K.
+  ///
+  /// In en, this message translates to:
+  /// **'Command Palette…'**
+  String get paletteCommand;
+
+  /// Command palette: the path of the app's menu commands.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions'**
+  String get paletteActions;
+
+  /// Command palette: the path of the fleet's servers.
+  ///
+  /// In en, this message translates to:
+  /// **'Servers'**
+  String get paletteServers;
+
+  /// Command palette: the path of the selected server's tabs.
+  ///
+  /// In en, this message translates to:
+  /// **'{server} tabs'**
+  String paletteTabs(String server);
+
+  /// Command palette: the path of the selected server's containers.
+  ///
+  /// In en, this message translates to:
+  /// **'{server} containers'**
+  String paletteContainers(String server);
+
+  /// Command palette: a container row's second line, its state and image.
+  ///
+  /// In en, this message translates to:
+  /// **'{state} · {image}'**
+  String paletteContainerDescription(String state, String image);
 }
 
 class _AppLocalizationsDelegate

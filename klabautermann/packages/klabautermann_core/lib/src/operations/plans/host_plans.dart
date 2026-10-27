@@ -27,6 +27,8 @@ import '../impact.dart';
 import '../operation_plan.dart';
 import '../plan_types.dart';
 import '../protected_targets.dart';
+import '../../sampling/argument_masking.dart'
+    show ArgumentMaskingBudget, maskCommandLine;
 import '../../sampling/sample_results.dart' show maskedCronJobs;
 
 /// What planning on one server sees: its ready link, its probe, its
@@ -84,6 +86,7 @@ Future<PlanAttempt> planHostAction(
       UnitAction() => await _planUnit(intent, context),
       StartTimer() => await _planTimer(intent, context),
       RunCronJob() => await _planCronRun(intent, context, elevated),
+      RunSnippet() => _planSnippet(intent, context),
       RefreshPackageLists() => await _planPackageRefresh(intent, context),
       PowerAction() => await _planPower(intent, context),
       _ => _refused(ActionRefusalReason.notImplemented),
@@ -378,6 +381,39 @@ Future<PlanAttempt> _planCronRun(
               identity: runAs,
               credentials: RunnerCredentials.adminPassword,
             ),
+      hostWrites: const [HostWriteRow.loginRecords],
+    ),
+  );
+}
+
+/// AUT-01: the snippet's command as the login user, through `sh -c` as
+/// a cron line runs. The preview, the linter and the audit show it
+/// masked by 8.9's rules, as a cron line's. Admin mode never applies: a
+/// snippet that needs root says so in its own words, as it does in
+/// Séance's terminal.
+PlanAttempt _planSnippet(RunSnippet intent, HostPlanContext c) {
+  final argv = HostCommands.runCronCommand(intent.command);
+  // The masker never reads the program's slot as a value, so an empty
+  // program stands in front, as for a cron line.
+  final shown = maskCommandLine([
+    '',
+    intent.command,
+  ], budget: ArgumentMaskingBudget())[1].display;
+  return _planned(
+    OperationPlan(
+      intent: intent,
+      kind: OperationKind.snippetRun,
+      // Séance lets a snippet go untitled.
+      targetName: intent.title.trim().isEmpty ? shown : intent.title,
+      steps: [
+        ShellStep(
+          argv,
+          shownArgv: HostCommands.runCronCommand(shown),
+          captureOutput: true,
+        ),
+      ],
+      requiredLevel: RequiredLevel.login,
+      runner: _runner(c, elevated: false),
       hostWrites: const [HostWriteRow.loginRecords],
     ),
   );
