@@ -4,11 +4,40 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/operations_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
+import '../workspace_dock.dart';
 
-/// JOB-19's output (03 §7.7): how the cron line's run [planId] ended and
-/// what it printed, redacted and capped by the engine, in a bottom sheet
-/// that waits for the run's end. [title] is the target the preview named.
+/// JOB-19's output (03 §7.7): how the cron line's run [planId] on
+/// [serverId] ended and what it printed, redacted and capped by the
+/// engine, waiting for the run's end. [title] is the target the preview
+/// named. The desktop shows it in the workspace's dock (OV-10); elsewhere
+/// it opens a bottom sheet.
 Future<void> showCronRunOutput(
+  BuildContext context, {
+  required OperationsController operations,
+  required String serverId,
+  required String planId,
+  required String title,
+}) async {
+  if (WorkspaceDockScope.maybeOf(context) case final dock?) {
+    dock.show(
+      DockedCommandRun(
+        serverId,
+        operations: operations,
+        planId: planId,
+        title: title,
+      ),
+    );
+    return;
+  }
+  await _showCronRunOutputSheet(
+    context,
+    operations: operations,
+    planId: planId,
+    title: title,
+  );
+}
+
+Future<void> _showCronRunOutputSheet(
   BuildContext context, {
   required OperationsController operations,
   required String planId,
