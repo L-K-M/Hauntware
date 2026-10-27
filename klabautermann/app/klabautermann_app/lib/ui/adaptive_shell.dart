@@ -6,9 +6,14 @@ import '../controllers/monitoring_controller.dart';
 import '../controllers/sync_controller.dart';
 import 'desktop_shell.dart';
 import 'phone_shell.dart';
+import 'workspace_navigation.dart';
 
 /// 03 §10.2: the desktop layout takes over at this width.
 const double kDesktopShellMinWidth = 960;
+
+/// Whether [context]'s window is wide enough for the desktop shell.
+bool showsDesktopShell(BuildContext context) =>
+    MediaQuery.sizeOf(context).width >= kDesktopShellMinWidth;
 
 /// Picks the shell for the window's width (03 §10.2, §10.5). Widths
 /// between the phone and desktop breakpoints use the phone stack until
@@ -22,6 +27,7 @@ class AdaptiveShell extends StatelessWidget {
     required this.onOpenSettings,
     this.onAddServer,
     this.sync,
+    this.navigation,
   });
 
   final FleetController fleet;
@@ -34,9 +40,12 @@ class AdaptiveShell extends StatelessWidget {
   /// idle with no action.
   final SyncController? sync;
 
+  /// Where the command palette sends the desktop workspace.
+  final WorkspaceNavigation? navigation;
+
   @override
   Widget build(BuildContext context) {
-    if (MediaQuery.sizeOf(context).width >= kDesktopShellMinWidth) {
+    if (showsDesktopShell(context)) {
       return DesktopShell(
         fleet: fleet,
         monitoring: monitoring,
@@ -44,6 +53,7 @@ class AdaptiveShell extends StatelessWidget {
         onOpenSettings: onOpenSettings,
         onAddServer: onAddServer,
         sync: sync,
+        navigation: navigation,
       );
     }
     return PhoneShell(

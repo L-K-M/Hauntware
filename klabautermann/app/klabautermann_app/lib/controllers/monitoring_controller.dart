@@ -274,6 +274,9 @@ final class MonitoringController extends ChangeNotifier {
 
   /// The 6.4 column the engine samples at; it starts at Desktop's.
   CadenceProfile _cadence = CadenceProfile.desktop;
+
+  /// Each server's cap as the engine was last told; none at the start.
+  Map<String, CadenceProfile> _caps = const {};
   bool _engineStopped = false;
 
   /// When the app last went to the background, and the servers the
@@ -600,6 +603,17 @@ final class MonitoringController extends ChangeNotifier {
     if (profile == _cadence) return;
     _cadence = profile;
     _send(SetCadenceProfile(profile));
+  }
+
+  /// Caps each server in [caps] at its column and lifts the caps of those
+  /// left out (SAF-19), telling the engine only what changed.
+  void setCadenceCaps(Map<String, CadenceProfile> caps) {
+    for (final serverId in {..._caps.keys, ...caps.keys}) {
+      final cap = caps[serverId];
+      if (cap == _caps[serverId]) continue;
+      _send(SetServerCadenceCap(serverId, cap));
+    }
+    _caps = Map.unmodifiable(caps);
   }
 
   /// Tells the engine whether the user can see the app (03 §10.1), when

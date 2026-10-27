@@ -5298,6 +5298,26 @@
   "@settingsCadenceNotChanged": {
     "description": "Settings, General: toast when the polling budget change failed."
   },
+  "settingsCadenceCapsTitle": "Refresh limits",
+  "@settingsCadenceCapsTitle": {
+    "description": "Settings, Servers: the heading of the per-server polling caps (SAF-19)."
+  },
+  "settingsCadenceCapsDetail": "Read a server no more often than the chosen rate, for example one on a metered link. A limit never makes a server refresh faster than the rate in General.",
+  "@settingsCadenceCapsDetail": {
+    "description": "Settings, Servers: what a per-server polling cap does (SAF-19, 03 §6.4)."
+  },
+  "settingsCadenceNoCap": "No limit",
+  "@settingsCadenceNoCap": {
+    "description": "Settings, Servers: the menu choice that lifts a server's polling cap."
+  },
+  "settingsCadenceCapNotSaved": "The refresh limit changed but could not be saved. It lasts until Klabautermann quits.",
+  "@settingsCadenceCapNotSaved": {
+    "description": "Settings, Servers: toast when a server's polling cap applied but settings.json could not be written."
+  },
+  "settingsCadenceCapNotChanged": "The refresh limit could not be changed.",
+  "@settingsCadenceCapNotChanged": {
+    "description": "Settings, Servers: toast when a server's polling cap change failed."
+  },
   "settingsAnnounceBands": "Announce threshold changes",
   "@settingsAnnounceBands": {
     "description": "Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level."
@@ -5305,6 +5325,70 @@
   "settingsAnnounceBandsDetail": "While a server's Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.",
   "@settingsAnnounceBandsDetail": {
     "description": "Explanation under the threshold announcement switch on the General settings tab (A11Y-15)."
+  },
+  "settingsThresholdsTitle": "Usage bands",
+  "@settingsThresholdsTitle": {
+    "description": "Settings, Alerts: the heading of OV-11's threshold levels."
+  },
+  "settingsThresholdsDetail": "The levels the fleet rows, the Overview and its health card judge each metric by. Careful shows an info icon, warning and critical also take their colour, and only warning and critical are announced.",
+  "@settingsThresholdsDetail": {
+    "description": "Settings, Alerts: what the usage bands do."
+  },
+  "settingsThresholdCareful": "Careful from",
+  "@settingsThresholdCareful": {
+    "description": "Settings, Alerts, threshold dialog: the careful level's field label."
+  },
+  "settingsThresholdWarning": "Warning from",
+  "@settingsThresholdWarning": {
+    "description": "Settings, Alerts, threshold dialog: the warning level's field label."
+  },
+  "settingsThresholdCritical": "Critical from",
+  "@settingsThresholdCritical": {
+    "description": "Settings, Alerts, threshold dialog: the critical level's field label."
+  },
+  "settingsThresholdPercentSuffix": "%",
+  "@settingsThresholdPercentSuffix": {
+    "description": "Settings, Alerts, threshold dialog: the unit after each level's number."
+  },
+  "settingsThresholdsInvalid": "Each level must be a whole percent from 1 to 100, and each one higher than the one before.",
+  "@settingsThresholdsInvalid": {
+    "description": "Settings, Alerts, threshold dialog: why the levels typed cannot be saved."
+  },
+  "settingsThresholdDefault": "Default",
+  "@settingsThresholdDefault": {
+    "description": "Settings, Alerts, threshold dialog: fills in the default levels (70, 80 and 90 %)."
+  },
+  "settingsThresholdCancel": "Cancel",
+  "@settingsThresholdCancel": {
+    "description": "Settings, Alerts, threshold dialog: closes it without a change."
+  },
+  "settingsThresholdSave": "Save",
+  "@settingsThresholdSave": {
+    "description": "Settings, Alerts, threshold dialog: applies the levels typed."
+  },
+  "settingsThresholdsNotSaved": "The levels changed but could not be saved. They last until Klabautermann quits.",
+  "@settingsThresholdsNotSaved": {
+    "description": "Settings, Alerts: toast when new levels applied but settings.json could not be written."
+  },
+  "settingsThresholdsNotChanged": "The levels could not be changed.",
+  "@settingsThresholdsNotChanged": {
+    "description": "Settings, Alerts: toast when the levels change failed."
+  },
+  "settingsThresholdMetric": "{metric, select, cpu{CPU} memory{Memory} other{Disk}}",
+  "@settingsThresholdMetric": {
+    "description": "Settings, Alerts: a metric whose usage bands are set (OV-11); disk covers space and inodes.",
+    "placeholders": {
+      "metric": {"type": "String", "example": "cpu"}
+    }
+  },
+  "settingsThresholdLevels": "Careful from {careful}, warning from {warning}, critical from {critical}",
+  "@settingsThresholdLevels": {
+    "description": "Settings, Alerts: a metric's three levels, each a formatted percent (chartPercent).",
+    "placeholders": {
+      "careful": {"type": "String", "example": "70%"},
+      "warning": {"type": "String", "example": "80%"},
+      "critical": {"type": "String", "example": "90%"}
+    }
   },
   "settingsAnnounceNotSaved": "The setting changed, but it could not be saved, so it will not be kept after a restart.",
   "@settingsAnnounceNotSaved": {
@@ -6115,6 +6199,38 @@
   "actionPreviewSteps": "What will run",
   "@actionPreviewSteps": {
     "description": "Heading above the exact commands and API requests in the action preview."
+  },
+  "actionPreviewCopyCommands": "Copy as commands",
+  "@actionPreviewCopyCommands": {
+    "description": "Action preview: copies the exact commands the action runs, to read or script; copying runs nothing (AUT-02)."
+  },
+  "actionPreviewCommandsStdin": "# The next command reads {size} of new content on stdin.",
+  "@actionPreviewCommandsStdin": {
+    "description": "Copied action commands: a shell comment above a command that reads an edit's new content on stdin. Keep the leading # so the line stays a comment.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "1.2 KiB"
+      }
+    }
+  },
+  "actionPreviewCommandsApi": "# Docker Engine API: {request}",
+  "@actionPreviewCommandsApi": {
+    "description": "Copied action commands: a shell comment naming a Docker Engine API request the action sends, which a shell cannot run as it stands. Keep the leading # so the line stays a comment.",
+    "placeholders": {
+      "request": {
+        "type": "String",
+        "example": "POST /v1.52/containers/web/restart"
+      }
+    }
+  },
+  "actionPreviewCommandsCopied": "Copied. Nothing ran.",
+  "@actionPreviewCommandsCopied": {
+    "description": "Action preview: the commands are on the clipboard; the action itself has not run."
+  },
+  "actionPreviewCommandsNotCopied": "Not copied. The clipboard still holds its earlier text.",
+  "@actionPreviewCommandsNotCopied": {
+    "description": "Action preview: the clipboard refused the commands, so pasting now would paste something else."
   },
   "actionPreviewRoot": "root",
   "@actionPreviewRoot": {
@@ -7898,6 +8014,100 @@
   "dockerContainersColumnsNotSaved": "The columns could not be saved. They stay until Klabautermann quits.",
   "@dockerContainersColumnsNotSaved": {
     "description": "Containers tab: the chosen columns show, but settings.json could not be written."
+  },
+  "dockerContainersTop": "Top",
+  "@dockerContainersTop": {
+    "description": "Containers tab: the chip that lists the running containers in one list, the busiest first (CST-05)."
+  },
+  "dockerContainersTopTooltip": "Running containers in one list, the busiest first",
+  "@dockerContainersTopTooltip": {
+    "description": "Containers tab: the Top chip's tooltip."
+  },
+  "dockerContainersMemoryRisk": "{share} of limit",
+  "@dockerContainersMemoryRisk": {
+    "description": "Containers table: a container's memory near its limit (CST-04), after a warning icon, in place of the bytes. share is the used share of the limit.",
+    "placeholders": {
+      "share": {
+        "type": "double",
+        "format": "percentPattern",
+        "example": "0.93"
+      }
+    }
+  },
+  "dockerUsageTitle": "Usage",
+  "@dockerUsageTitle": {
+    "description": "Container details: the usage charts' heading (CST-03)."
+  },
+  "dockerUsageSource": "Read every 5 s while these details show",
+  "@dockerUsageSource": {
+    "description": "Container details: where the usage charts' samples come from, as the chart legend names it."
+  },
+  "dockerUsageWaiting": "The first reading comes within a few seconds.",
+  "@dockerUsageWaiting": {
+    "description": "Container details: the usage charts have no reading yet."
+  },
+  "dockerUsageMemoryRisk": "Memory is at {share} of its limit ({used} of {limit}); near the limit the kernel may kill it (OOM).",
+  "@dockerUsageMemoryRisk": {
+    "description": "Container details: a container's memory at or above 90% of its limit (CST-04).",
+    "placeholders": {
+      "share": {
+        "type": "double",
+        "format": "percentPattern",
+        "example": "0.93"
+      },
+      "used": {
+        "type": "String",
+        "example": "930 MiB"
+      },
+      "limit": {
+        "type": "String",
+        "example": "1 GiB"
+      }
+    }
+  },
+  "dockerUsageCpu": "CPU",
+  "@dockerUsageCpu": {
+    "description": "Container details: the CPU chart's title and series."
+  },
+  "dockerUsageMemory": "Memory",
+  "@dockerUsageMemory": {
+    "description": "Container details: the memory chart's title."
+  },
+  "dockerUsageMemoryUsed": "Used",
+  "@dockerUsageMemoryUsed": {
+    "description": "Container details: the memory chart's used series."
+  },
+  "dockerUsageMemoryLimit": "Limit",
+  "@dockerUsageMemoryLimit": {
+    "description": "Container details: the memory chart's limit series."
+  },
+  "dockerUsageNetwork": "Network",
+  "@dockerUsageNetwork": {
+    "description": "Container details: the network chart's title."
+  },
+  "dockerUsageNetworkIn": "In",
+  "@dockerUsageNetworkIn": {
+    "description": "Container details: the network chart's received series."
+  },
+  "dockerUsageNetworkOut": "Out",
+  "@dockerUsageNetworkOut": {
+    "description": "Container details: the network chart's sent series."
+  },
+  "dockerUsageBlockIo": "Block I/O",
+  "@dockerUsageBlockIo": {
+    "description": "Container details: the block I/O chart's title."
+  },
+  "dockerUsageBlockRead": "Read",
+  "@dockerUsageBlockRead": {
+    "description": "Container details: the block I/O chart's read series."
+  },
+  "dockerUsageBlockWrite": "Written",
+  "@dockerUsageBlockWrite": {
+    "description": "Container details: the block I/O chart's written series."
+  },
+  "dockerUsagePids": "PIDs",
+  "@dockerUsagePids": {
+    "description": "Container details: the PIDs chart's title and series."
   },
   "dockerContainersSelect": "Select",
   "@dockerContainersSelect": {
@@ -12108,5 +12318,107 @@
   "fleetShowAll": "Show all servers",
   "@fleetShowAll": {
     "description": "Fleet list (FL-10): turns the faults-only filter off."
+  },
+  "snippetsTitle": "Snippets",
+  "@snippetsTitle": {
+    "description": "Server header button and page title (AUT-01): Séance's synced snippets, run on this server."
+  },
+  "snippetsPageTitle": "Snippets on {server}",
+  "@snippetsPageTitle": {
+    "description": "Snippets page title (AUT-01): the server the chosen snippet runs on.",
+    "placeholders": {
+      "server": {
+        "type": "String",
+        "example": "web-1"
+      }
+    }
+  },
+  "snippetsSearch": "Search snippets",
+  "@snippetsSearch": {
+    "description": "Snippets page (AUT-01): the search field's label; it matches titles and commands."
+  },
+  "snippetsEmpty": "No snippets yet. Snippets you save in Séance appear here once this device syncs with the same account.",
+  "@snippetsEmpty": {
+    "description": "Snippets page (AUT-01): shown when the account carries no snippet."
+  },
+  "snippetsNoMatch": "No snippet matches your search.",
+  "@snippetsNoMatch": {
+    "description": "Snippets page (AUT-01): shown when the search leaves no snippet."
+  },
+  "snippetsUntitled": "Untitled snippet",
+  "@snippetsUntitled": {
+    "description": "Snippets page (AUT-01): stands in for a snippet Séance saved without a title."
+  },
+  "snippetsFillTitle": "Fill in {title}",
+  "@snippetsFillTitle": {
+    "description": "Placeholder dialog title (AUT-01): the snippet whose placeholders the user fills before the preview.",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Restart a unit"
+      }
+    }
+  },
+  "snippetsFillHint": "Each value replaces its placeholder in the command. Nothing runs until you confirm the preview.",
+  "@snippetsFillHint": {
+    "description": "Placeholder dialog (AUT-01): explains the fields above the command."
+  },
+  "snippetsFillCommand": "Command",
+  "@snippetsFillCommand": {
+    "description": "Placeholder dialog (AUT-01): label of the filled command shown under the fields."
+  },
+  "snippetsFillRequired": "Fill in every value to continue.",
+  "@snippetsFillRequired": {
+    "description": "Placeholder dialog (AUT-01): shown while a placeholder is still empty, so a blank value never runs."
+  },
+  "snippetsContinue": "Preview",
+  "@snippetsContinue": {
+    "description": "Placeholder dialog (AUT-01): opens the action preview of the filled command."
+  },
+  "snippetsCancel": "Cancel",
+  "@snippetsCancel": {
+    "description": "Placeholder dialog (AUT-01): closes it without running anything."
+  },
+  "paletteCommand": "Command Palette…",
+  "@paletteCommand": {
+    "description": "View menu: opens the command palette (PLT-07), ⌘K or Ctrl+K."
+  },
+  "paletteActions": "Actions",
+  "@paletteActions": {
+    "description": "Command palette: the path of the app's menu commands."
+  },
+  "paletteServers": "Servers",
+  "@paletteServers": {
+    "description": "Command palette: the path of the fleet's servers."
+  },
+  "paletteTabs": "{server} tabs",
+  "@paletteTabs": {
+    "description": "Command palette: the path of the selected server's tabs.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteContainers": "{server} containers",
+  "@paletteContainers": {
+    "description": "Command palette: the path of the selected server's containers.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteContainerDescription": "{state} · {image}",
+  "@paletteContainerDescription": {
+    "description": "Command palette: a container row's second line, its state and image.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      },
+      "image": {
+        "type": "String"
+      }
+    }
   }
 }

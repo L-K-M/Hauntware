@@ -10,6 +10,7 @@ import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/settings_page.dart';
 
+import 'support/fake_engine.dart';
 import 'support/harness.dart';
 
 /// 03 §10.2: the settings route carries the seven planned tabs as
@@ -281,6 +282,61 @@ void main() {
 
     expect(harness.fleet.monitoredServerIds, {'srv-2'});
     expect(find.text('1 of 10 servers monitored'), findsOneWidget);
+  });
+
+  testWidgets('the Servers tab limits a server\'s refresh, and says when '
+      'the limit could not be saved (SAF-19)', (tester) async {
+    final engine = FakeEngineClient();
+    final fleet = FleetController(engine, servers: twoServers);
+    final caps = CadenceCapsController(
+      save: (_, _) async => throw const FileSystemException('disk full'),
+    );
+    addTearDown(() async {
+      caps.dispose();
+      fleet.dispose();
+      await engine.close();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: ServersTab(
+            monitorSet: fleet.monitorSettings,
+            cadenceCaps: caps,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Refresh limits'), findsOneWidget);
+    expect(find.text('No limit'), findsNWidgets(2));
+
+    await tester.tap(find.text('No limit').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Phone').last);
+    await tester.pumpAndSettle();
+
+    expect(caps.value, {twoServers.last.id: CadenceCap.phone});
+    expect(find.text('No limit'), findsOneWidget);
+    expect(
+      find.text(
+        'The refresh limit changed but could not be saved. It lasts until '
+        'Klabautermann quits.',
+      ),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('without caps the Servers tab leaves refresh limits out', (
+    tester,
+  ) async {
+    await openSettings(tester, servers: twoServers);
+    await tester.tap(find.text('Servers'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Refresh limits'), findsNothing);
   });
 
   testWidgets('back returns to the shell', (tester) async {

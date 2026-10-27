@@ -206,6 +206,34 @@ void main() {
       );
     });
 
+    testWidgets('Copy as commands copies what runs and runs nothing '
+        '(AUT-02)', (tester) async {
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      final results = await open(tester, _preview());
+      await tester.tap(find.text('Copy as commands'));
+      await tester.pumpAndSettle();
+      final step = _preview().steps.single as ShellStep;
+      expect(copied, 'sudo ${step.commandLine}');
+      expect(find.text('Copied. Nothing ran.'), findsOneWidget);
+      expect(find.byType(Dialog), findsOneWidget, reason: 'still open');
+      expect(results, isEmpty);
+    });
+
     testWidgets('tier 2 runs only once the target\'s name is typed exactly, '
         'by Run or Enter', (tester) async {
       final results = await open(tester, _preview());
@@ -319,6 +347,32 @@ void main() {
       findsOneWidget,
     );
     await tester.pump(const Duration(seconds: 10));
+  });
+
+  test('planCommandsText writes a pasteable script: sudo for an '
+      'elevated step, a note before stdin content, API requests as '
+      'comments', () {
+    final up = ShellStep(['docker', 'compose', 'up', '-d']);
+    final write = ShellStep(
+      ['tee', '--', '/etc/app.conf'],
+      input: [1, 2, 3],
+      elevated: true,
+    );
+    final text = planCommandsText(lookupAppLocalizations(const Locale('en')), [
+      up,
+      write,
+      ApiStep(
+        method: 'POST',
+        path: '/v1.52/containers/web/restart',
+        query: {'t': '10'},
+      ),
+    ]);
+    expect(text.split('\n'), [
+      up.commandLine,
+      '# The next command reads 3 B of new content on stdin.',
+      'sudo ${write.commandLine}',
+      '# Docker Engine API: POST /v1.52/containers/web/restart?t=10',
+    ]);
   });
 
   group('the action entry registry (SAF-06)', () {

@@ -9,11 +9,12 @@ import '../controllers/docker_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'certificates.dart' show kTlsExpirySoon;
-import 'charts/charts.dart' show ChartSeverity;
+import 'charts/charts.dart' show ChartSeverity, ChartThresholds;
 import 'docker/images_view.dart' show imageTagsOf;
 import 'overview_panel.dart' show DiskMeasure, diskAlarms;
 import 'system_view.dart' show clockSkewText, kClockInStep;
-import 'threshold_scope.dart' show kDefaultThresholds;
+import 'threshold_scope.dart'
+    show ThresholdMetric, ThresholdScope, kDefaultThresholds;
 
 /// TRI-01's checks, in the order the checklist lists them.
 enum DoctorCheckKind {
@@ -96,6 +97,7 @@ final class DoctorInputs {
     required this.now,
     this.fs,
     this.fsFailed = false,
+    this.diskLevels = kDefaultThresholds,
     this.failedUnits,
     this.profile,
     this.skew,
@@ -116,6 +118,10 @@ final class DoctorInputs {
   /// leaves every mount's use unknown.
   final FsSnapshot? fs;
   final bool fsFailed;
+
+  /// The disk bands the user set (OV-11), which the space and inode
+  /// checks judge [fs] by, as the fleet rows do.
+  final ChartThresholds diskLevels;
 
   final List<SystemdUnit>? failedUnits;
   final HostProfile? profile;
@@ -166,7 +172,7 @@ DoctorCheck _disk(
   }
 
   final alarms = [
-    for (final alarm in diskAlarms(fs))
+    for (final alarm in diskAlarms(fs, levels: inputs.diskLevels))
       if (alarm.measure == measure) alarm,
   ];
   if (alarms.isEmpty) return DoctorCheck(kind, DoctorVerdict.ok);
@@ -493,6 +499,7 @@ class _DoctorViewState extends State<DoctorView> {
               _ => null,
             },
             fsFailed: fsLatest.value?.result is CollectorUnavailable,
+            diskLevels: ThresholdScope.of(context, ThresholdMetric.disk),
             failedUnits: switch (units.value?.result) {
               FailedUnitsResult(:final failed) => failed,
               _ => null,
@@ -629,7 +636,10 @@ class DoctorRow extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                Text(_finding(l10n), style: theme.textTheme.bodyMedium),
+                Text(
+                  _finding(context, l10n),
+                  style: theme.textTheme.bodyMedium,
+                ),
                 for (final name in check.names)
                   SelectableText(name, style: muted),
                 if (actionable)
@@ -647,10 +657,13 @@ class DoctorRow extends StatelessWidget {
     );
   }
 
-  String _finding(AppLocalizations l10n) {
+  String _finding(BuildContext context, AppLocalizations l10n) {
     final count = check.count ?? 0;
     final size = ghostFormatBinarySize(check.bytes ?? 0);
-    final warning = l10n.chartPercent(kDefaultThresholds.warning / 100);
+    // The disk band the user set (OV-11), as the fleet rows draw it.
+    final warning = l10n.chartPercent(
+      ThresholdScope.of(context, ThresholdMetric.disk).warning / 100,
+    );
     return switch ((check.kind, check.verdict)) {
       (_, DoctorVerdict.unknown) => l10n.doctorUnknown,
       (_, DoctorVerdict.checking) => l10n.doctorChecking,

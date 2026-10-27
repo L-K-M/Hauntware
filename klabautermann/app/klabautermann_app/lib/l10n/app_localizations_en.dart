@@ -4362,11 +4362,87 @@ class AppLocalizationsEn extends AppLocalizations {
       'The refresh rate could not be changed.';
 
   @override
+  String get settingsCadenceCapsTitle => 'Refresh limits';
+
+  @override
+  String get settingsCadenceCapsDetail =>
+      'Read a server no more often than the chosen rate, for example one on a metered link. A limit never makes a server refresh faster than the rate in General.';
+
+  @override
+  String get settingsCadenceNoCap => 'No limit';
+
+  @override
+  String get settingsCadenceCapNotSaved =>
+      'The refresh limit changed but could not be saved. It lasts until Klabautermann quits.';
+
+  @override
+  String get settingsCadenceCapNotChanged =>
+      'The refresh limit could not be changed.';
+
+  @override
   String get settingsAnnounceBands => 'Announce threshold changes';
 
   @override
   String get settingsAnnounceBandsDetail =>
       'While a server\'s Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.';
+
+  @override
+  String get settingsThresholdsTitle => 'Usage bands';
+
+  @override
+  String get settingsThresholdsDetail =>
+      'The levels the fleet rows, the Overview and its health card judge each metric by. Careful shows an info icon, warning and critical also take their colour, and only warning and critical are announced.';
+
+  @override
+  String get settingsThresholdCareful => 'Careful from';
+
+  @override
+  String get settingsThresholdWarning => 'Warning from';
+
+  @override
+  String get settingsThresholdCritical => 'Critical from';
+
+  @override
+  String get settingsThresholdPercentSuffix => '%';
+
+  @override
+  String get settingsThresholdsInvalid =>
+      'Each level must be a whole percent from 1 to 100, and each one higher than the one before.';
+
+  @override
+  String get settingsThresholdDefault => 'Default';
+
+  @override
+  String get settingsThresholdCancel => 'Cancel';
+
+  @override
+  String get settingsThresholdSave => 'Save';
+
+  @override
+  String get settingsThresholdsNotSaved =>
+      'The levels changed but could not be saved. They last until Klabautermann quits.';
+
+  @override
+  String get settingsThresholdsNotChanged => 'The levels could not be changed.';
+
+  @override
+  String settingsThresholdMetric(String metric) {
+    String _temp0 = intl.Intl.selectLogic(metric, {
+      'cpu': 'CPU',
+      'memory': 'Memory',
+      'other': 'Disk',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String settingsThresholdLevels(
+    String careful,
+    String warning,
+    String critical,
+  ) {
+    return 'Careful from $careful, warning from $warning, critical from $critical';
+  }
 
   @override
   String get settingsAnnounceNotSaved =>
@@ -5051,6 +5127,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get actionPreviewSteps => 'What will run';
+
+  @override
+  String get actionPreviewCopyCommands => 'Copy as commands';
+
+  @override
+  String actionPreviewCommandsStdin(String size) {
+    return '# The next command reads $size of new content on stdin.';
+  }
+
+  @override
+  String actionPreviewCommandsApi(String request) {
+    return '# Docker Engine API: $request';
+  }
+
+  @override
+  String get actionPreviewCommandsCopied => 'Copied. Nothing ran.';
+
+  @override
+  String get actionPreviewCommandsNotCopied =>
+      'Not copied. The clipboard still holds its earlier text.';
 
   @override
   String get actionPreviewRoot => 'root';
@@ -6559,6 +6655,74 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerContainersColumnsNotSaved =>
       'The columns could not be saved. They stay until Klabautermann quits.';
+
+  @override
+  String get dockerContainersTop => 'Top';
+
+  @override
+  String get dockerContainersTopTooltip =>
+      'Running containers in one list, the busiest first';
+
+  @override
+  String dockerContainersMemoryRisk(double share) {
+    final intl.NumberFormat shareNumberFormat =
+        intl.NumberFormat.percentPattern(localeName);
+    final String shareString = shareNumberFormat.format(share);
+
+    return '$shareString of limit';
+  }
+
+  @override
+  String get dockerUsageTitle => 'Usage';
+
+  @override
+  String get dockerUsageSource => 'Read every 5 s while these details show';
+
+  @override
+  String get dockerUsageWaiting =>
+      'The first reading comes within a few seconds.';
+
+  @override
+  String dockerUsageMemoryRisk(double share, String used, String limit) {
+    final intl.NumberFormat shareNumberFormat =
+        intl.NumberFormat.percentPattern(localeName);
+    final String shareString = shareNumberFormat.format(share);
+
+    return 'Memory is at $shareString of its limit ($used of $limit); near the limit the kernel may kill it (OOM).';
+  }
+
+  @override
+  String get dockerUsageCpu => 'CPU';
+
+  @override
+  String get dockerUsageMemory => 'Memory';
+
+  @override
+  String get dockerUsageMemoryUsed => 'Used';
+
+  @override
+  String get dockerUsageMemoryLimit => 'Limit';
+
+  @override
+  String get dockerUsageNetwork => 'Network';
+
+  @override
+  String get dockerUsageNetworkIn => 'In';
+
+  @override
+  String get dockerUsageNetworkOut => 'Out';
+
+  @override
+  String get dockerUsageBlockIo => 'Block I/O';
+
+  @override
+  String get dockerUsageBlockRead => 'Read';
+
+  @override
+  String get dockerUsageBlockWrite => 'Written';
+
+  @override
+  String get dockerUsagePids => 'PIDs';
 
   @override
   String get dockerContainersSelect => 'Select';
@@ -10135,4 +10299,70 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fleetShowAll => 'Show all servers';
+
+  @override
+  String get snippetsTitle => 'Snippets';
+
+  @override
+  String snippetsPageTitle(String server) {
+    return 'Snippets on $server';
+  }
+
+  @override
+  String get snippetsSearch => 'Search snippets';
+
+  @override
+  String get snippetsEmpty =>
+      'No snippets yet. Snippets you save in Séance appear here once this device syncs with the same account.';
+
+  @override
+  String get snippetsNoMatch => 'No snippet matches your search.';
+
+  @override
+  String get snippetsUntitled => 'Untitled snippet';
+
+  @override
+  String snippetsFillTitle(String title) {
+    return 'Fill in $title';
+  }
+
+  @override
+  String get snippetsFillHint =>
+      'Each value replaces its placeholder in the command. Nothing runs until you confirm the preview.';
+
+  @override
+  String get snippetsFillCommand => 'Command';
+
+  @override
+  String get snippetsFillRequired => 'Fill in every value to continue.';
+
+  @override
+  String get snippetsContinue => 'Preview';
+
+  @override
+  String get snippetsCancel => 'Cancel';
+
+  @override
+  String get paletteCommand => 'Command Palette…';
+
+  @override
+  String get paletteActions => 'Actions';
+
+  @override
+  String get paletteServers => 'Servers';
+
+  @override
+  String paletteTabs(String server) {
+    return '$server tabs';
+  }
+
+  @override
+  String paletteContainers(String server) {
+    return '$server containers';
+  }
+
+  @override
+  String paletteContainerDescription(String state, String image) {
+    return '$state · $image';
+  }
 }
