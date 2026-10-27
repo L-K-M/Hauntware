@@ -401,6 +401,13 @@ final class DockerController {
   Future<DockerPayload> readContainerTop(String serverId, String containerId) =>
       _ask(serverId, DockerContainerTopQuery(containerId));
 
+  /// DKE-06's security review and DKE-07's log rotation lint of every
+  /// container on [serverId], up to [kDockerReviewMax]: a
+  /// [DockerReviewPayload] or a [DockerQueryFailed]. Nothing of the
+  /// answer stays here.
+  Future<DockerPayload> reviewContainers(String serverId) =>
+      _ask(serverId, const DockerReviewQuery());
+
   /// Sends [spec] once and completes with the engine's answer, as
   /// [readStackFile] describes.
   Future<DockerPayload> _ask(String serverId, DockerQuerySpec spec) {

@@ -25,6 +25,7 @@ import 'services/remote_files_controller.dart';
 import 'services/remote_git_controller.dart';
 import 'services/secrets_recovery.dart';
 import 'services/server_duplication.dart';
+import 'services/shell_location.dart';
 import 'services/xterm_engine.dart';
 import 'theme/app_appearance.dart';
 import 'ui/built_in_text_editor.dart';
@@ -36,18 +37,18 @@ import 'ui/terminal_appearance.dart';
 /// server list (green / grey / red, with a spinner while connecting).
 enum TerminalStatus { connecting, connected, disconnected, error }
 
-/// What the remote shell has told us about a session: the OSC 7 working
-/// directory, the OSC 0/2 terminal title, and the command it is running right
-/// now. Used to name the session's tab.
+/// What the remote shell has told us about a session: its working directory
+/// ([ShellLocation]), the OSC 0/2 terminal title, and the command it is
+/// running right now. Used to name the session's tab.
 @immutable
 class SessionMetadata {
   final String? workingDirectory;
   final String? terminalTitle;
 
   /// The command the session has been running for a while (already redacted),
-  /// or null at a prompt. Unlike the fields above this is *not* kept-last:
-  /// it names what the tab is doing, and a finished command must fall back
-  /// to where the tab is.
+  /// or null at a prompt. Unlike the title this is *not* kept-last: it names
+  /// what the tab is doing, and a finished command must fall back to where
+  /// the tab is.
   final String? runningCommand;
 
   const SessionMetadata({
@@ -140,6 +141,10 @@ class TerminalSession extends PaneTab {
 
   XtermTerminalEngine engine;
   SessionTransport? session;
+
+  /// Where the shell is, for [files], [git] and [metadata] alike. Reads
+  /// beside the shell only while a connection lends it a reader.
+  final ShellLocation _shellLocation;
   RemoteFilesController? files;
 
   /// Git status/actions for the shell's reported directory, driven by the
@@ -224,23 +229,35 @@ class TerminalSession extends PaneTab {
     SessionMetadata initialMetadata = const SessionMetadata(),
     String? initialCustomName,
   }) : editSessionId = editSessionId ?? id,
+       _shellLocation = ShellLocation(
+         reported: engine.workingDirectory,
+         mayHaveMoved: engine.shellMayHaveMoved,
+         titleChanged: engine.terminalTitle,
+       ),
        metadata = ValueNotifier<SessionMetadata>(initialMetadata),
        customName = ValueNotifier<String?>(initialCustomName) {
     log = SshConnectionLog(onUpdate: logNotifier.bump);
-    engine.workingDirectory.addListener(_syncMetadata);
-    engine.terminalTitle.addListener(_syncMetadata);
+    _shellLocation.addListener(_syncDirectory);
+    engine.terminalTitle.addListener(_syncTitle);
     engine.activeCommand.addListener(_syncRunningCommand);
   }
 
-  void _syncMetadata() {
+  /// The location turns null again only once the server stops answering
+  /// reads: then the title names the tab again, as it leads the panes.
+  void _syncDirectory() {
     metadata.value = SessionMetadata(
-      // Keep the last known values: a shell that stops reporting — or clears
-      // its title with an empty OSC 2, which is a common way to reset it —
-      // should not blank the tab back to "Session N" mid-session.
-      workingDirectory: _keepLast(
-        engine.workingDirectory.value,
-        metadata.value.workingDirectory,
-      ),
+      workingDirectory: _shellLocation.value,
+      terminalTitle: metadata.value.terminalTitle,
+      runningCommand: metadata.value.runningCommand,
+    );
+  }
+
+  void _syncTitle() {
+    metadata.value = SessionMetadata(
+      // Keep the last known title: a shell that clears its title with an
+      // empty OSC 2, which is a common way to reset it, should not blank the
+      // tab back to "Session N" mid-session.
+      workingDirectory: metadata.value.workingDirectory,
       terminalTitle: _keepLast(
         engine.terminalTitle.value,
         metadata.value.terminalTitle,
@@ -291,8 +308,9 @@ class TerminalSession extends PaneTab {
   @override
   void dispose() {
     _commandReveal?.cancel();
-    engine.workingDirectory.removeListener(_syncMetadata);
-    engine.terminalTitle.removeListener(_syncMetadata);
+    _shellLocation.removeListener(_syncDirectory);
+    _shellLocation.dispose();
+    engine.terminalTitle.removeListener(_syncTitle);
     engine.activeCommand.removeListener(_syncRunningCommand);
     metadata.dispose();
     customName.dispose();
@@ -1548,9 +1566,10 @@ class AppState extends ChangeNotifier {
         return;
       }
       tab.session = session;
+      tab._shellLocation.readWith(RemoteShellDirectory(session.runCommand));
       tab.files = RemoteFilesController(
         session.openRemoteFileSystem,
-        shellDirectory: engine.workingDirectory,
+        shellDirectory: tab._shellLocation,
         managedFileStore: services.managedRemoteFiles,
         serverId: tab.serverId,
         editSessionId: tab.editSessionId,
@@ -1573,12 +1592,10 @@ class AppState extends ChangeNotifier {
         terminalTitle: engine.terminalTitle,
         activeCommand: engine.activeCommand,
         initialLocalCopies: tab.retainedLocalCopies,
-        shellReader: RemoteShellDirectory(session.runCommand),
-        shellMayHaveMoved: engine.shellMayHaveMoved,
       );
       tab.git = RemoteGitController(
         session.runCommand,
-        shellDirectory: engine.workingDirectory,
+        shellDirectory: tab._shellLocation,
         terminalTitle: engine.terminalTitle,
         activeCommand: engine.activeCommand,
       );
@@ -1599,6 +1616,7 @@ class AppState extends ChangeNotifier {
           }
           tab.git?.dispose();
           tab.git = null;
+          tab._shellLocation.stopReading();
           tab.session = null;
           tab.connecting = false;
           notifyListeners();
@@ -2513,6 +2531,7 @@ class AppState extends ChangeNotifier {
     }
     tab.git?.dispose();
     tab.git = null;
+    tab._shellLocation.stopReading();
     await tab.session?.close();
     tab.session = null;
     tab.connecting = false;

@@ -4288,6 +4288,26 @@ TLS. The section checks when it shows, after an edit and on request.
   show as text where the app has none. CTR-11's mute labels
   (`dockhand.notify`) wait for per-container notifications, which v1
   does not send.
+- **As built (M6 N21a).** The security review (DKE-06) and log rotation
+  lint (DKE-07) run on request from the Docker tab's Review sub-tab as
+  one `DockerReviewQuery`: `/info`, the list, then one inspect per
+  container, sequentially and at most `kDockerReviewMax` (200), the rest
+  counted. `docker/container_review.dart` judges each container before
+  its inspect is masked and sends only findings, never values.
+  - Findings, most severe first: privileged; an engine socket
+    (`docker.sock`, `podman.sock`, `containerd.sock`) bind-mounted;
+    host network; host PID; `CapAdd`; a database's default port
+    published on every address (the port is matched, not the image
+    name); root (no `User`, `root` or `0`, left out on a rootless or
+    `userns` engine); `json-file` without `max-size`; an image named
+    without a tag or digest, or `latest`; no or a `NONE` health check; no
+    restart policy, unless the container is auto-removed or a compose
+    one-off.
+  - Docker copies the daemon's `log-opts` into each container's
+    `LogConfig` at create, so a daemon-wide `max-size` reads as set.
+    Whether the log file grows needs its size, which only root can
+    read under `/var/lib/docker`; the lint flags the configuration
+    alone until an admin-mode size read joins it.
 
 - **As built (M6 N20).** DKE-03's timeline comes from the events stream
   the watcher already holds for the lists (5.7), so it costs no channel
