@@ -6581,6 +6581,74 @@ class AppLocalizationsEn extends AppLocalizations {
       'The columns could not be saved. They stay until Klabautermann quits.';
 
   @override
+  String get dockerContainersTop => 'Top';
+
+  @override
+  String get dockerContainersTopTooltip =>
+      'Running containers in one list, the busiest first';
+
+  @override
+  String dockerContainersMemoryRisk(double share) {
+    final intl.NumberFormat shareNumberFormat =
+        intl.NumberFormat.percentPattern(localeName);
+    final String shareString = shareNumberFormat.format(share);
+
+    return '$shareString of limit';
+  }
+
+  @override
+  String get dockerUsageTitle => 'Usage';
+
+  @override
+  String get dockerUsageSource => 'Read every 5 s while these details show';
+
+  @override
+  String get dockerUsageWaiting =>
+      'The first reading comes within a few seconds.';
+
+  @override
+  String dockerUsageMemoryRisk(double share, String used, String limit) {
+    final intl.NumberFormat shareNumberFormat =
+        intl.NumberFormat.percentPattern(localeName);
+    final String shareString = shareNumberFormat.format(share);
+
+    return 'Memory is at $shareString of its limit ($used of $limit); near the limit the kernel may kill it (OOM).';
+  }
+
+  @override
+  String get dockerUsageCpu => 'CPU';
+
+  @override
+  String get dockerUsageMemory => 'Memory';
+
+  @override
+  String get dockerUsageMemoryUsed => 'Used';
+
+  @override
+  String get dockerUsageMemoryLimit => 'Limit';
+
+  @override
+  String get dockerUsageNetwork => 'Network';
+
+  @override
+  String get dockerUsageNetworkIn => 'In';
+
+  @override
+  String get dockerUsageNetworkOut => 'Out';
+
+  @override
+  String get dockerUsageBlockIo => 'Block I/O';
+
+  @override
+  String get dockerUsageBlockRead => 'Read';
+
+  @override
+  String get dockerUsageBlockWrite => 'Written';
+
+  @override
+  String get dockerUsagePids => 'PIDs';
+
+  @override
   String get dockerContainersSelect => 'Select';
 
   @override

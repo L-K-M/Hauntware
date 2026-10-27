@@ -527,6 +527,69 @@ void main() {
     expect(find.textContaining('could not be saved'), findsOneWidget);
   });
 
+  testWidgets('Top lists the running containers in one list, the busiest '
+      'first, and memory near its limit says so (CST-04, CST-05)', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.list(tester);
+    await panel.emit(
+      tester,
+      dockerStatsRound(_serverId, [
+        for (final row in _stats(_now))
+          if (row.containerId == 'b7e9d0c1a2f3')
+            ContainerListStats(
+              containerId: row.containerId,
+              at: _now,
+              cpuPercent: row.cpuPercent,
+              memoryUsed: 1900 * _mib,
+              memoryLimit: 2048 * _mib,
+            )
+          else
+            row,
+      ], at: _now),
+    );
+    expect(find.text('93% of limit'), findsOneWidget);
+    expect(find.byIcon(Icons.warning_amber), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilterChip, 'Top'));
+    await tester.pumpAndSettle();
+    expect(_order(tester), [
+      'prometheus',
+      'web-db',
+      'web-frontend',
+      'grafana',
+      'portainer',
+      'api.1.k2x9q4m7z1p3v8n5c6b0w2r4t',
+    ]);
+  });
+
+  testWidgets('Top ranks by CPU with its column hidden (CST-05)', (
+    tester,
+  ) async {
+    final panel = await _pump(
+      tester,
+      columns: ContainerColumnChoice(stored: ['state', 'memory']),
+    );
+    await panel.list(tester);
+    await panel.emit(
+      tester,
+      dockerStatsRound(_serverId, _stats(_now), at: _now),
+    );
+    expect(_header('cpu'), findsNothing);
+
+    await tester.tap(find.widgetWithText(FilterChip, 'Top'));
+    await tester.pumpAndSettle();
+    expect(_order(tester), [
+      'prometheus',
+      'web-db',
+      'web-frontend',
+      'grafana',
+      'portainer',
+      'api.1.k2x9q4m7z1p3v8n5c6b0w2r4t',
+    ]);
+  });
+
   group('bulk actions (CTR-07)', () {
     testWidgets('Select shows only where actions are allowed', (tester) async {
       final panel = await _pump(tester);

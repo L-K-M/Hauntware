@@ -89,6 +89,15 @@ void main() {
       expect(chartScaleMax(3, ChartUnit.percent), 100);
     });
 
+    test('a count scales to 1, 2 or 5 times a power of ten and reads as '
+        'a whole number', () {
+      expect(chartScaleMax(7, ChartUnit.count), 10);
+      expect(chartScaleMax(13, ChartUnit.count), 20);
+      expect(chartScaleMax(0.4, ChartUnit.count), 1);
+      expect(chartScaleMax(null, ChartUnit.count), 10);
+      expect(formatChartValue(41.6, ChartUnit.count, testChartStrings), '42');
+    });
+
     test('the charts never call a decimal size formatter', () {
       final offenders = [
         for (final file in Directory('lib/ui/charts').listSync(recursive: true))
