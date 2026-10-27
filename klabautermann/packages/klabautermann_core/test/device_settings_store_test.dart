@@ -589,6 +589,34 @@ void main() {
       });
     });
 
+    test('keeps the Overview\'s card order and hidden cards across '
+        'reloads, and reads a damaged entry as none (OV-06)', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.overview.cards': {'order': 'cpu'},
+      });
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.overviewCards, isNull);
+      await store.setOverviewCards(['memory', 'cpu'], ['swap']);
+      final reloaded = (await DeviceSettingsStore.open(file)).overviewCards!;
+      expect(reloaded.order, ['memory', 'cpu']);
+      expect(reloaded.hidden, ['swap']);
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.overview.cards': {
+          'order': ['cpu', 7, 'memory'],
+          'hidden': [null, 'swap'],
+        },
+      });
+      final mixed = (await DeviceSettingsStore.open(file)).overviewCards!;
+      expect(mixed.order, ['cpu', 'memory'], reason: 'non-strings left out');
+      expect(mixed.hidden, ['swap']);
+    });
+
     test('keeps the fleet board layout\'s name across reloads, and reads a '
         'damaged one as none (FL-08)', () async {
       writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
@@ -702,6 +730,23 @@ void main() {
       });
       final damaged = await DeviceSettingsStore.open(file);
       expect((damaged.logTextSize, damaged.logWrap), (null, false));
+    });
+
+    test('keeps server times across reloads and reads a damaged value as '
+        "the device's zone (A11Y-07)", () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.serverTimes, isFalse);
+      await store.setServerTimes(true);
+      expect((await DeviceSettingsStore.open(file)).serverTimes, isTrue);
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.display.serverTimes': 'yes',
+      });
+      expect((await DeviceSettingsStore.open(file)).serverTimes, isFalse);
     });
 
     test('keeps the app lock off until turned on, across reloads, and a '

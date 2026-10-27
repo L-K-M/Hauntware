@@ -10,6 +10,7 @@ import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
 import '../processes_panel.dart' show kRevealDuration;
 import 'containers_panel.dart' show DockerNotice;
+import '../time_display.dart';
 import 'images_view.dart';
 
 /// Opens [image]'s history (03 §7.14 IMG-04) in a sheet over the Images
@@ -218,7 +219,11 @@ class _ImageHistorySheetState extends State<ImageHistorySheet> {
           ],
           for (final (index, layer) in layers.indexed) ...[
             if (index > 0) const Divider(height: 1),
-            ImageLayerRow(layer: layer, revealed: revealed),
+            ImageLayerRow(
+              layer: layer,
+              revealed: revealed,
+              serverId: widget.serverId,
+            ),
           ],
         ];
       case _:
@@ -240,10 +245,16 @@ class _ImageHistorySheetState extends State<ImageHistorySheet> {
 /// One layer of an image's history: its instruction, masked unless
 /// [revealed], over its figures.
 class ImageLayerRow extends StatelessWidget {
-  const ImageLayerRow({super.key, required this.layer, required this.revealed});
+  const ImageLayerRow({
+    super.key,
+    required this.layer,
+    required this.revealed,
+    required this.serverId,
+  });
 
   final ImageLayer layer;
   final bool revealed;
+  final String serverId;
 
   @override
   Widget build(BuildContext context) {
@@ -255,7 +266,10 @@ class ImageLayerRow extends StatelessWidget {
         : createdBy.display;
     final facts = [
       if (layer.created case final created?)
-        (l10n.dockerImagesColumnCreated, l10n.dockerImagesDate(created)),
+        (
+          l10n.dockerImagesColumnCreated,
+          l10n.dockerImagesDate(displayTime(context, serverId, created)),
+        ),
       if (layer.size case final size?)
         (l10n.dockerImagesColumnSize, ghostFormatBinarySize(size)),
       if (layer.id case final id?)

@@ -12,6 +12,7 @@ import '../../controllers/account_size.dart';
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/cadence_controller.dart';
 import '../../controllers/log_display.dart';
+import '../../controllers/time_display.dart';
 import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/device_name.dart';
@@ -43,6 +44,7 @@ SettingsWindowHost? settingsWindowHostFor(
   CadenceSettings? cadence,
   CadenceCapSettings? cadenceCaps,
   LogDisplaySettings? logDisplay,
+  TimeDisplaySettings? timeDisplay,
 }) => switch (platform) {
   TargetPlatform.macOS ||
   TargetPlatform.linux ||
@@ -61,6 +63,7 @@ SettingsWindowHost? settingsWindowHostFor(
     cadence: cadence,
     cadenceCaps: cadenceCaps,
     logDisplay: logDisplay,
+    timeDisplay: timeDisplay,
   ),
   TargetPlatform.android ||
   TargetPlatform.iOS ||
@@ -93,6 +96,7 @@ final class SettingsWindowHost {
     CadenceSettings? cadence,
     CadenceCapSettings? cadenceCaps,
     LogDisplaySettings? logDisplay,
+    TimeDisplaySettings? timeDisplay,
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
@@ -108,7 +112,8 @@ final class SettingsWindowHost {
        _appLock = appLock,
        _cadence = cadence,
        _cadenceCaps = cadenceCaps,
-       _logDisplay = logDisplay {
+       _logDisplay = logDisplay,
+       _timeDisplay = timeDisplay {
     _engine = GhostSettingsWindowHost(
       control: control,
       link: link,
@@ -130,6 +135,7 @@ final class SettingsWindowHost {
           ?cadence,
           ?cadenceCaps,
           ?logDisplay,
+          ?timeDisplay,
         ],
       ),
       encodeError: encodeLinkError,
@@ -151,6 +157,7 @@ final class SettingsWindowHost {
   final CadenceSettings? _cadence;
   final CadenceCapSettings? _cadenceCaps;
   final LogDisplaySettings? _logDisplay;
+  final TimeDisplaySettings? _timeDisplay;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
 
   @visibleForTesting
@@ -181,6 +188,7 @@ final class SettingsWindowHost {
       final display? => encodeLogDisplay(display),
       null => null,
     },
+    SettingsLinkKey.timeDisplay.name: _timeDisplay?.value.name,
     SettingsLinkKey.deviceName.name: _deviceName.value,
     SettingsLinkKey.thresholds.name: switch (_thresholds) {
       final thresholds? => encodeThresholds(thresholds.value),
@@ -233,6 +241,8 @@ final class SettingsWindowHost {
         await _cadenceCaps?.setCap(serverId, CadenceCap.parse(name));
       case SettingsLinkMethod.setLogDisplay:
         await _logDisplay?.setLogDisplay(decodeLogDisplay(argument));
+      case SettingsLinkMethod.setTimeDisplay:
+        await _timeDisplay?.setTimeDisplay(decodeTimeDisplay(argument));
       case SettingsLinkMethod.setDeviceName:
         await _deviceName.setDeviceName(argument! as String);
       case SettingsLinkMethod.setThresholds:

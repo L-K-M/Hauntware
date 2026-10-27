@@ -13,6 +13,7 @@ import '../actions/docker_actions.dart'
     show ImageActionsButton, PruneButton, imageActionEntries;
 import '../charts/charts.dart' show ChartPalette;
 import '../sortable_table.dart';
+import '../time_display.dart';
 import 'image_history.dart';
 import 'image_pull.dart' show ImagePullButton;
 import 'containers_panel.dart' show DockerNotice;
@@ -656,7 +657,7 @@ class _ImagesPanelState extends State<ImagesPanel> {
       if (at == null) return null;
       return (
         dockerAgeText(l10n, now.difference(at)),
-        l10n.dockerImagesDate(at.toLocal()),
+        l10n.dockerImagesDate(displayTime(context, widget.serverId, at)),
       );
     }
 
