@@ -383,9 +383,9 @@ void main() {
 
     test('leaves out a route of more than 16 hops, which Séance refuses '
         'to dial', () {
-      String names(String prefix, int count) =>
-          [for (var index = 1; index <= count; index++) '$prefix$index']
-              .join(',');
+      String names(String prefix, int count) => [
+        for (var index = 1; index <= count; index++) '$prefix$index',
+      ].join(',');
       // A chain of first hops: c<k> is k hops from c0.
       final chain = StringBuffer('Host c0\n');
       for (var k = 1; k <= 17; k++) {
@@ -736,10 +736,9 @@ void main() {
 
       // Lines before the first Host apply to every host, before its own.
       expect(
-        importedHostsFromSshConfig('User everyone\nHost web\n  User deploy\n')
-            .hosts
-            .single
-            .user,
+        importedHostsFromSshConfig(
+          'User everyone\nHost web\n  User deploy\n',
+        ).hosts.single.user,
         'everyone',
       );
       // So does a `Host *` key at the top: ssh offers the host's own key
@@ -827,8 +826,9 @@ void main() {
         'web': ['admin@gw.corp:2222', 'me@db.internal:22', 'me@web:22'],
       });
       expect(
-        importedHostsFromSshConfig(nested).hops
-            .map((h) => (h.alias, h.port, h.user, h.proxyJump)),
+        importedHostsFromSshConfig(
+          nested,
+        ).hops.map((h) => (h.alias, h.port, h.user, h.proxyJump)),
         [
           ('db.internal', 22, null, 'gw.corp'),
           ('gw.corp', 2222, 'admin', null),

@@ -139,10 +139,8 @@ void main() {
         rootOnly: false,
       );
       Future<EditReadFailure> failure(String path) async =>
-          ((await readEditable(
-            FileTarget(path),
-            context(),
-          )) as EditReadFailed).failure;
+          ((await readEditable(FileTarget(path), context())) as EditReadFailed)
+              .failure;
 
       expect(await failure('/var/missing'), EditReadFailure.notFound);
       expect(await failure('/var/big'), EditReadFailure.tooLarge);
@@ -192,10 +190,9 @@ void main() {
       for (final step in plan.steps) (step as ShellStep).argv,
     ];
 
-    String tempOf(OperationPlan plan) =>
-        argvs(plan)
-            .firstWhere((argv) => argv.contains('klabautermann-write'))
-            .last;
+    String tempOf(OperationPlan plan) => argvs(
+      plan,
+    ).firstWhere((argv) => argv.contains('klabautermann-write')).last;
 
     test("the login user's file: backup, manifest, temp, attributes, "
         'swap', () async {
@@ -413,8 +410,9 @@ void main() {
       profile = HostProfile(uid: 1000, user: 'deploy', systemdVersion: 255);
       final verified = await planned();
       final temp = tempOf(verified);
-      final verify = argvs(verified)
-          .indexWhere((argv) => argv.first == 'systemd-analyze');
+      final verify = argvs(
+        verified,
+      ).indexWhere((argv) => argv.first == 'systemd-analyze');
       expect(verify, isNonNegative);
       expect(
         argvs(verified)[verify],
@@ -613,15 +611,15 @@ void main() {
       );
 
       expect(
-        (await read(
-          lookup(failure: StackFileFailure.notVerified),
-        ) as EditReadFailed).failure,
+        (await read(lookup(failure: StackFileFailure.notVerified))
+                as EditReadFailed)
+            .failure,
         EditReadFailure.stackUnverified,
       );
       expect(
-        (await read(
-          lookup(failure: StackFileFailure.notStackFile),
-        ) as EditReadFailed).failure,
+        (await read(lookup(failure: StackFileFailure.notStackFile))
+                as EditReadFailed)
+            .failure,
         EditReadFailure.invalidTarget,
       );
       expect(

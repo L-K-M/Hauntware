@@ -661,8 +661,9 @@ void main() {
       final unenrolled = await open();
       expect(
         (await unenrolled.saveServer(
-          const SaveServer(requestId: 'r1', draft: draft),
-        )) as CatalogWriteRefused,
+              const SaveServer(requestId: 'r1', draft: draft),
+            ))
+            as CatalogWriteRefused,
         isA<CatalogWriteRefused>().having(
           (r) => r.failure,
           'failure',

@@ -39,14 +39,15 @@ Future<(SendPort, StreamIterator<Object?>)> _start(
       linksEnabled: true,
       supportDirectoryAccess: SupportDirectoryAccess.exclusive,
     ),
-    dial: ({
-      required config,
-      required credentials,
-      required tofu,
-      required onHostKey,
-      onKeyboardInteractive,
-      resolveJumpHost,
-    }) async => link,
+    dial:
+        ({
+          required config,
+          required credentials,
+          required tofu,
+          required onHostKey,
+          onKeyboardInteractive,
+          resolveJumpHost,
+        }) async => link,
   );
   expect(await events.moveNext(), isTrue);
   return (events.current as SendPort, events);

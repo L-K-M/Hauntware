@@ -214,8 +214,9 @@ void main() {
       final events = h.daemon.requests.indexWhere((r) => r.contains('/events'));
       expect(events, lessThan(h.daemon.requests.indexWhere(_isList)));
       expect(
-        Uri.parse(h.requests('/events').single.split(' ')[1])
-            .queryParameters['filters'],
+        Uri.parse(
+          h.requests('/events').single.split(' ')[1],
+        ).queryParameters['filters'],
         jsonEncode({
           'type': ['container', 'image', 'volume', 'network'],
         }),
@@ -281,8 +282,9 @@ void main() {
       expect([for (final c in containers) c.id], ['abc', 'def']);
       expect(containers.first.state, 'paused');
       expect(
-        Uri.parse(h.requests(_containersPath).last.split(' ')[1])
-            .queryParameters['filters'],
+        Uri.parse(
+          h.requests(_containersPath).last.split(' ')[1],
+        ).queryParameters['filters'],
         jsonEncode({
           'id': ['abc'],
         }),
@@ -305,8 +307,9 @@ void main() {
       await h.clock.elapse(kDockerEventBatch);
       expect(_ids(h.lists().single), ['abc']);
       expect(
-        Uri.parse(h.requests(_containersPath).last.split(' ')[1])
-            .queryParameters['filters'],
+        Uri.parse(
+          h.requests(_containersPath).last.split(' ')[1],
+        ).queryParameters['filters'],
         isNull,
       );
     });

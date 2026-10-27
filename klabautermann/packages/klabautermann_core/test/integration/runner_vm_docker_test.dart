@@ -109,9 +109,12 @@ void main() {
   /// [user]'s stack container, as compose names it.
   String containerOf(String user) => '$user-app-1';
 
-  Future<String> containerId(String user) async =>
-      (await vm.docker(['inspect', '--format', '{{.Id}}', containerOf(user)]))
-          .trim();
+  Future<String> containerId(String user) async => (await vm.docker([
+    'inspect',
+    '--format',
+    '{{.Id}}',
+    containerOf(user),
+  ])).trim();
 
   Future<String> revisionOf(String user) async => (await vm.docker([
     'inspect',

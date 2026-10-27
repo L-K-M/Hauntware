@@ -123,11 +123,12 @@ void main() {
     broker = PromptBroker(emit: events.add);
     pins = InMemoryHostKeyStore();
     signedIn = [];
-    onSignIn = ({
-      required HostKeyStore hostKeys,
-      required HostKeyPrompter onHostKey,
-      required KeyboardInteractiveResponder onKeyboardInteractive,
-    }) async => AuthKind.storedPassword;
+    onSignIn =
+        ({
+          required HostKeyStore hostKeys,
+          required HostKeyPrompter onHostKey,
+          required KeyboardInteractiveResponder onKeyboardInteractive,
+        }) async => AuthKind.storedPassword;
   });
 
   test('a typed password outranks the stored one, and a blank box falls '
@@ -140,10 +141,12 @@ void main() {
       ),
     };
 
-    final typed = await tester(secrets: secrets)
-        .test(_server(), const CredentialDraft(password: 'typed'));
-    final blank = await tester(secrets: secrets)
-        .test(_server(), const CredentialDraft(password: ''));
+    final typed = await tester(
+      secrets: secrets,
+    ).test(_server(), const CredentialDraft(password: 'typed'));
+    final blank = await tester(
+      secrets: secrets,
+    ).test(_server(), const CredentialDraft(password: ''));
 
     expect(typed.ok, isTrue);
     expect(typed.summary, contains('me@192.0.2.10:22'));
@@ -197,8 +200,9 @@ void main() {
           required HostKeyPrompter onHostKey,
           required KeyboardInteractiveResponder onKeyboardInteractive,
         }) async {
-          final HostKeyDecision decision = await TofuVerifier(hostKeys)
-              .check(_key);
+          final HostKeyDecision decision = await TofuVerifier(
+            hostKeys,
+          ).check(_key);
           await onHostKey(decision);
           return AuthKind.storedPassword;
         };
@@ -236,8 +240,9 @@ void main() {
           );
           // A second question nobody answers before the test ends.
           unawaited(
-            onHostKey(await TofuVerifier(hostKeys).check(_key))
-                .whenComplete(unanswered.complete),
+            onHostKey(
+              await TofuVerifier(hostKeys).check(_key),
+            ).whenComplete(unanswered.complete),
           );
           await pumpEventQueue();
           return AuthKind.keyboardInteractive;

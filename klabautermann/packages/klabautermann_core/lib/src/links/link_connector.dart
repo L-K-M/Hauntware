@@ -62,14 +62,15 @@ enum ChangedHostKey {
 }
 
 /// [SshLink.connect] as the connector calls it; tests pass a fake.
-typedef LinkDialer = Future<SshLink> Function({
-  required ServerConfig config,
-  required SshCredentials credentials,
-  required TofuVerifier tofu,
-  required HostKeyPrompter onHostKey,
-  KeyboardInteractiveResponder? onKeyboardInteractive,
-  SshJumpHostResolver? resolveJumpHost,
-});
+typedef LinkDialer =
+    Future<SshLink> Function({
+      required ServerConfig config,
+      required SshCredentials credentials,
+      required TofuVerifier tofu,
+      required HostKeyPrompter onHostKey,
+      KeyboardInteractiveResponder? onKeyboardInteractive,
+      SshJumpHostResolver? resolveJumpHost,
+    });
 
 /// How one [LinkConnector.connect] ended.
 sealed class LinkConnectResult {

@@ -205,13 +205,15 @@ void main() {
         expect(planned.preview.protected, ProtectedReason.sessionPath);
         expect(planned.preview.requiredTier, ConfirmationTier.typedPhrase);
         // Never confirmed: the runner's own sshd stays as it is.
-        final refused = await run(
-          engine,
-          planned,
-          confirmation: const ActionConfirmation(
-            tier: ConfirmationTier.acknowledge,
-          ),
-        ) as ActionRefused;
+        final refused =
+            await run(
+                  engine,
+                  planned,
+                  confirmation: const ActionConfirmation(
+                    tier: ConfirmationTier.acknowledge,
+                  ),
+                )
+                as ActionRefused;
         expect(refused.reason, ActionRefusalReason.confirmationMismatch);
       }
       expect(await show('ssh.service', 'UnitFileState'), isNot('masked'));
@@ -310,9 +312,9 @@ void main() {
     expect(current.offset, 0);
     expect(
       current.id,
-      (await root('cat /proc/sys/kernel/random/boot_id'))
-          .trim()
-          .replaceAll('-', ''),
+      (await root(
+        'cat /proc/sys/kernel/random/boot_id',
+      )).trim().replaceAll('-', ''),
     );
 
     final tag = 'klabautermann-v1-$pid';

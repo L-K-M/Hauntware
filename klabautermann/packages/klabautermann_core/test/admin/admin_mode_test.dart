@@ -339,8 +339,9 @@ void main() {
     final rs = elevationProbeOf(_profile(sudo: 'sudo-rs 0.2.13-0ubuntu1'));
     expect(rs.sudoIsRs, isTrue);
     expect(
-      elevationProbeOf(_profile(sudo: null, doas: true, doasNopasswd: true))
-          .doasNopasswd,
+      elevationProbeOf(
+        _profile(sudo: null, doas: true, doasNopasswd: true),
+      ).doasNopasswd,
       isTrue,
     );
   });

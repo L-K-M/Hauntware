@@ -804,10 +804,9 @@ Future<PrunePreview> prunePreview(
             if (!unused.contains(volume.name))
               PruneKept(volume.name, PruneExemption.inUse),
         ],
-        freed: (await client.systemDf(type: SystemDfType.volume))
-            .value
-            .volumes
-            ?.reclaimable,
+        freed: (await client.systemDf(
+          type: SystemDfType.volume,
+        )).value.volumes?.reclaimable,
       );
 
     case DockerPruneKind.networks:
@@ -829,9 +828,9 @@ Future<PrunePreview> prunePreview(
       return PrunePreview(removes: removes, kept: kept);
 
     case DockerPruneKind.buildCache:
-      final usage = (await client.systemDf(type: SystemDfType.buildCache))
-          .value
-          .buildCache;
+      final usage = (await client.systemDf(
+        type: SystemDfType.buildCache,
+      )).value.buildCache;
       final total = usage?.totalCount ?? 0;
       return PrunePreview(
         removes: const [],

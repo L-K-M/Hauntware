@@ -51,10 +51,8 @@ const String _overrideCustom = 'custom';
 
 /// Replaces a file's contents. [DeviceSettingsStore] writes the settings
 /// document and the copy of a damaged file through it.
-typedef DeviceSettingsWriter = Future<void> Function(
-  File target,
-  List<int> bytes,
-);
+typedef DeviceSettingsWriter =
+    Future<void> Function(File target, List<int> bytes);
 
 /// One server's engine socket chosen on this device (CN-09, D54), with
 /// the endpoint it was chosen for, so a server that now names another
@@ -524,13 +522,11 @@ final class DeviceSettingsStore {
       };
 
   static DockerEndpointOverride? _readOverride(Object? value) {
-    if (value
-        case {
-          _overrideChoiceField: final String choice,
-          _overrideSocketField: final String path,
-          _overrideEndpointField: final String endpoint,
-        }
-        when dockerSocketPathProblem(path) == null) {
+    if (value case {
+      _overrideChoiceField: final String choice,
+      _overrideSocketField: final String path,
+      _overrideEndpointField: final String endpoint,
+    } when dockerSocketPathProblem(path) == null) {
       final socket = switch (choice) {
         _overrideDetected => DockerEndpointDetected(path),
         _overrideCustom => DockerEndpointCustom(path),

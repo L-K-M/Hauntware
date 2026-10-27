@@ -313,8 +313,10 @@ final class _Shell {
     RegExpMatch? match() => pattern.firstMatch(output.substring(from));
     if (match() case final found?) return found;
     await engine.until<EngineEvent>((event) {
-      if (event case TerminalBytes(:final terminalId, :final bytes)
-          when terminalId == id) {
+      if (event case TerminalBytes(
+        :final terminalId,
+        :final bytes,
+      ) when terminalId == id) {
         _output.add(bytes);
       }
       if (event case TerminalClosed(:final terminalId) when terminalId == id) {

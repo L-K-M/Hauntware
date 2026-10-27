@@ -186,8 +186,9 @@ typedef _Shown = ({int start, int end, String display});
 /// [argument] with each of [shown]'s spans replaced by its display.
 MaskedValue _masked(String argument, List<_Shown>? shown) {
   if (shown == null) return MaskedValue.plain(argument);
-  if (shown case [(start: 0, :final end, display: MaskedValue.maskToken)]
-      when end == argument.length) {
+  if (shown case [
+    (start: 0, :final end, display: MaskedValue.maskToken),
+  ] when end == argument.length) {
     return MaskedValue.secret(argument);
   }
 

@@ -301,8 +301,9 @@ void main() {
           'Host gw\n  HostName 198.51.100.1\n  IdentityFile ~/.ssh/gw\n'
           'Host t\n  ProxyJump gw,inner.example\n',
         );
-        final resolve = CredentialResolver(_Keys())
-            .jumpHostResolver((id) async => fleet.serverConfig(id));
+        final resolve = CredentialResolver(
+          _Keys(),
+        ).jumpHostResolver((id) async => fleet.serverConfig(id));
 
         final route = <String>[];
         var next = fleet.serverConfig('ssh-config:t')!.jumpHostId;

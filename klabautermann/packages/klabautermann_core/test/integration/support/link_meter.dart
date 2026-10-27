@@ -54,8 +54,9 @@ final class LinkMeter {
   Future<Map<String, Object?>> read() async {
     final answer = ReceivePort('klabautermann link meter reading');
     try {
-      (await _engineSide.timeout(const Duration(seconds: 10)))
-          .send(answer.sendPort);
+      (await _engineSide.timeout(
+        const Duration(seconds: 10),
+      )).send(answer.sendPort);
       return await answer.first.timeout(const Duration(seconds: 10))
           as Map<String, Object?>;
     } finally {

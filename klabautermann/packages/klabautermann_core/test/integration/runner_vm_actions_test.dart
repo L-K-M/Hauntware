@@ -237,11 +237,13 @@ void main() {
         ActionConfirmation(tier: ConfirmationTier.acknowledge),
         ActionConfirmation(tier: ConfirmationTier.typedPhrase, phrase: 'ssh'),
       ]) {
-        final refused = await run(
-          engine,
-          await plan(engine, planned.preview.intent),
-          confirmation: confirmation,
-        ) as ActionRefused;
+        final refused =
+            await run(
+                  engine,
+                  await plan(engine, planned.preview.intent),
+                  confirmation: confirmation,
+                )
+                as ActionRefused;
         expect(refused.reason, ActionRefusalReason.confirmationMismatch);
       }
     });

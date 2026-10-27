@@ -219,9 +219,9 @@ void main() {
       final p = await link.process(0);
 
       var line = 0;
-      String lines(int count) =>
-          [for (var i = 0; i < count; i++) 'line ${line++} ${'x' * 80}\n']
-              .join();
+      String lines(int count) => [
+        for (var i = 0; i < count; i++) 'line ${line++} ${'x' * 80}\n',
+      ].join();
 
       // 10 lines every 10 ms, in two chunks that split a line.
       Future<void> steady(Duration span) async {
@@ -305,8 +305,9 @@ void main() {
       events.clear();
       final files = ScriptedLink();
       follower(_spec(const FileLogSource('/var/log/app.log'))).run(files);
-      (await files.process(0))
-          .emitText('${'w' * (kFollowLineMaxBytes + 9)}\r\nnext\n');
+      (await files.process(
+        0,
+      )).emitText('${'w' * (kFollowLineMaxBytes + 9)}\r\nnext\n');
       await clock.elapse(Duration.zero);
       final records = batches().single.records.cast<FileRecord>();
       expect(records.map((r) => r.text.length), [kFollowLineMaxBytes, 4]);
@@ -357,8 +358,9 @@ void main() {
     test('a cursor the validator refuses is never resumed after', () async {
       final f = follower(_spec(const JournalLogSource()));
       f.run(link);
-      (await link.process(0))
-          .emitText(_entry(1) + _entry(2, cursor: r's=1;$(reboot)'));
+      (await link.process(
+        0,
+      )).emitText(_entry(1) + _entry(2, cursor: r's=1;$(reboot)'));
       await clock.elapse(Duration.zero);
       f
         ..pause()

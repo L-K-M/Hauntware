@@ -15,10 +15,8 @@ import 'package:seance_core/seance_core.dart'
         SshLink;
 
 /// Runs one login-shell command line with [stdin] and returns its result.
-typedef CommandRunner = Future<RemoteCommandResult> Function(
-  String command,
-  List<int> stdin,
-);
+typedef CommandRunner =
+    Future<RemoteCommandResult> Function(String command, List<int> stdin);
 
 /// The evidence format's version, bumped when a field changes meaning.
 const elevationEvidenceVersion = 1;

@@ -887,8 +887,9 @@ Host gw
   User jump
   IdentityFile ~/.ssh/gw
 """);
-    final saved = await (await SshConfigImportStore.open(file))
-        .replace(imported.hosts, hops: imported.hops);
+    final saved = await (await SshConfigImportStore.open(
+      file,
+    )).replace(imported.hosts, hops: imported.hops);
     expect(saved, isTrue);
 
     // What a restarted engine reads back.

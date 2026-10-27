@@ -79,11 +79,10 @@ Future<DockerNoRouteReason> _none(
   ForwardingLink link,
   HostProfile profile, {
   String? override,
-}) async => (await DockerLadder.resolve(
-  link,
-  profile,
-  override: override,
-) as DockerRouteNone).reason;
+}) async =>
+    (await DockerLadder.resolve(link, profile, override: override)
+            as DockerRouteNone)
+        .reason;
 
 /// Pings through [route] with the Docker client, as the engine will.
 Future<void> _ping(ForwardingLink link, DockerRoute route) async {
@@ -444,8 +443,9 @@ void main() {
         if (usage == null) {
           for (final tool in ['sh', 'grep']) {
             final found = await Process.run('sh', ['-c', 'command -v $tool']);
-            await Link('${bin.path}/$tool')
-                .create((found.stdout as String).trim());
+            await Link(
+              '${bin.path}/$tool',
+            ).create((found.stdout as String).trim());
           }
           path = bin.path;
         } else {
@@ -524,11 +524,9 @@ void main() {
       final profile = _profile([_rootful, _podman]);
       final first = await _route(link, profile);
 
-      final next = await DockerLadder.resolve(
-        link,
-        profile,
-        excluding: {first},
-      ) as DockerRoute;
+      final next =
+          await DockerLadder.resolve(link, profile, excluding: {first})
+              as DockerRoute;
       expect(next.socketPath, _podman);
       expect(next.rank, DockerRank.streamlocal);
       // The excluded path was neither opened again nor probed.
@@ -550,18 +548,14 @@ void main() {
       final cli = await _route(link, profile);
       expect(cli.rank, DockerRank.cliRelay);
 
-      final socat = await DockerLadder.resolve(
-        link,
-        profile,
-        excluding: {cli},
-      ) as DockerRoute;
+      final socat =
+          await DockerLadder.resolve(link, profile, excluding: {cli})
+              as DockerRoute;
       expect(socat.relayArgv.first, 'socat');
       expect(
-        (await DockerLadder.resolve(
-          link,
-          profile,
-          excluding: {cli, socat},
-        ) as DockerRouteNone).reason,
+        (await DockerLadder.resolve(link, profile, excluding: {cli, socat})
+                as DockerRouteNone)
+            .reason,
         DockerNoRouteReason.noRelay,
       );
     });

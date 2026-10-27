@@ -17,10 +17,8 @@ typedef StackEditSource = ({
 
 /// Looks [path] of [project] up on the server's Docker endpoint: the
 /// engine passes one to an edit's read and plan.
-typedef StackEditLookup = Future<StackEditSource> Function(
-  String project,
-  String path,
-);
+typedef StackEditLookup =
+    Future<StackEditSource> Function(String project, String path);
 
 /// `compose config -q` over [project]'s files with [temp] in [path]'s
 /// place: a config file or a recorded environment file is replaced in

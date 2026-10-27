@@ -252,9 +252,10 @@ void main() {
       return (oldKey, newKey, keystore);
     }
 
-    Future<String?> readA(List<int> key) async =>
-        (await SecretVault(FileVaultStore(vaultFile), key).getSecret('a'))
-            ?.value;
+    Future<String?> readA(List<int> key) async => (await SecretVault(
+      FileVaultStore(vaultFile),
+      key,
+    ).getSecret('a'))?.value;
 
     test(
       'an enrollment re-key leaves the vault readable with the new key',

@@ -29,12 +29,11 @@ Future<Map<String, Object?>> measureAll({
   final clockTicks = await clockTicksPerSecond();
   final env = runEnvironment(home: Directory.systemTemp.path, user: user);
   String loadavg() => File('/proc/loadavg').readAsStringSync().trim();
-  String field(String file, String key) =>
-      File(file)
-          .readAsLinesSync()
-          .firstWhere((l) => l.startsWith(key), orElse: () => key)
-          .substring(key.length)
-          .replaceAll(RegExp(r'^[\s:="]+|"$'), '');
+  String field(String file, String key) => File(file)
+      .readAsLinesSync()
+      .firstWhere((l) => l.startsWith(key), orElse: () => key)
+      .substring(key.length)
+      .replaceAll(RegExp(r'^[\s:="]+|"$'), '');
   final loadStart = loadavg();
   final uname = await Process.run('uname', ['-s', '-r', '-m']);
   final result = <String, Object?>{
@@ -275,8 +274,9 @@ Future<List<Map<String, Object?>>> measureProcs(
               cpus.add(cpu);
             }
             final bytes = int.parse(
-              RegExp(r'\x1e[0-9a-f]{32} S procs [a-z]+ (\d+)\n')
-                  .firstMatch(latin1.decode(reply.head))![1]!,
+              RegExp(
+                r'\x1e[0-9a-f]{32} S procs [a-z]+ (\d+)\n',
+              ).firstMatch(latin1.decode(reply.head))![1]!,
             );
             final payload = reply.tick
                 ?.section(Collector.procs.wireName)

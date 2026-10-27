@@ -75,8 +75,9 @@ void main() {
   /// What the engine's probe would learn of password sudo (03 §6.1).
   Future<ElevationProbe> probe(HostRun run) async => ElevationProbe(
     sudoVersionLine: (await run('sudo -V | head -n 1')).stdout.trim(),
-    printfIsBuiltin: (await run('command -V printf')).stdout
-        .contains('builtin'),
+    printfIsBuiltin: (await run(
+      'command -V printf',
+    )).stdout.contains('builtin'),
   );
 
   /// A fresh root-owned directory, mode 0700, removed after the test.

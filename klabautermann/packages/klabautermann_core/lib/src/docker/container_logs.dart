@@ -326,8 +326,10 @@ final class ContainerLogReader {
     _lines = null;
     _client = null;
     _track(
-      Future.wait([?lines?.cancel(), ?client?.close()])
-          .then((_) {}, onError: (Object _) {}),
+      Future.wait([
+        ?lines?.cancel(),
+        ?client?.close(),
+      ]).then((_) {}, onError: (Object _) {}),
     );
   }
 

@@ -515,9 +515,9 @@ void main() {
   test('no rule cuts a UTF-8 character, and cron splits as parseCron', () {
     // à is C3 A0, Р is D0 A0: A0 is a no-break space in Latin-1.
     String redactUtf8(String text, String collector) => utf8.decode(
-      Redactor(const RedactionLiterals())
-          .redact(collector, utf8.encode(text))
-          .bytes,
+      Redactor(
+        const RedactionLiterals(),
+      ).redact(collector, utf8.encode(text)).bytes,
     );
     expect(
       redactUtf8('/home/àlex/x /dev/disk/by-label/Données_à', 'units'),
@@ -750,8 +750,9 @@ void main() {
         '0 3 * * * /usr/bin/backup';
 
     test('secrets, URL credentials and private keys become placeholders', () {
-      final r = Redactor(const RedactionLiterals())
-          .redact('units', utf8.encode(cron));
+      final r = Redactor(
+        const RedactionLiterals(),
+      ).redact('units', utf8.encode(cron));
       expect(
         latin1.decode(r.bytes),
         '== crontab ==\n'

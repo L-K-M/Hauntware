@@ -29,44 +29,39 @@ import 'plan_types.dart';
 /// the step with the daemon's words; a [DockerCancelledException], a
 /// [CancelAction] honoured, cancels the run; any other [DockerException]
 /// or a [DockerEndpointUnavailable] ends it as a transport failure.
-typedef ApiStepRunner = Future<int> Function(
-  String serverId,
-  String planId,
-  ApiStep step,
-);
+typedef ApiStepRunner =
+    Future<int> Function(String serverId, String planId, ApiStep step);
 
 /// Runs one [ExecStep] on [serverId]'s engine (CTX-08) and returns the
 /// command's exit code, null when the daemon reported none, and its
 /// redacted output. A [DockerApiException] it throws, the daemon's
 /// refusal, fails the step; any other [DockerException] or a
 /// [DockerEndpointUnavailable] ends the run as a transport failure.
-typedef ExecStepRunner = Future<({int? exitCode, ExecOutput output})> Function(
-  String serverId,
-  ExecStep step,
-);
+typedef ExecStepRunner =
+    Future<({int? exitCode, ExecOutput output})> Function(
+      String serverId,
+      ExecStep step,
+    );
 
 /// Checks a [DockerTargetUnchanged] or a [StackConfigUnchanged] on
 /// [serverId] through its Docker endpoint: null when unchanged.
-typedef DockerRevalidator = Future<RevalidationFailure?> Function(
-  String serverId,
-  Revalidation check,
-);
+typedef DockerRevalidator =
+    Future<RevalidationFailure?> Function(String serverId, Revalidation check);
 
 /// Launches a detached [plan] on [serverId] as its runner row says,
 /// through [session]'s elevation where the row needs it (03 §7.17).
-typedef DetachedLauncher = Future<LaunchResult> Function(
-  String serverId,
-  OperationPlan plan,
-  AdminSession? session,
-);
+typedef DetachedLauncher =
+    Future<LaunchResult> Function(
+      String serverId,
+      OperationPlan plan,
+      AdminSession? session,
+    );
 
 /// Runs [body], a user-initiated step's work on [serverId]'s link, with a
 /// session channel free for it: on a link at its learned session limit,
 /// the slow sampler lends its own for the while (M4 plan M6).
-typedef SessionLender = Future<T> Function<T>(
-  String serverId,
-  Future<T> Function() body,
-);
+typedef SessionLender =
+    Future<T> Function<T>(String serverId, Future<T> Function() body);
 
 /// What became of one run, for the audit log (8.10, E12b).
 typedef OperationResult = ({

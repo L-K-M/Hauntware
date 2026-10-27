@@ -597,8 +597,9 @@ void main() {
       final ids = [for (var i = 1; i <= kMonitorSetLimit + 1; i++) 's$i'];
       await import(
         engine,
-        [for (final id in ids) 'Host $id\n  HostName 192.0.2.1\n  User me\n']
-            .join(),
+        [
+          for (final id in ids) 'Host $id\n  HostName 192.0.2.1\n  User me\n',
+        ].join(),
       );
 
       engine.send(const SetMonitorSet(['ssh-config:s1', 'ssh-config:gone']));

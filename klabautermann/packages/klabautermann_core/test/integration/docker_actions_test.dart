@@ -349,8 +349,13 @@ void main() {
     expectSucceeded(await run(engine, created));
     await untilList(engine, DockerWatchList.volumes, listed);
     expect(
-      (await dind(['volume', 'inspect', '--format', '{{.Driver}}', volume]))
-          .trim(),
+      (await dind([
+        'volume',
+        'inspect',
+        '--format',
+        '{{.Driver}}',
+        volume,
+      ])).trim(),
       'local',
     );
     expect(
@@ -670,8 +675,12 @@ void main() {
       );
     }
     expect(
-      (await dind(['inspect', '--format', '{{.State.Status}}', 'ssh-port']))
-          .trim(),
+      (await dind([
+        'inspect',
+        '--format',
+        '{{.State.Status}}',
+        'ssh-port',
+      ])).trim(),
       'running',
     );
 

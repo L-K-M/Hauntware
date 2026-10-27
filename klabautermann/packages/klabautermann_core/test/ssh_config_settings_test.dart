@@ -426,9 +426,10 @@ void main() {
       expect(_resolve(config, 'db'), UnresolvedReason.secondPass);
       // The import still sees both, to keep the first where ssh would
       // refuse the final pass's route.
-      final passes = (SshConfigSettings.parse(
-        config,
-      ).resolve('db') as UnresolvedSshSettings).passes!;
+      final passes =
+          (SshConfigSettings.parse(config).resolve('db')
+                  as UnresolvedSshSettings)
+              .passes!;
       expect(
         [
           passes.firstPass,

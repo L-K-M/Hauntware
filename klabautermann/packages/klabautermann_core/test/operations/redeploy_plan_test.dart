@@ -743,8 +743,9 @@ void main() {
 
     test('a hash that changed since the preview launches nothing', () async {
       final plan = _planned(await _plan());
-      final finished = await runner(changed: RevalidationFailure.targetChanged)
-          .run('plan-1', plan);
+      final finished = await runner(
+        changed: RevalidationFailure.targetChanged,
+      ).run('plan-1', plan);
       expect(finished.failure, ActionFailure.revalidation);
       expect(finished.revalidation, RevalidationFailure.targetChanged);
       expect(launches, isEmpty);

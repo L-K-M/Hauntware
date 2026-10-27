@@ -46,11 +46,12 @@ import '../admin/admin_mode.dart' show AdminSession;
 import '../engine/protocol.dart';
 
 /// Runs one remote command in a short-action slot (M9).
-typedef StackCommandRunner = Future<RemoteCommandResult> Function(
-  String command, {
-  required Duration timeout,
-  required int maxOutputBytes,
-});
+typedef StackCommandRunner =
+    Future<RemoteCommandResult> Function(
+      String command, {
+      required Duration timeout,
+      required int maxOutputBytes,
+    });
 
 /// Thrown by a [StackCommandRunner] instead of waiting for a session
 /// channel the link has none left for (M4 plan M6): the check reads

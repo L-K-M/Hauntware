@@ -186,8 +186,9 @@ void main() {
       expect(next!.isAfter(readAt), isFalse, reason: 'next $next, $runs');
     }
 
-    final row = TimerJobEntry(timer: timer)
-        .withDetail(detail.value, calendars: {vm.calendar: calendar.value});
+    final row = TimerJobEntry(
+      timer: timer,
+    ).withDetail(detail.value, calendars: {vm.calendar: calendar.value});
     expect(row.triggers, [
       isA<CalendarSchedule>()
           .having((s) => s.normalized, 'normalized', vm.calendar)
@@ -602,12 +603,10 @@ Future<_Window> _window(
     ],
     readers: [
       for (final e in events)
-        if (e
-            case LogStreamState(
-              streamId: final id,
-              status: LogStreamRunning(:final reader),
-            )
-            when id == streamId)
+        if (e case LogStreamState(
+          streamId: final id,
+          status: LogStreamRunning(:final reader),
+        ) when id == streamId)
           reader,
     ],
     end: ended.status as LogStreamEnded,

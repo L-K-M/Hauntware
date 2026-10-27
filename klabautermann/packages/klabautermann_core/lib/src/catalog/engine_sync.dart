@@ -79,10 +79,8 @@ abstract interface class SyncTransport implements SyncEnrollmentApi {
 
 /// Builds the transport for [baseUrl]; [token] restores a session for a
 /// round, and enrollment passes none.
-typedef SyncTransportFactory = SyncTransport Function(
-  String baseUrl, {
-  String? token,
-});
+typedef SyncTransportFactory =
+    SyncTransport Function(String baseUrl, {String? token});
 
 /// Séance's HTTP sync client, which already has every member
 /// [SyncTransport] names.
@@ -424,8 +422,9 @@ final class EngineSync {
     final SyncTransport api;
     final RecordCoordinator coordinator;
     try {
-      final token = await KeystoreSyncCredentialStore(keystore: _keystore)
-          .readToken();
+      final token = await KeystoreSyncCredentialStore(
+        keystore: _keystore,
+      ).readToken();
       final key = await _keystore.readMasterKey();
       if (token == null || key == null) {
         return _failed(

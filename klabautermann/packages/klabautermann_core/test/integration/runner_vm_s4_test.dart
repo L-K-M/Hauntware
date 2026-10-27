@@ -103,8 +103,9 @@ void main() {
   /// a version line, no blanket NOPASSWD, and dash's builtin printf.
   Future<ElevationProbe> probe(HostRun run) async => ElevationProbe(
     sudoVersionLine: (await run('sudo -V | head -n 1')).stdout.trim(),
-    printfIsBuiltin: (await run('command -V printf')).stdout
-        .contains('builtin'),
+    printfIsBuiltin: (await run(
+      'command -V printf',
+    )).stdout.contains('builtin'),
   );
 
   Future<int> uidOf(HostRun run) async =>
@@ -273,8 +274,9 @@ void main() {
     );
     final done = after == null
         ? parseOpRecord(
-            (await asRoot('cat -- ${quoteShellWord(record)} 2>/dev/null'))
-                .stdout,
+            (await asRoot(
+              'cat -- ${quoteShellWord(record)} 2>/dev/null',
+            )).stdout,
           )
         : await untilDone(asRoot, dir, id);
     final log = await asRoot(

@@ -108,9 +108,9 @@ void main() {
       final range = await history.read(
         _web,
         HistoryTier.minute,
-        now: _at(0)
-            .add(HistoryTier.minute.span)
-            .add(const Duration(seconds: 30)),
+        now: _at(
+          0,
+        ).add(HistoryTier.minute.span).add(const Duration(seconds: 30)),
       );
       expect([for (final b in range.buckets) b.start], [_at(60)]);
     });
