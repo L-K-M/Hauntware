@@ -3030,6 +3030,9 @@ enum TimerDetailFailure {
   /// systemctl is not installed.
   missing,
 
+  /// systemctl failed, as when the manager could not be reached.
+  unreadable,
+
   /// The link failed, or a read ran past its time.
   transport,
 }

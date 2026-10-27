@@ -1243,7 +1243,8 @@ String timerDetailFailureText(
 ) => switch (failure) {
   TimerDetailFailure.noLink => l10n.jobsTimerTriggersNoLink,
   TimerDetailFailure.invalidUnit ||
-  TimerDetailFailure.missing => l10n.jobsTimerTriggersUnreadable,
+  TimerDetailFailure.missing ||
+  TimerDetailFailure.unreadable => l10n.jobsTimerTriggersUnreadable,
   TimerDetailFailure.transport => l10n.jobsTimerTriggersFailed,
 };
 

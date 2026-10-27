@@ -110,6 +110,25 @@ void main() {
     expect(report.calendars, isEmpty);
   });
 
+  test('a calendar read that exits non-zero lists no runs', () async {
+    final link = _Link({
+      'systemctl': _show,
+      'systemd-analyze': const RemoteCommandResult(
+        exitCode: 1,
+        stderr: 'Failed to parse calendar specification',
+      ),
+    });
+    final report = await readTimerDetail(
+      _server,
+      'backup.timer',
+      requestId: 'r-1',
+      link: link,
+      user: false,
+    );
+    expect(report.failure, isNull);
+    expect(report.calendars, isEmpty);
+  });
+
   test('failures are typed', () async {
     Future<TimerDetailFailure?> failure(
       _Link link, [
@@ -131,6 +150,17 @@ void main() {
         _Link({'systemctl': const RemoteCommandResult(exitCode: 127)}),
       ),
       TimerDetailFailure.missing,
+    );
+    expect(
+      await failure(
+        _Link({
+          'systemctl': const RemoteCommandResult(
+            exitCode: 1,
+            stderr: 'Failed to connect to bus',
+          ),
+        }),
+      ),
+      TimerDetailFailure.unreadable,
     );
     expect(
       await failure(

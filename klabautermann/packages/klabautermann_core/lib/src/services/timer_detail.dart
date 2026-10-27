@@ -63,6 +63,7 @@ Future<TimerDetailReport> readTimerDetail(
   try {
     final (status, stdout) = await run(argv);
     if (status == _commandNotFound) return failed(TimerDetailFailure.missing);
+    if (status != 0) return failed(TimerDetailFailure.unreadable);
     final detail = parseTimerDetail(stdout, ParseContext.standard).value;
 
     final calendars = <String, OnCalendarResult>{};
@@ -73,8 +74,8 @@ Future<TimerDetailReport> readTimerDetail(
     );
     for (final MapEntry(key: expression, value: argv) in commands.entries) {
       try {
-        final (_, out) = await run(argv);
-        calendars[expression] = parseOnCalendar(out).value;
+        final (status, out) = await run(argv);
+        if (status == 0) calendars[expression] = parseOnCalendar(out).value;
       } on RemoteCommandException {
         // The triggers are read; this expression lists no runs.
         continue;
