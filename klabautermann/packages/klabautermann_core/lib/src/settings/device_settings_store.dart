@@ -40,9 +40,11 @@ const String _appLockKey = 'klabautermann.appLock';
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
 const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
 const String _containerColumnsKey = 'klabautermann.docker.containerColumns';
+const String _thresholdsKey = 'klabautermann.overview.thresholds';
 const String _tlsEndpointsKey = 'klabautermann.certificates.endpoints';
 const String _cadenceKey = 'klabautermann.sampling.cadence';
 const String _fleetDensityKey = 'klabautermann.fleet.density';
+const String _cadenceCapsKey = 'klabautermann.sampling.caps';
 const String _attentionKey = 'klabautermann.attention.acknowledged';
 
 // The fields of one server's entry under [_endpointOverridesKey].
@@ -375,6 +377,35 @@ final class DeviceSettingsStore {
     await _save();
   }
 
+  /// Each server's polling cap (SAF-19), `klabautermann.sampling.caps`:
+  /// the name the app stored for the slowest column it may sample at, by
+  /// server id. An entry that is not a string is left out, so it caps
+  /// nothing; the app reads a name it does not know as no cap.
+  Map<String, String> get cadenceCaps => {
+    for (final MapEntry(:key, :value) in _rawCadenceCaps.entries)
+      if (value case final String name) key: name,
+  };
+
+  /// Stores [serverId]'s cap [name], null to lift it, and writes the
+  /// document; throws as [setCadence] does. A cap outlives the fleet, as
+  /// the engine keeps it: a server that leaves and returns keeps its own.
+  Future<void> setCadenceCap(String serverId, String? name) async {
+    final entries = _rawCadenceCaps;
+    if (name == null) {
+      entries.remove(serverId);
+    } else {
+      entries[serverId] = name;
+    }
+    _values[_cadenceCapsKey] = entries;
+    await _save();
+  }
+
+  Map<String, Object?> get _rawCadenceCaps =>
+      switch (_values[_cadenceCapsKey]) {
+        final Map<String, Object?> entries => {...entries},
+        _ => {},
+      };
+
   /// The device's app lock (SAF-20), `klabautermann.appLock`: off until
   /// the user turns it on. Any other value than `false` that is there
   /// reads as on, so a damaged value can never drop the lock; an absent
@@ -478,6 +509,38 @@ final class DeviceSettingsStore {
   /// the value stays in memory either way.
   Future<void> setContainerColumns(List<String> names) async {
     _values[_containerColumnsKey] = [...names];
+    await _save();
+  }
+
+  /// OV-11's threshold levels by metric name,
+  /// `klabautermann.overview.thresholds`: each its careful, warning and
+  /// critical percent, which the app reads against its own metrics. An
+  /// entry that is not three numbers is skipped, as is a value that is
+  /// not an object, rather than failing the file.
+  Map<String, List<double>> get thresholds => switch (_values[_thresholdsKey]) {
+    final Map<String, Object?> byMetric => {
+      for (final MapEntry(:key, :value) in byMetric.entries)
+        if (value case [
+          final num careful,
+          final num warning,
+          final num critical,
+        ])
+          key: List.unmodifiable([
+            careful.toDouble(),
+            warning.toDouble(),
+            critical.toDouble(),
+          ]),
+    },
+    _ => const {},
+  };
+
+  /// Stores [levels] as the threshold levels, replacing every metric's,
+  /// and writes the document. Throws when the write fails or this
+  /// session is read-only; the value stays in memory either way.
+  Future<void> setThresholds(Map<String, List<double>> levels) async {
+    _values[_thresholdsKey] = {
+      for (final MapEntry(:key, :value) in levels.entries) key: [...value],
+    };
     await _save();
   }
 

@@ -17,6 +17,8 @@ import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart';
 import '../../controllers/safety_controller.dart';
 import '../../controllers/sync_secrets_controller.dart';
+import '../../controllers/threshold_controller.dart';
+import '../../ui/threshold_scope.dart' show ThresholdMetric;
 import '../stored_safety.dart';
 import 'settings_window_link.dart';
 
@@ -32,9 +34,11 @@ SettingsWindowHost? settingsWindowHostFor(
   required MonitorSetSettings monitorSet,
   required SafetySettings safety,
   required SyncSecretsSettings syncSecrets,
+  ThresholdSettings? thresholds,
   PinPublicationSettings? pinPublication,
   AppLockSettings? appLock,
   CadenceSettings? cadence,
+  CadenceCapSettings? cadenceCaps,
 }) => switch (platform) {
   TargetPlatform.macOS ||
   TargetPlatform.linux ||
@@ -46,9 +50,11 @@ SettingsWindowHost? settingsWindowHostFor(
     monitorSet: monitorSet,
     safety: safety,
     syncSecrets: syncSecrets,
+    thresholds: thresholds,
     pinPublication: pinPublication,
     appLock: appLock,
     cadence: cadence,
+    cadenceCaps: cadenceCaps,
   ),
   TargetPlatform.android ||
   TargetPlatform.iOS ||
@@ -74,9 +80,11 @@ final class SettingsWindowHost {
     required MonitorSetSettings monitorSet,
     required SafetySettings safety,
     required SyncSecretsSettings syncSecrets,
+    ThresholdSettings? thresholds,
     PinPublicationSettings? pinPublication,
     AppLockSettings? appLock,
     CadenceSettings? cadence,
+    CadenceCapSettings? cadenceCaps,
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
@@ -86,9 +94,11 @@ final class SettingsWindowHost {
        _monitorSet = monitorSet,
        _safety = safety,
        _syncSecrets = syncSecrets,
+       _thresholds = thresholds,
        _pinPublication = pinPublication,
        _appLock = appLock,
-       _cadence = cadence {
+       _cadence = cadence,
+       _cadenceCaps = cadenceCaps {
     _engine = GhostSettingsWindowHost(
       control: control,
       link: link,
@@ -103,9 +113,11 @@ final class SettingsWindowHost {
           monitorSet,
           safety,
           syncSecrets,
+          ?thresholds,
           ?pinPublication,
           ?appLock,
           ?cadence,
+          ?cadenceCaps,
         ],
       ),
       encodeError: encodeLinkError,
@@ -120,9 +132,11 @@ final class SettingsWindowHost {
   final MonitorSetSettings _monitorSet;
   final SafetySettings _safety;
   final SyncSecretsSettings _syncSecrets;
+  final ThresholdSettings? _thresholds;
   final PinPublicationSettings? _pinPublication;
   final AppLockSettings? _appLock;
   final CadenceSettings? _cadence;
+  final CadenceCapSettings? _cadenceCaps;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
 
   @visibleForTesting
@@ -143,7 +157,17 @@ final class SettingsWindowHost {
     SettingsLinkKey.appearance.name: encodeAppearance(_appearance.value),
     SettingsLinkKey.announceThresholdBands.name: _announcements.value,
     SettingsLinkKey.cadence.name: _cadence?.value.name,
+    SettingsLinkKey.cadenceCaps.name: switch (_cadenceCaps?.value) {
+      final caps? => {
+        for (final MapEntry(:key, :value) in caps.entries) key: value.name,
+      },
+      null => null,
+    },
     SettingsLinkKey.deviceName.name: _deviceName.value,
+    SettingsLinkKey.thresholds.name: switch (_thresholds) {
+      final thresholds? => encodeThresholds(thresholds.value),
+      null => null,
+    },
     SettingsLinkKey.syncSecrets.name: _syncSecrets.value,
     SettingsLinkKey.pinPublication.name: switch (_pinPublication?.value) {
       final value? => encodePinPublication(value),
@@ -182,8 +206,27 @@ final class SettingsWindowHost {
         await _announcements.setAnnounceThresholdBands(argument! as bool);
       case SettingsLinkMethod.setCadence:
         await _cadence?.setCadence(CadencePreset.parse(argument! as String));
+      case SettingsLinkMethod.setCadenceCap:
+        final [serverId as String, name as String?] = argument! as List;
+        await _cadenceCaps?.setCap(serverId, CadenceCap.parse(name));
       case SettingsLinkMethod.setDeviceName:
         await _deviceName.setDeviceName(argument! as String);
+      case SettingsLinkMethod.setThresholds:
+        final call = (argument! as Map).cast<String, Object?>();
+        final [careful, warning, critical] = [
+          for (final level in call[SettingsLinkKey.levels.name]! as List)
+            (level as num).toDouble(),
+        ];
+        final levels = thresholdsOf(careful, warning, critical);
+        if (levels == null) {
+          throw ArgumentError.value(argument, 'levels', 'not valid bands');
+        }
+        await _thresholds?.setThresholds(
+          ThresholdMetric.values.byName(
+            call[SettingsLinkKey.metric.name]! as String,
+          ),
+          levels,
+        );
       case SettingsLinkMethod.setSyncSecrets:
         await _syncSecrets.setSyncSecrets(argument! as bool);
       case SettingsLinkMethod.setPinPublication:

@@ -19,6 +19,9 @@ enum ActionEntryPoint {
   /// "Run now" on a cron line (JOB-19).
   cronRunNow,
 
+  /// Running a Séance snippet (AUT-01).
+  snippetRun,
+
   /// Pause and Resume on a cron line (JOB-07).
   cronPause,
 

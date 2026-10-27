@@ -78,10 +78,18 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/announcement_controller.dart': {
     r"'The announcement setting was not saved: $error'",
   },
+  // The not-saved diagnostic; the Alerts tab prints it and shows its own
+  // ARB text (settingsThresholdsNotSaved).
+  'lib/controllers/threshold_controller.dart': {
+    r"'The threshold levels were not saved: $error'",
+    "'levels'",
+    "'not valid bands'",
+  },
   // The not-saved diagnostic; the General tab prints it and shows its own
   // ARB text (settingsCadenceNotSaved).
   'lib/controllers/cadence_controller.dart': {
     r"'The polling budget was not saved: $error'",
+    r"'The polling cap was not saved: $error'",
   },
   // The not-saved diagnostic; the fleet board prints it and shows its own
   // ARB text (fleetDensityNotSaved).
@@ -113,6 +121,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The space between a firewalld zone's names, as firewalld lists them,
   // and between a chain's family, table and name.
   'lib/ui/firewall.dart': {"' '"},
+  // The snippet search's haystack and its term separator (AUT-01).
+  'lib/ui/snippets.dart': {r"'${snippet.title}\n${snippet.body}'", "' '"},
   // The separator between the ports, addresses, key types and setting
   // names sshd printed.
   'lib/ui/sshd_posture.dart': {"', '"},
@@ -375,6 +385,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'No settings window method $name'",
     "'No pin publication settings'",
     "'No app lock settings'",
+    "'levels'",
+    "'not valid bands'",
   },
   'lib/services/settings_window/remote_settings.dart': {
     "'Settings link closed'",
@@ -912,6 +924,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // debugPrint of a failed theme change; the toast is ARB text.
   'lib/ui/fleet_board.dart': {r"'$error'"},
   'lib/ui/settings_page.dart': {r"'$error'"},
+  'lib/ui/thresholds_tab.dart': {r"'$error'"},
   'lib/ui/sortable_table.dart': {
     // FocusNode debug labels.
     "'SortableTable'",
