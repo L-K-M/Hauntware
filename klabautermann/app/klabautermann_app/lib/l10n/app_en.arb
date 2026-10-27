@@ -821,6 +821,10 @@
   "@fleetServerLeftDismiss": {
     "description": "Button that hides the notice that a server left the fleet."
   },
+  "fleetSplitChooseServer": "Choose a server to see it here.",
+  "@fleetSplitChooseServer": {
+    "description": "Shown beside the fleet list on a tablet while no server is selected."
+  },
   "processesWaiting": "Waiting for the first process list.",
   "@processesWaiting": {
     "description": "The Processes tab before the server sent its first process list (PRC-01)."
