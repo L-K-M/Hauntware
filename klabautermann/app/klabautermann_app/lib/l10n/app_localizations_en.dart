@@ -10548,4 +10548,133 @@ class AppLocalizationsEn extends AppLocalizations {
   String paletteContainerDescription(String state, String image) {
     return '$state · $image';
   }
+
+  @override
+  String get exportNameServer => 'Name the server';
+
+  @override
+  String get exportServerUnnamed =>
+      'The card leaves out the server\'s name and host name.';
+
+  @override
+  String get exportServerNamed =>
+      'The card names the server and its host name.';
+
+  @override
+  String get statusCardAction => 'Share status…';
+
+  @override
+  String get statusCardTitle => 'Status card';
+
+  @override
+  String get statusCardFileName => 'status.txt';
+
+  @override
+  String get statusCardNothingRead =>
+      'Nothing has been read from the server yet.';
+
+  @override
+  String statusCardHeading(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Server status at $timeString';
+  }
+
+  @override
+  String statusCardServer(String name) {
+    return 'Server: $name';
+  }
+
+  @override
+  String statusCardHostName(String hostname) {
+    return 'Host name: $hostname';
+  }
+
+  @override
+  String statusCardSystem(String os) {
+    return 'System: $os';
+  }
+
+  @override
+  String statusCardUptime(String uptime) {
+    return 'Up for $uptime';
+  }
+
+  @override
+  String statusCardCpu(String percent) {
+    return 'CPU: $percent busy';
+  }
+
+  @override
+  String statusCardLoad(double load1, double load5, double load15) {
+    final intl.NumberFormat load1NumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 2,
+        );
+    final String load1String = load1NumberFormat.format(load1);
+    final intl.NumberFormat load5NumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 2,
+        );
+    final String load5String = load5NumberFormat.format(load5);
+    final intl.NumberFormat load15NumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 2,
+        );
+    final String load15String = load15NumberFormat.format(load15);
+
+    return 'Load: $load1String, $load5String, $load15String';
+  }
+
+  @override
+  String statusCardMemory(String used, String total, String percent) {
+    return 'Memory: $used of $total used ($percent)';
+  }
+
+  @override
+  String statusCardDisk(String mount, String percent) {
+    return 'Disk $mount: $percent used';
+  }
+
+  @override
+  String statusCardFailedUnits(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count failed units',
+      one: '1 failed unit',
+      zero: 'No failed units',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String statusCardContainers(int running, int total) {
+    return 'Containers: $running of $total running';
+  }
+
+  @override
+  String statusCardUnhealthy(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count containers unhealthy',
+      one: '1 container unhealthy',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerDetailsRawExportTitle => 'Export the container\'s details';
+
+  @override
+  String dockerDetailsRawFileName(String name) {
+    return '$name-inspect.json';
+  }
 }

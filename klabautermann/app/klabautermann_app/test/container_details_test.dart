@@ -511,6 +511,37 @@ void main() {
     expect(json, isNot(contains('t0ken')));
     expect(json, isNot(contains('never-shown')), reason: 'log options');
     expect(json, isNot(contains('0001-01-01')), reason: 'the zero time');
+
+    // PLT-08: the same masked JSON is exported, through the redactor.
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String?;
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await tester.ensureVisible(_inDetails(find.text('Export')));
+    await tester.tap(_inDetails(find.text('Export')));
+    await tester.pumpAndSettle();
+    expect(find.text("Export the container's details"), findsOneWidget);
+    await tester.tap(find.text('Copy'));
+    await tester.pump();
+    final redact =
+        harness.engine.sentOfType<RedactLines>().single as RedactLines;
+    expect(redact.lines.join('\n'), json);
+    harness.engine.emit(RedactedLines(redact.requestId, 'redacted'));
+    await tester.pumpAndSettle();
+    expect(copied, 'redacted');
+    expect(find.text("Export the container's details"), findsNothing);
   });
 
   testWidgets('a container another tool manages carries its badge', (

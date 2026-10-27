@@ -15,6 +15,7 @@ import 'overview_panel.dart';
 import 'connect_rejected_banner.dart';
 import 'processes_panel.dart';
 import 'server_coverage.dart';
+import 'status_card.dart';
 import 'server_header.dart';
 import 'server_surfaces.dart';
 import 'services_panel.dart';
@@ -237,6 +238,11 @@ class _ServerDetailPageState extends State<ServerDetailPage>
                           monitoring: widget.monitoring,
                           serverId: widget.server.id,
                           visible: _destinations.index == index,
+                        ),
+                        statusCard: StatusCardButton(
+                          monitoring: widget.monitoring,
+                          serverId: widget.server.id,
+                          serverName: widget.server.displayName,
                         ),
                       ),
                       ServerPanel.docker => DockerPanel(
