@@ -19,6 +19,7 @@ import 'log_streams.dart';
 import 'package_reads.dart';
 import 'port_forwards.dart';
 import 'stack_folders.dart';
+import 'timer_detail_reads.dart';
 import 'tls_endpoints.dart';
 
 /// How long a server's link outlives the last view that opened it, as long
@@ -176,6 +177,7 @@ final class MonitoringController extends ChangeNotifier {
     rollups = HistoryReads(_engine);
     accounts = AccountReads(_engine);
     diskUsage = DiskUsageReads(_engine);
+    timerDetails = TimerDetailReads(_engine);
     forwards = PortForwardsController(_engine);
     docker = DockerController(
       _engine,
@@ -229,6 +231,10 @@ final class MonitoringController extends ChangeNotifier {
   /// The disk space explorer's folder reads (DSK-07), a concern of its
   /// own beside [logs].
   late final DiskUsageReads diskUsage;
+
+  /// The Jobs tab's timer reads (JOB-02), a concern of its own beside
+  /// [logs].
+  late final TimerDetailReads timerDetails;
 
   /// Each server's Docker endpoint, which the server header names, and
   /// the engine details the Docker tab shows (03 §5.9, §10.2): a concern
@@ -859,6 +865,7 @@ final class MonitoringController extends ChangeNotifier {
     rollups.dispose();
     accounts.dispose();
     diskUsage.dispose();
+    timerDetails.dispose();
     forwards.dispose();
     docker.dispose();
     _onEngineDone();

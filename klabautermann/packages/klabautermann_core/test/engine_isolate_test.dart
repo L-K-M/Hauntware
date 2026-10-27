@@ -350,6 +350,15 @@ void main() {
         expect(usage.failure, DiskUsageReportFailure.noLink);
       }
 
+      // JOB-02's timer read answers without a link.
+      client.send(
+        const ReadTimerDetail('ssh-config:web', 'a.timer', requestId: 'r-t'),
+      );
+      final timer = (await next(events)) as TimerDetailReport;
+      expect(timer.requestId, 'r-t');
+      expect(timer.unit, 'a.timer');
+      expect(timer.failure, TimerDetailFailure.noLink);
+
       // A detached operation's result is acknowledged over a link.
       client.send(
         const AcknowledgeOperation('ssh-config:web', '0123456789abcdef'),

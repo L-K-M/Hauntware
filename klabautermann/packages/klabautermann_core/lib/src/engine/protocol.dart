@@ -6,6 +6,8 @@ import 'package:klabautermann_host/klabautermann_host.dart'
     show
         AccountsSnapshot,
         DiskUsageListing,
+        OnCalendarResult,
+        TimerDetail,
         AnacronJob,
         BackupEntry,
         CpuPercentages,
@@ -1407,6 +1409,25 @@ final class ReadDiskUsage extends EngineRequest {
   final String path;
   final String requestId;
   final bool elevated;
+}
+
+/// Reads one timer's triggers on [serverId] for its details (JOB-02, 03
+/// §7.7, D57): its `OnCalendar=` and monotonic triggers and randomized
+/// delay, and each calendar trigger's next runs, as the login user; in
+/// the login user's own manager when [user]. Never cached. One
+/// [TimerDetailReport] with [requestId] answers it.
+final class ReadTimerDetail extends EngineRequest {
+  const ReadTimerDetail(
+    this.serverId,
+    this.unit, {
+    required this.requestId,
+    this.user = false,
+  });
+
+  final String serverId;
+  final String unit;
+  final String requestId;
+  final bool user;
 }
 
 /// Reads every drive's SMART health on [serverId] (HW-04, 03 §7.11): in
@@ -3087,6 +3108,48 @@ final class DiskUsageReport extends EngineEvent {
   final String path;
   final DiskUsageListing? listing;
   final DiskUsageReportFailure? failure;
+}
+
+/// Why a [ReadTimerDetail] read nothing.
+enum TimerDetailFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// The unit name is not a timer's.
+  invalidUnit,
+
+  /// systemctl is not installed.
+  missing,
+
+  /// systemctl failed, as when the manager could not be reached.
+  unreadable,
+
+  /// The link failed, or a read ran past its time.
+  transport,
+}
+
+/// The answer to [ReadTimerDetail]: [unit]'s triggers and each calendar
+/// trigger's `systemd-analyze calendar` result keyed by expression, which
+/// `TimerJobEntry.withDetail` merges into the timer's row, or why nothing
+/// was read.
+final class TimerDetailReport extends EngineEvent {
+  TimerDetailReport({
+    required this.serverId,
+    required this.requestId,
+    required this.unit,
+    required this.user,
+    this.detail,
+    Map<String, OnCalendarResult> calendars = const {},
+    this.failure,
+  }) : calendars = Map.unmodifiable(calendars);
+
+  final String serverId;
+  final String requestId;
+  final String unit;
+  final bool user;
+  final TimerDetail? detail;
+  final Map<String, OnCalendarResult> calendars;
+  final TimerDetailFailure? failure;
 }
 
 /// Why a [ReadAccounts] read nothing.

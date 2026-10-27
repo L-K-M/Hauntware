@@ -78,6 +78,7 @@ import '../jobs/job_history_query.dart';
 import '../services/packages.dart';
 import '../services/accounts.dart';
 import '../services/disk_usage.dart';
+import '../services/timer_detail.dart';
 import '../services/unit_queries.dart';
 import '../operations/stack_edits.dart';
 import '../operations/plans/host_plans.dart';
@@ -1834,6 +1835,44 @@ void engineMain(
           ).then(
             uiPort.send,
             onError: (Object _) => fail(DiskUsageReportFailure.transport),
+          ),
+        );
+      case ReadTimerDetail(
+        :final serverId,
+        :final unit,
+        :final requestId,
+        :final user,
+      ):
+        void fail(TimerDetailFailure failure) => uiPort.send(
+          TimerDetailReport(
+            serverId: serverId,
+            requestId: requestId,
+            unit: unit,
+            user: user,
+            failure: failure,
+          ),
+        );
+        final link = links?.link(serverId);
+        if (!fleetIds.contains(serverId) || link == null) {
+          fail(TimerDetailFailure.noLink);
+          return;
+        }
+        // Not awaited, as the other reads; a lend that fails still
+        // answers.
+        unawaited(
+          lendSession(
+            serverId,
+            () => readTimerDetail(
+              serverId,
+              unit,
+              requestId: requestId,
+              link: link,
+              user: user,
+              profile: profiles[serverId],
+            ),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => fail(TimerDetailFailure.transport),
           ),
         );
       case ReadSmart(:final serverId, :final requestId):
