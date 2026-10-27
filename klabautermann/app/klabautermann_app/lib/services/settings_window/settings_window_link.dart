@@ -19,6 +19,8 @@ import '../../controllers/threshold_controller.dart'
     show ThresholdsNotSavedException;
 import '../../controllers/cadence_controller.dart'
     show CadenceCap, CadenceNotSavedException, CadencePreset;
+import '../../controllers/log_display.dart'
+    show LogDisplay, LogDisplayNotSavedException, LogWrap;
 import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart'
     show AppearanceNotSavedException;
@@ -76,6 +78,10 @@ enum SettingsLinkMethod {
   /// `[serverId, name]`, a [CadenceCap] name or null to lift the cap.
   setCadenceCap,
 
+  /// The General tab's log display (A11Y-12); the argument is as
+  /// [encodeLogDisplay] writes it.
+  setLogDisplay,
+
   /// The General tab's device name (M5 plan Q6); the argument is a
   /// string, blank for the default.
   setDeviceName,
@@ -128,6 +134,10 @@ enum SettingsLinkKey {
   /// Each capped server's [CadenceCap] name by server id, or null when
   /// the app offers no caps.
   cadenceCaps,
+
+  /// The log display as [encodeLogDisplay] writes it, or null when the app
+  /// offers none.
+  logDisplay,
   deviceName,
 
   /// Each metric's usage bands (OV-11), as [encodeThresholds] writes them.
@@ -253,6 +263,10 @@ enum SettingsLinkError {
   /// [CadenceNotSavedException].
   cadenceNotSaved,
 
+  /// As [notSaved], for the log display: the window rebuilds the
+  /// [LogDisplayNotSavedException].
+  logDisplayNotSaved,
+
   /// The monitor set is full: the window rebuilds the
   /// [MonitorSetFullException], so the Servers tab words it as the app's
   /// rows do.
@@ -290,6 +304,7 @@ PlatformException encodeLinkError(Object error) => PlatformException(
     AnnouncementNotSavedException() =>
       SettingsLinkError.announcementNotSaved.name,
     CadenceNotSavedException() => SettingsLinkError.cadenceNotSaved.name,
+    LogDisplayNotSavedException() => SettingsLinkError.logDisplayNotSaved.name,
     MonitorSetFullException() => SettingsLinkError.monitorSetFull.name,
     MonitorSetNotSavedException() => SettingsLinkError.monitorSetNotSaved.name,
     SafetyNotSavedException() => SettingsLinkError.safetyNotSaved.name,
@@ -301,6 +316,22 @@ PlatformException encodeLinkError(Object error) => PlatformException(
   },
   message: '$error',
 );
+
+/// [display] for the link: its text size and its [LogWrap] name.
+List<Object> encodeLogDisplay(LogDisplay display) => [
+  display.textSize,
+  display.wrap.name,
+];
+
+/// The inverse of [encodeLogDisplay]; a value it did not write reads as
+/// the default display.
+LogDisplay decodeLogDisplay(Object? value) => switch (value) {
+  [final int textSize, final String wrap] => LogDisplay(
+    textSize: textSize,
+    wrap: LogWrap.values.asNameMap()[wrap] ?? LogWrap.off,
+  ),
+  _ => LogDisplay(),
+};
 
 /// [size] for the link: its bytes, budget and warning point, then each
 /// row's prefix, records and bytes.
@@ -358,6 +389,9 @@ Exception decodeLinkError(PlatformException error) {
       message,
     ),
     SettingsLinkError.cadenceNotSaved => CadenceNotSavedException(message),
+    SettingsLinkError.logDisplayNotSaved => LogDisplayNotSavedException(
+      message,
+    ),
     SettingsLinkError.monitorSetFull => const MonitorSetFullException(),
     SettingsLinkError.monitorSetNotSaved => MonitorSetNotSavedException(
       message,

@@ -14,6 +14,7 @@ import 'controllers/admin_controller.dart';
 import 'controllers/alert_center.dart';
 import 'controllers/alert_notifications.dart';
 import 'controllers/alert_rules_controller.dart';
+import 'controllers/log_display.dart';
 import 'controllers/snippets_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
@@ -246,6 +247,15 @@ Future<void> main(List<String> args) async {
   final alertRules = AlertRulesController(engine);
   // Séance's synced snippets, run on a server (AUT-01).
   final snippets = SnippetsController(engine);
+
+  // Every log view's text size and wrapping (A11Y-12), kept per device.
+  final logDisplay = LogDisplayController(
+    display: LogDisplay(
+      textSize: settings.logTextSize ?? kLogTextSizeDefault,
+      wrap: settings.logWrap ? LogWrap.on : LogWrap.off,
+    ),
+    save: settings.setLogDisplay,
+  );
   // Their system notifications (ALR-01), worded in the device's locale
   // as it is when each posts, and switched on per device in
   // settings.json.
@@ -470,6 +480,7 @@ Future<void> main(List<String> args) async {
     accountSize: sync.accountSize,
     cadence: cadence,
     cadenceCaps: cadenceCaps,
+    logDisplay: logDisplay,
   );
 
   runApp(
@@ -494,6 +505,7 @@ Future<void> main(List<String> args) async {
       alerts: alerts,
       alertRules: alertRules,
       snippets: snippets,
+      logDisplay: logDisplay,
       alertNotifications: alertNotifications,
       operations: operations,
       dockerNotice: dockerNotice,

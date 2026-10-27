@@ -7877,6 +7877,16 @@ Rows from `dmesg`, which has no journal fields, carry no
 level yet, and LOG-01's "load older" waits for a buffer that can add
 entries before its oldest.
 
+As built in M6 (N67, A11Y-12): Settings > General sets every log view's
+text size, 10 to 18 px (13 by default), and whether long lines wrap. Both
+are device settings in `settings.json` (`klabautermann.logs.textSize`,
+`klabautermann.logs.wrap`), offered in the desktop settings window too.
+A `LogDisplayScope` above every route hands them to the viewers; the size
+applies before the system's text scale, and a view that picks its own
+wrapping keeps it. A changed size or mode keeps the lines in sight where
+they were. Each row is one screen-reader node, so a reader steps line by
+line.
+
 ### 10.9 Theme
 
 MVP: `ghost_theme` (F4b, D9) builds the light and dark themes, installs

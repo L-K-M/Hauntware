@@ -11,6 +11,7 @@ import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 import '../../controllers/account_size.dart';
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/cadence_controller.dart';
+import '../../controllers/log_display.dart';
 import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/device_name.dart';
@@ -41,6 +42,7 @@ SettingsWindowHost? settingsWindowHostFor(
   AppLockSettings? appLock,
   CadenceSettings? cadence,
   CadenceCapSettings? cadenceCaps,
+  LogDisplaySettings? logDisplay,
 }) => switch (platform) {
   TargetPlatform.macOS ||
   TargetPlatform.linux ||
@@ -58,6 +60,7 @@ SettingsWindowHost? settingsWindowHostFor(
     appLock: appLock,
     cadence: cadence,
     cadenceCaps: cadenceCaps,
+    logDisplay: logDisplay,
   ),
   TargetPlatform.android ||
   TargetPlatform.iOS ||
@@ -89,6 +92,7 @@ final class SettingsWindowHost {
     AppLockSettings? appLock,
     CadenceSettings? cadence,
     CadenceCapSettings? cadenceCaps,
+    LogDisplaySettings? logDisplay,
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
@@ -103,7 +107,8 @@ final class SettingsWindowHost {
        _accountSize = accountSize,
        _appLock = appLock,
        _cadence = cadence,
-       _cadenceCaps = cadenceCaps {
+       _cadenceCaps = cadenceCaps,
+       _logDisplay = logDisplay {
     _engine = GhostSettingsWindowHost(
       control: control,
       link: link,
@@ -124,6 +129,7 @@ final class SettingsWindowHost {
           ?appLock,
           ?cadence,
           ?cadenceCaps,
+          ?logDisplay,
         ],
       ),
       encodeError: encodeLinkError,
@@ -144,6 +150,7 @@ final class SettingsWindowHost {
   final AppLockSettings? _appLock;
   final CadenceSettings? _cadence;
   final CadenceCapSettings? _cadenceCaps;
+  final LogDisplaySettings? _logDisplay;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
 
   @visibleForTesting
@@ -168,6 +175,10 @@ final class SettingsWindowHost {
       final caps? => {
         for (final MapEntry(:key, :value) in caps.entries) key: value.name,
       },
+      null => null,
+    },
+    SettingsLinkKey.logDisplay.name: switch (_logDisplay?.value) {
+      final display? => encodeLogDisplay(display),
       null => null,
     },
     SettingsLinkKey.deviceName.name: _deviceName.value,
@@ -220,6 +231,8 @@ final class SettingsWindowHost {
       case SettingsLinkMethod.setCadenceCap:
         final [serverId as String, name as String?] = argument! as List;
         await _cadenceCaps?.setCap(serverId, CadenceCap.parse(name));
+      case SettingsLinkMethod.setLogDisplay:
+        await _logDisplay?.setLogDisplay(decodeLogDisplay(argument));
       case SettingsLinkMethod.setDeviceName:
         await _deviceName.setDeviceName(argument! as String);
       case SettingsLinkMethod.setThresholds:

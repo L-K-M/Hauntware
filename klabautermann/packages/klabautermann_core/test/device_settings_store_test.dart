@@ -684,6 +684,26 @@ void main() {
       },
     );
 
+    test('keeps the log display across reloads and reads a damaged value '
+        'as none (A11Y-12)', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect((store.logTextSize, store.logWrap), (null, false));
+      await store.setLogDisplay(16, true);
+      final reopened = await DeviceSettingsStore.open(file);
+      expect((reopened.logTextSize, reopened.logWrap), (16, true));
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.logs.textSize': 12.5,
+        'klabautermann.logs.wrap': 'yes',
+      });
+      final damaged = await DeviceSettingsStore.open(file);
+      expect((damaged.logTextSize, damaged.logWrap), (null, false));
+    });
+
     test('keeps the app lock off until turned on, across reloads, and a '
         'damaged value never drops it (SAF-20)', () async {
       writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});

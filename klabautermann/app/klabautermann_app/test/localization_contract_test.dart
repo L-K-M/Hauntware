@@ -91,6 +91,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'The polling budget was not saved: $error'",
     r"'The polling cap was not saved: $error'",
   },
+  // The not-saved diagnostic; the General tab prints it and shows its own
+  // ARB text (settingsLogDisplayNotSaved).
+  'lib/controllers/log_display.dart': {
+    r"'The log display was not saved: $error'",
+  },
   // A pin's stored form (`<scope>/<unit>`) and the not-saved diagnostic;
   // the unit page shows its own ARB toast (quickActionsPinNotSaved).
   'lib/controllers/pinned_services.dart': {
