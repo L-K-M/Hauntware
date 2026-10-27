@@ -49,7 +49,10 @@ class HeaderToolbar extends StatelessWidget {
     };
     return Material(
       color: chrome.headerBackground,
+      // As wide as it is let be, title or not: with nothing open it would
+      // shrink to its padding, and the page would show beside it.
       child: SizedBox(
+        width: double.infinity,
         height: chrome.headerHeight,
         child: Padding(
           padding: EdgeInsetsDirectional.only(

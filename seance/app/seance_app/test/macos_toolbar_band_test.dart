@@ -263,6 +263,25 @@ void main() {
     await unmount(tester);
   });
 
+  testWidgets('macOS: with nothing open the header still spans the band', (
+    tester,
+  ) async {
+    final band = ValueNotifier(true);
+    addTearDown(band.dispose);
+    await pumpShell(tester, platform: TargetPlatform.macOS, band: band);
+    await tester.runAsync(() => state!.closeTab('tab'));
+    await tester.pump();
+
+    // No title to stretch it: the header alone still fills the band right
+    // of the rail, so no strip of the page shows through beside it.
+    expect(state!.activeTab, isNull);
+    final header = tester.getRect(find.byType(HeaderToolbar));
+    final rail = tester.getRect(find.byKey(AdaptivePaneLayout.listPaneKey));
+    expect(header.left, rail.right + AdaptiveShell.seamWidth);
+    expect(header.right, 1280);
+    await unmount(tester);
+  });
+
   testWidgets('macOS: the dividers still resize from the keyboard', (
     tester,
   ) async {
