@@ -1256,6 +1256,22 @@ void main() {
     expect(find.textContaining('Threshold announcements'), findsNothing);
   });
 
+  testWidgets('TRI-01: the health card runs the doctor', (tester) async {
+    final panel = await _pump(tester);
+    await tester.ensureVisible(find.text('Run the doctor'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Run the doctor'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Doctor'), findsOne);
+    expect(find.text('Checking…'), findsOne);
+    expect(panel.engine.sentOfType<ReadPackages>(), hasLength(1));
+
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Doctor'), findsNothing);
+  });
+
   testWidgets('TRI-02 names what in the reading slows the server', (
     tester,
   ) async {

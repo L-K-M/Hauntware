@@ -9535,4 +9535,227 @@ class AppLocalizationsEn extends AppLocalizations {
 
     return 'Checked $timeString';
   }
+
+  @override
+  String get doctorOpen => 'Run the doctor';
+
+  @override
+  String get doctorTitle => 'Doctor';
+
+  @override
+  String get doctorIntro =>
+      'Read-only checks of this server, each with what to do about a finding. Nothing on the server changes.';
+
+  @override
+  String get doctorRunning => 'Checking…';
+
+  @override
+  String doctorSummary(int problems, int warnings) {
+    String _temp0 = intl.Intl.pluralLogic(
+      problems,
+      locale: localeName,
+      other: '$problems problems',
+      one: '1 problem',
+      zero: 'No problems',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      warnings,
+      locale: localeName,
+      other: '$warnings warnings',
+      one: '1 warning',
+      zero: 'no warnings',
+    );
+    return '$_temp0, $_temp1';
+  }
+
+  @override
+  String get doctorAgain => 'Check again';
+
+  @override
+  String get doctorClose => 'Close';
+
+  @override
+  String doctorCheck(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'diskSpace': 'Disk space',
+      'inodes': 'Inodes',
+      'failedUnits': 'Failed units',
+      'securityUpdates': 'Security updates',
+      'rebootRequired': 'Reboot',
+      'timeSync': 'Time sync',
+      'certificates': 'Certificates',
+      'dockerDiskUse': 'Docker disk use',
+      'danglingImages': 'Dangling images',
+      'other': 'Check',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String doctorHint(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'diskSpace':
+          'Remove old logs, caches and unused images, or grow the filesystem. Disks on the System tab lists every mount.',
+      'inodes':
+          'Many small files use up inodes: look for caches, mail queues or session files and remove what is no longer needed.',
+      'failedUnits':
+          'Open Services to read each unit\'s log, and restart it once the cause is fixed.',
+      'securityUpdates':
+          'Install them from Updates on the System tab or with the package manager.',
+      'rebootRequired':
+          'Reboot from Power on the System tab when it suits, so the updated kernel or libraries run.',
+      'timeSync':
+          'Turn time sync on (for example with timedatectl set-ntp true) and make sure the NTP server can be reached.',
+      'certificates':
+          'Renew or replace the certificate before it expires. Certificates on the System tab shows each endpoint.',
+      'dockerDiskUse':
+          'Remove unused images, stopped containers and build cache from the Docker tab.',
+      'danglingImages':
+          'Rebuilds leave untagged images behind. Remove them from Images with the Dangling filter.',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get doctorUnknown =>
+      'Not known: the reading failed or has not arrived.';
+
+  @override
+  String get doctorChecking => 'Reading…';
+
+  @override
+  String doctorSpaceOk(String percent) {
+    return 'Every filesystem is under $percent full.';
+  }
+
+  @override
+  String doctorSpaceFull(String percent) {
+    return 'Filling up, the fullest at $percent:';
+  }
+
+  @override
+  String doctorInodesOk(String percent) {
+    return 'Every filesystem uses under $percent of its inodes.';
+  }
+
+  @override
+  String doctorInodesFull(String percent) {
+    return 'Running out of inodes, the fullest at $percent:';
+  }
+
+  @override
+  String get doctorUnitsOk => 'No unit has failed.';
+
+  @override
+  String doctorUnitsFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count units have failed:',
+      one: '1 unit has failed:',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String doctorSecurityPending(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count security updates are pending.',
+      one: '1 security update is pending.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String doctorUpdatesUnclassified(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count updates are pending, and the package manager does not say which fix security issues.',
+      one:
+          '1 update is pending, and the package manager does not say whether it fixes a security issue.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String doctorSecurityNone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'No security updates are pending; $count other updates are.',
+      one: 'No security updates are pending; 1 other update is.',
+      zero: 'No updates are pending.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get doctorRebootNo => 'No reboot is needed.';
+
+  @override
+  String get doctorRebootYes =>
+      'A reboot is needed. Packages that asked for it, where the host says:';
+
+  @override
+  String get doctorTimeOk => 'The clock is synchronized.';
+
+  @override
+  String get doctorTimeNotSynced => 'The clock is not synchronized.';
+
+  @override
+  String doctorTimeNotSyncedSkew(String skew) {
+    return 'The clock is not synchronized; it reads $skew.';
+  }
+
+  @override
+  String doctorClockOff(String skew) {
+    return 'The clock reads $skew.';
+  }
+
+  @override
+  String get doctorCertificatesNone =>
+      'No endpoints are listed for this server.';
+
+  @override
+  String get doctorCertificatesSetUp =>
+      'List endpoints under Certificates on the System tab to check them here.';
+
+  @override
+  String doctorCertificatesOk(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'All $count endpoints present valid certificates.',
+      one: 'The endpoint presents a valid certificate.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get doctorCertificatesBad =>
+      'Failing, untrusted, expired or expiring within 14 days:';
+
+  @override
+  String doctorDockerReclaimable(String size) {
+    return 'Docker could free $size of unused data.';
+  }
+
+  @override
+  String get doctorDanglingNone => 'No dangling images.';
+
+  @override
+  String doctorDangling(int count, String size) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count dangling images take $size.',
+      one: '1 dangling image takes $size.',
+    );
+    return '$_temp0';
+  }
 }

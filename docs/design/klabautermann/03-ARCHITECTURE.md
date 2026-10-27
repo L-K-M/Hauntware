@@ -4054,6 +4054,19 @@ TLS. The section checks when it shows, after an edit and on request.
   installed kernel; doctor checklist; "why is it slow"; attention queue
   (acknowledgements device-local); container diagnose without an LLM.
 
+  As built (M6 N53c), the doctor (TRI-01) opens from the overview's
+  Health card as a checklist (`ui/doctor.dart`), read-only, each finding
+  with what to do about it. Disk space and inodes (a mount at 80 % warns,
+  at 90 % is a problem, as on the fleet rows), failed units, the clock
+  (not synchronized, or off this device's by 2 s or more) and dangling
+  images read what the Overview holds; the package check (security
+  updates, reboot needed), the listed endpoints' certificates (failing,
+  untrusted, expired, or within 14 days of expiry) and Docker's
+  reclaimable space (a warning from 1 GiB) are read as it opens and on
+  request. The Docker checks show only with a Docker endpoint. Open
+  ports and unrotated container logs join the list once the listening
+  ports (N34) and the container review (N21a) are on main.
+
   As built (M6 N53b), "why is it slow" (TRI-02) is a card under the
   overview's Health card, from the live core reading alone
   (`ui/slowness.dart`): tasks waiting for a CPU 20 % of the last 10 s
