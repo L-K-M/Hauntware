@@ -5268,6 +5268,36 @@
   "@settingsAccessibilityTitle": {
     "description": "Heading of the accessibility settings on the General settings tab."
   },
+  "settingsCadenceTitle": "Refresh",
+  "@settingsCadenceTitle": {
+    "description": "Settings, General: the heading of the polling budget section (SAF-19)."
+  },
+  "settingsCadenceLabel": "How often servers are read",
+  "@settingsCadenceLabel": {
+    "description": "Settings, General: the label beside the polling budget's preset menu (SAF-19)."
+  },
+  "settingsCadencePreset": "{preset, select, automatic{Automatic} desktop{Desktop} phone{Phone} other{Cellular saver}}",
+  "@settingsCadencePreset": {
+    "description": "Settings, General: a polling budget preset in its menu.",
+    "placeholders": {
+      "preset": {"type": "String", "example": "automatic"}
+    }
+  },
+  "settingsCadenceDetail": "{preset, select, automatic{Desktop rates on a computer, phone rates on a phone or tablet.} desktop{Fleet rows every 5 s, the open server every 2 s.} phone{Fleet rows every 10 s, the open server every 3 s, to save battery.} other{Fleet rows every 30 s, the open server every 10 s; timers, cron jobs, temperatures, GPUs and disk health are read once when you open them.}}",
+  "@settingsCadenceDetail": {
+    "description": "Settings, General: what the chosen polling budget preset reads how often (03 §6.4).",
+    "placeholders": {
+      "preset": {"type": "String", "example": "automatic"}
+    }
+  },
+  "settingsCadenceNotSaved": "The refresh rate changed but could not be saved. It lasts until Klabautermann quits.",
+  "@settingsCadenceNotSaved": {
+    "description": "Settings, General: toast when the polling budget applied but settings.json could not be written."
+  },
+  "settingsCadenceNotChanged": "The refresh rate could not be changed.",
+  "@settingsCadenceNotChanged": {
+    "description": "Settings, General: toast when the polling budget change failed."
+  },
   "settingsAnnounceBands": "Announce threshold changes",
   "@settingsAnnounceBands": {
     "description": "Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level."

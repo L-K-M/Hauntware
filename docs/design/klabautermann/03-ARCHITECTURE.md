@@ -3111,7 +3111,11 @@ while at least one subscription for the server names it; the Desktop,
 Phone and Cellular saver columns are cadence profiles, chosen by a request
 of their own rather than per subscription, and the health card's failed
 units are a stream of their own, apart from the Services panel's `units`
-(D45, 10.1). Rates
+(D45, 10.1). As built, Settings > General picks the profile per
+device: Automatic (Desktop on a computer, Phone on a phone or tablet),
+Desktop, Phone or Cellular saver, kept in `settings.json` under
+`klabautermann.sampling.cadence`; per-server caps are not built yet.
+Rates
 are computed in the engine isolate (D43) from counter deltas over the
 host's uptime between two replies that carry them, with wrap detection
 and reset detection: a changed `btime`, an uptime that went back or a

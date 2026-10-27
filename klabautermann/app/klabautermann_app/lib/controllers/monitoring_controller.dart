@@ -271,6 +271,9 @@ final class MonitoringController extends ChangeNotifier {
   /// What the engine was last told. It starts with the app in the
   /// foreground, so only a change is sent (03 §10.1).
   AppActivity _activity = AppActivity.foreground;
+
+  /// The 6.4 column the engine samples at; it starts at Desktop's.
+  CadenceProfile _cadence = CadenceProfile.desktop;
   bool _engineStopped = false;
 
   /// When the app last went to the background, and the servers the
@@ -589,6 +592,14 @@ final class MonitoringController extends ChangeNotifier {
       _leaving.remove(serverId);
       _send(Disconnect(serverId));
     });
+  }
+
+  /// Picks the 6.4 column the engine samples at (SAF-19), when that
+  /// changed.
+  void setCadenceProfile(CadenceProfile profile) {
+    if (profile == _cadence) return;
+    _cadence = profile;
+    _send(SetCadenceProfile(profile));
   }
 
   /// Tells the engine whether the user can see the app (03 §10.1), when

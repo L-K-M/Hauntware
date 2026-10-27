@@ -14,6 +14,8 @@ import 'package:ghost_theme/ghost_theme.dart';
 
 import '../../controllers/announcement_controller.dart'
     show AnnouncementNotSavedException;
+import '../../controllers/cadence_controller.dart'
+    show CadenceNotSavedException, CadencePreset;
 import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart'
     show AppearanceNotSavedException;
@@ -63,6 +65,10 @@ enum SettingsLinkMethod {
   /// The General tab's A11Y-15 switch; the argument is a bool (D60).
   setAnnounceThresholdBands,
 
+  /// The General tab's polling budget (SAF-19); the argument is a
+  /// [CadencePreset] name.
+  setCadence,
+
   /// The General tab's device name (M5 plan Q6); the argument is a
   /// string, blank for the default.
   setDeviceName,
@@ -103,6 +109,10 @@ enum SettingsLinkKey {
   palette,
   mode,
   announceThresholdBands,
+
+  /// The polling budget's [CadencePreset] name, or null when the app
+  /// offers none.
+  cadence,
   deviceName,
   syncSecrets,
 
@@ -212,6 +222,10 @@ enum SettingsLinkError {
   /// [AnnouncementNotSavedException].
   announcementNotSaved,
 
+  /// As [notSaved], for the polling budget: the window rebuilds the
+  /// [CadenceNotSavedException].
+  cadenceNotSaved,
+
   /// The monitor set is full: the window rebuilds the
   /// [MonitorSetFullException], so the Servers tab words it as the app's
   /// rows do.
@@ -244,6 +258,7 @@ PlatformException encodeLinkError(Object error) => PlatformException(
     AppearanceNotSavedException() => SettingsLinkError.notSaved.name,
     AnnouncementNotSavedException() =>
       SettingsLinkError.announcementNotSaved.name,
+    CadenceNotSavedException() => SettingsLinkError.cadenceNotSaved.name,
     MonitorSetFullException() => SettingsLinkError.monitorSetFull.name,
     MonitorSetNotSavedException() => SettingsLinkError.monitorSetNotSaved.name,
     SafetyNotSavedException() => SettingsLinkError.safetyNotSaved.name,
@@ -273,6 +288,7 @@ Exception decodeLinkError(PlatformException error) {
     SettingsLinkError.announcementNotSaved => AnnouncementNotSavedException(
       message,
     ),
+    SettingsLinkError.cadenceNotSaved => CadenceNotSavedException(message),
     SettingsLinkError.monitorSetFull => const MonitorSetFullException(),
     SettingsLinkError.monitorSetNotSaved => MonitorSetNotSavedException(
       message,

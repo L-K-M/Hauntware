@@ -4323,6 +4323,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAccessibilityTitle => 'Accessibility';
 
   @override
+  String get settingsCadenceTitle => 'Refresh';
+
+  @override
+  String get settingsCadenceLabel => 'How often servers are read';
+
+  @override
+  String settingsCadencePreset(String preset) {
+    String _temp0 = intl.Intl.selectLogic(preset, {
+      'automatic': 'Automatic',
+      'desktop': 'Desktop',
+      'phone': 'Phone',
+      'other': 'Cellular saver',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String settingsCadenceDetail(String preset) {
+    String _temp0 = intl.Intl.selectLogic(preset, {
+      'automatic':
+          'Desktop rates on a computer, phone rates on a phone or tablet.',
+      'desktop': 'Fleet rows every 5 s, the open server every 2 s.',
+      'phone':
+          'Fleet rows every 10 s, the open server every 3 s, to save battery.',
+      'other':
+          'Fleet rows every 30 s, the open server every 10 s; timers, cron jobs, temperatures, GPUs and disk health are read once when you open them.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get settingsCadenceNotSaved =>
+      'The refresh rate changed but could not be saved. It lasts until Klabautermann quits.';
+
+  @override
+  String get settingsCadenceNotChanged =>
+      'The refresh rate could not be changed.';
+
+  @override
   String get settingsAnnounceBands => 'Announce threshold changes';
 
   @override
