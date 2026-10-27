@@ -3338,6 +3338,14 @@ unless the user enables admin mode for that panel.
   steal explained), PSI (absence is normal), model and topology, OOM kills
   linked to journal entries, configurable cards, top lists, quick actions,
   threshold bands, bottom dock.
+
+  As built in M6 (N61d, OV-07), the Overview's Top card ranks the
+  server's five busiest processes and, where its Docker engine answers,
+  its five busiest containers, by CPU or by memory. It is closed at
+  first and reads nothing; opened, it subscribes `procs` and holds the
+  container watch with list stats for the running containers while the
+  Overview shows, as the Processes tab and the Containers view do, so an
+  unopened card costs the host no process list.
 - **As built (M6 N42c).** CPU-07's model and topology are a host query,
   `CpuTopologyQuery`, shown in the System tab's Processor section beside
   the identity, since they do not change while the Overview samples. It

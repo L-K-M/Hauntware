@@ -568,6 +568,66 @@ abstract class AppLocalizations {
   /// **'Stale · {age}'**
   String fleetRowStaleAge(String age);
 
+  /// Overview (OV-07): the heading of the card ranking the busiest processes and containers.
+  ///
+  /// In en, this message translates to:
+  /// **'Top'**
+  String get topListsTitle;
+
+  /// Overview top lists (OV-07): what the lists rank by, in the card's picker.
+  ///
+  /// In en, this message translates to:
+  /// **'{measure, select, cpu{CPU} other{Memory}}'**
+  String topListsMeasure(String measure);
+
+  /// Overview top lists (OV-07): opens the card, which then reads the process list and container stats while the Overview shows.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the busiest processes and containers'**
+  String get topListsShow;
+
+  /// Overview top lists (OV-07): closes the card, which then reads nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide'**
+  String get topListsHide;
+
+  /// Overview top lists (OV-07): one process, its name and id.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ({pid})'**
+  String topListsProcess(String name, int pid);
+
+  /// Overview top lists (OV-07): a CPU share, already rounded to one decimal.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} %'**
+  String topListsPercent(String value);
+
+  /// Overview top lists (OV-07): the heading of the busiest processes.
+  ///
+  /// In en, this message translates to:
+  /// **'Processes'**
+  String get topListsProcesses;
+
+  /// Overview top lists (OV-07): the heading of the busiest containers, shown where the Docker engine answers.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get topListsContainers;
+
+  /// Overview top lists (OV-07): shown until the first process list or container stats arrive.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first reading…'**
+  String get topListsWaiting;
+
+  /// Overview top lists (OV-07): shown when no process or container reported the figure, as before a second CPU reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to rank yet.'**
+  String get topListsEmpty;
+
   /// The CPU cell of a fleet row's pressure bar (FL-07), as its summary names it.
   ///
   /// In en, this message translates to:

@@ -301,6 +301,56 @@
       }
     }
   },
+  "topListsTitle": "Top",
+  "@topListsTitle": {
+    "description": "Overview (OV-07): the heading of the card ranking the busiest processes and containers."
+  },
+  "topListsMeasure": "{measure, select, cpu{CPU} other{Memory}}",
+  "@topListsMeasure": {
+    "description": "Overview top lists (OV-07): what the lists rank by, in the card's picker.",
+    "placeholders": {
+      "measure": {"type": "String", "example": "cpu"}
+    }
+  },
+  "topListsShow": "Show the busiest processes and containers",
+  "@topListsShow": {
+    "description": "Overview top lists (OV-07): opens the card, which then reads the process list and container stats while the Overview shows."
+  },
+  "topListsHide": "Hide",
+  "@topListsHide": {
+    "description": "Overview top lists (OV-07): closes the card, which then reads nothing."
+  },
+  "topListsProcess": "{name} ({pid})",
+  "@topListsProcess": {
+    "description": "Overview top lists (OV-07): one process, its name and id.",
+    "placeholders": {
+      "name": {"type": "String", "example": "nginx"},
+      "pid": {"type": "int", "example": "1042"}
+    }
+  },
+  "topListsPercent": "{value} %",
+  "@topListsPercent": {
+    "description": "Overview top lists (OV-07): a CPU share, already rounded to one decimal.",
+    "placeholders": {
+      "value": {"type": "String", "example": "12.5"}
+    }
+  },
+  "topListsProcesses": "Processes",
+  "@topListsProcesses": {
+    "description": "Overview top lists (OV-07): the heading of the busiest processes."
+  },
+  "topListsContainers": "Containers",
+  "@topListsContainers": {
+    "description": "Overview top lists (OV-07): the heading of the busiest containers, shown where the Docker engine answers."
+  },
+  "topListsWaiting": "Waiting for the first reading…",
+  "@topListsWaiting": {
+    "description": "Overview top lists (OV-07): shown until the first process list or container stats arrive."
+  },
+  "topListsEmpty": "Nothing to rank yet.",
+  "@topListsEmpty": {
+    "description": "Overview top lists (OV-07): shown when no process or container reported the figure, as before a second CPU reading."
+  },
   "fleetRowCpu": "CPU",
   "@fleetRowCpu": {
     "description": "The CPU cell of a fleet row's pressure bar (FL-07), as its summary names it."
