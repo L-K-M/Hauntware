@@ -9,11 +9,12 @@ import 'package:macos_window_utils/macos_window_utils.dart';
 const windowChannelName = 'seance/window';
 
 /// Makes the main window's titlebar part of the app, the way Poltergeist's
-/// is: content under a transparent titlebar, the title hidden, and an empty
-/// unified toolbar that makes the band 52 pt tall so the traffic lights sit
-/// centred on the header drawn beneath it. Empty band space keeps AppKit's
-/// window drag and double-click zoom; the header's controls take clicks
-/// through `MacosToolbarPassthrough` views.
+/// is: content under a transparent titlebar and the title hidden, with the
+/// runner's unified toolbar (`SeanceToolbar`, installed natively before
+/// this runs) making the band 52 pt tall, so the traffic lights and the
+/// toolbar's buttons sit centred on the header drawn beneath it. Empty band
+/// space keeps AppKit's window drag and double-click zoom; Flutter controls
+/// inside the band take clicks through `MacosToolbarPassthrough` views.
 ///
 /// The runner starts from a standard titlebar
 /// (`MainFlutterWindowManipulator.start`), so this must run before the
@@ -35,8 +36,8 @@ abstract final class MacosTitlebar {
     } catch (error) {
       debugPrint('Integrated titlebar install failed: $error');
       // A half-applied titlebar (content under a transparent bar, but no
-      // toolbar to make the band) would put the traffic lights over the
-      // rail with nothing reserved for them. Back to the standard one.
+      // header reserved under it) would put the traffic lights over the
+      // rail. Back to the standard one.
       try {
         await adapter.reset();
       } catch (_) {}
@@ -56,11 +57,11 @@ abstract final class MacosTitlebar {
 
 /// The native calls behind [MacosTitlebar.install], a seam for tests.
 abstract interface class MacosTitlebarAdapter {
-  /// Makes the titlebar transparent over full-size content and adds the
-  /// empty unified toolbar.
+  /// Makes the titlebar transparent over full-size content.
   Future<void> install();
 
-  /// Puts the standard titlebar back.
+  /// Puts the standard titlebar back. The native toolbar stays: under a
+  /// standard titlebar it is an ordinary Mac toolbar above the content.
   Future<void> reset();
 }
 
@@ -76,7 +77,6 @@ final class _WindowUtilsTitlebar implements MacosTitlebarAdapter {
     await WindowManipulator.enableFullSizeContentView();
     await WindowManipulator.makeTitlebarTransparent();
     await WindowManipulator.hideTitle();
-    await WindowManipulator.addToolbar();
     await WindowManipulator.setToolbarStyle(
       toolbarStyle: NSWindowToolbarStyle.unified,
     );
@@ -85,7 +85,6 @@ final class _WindowUtilsTitlebar implements MacosTitlebarAdapter {
   @override
   Future<void> reset() async {
     if (!_initialized) return;
-    await WindowManipulator.removeToolbar();
     await WindowManipulator.showTitle();
     await WindowManipulator.makeTitlebarOpaque();
     await WindowManipulator.disableFullSizeContentView();

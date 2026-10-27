@@ -29,6 +29,7 @@ import 'services/shell_location.dart';
 import 'services/xterm_engine.dart';
 import 'theme/app_appearance.dart';
 import 'ui/built_in_text_editor.dart';
+import 'ui/inspector_page.dart';
 import 'ui/server_list_density.dart';
 import 'ui/session_label.dart';
 import 'ui/terminal_appearance.dart';
@@ -1275,6 +1276,39 @@ class AppState extends ChangeNotifier {
     }
     settings.paneListWidth = listWidth;
     settings.paneUtilityWidth = utilityWidth;
+    await services.saveSettings();
+  }
+
+  /// Whether the wide layout shows its server list (View ▸ Hide Sidebar).
+  bool get sidebarVisible => !services.settings.sidebarHidden;
+
+  /// Whether the wide layout shows its inspector (View ▸ Hide Inspector).
+  bool get inspectorVisible => !services.settings.inspectorHidden;
+
+  /// The inspector's open page; Files until the user picks another.
+  InspectorPage get inspectorPage =>
+      services.settings.inspectorPage ?? InspectorPage.files;
+
+  Future<void> setSidebarVisible(bool visible) async {
+    if (sidebarVisible == visible) return;
+    services.settings.sidebarHidden = !visible;
+    notifyListeners();
+    await services.saveSettings();
+  }
+
+  Future<void> setInspectorVisible(bool visible) async {
+    if (inspectorVisible == visible) return;
+    services.settings.inspectorHidden = !visible;
+    notifyListeners();
+    await services.saveSettings();
+  }
+
+  /// Opens [page] in the inspector. Files, the default, is stored as no
+  /// choice at all, so a settings file that never moved off it is unchanged.
+  Future<void> setInspectorPage(InspectorPage page) async {
+    if (inspectorPage == page) return;
+    services.settings.inspectorPage = page == InspectorPage.files ? null : page;
+    notifyListeners();
     await services.saveSettings();
   }
 

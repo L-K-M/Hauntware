@@ -19,9 +19,6 @@ class MainFlutterWindow: NSWindow {
   /// (macos_titlebar.dart), possibly after a restored window already
   /// entered full screen, so every toolbar the window receives takes the
   /// current visibility.
-  override var toolbar: NSToolbar? {
-    didSet { toolbar?.isVisible = !inFullScreen }
-  }
 
   /// Settings in a window of its own (SettingsWindow.swift).
   private var settingsWindow: SettingsWindowHost?
@@ -32,19 +29,13 @@ class MainFlutterWindow: NSWindow {
   private var activeScopedUrls: [String: URL] = [:]
   private var nextGrantToken = 0
 
-  /// Whether a terminal (rather than a text field) currently has focus. Pushed
-  /// from Dart so the Edit menu can route Copy/Paste/Select All to the active
-  /// terminal, and otherwise fall back to the native behaviour (text fields).
-  private var terminalFocused = false
+  /// The menu bar, toolbar and Dock menu's commands (MainMenu.swift).
+  private(set) var commands: CommandCenter?
+  private var seanceToolbar: SeanceToolbar?
 
-  /// View ▸ "Use Compact Sidebar Rows" / "Use Comfortable Sidebar Rows": one
-  /// item whose title Dart owns and sets to the density it would switch to,
-  /// so the copy lives in one place. Hidden (with its separator) until Dart
-  /// has named it; Dart may name it before the menu is built, hence the
-  /// title kept on its own.
-  private var densityItem: NSMenuItem?
-  private var densitySeparator: NSMenuItem?
-  private var densityTitle: String?
+  /// The app's one main window, for the app delegate's reopen and Dock
+  /// menu. Set once the window has loaded.
+  private(set) static weak var shared: MainFlutterWindow?
 
   override func awakeFromNib() {
     // Séance's windows never tab (the app's, and Settings' with its own
@@ -75,21 +66,38 @@ class MainFlutterWindow: NSWindow {
       name: "seance/menu",
       binaryMessenger: flutterViewController.engine.binaryMessenger)
 
-    // Dart → native: track whether a terminal is focused (see
-    // `terminalFocused`), and title the View menu's density item.
+    // Dart → native: the commands' states, the window's title, and alerts.
     menuChannel?.setMethodCallHandler { [weak self] call, result in
-      switch call.method {
-      case "setTerminalFocused":
-        self?.terminalFocused = (call.arguments as? Bool) ?? false
+      guard let self else {
         result(nil)
-      case "setServerListDensityTitle":
-        self?.densityTitle = call.arguments as? String
-        self?.applyDensityTitle()
+        return
+      }
+      switch call.method {
+      case "setCommandStates":
+        self.commands?.apply(call.arguments as? [String: Any] ?? [:])
+        result(nil)
+      case "setWindowTitle":
+        let arguments = call.arguments as? [String: Any]
+        self.title = arguments?["title"] as? String ?? "Séance"
+        self.subtitle = arguments?["subtitle"] as? String ?? ""
+        result(nil)
+      case "showAlert":
+        self.showAlert(call.arguments as? [String: Any] ?? [:], result: result)
+      case "setDockBadge":
+        NSApp.dockTile.badgeLabel = call.arguments as? String
         result(nil)
       default:
         result(FlutterMethodNotImplemented)
       }
     }
+    if let menuChannel {
+      let commands = CommandCenter(channel: menuChannel, mainWindow: self)
+      self.commands = commands
+      let toolbar = SeanceToolbar(commands: commands)
+      toolbar.install(on: self)
+      seanceToolbar = toolbar
+    }
+    MainFlutterWindow.shared = self
 
     filesChannel = FlutterMethodChannel(
       name: "seance/files",
@@ -214,17 +222,17 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
 
-    // The main menu is loaded from the storyboard; augment it once it's set.
+    // Replaces the storyboard's menu bar once AppKit has loaded it.
     DispatchQueue.main.async { [weak self] in
-      self?.installMenuItems()
+      self?.commands?.installMenuBar()
     }
 
     super.awakeFromNib()
   }
 
-  /// The Settings window closes with this one, so closing the app's window
-  /// still leaves no window open and quits the app
-  /// (AppDelegate.applicationShouldTerminateAfterLastWindowClosed).
+  /// The Settings window closes with this one. The close button only hides
+  /// this window (Dart intercepts it, `WindowStateService`), so this runs
+  /// when AppKit closes it for good, at termination.
   override func close() {
     settingsWindow?.close()
     super.close()
@@ -241,7 +249,6 @@ class MainFlutterWindow: NSWindow {
   private func setInFullScreen(_ value: Bool) {
     guard value != inFullScreen else { return }
     inFullScreen = value
-    toolbar?.isVisible = !value
     windowChannel?.invokeMethod("toolbarBandChanged", arguments: !value)
   }
 
@@ -253,135 +260,6 @@ class MainFlutterWindow: NSWindow {
   override public func order(_ place: NSWindow.OrderingMode, relativeTo otherWin: Int) {
     super.order(place, relativeTo: otherWin)
     hiddenWindowAtLaunch()
-  }
-
-  /// Keep the storyboard's standard menus (Edit, Window, Help, …) and add our
-  /// own: rewire the app menu's Preferences item to open Settings, add Terminal
-  /// items for New Tab (⌘T) and Generate Command… (⌘K), put the server list's
-  /// density switch at the top of View, and route Edit ▸ Copy/Paste/Select All
-  /// through us so they can reach the terminal — all fire back into Dart.
-  ///
-  /// Deliberately no File ▸ Close (⌘W) item: ⌘W closes the active tab, in
-  /// Dart (`tabShortcuts` in app_menus.dart), and a native key equivalent
-  /// would take the key first.
-  private func installMenuItems() {
-    guard let mainMenu = NSApp.mainMenu else { return }
-
-    if let appMenu = mainMenu.items.first?.submenu,
-       let settings = appMenu.items.first(where: {
-         $0.title.hasPrefix("Preferences") || $0.title.hasPrefix("Settings")
-       }) {
-      settings.title = "Settings…"
-      settings.target = self
-      settings.action = #selector(didSelectSettings)
-      settings.keyEquivalent = ","
-      settings.keyEquivalentModifierMask = [.command]
-    }
-
-    let terminalSubmenu = NSMenu(title: "Terminal")
-    let newTab = NSMenuItem(
-      title: "New Tab",
-      action: #selector(didSelectNewTab),
-      keyEquivalent: "t")
-    newTab.target = self
-    terminalSubmenu.addItem(newTab)
-    terminalSubmenu.addItem(.separator())
-
-    let generate = NSMenuItem(
-      title: "Generate Command…",
-      action: #selector(didSelectGenerateCommand),
-      keyEquivalent: "k")
-    generate.target = self
-    terminalSubmenu.addItem(generate)
-
-    let terminalItem = NSMenuItem(title: "Terminal", action: nil, keyEquivalent: "")
-    terminalItem.submenu = terminalSubmenu
-    let windowIndex = mainMenu.indexOfItem(withTitle: "Window")
-    if windowIndex >= 0 {
-      mainMenu.insertItem(terminalItem, at: windowIndex)
-    } else {
-      mainMenu.addItem(terminalItem)
-    }
-
-    if let viewMenu = mainMenu.items.first(where: { $0.title == "View" })?.submenu {
-      let density = NSMenuItem(
-        title: "",
-        action: #selector(didSelectToggleDensity),
-        keyEquivalent: "")
-      density.target = self
-      let separator = NSMenuItem.separator()
-      viewMenu.insertItem(density, at: 0)
-      viewMenu.insertItem(separator, at: 1)
-      densityItem = density
-      densitySeparator = separator
-      applyDensityTitle()
-    }
-
-    retargetEditMenu(mainMenu)
-  }
-
-  /// Title the density item with the latest name from Dart, or keep it (and
-  /// its separator) hidden while there is none.
-  private func applyDensityTitle() {
-    let title = densityTitle ?? ""
-    densityItem?.title = title
-    densityItem?.isHidden = title.isEmpty
-    densitySeparator?.isHidden = title.isEmpty
-  }
-
-  /// Retarget the standard Edit menu's Copy / Paste / Select All to our own
-  /// actions (keeping their ⌘C/⌘V/⌘A key equivalents from the storyboard). When
-  /// a terminal is focused we forward to Dart; otherwise we re-dispatch the
-  /// original selector so a focused text field copies/pastes natively as before.
-  ///
-  /// "A terminal is focused" is this window's focus: with the Settings window
-  /// key, its text fields get the native actions even though a terminal
-  /// behind it still holds focus in this window.
-  private func retargetEditMenu(_ mainMenu: NSMenu) {
-    let copySel = NSSelectorFromString("copy:")
-    let pasteSel = NSSelectorFromString("paste:")
-    let selectAllSel = NSSelectorFromString("selectAll:")
-    for topItem in mainMenu.items {
-      guard let submenu = topItem.submenu else { continue }
-      for item in submenu.items {
-        if item.action == copySel {
-          item.target = self
-          item.action = #selector(editCopy(_:))
-        } else if item.action == pasteSel {
-          item.target = self
-          item.action = #selector(editPaste(_:))
-        } else if item.action == selectAllSel {
-          item.target = self
-          item.action = #selector(editSelectAll(_:))
-        }
-      }
-    }
-  }
-
-  private var routesEditToTerminal: Bool { terminalFocused && isKeyWindow }
-
-  @objc private func editCopy(_ sender: Any?) {
-    if routesEditToTerminal {
-      menuChannel?.invokeMethod("editCopy", arguments: nil)
-    } else {
-      _ = NSApp.sendAction(NSSelectorFromString("copy:"), to: nil, from: sender)
-    }
-  }
-
-  @objc private func editPaste(_ sender: Any?) {
-    if routesEditToTerminal {
-      menuChannel?.invokeMethod("editPaste", arguments: nil)
-    } else {
-      _ = NSApp.sendAction(NSSelectorFromString("paste:"), to: nil, from: sender)
-    }
-  }
-
-  @objc private func editSelectAll(_ sender: Any?) {
-    if routesEditToTerminal {
-      menuChannel?.invokeMethod("editSelectAll", arguments: nil)
-    } else {
-      _ = NSApp.sendAction(NSSelectorFromString("selectAll:"), to: nil, from: sender)
-    }
   }
 
   /// The user's real home directory. The sandbox's $HOME is the app
@@ -486,19 +364,62 @@ class MainFlutterWindow: NSWindow {
     }
   }
 
-  @objc private func didSelectSettings() {
-    menuChannel?.invokeMethod("openSettings", arguments: nil)
+  // MARK: responder actions
+
+  /// The toolbar's system sidebar and inspector buttons send these down
+  /// the responder chain; the window is the end of it.
+  @objc func toggleSidebar(_ sender: Any?) {
+    commands?.run("toggleSidebar")
   }
 
-  @objc private func didSelectNewTab() {
-    menuChannel?.invokeMethod("newTab", arguments: nil)
+  @objc func toggleInspector(_ sender: Any?) {
+    commands?.run("toggleInspector")
   }
 
-  @objc private func didSelectGenerateCommand() {
-    menuChannel?.invokeMethod("generateCommand", arguments: nil)
+  override func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+    switch item.action {
+    case #selector(toggleSidebar(_:)):
+      return commands?.state("toggleSidebar").enabled ?? false
+    case #selector(toggleInspector(_:)):
+      return commands?.state("toggleInspector").enabled ?? false
+    default:
+      return super.validateUserInterfaceItem(item)
+    }
   }
 
-  @objc private func didSelectToggleDensity() {
-    menuChannel?.invokeMethod("toggleServerListDensity", arguments: nil)
+  // MARK: alerts
+
+  /// A native alert for Dart's confirmations: a sheet on this window while
+  /// it is on screen, app-modal otherwise (a quit with the window closed).
+  /// Answers `{button: index, suppressed: bool}`; the first button is the
+  /// default one, and one titled Cancel takes Escape.
+  private func showAlert(_ arguments: [String: Any], result: @escaping FlutterResult) {
+    let alert = NSAlert()
+    alert.messageText = arguments["message"] as? String ?? ""
+    alert.informativeText = arguments["informative"] as? String ?? ""
+    alert.alertStyle = arguments["style"] as? String == "critical" ? .critical : .warning
+    for title in arguments["buttons"] as? [String] ?? ["OK"] {
+      alert.addButton(withTitle: title)
+    }
+    if let destructive = arguments["destructive"] as? Int,
+      alert.buttons.indices.contains(destructive)
+    {
+      alert.buttons[destructive].hasDestructiveAction = true
+    }
+    if let suppression = arguments["suppression"] as? String {
+      alert.showsSuppressionButton = true
+      alert.suppressionButton?.title = suppression
+    }
+    func answer(_ response: NSApplication.ModalResponse) {
+      result([
+        "button": response.rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue,
+        "suppressed": alert.suppressionButton?.state == .on,
+      ])
+    }
+    if isVisible && attachedSheet == nil {
+      alert.beginSheetModal(for: self, completionHandler: answer)
+    } else {
+      answer(alert.runModal())
+    }
   }
 }

@@ -1,5 +1,8 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 
+import '../app_state.dart';
 import '../family_hues.dart';
 import '../main.dart';
 import '../theme.dart';
@@ -8,6 +11,7 @@ import 'settings_screen.dart';
 import 'chat_sidebar.dart';
 import 'files_pane.dart';
 import 'git_pane.dart';
+import 'inspector_page.dart';
 import 'selected_tab_view.dart';
 import 'snippets_pane.dart';
 import 'terminal_pane.dart';
@@ -36,13 +40,15 @@ class _SidebarPanelState extends State<SidebarPanel>
     super.didChangeDependencies();
     if (_tabs != null) return;
     final state = AppScope.of(context);
-    // Files opens first. The narrow drawer has no Files and opens on what
-    // its button names: the Assistant once one is set up, else Snippets.
+    // The wide layout's panel opens on the page the window last showed
+    // (Files at first) and follows View ▸ Files…Assistant. The narrow
+    // drawer has no Files and opens on what its button names: the
+    // Assistant once one is set up, else Snippets.
     final opening = widget.includeFiles
-        ? _PanelPage.files
+        ? state.inspectorPage
         : state.llmConfigured
-        ? _PanelPage.assistant
-        : _PanelPage.snippets;
+        ? InspectorPage.assistant
+        : InspectorPage.snippets;
     final tabs = _panelTabs;
     // includeFiles is fixed at every call site (const constructions), so the
     // controller's length never needs to track a rebuild-time change.
@@ -50,13 +56,39 @@ class _SidebarPanelState extends State<SidebarPanel>
       length: tabs.length,
       initialIndex: tabs.indexWhere((tab) => tab.page == opening),
       vsync: this,
-    );
+    )..addListener(_pageChosen);
+    _state = state..addListener(_followState);
   }
+
+  AppState? _state;
 
   @override
   void dispose() {
+    _state?.removeListener(_followState);
     _tabs?.dispose();
     super.dispose();
+  }
+
+  /// A tab the user opened becomes the window's inspector page, which the
+  /// View menu checks and the next launch reopens.
+  void _pageChosen() {
+    final tabs = _tabs;
+    if (tabs == null || tabs.indexIsChanging || !widget.includeFiles) return;
+    final page = _panelTabs[tabs.index].page;
+    final state = _state;
+    if (state != null && state.inspectorPage != page) {
+      unawaited(state.setInspectorPage(page));
+    }
+  }
+
+  /// The page the View menu picked, shown when it differs from the open tab.
+  void _followState() {
+    final tabs = _tabs;
+    final state = _state;
+    if (tabs == null || state == null || !widget.includeFiles) return;
+    final page = state.inspectorPage;
+    final index = _panelTabs.indexWhere((tab) => tab.page == page);
+    if (index >= 0 && index != tabs.index) tabs.index = index;
   }
 
   /// The tabs in order, each with its family hue (Poltergeist's D34, the
@@ -66,28 +98,28 @@ class _SidebarPanelState extends State<SidebarPanel>
   List<_PanelTab> get _panelTabs => [
     if (widget.includeFiles)
       const _PanelTab(
-        _PanelPage.files,
+        InspectorPage.files,
         'Files',
         Icons.folder_outlined,
         Icons.folder,
         FamilyHue.blue,
       ),
     const _PanelTab(
-      _PanelPage.git,
+      InspectorPage.git,
       'Git',
       Icons.account_tree_outlined,
       Icons.account_tree,
       FamilyHue.orange,
     ),
     const _PanelTab(
-      _PanelPage.snippets,
+      InspectorPage.snippets,
       'Snippets',
       Icons.bookmarks_outlined,
       Icons.bookmarks,
       FamilyHue.teal,
     ),
     const _PanelTab(
-      _PanelPage.assistant,
+      InspectorPage.assistant,
       'Assistant',
       Icons.auto_awesome_outlined,
       Icons.auto_awesome,
@@ -115,10 +147,10 @@ class _SidebarPanelState extends State<SidebarPanel>
                   children: [
                     for (final tab in tabs)
                       switch (tab.page) {
-                        _PanelPage.files => const FilesPane(),
-                        _PanelPage.git => const GitPane(),
-                        _PanelPage.snippets => const SnippetsPane(),
-                        _PanelPage.assistant =>
+                        InspectorPage.files => const FilesPane(),
+                        InspectorPage.git => const GitPane(),
+                        InspectorPage.snippets => const SnippetsPane(),
+                        InspectorPage.assistant =>
                           state.llmConfigured
                               ? const ChatSidebar()
                               : const _AssistantSetupPrompt(),
@@ -139,13 +171,10 @@ class _SidebarPanelState extends State<SidebarPanel>
 /// Poltergeist's inspector tabs use the same value.
 const panelTabWashAlpha = 0.16;
 
-/// What a panel tab opens.
-enum _PanelPage { files, git, snippets, assistant }
-
 class _PanelTab {
   const _PanelTab(this.page, this.label, this.glyph, this.openGlyph, this.hue);
 
-  final _PanelPage page;
+  final InspectorPage page;
   final String label;
 
   /// The glyph at rest, and the filled one the open tab shows.

@@ -199,6 +199,15 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
         false;
   });
 
+  /// Whether a save can also upload the file (File ▸ Save does, File ▸
+  /// Save Without Uploading does not).
+  bool get canUpload => widget.onUpload != null;
+
+  /// Saves the buffer for the menu bar: [upload] sends it to the server as
+  /// well, when it [canUpload].
+  Future<void> save({required bool upload}) =>
+      _save(upload: upload && canUpload);
+
   Future<void> _save({bool upload = false}) async {
     if (_reloading) return;
     try {

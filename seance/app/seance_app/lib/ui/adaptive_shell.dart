@@ -57,6 +57,9 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
     // that draws under the toolbar band, and Generate command moves up
     // into it. Elsewhere the native titlebar stays and so does the strip.
     final unifiedToolbar = MacosToolbarBandScope.unifiedToolbarOf(context);
+    // The Mac window's native toolbar carries Generate command (and the
+    // rest of the session's actions), in and out of full screen.
+    final macWindow = Theme.of(context).platform == TargetPlatform.macOS;
     return ListenableBuilder(
       listenable: state,
       builder: (context, _) {
@@ -79,10 +82,29 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
             // the header and its rule or at the window's top.
             filterBarExtent: TerminalTabStrip.height,
           ),
-          header: unifiedToolbar ? const HeaderToolbar() : null,
+          header: unifiedToolbar
+              ? (list) => HeaderToolbar(
+                  // The traffic lights and the sidebar button sit over the
+                  // header's leading end once the list is not under them.
+                  titlebarControls: list == PaneVisibility.shown
+                      ? TitlebarControls.overSidebar
+                      : TitlebarControls.overHeader,
+                )
+              : null,
+          list: state.sidebarVisible
+              ? PaneVisibility.shown
+              : PaneVisibility.hidden,
+          utility: state.inspectorVisible
+              ? PaneVisibility.shown
+              : PaneVisibility.hidden,
+          // A Mac window keeps its terminal and sets the side panes aside
+          // when it is narrowed; elsewhere narrow means the phone layout.
+          overflow: macWindow
+              ? PaneOverflow.collapsePanes
+              : PaneOverflow.switchToNarrow,
           terminalPane: TerminalPane(
             showAppBar: false,
-            showGenerateCommandInStrip: !unifiedToolbar,
+            showGenerateCommandInStrip: !macWindow,
           ),
           // The utility panel (Assistant + Snippets) is always available;
           // Snippets works without an LLM configured.
@@ -164,8 +186,18 @@ class AdaptivePaneWidths {
   final double utility;
 }
 
+/// Whether a side pane of the wide layout is on screen.
+enum PaneVisibility { shown, hidden }
+
+/// What the wide layout does when the window is too narrow for the panes it
+/// should show: [switchToNarrow] hands over to the narrow layout, as phones
+/// and tablets want; [collapsePanes] drops the inspector, then the server
+/// list, for the moment, and keeps the terminal, as a Mac window does.
+enum PaneOverflow { switchToNarrow, collapsePanes }
+
 /// Allocates a wide layout while preserving a useful terminal. Returns `null`
-/// when the narrow layout should be used instead.
+/// when the narrow layout should be used instead. A [PaneVisibility.hidden]
+/// pane takes no width (it reports zero), and no room is kept for it.
 ///
 /// When both requested side panes do not fit, their space above their minimums
 /// is reduced proportionally. This preserves the user's relative drag choices
@@ -174,7 +206,18 @@ AdaptivePaneWidths? allocateAdaptivePaneWidths({
   required double availableWidth,
   required double requestedListWidth,
   required double requestedUtilityWidth,
+  PaneVisibility list = PaneVisibility.shown,
+  PaneVisibility utility = PaneVisibility.shown,
 }) {
+  final listShown = list == PaneVisibility.shown;
+  final utilityShown = utility == PaneVisibility.shown;
+  if (!listShown || !utilityShown) {
+    return _allocateOneSide(
+      availableWidth: availableWidth,
+      requestedList: listShown ? requestedListWidth : null,
+      requestedUtility: utilityShown ? requestedUtilityWidth : null,
+    );
+  }
   if (availableWidth < AdaptiveShell.breakpoint) return null;
 
   final requestedList = requestedListWidth
@@ -208,10 +251,10 @@ AdaptivePaneWidths? allocateAdaptivePaneWidths({
     rawList = AdaptiveShell.minimumListWidth + listExtra * scale;
     rawUtility = AdaptiveShell.minimumUtilityWidth + utilityExtra * scale;
   }
-  final list = rawList
+  final listWidth = rawList
       .clamp(AdaptiveShell.minimumListWidth, AdaptiveShell.maximumListWidth)
       .toDouble();
-  final utility = rawUtility
+  final utilityWidth = rawUtility
       .clamp(
         AdaptiveShell.minimumUtilityWidth,
         AdaptiveShell.maximumUtilityWidth,
@@ -224,10 +267,42 @@ AdaptivePaneWidths? allocateAdaptivePaneWidths({
   // overhang, [AdaptiveShell.resizeHandleWidth] less a seam per edge, lies
   // over its edges.
   return AdaptivePaneWidths(
-    list: list,
-    terminal: availableWidth - list - utility - AdaptiveShell.seamWidth * 2,
-    utility: utility,
+    list: listWidth,
+    terminal: availableWidth - listWidth - utilityWidth - AdaptiveShell.seamWidth * 2,
+    utility: utilityWidth,
   );
+}
+
+/// [allocateAdaptivePaneWidths] with at most one side pane: the one whose
+/// request is not null. The terminal keeps its minimum; the side pane gets
+/// its request, clamped to its own bounds and to what the terminal leaves.
+AdaptivePaneWidths? _allocateOneSide({
+  required double availableWidth,
+  double? requestedList,
+  double? requestedUtility,
+}) {
+  final request = requestedList ?? requestedUtility;
+  if (request == null) {
+    if (availableWidth < AdaptiveShell.minimumTerminalWidth) return null;
+    return AdaptivePaneWidths(list: 0, terminal: availableWidth, utility: 0);
+  }
+  final isList = requestedList != null;
+  final minimum = isList
+      ? AdaptiveShell.minimumListWidth
+      : AdaptiveShell.minimumUtilityWidth;
+  final maximum = isList
+      ? AdaptiveShell.maximumListWidth
+      : AdaptiveShell.maximumUtilityWidth;
+  final room =
+      availableWidth -
+      AdaptiveShell.minimumTerminalWidth -
+      AdaptiveShell.resizeHandleWidth;
+  if (room < minimum) return null;
+  final side = request.clamp(minimum, maximum < room ? maximum : room).toDouble();
+  final terminal = availableWidth - side - AdaptiveShell.seamWidth;
+  return isList
+      ? AdaptivePaneWidths(list: side, terminal: terminal, utility: 0)
+      : AdaptivePaneWidths(list: 0, terminal: terminal, utility: side);
 }
 
 /// Constraint-aware tiled panes used by [AdaptiveShell]. Kept independent of
@@ -240,6 +315,9 @@ class AdaptivePaneLayout extends StatefulWidget {
     required this.utilityPane,
     required this.narrowPane,
     this.header,
+    this.list = PaneVisibility.shown,
+    this.utility = PaneVisibility.shown,
+    this.overflow = PaneOverflow.switchToNarrow,
     this.initialListWidth = AdaptiveShell.defaultListWidth,
     this.initialUtilityWidth = AdaptiveShell.defaultUtilityWidth,
     this.onPaneWidthsChanged,
@@ -250,14 +328,22 @@ class AdaptivePaneLayout extends StatefulWidget {
   final Widget utilityPane;
   final Widget narrowPane;
 
-  /// The header drawn under the macOS unified toolbar band ([HeaderToolbar]),
-  /// or null for no header. When set, it spans the terminal and utility
+  /// Builds the header drawn under the macOS unified toolbar band
+  /// ([HeaderToolbar]) for the list's visibility this frame, or null for no
+  /// header. When set, it spans the terminal and utility
   /// panes the way Poltergeist's spans its panes and inspector; the list
   /// pane stays full height and starts below a spacer of the header's
   /// height and its rule, where the traffic lights sit, and the layout
   /// takes the band back from the app's reservation
   /// ([ClaimMacosToolbarBand]).
-  final Widget? header;
+  final Widget Function(PaneVisibility list)? header;
+
+  /// Whether the server list and the utility panel show (View ▸ Hide
+  /// Sidebar, Hide Inspector), and what happens when the window is too
+  /// narrow for those that do.
+  final PaneVisibility list;
+  final PaneVisibility utility;
+  final PaneOverflow overflow;
 
   /// Requested pane widths to start from (the persisted values, on real
   /// launches). The widget owns them once mounted; later changes to these
@@ -290,68 +376,129 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
   double? _temporaryListWidth;
   double? _temporaryUtilityWidth;
 
+  /// The side panes this frame shows: the requested ones, less those the
+  /// overflow policy collapsed for a narrow window.
+  PaneVisibility _list = PaneVisibility.shown;
+  PaneVisibility _utility = PaneVisibility.shown;
+
+  AdaptivePaneWidths? _allocate(
+    double availableWidth,
+    PaneVisibility list,
+    PaneVisibility utility,
+  ) => allocateAdaptivePaneWidths(
+    availableWidth: availableWidth,
+    requestedListWidth: _temporaryListWidth ?? _requestedListWidth,
+    requestedUtilityWidth: _temporaryUtilityWidth ?? _requestedUtilityWidth,
+    list: list,
+    utility: utility,
+  );
+
+  /// Fits the requested panes into [availableWidth]: null for the narrow
+  /// layout; under [PaneOverflow.collapsePanes] the inspector and then the
+  /// list step aside instead, and below the terminal's own minimum the
+  /// terminal takes whatever there is.
+  AdaptivePaneWidths? _fit(double availableWidth) {
+    _list = widget.list;
+    _utility = widget.utility;
+    final requested = _allocate(availableWidth, _list, _utility);
+    if (requested != null || widget.overflow == PaneOverflow.switchToNarrow) {
+      return requested;
+    }
+    if (_utility == PaneVisibility.shown) {
+      _utility = PaneVisibility.hidden;
+      final withoutUtility = _allocate(availableWidth, _list, _utility);
+      if (withoutUtility != null) return withoutUtility;
+    }
+    _list = PaneVisibility.hidden;
+    return _allocate(availableWidth, _list, _utility) ??
+        AdaptivePaneWidths(list: 0, terminal: availableWidth, utility: 0);
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        AdaptivePaneWidths? currentWidths() => allocateAdaptivePaneWidths(
-          availableWidth: constraints.maxWidth,
-          requestedListWidth: _temporaryListWidth ?? _requestedListWidth,
-          requestedUtilityWidth:
-              _temporaryUtilityWidth ?? _requestedUtilityWidth,
-        );
-        final widths = currentWidths();
+        final widths = _fit(constraints.maxWidth);
         if (widths == null) {
           return KeyedSubtree(
             key: AdaptivePaneLayout.narrowPaneKey,
             child: widget.narrowPane,
           );
         }
+        AdaptivePaneWidths currentWidths() =>
+            _allocate(constraints.maxWidth, _list, _utility) ?? widths;
+        final listShown = _list == PaneVisibility.shown;
+        final utilityShown = _utility == PaneVisibility.shown;
 
-        final header = widget.header;
-        final utilityHandle = GhostResizeHandle(
-          key: AdaptivePaneLayout.utilityResizeHandleKey,
-          label: 'Resize utility panel',
-          width: widths.utility,
-          minimumWidth: AdaptiveShell.minimumUtilityWidth,
-          maximumWidth: _maximumUtilityWidth(widths),
-          edge: GhostPaneEdge.trailing,
-          widthAfterStep: (delta) => _widthAfterStep(
-            GhostPaneEdge.trailing,
-            currentWidths()!,
-            constraints.maxWidth,
-            delta,
-          ),
-          onStep: (delta) =>
-              _stepPane(GhostPaneEdge.trailing, currentWidths()!, delta),
-          onStart: () => _startUtilityResize(currentWidths()!),
-          onDelta: _resizeUtility,
-          onEnd: _endUtilityResize,
-          handleWidth: AdaptiveShell.resizeHandleWidth,
-          valueText: _pixels,
+        final header = widget.header?.call(_list);
+        final terminal = SizedBox(
+          key: AdaptivePaneLayout.terminalPaneKey,
+          child: widget.terminalPane,
         );
-        // The terminal, its seam and the utility pane, with the utility
-        // handle floated over that seam.
-        final panes = _straddle(
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  key: AdaptivePaneLayout.terminalPaneKey,
-                  child: widget.terminalPane,
+        // The terminal, and when it shows, its seam and the utility pane,
+        // with the utility handle floated over that seam.
+        final Widget panes;
+        if (utilityShown) {
+          final utilityHandle = GhostResizeHandle(
+            key: AdaptivePaneLayout.utilityResizeHandleKey,
+            label: 'Resize utility panel',
+            width: widths.utility,
+            minimumWidth: AdaptiveShell.minimumUtilityWidth,
+            maximumWidth: _maximumUtilityWidth(widths),
+            edge: GhostPaneEdge.trailing,
+            widthAfterStep: (delta) => _widthAfterStep(
+              GhostPaneEdge.trailing,
+              currentWidths(),
+              constraints.maxWidth,
+              delta,
+            ),
+            onStep: (delta) =>
+                _stepPane(GhostPaneEdge.trailing, currentWidths(), delta),
+            onStart: () => _startUtilityResize(currentWidths()),
+            onDelta: _resizeUtility,
+            onEnd: _endUtilityResize,
+            handleWidth: AdaptiveShell.resizeHandleWidth,
+            valueText: _pixels,
+          );
+          panes = _straddle(
+            Row(
+              children: [
+                Expanded(child: terminal),
+                const _Seam(),
+                SizedBox(
+                  key: AdaptivePaneLayout.utilityPaneKey,
+                  width: widths.utility,
+                  child: widget.utilityPane,
                 ),
-              ),
-              const _Seam(),
-              SizedBox(
-                key: AdaptivePaneLayout.utilityPaneKey,
-                width: widths.utility,
-                child: widget.utilityPane,
-              ),
-            ],
-          ),
-          handle: utilityHandle,
-          end: widths.utility,
-        );
+              ],
+            ),
+            handle: utilityHandle,
+            end: widths.utility,
+          );
+        } else {
+          panes = terminal;
+        }
+
+        final chrome = SeanceChrome.of(context, seanceThemeStyle);
+        // Under the macOS header: the header and its rule over the panes.
+        final content = header == null
+            ? panes
+            : Column(
+                children: [
+                  header,
+                  Divider(
+                    height: _headerRuleHeight,
+                    thickness: _headerRuleHeight,
+                    color: chrome.separator,
+                  ),
+                  Expanded(child: panes),
+                ],
+              );
+        Widget wrap(Widget body) => header == null
+            ? Scaffold(body: body)
+            : ClaimMacosToolbarBand(child: Scaffold(body: body));
+        if (!listShown) return wrap(content);
+
         Widget listHandle = GhostResizeHandle(
           key: AdaptivePaneLayout.listResizeHandleKey,
           label: 'Resize server list',
@@ -361,21 +508,21 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
           edge: GhostPaneEdge.leading,
           widthAfterStep: (delta) => _widthAfterStep(
             GhostPaneEdge.leading,
-            currentWidths()!,
+            currentWidths(),
             constraints.maxWidth,
             delta,
           ),
           onStep: (delta) =>
-              _stepPane(GhostPaneEdge.leading, currentWidths()!, delta),
-          onStart: () => _startListResize(currentWidths()!),
+              _stepPane(GhostPaneEdge.leading, currentWidths(), delta),
+          onStart: () => _startListResize(currentWidths()),
           onDelta: _resizeList,
           onEnd: _endListResize,
           handleWidth: AdaptiveShell.resizeHandleWidth,
           valueText: _pixels,
         );
         if (header == null) {
-          return Scaffold(
-            body: _straddle(
+          return wrap(
+            _straddle(
               Row(
                 children: [
                   SizedBox(
@@ -384,7 +531,7 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
                     child: widget.listPane,
                   ),
                   const _Seam(),
-                  Expanded(child: panes),
+                  Expanded(child: content),
                 ],
               ),
               handle: listHandle,
@@ -393,57 +540,42 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
           );
         }
 
-        final chrome = SeanceChrome.of(context, seanceThemeStyle);
         // The list handle runs the full height, so its top lies inside the
         // band, where AppKit would take a drag on it for the window's.
         if (MacosToolbarBandScope.unifiedToolbarOf(context)) {
           listHandle = MacosToolbarPassthrough(child: listHandle);
         }
-        return ClaimMacosToolbarBand(
-          child: Scaffold(
-            body: _straddle(
-              Row(
-                children: [
-                  SizedBox(
-                    key: AdaptivePaneLayout.listPaneKey,
-                    width: widths.list,
-                    // The traffic lights sit over the list's top, which
-                    // drags the window natively: Finder's layout, and
-                    // Poltergeist's.
-                    child: ColoredBox(
-                      color: chrome.sidebarBackground,
-                      child: Column(
-                        children: [
-                          // The header and its rule, so the list starts
-                          // where the tab strip does and its filter field
-                          // lines up with the tabs.
-                          SizedBox(
-                            height: chrome.headerHeight + _headerRuleHeight,
-                          ),
-                          Expanded(child: widget.listPane),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const _Seam(),
-                  Expanded(
+        return wrap(
+          _straddle(
+            Row(
+              children: [
+                SizedBox(
+                  key: AdaptivePaneLayout.listPaneKey,
+                  width: widths.list,
+                  // The traffic lights sit over the list's top, which
+                  // drags the window natively: Finder's layout, and
+                  // Poltergeist's.
+                  child: ColoredBox(
+                    color: chrome.sidebarBackground,
                     child: Column(
                       children: [
-                        header,
-                        Divider(
-                          height: _headerRuleHeight,
-                          thickness: _headerRuleHeight,
-                          color: chrome.separator,
+                        // The header and its rule, so the list starts
+                        // where the tab strip does and its filter field
+                        // lines up with the tabs.
+                        SizedBox(
+                          height: chrome.headerHeight + _headerRuleHeight,
                         ),
-                        Expanded(child: panes),
+                        Expanded(child: widget.listPane),
                       ],
                     ),
                   ),
-                ],
-              ),
-              handle: listHandle,
-              start: widths.list,
+                ),
+                const _Seam(),
+                Expanded(child: content),
+              ],
             ),
+            handle: listHandle,
+            start: widths.list,
           ),
         );
       },
@@ -534,7 +666,10 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
       availableWidth: availableWidth,
       requestedListWidth: leading ? requested : _requestedListWidth,
       requestedUtilityWidth: leading ? _requestedUtilityWidth : requested,
-    )!;
+      list: _list,
+      utility: _utility,
+    );
+    if (next == null) return leading ? widths.list : widths.utility;
     return leading ? next.list : next.utility;
   }
 

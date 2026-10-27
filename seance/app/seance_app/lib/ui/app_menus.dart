@@ -9,7 +9,6 @@ import '../app_state.dart';
 import '../main.dart';
 import '../services/local_settings_backend.dart';
 import 'command_generator.dart';
-import 'server_list_density.dart';
 import 'server_list_pane.dart';
 import 'settings_screen.dart';
 import 'tab_close.dart';
@@ -83,7 +82,7 @@ void openNewTab(AppState state) {
 
 /// Copy the active terminal's selection to the clipboard. Returns false when
 /// nothing is selected (so a keypress can fall through). Shared by the terminal
-/// right-click menu, the keyboard shortcut, and the native macOS Edit ▸ Copy.
+/// right-click menu, the keyboard shortcut, and the macOS Edit ▸ Copy.
 bool terminalCopy(TerminalSession tab) {
   final controller = tab.controller;
   if (controller == null) return false;
@@ -119,69 +118,6 @@ void terminalSelectAll(TerminalSession tab) {
     buffer.createAnchor(terminal.viewWidth, buffer.height - 1),
   );
 }
-
-/// The channel the native macOS menu (MainFlutterWindow.swift) and Dart
-/// talk over, both ways.
-const MethodChannel macMenuChannel = MethodChannel('seance/menu');
-
-/// Wire the native macOS menu items to app actions, and keep the one item
-/// whose title Dart owns in step: View's density item, which names the
-/// density it switches to ("Use Compact Sidebar Rows"). One item with a
-/// flipping title rather than a checked pair, the pattern Poltergeist's
-/// View menu uses for the same command (sibling contract §10.5).
-void installMacMenu(AppState state, {MethodChannel channel = macMenuChannel}) {
-  channel.setMethodCallHandler((call) async {
-    switch (call.method) {
-      case 'newTab':
-        openNewTab(state);
-      case 'openSettings':
-        openSettings();
-      case 'generateCommand':
-        openCommandGenerator(state);
-      case 'toggleServerListDensity':
-        await state.setServerListDensity(switch (state.serverListDensity) {
-          ServerListDensity.comfortable => ServerListDensity.compact,
-          ServerListDensity.compact => ServerListDensity.comfortable,
-        });
-      // Native Edit menu, forwarded only when a terminal is focused.
-      case 'editCopy':
-        if (state.activeSession != null) terminalCopy(state.activeSession!);
-      case 'editPaste':
-        if (state.activeSession != null) {
-          await terminalPaste(state.activeSession!);
-        }
-      case 'editSelectAll':
-        if (state.activeSession != null) {
-          terminalSelectAll(state.activeSession!);
-        }
-    }
-    return null;
-  });
-
-  // Retitled on every density change, from the menu or either switch, and
-  // on nothing else: the state notifies for far more than this.
-  ServerListDensity? titled;
-  void retitle() {
-    final density = state.serverListDensity;
-    if (density == titled) return;
-    titled = density;
-    unawaited(
-      channel.invokeMethod<void>(
-        'setServerListDensityTitle',
-        _densityMenuTitle(density),
-      ),
-    );
-  }
-
-  retitle();
-  state.addListener(retitle);
-}
-
-/// The View menu's density item at [current]: the choice it switches to.
-String _densityMenuTitle(ServerListDensity current) => switch (current) {
-  ServerListDensity.comfortable => 'Use Compact Sidebar Rows',
-  ServerListDensity.compact => 'Use Comfortable Sidebar Rows',
-};
 
 /// The server filter's chord (Poltergeist's plan, 10 §5): ⌥⌘F on Apple
 /// platforms, Ctrl+Alt+F elsewhere.
@@ -381,6 +317,17 @@ KeyEventResult handleTabShortcut(
     ),
 ], event);
 
+/// Shows the tab [step] places along the active tab's strip (1 the next,
+/// -1 the previous), wrapping round at either end: the tab shortcuts and
+/// Window ▸ Show Next Tab, Show Previous Tab.
+void stepActiveTab(AppState state, int step) {
+  final active = state.activeTab;
+  if (active == null) return;
+  final strip = state.tabsForServer(active.serverId);
+  // Dart's % is never negative for a positive divisor: -1 wraps to the end.
+  state.focusTab(strip[(strip.indexOf(active) + step) % strip.length].id);
+}
+
 void _runTabCommand(BuildContext context, AppState state, TabCommand command) {
   final active = state.activeTab;
   if (active == null) return;
@@ -389,8 +336,7 @@ void _runTabCommand(BuildContext context, AppState state, TabCommand command) {
     case CloseTabCommand():
       unawaited(confirmAndCloseTab(context, state, active.id));
     case StepTabCommand(:final step):
-      // Dart's % is never negative for a positive divisor: -1 wraps to the end.
-      state.focusTab(strip[(strip.indexOf(active) + step) % strip.length].id);
+      stepActiveTab(state, step);
     case GoToTabCommand(:final number):
       final index = number == GoToTabCommand.last
           ? strip.length - 1
@@ -400,11 +346,11 @@ void _runTabCommand(BuildContext context, AppState state, TabCommand command) {
 }
 
 /// Cross-platform keyboard shortcuts for the menu commands. On macOS the native
-/// menu (wired in MainFlutterWindow.swift) owns ⌘T, ⌘, and ⌘K; this also covers
-/// Linux/Windows, where there is no system menu bar. The native menu and these
-/// shortcuts share the same Dart actions. The tab shortcuts ([tabShortcuts])
-/// are Dart's alone on every platform: the native menu has no item for them,
-/// so ⌘W reaches here instead of closing the window.
+/// menu bar (MainMenu.swift, run by `MacCommandHost`) takes its key
+/// equivalents first, ⌘T, ⌘, and ⌘W among them, whenever their commands
+/// apply; these bindings cover Linux/Windows, where there is no system menu
+/// bar, and any chord the menu bar leaves disabled. The tab shortcuts
+/// ([tabShortcuts]) without a menu item, ⌘1 to ⌘9, are Dart's alone.
 class AppMenus extends StatelessWidget {
   final Widget child;
   const AppMenus({super.key, required this.child});

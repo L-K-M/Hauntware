@@ -56,6 +56,43 @@ final bool _isTouchPlatform = Platform.isAndroid || Platform.isIOS;
 /// In the wide layout the server name and disconnect controls live in the
 /// sidebar, so the app bar is dropped ([showAppBar] false). The narrow layout
 /// keeps a slim bar for back-navigation and the assistant drawer.
+/// What the active tab's terminal view offers the menu bar: its find bar,
+/// its selection and its focus (Edit ▸ Find, Copy). Implemented by the view
+/// itself; see [activeTerminalView].
+abstract interface class TerminalViewCommands {
+  /// The tab the view shows.
+  TerminalSession get tab;
+
+  /// Whether the terminal (not its find bar or anything else) has focus.
+  bool get terminalFocused;
+
+  bool get hasSelection;
+
+  /// Fires when [terminalFocused], [hasSelection] or the find bar change.
+  Listenable get changes;
+
+  /// Opens the find bar, or focuses its query when open.
+  void openFind();
+
+  /// The next or previous match, opening the find bar on the last query
+  /// when it is closed.
+  void findNext();
+  void findPrevious();
+
+  /// Makes the selection the find query (⌘E), and searches for it when
+  /// the bar is open.
+  void useSelectionForFind();
+
+  /// Drops the scrollback above the screen.
+  void clearScrollback();
+}
+
+/// The active tab's terminal view while one is mounted, for the menu bar.
+/// Set and cleared by the view as its tab becomes active or goes away.
+final ValueNotifier<TerminalViewCommands?> activeTerminalView = ValueNotifier(
+  null,
+);
+
 class TerminalPane extends StatelessWidget {
   final VoidCallback? onBack;
   final bool showAssistantAffordance;
@@ -1081,7 +1118,8 @@ class _SessionView extends StatefulWidget {
   State<_SessionView> createState() => _SessionViewState();
 }
 
-class _SessionViewState extends State<_SessionView> {
+class _SessionViewState extends State<_SessionView>
+    implements TerminalViewCommands {
   /// Zoom keys. `equal` covers the unshifted key that carries "+" on most
   /// layouts, and the numpad variants cover the keypad, so ⌘+ works whether or
   /// not the user reaches for Shift. `static final`, not `const`:
@@ -1116,15 +1154,23 @@ class _SessionViewState extends State<_SessionView> {
   @override
   void initState() {
     super.initState();
-    // Expose the controller on the session so the native macOS Edit menu can
-    // copy from the active terminal, and report focus so it only routes ⌘C/⌘V
-    // to the terminal when a terminal (not a text field) is focused.
+    // Expose the controller on the session so the menu bar's Edit commands
+    // can copy from the active terminal (app_menus.dart).
     widget.tab.controller = _terminalController;
-    _focus.addListener(_reportTerminalFocus);
     _focus.addListener(_hideSelectionToolbarOnBlur);
     _terminalController.addListener(_hideSelectionToolbarWithoutSelection);
     _wasConnected = widget.tab.status == TerminalStatus.connected;
     if (_wasConnected && widget.isActive) _requestTerminalFocus();
+    _claimMenuBar();
+  }
+
+  /// Publishes this view to the menu bar while its tab is the active one.
+  void _claimMenuBar() {
+    if (widget.isActive) {
+      activeTerminalView.value = this;
+    } else if (identical(activeTerminalView.value, this)) {
+      activeTerminalView.value = null;
+    }
   }
 
   @override
@@ -1145,6 +1191,7 @@ class _SessionViewState extends State<_SessionView> {
       _requestTerminalFocus();
     }
     _wasConnected = connected;
+    if (widget.isActive != oldWidget.isActive) _claimMenuBar();
   }
 
   void _requestTerminalFocus() {
@@ -1161,7 +1208,10 @@ class _SessionViewState extends State<_SessionView> {
 
   @override
   void dispose() {
-    _focus.removeListener(_reportTerminalFocus);
+    if (identical(activeTerminalView.value, this)) {
+      activeTerminalView.value = null;
+    }
+    _findState.dispose();
     _focus.removeListener(_hideSelectionToolbarOnBlur);
     _terminalController.removeListener(_hideSelectionToolbarWithoutSelection);
     _selectionToolbar.remove();
@@ -1175,14 +1225,62 @@ class _SessionViewState extends State<_SessionView> {
     super.dispose();
   }
 
-  /// Tell the macOS shell whether a terminal is focused, so the native Edit
-  /// menu routes ⌘C/⌘V/⌘A to the terminal rather than a focused text field.
-  void _reportTerminalFocus() {
-    if (Platform.isMacOS) {
-      const MethodChannel(
-        'seance/menu',
-      ).invokeMethod('setTerminalFocused', _focus.hasFocus);
+  // -- TerminalViewCommands ------------------------------------------------
+
+  /// Bumped when the find bar opens or closes, for [changes].
+  final ValueNotifier<int> _findState = ValueNotifier(0);
+
+  @override
+  TerminalSession get tab => widget.tab;
+
+  @override
+  bool get terminalFocused => _focus.hasFocus;
+
+  @override
+  bool get hasSelection => _terminalController.selection != null;
+
+  @override
+  late final Listenable changes = Listenable.merge([
+    _terminalController,
+    _focus,
+    _findState,
+  ]);
+
+  @override
+  void openFind() => _openFind();
+
+  @override
+  void findNext() => _stepFind(forward: true);
+
+  @override
+  void findPrevious() => _stepFind(forward: false);
+
+  void _stepFind({required bool forward}) {
+    final search = _search;
+    if (search == null) {
+      _openFind();
+      return;
     }
+    forward ? search.next() : search.previous();
+  }
+
+  @override
+  void useSelectionForFind() {
+    final selection = _terminalController.selection;
+    if (selection == null) return;
+    final selected = widget.tab.engine.terminal.buffer
+        .getText(selection)
+        .trim();
+    if (selected.isEmpty || selected.contains('\n')) return;
+    _lastFindQuery = selected;
+    _search?.search(selected);
+  }
+
+  @override
+  void clearScrollback() {
+    final terminal = widget.tab.engine.terminal;
+    terminal.eraseScrollbackOnly();
+    terminal.notifyListeners();
   }
 
   @override
@@ -1344,6 +1442,7 @@ class _SessionViewState extends State<_SessionView> {
             ..caseSensitive = _lastFindCaseSensitive
             ..search(query);
     });
+    _findState.value++;
   }
 
   /// Closes the find bar, clearing its highlights, and hands the keyboard
@@ -1355,6 +1454,7 @@ class _SessionViewState extends State<_SessionView> {
     _lastFindCaseSensitive = search.caseSensitive;
     setState(() => _search = null);
     search.dispose();
+    _findState.value++;
     _focus.requestFocus();
   }
 

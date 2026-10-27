@@ -12,6 +12,7 @@ import 'package:seance_core/seance_core.dart';
 import '../theme/app_appearance.dart';
 import '../theme/theme_palette.dart';
 import '../theme/theme_presets.dart';
+import '../ui/inspector_page.dart';
 import '../ui/server_list_density.dart';
 import '../ui/terminal_appearance.dart';
 import 'atomic_file.dart';
@@ -252,6 +253,14 @@ class AppSettings {
   double? paneListWidth;
   double? paneUtilityWidth;
 
+  /// Whether the wide layout hides its server list or its inspector (View ▸
+  /// Hide Sidebar, Hide Inspector), and which inspector page shows. Null is
+  /// the default page, Files; written only when set, so a file that never
+  /// used them reads back unchanged.
+  bool sidebarHidden;
+  bool inspectorHidden;
+  InspectorPage? inspectorPage;
+
   /// Terminal appearance. Device-local by design: the right font size depends
   /// on the screen in front of you, not on the account, so these never sync.
   double terminalFontSize;
@@ -328,6 +337,9 @@ class AppSettings {
     this.serverListDensity = ServerListDensity.comfortable,
     this.paneListWidth,
     this.paneUtilityWidth,
+    this.sidebarHidden = false,
+    this.inspectorHidden = false,
+    this.inspectorPage,
     Set<String>? unwrittenAssistantKeyRefs,
     Set<String>? heldAssistantKeyRefs,
     this.terminalFontSize = kDefaultTerminalFontSize,
@@ -401,6 +413,9 @@ class AppSettings {
     'serverListDensity': serverListDensity.name,
     if (paneListWidth != null) 'paneListWidth': paneListWidth,
     if (paneUtilityWidth != null) 'paneUtilityWidth': paneUtilityWidth,
+    if (sidebarHidden) 'sidebarHidden': true,
+    if (inspectorHidden) 'inspectorHidden': true,
+    if (inspectorPage case final page?) 'inspectorPage': page.name,
     'terminalFontSize': terminalFontSize,
     'terminalFontFamily': terminalFontFamily,
     'terminalPalette': terminalPalette.name,
@@ -461,6 +476,9 @@ class AppSettings {
     ),
     paneListWidth: _paneWidth(json['paneListWidth']),
     paneUtilityWidth: _paneWidth(json['paneUtilityWidth']),
+    sidebarHidden: json['sidebarHidden'] == true,
+    inspectorHidden: json['inspectorHidden'] == true,
+    inspectorPage: InspectorPage.values.asNameMap()[json['inspectorPage']],
     // Clamped on read: a hand-edited or downgraded settings file must never be
     // able to render the terminal at an unusable size.
     terminalFontSize: clampTerminalFontSize(
