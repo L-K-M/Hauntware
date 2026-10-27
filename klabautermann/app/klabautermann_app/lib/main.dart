@@ -33,6 +33,7 @@ import 'controllers/stack_folders.dart';
 import 'controllers/tls_endpoints.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
+import 'controllers/threshold_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/app_version.dart';
 import 'services/device_authenticator.dart';
@@ -321,6 +322,12 @@ Future<void> main(List<String> args) async {
     save: settings.setAnnounceThresholdBands,
   );
 
+  // OV-11's threshold bands, kept per device in settings.json.
+  final thresholds = ThresholdController(
+    stored: settings.thresholds,
+    save: settings.setThresholds,
+  );
+
   // The synced servers' preferences (03 §4.8), as the engine reports their
   // `pref` records.
   final serverPrefs = ServerPrefsController(engine);
@@ -396,6 +403,7 @@ Future<void> main(List<String> args) async {
     defaultTargetPlatform,
     appearance: appearance,
     announcements: announcements,
+    thresholds: thresholds,
     deviceName: deviceName,
     appVersion: appVersion,
     monitorSet: fleet.monitorSettings,
@@ -413,6 +421,7 @@ Future<void> main(List<String> args) async {
       appearance: appearance,
       coverage: coverage,
       announcements: announcements,
+      thresholds: thresholds,
       deviceName: deviceName,
       safety: safety,
       appLock: appLock,

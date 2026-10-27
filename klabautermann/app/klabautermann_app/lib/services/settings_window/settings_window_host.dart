@@ -16,6 +16,8 @@ import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart';
 import '../../controllers/safety_controller.dart';
 import '../../controllers/sync_secrets_controller.dart';
+import '../../controllers/threshold_controller.dart';
+import '../../ui/threshold_scope.dart' show ThresholdMetric;
 import '../stored_safety.dart';
 import 'settings_window_link.dart';
 
@@ -31,6 +33,7 @@ SettingsWindowHost? settingsWindowHostFor(
   required MonitorSetSettings monitorSet,
   required SafetySettings safety,
   required SyncSecretsSettings syncSecrets,
+  ThresholdSettings? thresholds,
   PinPublicationSettings? pinPublication,
   AppLockSettings? appLock,
 }) => switch (platform) {
@@ -44,6 +47,7 @@ SettingsWindowHost? settingsWindowHostFor(
     monitorSet: monitorSet,
     safety: safety,
     syncSecrets: syncSecrets,
+    thresholds: thresholds,
     pinPublication: pinPublication,
     appLock: appLock,
   ),
@@ -71,6 +75,7 @@ final class SettingsWindowHost {
     required MonitorSetSettings monitorSet,
     required SafetySettings safety,
     required SyncSecretsSettings syncSecrets,
+    ThresholdSettings? thresholds,
     PinPublicationSettings? pinPublication,
     AppLockSettings? appLock,
     MethodChannel control = settingsWindowControlChannel,
@@ -82,6 +87,7 @@ final class SettingsWindowHost {
        _monitorSet = monitorSet,
        _safety = safety,
        _syncSecrets = syncSecrets,
+       _thresholds = thresholds,
        _pinPublication = pinPublication,
        _appLock = appLock {
     _engine = GhostSettingsWindowHost(
@@ -98,6 +104,7 @@ final class SettingsWindowHost {
           monitorSet,
           safety,
           syncSecrets,
+          ?thresholds,
           ?pinPublication,
           ?appLock,
         ],
@@ -114,6 +121,7 @@ final class SettingsWindowHost {
   final MonitorSetSettings _monitorSet;
   final SafetySettings _safety;
   final SyncSecretsSettings _syncSecrets;
+  final ThresholdSettings? _thresholds;
   final PinPublicationSettings? _pinPublication;
   final AppLockSettings? _appLock;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
@@ -136,6 +144,10 @@ final class SettingsWindowHost {
     SettingsLinkKey.appearance.name: encodeAppearance(_appearance.value),
     SettingsLinkKey.announceThresholdBands.name: _announcements.value,
     SettingsLinkKey.deviceName.name: _deviceName.value,
+    SettingsLinkKey.thresholds.name: switch (_thresholds) {
+      final thresholds? => encodeThresholds(thresholds.value),
+      null => null,
+    },
     SettingsLinkKey.syncSecrets.name: _syncSecrets.value,
     SettingsLinkKey.pinPublication.name: switch (_pinPublication?.value) {
       final value? => encodePinPublication(value),
@@ -174,6 +186,22 @@ final class SettingsWindowHost {
         await _announcements.setAnnounceThresholdBands(argument! as bool);
       case SettingsLinkMethod.setDeviceName:
         await _deviceName.setDeviceName(argument! as String);
+      case SettingsLinkMethod.setThresholds:
+        final call = (argument! as Map).cast<String, Object?>();
+        final [careful, warning, critical] = [
+          for (final level in call[SettingsLinkKey.levels.name]! as List)
+            (level as num).toDouble(),
+        ];
+        final levels = thresholdsOf(careful, warning, critical);
+        if (levels == null) {
+          throw ArgumentError.value(argument, 'levels', 'not valid bands');
+        }
+        await _thresholds?.setThresholds(
+          ThresholdMetric.values.byName(
+            call[SettingsLinkKey.metric.name]! as String,
+          ),
+          levels,
+        );
       case SettingsLinkMethod.setSyncSecrets:
         await _syncSecrets.setSyncSecrets(argument! as bool);
       case SettingsLinkMethod.setPinPublication:

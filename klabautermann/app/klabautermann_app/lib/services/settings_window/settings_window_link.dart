@@ -14,6 +14,8 @@ import 'package:ghost_theme/ghost_theme.dart';
 
 import '../../controllers/announcement_controller.dart'
     show AnnouncementNotSavedException;
+import '../../controllers/threshold_controller.dart'
+    show ThresholdsNotSavedException;
 import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart'
     show AppearanceNotSavedException;
@@ -67,6 +69,10 @@ enum SettingsLinkMethod {
   /// string, blank for the default.
   setDeviceName,
 
+  /// The Alerts tab's usage bands (OV-11); the argument is an object of
+  /// [SettingsLinkKey.metric] and [SettingsLinkKey.levels].
+  setThresholds,
+
   /// The Sync tab's "sync passwords" switch (SYN-02); the argument is a
   /// bool.
   setSyncSecrets,
@@ -104,6 +110,14 @@ enum SettingsLinkKey {
   mode,
   announceThresholdBands,
   deviceName,
+
+  /// Each metric's usage bands (OV-11), as [encodeThresholds] writes them.
+  thresholds,
+
+  /// A metric's name and its careful, warning and critical levels, the
+  /// arguments of [SettingsLinkMethod.setThresholds].
+  metric,
+  levels,
   syncSecrets,
 
   /// The host key sharing assertion, an object of [release] and
@@ -233,6 +247,10 @@ enum SettingsLinkError {
   /// [DeviceNameNotSavedException].
   deviceNameNotSaved,
 
+  /// As [notSaved], for the usage bands: the window rebuilds the
+  /// [ThresholdsNotSavedException].
+  thresholdsNotSaved,
+
   /// Anything else: the change did not happen.
   failed,
 }
@@ -250,6 +268,7 @@ PlatformException encodeLinkError(Object error) => PlatformException(
     SyncSecretsNotSavedException() =>
       SettingsLinkError.syncSecretsNotSaved.name,
     DeviceNameNotSavedException() => SettingsLinkError.deviceNameNotSaved.name,
+    ThresholdsNotSavedException() => SettingsLinkError.thresholdsNotSaved.name,
     _ => SettingsLinkError.failed.name,
   },
   message: '$error',
@@ -282,6 +301,9 @@ Exception decodeLinkError(PlatformException error) {
       message,
     ),
     SettingsLinkError.deviceNameNotSaved => DeviceNameNotSavedException(
+      message,
+    ),
+    SettingsLinkError.thresholdsNotSaved => ThresholdsNotSavedException(
       message,
     ),
     SettingsLinkError.failed || null => SettingsLinkException(message),

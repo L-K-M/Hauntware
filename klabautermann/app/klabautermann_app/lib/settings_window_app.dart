@@ -87,6 +87,7 @@ class _SettingsWindowAppState extends State<SettingsWindowApp> {
                 key: ValueKey(page.generation),
                 appearance: remote.appearance,
                 announcements: remote.announcements,
+                thresholds: remote.thresholds,
                 deviceName: remote.deviceName,
                 appVersion: remote.appVersion,
                 monitorSet: remote.monitorSet,

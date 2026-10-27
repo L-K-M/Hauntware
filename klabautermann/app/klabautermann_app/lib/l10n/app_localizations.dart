@@ -5514,6 +5514,94 @@ abstract class AppLocalizations {
   /// **'While a server\'s Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.'**
   String get settingsAnnounceBandsDetail;
 
+  /// Settings, Alerts: the heading of OV-11's threshold levels.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage bands'**
+  String get settingsThresholdsTitle;
+
+  /// Settings, Alerts: what the usage bands do.
+  ///
+  /// In en, this message translates to:
+  /// **'The levels the fleet rows, the Overview and its health card judge each metric by. Careful shows an info icon, warning and critical also take their colour, and only warning and critical are announced.'**
+  String get settingsThresholdsDetail;
+
+  /// Settings, Alerts, threshold dialog: the careful level's field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Careful from'**
+  String get settingsThresholdCareful;
+
+  /// Settings, Alerts, threshold dialog: the warning level's field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning from'**
+  String get settingsThresholdWarning;
+
+  /// Settings, Alerts, threshold dialog: the critical level's field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical from'**
+  String get settingsThresholdCritical;
+
+  /// Settings, Alerts, threshold dialog: the unit after each level's number.
+  ///
+  /// In en, this message translates to:
+  /// **'%'**
+  String get settingsThresholdPercentSuffix;
+
+  /// Settings, Alerts, threshold dialog: why the levels typed cannot be saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Each level must be a whole percent from 1 to 100, and each one higher than the one before.'**
+  String get settingsThresholdsInvalid;
+
+  /// Settings, Alerts, threshold dialog: fills in the default levels (70, 80 and 90 %).
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get settingsThresholdDefault;
+
+  /// Settings, Alerts, threshold dialog: closes it without a change.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get settingsThresholdCancel;
+
+  /// Settings, Alerts, threshold dialog: applies the levels typed.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get settingsThresholdSave;
+
+  /// Settings, Alerts: toast when new levels applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The levels changed but could not be saved. They last until Klabautermann quits.'**
+  String get settingsThresholdsNotSaved;
+
+  /// Settings, Alerts: toast when the levels change failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The levels could not be changed.'**
+  String get settingsThresholdsNotChanged;
+
+  /// Settings, Alerts: a metric whose usage bands are set (OV-11); disk covers space and inodes.
+  ///
+  /// In en, this message translates to:
+  /// **'{metric, select, cpu{CPU} memory{Memory} other{Disk}}'**
+  String settingsThresholdMetric(String metric);
+
+  /// Settings, Alerts: a metric's three levels, each a formatted percent (chartPercent).
+  ///
+  /// In en, this message translates to:
+  /// **'Careful from {careful}, warning from {warning}, critical from {critical}'**
+  String settingsThresholdLevels(
+    String careful,
+    String warning,
+    String critical,
+  );
+
   /// Toast when the threshold announcement switch applied but settings.json could not be written.
   ///
   /// In en, this message translates to:

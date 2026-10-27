@@ -14,6 +14,9 @@ import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart';
 import '../../controllers/safety_controller.dart';
 import '../../controllers/sync_secrets_controller.dart';
+import '../../controllers/threshold_controller.dart';
+import '../../ui/charts/charts.dart' show ChartThresholds;
+import '../../ui/threshold_scope.dart';
 import '../stored_safety.dart';
 import '../../theme/app_theme.dart';
 import 'settings_window_link.dart';
@@ -53,6 +56,20 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
   late final RemoteAnnouncements announcements = RemoteAnnouncements._(
     (announce) =>
         invoke(SettingsLinkMethod.setAnnounceThresholdBands.name, announce),
+  );
+
+  /// The Alerts tab's usage bands, from the latest snapshot; null until
+  /// the app offers them.
+  RemoteThresholds? get thresholds => _thresholds.offered ? _thresholds : null;
+  late final RemoteThresholds _thresholds = RemoteThresholds._(
+    (metric, levels) => invoke(SettingsLinkMethod.setThresholds.name, {
+      SettingsLinkKey.metric.name: metric.name,
+      SettingsLinkKey.levels.name: [
+        levels.careful,
+        levels.warning,
+        levels.critical,
+      ],
+    }),
   );
 
   /// The General tab's device name, from the latest snapshot.
@@ -106,6 +123,9 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
       snapshot[SettingsLinkKey.announceThresholdBands.name]! as bool,
     );
     deviceName._apply(snapshot[SettingsLinkKey.deviceName.name]! as String);
+    _thresholds._apply(
+      snapshot[SettingsLinkKey.thresholds.name] as Map<Object?, Object?>?,
+    );
     syncSecrets._apply(snapshot[SettingsLinkKey.syncSecrets.name]! as bool);
     pinPublication._apply(
       decodePinPublication(
@@ -133,6 +153,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     appearance.dispose();
     announcements.dispose();
     deviceName.dispose();
+    _thresholds.dispose();
     syncSecrets.dispose();
     pinPublication.dispose();
     monitorSet.dispose();
@@ -165,6 +186,47 @@ final class RemoteAnnouncements extends ChangeNotifier
   @override
   Future<void> setAnnounceThresholdBands(bool announce) async {
     await _call(announce);
+  }
+}
+
+/// [ThresholdSettings] over the link: the app's bands as the latest
+/// snapshot carries them, and changes that run in the app's isolate.
+final class RemoteThresholds extends ChangeNotifier
+    implements ThresholdSettings {
+  RemoteThresholds._(this._call);
+
+  final Future<Object?> Function(ThresholdMetric metric, ChartThresholds levels)
+  _call;
+
+  /// Whether the app's snapshot carries bands; a build without them
+  /// leaves the Alerts tab a placeholder.
+  bool offered = false;
+
+  MetricThresholds _value = decodeThresholds(const {});
+
+  void _apply(Map<Object?, Object?>? stored) {
+    offered = stored != null;
+    final value = decodeThresholds({
+      for (final MapEntry(:key, :value) in (stored ?? const {}).entries)
+        if ((key, value) case (final String metric, final List<Object?> levels))
+          metric: [
+            for (final level in levels.whereType<num>()) level.toDouble(),
+          ],
+    });
+    if (mapEquals(value, _value)) return;
+    _value = value;
+    notifyListeners();
+  }
+
+  @override
+  MetricThresholds get value => _value;
+
+  @override
+  Future<void> setThresholds(
+    ThresholdMetric metric,
+    ChartThresholds levels,
+  ) async {
+    await _call(metric, levels);
   }
 }
 
