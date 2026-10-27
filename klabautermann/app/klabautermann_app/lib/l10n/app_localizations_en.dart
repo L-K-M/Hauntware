@@ -7896,6 +7896,40 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get dockerStackLogsOpen => 'Logs';
+
+  @override
+  String dockerStackLogsTitle(String project) {
+    return '$project logs';
+  }
+
+  @override
+  String get dockerStackLogsNone =>
+      'This stack has no containers, so it has no logs.';
+
+  @override
+  String dockerStackLogsOmitted(int shown, int omitted) {
+    String _temp0 = intl.Intl.pluralLogic(
+      omitted,
+      locale: localeName,
+      other: '$omitted more are not shown.',
+      one: '1 more is not shown.',
+    );
+    return '$shown containers\' logs are read at once, as each holds a connection to the server. $_temp0';
+  }
+
+  @override
+  String dockerStackLogsState(String container, String state) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'waiting': 'waiting',
+      'ended': 'stopped reading',
+      'refused': 'refused',
+      'other': 'opening',
+    });
+    return '$container: $_temp0';
+  }
+
+  @override
   String get dockerLogsLiveRange =>
       'A range with an end has no new lines to follow.';
 

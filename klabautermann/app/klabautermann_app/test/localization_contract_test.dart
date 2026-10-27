@@ -532,6 +532,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'  '",
     r"'${variable.name}=${variable.value.display}'",
   },
+  'lib/ui/docker/stack_logs.dart': {
+    // A merged line: the container's name in its colour as SGR escapes,
+    // then the line as the container wrote it.
+    r"'\x1b[38;5;${colour}m$name\x1b[0m $text'",
+  },
   'lib/ui/docker/container_terminal.dart': {
     // Shell paths the picker offers, run as typed, and the empty field
     // that leaves the choice to the engine.

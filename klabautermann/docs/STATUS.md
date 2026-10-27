@@ -319,6 +319,10 @@ is on main:
 - Container log export (M6 N19b, CTX-06): the container log view's
   Export opens LOG-10's sheet, redacted unless Include secrets is on,
   and copies, saves as `<container>.log` or shares the held rows.
+- Stack logs (M6 N19c, CTX-04): a stack overview's Logs follows up to 6
+  of its containers and merges their lines by time, each led by its
+  container's name in its own colour, with a chip per container that
+  hides or shows its lines, and LOG-10's export.
 - Images in the app (M3, D16, 03 §7.14, §10.4): the Images sub-tab
   holds one `DockerWatch` of the images and containers per server while
   it shows, apart from the Containers view's, and sends `DockerUnwatch`
