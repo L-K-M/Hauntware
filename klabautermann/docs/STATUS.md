@@ -316,6 +316,18 @@ is on main:
   following, or between a chosen start and end, read once with Live
   stopped. The engine sends `since` and `until` and no `tail`, and a
   follow's resume starts after its newest line.
+- Container log export (M6 N19b, CTX-06): the container log view's
+  Export opens LOG-10's sheet, redacted unless Include secrets is on,
+  and copies, saves as `<container>.log` or shares the held rows.
+- Stack logs (M6 N19c, CTX-04): a stack overview's Logs follows up to 6
+  of its containers and merges their lines by time, each led by its
+  container's name in its own colour, with a chip per container that
+  hides or shows its lines, and LOG-10's export.
+- Container log levels and JSON (M6 N19d, CTX-05): container and stack
+  log lines take the level they name of themselves (JSON and logfmt
+  keys, a leading level word, an exception line) with the gutter icon
+  and colour, a stack trace's frames take its opener's level, and a JSON
+  line opens its keys beneath it on a tap.
 - Images in the app (M3, D16, 03 §7.14, §10.4): the Images sub-tab
   holds one `DockerWatch` of the images and containers per server while
   it shows, apart from the Containers view's, and sends `DockerUnwatch`
@@ -1878,6 +1890,15 @@ is on main:
   `sudo -n -l` lists the rule without a password while `systemd-run`
   needs one; the engine now reads the rules before it elevates a runner
   (above).
+- M6 spike S8 (N06, 03 D68, evidence in
+  [docs/evidence/s8](evidence/s8/README.md)): `probe.sh` reads Docker
+  Hub, GHCR and Quay by manifest `HEAD`, the daemon's DistributionInspect
+  and a local registry behind basic auth. A `HEAD` leaves Docker Hub's
+  quota unchanged but is refused once the address's hourly quota is
+  spent; DistributionInspect spends a pull; on the containerd store a
+  pushed single-platform manifest matches a child of the local index,
+  not `RepoDigests`; private registries answer through
+  `docker buildx imagetools inspect`. IMG-05 (N15) builds on it.
 - M4 theme editing (E25): Settings > Appearance edits the theme with
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,

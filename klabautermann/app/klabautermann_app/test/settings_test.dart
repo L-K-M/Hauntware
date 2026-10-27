@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
+import 'package:klabautermann_app/controllers/cadence_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/settings_page.dart';
@@ -147,6 +148,83 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 10));
     await tester.pumpAndSettle();
+  });
+
+  Future<void> pumpGeneralTab(
+    WidgetTester tester,
+    CadenceController cadence,
+  ) async {
+    final announcements = AnnouncementController();
+    addTearDown(announcements.dispose);
+    addTearDown(cadence.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: GeneralTab(
+            announcements: announcements,
+            cadence: cadence,
+            appVersion: null,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> pickCadence(WidgetTester tester, String label) async {
+    await tester.tap(find.byType(DropdownButton<CadencePreset>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('the General tab picks the polling budget and explains its '
+      'rates (SAF-19)', (tester) async {
+    final cadence = CadenceController();
+    await pumpGeneralTab(tester, cadence);
+    expect(find.text('How often servers are read'), findsOneWidget);
+    expect(
+      find.text(
+        'Desktop rates on a computer, phone rates on a phone or tablet.',
+      ),
+      findsOneWidget,
+    );
+
+    await pickCadence(tester, 'Cellular saver');
+
+    expect(cadence.value, CadencePreset.cellularSaver);
+    expect(find.textContaining('every 30 s'), findsOneWidget);
+  });
+
+  testWidgets('a polling budget that cannot be saved stays and says so', (
+    tester,
+  ) async {
+    final cadence = CadenceController(
+      save: (_) async => throw const FileSystemException('disk full'),
+    );
+    await pumpGeneralTab(tester, cadence);
+
+    await pickCadence(tester, 'Phone');
+
+    expect(cadence.value, CadencePreset.phone);
+    expect(
+      find.text(
+        'The refresh rate changed but could not be saved. It lasts until '
+        'Klabautermann quits.',
+      ),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('without a polling budget the General tab leaves it out', (
+    tester,
+  ) async {
+    await openSettings(tester);
+
+    expect(find.text('How often servers are read'), findsNothing);
   });
 
   testWidgets('the General tab\'s about row shows the title with its '

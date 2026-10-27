@@ -116,6 +116,89 @@ void main() {
       expect(afterResult.value.first.containers, 3);
     });
 
+    test('inspectImage asks for the index children from 1.48 only', () async {
+      Future<String> requestLine(ApiVersion version) async {
+        final daemon = FakeDaemon();
+        final inspect = clientFor(
+          daemon,
+          version,
+        ).inspectImage('alpine:3.22', manifests: true);
+        await daemon.gotBytes(1);
+        daemon.feed(
+          jsonResponse(
+            utf8.encode(
+              jsonEncode({
+                'Id': 'sha256:i1',
+                'Manifests': [
+                  {
+                    'Kind': 'image',
+                    'Available': true,
+                    'Descriptor': {'digest': 'sha256:c1'},
+                  },
+                  {
+                    'Kind': 'attestation',
+                    'Available': true,
+                    'Descriptor': {'digest': 'sha256:a1'},
+                  },
+                  {
+                    'Kind': 'image',
+                    'Available': false,
+                    'Descriptor': {'digest': 'sha256:c2'},
+                  },
+                ],
+              }),
+            ),
+          ),
+        );
+        expect((await inspect).value.availableChildDigests, ['sha256:c1']);
+        return utf8.decode(daemon.received).split('\r\n').first;
+      }
+
+      expect(
+        await requestLine(const ApiVersion(1, 48)),
+        'GET /v1.48/images/alpine%3A3.22/json?manifests=1 HTTP/1.1',
+      );
+      expect(
+        await requestLine(const ApiVersion(1, 47)),
+        'GET /v1.47/images/alpine%3A3.22/json HTTP/1.1',
+      );
+    });
+
+    test('distributionInspect reads the descriptor the tag names', () async {
+      final daemon = FakeDaemon();
+      final read = clientFor(
+        daemon,
+        const ApiVersion(1, 52),
+      ).distributionInspect('alpine:3.22');
+      await daemon.gotBytes(1);
+      daemon.feed(
+        jsonResponse(
+          utf8.encode(
+            jsonEncode({
+              'Descriptor': {
+                'mediaType': 'application/vnd.oci.image.index.v1+json',
+                'digest': 'sha256:aa',
+                'size': 9218,
+              },
+              'Platforms': [
+                {'architecture': 'amd64', 'os': 'linux'},
+              ],
+            }),
+          ),
+        ),
+      );
+      final descriptor = (await read).value;
+      expect(descriptor.digest, 'sha256:aa');
+      expect(descriptor.mediaType, 'application/vnd.oci.image.index.v1+json');
+      expect(
+        utf8.decode(daemon.received).split('\r\n').first,
+        'GET /v1.52/distribution/alpine%3A3.22/json HTTP/1.1',
+      );
+      expect(parseDistributionInspect(const <String, Object?>{}).warnings, [
+        'distribution inspect has no Descriptor',
+      ]);
+    });
+
     test('pullImage streams parsed progress values', () async {
       final daemon = FakeDaemon();
       final client = clientFor(daemon, const ApiVersion(1, 44));

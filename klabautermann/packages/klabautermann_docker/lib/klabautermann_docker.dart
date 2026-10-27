@@ -22,6 +22,7 @@ export 'src/api_version.dart'
         apiVersionVolumePruneAll,
         apiVersionEventV2,
         apiVersionImageContainers,
+        apiVersionImageManifests,
         apiVersionLogsContentType,
         apiVersionSystemDf152,
         apiVersionSystemDf153,
@@ -104,6 +105,7 @@ export 'src/http_types.dart'
 export 'src/image_digest.dart'
     show
         ImageDigestComparison,
+        ImageUpdateIssue,
         ImageUpdateStatus,
         RegistryManifestHead,
         RepoDigest,
@@ -159,9 +161,11 @@ export 'src/models/engine_info.dart' show EngineInfo, parseEngineInfo;
 export 'src/models/events.dart' show DockerEvent, parseDockerEvent;
 export 'src/models/image.dart'
     show
+        DistributionDescriptor,
         ImageConfig,
         ImageInspect,
         ImageSummary,
+        parseDistributionInspect,
         parseImageInspect,
         parseImageSummaries;
 export 'src/models/container_top.dart'
@@ -192,6 +196,13 @@ export 'src/models/stats.dart'
 export 'src/models/system_df.dart'
     show DiskUsageTotals, SystemDf, SystemDfType, parseSystemDf;
 export 'src/models/volume.dart' show VolumeSummary, parseVolumeSummaries;
+export 'src/registry_reference.dart'
+    show
+        RegistryAuthScheme,
+        RegistryChallenge,
+        RegistryRateLimit,
+        RegistryReference,
+        dockerHubRegistry;
 export 'src/stdcopy.dart'
     show
         BoundedLogRing,

@@ -9,6 +9,7 @@ import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 
 import '../../controllers/announcement_controller.dart';
+import '../../controllers/cadence_controller.dart';
 import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/device_name.dart';
@@ -36,6 +37,7 @@ SettingsWindowHost? settingsWindowHostFor(
   ThresholdSettings? thresholds,
   PinPublicationSettings? pinPublication,
   AppLockSettings? appLock,
+  CadenceSettings? cadence,
 }) => switch (platform) {
   TargetPlatform.macOS ||
   TargetPlatform.linux ||
@@ -50,6 +52,7 @@ SettingsWindowHost? settingsWindowHostFor(
     thresholds: thresholds,
     pinPublication: pinPublication,
     appLock: appLock,
+    cadence: cadence,
   ),
   TargetPlatform.android ||
   TargetPlatform.iOS ||
@@ -78,6 +81,7 @@ final class SettingsWindowHost {
     ThresholdSettings? thresholds,
     PinPublicationSettings? pinPublication,
     AppLockSettings? appLock,
+    CadenceSettings? cadence,
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
@@ -89,7 +93,8 @@ final class SettingsWindowHost {
        _syncSecrets = syncSecrets,
        _thresholds = thresholds,
        _pinPublication = pinPublication,
-       _appLock = appLock {
+       _appLock = appLock,
+       _cadence = cadence {
     _engine = GhostSettingsWindowHost(
       control: control,
       link: link,
@@ -107,6 +112,7 @@ final class SettingsWindowHost {
           ?thresholds,
           ?pinPublication,
           ?appLock,
+          ?cadence,
         ],
       ),
       encodeError: encodeLinkError,
@@ -124,6 +130,7 @@ final class SettingsWindowHost {
   final ThresholdSettings? _thresholds;
   final PinPublicationSettings? _pinPublication;
   final AppLockSettings? _appLock;
+  final CadenceSettings? _cadence;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
 
   @visibleForTesting
@@ -143,6 +150,7 @@ final class SettingsWindowHost {
   Map<String, Object?> _snapshot() => {
     SettingsLinkKey.appearance.name: encodeAppearance(_appearance.value),
     SettingsLinkKey.announceThresholdBands.name: _announcements.value,
+    SettingsLinkKey.cadence.name: _cadence?.value.name,
     SettingsLinkKey.deviceName.name: _deviceName.value,
     SettingsLinkKey.thresholds.name: switch (_thresholds) {
       final thresholds? => encodeThresholds(thresholds.value),
@@ -184,6 +192,8 @@ final class SettingsWindowHost {
         await _appearance.setAppearance(appearance.palette, appearance.mode);
       case SettingsLinkMethod.setAnnounceThresholdBands:
         await _announcements.setAnnounceThresholdBands(argument! as bool);
+      case SettingsLinkMethod.setCadence:
+        await _cadence?.setCadence(CadencePreset.parse(argument! as String));
       case SettingsLinkMethod.setDeviceName:
         await _deviceName.setDeviceName(argument! as String);
       case SettingsLinkMethod.setThresholds:

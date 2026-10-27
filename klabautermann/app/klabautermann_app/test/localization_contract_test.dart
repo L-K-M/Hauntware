@@ -85,6 +85,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'levels'",
     "'not valid bands'",
   },
+  // The not-saved diagnostic; the General tab prints it and shows its own
+  // ARB text (settingsCadenceNotSaved).
+  'lib/controllers/cadence_controller.dart': {
+    r"'The polling budget was not saved: $error'",
+  },
   // The host syslog line's device name, written into host journals in
   // one form (M5 plan Q6).
   'lib/controllers/device_name.dart': {
@@ -265,6 +270,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'..'",
   },
   'lib/controllers/sync_controller.dart': {"'the engine stopped'"},
+  // TRI-03's acknowledgement keys (kind and subject) and the fields they
+  // are stored under in settings.json.
+  'lib/controllers/attention.dart': {
+    r"'${kind.name}:${subject ?? ''}'",
+    "''",
+    "':'",
+    "'at'",
+    "'note'",
+  },
   // A Docker query id the engine echoes in its answer (03 §10.1).
   // The query and watch ids the engine keys Docker answers by (03 §10.1).
   'lib/controllers/docker_controller.dart': {
@@ -527,6 +541,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'  '",
     r"'${variable.name}=${variable.value.display}'",
   },
+  'lib/ui/logs/container_lines.dart': {
+    // The space after a word a view puts before a line's own text.
+    "' '",
+  },
+  'lib/ui/docker/stack_logs.dart': {
+    // A merged line: the container's name in its colour as SGR escapes,
+    // then the line as the container wrote it.
+    r"'\x1b[38;5;${colour}m$name\x1b[0m $text'",
+  },
   'lib/ui/docker/container_terminal.dart': {
     // Shell paths the picker offers, run as typed, and the empty field
     // that leaves the choice to the engine.
@@ -752,6 +775,20 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"""r'|\b(?:GET|HEAD|POST|PUT|DELETE|PATCH|OPTIONS|CONNECT|TRACE)\s+\S+\s+'""",
     r"""r'|\b(?:[Ss]tatus|STATUS|[Cc]ode|CODE)(?:_code)?["\x27]?\s*[=:]\s*"?)'""",
     r"""r'([1-5]\d\d)\b'""",
+  },
+  'lib/ui/diagnostic_bundle.dart': {
+    // CN-18's bundle is a fixture-format text file for maintainers, not
+    // UI copy: its header, each section's `###` line and the closing
+    // list of collectors that gave no answer, with the line break its
+    // payloads split on and the space between wire names; then the
+    // separators between the sheet's ARB texts and wire names.
+    r"'# Klabautermann diagnostic bundle (HWS/1), read ${at.toUtc().toIso8601String()}'",
+    r"'### ${section.collector} ${section.status}'",
+    r"'\n'",
+    r"'# no answer: ${bundle.missing.join(' ')}'",
+    "' '",
+    "', '",
+    r"'\n\n'",
   },
   'lib/ui/logs/log_export.dart': {
     // LOG-10's export: the lines joined as a text file, ending in a

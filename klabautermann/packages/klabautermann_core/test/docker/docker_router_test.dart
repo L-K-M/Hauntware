@@ -629,6 +629,7 @@ void main() {
           {
             'Id': 'gone',
             'Names': ['/gone'],
+            'Image': 'amir20/dozzle:v8',
             'State': 'exited',
           },
         ])
@@ -674,6 +675,11 @@ void main() {
       final second = await h.result(again) as DockerReviewPayload;
       expect([for (final r in second.reviews) r.name], ['db']);
       expect(second.unreadable, 1);
+      expect(
+        [for (final tool in payload.tools) (tool.tool, tool.name)],
+        [(HostTool.dozzle, 'gone')],
+        reason: 'tools come from the whole list, inspected or not',
+      );
       expect(
         daemon.requests,
         contains('GET /v1.52/containers/gone/json HTTP/1.1'),
@@ -1080,6 +1086,50 @@ void main() {
       final id = h.query(const DockerComposeQuery());
       final cli = (await h.result(id) as DockerComposePayload).composeCli;
       expect((cli.pluginVersion, cli.standaloneVersion), (null, null));
+    });
+
+    test('an update check reads the registry on the host once, and keeps '
+        'its rows for the next query (IMG-05)', () async {
+      const index =
+          'sha256:a100000000000000000000000000000000000000000000000000000000000000';
+      final h = _Harness();
+      h.forwarding
+        ..daemons[_rootful] = (EngineDaemon()
+          ..routes['/v1.52/images/json'] = jsonEncode([
+            {
+              'Id': 'sha256:i1',
+              'RepoTags': ['alpine:3.22'],
+              'RepoDigests': ['alpine@$index'],
+            },
+          ])
+          ..routes['/v1.52/images/sha256%3Ai1/json'] = jsonEncode({
+            'Id': 'sha256:i1',
+            'RepoDigests': ['alpine@$index'],
+          }))
+        ..answer = (command) => command.contains('hws-registry')
+            ? Future.value(
+                const RemoteCommandResult(
+                  stdout:
+                      '== image alpine:3.22\n== head 0\nHTTP/2 200 \n'
+                      'docker-content-digest: $index\n',
+                  exitCode: 0,
+                ),
+              )
+            : null;
+      await h.open();
+      await h.resolve(_profile([_rootful]));
+
+      for (var round = 0; round < 2; round++) {
+        final id = h.query(const DockerImageUpdatesQuery());
+        final rows = (await h.result(id) as DockerImageUpdatesPayload).rows;
+        expect(rows.single.reference, 'alpine:3.22');
+        expect(rows.single.comparison.status, ImageUpdateStatus.upToDate);
+      }
+      expect(h.forwarding.commands, hasLength(1));
+      expect(
+        h.forwarding.daemons[_rootful]!.requests,
+        contains(contains('/images/sha256%3Ai1/json?manifests=1')),
+      );
     });
   });
 

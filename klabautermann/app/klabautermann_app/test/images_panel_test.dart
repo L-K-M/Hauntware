@@ -273,13 +273,14 @@ void main() {
       'ID: 3f1c9a6b2e8d\n'
       'Size: 187 MiB\n'
       'Created: 3 weeks ago, Sep 24, 2026\n'
-      'Use: In use by 2 containers',
+      'Use: In use by 2 containers\n'
+      'Update: Not checked',
     );
     expect(_label(tester, _orphan), startsWith('Tags: Dangling\n'));
-    expect(_label(tester, _orphan), endsWith('Use: Unused'));
+    expect(_label(tester, _orphan), contains('Use: Unused\nUpdate:'));
     expect(
       _label(tester, _hello),
-      endsWith('Use: In use by 1 container'),
+      contains('Use: In use by 1 container\nUpdate:'),
       reason: 'a container that never started still uses its image',
     );
   });
@@ -409,7 +410,7 @@ void main() {
     await panel.list(tester, images: _images(counted: false));
 
     // No count, and no container list yet.
-    expect(_label(tester, _nginx), endsWith('Use: unknown'));
+    expect(_label(tester, _nginx), contains('Use: unknown\nUpdate:'));
     await _choose(tester, 'Unused');
     expect(_order(tester), isEmpty, reason: 'unknown is not unused');
     await _choose(tester, 'All');
@@ -418,9 +419,15 @@ void main() {
       tester,
       dockerContainerList(_serverId, _containers, at: _now),
     );
-    expect(_label(tester, _nginx), endsWith('Use: In use by 2 containers'));
-    expect(_label(tester, _postgres), endsWith('Use: In use by 1 container'));
-    expect(_label(tester, _worker), endsWith('Use: Unused'));
+    expect(
+      _label(tester, _nginx),
+      contains('Use: In use by 2 containers\nUpdate:'),
+    );
+    expect(
+      _label(tester, _postgres),
+      contains('Use: In use by 1 container\nUpdate:'),
+    );
+    expect(_label(tester, _worker), contains('Use: Unused\nUpdate:'));
 
     // A container created from the worker image counts at once: the
     // engine re-lists the containers, not the images.
@@ -431,7 +438,10 @@ void main() {
         dockerContainer('d1', name: 'worker', imageId: _worker),
       ], at: _now),
     );
-    expect(_label(tester, _worker), endsWith('Use: In use by 1 container'));
+    expect(
+      _label(tester, _worker),
+      contains('Use: In use by 1 container\nUpdate:'),
+    );
   });
 
   testWidgets('below API 1.51, a failed container list leaves the use '
@@ -461,7 +471,10 @@ void main() {
     // From 1.51 the counts stand in.
     await panel.list(tester);
     expect(find.textContaining('Which images are in use'), findsNothing);
-    expect(_label(tester, _nginx), endsWith('Use: In use by 2 containers'));
+    expect(
+      _label(tester, _nginx),
+      contains('Use: In use by 2 containers\nUpdate:'),
+    );
   });
 
   testWidgets('from API 1.51 the image counts stand in only until the '
@@ -470,8 +483,14 @@ void main() {
   ) async {
     final panel = await _pump(tester);
     await panel.list(tester);
-    expect(_label(tester, _nginx), endsWith('Use: In use by 2 containers'));
-    expect(_label(tester, _hello), endsWith('Use: In use by 1 container'));
+    expect(
+      _label(tester, _nginx),
+      contains('Use: In use by 2 containers\nUpdate:'),
+    );
+    expect(
+      _label(tester, _hello),
+      contains('Use: In use by 1 container\nUpdate:'),
+    );
 
     // The hello-world container was removed and one created from the
     // worker image since the images were listed.
@@ -482,9 +501,15 @@ void main() {
         dockerContainer('d1', name: 'worker', imageId: _worker),
       ], at: _now),
     );
-    expect(_label(tester, _hello), endsWith('Use: Unused'));
-    expect(_label(tester, _worker), endsWith('Use: In use by 1 container'));
-    expect(_label(tester, _nginx), endsWith('Use: In use by 2 containers'));
+    expect(_label(tester, _hello), contains('Use: Unused\nUpdate:'));
+    expect(
+      _label(tester, _worker),
+      contains('Use: In use by 1 container\nUpdate:'),
+    );
+    expect(
+      _label(tester, _nginx),
+      contains('Use: In use by 2 containers\nUpdate:'),
+    );
   });
 
   testWidgets('says why the list failed, keeps the last one and watches '
@@ -678,11 +703,42 @@ void main() {
 
   group('golden', () {
     // 03 §11.1: tagged, unused, dangling and in-use images, sizes from
-    // KiB to GiB and ages from hours to years, on desktop.
+    // KiB to GiB, ages from hours to years and each update mark, on
+    // desktop.
     for (final brightness in Brightness.values) {
       testWidgets('desktop, ${brightness.name}', (tester) async {
         final panel = await _pump(tester, brightness: brightness);
         await panel.list(tester, containers: _containers);
+        // IMG-05: an update, a current image and an undecided one.
+        final check = panel.engine
+            .sentOfType<DockerQuery>()
+            .cast<DockerQuery>()
+            .lastWhere((query) => query.query is DockerImageUpdatesQuery);
+        await panel.emit(
+          tester,
+          dockerAnswer(
+            check,
+            DockerImageUpdatesPayload([
+              for (final (reference, id, status) in [
+                ('nginx:latest', _nginx, ImageUpdateStatus.updateAvailable),
+                ('postgres:16', _postgres, ImageUpdateStatus.upToDate),
+                ('myorg/worker:5', _worker, ImageUpdateStatus.unknown),
+              ])
+                ImageUpdateRow(
+                  reference: reference,
+                  imageId: id,
+                  comparison: ImageDigestComparison(
+                    status: status,
+                    repository: reference.split(':').first,
+                    issue: status == ImageUpdateStatus.unknown
+                        ? ImageUpdateIssue.unauthorized
+                        : null,
+                  ),
+                  checkedAt: _now,
+                ),
+            ]),
+          ),
+        );
         await expectLater(
           find.byType(ImagesPanel),
           matchesGoldenFile(
@@ -823,6 +879,188 @@ void main() {
         findsOneWidget,
       );
       expect(find.textContaining('masked values'), findsNothing);
+    });
+  });
+
+  group('update check (IMG-05)', () {
+    List<DockerImageUpdatesQuery> checks(_Panel panel) => [
+      for (final query
+          in panel.engine.sentOfType<DockerQuery>().cast<DockerQuery>())
+        if (query.query case final DockerImageUpdatesQuery check) check,
+    ];
+
+    DockerQuery lastCheck(_Panel panel) => panel.engine
+        .sentOfType<DockerQuery>()
+        .cast<DockerQuery>()
+        .lastWhere((query) => query.query is DockerImageUpdatesQuery);
+
+    ImageUpdateRow row(
+      String reference,
+      String imageId,
+      ImageUpdateStatus status, {
+      ImageUpdateIssue? issue,
+      bool cliMissing = false,
+      RegistryRateLimit? rateLimit,
+    }) => ImageUpdateRow(
+      reference: reference,
+      imageId: imageId,
+      comparison: ImageDigestComparison(
+        status: status,
+        repository: reference.split(':').first,
+        issue: issue,
+      ),
+      checkedAt: _now,
+      route: status == ImageUpdateStatus.unknown
+          ? null
+          : ImageUpdateRoute.registry,
+      cliMissing: cliMissing,
+      rateLimit: rateLimit,
+    );
+
+    Future<_Panel> checked(
+      WidgetTester tester,
+      DockerPayload payload, {
+      Size size = _wide,
+    }) async {
+      final panel = await _pump(tester, size: size);
+      await panel.list(tester, containers: _containers);
+      await panel.emit(tester, dockerAnswer(lastCheck(panel), payload));
+      return panel;
+    }
+
+    final rows = DockerImageUpdatesPayload([
+      row('nginx:1.27', _nginx, ImageUpdateStatus.upToDate),
+      row('nginx:latest', _nginx, ImageUpdateStatus.updateAvailable),
+      row('postgres:16', _postgres, ImageUpdateStatus.upToDate),
+      row(
+        'myorg/worker:5',
+        _worker,
+        ImageUpdateStatus.unknown,
+        issue: ImageUpdateIssue.unauthorized,
+        cliMissing: true,
+      ),
+      row(
+        'hello-world:latest',
+        _hello,
+        ImageUpdateStatus.unknown,
+        issue: ImageUpdateIssue.notFound,
+      ),
+    ]);
+
+    testWidgets('asks each time the tab shows, and Check for updates asks '
+        'the registries again', (tester) async {
+      final panel = await _pump(tester);
+      expect(checks(panel), hasLength(1));
+      expect(checks(panel).single.refresh, isFalse);
+      expect(checks(panel).single.runner, ImageCheckRunner.host);
+
+      panel.visible.value = false;
+      await tester.pumpAndSettle();
+      panel.visible.value = true;
+      await tester.pumpAndSettle();
+      expect(checks(panel), hasLength(2));
+
+      await panel.list(tester, containers: _containers);
+      await panel.emit(tester, dockerAnswer(lastCheck(panel), rows));
+      await tester.tap(find.text('Check for updates'));
+      await tester.pump();
+      expect(checks(panel).last.refresh, isTrue);
+      expect(find.text('Checking for updates…'), findsOneWidget);
+      await panel.emit(tester, dockerAnswer(lastCheck(panel), rows));
+      expect(find.text('Check for updates'), findsOneWidget);
+    });
+
+    testWidgets('marks each image by its tags: an update on any tag wins, '
+        'and an undecided one says why', (tester) async {
+      await checked(tester, rows);
+      expect(_label(tester, _nginx), contains('Update: Update available'));
+      expect(_label(tester, _postgres), contains('Update: Current'));
+      expect(
+        _label(tester, _worker),
+        contains(
+          'Update: Unknown: the registry wants credentials, and the '
+          "server's Docker CLI has no buildx plugin to read them",
+        ),
+      );
+      expect(
+        _label(tester, _hello),
+        contains('Update: Unknown: the registry does not know this tag'),
+      );
+      expect(_label(tester, _orphan), contains('Update: Not checked'));
+
+      await tester.tap(_header(ImageColumn.update));
+      await tester.pumpAndSettle();
+      expect(_order(tester).take(4), ['nginx', 'worker', 'hello', 'postgres']);
+
+      await _choose(tester, 'Updates');
+      expect(_order(tester), ['nginx']);
+    });
+
+    testWidgets('a host without curl offers the engine route with its cost', (
+      tester,
+    ) async {
+      final panel = await checked(
+        tester,
+        DockerImageUpdatesPayload(const [], curlMissing: true),
+      );
+      expect(find.textContaining('This server has no curl'), findsOneWidget);
+      expect(
+        find.textContaining("spends one of Docker Hub's pulls"),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Check through the engine'));
+      await tester.pump();
+      expect(checks(panel).last.runner, ImageCheckRunner.daemon);
+      expect(checks(panel).last.refresh, isTrue);
+    });
+
+    testWidgets("Docker Hub's spent limit says when the check asks again", (
+      tester,
+    ) async {
+      await checked(
+        tester,
+        DockerImageUpdatesPayload([
+          row(
+            'nginx:latest',
+            _nginx,
+            ImageUpdateStatus.unknown,
+            issue: ImageUpdateIssue.rateLimited,
+            rateLimit: const RegistryRateLimit(
+              limit: 100,
+              remaining: 0,
+              window: Duration(hours: 1),
+            ),
+          ),
+        ]),
+      );
+      expect(
+        find.text(
+          "Docker Hub's limit for this server's address is used up. Those "
+          'images are checked again after 3:30 PM.',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a failed check says why and asks again on Try again', (
+      tester,
+    ) async {
+      final panel = await checked(
+        tester,
+        const DockerQueryFailed(
+          DockerQueryFailure.connectionFailed,
+          detail: 'the registry check could not run on the server',
+        ),
+      );
+      expect(
+        find.text('The update check could not run on the server.'),
+        findsOneWidget,
+      );
+      final before = checks(panel).length;
+      await tester.tap(find.text('Try again'));
+      await tester.pump();
+      expect(checks(panel), hasLength(before + 1));
     });
   });
 }

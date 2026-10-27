@@ -94,6 +94,42 @@ List<String> logExportLines(
 /// Where an export goes.
 enum LogExportTarget { copy, save, share }
 
+/// Opens LOG-10's export sheet over the rows [logs] holds, as a bottom
+/// sheet: the Logs panel's export, and a container's (CTX-06).
+Future<void> showLogExport(
+  BuildContext context, {
+  required MonitoringController monitoring,
+  required LogViewController logs,
+  required String fileName,
+}) {
+  final l10n = AppLocalizations.of(context);
+  final lines = logExportLines(logs, dropped: l10n.logDroppedLines);
+  final host = LogExportScope.of(context);
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          0,
+          16,
+          16 + MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SingleChildScrollView(
+          child: LogExportSheet(
+            monitoring: monitoring,
+            host: host,
+            lines: lines,
+            fileName: fileName,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 /// LOG-10's export sheet over [lines]: redacted through the engine's
 /// secret redactor unless the user turns on Include secrets (SAF-07),
 /// then copied, saved as [fileName] or shared. It pops once the export
@@ -105,6 +141,8 @@ class LogExportSheet extends StatefulWidget {
     required this.host,
     required this.lines,
     required this.fileName,
+    this.title,
+    this.note,
   });
 
   final MonitoringController monitoring;
@@ -115,6 +153,12 @@ class LogExportSheet extends StatefulWidget {
   final LogExportHost host;
   final List<String> lines;
   final String fileName;
+
+  /// The sheet's title; a log export's line count by default.
+  final String? title;
+
+  /// A paragraph under the title, if any.
+  final String? note;
 
   @override
   State<LogExportSheet> createState() => _LogExportSheetState();
@@ -195,9 +239,13 @@ class _LogExportSheetState extends State<LogExportSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          l10n.logsExportTitle(widget.lines.length),
+          widget.title ?? l10n.logsExportTitle(widget.lines.length),
           style: Theme.of(context).textTheme.titleMedium,
         ),
+        if (widget.note case final note?) ...[
+          const SizedBox(height: 8),
+          Text(note),
+        ],
         const SizedBox(height: 8),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,

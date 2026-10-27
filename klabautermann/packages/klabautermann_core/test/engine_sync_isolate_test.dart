@@ -471,6 +471,53 @@ void main() {
     );
   });
 
+  test("Séance's snippets go out when they change, and a restart sends "
+      'them again', () async {
+    final server = await FakeSyncServer.create();
+    Map<String, Object?> snippet(String id, String title) => Snippet(
+      id: id,
+      title: title,
+      body: 'df -h {{path}}',
+      createdAt: 1,
+      updatedAt: 1,
+    ).toJson();
+    // Seeded before the spawn: the engine isolate holds its own copy.
+    await server.seedSnippet('snippet:s-b', snippet('s-b', 'Disk'));
+    await server.seedSnippet('snippet:s-a', snippet('s-a', 'backup'));
+    await server.seedSnippet('snippet:s-c', snippet('s-c', 'Gone'));
+    server.seedTombstone('snippet:s-c', updatedAt: 2);
+    final (client, events) = await spawn(
+      entryPoint: (start) => engineMain(start, syncTransport: server.transport),
+    );
+    final keystore = MemoryKeystore();
+
+    client.send(
+      const EnrollSync(
+        baseUrl: 'https://sync.example.com',
+        username: fakeSyncUser,
+        password: fakeSyncPassword,
+        encryptionPassphrase: fakeSyncPassword,
+      ),
+    );
+    final enrolled = await untilSyncEnds(client, events, keystore);
+    final pulled = enrolled.whereType<SnippetsChanged>().single;
+    expect(
+      [for (final s in pulled.snippets) (s.id, s.title)],
+      [('s-a', 'backup'), ('s-b', 'Disk')],
+    );
+
+    client.send(const RunSyncRound());
+    final quiet = await untilSyncEnds(client, events, keystore);
+    expect(quiet.whereType<SnippetsChanged>(), isEmpty);
+
+    await events.cancel();
+    await client.shutdown();
+    final (_, restarted) = await spawn();
+    expect(await restarted.moveNext(), isTrue);
+    final again = restarted.current as SnippetsChanged;
+    expect([for (final s in again.snippets) s.id], ['s-a', 's-b']);
+  });
+
   group('pin publication (D15, M5 plan M07)', () {
     const enroll = EnrollSync(
       baseUrl: 'https://sync.example.com',

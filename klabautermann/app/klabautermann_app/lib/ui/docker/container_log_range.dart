@@ -107,7 +107,7 @@ class _RangeDialogState extends State<_RangeDialog> {
       context: context,
       initialTime: TimeOfDay.fromDateTime(initial),
     );
-    if (time == null) return null;
+    if (time == null || !mounted) return null;
     return DateTime(date.year, date.month, date.day, time.hour, time.minute);
   }
 

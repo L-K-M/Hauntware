@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
     show MonitorEligibility, kAdminExpiryChoices, kMonitorSetLimit;
 
 import '../controllers/announcement_controller.dart';
+import '../controllers/cadence_controller.dart';
 import '../controllers/app_lock_controller.dart';
 import '../controllers/appearance_controller.dart';
 import '../controllers/device_name.dart';
@@ -41,6 +42,7 @@ class SettingsPage extends StatefulWidget {
     required this.appVersion,
     required this.monitorSet,
     this.thresholds,
+    this.cadence,
     this.deviceName,
     this.safety,
     this.appLock,
@@ -57,6 +59,10 @@ class SettingsPage extends StatefulWidget {
   /// OV-11's usage bands in the Alerts tab; null in tests that leave them
   /// out, where the tab is a placeholder.
   final ThresholdSettings? thresholds;
+
+  /// The polling budget (SAF-19) in General; null in tests that leave it
+  /// out, where General shows none.
+  final CadenceSettings? cadence;
 
   /// Null in tests that leave it out, where General shows no device name.
   final DeviceNameSettings? deviceName;
@@ -147,6 +153,7 @@ class _SettingsPageState extends State<SettingsPage>
             switch (tab) {
               SettingsTab.general => GeneralTab(
                 announcements: widget.announcements,
+                cadence: widget.cadence,
                 deviceName: widget.deviceName,
                 appVersion: widget.appVersion,
               ),
@@ -182,11 +189,15 @@ class GeneralTab extends StatelessWidget {
   const GeneralTab({
     super.key,
     required this.announcements,
+    this.cadence,
     this.deviceName,
     required this.appVersion,
   });
 
   final AnnouncementSettings announcements;
+
+  /// As [SettingsPage.cadence].
+  final CadenceSettings? cadence;
 
   /// As [SettingsPage.deviceName].
   final DeviceNameSettings? deviceName;
@@ -214,11 +225,35 @@ class GeneralTab extends StatelessWidget {
     }
   }
 
+  /// As [_set], for the polling budget.
+  Future<void> _setCadence(
+    BuildContext context,
+    CadenceSettings cadence,
+    CadencePreset preset,
+  ) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await cadence.setCadence(preset);
+    } on CadenceNotSavedException catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsCadenceNotSaved);
+      }
+    } on Exception catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsCadenceNotChanged);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final cadence = this.cadence;
     return ListenableBuilder(
-      listenable: announcements,
+      listenable: Listenable.merge([announcements, ?cadence]),
       builder: (context, _) => ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -237,6 +272,36 @@ class GeneralTab extends StatelessWidget {
             title: Text(l10n.settingsAnnounceBands),
             subtitle: Text(l10n.settingsAnnounceBandsDetail),
           ),
+          if (cadence != null) ...[
+            const SizedBox(height: 24),
+            Semantics(
+              header: true,
+              child: Text(
+                l10n.settingsCadenceTitle,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.settingsCadenceLabel),
+              subtitle: Text(l10n.settingsCadenceDetail(cadence.value.name)),
+              trailing: DropdownButton<CadencePreset>(
+                value: cadence.value,
+                items: [
+                  for (final preset in CadencePreset.values)
+                    DropdownMenuItem(
+                      value: preset,
+                      child: Text(l10n.settingsCadencePreset(preset.name)),
+                    ),
+                ],
+                onChanged: (preset) {
+                  if (preset == null) return;
+                  unawaited(_setCadence(context, cadence, preset));
+                },
+              ),
+            ),
+          ],
           if (deviceName case final deviceName?) ...[
             const SizedBox(height: 24),
             Semantics(

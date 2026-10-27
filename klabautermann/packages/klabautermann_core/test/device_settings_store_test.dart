@@ -15,11 +15,13 @@ const _appLockKey = 'klabautermann.appLock';
 const _syncSecretsKey = 'klabautermann.sync.secrets';
 const _deviceNameKey = 'klabautermann.audit.deviceName';
 const _thresholdsKey = 'klabautermann.overview.thresholds';
+const _cadenceKey = 'klabautermann.sampling.cadence';
 const _overridesKey = 'klabautermann.docker.endpointOverrides';
 const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const _monitorSetKey = 'klabautermann.monitorSet';
 const _containerColumnsKey = 'klabautermann.docker.containerColumns';
 const _safetyKey = 'klabautermann.safety';
+const _attentionKey = 'klabautermann.attention.acknowledged';
 
 final _uuidV4 = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -547,6 +549,20 @@ void main() {
       expect((await DeviceSettingsStore.open(file)).thresholds, isEmpty);
     });
 
+    test('keeps the polling budget\'s preset name across reloads, and reads '
+        'a missing or damaged one as none (SAF-19)', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.cadence, isNull);
+      await store.setCadence('cellularSaver');
+      expect(document()[_cadenceKey], 'cellularSaver');
+      expect((await DeviceSettingsStore.open(file)).cadence, 'cellularSaver');
+
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a', _cadenceKey: 3});
+      expect((await DeviceSettingsStore.open(file)).cadence, isNull);
+    });
+
     test('posts no alert notification until turned on, keeps it off once '
         'turned off, and reads a damaged value as off', () async {
       writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
@@ -857,6 +873,36 @@ void main() {
 
       writeDocument({...document(), _safetyKey: 'on'});
       expect((await DeviceSettingsStore.open(file)).safety, isNull);
+    });
+
+    test('keeps the acknowledged problems across reloads (TRI-03); a '
+        'value that is not an object reads as none', () async {
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.attention, isNull);
+      await store.setAttention({
+        'srv-a': {
+          'failedUnit:nginx.service': {
+            'at': '2026-10-26T12:00:00.000Z',
+            'note': 'restarts tonight',
+          },
+        },
+      });
+
+      final reopened = await DeviceSettingsStore.open(file);
+      expect(reopened.attention, {
+        'srv-a': {
+          'failedUnit:nginx.service': {
+            'at': '2026-10-26T12:00:00.000Z',
+            'note': 'restarts tonight',
+          },
+        },
+      });
+
+      writeDocument({
+        ...document(),
+        _attentionKey: ['srv-a'],
+      });
+      expect((await DeviceSettingsStore.open(file)).attention, isNull);
     });
 
     test('saves the appearance as it was passed', () async {

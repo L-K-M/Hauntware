@@ -71,6 +71,10 @@ const ApiVersion apiVersionVolumePruneAll = ApiVersion(1, 42);
 /// `/images/json` `Containers` count, gated at 1.51 (03 §5.8).
 const ApiVersion apiVersionImageContainers = ApiVersion(1, 51);
 
+/// `GET /images/{name}/json?manifests=1` lists an index's children with
+/// whether each is present locally (03 §7.14 IMG-05, D68).
+const ApiVersion apiVersionImageManifests = ApiVersion(1, 48);
+
 /// Event stream shape: the legacy fields were removed in 1.52 (03 §5.6
 /// and §5.8).
 const ApiVersion apiVersionEventV2 = ApiVersion(1, 52);
@@ -102,6 +106,9 @@ final class ApiFeatureGates {
 
   /// `/images/json` reports the `Containers` count.
   bool get hasImageContainersCount => negotiated >= apiVersionImageContainers;
+
+  /// An image inspect can list the local index's children.
+  bool get hasImageManifests => negotiated >= apiVersionImageManifests;
 
   /// Events carry the post-1.52 shape (no legacy fields).
   bool get usesEventV2 => negotiated >= apiVersionEventV2;

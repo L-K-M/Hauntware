@@ -67,14 +67,16 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         EnvVar,
         ExternalManager,
         HealthStatus,
+        ImageDigestComparison,
         ImageSummary,
         MaskedValue,
         NetworkSummary,
+        RegistryRateLimit,
         SystemDf,
         VolumeSummary;
 import 'package:meta/meta.dart';
 // DangerLinter's findings are plain data: a severity and three values.
-import 'package:seance_core/seance_core.dart' show DangerFinding;
+import 'package:seance_core/seance_core.dart' show DangerFinding, Snippet;
 
 import '../catalog/klabautermann_records.dart' show SyncedRule;
 import '../certificates/tls_check.dart' show TlsEndpoint, TlsEndpointCheck;
@@ -309,6 +311,10 @@ import '../operations/plan_types.dart';
 ///
 /// Per-server polling caps then joined v3 the same way (02 SAF-19, M6
 /// plan N64): [SetServerCadenceCap].
+///
+/// Update checks then joined v3 the same way (03 §7.14 IMG-05, M6 plan
+/// N15): [DockerImageUpdatesQuery], answered by
+/// [DockerImageUpdatesPayload].
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -800,6 +806,14 @@ final class InterfacesQuery extends HostQuerySpec {
 /// (DSK-14), as [Mounts].
 final class MountsQuery extends HostQuerySpec {
   const MountsQuery();
+}
+
+/// A diagnostic bundle (CN-18, 03 §6.5), as [DiagnosticBundle]: the raw
+/// output of the probe and of every collector that takes no arguments
+/// but `ops`, each read once on its own sampler, for a parser bug report
+/// that can become a fixture. Read only while the server is sampled.
+final class DiagnosticBundleQuery extends HostQuerySpec {
+  const DiagnosticBundleQuery();
 }
 
 /// Redacts [lines] the app holds for an export (LOG-10, 03 §8.9) through
@@ -2236,6 +2250,34 @@ final class Mounts extends HostPayload {
   final MountsRead read;
 }
 
+/// One collector's section of a [DiagnosticBundle], as the host sent it:
+/// [collector] is its wire name, [status] its section status, and [text]
+/// its payload, decoded leniently and not yet redacted.
+@immutable
+final class DiagnosticSection {
+  const DiagnosticSection({
+    required this.collector,
+    required this.status,
+    required this.text,
+  });
+
+  final String collector;
+  final String status;
+  final String text;
+}
+
+/// [DiagnosticBundleQuery]'s sections, the probe's first, then the fast
+/// sampler's and the slow one's in collector order. A sampler that
+/// answered nothing leaves its collectors out; [missing] names them.
+final class DiagnosticBundle extends HostPayload {
+  const DiagnosticBundle(this.sections, {this.missing = const []});
+
+  final List<DiagnosticSection> sections;
+
+  /// The wire names of the collectors whose sampler gave no answer.
+  final List<String> missing;
+}
+
 /// A [HostQuery] that read nothing; [detail] is the end of its stderr,
 /// or the text of an error the read threw (a timeout or a lost link).
 final class HostQueryFailed extends HostPayload {
@@ -3469,6 +3511,16 @@ final class AlertRulesChanged extends EngineEvent {
   final List<SyncedRule> rules;
 }
 
+/// Séance's snippets the account carries (03 §7.21, AUT-01) changed: a
+/// pulled `snippet:` record applied or a tombstone removed one. [snippets]
+/// is every live snippet, by title. As with [AlertRulesChanged], the
+/// engine sends it only on a change, starting from none.
+final class SnippetsChanged extends EngineEvent {
+  const SnippetsChanged(this.snippets);
+
+  final List<Snippet> snippets;
+}
+
 /// The answer to [ReadHistory]: [serverId]'s buckets in [tier], oldest
 /// first, the one still filling included, and the gaps the engine saw
 /// within their span; empty before the engine opens its store.
@@ -4206,6 +4258,34 @@ final class DockerImageHistoryQuery extends DockerQuerySpec {
   final String image;
 }
 
+/// IMG-05's digest update check for every tagged image (D68): rows read
+/// within six hours are kept unless [refresh]. Answered by
+/// [DockerImageUpdatesPayload].
+final class DockerImageUpdatesQuery extends DockerQuerySpec {
+  const DockerImageUpdatesQuery({
+    this.refresh = false,
+    this.runner = ImageCheckRunner.host,
+  });
+
+  /// Reads every reference again, as the Check now action does.
+  final bool refresh;
+
+  /// Where the registry reads run.
+  final ImageCheckRunner runner;
+}
+
+/// Where an update check's registry reads run (D68).
+enum ImageCheckRunner {
+  /// curl on the host, buildx where the registry wants credentials: no
+  /// Docker Hub pull is spent.
+  host,
+
+  /// The daemon's DistributionInspect, which spends a Docker Hub pull per
+  /// tag: the last resort, asked for only when the host has no curl and
+  /// the person accepts that cost.
+  daemon,
+}
+
 /// Disk use by type (02 OV-05): `/system/df` without `verbose`, which
 /// the daemon computes by walking images, containers, volumes and the
 /// build cache, so the app asks for it only on demand. Answered by
@@ -4388,6 +4468,61 @@ final class ImageLayer {
   final int? size;
   final String? comment;
   final List<String> tags;
+}
+
+/// How an update check read the registry digest (D68).
+enum ImageUpdateRoute {
+  /// A manifest `HEAD` by curl on the host.
+  registry,
+
+  /// `docker buildx imagetools inspect` with the host CLI's credentials.
+  hostCli,
+
+  /// The daemon's DistributionInspect ([ImageCheckRunner.daemon]).
+  daemon,
+}
+
+/// One reference's update check (IMG-05).
+@immutable
+final class ImageUpdateRow {
+  const ImageUpdateRow({
+    required this.reference,
+    required this.imageId,
+    required this.comparison,
+    required this.checkedAt,
+    this.route,
+    this.cliMissing = false,
+    this.rateLimit,
+  });
+
+  /// The tag as the image list names it, e.g. `alpine:3.22`.
+  final String reference;
+  final String imageId;
+  final ImageDigestComparison comparison;
+  final DateTime checkedAt;
+
+  /// Null when no digest came back.
+  final ImageUpdateRoute? route;
+
+  /// The registry wants credentials and the host has no buildx plugin.
+  final bool cliMissing;
+
+  /// Docker Hub's count for the host's address, when it sent one.
+  final RegistryRateLimit? rateLimit;
+}
+
+/// The update check (IMG-05): a row per tagged image that has been
+/// checked, fresh or kept from an earlier check.
+final class DockerImageUpdatesPayload extends DockerPayload {
+  DockerImageUpdatesPayload(
+    Iterable<ImageUpdateRow> rows, {
+    this.curlMissing = false,
+  }) : rows = List.unmodifiable(rows);
+
+  final List<ImageUpdateRow> rows;
+
+  /// The host has no `curl`, so this check read no registry.
+  final bool curlMissing;
 }
 
 /// The image list (IMG-01), labels masked by key.
@@ -4590,20 +4725,55 @@ final class ContainerReview {
   final List<ContainerFinding> findings;
 }
 
+/// Another manager, monitor or log viewer DKE-17 recognises among the
+/// containers by its image.
+enum HostTool {
+  portainer,
+  dockhand,
+  dockge,
+  dozzle,
+  beszel,
+  uptimeKuma,
+  netdata,
+  wud,
+}
+
+/// One container running a [HostTool], with its published ports as the
+/// list labels them (`0.0.0.0:9443->9443/tcp`).
+@immutable
+final class HostToolContainer {
+  const HostToolContainer({
+    required this.tool,
+    required this.containerId,
+    required this.name,
+    required this.state,
+    this.ports = const [],
+  });
+
+  final HostTool tool;
+  final String containerId;
+  final String name;
+  final String? state;
+  final List<String> ports;
+}
+
 /// A [DockerReviewQuery]'s answer: each container read, in the list's
-/// order. A container removed between the list and its inspect is left
-/// out; [omitted] counts those past [kDockerReviewMax], [unreadable]
-/// those whose inspect the daemon refused.
+/// order, and the other tools running among all of them (DKE-17). A
+/// container removed between the list and its inspect is left out;
+/// [omitted] counts those past [kDockerReviewMax], [unreadable] those
+/// whose inspect the daemon refused.
 final class DockerReviewPayload extends DockerPayload {
   const DockerReviewPayload(
     this.reviews, {
     this.omitted = 0,
     this.unreadable = 0,
+    this.tools = const [],
   });
 
   final List<ContainerReview> reviews;
   final int omitted;
   final int unreadable;
+  final List<HostToolContainer> tools;
 }
 
 /// The containers grouped by compose project (STK-01), from the same

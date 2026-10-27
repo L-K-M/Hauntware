@@ -92,6 +92,7 @@ class LogView extends StatefulWidget {
     required this.controller,
     this.wrap = LogWrap.off,
     this.levelOf,
+    this.fieldsOf,
     this.search,
   });
 
@@ -101,6 +102,11 @@ class LogView extends StatefulWidget {
   /// The level of a line, for its colour and gutter icon. Without it no
   /// line has a level and the view has no gutter.
   final LogLevel? Function(LogLine line)? levelOf;
+
+  /// The fields a tap on a line shows beneath it, or null for a line
+  /// without: a journal entry's by default, a container's JSON line's
+  /// keys (CTX-05) where the caller says so.
+  final List<(String, String?)>? Function(LogLine line)? fieldsOf;
 
   /// The search whose matches the view highlights, over [controller].
   final LogSearch? search;
@@ -280,7 +286,7 @@ class _LogViewState extends State<LogView> {
 
     setState(() {
       if (_expanded.remove(line.seq) == null) {
-        _expanded[line.seq] = line.journal!.fields;
+        _expanded[line.seq] = _fieldsOf(line)!;
         widget.controller.pause();
       }
     });
@@ -381,9 +387,12 @@ class _LogViewState extends State<LogView> {
           : parseSgr(
               '$name=$value'.replaceAll('\n', ' '),
             ).text.replaceAll(_rowBreaks, ' '),
-    if (line.journal!.fieldsLeftOut > 0)
-      _l10n.logJournalFieldsLeftOut(line.journal!.fieldsLeftOut),
+    if (line.journal?.fieldsLeftOut case final left? when left > 0)
+      _l10n.logJournalFieldsLeftOut(left),
   ];
+
+  List<(String, String?)>? _fieldsOf(LogLine line) =>
+      widget.fieldsOf?.call(line) ?? line.journal?.fields;
 
   bool get _hasGutter => widget.levelOf != null;
 
@@ -683,7 +692,7 @@ class _LogViewState extends State<LogView> {
       ),
     );
     final key = ValueKey(entry.seq);
-    if (entry is! LogLine || entry.journal == null) {
+    if (entry is! LogLine || _fieldsOf(entry) == null) {
       return MergeSemantics(key: key, child: row);
     }
 

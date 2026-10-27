@@ -250,7 +250,8 @@ cron zone rules · D59 capability cache · D60 threshold announcements ·
 D61 host-key pins and re-pin ·
 D62 sync state files and the keystore port · D63 pull-only sync in the
 engine · D64 a server's confirmation covers its route · D65 spike S3
-and admin validation · D66 spike S4 and Docker-scoped sudo rules.
+and admin validation · D66 spike S4 and Docker-scoped sudo rules · D67
+spike S6 and the privileged write · D68 spike S8 and update checks.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -1284,6 +1285,58 @@ Proposals awaiting the owner close the section; they are not decisions.
   - writing in place with `tee <target>`, which keeps every attribute but
     leaves a half-written file when the link drops, and no hash
     re-check can make it atomic.
+- **D68. Spike S8 settles the update check (M6 N06).** The spike sent
+  manifest `HEAD`s to Docker Hub, GHCR and Quay, called DistributionInspect
+  on Docker 29.8 with the containerd image store, and read a local
+  registry behind basic auth (evidence in
+  `klabautermann/docs/evidence/s8/`).
+
+  What it showed:
+  - A `HEAD` leaves Docker Hub's `ratelimit-remaining` unchanged, but is
+    refused with `429` once the source address has spent its quota. The
+    window is one hour (`ratelimit-limit: 100;w=3600`), not six.
+  - DistributionInspect resolves the tag with a `HEAD` and then `GET`s
+    the manifest, so each call spends one pull.
+  - All three public registries answer a multi-platform tag with its
+    index digest. Docker Hub needs its anonymous token, GHCR names a
+    Bearer realm in its first `401`, and Quay answers without a token.
+  - After a pull, the local `RepoDigests` entry and `Descriptor` carry the
+    index digest. A push from the containerd store with one platform
+    present stores that platform's manifest instead, while `RepoDigests`
+    keeps the index digest. `GET /images/{name}/json?manifests=1` (API
+    1.48) lists the children, and the pushed digest is the available one.
+  - A private registry answers `401` with a `Basic` challenge.
+    `docker buildx imagetools inspect` reads the CLI's credentials and
+    returns the digest, resolving with a `HEAD`. `docker manifest inspect
+    -v` gives a single manifest's digest, but for an index it lists only
+    the children, never the index digest, and it needs `--insecure` for
+    a plain-HTTP registry.
+
+  The check therefore runs as follows:
+  1. On the host, `curl -sI` with the realm's anonymous token where the
+     first answer names a Bearer realm.
+  2. On a `Basic` challenge or a `401` after the token, buildx
+     `imagetools inspect`. Without the plugin it says the host's Docker
+     CLI cannot read the registry.
+  3. A tag is current when the registry digest equals the repository's
+     `RepoDigests` entry, the image's `Descriptor` digest, or an
+     available child from `manifests=1` (on daemons below API 1.48, the
+     first two only).
+  4. A `429` reads "Docker Hub's limit for this host's address is used
+     up". The check waits for the reported window before it runs again,
+     and never falls back to DistributionInspect.
+  5. A `HEAD` without `Docker-Content-Digest` reads as "this registry does
+     not say" rather than a `GET`.
+  6. DistributionInspect stays the last resort, offered only with its
+     quota warning when the host has no `curl` and no CLI route.
+
+  *Rejected:*
+  - DistributionInspect as the default: it spends a pull per check and
+    needs credentials the device does not hold before REG-02;
+  - comparing `RepoDigests` alone: it reports an update for every image
+    pushed from a containerd store that holds only some platforms;
+  - `docker manifest inspect -v` as the CLI fallback: it cannot name an
+    index's digest, so a multi-platform tag would never compare.
 
 ### Persistence, alerts and tiers
 
@@ -2390,6 +2443,7 @@ platform identities in 04, section 12.3):
 | `capabilities/<name>.json` | Cached probe results, 24 h TTL; named, written only by a process that holds the directory alone, and purged as D59 decides | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
 | `klabautermann_records.json` [E] | The `klabautermann:` records the coordinator applied (4.8, M5, M04): per record id, the `(updatedAt, deviceId)` it won with and its sealed payload, sealed removals, unknown types and newer versions included, so the tuple guard holds across restarts and §3.1's recovery re-seals them verbatim. A `pref` whose server is absent waits here. Kept like the sync state files. Never pushed while sync is pull-only | `klabautermann_core` | v1 |
+| `snippet_mirror.json` [E] | Séance's `snippet:` records the read-only handler applied (7.21, M6 N65b): per record id, the `(updatedAt, deviceId)` it won with and the snippet, or a removal a tombstone left, so an older copy pulled later cannot bring it back. Kept like the sync state files. Never sealed or pushed: Séance owns the records | `klabautermann_core` | v1 |
 | `operations_shown.json` [E] | Detached operations this device remembers (M4, E17b, 7.17): per server and operation id, the operation's directory, whether its result was shown and audited here, and, for one this device launched, the audit record's facts (action, target, redacted steps, tier, start). An entry goes once the operation's files are gone. Kept like the sync state files: written only with exclusive access, a damaged file set aside; losing it costs a result's launch facts and the reminder of a root cleanup, which the 7-day prune covers. Never synced | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample). Built in M6 N52a: `minute.ring` (2,880 slots) and `tenMinutes.ring` (4,320 slots) of 92 bytes, a slot per bucket with its start, provenance and per metric the count and the min, max and mean as 32-bit floats (about 0.66 MB per server), and `gaps.ring`, the last 256 gaps. The directory is the server's file stem; a file of another layout starts over | `klabautermann_core` | v1 |
 | `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |
@@ -3058,7 +3112,11 @@ while at least one subscription for the server names it; the Desktop,
 Phone and Cellular saver columns are cadence profiles, chosen by a request
 of their own rather than per subscription, and the health card's failed
 units are a stream of their own, apart from the Services panel's `units`
-(D45, 10.1). Rates
+(D45, 10.1). As built, Settings > General picks the profile per
+device: Automatic (Desktop on a computer, Phone on a phone or tablet),
+Desktop, Phone or Cellular saver, kept in `settings.json` under
+`klabautermann.sampling.cadence`; per-server caps are not built yet.
+Rates
 are computed in the engine isolate (D43) from counter deltas over the
 host's uptime between two replies that carry them, with wrap detection
 and reset detection: a changed `btime`, an uptime that went back or a
@@ -3159,6 +3217,21 @@ timed-out channel or no READY, would hold the fast one until it does).
   wrapped `df` lines; Swarm task names (ServerBox #1226 [R]).
 - The diagnostic bundle (CN-18, v1) exports the same raw format, redacted
   by `SecretRedactor`, so a user report becomes a fixture.
+  As built (M6 N64a), the server header's Safety menu offers Diagnostic
+  bundle…, a `DiagnosticBundleQuery`. The sampling scheduler reads it on
+  the server's own samplers, so it costs no channel: once the regular
+  probe has answered and each sampler is free, the slow one sends the
+  probe on demand, then each sampler one tick of every collector that
+  takes no arguments but `ops` (`kDiagnosticCollectors`), ahead of its
+  due ticks. A request while one is owed shares its answer; a sampler
+  that has not answered within 60 s leaves its collectors listed as
+  giving no answer, and a server that stops sampling answers none. The
+  app writes each section under a `### <collector> <status>` line and
+  exports it through LOG-10's sheet, so the bundle passes the engine's
+  `SecretRedactor` unless the user includes secrets (SAF-07). The
+  capture redaction below stays the fixture tool's: the sheet says the
+  bundle names the server's processes, units, mounts and paths, to be
+  read before it is shared.
 - Capture redaction: the host's names (kernel, `/etc/hostname`,
   hostnamectl) that are no address and each FQDN's first label, the
   domains of those names and of resolv.conf's search list (each suffix
@@ -4078,6 +4151,25 @@ TLS. The section checks when it shows, after an edit and on request.
   the top processes and to System for recent out-of-memory kills, which
   stay their own reads.
 
+  As built (M6 N53d), the attention queue (TRI-03) reads cached results
+  only: each fleet server's link (blocked, or failed or backing off), its
+  raised alerts, and where this run holds them its failed units, mounts
+  at the fleet rows' critical level (space or inodes, 90 %) and
+  unhealthy containers. The fleet list counts the unacknowledged ones in
+  a notice that opens the queue (`ui/attention.dart`). Acknowledging
+  takes an optional note of up to 500 code points and hides the problem
+  until a reading shows it cleared, so the same problem coming back asks
+  again; a kind the run holds no reading for keeps its
+  acknowledgements, as do a link's while it is idle, connecting,
+  waiting for the user or closed without a failure, so a relaunch or a
+  retry between backoffs does not reopen them, and a server that leaves
+  the fleet loses them. Alerts last one run (7.19), so an alert raised
+  again after a relaunch asks again. They
+  stay on this device in `settings.json`
+  (`klabautermann.attention.acknowledged`: by server id, each problem's
+  kind and subject with when and the note; anything unreadable reads as
+  none).
+
   As built (M6 N37a, collector-set version 11), the slow `temps`
   collector reads each hwmon chip's `temp<N>_input` with its `_max`,
   `_crit` and `_label` through builtins, without `sensors`, and lists the
@@ -4241,6 +4333,34 @@ TLS. The section checks when it shows, after an edit and on request.
   offers LOG-01's spans, counted back from when the stream opens, and a
   chosen start and end from date and time pickers, which reads once:
   the Live chip stops and says why.
+- **As built (M6 N19b).** CTX-06: the container log view's Export opens
+  LOG-10's sheet over the rows it holds, redacted by the engine's
+  `SecretRedactor` unless the user turns on Include secrets (SAF-07),
+  then copied, saved as `<container>.log` or shared.
+- **As built (M6 N19c).** CTX-04: a stack overview's Logs opens a page
+  that follows each of the stack's containers, the first 6 since each
+  follow holds one of the server's SSH channels (`MaxSessions` 10 by
+  default [E]), saying how many are left out. Lines merge by time, each
+  led by its container's name in one of ten xterm colours without red,
+  as SGR escapes the view holds to its contrast floor and its search
+  and export leave out. A batch older than the newest line shown
+  rebuilds the view in time order without moving its scroll state; the
+  page keeps the newest 10,000 merged lines. A chip per container hides
+  or shows its lines, which stay read, and names its stream's state
+  when it is not running; the page has LOG-10's export.
+- **As built (M6 N19d).** CTX-05: `line_reading.dart` in the engine
+  package reads a container line's own text. Its severity comes from a
+  JSON key (`level`, `severity`, `lvl`, `loglevel`, `levelname`,
+  `log.level`, `@l`, with pino's numbers), a logfmt `level=`, a level
+  word in capitals first or after up to four prefix words that hold a
+  digit or are a zone's capitals (a timestamp, PostgreSQL's prefix), or
+  an exception's own line; a level word after a message's words is not
+  read. A stack trace's continuation lines (indented frames, `Caused
+  by:`) take the level of the line that opened them, up to 200 lines
+  back, so the trace reads as one. A JSON object line's keys, nested
+  ones dotted, are fields a tap shows beneath it, as a journal row's
+  are. The container and stack log views read lines through one cached
+  reader per view.
 - **As built (M4 E15).** `operations/plans/docker_plans.dart` plans
   CTR-02's verbs, CTR-06's removal, IMG-02 and STK-03 (7.14, 7.16) over
   the server's Docker endpoint (`DockerRouter.useEndpoint`).
@@ -4310,6 +4430,15 @@ TLS. The section checks when it shows, after an edit and on request.
     Whether the log file grows needs its size, which only root can
     read under `/var/lib/docker`; the lint flags the configuration
     alone until an admin-mode size read joins it.
+- **As built (M6 N21b).** The same review names the other tools among
+  all listed containers (DKE-17) by their image's last path segment:
+  Portainer (and its agent), Dockhand, Dockge, Dozzle, Beszel (hub and
+  agent), Uptime Kuma, Netdata and What's Up Docker, each with its
+  published ports. Tools installed as host units are not detected yet,
+  and opening one or forwarding its port comes with the apps and ports
+  view (DKE-08, NET-11) after S7. The engine strip warns when a
+  rootless engine's user has linger off (DKE-11), from `/info`'s
+  `name=rootless` and the probe's `lingerEnabled`.
 
 - **As built (M6 N20).** DKE-03's timeline comes from the events stream
   the watcher already holds for the lists (5.7), so it costs no channel
@@ -4363,13 +4492,14 @@ TLS. The section checks when it shows, after an edit and on request.
   `CreatedBy` masked. Digest update detection (IMG-05): local `RepoDigests`
   against the registry digest from a manifest `HEAD`
   (`Docker-Content-Digest`), which does not count against Docker Hub pull
-  limits while `GET` does [R: r5 §1.10]; the default runner is `curl -sI` on
-  the host after the anonymous token flow (host network and proxy; nothing
-  about the device is disclosed); a device-side `HEAD` is opt-in (+E);
-  `GET /distribution/{name}/json` is the last resort with a quota warning;
-  results cached 6 h per repository and tag; index digests compared on the
-  containerd image store [U]; private registries through the host CLI [U:
-  spike S8]. Prune unused images through the DKE-05 preview.
+  limits while `GET` does [R: r5 §1.10; spike S8, D68]; the default
+  runner is `curl -sI` on the host after the registry's anonymous token
+  flow (host network and proxy; nothing about the device is disclosed); a
+  device-side `HEAD` is opt-in (+E); `GET /distribution/{name}/json` is
+  the last resort with a quota warning; results cached 6 h per repository
+  and tag; on the containerd image store the registry digest also matches
+  an available child of the local index (D68); private registries through
+  the host's `docker buildx imagetools inspect` (D68). Prune unused images through the DKE-05 preview.
 - **v1.x.** Update shelf; safe update (pull first, record previous digests,
   recreate, wait for health, roll back automatically, all run host-side as a
   detached operation, with host-side deploy history); semver advisories;
@@ -4972,6 +5102,16 @@ arrives with E22's Docker actions.
 - **v1.** Run Séance snippets with placeholders, preview and danger lint
   (AUT-01; existing `snippet` records, no new kind); "copy as commands" on
   every action (AUT-02).
+- **As built (M6 N65b).** Klabautermann registers a read-only
+  `SnippetMirrorHandler` for the `snippet:` prefix in the configs phase.
+  It applies live records as Séance's coordinator does: a payload that is
+  not a snippet of its own record id trips. It also honours tombstones as
+  Séance does, since a snippet is non-secret settings; the never-honoured
+  `snippet:` tombstones of 4.4 hold for the library's stores, which
+  mirror no snippets. The handler never seals or pushes one, so a store
+  loss re-seals nothing and a pending record has no source. The engine
+  sends every live snippet, by title, as `SnippetsChanged` at start and
+  after a round that changed them, as it sends `AlertRulesChanged`.
 - **v1.x.** Custom probes, run on many with a concurrency cap; assistant
   features (explain a log excerpt, suggest a fix, diagnostics the user
   chooses to attach, explain a container) after `ChatController` is
@@ -6120,7 +6260,7 @@ shows there.
 
 | Requests (UI to engine) | Events (engine to UI) |
 |---|---|
-| `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus(phase, operation, account, failure, passphraseUnverified)` |
+| `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound` | `CatalogReplaced(entries)`, `SnippetsChanged(snippets)` when the round changed Séance's snippets (M6 N65b, also sent at start), `SyncStatus(phase, operation, account, failure, passphraseUnverified)` |
 | `ReadServerDraft(requestId, serverId)`; `SaveServer(requestId, draft, credential?)`, `DeleteServer(requestId, serverId)`, `SetServerPrefs(requestId, serverId, prefs?)`, `PutRule(requestId, ruleId, rule, target?)`, `RemoveRule(requestId, ruleId)` (M05) | `ServerDraftRead(requestId, draft?)`; `CatalogReplaced`, then `AlertRulesChanged(rules)` when a rule write changed the rules (M6 N50c), then `CatalogWritten(requestId, serverId?, credentialWritten)` or `CatalogWriteRefused(requestId, failure, detail?)`, then the round's `SyncStatus` |
 | `DuplicateServer(requestId, serverId)` (M09b): a new server from a synced one, its own id, timestamps and "copy" label, and its own copy of the credential, never a shared vault entry; a copy of a confirmed endpoint is confirmed | As `SaveServer`, with the copy's id in `CatalogWritten.serverId` |
 | `TestServerConnection(requestId, draft, credential)` (M09b): the editor's Test connection over the links' credentials, pins and prompts; a host key trusted during it holds for that attempt only; rejected while links are off | `Prompt`s as a connect sends them, then `ServerConnectionTested(requestId, ok, summary, notes, log)`, the summary, notes and redacted transcript as seance_core's `runConnectionTest` words them |
@@ -7545,8 +7685,9 @@ on its background, moved toward black or white as little as needed. SGR
 colours 1 to 6 and 9 to 14 take the family's glyph hues, 8 its graphite;
 0, 7 and 15 stay black, light grey and white. The caller supplies a line's
 level; journal priorities 0 to 3 are errors, 4 warnings, 5 and 6 plain, 7
-debug, each with a spoken gutter icon. Levels are never guessed from text
-(CTX-05, v1). Its goldens draw with flutter_test's font rather than the
+debug, each with a spoken gutter icon. A container line's level is what
+it says of itself (CTX-05, as built in N19d below), never a word inside
+its message. Its goldens draw with flutter_test's font rather than the
 bundled font of 11.1 until they share K05a's approach.
 
 Journal rows and search (LOG-01, LOG-05, as built in M2): `LogBuffer`

@@ -5268,6 +5268,36 @@
   "@settingsAccessibilityTitle": {
     "description": "Heading of the accessibility settings on the General settings tab."
   },
+  "settingsCadenceTitle": "Refresh",
+  "@settingsCadenceTitle": {
+    "description": "Settings, General: the heading of the polling budget section (SAF-19)."
+  },
+  "settingsCadenceLabel": "How often servers are read",
+  "@settingsCadenceLabel": {
+    "description": "Settings, General: the label beside the polling budget's preset menu (SAF-19)."
+  },
+  "settingsCadencePreset": "{preset, select, automatic{Automatic} desktop{Desktop} phone{Phone} other{Cellular saver}}",
+  "@settingsCadencePreset": {
+    "description": "Settings, General: a polling budget preset in its menu.",
+    "placeholders": {
+      "preset": {"type": "String", "example": "automatic"}
+    }
+  },
+  "settingsCadenceDetail": "{preset, select, automatic{Desktop rates on a computer, phone rates on a phone or tablet.} desktop{Fleet rows every 5 s, the open server every 2 s.} phone{Fleet rows every 10 s, the open server every 3 s, to save battery.} other{Fleet rows every 30 s, the open server every 10 s; timers, cron jobs, temperatures, GPUs and disk health are read once when you open them.}}",
+  "@settingsCadenceDetail": {
+    "description": "Settings, General: what the chosen polling budget preset reads how often (03 §6.4).",
+    "placeholders": {
+      "preset": {"type": "String", "example": "automatic"}
+    }
+  },
+  "settingsCadenceNotSaved": "The refresh rate changed but could not be saved. It lasts until Klabautermann quits.",
+  "@settingsCadenceNotSaved": {
+    "description": "Settings, General: toast when the polling budget applied but settings.json could not be written."
+  },
+  "settingsCadenceNotChanged": "The refresh rate could not be changed.",
+  "@settingsCadenceNotChanged": {
+    "description": "Settings, General: toast when the polling budget change failed."
+  },
   "settingsAnnounceBands": "Announce threshold changes",
   "@settingsAnnounceBands": {
     "description": "Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level."
@@ -7257,6 +7287,10 @@
   "@dockerTabStacks": {
     "description": "Docker tab: the sub-tab listing compose stacks."
   },
+  "dockerEngineLingerOff": "This rootless engine runs under your user, and linger is off: its containers stop when your last session on the server ends. Turn linger on with loginctl enable-linger to keep them running.",
+  "@dockerEngineLingerOff": {
+    "description": "Docker tab, engine strip: a rootless engine whose user has linger off (DKE-11)."
+  },
   "dockerTabReview": "Review",
   "@dockerTabReview": {
     "description": "Docker tab: the sub-tab with the containers' security review (DKE-06, DKE-07)."
@@ -7369,6 +7403,44 @@
         "type": "String"
       }
     }
+  },
+  "dockerReviewToolsHeading": "Other tools on this host",
+  "@dockerReviewToolsHeading": {
+    "description": "Docker Review sub-tab: the heading over other managers and monitors found among the containers (DKE-17)."
+  },
+  "dockerReviewTool": "{tool, select, portainer{Portainer} dockhand{Dockhand} dockge{Dockge} dozzle{Dozzle} beszel{Beszel} uptimeKuma{Uptime Kuma} netdata{Netdata} wud{What's Up Docker} other{Another tool}}",
+  "@dockerReviewTool": {
+    "description": "Docker Review sub-tab: another tool's product name, by HostTool name. Product names stay as their makers spell them.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerReviewToolContainer": "Container {name}, {state}",
+  "@dockerReviewToolContainer": {
+    "description": "Docker Review sub-tab: the container another tool runs in, and its state as the Containers sub-tab words it.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerReviewToolContainerName": "Container {name}",
+  "@dockerReviewToolContainerName": {
+    "description": "Docker Review sub-tab: the container another tool runs in, when the list gives no state.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerReviewToolNoPorts": "It publishes no port.",
+  "@dockerReviewToolNoPorts": {
+    "description": "Docker Review sub-tab: another tool's container publishes no port."
   },
   "dockerReviewFailed": "{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server's capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to list or inspect the containers.} connectionFailed{The connection to the engine failed during the review.} cancelled{The review stopped before it finished.} other{The containers could not be reviewed.}}",
   "@dockerReviewFailed": {
@@ -8167,6 +8239,10 @@
   "@dockerImagesColumnUse": {
     "description": "Images table column: whether any container, running or not, was created from the image."
   },
+  "dockerImagesColumnUpdate": "Update",
+  "@dockerImagesColumnUpdate": {
+    "description": "Images table column: whether the image's registry has a newer digest for its tag (IMG-05)."
+  },
   "dockerImagesDangling": "Dangling",
   "@dockerImagesDangling": {
     "description": "Images list: the badge of a dangling image, one without a tag, which docker images shows as <none>."
@@ -8332,6 +8408,88 @@
   "dockerImagesNoneDangling": "No image is dangling.",
   "@dockerImagesNoneDangling": {
     "description": "Images list: the Dangling filter hides every image."
+  },
+  "dockerImagesFilterUpdates": "Updates",
+  "@dockerImagesFilterUpdates": {
+    "description": "Images list: a filter choice that lists only the images whose registry has a newer digest."
+  },
+  "dockerImagesNoneUpdates": "No image has an update.",
+  "@dockerImagesNoneUpdates": {
+    "description": "Images list: the Updates filter hides every image."
+  },
+  "dockerImagesUpdatesCheck": "Check for updates",
+  "@dockerImagesUpdatesCheck": {
+    "description": "Images list: the button that asks every tag's registry again, even within the six hours a check is kept."
+  },
+  "dockerImagesUpdatesChecking": "Checking for updates…",
+  "@dockerImagesUpdatesChecking": {
+    "description": "Images list: the update check button while a check runs."
+  },
+  "dockerImagesUpdatesFailed": "{reason, select, connectionFailed{The update check could not run on the server.} endpointUnavailable{The update check needs the Docker engine, which is not reachable.} daemonError{The engine refused or failed to list the images for the update check.} other{The update check failed.}}",
+  "@dockerImagesUpdatesFailed": {
+    "description": "Images list: why the update check could not run. reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerImagesUpdatesNoCurl": "This server has no curl, so no registry was asked. The engine can ask instead, but each tag it checks spends one of Docker Hub's pulls for the server's address.",
+  "@dockerImagesUpdatesNoCurl": {
+    "description": "Images list: the server has no curl for the update check; the button after it asks the Docker engine instead, at the cost it names."
+  },
+  "dockerImagesUpdatesThroughDaemon": "Check through the engine",
+  "@dockerImagesUpdatesThroughDaemon": {
+    "description": "Images list: the button that runs the update check through the Docker engine, spending a Docker Hub pull per tag."
+  },
+  "dockerImagesUpdatesRateLimited": "Docker Hub's limit for this server's address is used up. Those images are checked again after {time}.",
+  "@dockerImagesUpdatesRateLimited": {
+    "description": "Images list: Docker Hub refused the update check for the server's address; time is when the check asks again.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "14:30"
+      }
+    }
+  },
+  "dockerImagesUpdateNotChecked": "Not checked",
+  "@dockerImagesUpdateNotChecked": {
+    "description": "Images list: the update check has not read this image's registry yet, or the image has no tag."
+  },
+  "dockerImagesUpdateAvailable": "Update available",
+  "@dockerImagesUpdateAvailable": {
+    "description": "Images list: the registry has a newer digest for one of the image's tags."
+  },
+  "dockerImagesUpdateCurrent": "Current",
+  "@dockerImagesUpdateCurrent": {
+    "description": "Images list: the registry's digest for each of the image's tags matches the local one."
+  },
+  "dockerImagesUpdateUndecided": "Unknown",
+  "@dockerImagesUpdateUndecided": {
+    "description": "Images list: the update check could not compare one of the image's tags; the tooltip says why."
+  },
+  "dockerImagesUpdateUnknown": "Unknown: {reason}",
+  "@dockerImagesUpdateUnknown": {
+    "description": "Images list: the update check could not compare one of the image's tags, and why.",
+    "placeholders": {
+      "reason": {
+        "type": "String",
+        "example": "the registry does not know this tag"
+      }
+    }
+  },
+  "dockerImagesUpdateWhy": "{issue, select, noResult{the registry did not answer} unauthorized{the registry wants credentials the server's Docker CLI does not have} notFound{the registry does not know this tag} rateLimited{Docker Hub's limit for the server's address is used up} noDigest{this registry does not say which digest it holds} noLocalDigest{this image was not pulled from the registry} other{the registry refused the check}}",
+  "@dockerImagesUpdateWhy": {
+    "description": "Images list: why the update check could not compare a tag. issue is the check's issue name.",
+    "placeholders": {
+      "issue": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerImagesUpdateWhyNoBuildx": "the registry wants credentials, and the server's Docker CLI has no buildx plugin to read them",
+  "@dockerImagesUpdateWhyNoBuildx": {
+    "description": "Images list: why the update check could not compare a tag from a registry that wants credentials."
   },
   "dockerImagesFailed": "{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the images.} connectionFailed{The connection to the engine failed while listing the images.} other{The images could not be listed.}}",
   "@dockerImagesFailed": {
@@ -9339,6 +9497,59 @@
   "@dockerLogsRangeApply": {
     "description": "Reads the container's logs in the chosen time range."
   },
+  "dockerLogsExportFileName": "{container}.log",
+  "@dockerLogsExportFileName": {
+    "description": "The suggested file name for a container's saved log export: the container's name. Keep it a valid file name.",
+    "placeholders": {
+      "container": {
+        "type": "String",
+        "example": "web-db"
+      }
+    }
+  },
+  "dockerStackLogsOpen": "Logs",
+  "@dockerStackLogsOpen": {
+    "description": "Stack overview: opens the logs of all the stack's containers, merged by time."
+  },
+  "dockerStackLogsTitle": "{project} logs",
+  "@dockerStackLogsTitle": {
+    "description": "Title of a stack's merged logs page.",
+    "placeholders": {
+      "project": {
+        "type": "String",
+        "example": "web"
+      }
+    }
+  },
+  "dockerStackLogsNone": "This stack has no containers, so it has no logs.",
+  "@dockerStackLogsNone": {
+    "description": "Stack logs page: the stack has no containers to read."
+  },
+  "dockerStackLogsOmitted": "{shown} containers' logs are read at once, as each holds a connection to the server. {omitted, plural, =1{1 more is not shown.} other{{omitted} more are not shown.}}",
+  "@dockerStackLogsOmitted": {
+    "description": "Stack logs page: only the first containers' logs are read.",
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "omitted": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerStackLogsState": "{container}: {state, select, waiting{waiting} ended{stopped reading} refused{refused} other{opening}}",
+  "@dockerStackLogsState": {
+    "description": "Stack logs page: a container's filter chip while its log stream is not running.",
+    "placeholders": {
+      "container": {
+        "type": "String",
+        "example": "web-db-1"
+      },
+      "state": {
+        "type": "String"
+      }
+    }
+  },
   "dockerLogsLiveRange": "A range with an end has no new lines to follow.",
   "@dockerLogsLiveRange": {
     "description": "Tooltip of the off Live chip while a container's logs read a range with a chosen end."
@@ -9963,6 +10174,44 @@
   "footprintMenu": "Footprint",
   "@footprintMenu": {
     "description": "Server Safety menu: opens what Klabautermann keeps on the server (SAF-14)."
+  },
+  "diagnosticsMenu": "Diagnostic bundle…",
+  "@diagnosticsMenu": {
+    "description": "Server Safety menu: reads each collector once and offers the raw output for a bug report (CN-18)."
+  },
+  "diagnosticsReading": "Reading each collector once…",
+  "@diagnosticsReading": {
+    "description": "Diagnostic bundle sheet: shown while the server's collectors are read."
+  },
+  "diagnosticsTitle": "Diagnostic bundle for {server}: {count, plural, =1{1 section} other{{count} sections}}",
+  "@diagnosticsTitle": {
+    "description": "Diagnostic bundle sheet: its title, with the server's name and how many collector sections the bundle holds.",
+    "placeholders": {
+      "server": {"type": "String", "example": "web-1"},
+      "count": {"type": "int", "example": "14"}
+    }
+  },
+  "diagnosticsHint": "The raw output of each collector, for a parser bug report. It names this server's processes, units, mounts and paths, so read it before you share it.",
+  "@diagnosticsHint": {
+    "description": "Diagnostic bundle sheet: what the bundle holds and why to check it before sharing."
+  },
+  "diagnosticsMissing": "No answer from: {collectors}",
+  "@diagnosticsMissing": {
+    "description": "Diagnostic bundle sheet: the collectors whose sampler did not answer in time, by their wire names, which are not translated.",
+    "placeholders": {
+      "collectors": {"type": "String", "example": "probe, fs, procs"}
+    }
+  },
+  "diagnosticsFailed": "{failure, select, noLink{Klabautermann is not reading this server right now, so its collectors cannot be read. Open the server while it is connected and try again.} other{The collectors could not be read.}}",
+  "@diagnosticsFailed": {
+    "description": "Diagnostic bundle sheet: why no bundle was read.",
+    "placeholders": {
+      "failure": {"type": "String", "example": "noLink"}
+    }
+  },
+  "diagnosticsFileName": "diagnostics.txt",
+  "@diagnosticsFileName": {
+    "description": "The suggested file name for a saved diagnostic bundle. Keep it a valid file name."
   },
   "footprintTitle": "Footprint on {server}",
   "@footprintTitle": {
@@ -11722,5 +11971,136 @@
         "type": "String"
       }
     }
+  },
+  "attentionNotice": "{count, plural, =1{1 problem needs attention} other{{count} problems need attention}}",
+  "@attentionNotice": {
+    "description": "Fleet list: the attention notice (TRI-03), counting the unacknowledged problems.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "attentionShow": "Show",
+  "@attentionShow": {
+    "description": "Fleet list: opens the attention queue."
+  },
+  "attentionTitle": "Attention",
+  "@attentionTitle": {
+    "description": "Title of the attention queue (TRI-03)."
+  },
+  "attentionIntro": "Problems across the fleet, from what this device has read this run. Acknowledging one hides it until it clears; acknowledgements stay on this device.",
+  "@attentionIntro": {
+    "description": "Attention queue: what it lists and how acknowledging works."
+  },
+  "attentionNone": "Nothing needs attention.",
+  "@attentionNone": {
+    "description": "Attention queue: no unacknowledged problem."
+  },
+  "attentionAcknowledgedHeading": "{count, plural, =1{Acknowledged (1)} other{Acknowledged ({count})}}",
+  "@attentionAcknowledgedHeading": {
+    "description": "Attention queue: heading over the acknowledged problems.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "attentionClose": "Close",
+  "@attentionClose": {
+    "description": "Attention queue: closes it."
+  },
+  "attentionAcknowledgedAt": "Acknowledged {time}",
+  "@attentionAcknowledgedAt": {
+    "description": "Attention queue: when a problem was acknowledged, in this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "attentionAcknowledge": "Acknowledge",
+  "@attentionAcknowledge": {
+    "description": "Attention queue: acknowledges a problem, after an optional note."
+  },
+  "attentionReopen": "Reopen",
+  "@attentionReopen": {
+    "description": "Attention queue: takes an acknowledgement back."
+  },
+  "attentionOpenServer": "Open server",
+  "@attentionOpenServer": {
+    "description": "Attention queue: opens the problem's server."
+  },
+  "attentionBlocked": "Connecting is blocked until you decide, for example about a changed host key.",
+  "@attentionBlocked": {
+    "description": "Attention queue: the engine will not dial the server until the user decides (D46)."
+  },
+  "attentionUnreachable": "Cannot be reached: the last attempt failed.",
+  "@attentionUnreachable": {
+    "description": "Attention queue: the link failed or waits before dialling again."
+  },
+  "attentionAlert": "Alert raised: {metric}",
+  "@attentionAlert": {
+    "description": "Attention queue: an in-app alert is raised, with its metric's name.",
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionFailedUnit": "Unit failed: {unit}",
+  "@attentionFailedUnit": {
+    "description": "Attention queue: a failed systemd unit.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionDiskFull": "{mount} is {percent} full",
+  "@attentionDiskFull": {
+    "description": "Attention queue: a mount's space at the critical level.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionInodesFull": "{mount} uses {percent} of its inodes",
+  "@attentionInodesFull": {
+    "description": "Attention queue: a mount's inodes at the critical level.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionUnhealthy": "Container unhealthy: {container}",
+  "@attentionUnhealthy": {
+    "description": "Attention queue: a container whose health check fails.",
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionNoteTitle": "Acknowledge the problem",
+  "@attentionNoteTitle": {
+    "description": "Attention queue: title of the note dialog."
+  },
+  "attentionNoteLabel": "Note (optional)",
+  "@attentionNoteLabel": {
+    "description": "Attention queue: the note field's label."
+  },
+  "attentionCancel": "Cancel",
+  "@attentionCancel": {
+    "description": "Attention queue: closes the note dialog without acknowledging."
   }
 }

@@ -7,6 +7,7 @@ import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 
 import '../../controllers/announcement_controller.dart';
+import '../../controllers/cadence_controller.dart';
 import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/device_name.dart';
@@ -72,6 +73,14 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     }),
   );
 
+  /// The General tab's polling budget, from the latest snapshot; null
+  /// while the app offers none.
+  RemoteCadence? get cadence => _cadence.offered ? _cadence : null;
+
+  late final RemoteCadence _cadence = RemoteCadence._(
+    (preset) => invoke(SettingsLinkMethod.setCadence.name, preset.name),
+  );
+
   /// The General tab's device name, from the latest snapshot.
   late final RemoteDeviceName deviceName = RemoteDeviceName._(
     (name) => invoke(SettingsLinkMethod.setDeviceName.name, name),
@@ -122,6 +131,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     announcements._apply(
       snapshot[SettingsLinkKey.announceThresholdBands.name]! as bool,
     );
+    _cadence._apply(snapshot[SettingsLinkKey.cadence.name] as String?);
     deviceName._apply(snapshot[SettingsLinkKey.deviceName.name]! as String);
     _thresholds._apply(
       snapshot[SettingsLinkKey.thresholds.name] as Map<Object?, Object?>?,
@@ -227,6 +237,35 @@ final class RemoteThresholds extends ChangeNotifier
     ChartThresholds levels,
   ) async {
     await _call(metric, levels);
+  }
+}
+
+/// [CadenceSettings] over the link: the app's preset as the latest
+/// snapshot carries it, and changes that run in the app's isolate.
+final class RemoteCadence extends ChangeNotifier implements CadenceSettings {
+  RemoteCadence._(this._call);
+
+  final Future<Object?> Function(CadencePreset preset) _call;
+
+  /// Whether the app offers a polling budget; the first snapshot says.
+  bool offered = false;
+
+  CadencePreset _value = CadencePreset.automatic;
+
+  void _apply(String? name) {
+    final preset = CadencePreset.parse(name);
+    if (offered == (name != null) && preset == _value) return;
+    offered = name != null;
+    _value = preset;
+    notifyListeners();
+  }
+
+  @override
+  CadencePreset get value => _value;
+
+  @override
+  Future<void> setCadence(CadencePreset preset) async {
+    await _call(preset);
   }
 }
 
