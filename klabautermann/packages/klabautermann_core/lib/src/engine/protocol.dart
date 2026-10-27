@@ -306,6 +306,9 @@ import '../operations/plan_types.dart';
 /// A container's processes then joined v3 the same way (03 §7.12 CTR-10,
 /// M6 plan N17): [DockerContainerTopQuery], answered by
 /// [DockerContainerTopPayload] with each command line masked.
+///
+/// Per-server polling caps then joined v3 the same way (02 SAF-19, M6
+/// plan N64): [SetServerCadenceCap].
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -527,6 +530,18 @@ final class SetCadenceProfile extends EngineRequest {
   const SetCadenceProfile(this.profile);
 
   final CadenceProfile profile;
+}
+
+/// Caps [serverId]'s cadence at [cap]'s 03 §6.4 column (SAF-19), such as
+/// the cellular saver for a server behind a metered link; null lifts the
+/// cap. The slower of the cap and [SetCadenceProfile]'s column wins, so a
+/// cap never speeds a server up. Caps outlive the fleet: a server that
+/// leaves and returns keeps its own.
+final class SetServerCadenceCap extends EngineRequest {
+  const SetServerCadenceCap(this.serverId, this.cap);
+
+  final String serverId;
+  final CadenceProfile? cap;
 }
 
 /// Opens a log stream on [spec]'s server (03 §10.1, §7.6): its records
@@ -6396,7 +6411,8 @@ enum SampleStream {
   gpu,
 }
 
-/// The 03 §6.4 cadence columns [SetCadenceProfile] picks among.
+/// The 03 §6.4 cadence columns [SetCadenceProfile] picks among, from the
+/// fastest to the slowest; [SetServerCadenceCap] relies on that order.
 enum CadenceProfile {
   /// The Desktop column; the engine starts with it.
   desktop,
