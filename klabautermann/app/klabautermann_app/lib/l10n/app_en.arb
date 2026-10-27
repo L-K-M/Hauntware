@@ -301,6 +301,29 @@
       }
     }
   },
+  "fleetDensityLabel": "Layout",
+  "@fleetDensityLabel": {
+    "description": "The fleet board (FL-08): the label before its layout picker, shown in the desktop workspace while no server is open."
+  },
+  "fleetDensity": "{density, select, auto{Auto} cards{Cards} grid{Grid} other{Rows}}",
+  "@fleetDensity": {
+    "description": "The fleet board (FL-08): one layout in its picker. Auto shows cards for a small fleet and a grid for a large one; Rows leaves the rail's rows alone.",
+    "placeholders": {
+      "density": {"type": "String", "example": "grid"}
+    }
+  },
+  "fleetDensityNotSaved": "The layout changed but could not be saved. It lasts until Klabautermann quits.",
+  "@fleetDensityNotSaved": {
+    "description": "The fleet board: toast when the picked layout applied but settings.json could not be written."
+  },
+  "fleetTileShare": "{label} {percent} %",
+  "@fleetTileShare": {
+    "description": "A fleet board card: one pressure bar cell's share in figures, e.g. 'CPU 23 %'. label is fleetRowCpu, fleetRowMemory or fleetRowDisk.",
+    "placeholders": {
+      "label": {"type": "String", "example": "CPU"},
+      "percent": {"type": "int", "example": "23"}
+    }
+  },
   "fleetRowCpu": "CPU",
   "@fleetRowCpu": {
     "description": "The CPU cell of a fleet row's pressure bar (FL-07), as its summary names it."

@@ -320,6 +320,29 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get fleetDensityLabel => 'Layout';
+
+  @override
+  String fleetDensity(String density) {
+    String _temp0 = intl.Intl.selectLogic(density, {
+      'auto': 'Auto',
+      'cards': 'Cards',
+      'grid': 'Grid',
+      'other': 'Rows',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetDensityNotSaved =>
+      'The layout changed but could not be saved. It lasts until Klabautermann quits.';
+
+  @override
+  String fleetTileShare(String label, int percent) {
+    return '$label $percent %';
+  }
+
+  @override
   String get fleetRowCpu => 'CPU';
 
   @override
