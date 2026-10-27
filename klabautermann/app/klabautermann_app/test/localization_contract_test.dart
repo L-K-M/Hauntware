@@ -403,7 +403,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'a colour per cell'",
     "'a bar has a cell'",
   },
-  'lib/ui/charts/chart_style.dart': {"'warning must not exceed critical'"},
+  'lib/ui/charts/chart_style.dart': {
+    "'careful must not exceed warning'",
+    "'warning must not exceed critical'",
+  },
   'lib/ui/charts/chart_values.dart': {"'samples are finite'"},
   'lib/ui/charts/series_ring.dart': {
     "'a series needs two slots to draw a line'",

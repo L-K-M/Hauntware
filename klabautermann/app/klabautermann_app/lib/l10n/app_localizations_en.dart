@@ -2571,6 +2571,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get chartSeverityCareful => 'careful';
+
+  @override
   String get chartSeverityWarning => 'warning';
 
   @override
