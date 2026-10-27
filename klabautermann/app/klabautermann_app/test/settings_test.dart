@@ -7,6 +7,7 @@ import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/cadence_controller.dart';
 import 'package:klabautermann_app/controllers/log_display.dart';
+import 'package:klabautermann_app/controllers/time_display.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/settings_page.dart';
@@ -229,6 +230,47 @@ void main() {
     expect(
       find.text(
         'The log display changed but could not be saved. It lasts until '
+        'Klabautermann quits.',
+      ),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('the General tab switches server times to the server\'s zone, '
+      'and one that cannot be saved stays and says so (A11Y-07)', (
+    tester,
+  ) async {
+    final announcements = AnnouncementController();
+    final timeDisplay = TimeDisplayController(
+      save: (_) async => throw const FileSystemException('disk full'),
+    );
+    addTearDown(() {
+      announcements.dispose();
+      timeDisplay.dispose();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: GeneralTab(
+            announcements: announcements,
+            timeDisplay: timeDisplay,
+            appVersion: null,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text("Show server times in the server's zone"));
+    await tester.pumpAndSettle();
+
+    expect(timeDisplay.value, TimeDisplay.server);
+    expect(
+      find.text(
+        'The time display changed but could not be saved. It lasts until '
         'Klabautermann quits.',
       ),
       findsOneWidget,

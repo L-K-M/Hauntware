@@ -37,6 +37,7 @@ class TimeSeriesChart extends StatelessWidget {
     required this.end,
     this.span = const Duration(minutes: 10),
     this.max,
+    this.zoneOffset,
   });
 
   final TimeSeriesRing data;
@@ -60,6 +61,11 @@ class TimeSeriesChart extends StatelessWidget {
   /// The top of the scale; null scales to the data in view
   /// ([chartScaleMax]).
   final double? max;
+
+  /// The fixed zone offset the time axis reads, such as a server's when
+  /// the time display shows server times (A11Y-07); null for this
+  /// device's zone.
+  final Duration? zoneOffset;
 
   @override
   Widget build(BuildContext context) {
@@ -134,6 +140,10 @@ class TimeSeriesChart extends StatelessWidget {
           textScaler: MediaQuery.textScalerOf(context),
           textDirection: Directionality.of(context),
           background: theme.colorScheme.surface,
+          zoneOffsetOf: switch (zoneOffset) {
+            final offset? => (_) => offset,
+            null => _deviceZoneOffset,
+          },
         ),
       ),
     );
@@ -378,9 +388,9 @@ final class TimeSeriesPainter extends CustomPainter {
   final Color background;
 
   /// The zone's offset from UTC at a time; ticks fall on round times in
-  /// that zone. The labels always read the device's zone, so the chart
-  /// keeps the default, and a test passes a zone that the machine's `TZ`
-  /// cannot change.
+  /// that zone and their labels read its wall clock. The default is the
+  /// device's zone; a test passes a zone that the machine's `TZ` cannot
+  /// change.
   final Duration Function(DateTime time) zoneOffsetOf;
 
   static const strokeWidth = 1.5;
@@ -605,7 +615,9 @@ final class TimeSeriesPainter extends CustomPainter {
         Rect.fromLTWH(x - 0.5, plot.bottom, 1, _tickLength),
         tickPaint,
       );
-      final time = DateTime.fromMicrosecondsSinceEpoch(tick);
+      final utc = DateTime.fromMicrosecondsSinceEpoch(tick, isUtc: true);
+      // Fields that read the zone's wall clock; only they are formatted.
+      final time = utc.add(zoneOffsetOf(utc));
       final label = _text(
         step < 60 ? strings.timeWithSeconds(time) : strings.time(time),
       );

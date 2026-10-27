@@ -7,6 +7,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/operations_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'actions/action_entry.dart';
+import 'time_display.dart';
 import 'actions/action_preview.dart' show startAction;
 import 'admin_mode_chip.dart' show TurnOnAdminModeButton;
 import 'edit/remote_editor.dart' show openRemoteEditor;
@@ -330,7 +331,7 @@ class _BackupRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final localizations = MaterialLocalizations.of(context);
     final theme = Theme.of(context);
-    final local = backup.entry.savedAt.toLocal();
+    final local = displayTime(context, serverId, backup.entry.savedAt);
     final status = backup.status;
     final restore = this.restore;
     return MergeSemantics(

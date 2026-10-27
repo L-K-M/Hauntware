@@ -36,6 +36,7 @@ import 'controllers/server_editor_controller.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
 import 'controllers/threshold_controller.dart';
+import 'controllers/time_display.dart';
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/hand_off.dart' show HandOffLauncher;
@@ -66,6 +67,7 @@ import 'ui/settings_page.dart';
 import 'ui/startup_issue_notice.dart';
 import 'ui/threshold_announcer.dart' show AnnouncementScope;
 import 'ui/threshold_scope.dart' show ThresholdScope;
+import 'ui/time_display.dart' show TimeDisplayScope;
 import 'ui/workspace_navigation.dart';
 
 /// The settings route's name: Settings on phones, and on a desktop whose
@@ -99,6 +101,7 @@ class KlabautermannApp extends StatelessWidget {
     this.alertRules,
     this.snippets,
     this.logDisplay,
+    this.timeDisplay,
     this.alertNotifications,
     this.operations,
     required this.dockerNotice,
@@ -198,6 +201,11 @@ class KlabautermannApp extends StatelessWidget {
   /// General; null in tests that leave it out, where logs keep their
   /// defaults.
   final LogDisplayController? logDisplay;
+
+  /// Which zone server times show in (A11Y-07), set in Settings >
+  /// General; null in tests that leave it out, where every time shows in
+  /// the device's zone.
+  final TimeDisplayController? timeDisplay;
 
   /// Raised alerts' system notifications (ALR-01), one engine run's like
   /// [fleet]. Null in tests that leave it out, where no surface offers
@@ -407,12 +415,21 @@ class KlabautermannApp extends StatelessWidget {
               ),
               null => withSnippets,
             };
-            final withNotifications = switch (alertNotifications) {
-              final notifications? => AlertNotificationsScope(
-                notifications: notifications,
+            final withTimeDisplay = switch (timeDisplay) {
+              final display? => TimeDisplayScope(
+                display: display,
+                serverZoneOffset: (serverId) =>
+                    monitoring.profileFor(serverId).value?.serverZone?.offset,
                 child: withLogDisplay,
               ),
               null => withLogDisplay,
+            };
+            final withNotifications = switch (alertNotifications) {
+              final notifications? => AlertNotificationsScope(
+                notifications: notifications,
+                child: withTimeDisplay,
+              ),
+              null => withTimeDisplay,
             };
             final withAlerts = switch (alerts) {
               final alerts? => AlertScope(
@@ -515,6 +532,7 @@ class KlabautermannApp extends StatelessWidget {
               cadence: cadence,
               cadenceCaps: cadenceCaps,
               logDisplay: logDisplay,
+              timeDisplay: timeDisplay,
               deviceName: deviceName,
               appVersion: appVersion,
               monitorSet: fleet.monitorSettings,

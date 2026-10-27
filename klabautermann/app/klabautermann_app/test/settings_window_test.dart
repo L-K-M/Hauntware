@@ -15,6 +15,7 @@ import 'package:klabautermann_app/controllers/app_lock_controller.dart';
 import 'package:klabautermann_app/controllers/account_size.dart';
 import 'package:klabautermann_app/controllers/cadence_controller.dart';
 import 'package:klabautermann_app/controllers/log_display.dart';
+import 'package:klabautermann_app/controllers/time_display.dart';
 import 'package:klabautermann_app/controllers/sync_secrets_controller.dart';
 import 'package:klabautermann_app/controllers/threshold_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
@@ -181,6 +182,7 @@ void main() {
     CadenceCapSettings? cadenceCaps,
     LogDisplaySettings? logDisplay,
     ValueListenable<AccountSize?>? accountSize,
+    TimeDisplaySettings? timeDisplay,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
@@ -195,6 +197,7 @@ void main() {
       cadence: cadence,
       cadenceCaps: cadenceCaps,
       logDisplay: logDisplay,
+      timeDisplay: timeDisplay,
       accountSize: accountSize,
       control: _control,
       link: _appLink,
@@ -355,6 +358,7 @@ void main() {
     late CadenceController cadence;
     late CadenceCapsController cadenceCaps;
     late LogDisplayController logDisplay;
+    late TimeDisplayController timeDisplay;
     late ValueNotifier<AccountSize?> accountSize;
     late SettingsWindowHost host;
 
@@ -407,6 +411,8 @@ void main() {
       addTearDown(cadenceCaps.dispose);
       logDisplay = LogDisplayController();
       addTearDown(logDisplay.dispose);
+      timeDisplay = TimeDisplayController();
+      addTearDown(timeDisplay.dispose);
       accountSize = ValueNotifier(null);
       addTearDown(accountSize.dispose);
       host = newHost(
@@ -422,6 +428,7 @@ void main() {
         cadenceCaps,
         logDisplay,
         accountSize,
+        timeDisplay,
       );
     });
 
@@ -773,6 +780,40 @@ void main() {
       });
       await tester.pumpAndSettle();
       expect(inWindow(find.text('11 px')), findsOneWidget);
+    });
+
+    testWidgets('the General tab\'s time display changes the app\'s '
+        'through the link (A11Y-07)', (tester) async {
+      final remote = await pumpBothWindows(
+        tester,
+        appearance,
+        tab: SettingsTab.general,
+      );
+      Finder inWindow(Finder finder) =>
+          find.descendant(of: find.byType(SettingsWindowApp), matching: finder);
+      expect(remote.timeDisplay?.value, TimeDisplay.device);
+
+      final serverTimes = inWindow(
+        find.widgetWithText(
+          SwitchListTile,
+          "Show server times in the server's zone",
+        ),
+      );
+      await tester.ensureVisible(serverTimes);
+      await tester.tap(serverTimes);
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(timeDisplay.value, TimeDisplay.server);
+      expect(remote.timeDisplay?.value, TimeDisplay.server);
+
+      // A change in the app reaches the showing window too.
+      await tester.runAsync(() async {
+        await timeDisplay.setTimeDisplay(TimeDisplay.device);
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(remote.timeDisplay?.value, TimeDisplay.device);
+      expect(tester.widget<SwitchListTile>(serverTimes).value, isFalse);
     });
 
     testWidgets('the General tab\'s polling budget changes the app\'s '
@@ -1256,6 +1297,14 @@ void main() {
       expect(
         roundTrip(const LogDisplayNotSavedException('disk full')),
         isA<LogDisplayNotSavedException>().having(
+          (error) => error.message,
+          'message',
+          'disk full',
+        ),
+      );
+      expect(
+        roundTrip(const TimeDisplayNotSavedException('disk full')),
+        isA<TimeDisplayNotSavedException>().having(
           (error) => error.message,
           'message',
           'disk full',

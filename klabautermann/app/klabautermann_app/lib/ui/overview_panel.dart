@@ -22,6 +22,7 @@ import 'system_panel.dart' show PanelNotice, PanelSection;
 import 'system_view.dart';
 import 'threshold_announcer.dart';
 import 'threshold_scope.dart';
+import 'time_display.dart';
 import 'top_lists.dart';
 
 /// The panel width from which the cards sit in two columns, growing with
@@ -200,6 +201,7 @@ class OverviewPanel extends StatelessWidget {
       _ => null,
     };
     final partTwo = _PartTwo(
+      serverId: serverId,
       slow: slow,
       docker: docker,
       core: cards?.core,
@@ -552,7 +554,9 @@ class _DockerCard extends StatelessWidget {
         if (stale && readAt != null)
           PanelNotice(
             icon: Icons.history,
-            text: l10n.overviewDockerStale(readAt.toLocal()),
+            text: l10n.overviewDockerStale(
+              displayTime(context, serverId, readAt),
+            ),
           ),
         if (failure != null) ...[
           PanelNotice(
@@ -624,7 +628,10 @@ class _DockerCard extends StatelessWidget {
         ],
       ),
       if (df != null && at != null)
-        Text(l10n.overviewDockerMeasured(at.toLocal()), style: note),
+        Text(
+          l10n.overviewDockerMeasured(displayTime(context, serverId, at)),
+          style: note,
+        ),
       if (diskUse.inFlight)
         MergeSemantics(
           child: Row(
@@ -742,6 +749,7 @@ enum _SwitchState { on, off }
 /// reading's uptime and boot time.
 final class _PartTwo {
   const _PartTwo({
+    required this.serverId,
     required this.slow,
     required this.docker,
     required this.core,
@@ -750,6 +758,7 @@ final class _PartTwo {
     required this.healthFreshness,
   });
 
+  final String serverId;
   final _Slow slow;
   final _Docker docker;
   final CoreResult? core;
@@ -940,7 +949,11 @@ final class _PartTwo {
             text: l10n.systemDisksTimedOut,
           ),
           if (listed != null)
-            Text(l10n.systemDisksLastListed(listed.at.toLocal())),
+            Text(
+              l10n.systemDisksLastListed(
+                displayTime(context, serverId, listed.at),
+              ),
+            ),
         ] else if (unavailable != null)
           PanelNotice(
             icon: _reasonIcon(unavailable),
@@ -1088,7 +1101,9 @@ final class _PartTwo {
                 l10n.systemBooted,
                 booted == null
                     ? null
-                    : l10n.systemBootedValue(booted.toLocal()),
+                    : l10n.systemBootedValue(
+                        displayTime(context, serverId, booted),
+                      ),
               ),
             ],
           ),
