@@ -2093,6 +2093,12 @@ is on main:
   cgroup's limit ran out rather than the server's memory. "Show in
   kernel log" opens the boot's OOM report lines from the journal. An
   unreadable kernel log and a kernel without the counter say so.
+- Listening ports (M6 N34a, NET-04): the System tab's new section lists
+  each listening TCP and bound UDP port, on every address or the ones
+  named, with the processes holding it and the systemd unit or
+  container each runs in, from `ss` (or BusyBox `netstat`) and the
+  processes' cgroups. Ports whose processes belong to other users say
+  so. Docker's published ports and admin-mode owners follow in N34b.
 - CPU breakdown and pressure (M6 N42a, CPU-04, CPU-05, MEM-04): the
   Overview's CPU card adds I/O wait, steal, IRQ and soft IRQ beside
   user, system and idle, with a plain-language hint once steal, iowait

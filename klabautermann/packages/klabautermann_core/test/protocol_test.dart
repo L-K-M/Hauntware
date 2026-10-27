@@ -153,6 +153,11 @@ void main() {
         ),
         const HostQuery(
           serverId: 'srv-1',
+          queryId: 'h-ports',
+          query: ListeningPortsQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
           queryId: 'h-3',
           query: BootEndsQuery(),
         ),
@@ -454,6 +459,24 @@ void main() {
                   cgroup: '/system.slice/docker-0123.scope',
                 ),
               ],
+            ),
+          ),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-ports',
+          payload: ListeningPorts(
+            ListeningPortsRead(
+              tool: PortsTool.ss,
+              sockets: [
+                ListeningSocket(
+                  protocol: PortProtocol.tcp,
+                  address: '0.0.0.0',
+                  port: 22,
+                  processes: const [PortProcess(name: 'sshd', pid: 812)],
+                ),
+              ],
+              owners: const {812: ProcessAttribution(unit: 'ssh.service')},
             ),
           ),
         ),
