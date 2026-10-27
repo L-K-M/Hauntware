@@ -49,6 +49,16 @@ final _containerRef = RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,254}$');
 const _retryBase = Duration(seconds: 1);
 const _retryCap = Duration(seconds: 30);
 
+/// [at] as the Engine API's `since=` and `until=` take it.
+LogTimestamp? _timestamp(DateTime? at) {
+  if (at == null) return null;
+  final micros = at.microsecondsSinceEpoch;
+  return LogTimestamp.fromUnix(
+    micros ~/ Duration.microsecondsPerSecond,
+    nanos: micros % Duration.microsecondsPerSecond * 1000,
+  );
+}
+
 /// The name of [config]'s driver when it keeps no logs the API can read
 /// (03 §7.12 CTX-01), or null when the API reads them or the driver is
 /// not named, which the read then tries. Docker reads any driver but
@@ -186,6 +196,7 @@ final class ContainerLogReader {
   Future<void> _open(ContainerLogTarget target, int epoch) async {
     final client = _client = target.openStream();
     final since = _newest;
+    final source = _spec.source as ContainerLogSource;
     String? driver;
     try {
       final inspect = (await client.inspectContainer(_containerId)).value;
@@ -202,14 +213,16 @@ final class ContainerLogReader {
       final response = await client.containerLogsRaw(
         _containerId,
         follow: _spec.follow,
-        // Since a line, every later one; without one, the window, or
-        // only new lines once lines without a timestamp arrived.
-        tail: since != null
+        // Since a line, every later one; without one, the range or the
+        // window, or only new lines once lines without a timestamp
+        // arrived.
+        tail: since != null || source.ranged
             ? null
             : _received > 0
             ? 0
             : _spec.window,
-        since: since,
+        since: since ?? _timestamp(source.since),
+        until: _timestamp(source.until),
       );
       if (epoch != _epoch) {
         unawaited(response.body.listen(null).cancel());

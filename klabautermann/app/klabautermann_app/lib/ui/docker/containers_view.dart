@@ -1,8 +1,9 @@
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show ContainerPort, ContainerSummary, HealthStatus;
+    show ContainerBulkVerb, ContainerPort, ContainerSummary, HealthStatus;
 
-/// The Containers sub-tab's columns, whose names key them in the table
-/// and its sort (03 §7.12 CTR-01, CTR-04, CST-01).
+/// The Containers sub-tab's columns, whose names key them in the table,
+/// its sort and the stored choice (03 §7.12 CTR-01, CTR-04, CTR-08,
+/// CST-01).
 enum ContainerColumn {
   name,
   state,
@@ -13,6 +14,59 @@ enum ContainerColumn {
   stack,
   cpu,
   memory,
+  network,
+  blockIo,
+  pids,
+  ip,
+  started;
+
+  /// Every column but the name, which always leads: the ones CTR-08's
+  /// chooser shows, hides and orders.
+  static final chooseable = [
+    for (final column in values)
+      if (column != name) column,
+  ];
+}
+
+/// The columns shown after the name until the user chooses (CTR-08).
+const kDefaultContainerColumns = [
+  ContainerColumn.state,
+  ContainerColumn.health,
+  ContainerColumn.status,
+  ContainerColumn.image,
+  ContainerColumn.ports,
+  ContainerColumn.stack,
+  ContainerColumn.cpu,
+  ContainerColumn.memory,
+];
+
+/// The columns [names] choose, in their order: the default for none, and
+/// a name the tab does not know, the name column's, or a repeat skipped,
+/// so a choice stored by another version still reads.
+List<ContainerColumn> chosenContainerColumns(List<String>? names) {
+  if (names == null) return kDefaultContainerColumns;
+
+  final byName = ContainerColumn.values.asNameMap();
+  final chosen = <ContainerColumn>[];
+  for (final name in names) {
+    final column = byName[name];
+    if (column == null ||
+        column == ContainerColumn.name ||
+        chosen.contains(column)) {
+      continue;
+    }
+    chosen.add(column);
+  }
+  return chosen;
+}
+
+/// [container]'s first address on a network, in the order the list gave
+/// them, or null when it has none (host networking, or stopped).
+String? containerIpOf(ContainerSummary container) {
+  for (final ip in container.networks.values) {
+    if (ip.isNotEmpty) return ip;
+  }
+  return null;
 }
 
 /// The label that names a container's compose project (compose's
@@ -103,6 +157,51 @@ final _healthMarker = RegExp(
   caseSensitive: false,
 );
 
+/// The exit code in a stopped or restarting container's Status text:
+/// "Exited (137) 2 hours ago", "Restarting (1) 3 seconds ago", as
+/// Docker's `State.String` and Podman print it. Null for any other.
+int? containerExitCode(ContainerSummary container) {
+  final match = _exitStatus.firstMatch(container.status ?? '');
+  // A digit run past int's range reads as no code, not a thrown build.
+  return match == null ? null : int.tryParse(match.group(1)!);
+}
+
+final _exitStatus = RegExp(r'^(?:Exited|Restarting) \((-?\d+)\)');
+
+/// The exit codes a stop leaves, which the list cannot tell from a
+/// failure: 128 plus SIGINT, SIGQUIT or SIGTERM, the usual stop signals,
+/// or SIGKILL, which follows when the stop times out. An OOM kill also
+/// leaves 137; the details say so from `State.OOMKilled`.
+const _stopExitCodes = {130, 131, 137, 143};
+
+/// A list row's CTR-09 flag.
+enum ContainerFlag {
+  /// The daemon is waiting to start it again after it exited, as a
+  /// restart policy does in a loop.
+  restartLoop,
+
+  /// It exited with a code a stop does not leave.
+  failed,
+}
+
+/// [container]'s flag, from what the list carries: its state and the
+/// exit code in its Status text. The list has no `RestartCount` or
+/// `State.OOMKilled`, which the details show from the inspect.
+ContainerFlag? containerFlagOf(ContainerSummary container) {
+  switch (EngineContainerState.of(container.state)) {
+    case EngineContainerState.restarting:
+      return ContainerFlag.restartLoop;
+    case EngineContainerState.exited:
+      final code = containerExitCode(container);
+      if (code == null || code == 0 || _stopExitCodes.contains(code)) {
+        return null;
+      }
+      return ContainerFlag.failed;
+    default:
+      return null;
+  }
+}
+
 /// How long a container that is up has been, from its Status text: the
 /// list carries no start time, and its "Up 3 hours" is go-units'
 /// `HumanDuration`, which Docker and Podman both print, Podman with
@@ -175,6 +274,28 @@ int healthRank(HealthStatus? health) => switch (health) {
   HealthStatus.none || null => 3,
 };
 
+/// [containers] that [runningOnly] and [terms] keep, in their order: the
+/// containers the tab shows, folded headings or not.
+List<ContainerSummary> containersShown(
+  List<ContainerSummary> containers, {
+  required bool runningOnly,
+  required List<String> terms,
+}) => [
+  for (final container in containers)
+    if ((!runningOnly || containerIsUp(container)) &&
+        containerMatches(container, terms))
+      container,
+];
+
+/// The ids of [selected] that [verb] takes (CTR-07), in their order.
+List<String> bulkTargets(
+  Iterable<ContainerSummary> selected,
+  ContainerBulkVerb verb,
+) => [
+  for (final container in selected)
+    if (verb.appliesTo(container.state)) container.id,
+];
+
 /// One row of the grouped list: a compose project's heading or a
 /// container.
 sealed class ContainerListEntry {
@@ -219,9 +340,11 @@ List<ContainerListEntry> containerListEntries(
   required List<ContainerEntry> Function(List<ContainerEntry> rows) order,
 }) {
   final groups = <String?, List<ContainerEntry>>{};
-  for (final container in containers) {
-    if (runningOnly && !containerIsUp(container)) continue;
-    if (!containerMatches(container, terms)) continue;
+  for (final container in containersShown(
+    containers,
+    runningOnly: runningOnly,
+    terms: terms,
+  )) {
     groups
         .putIfAbsent(composeProjectOf(container), () => [])
         .add(ContainerEntry(container));

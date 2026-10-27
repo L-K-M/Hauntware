@@ -24,9 +24,11 @@ import 'package:seance_core/seance_core.dart'
 import '../admin/admin_mode.dart';
 import '../audit/audit_log.dart';
 import '../audit/host_audit_line.dart';
+import '../admin/firewall.dart';
 import '../admin/restarts.dart';
 import '../admin/safety_policy.dart';
 import '../admin/smart.dart';
+import '../admin/sshd_posture.dart';
 import '../admin/user_crontabs.dart';
 import '../certificates/tls_check.dart';
 import '../alerts/alert_evaluator.dart';
@@ -1243,11 +1245,19 @@ void engineMain(
         );
       case CheckTlsEndpoints(:final requestId, :final endpoints):
         // Not awaited: each check may wait out its timeout, and the queue
-        // keeps serving meanwhile. checkTlsEndpoint never throws.
+        // keeps serving meanwhile. checkTlsEndpoint throws no exception;
+        // anything else still answers as a failed check, so the request
+        // is never left without an answer.
         unawaited(
           Future.wait([
             for (final endpoint in endpoints.take(kTlsEndpointsMax))
-              checkTlsEndpoint(endpoint),
+              checkTlsEndpoint(endpoint).catchError(
+                (Object error) => TlsEndpointCheck(
+                  endpoint: endpoint,
+                  failure: TlsCheckFailure.connect,
+                  detail: '$error',
+                ),
+              ),
           ]).then(
             (checks) => uiPort.send(TlsEndpointsChecked(requestId, checks)),
           ),
@@ -1473,6 +1483,7 @@ void engineMain(
             );
           case ContainerAction() ||
               RemoveContainer() ||
+              ContainerBulkAction() ||
               RemoveImage() ||
               CreateVolume() ||
               RemoveVolume() ||
@@ -1798,6 +1809,66 @@ void engineMain(
           ).then(
             uiPort.send,
             onError: (Object _) => fail(RestartReportFailure.transport),
+          ),
+        );
+      case ReadFirewall(:final serverId, :final requestId):
+        void fail(FirewallReportFailure failure) => uiPort.send(
+          FirewallReport(
+            serverId: serverId,
+            requestId: requestId,
+            failure: failure,
+          ),
+        );
+        if (links?.link(serverId) == null) {
+          fail(FirewallReportFailure.noLink);
+          return;
+        }
+        final session = admin?.session(serverId);
+        if (session == null) {
+          fail(FirewallReportFailure.adminRequired);
+          return;
+        }
+        admin?.touch(serverId);
+        unawaited(
+          lendSession(
+            serverId,
+            () =>
+                readFirewall(serverId, requestId: requestId, session: session),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => fail(FirewallReportFailure.transport),
+          ),
+        );
+      case ReadSshdPosture(:final serverId, :final requestId):
+        void fail(SshdPostureFailure failure) => uiPort.send(
+          SshdPostureReport(
+            serverId: serverId,
+            requestId: requestId,
+            failure: failure,
+          ),
+        );
+        if (links?.link(serverId) == null) {
+          fail(SshdPostureFailure.noLink);
+          return;
+        }
+        final session = admin?.session(serverId);
+        if (session == null) {
+          fail(SshdPostureFailure.adminRequired);
+          return;
+        }
+        admin?.touch(serverId);
+        unawaited(
+          lendSession(
+            serverId,
+            () => readSshdPosture(
+              serverId,
+              requestId: requestId,
+              session: session,
+              profile: profiles[serverId],
+            ),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => fail(SshdPostureFailure.transport),
           ),
         );
       case ReadPackages(:final serverId, :final requestId, :final fresh):
