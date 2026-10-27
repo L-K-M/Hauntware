@@ -353,6 +353,12 @@ const kBootEndsRead = 10;
 /// [HostCommands.kernels]' output.
 const kKernelsMarker = '== modules';
 
+/// The markers in [HostCommands.listeningPorts]' output: which tool
+/// listed the sockets (`== ss`, `== netstat` or `== none`), then
+/// `== cgroup <pid>` before each listed process's cgroups.
+const kPortsToolMarker = '==';
+const kPortsCgroupMarker = '== cgroup';
+
 /// The markers before the usable CPU count, `lscpu`'s JSON and the
 /// `/proc/cpuinfo` lines in [HostCommands.cpuTopology]' output.
 const kCpuNprocMarker = '== nproc';
@@ -924,6 +930,30 @@ abstract final class HostCommands {
       'uname -r; echo "$kKernelsMarker"; '
       'ls -1 /lib/modules 2>/dev/null || ls -1 /usr/lib/modules 2>/dev/null; '
       'exit 0';
+
+  /// NET-04's read: the listening TCP and UDP sockets with their
+  /// processes from `ss -Htulpn`, or BusyBox's `netstat -tulpn` where
+  /// there is no `ss`, then the cgroups of each process they name, so the
+  /// app can tell the systemd unit or container behind a port. The login
+  /// user sees only its own processes' sockets' owners.
+  /// `parseListeningPorts` reads it.
+  static List<String> listeningPorts() => const [
+    'sh',
+    '-c',
+    _kListeningPortsScript,
+  ];
+
+  static const _kListeningPortsScript =
+      'if command -v ss >/dev/null 2>&1; then '
+      'echo "$kPortsToolMarker ss"; o=\$(ss -Htulpn 2>/dev/null); '
+      'elif command -v netstat >/dev/null 2>&1; then '
+      'echo "$kPortsToolMarker netstat"; o=\$(netstat -tulpn 2>/dev/null); '
+      'else echo "$kPortsToolMarker none"; o=; fi; '
+      "printf '%s\\n' \"\$o\"; "
+      "for p in \$(printf '%s\\n' \"\$o\" | grep -oE 'pid=[0-9]+| [0-9]+/' "
+      "| tr -dc '0-9\\n' | sort -un); do "
+      'echo "$kPortsCgroupMarker \$p"; cat "/proc/\$p/cgroup" 2>/dev/null; '
+      'done; exit 0';
 
   /// CPU-07's read: the CPUs this login may run on, `lscpu`'s fields in
   /// the C locale, whose names it translates otherwise, and the

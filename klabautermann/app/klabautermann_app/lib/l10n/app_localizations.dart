@@ -2212,6 +2212,84 @@ abstract class AppLocalizations {
   /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the processor read.} missing{The server lacks the tools the processor read runs.} other{The processor read failed.}}'**
   String systemProcessorFailed(String failure);
 
+  /// System tab: the heading of the listening ports section (NET-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Listening ports'**
+  String get systemPortsTitle;
+
+  /// System tab, Listening ports: shown while the ports are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the listening ports…'**
+  String get systemPortsReading;
+
+  /// System tab, Listening ports: the button that reads the ports again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemPortsReadAgain;
+
+  /// System tab, Listening ports: why the port read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the port read.} missing{The server lacks the tools the port read runs.} other{The port read failed.}}'**
+  String systemPortsFailed(String failure);
+
+  /// System tab, Listening ports: shown when neither listing tool is installed. ss and netstat are command names, never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'The server has neither ss nor netstat, so its ports cannot be listed.'**
+  String get systemPortsNoTool;
+
+  /// System tab, Listening ports: shown when the login user could not see which process holds some sockets.
+  ///
+  /// In en, this message translates to:
+  /// **'Some ports belong to other users\' processes, whose names only root may see.'**
+  String get systemPortsHidden;
+
+  /// System tab, Listening ports: shown when no socket listens.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing listens on this server.'**
+  String get systemPortsNone;
+
+  /// System tab, Listening ports: a port that accepts connections on all of the server's addresses.
+  ///
+  /// In en, this message translates to:
+  /// **'{protocol, select, tcp{TCP} udp{UDP} other{{protocol}}} {port} on every address'**
+  String systemPortsEvery(String protocol, int port);
+
+  /// System tab, Listening ports: a port that accepts connections only on the listed addresses, such as 127.0.0.1.
+  ///
+  /// In en, this message translates to:
+  /// **'{protocol, select, tcp{TCP} udp{UDP} other{{protocol}}} {port} on {addresses}'**
+  String systemPortsOn(String protocol, int port, String addresses);
+
+  /// System tab, Listening ports: a process holding the port, by its command name and process ID.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (PID {pid})'**
+  String systemPortsProcess(String name, int pid);
+
+  /// System tab, Listening ports: shown under a port whose process the login user may not see.
+  ///
+  /// In en, this message translates to:
+  /// **'Held by another user\'s process'**
+  String get systemPortsOwnerHidden;
+
+  /// System tab, Listening ports: the systemd unit the process runs in, such as nginx.service.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit {unit}'**
+  String systemPortsUnit(String unit);
+
+  /// System tab, Listening ports: the container the process runs in, by its short ID.
+  ///
+  /// In en, this message translates to:
+  /// **'Container {id}'**
+  String systemPortsContainer(String id);
+
   /// System tab: the heading of the network interfaces section (NET-02, NET-03).
   ///
   /// In en, this message translates to:
