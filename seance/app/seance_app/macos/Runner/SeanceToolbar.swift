@@ -100,7 +100,7 @@ final class SeanceToolbar: NSObject, NSToolbarDelegate {
     item.image = NSImage(systemSymbolName: spec.symbol, accessibilityDescription: spec.label)
     item.isBordered = true
     item.target = commands
-    item.action = #selector(CommandCenter.run(_:))
+    item.action = #selector(CommandCenter.runItem(_:))
     if flag { items[identifier] = item }
     if identifier == Self.connection { DispatchQueue.main.async { [weak self] in self?.refresh() } }
     return item

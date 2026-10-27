@@ -11,7 +11,7 @@ class AppDelegate: FlutterAppDelegate {
     return false
   }
 
-  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+  override func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
     if !flag, let window = MainFlutterWindow.shared {
       window.commands?.run("showMainWindow")
       return false
@@ -19,7 +19,7 @@ class AppDelegate: FlutterAppDelegate {
     return true
   }
 
-  func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+  override func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
     MainFlutterWindow.shared?.commands?.dockMenu()
   }
 

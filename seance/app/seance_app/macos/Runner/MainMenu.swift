@@ -81,7 +81,7 @@ final class CommandCenter: NSObject, NSMenuItemValidation, NSToolbarItemValidati
 
   // MARK: native → Dart
 
-  @objc func run(_ sender: Any?) {
+  @objc func runItem(_ sender: Any?) {
     let name: String?
     switch sender {
     case let item as NSMenuItem: name = item.representedObject as? String
@@ -165,7 +165,7 @@ final class CommandCenter: NSObject, NSMenuItemValidation, NSToolbarItemValidati
       return key.styleMask.contains(.closable)
     case #selector(openServerFromDock(_:)):
       return true
-    case #selector(run(_:)):
+    case #selector(runItem(_:)):
       guard let name = item.representedObject as? String else { return false }
       let state = state(name)
       if let title = state.title { item.title = title }
@@ -382,7 +382,7 @@ final class CommandCenter: NSObject, NSMenuItemValidation, NSToolbarItemValidati
     _ name: String, _ title: String, key: String = "",
     modifiers: NSEvent.ModifierFlags = [.command]
   ) -> NSMenuItem {
-    let item = NSMenuItem(title: title, action: #selector(run(_:)), keyEquivalent: key)
+    let item = NSMenuItem(title: title, action: #selector(runItem(_:)), keyEquivalent: key)
     item.keyEquivalentModifierMask = key.isEmpty ? [] : modifiers
     item.target = self
     item.representedObject = name
