@@ -174,8 +174,8 @@ class DockerEndpointPicker extends StatelessWidget {
   }
 
   /// The chosen socket's path when the endpoint settled on another socket
-  /// or on none; null otherwise. An invalid path has the gate's own
-  /// words.
+  /// or on none; null otherwise. An invalid path or docker program has
+  /// the gate's own words.
   static String? _notInUse(
     DockerEndpointChoice choice,
     DockerEndpointState? endpoint,
@@ -192,6 +192,7 @@ class DockerEndpointPicker extends StatelessWidget {
         :final route,
       )
           when failure != DockerEndpointFailure.invalidChoice &&
+              failure != DockerEndpointFailure.invalidProgram &&
               route?.socketPath != choice.socketPath =>
         choice.socketPath,
       _ => null,

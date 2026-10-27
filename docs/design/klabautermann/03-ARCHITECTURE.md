@@ -2756,6 +2756,20 @@ limit of 2 and reports `SshLinkDegraded(sessionLimitLearned)`.
   matches; an `env DOCKER_HOST=` prefix would make sudo check `env`
   and fail [R: sudoers(5)]. Command templates elsewhere in this plan omit
   the option for brevity.
+- **Docker program (CN-16, as built in M6 N63e)**: a per-server
+  device-local path names the `docker` the relays and compose commands
+  run, for a CLI the non-login exec `PATH` lacks (Snap's
+  `/snap/bin/docker`, a NAS's `/usr/local/bin/docker`). `SetDockerProgram`
+  carries it as `SetDockerEndpoint` carries the socket; the program counts
+  as present whatever the probe found, rank 3 runs it under sudo as an
+  absolute path, so a NOPASSWD rule must name that path, and a path that
+  is not absolute or holds a NUL or line break fails the endpoint as
+  `invalidProgram`. `DockerEndpointRoute.dockerProgram` carries it to the
+  compose plans. `DOCKER_HOST` needs no override of its own: the
+  endpoint choice (CN-09) names any Unix socket, and a TCP engine is out
+  of scope, since the socket is never exposed (r5 §1.3). `journalctl`
+  keeps the exec `PATH`'s: systemd installs it in `/usr/bin` or `/bin`,
+  which every exec `PATH` holds.
 - The socket is never exposed on a local TCP port or local Unix socket: it
   is root-equivalent (r5 §1.3).
 
@@ -6359,7 +6373,7 @@ shows there.
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`, `SetServerCadenceCap(serverId, cap)` (SAF-19); app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
-| `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)`, `SetDockerEndpoint(serverId, choice)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason, choice)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
+| `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)`, `SetDockerEndpoint(serverId, choice)` (M3 below), `SetDockerProgram(serverId, program?)` (M6 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason, choice)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(planId, preview)`, `ActionProgress`, `ActionFinished`, `ActionRefused(reason, intent or planId)` |
 | `AuditQuery(serverId, before, limit)` (8.10, M4) | `AuditRecords(serverId, records, more)` |
 | `ReadHistory(serverId, tier, requestId)` (7.20, M6 N52a) | `HistoryRead(requestId, serverId, tier, range)`: the tier's buckets and gaps within its span, the filling bucket included |
@@ -7079,6 +7093,12 @@ the engine in `engine_isolate.dart` beside it):
   such a key, and URL credentials in both; a secret plain scalar
   continued on later lines and flow mappings are not masked. The text
   is neither cached nor logged.
+- **Version 3 (M6 docker program).** CN-16's program path joined
+  version 3 the same way: `SetDockerProgram(serverId, program?)` sets
+  the `docker` a server's relays and compose commands run (5.4), the
+  engine keeps it as it keeps the endpoint choice,
+  `DockerEndpointRoute` gained `dockerProgram`, and
+  `DockerEndpointFailure` gained `invalidProgram`.
 - **Version 3 (M3 endpoint choice).** CN-09's manual override joined
   version 3 the same way (D20, D54). `SetDockerEndpoint(serverId,
   choice)` carries a sealed choice: automatic, one of the sockets the

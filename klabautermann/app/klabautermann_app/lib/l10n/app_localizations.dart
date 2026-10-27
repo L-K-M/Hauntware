@@ -7720,6 +7720,12 @@ abstract class AppLocalizations {
   /// **'No Engine API route: the chosen socket path is not valid'**
   String get dockerTransportInvalidChoice;
 
+  /// The server header's Docker transport label (03 §5.9, E4) when the docker program path set for the server (CN-16) is not an absolute path.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: the docker program path is not valid'**
+  String get dockerTransportInvalidProgram;
+
   /// Server header: the server allows few SSH sessions, so Docker shares them sparingly (03 §5.2).
   ///
   /// In en, this message translates to:
@@ -7863,6 +7869,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The socket path chosen for this server is not a valid absolute path. Choose another socket below.'**
   String get dockerGateInvalidChoice;
+
+  /// Docker tab, shown instead of its panels under accessPanelHiddenTitle: the docker program path set for the server (CN-16) is not valid.
+  ///
+  /// In en, this message translates to:
+  /// **'The docker program path set for this server is not a valid absolute path.'**
+  String get dockerGateInvalidProgram;
 
   /// Docker tab: asks again for the Docker endpoint or the engine details after a failure.
   ///
