@@ -17,6 +17,7 @@ import '../actions/docker_actions.dart'
     show ContainerActionButtons, containerActionsShown;
 import '../processes_panel.dart' show kRevealDuration;
 import '../processes_view.dart' show argumentText, clipProcessText;
+import '../workspace_dock.dart';
 import 'container_details_view.dart';
 import 'container_diagnosis.dart';
 import 'container_links.dart';
@@ -200,7 +201,18 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
                         ? l10n.dockerShellHide
                         : l10n.dockerShellOpen,
                     icon: Icon(shell ? Icons.info_outline : Icons.terminal),
-                    onPressed: () => setState(() => _shell = !shell),
+                    onPressed: () {
+                      // The desktop dock (OV-10) gives a shell the room
+                      // the inspector's column lacks.
+                      if (!shell) {
+                        if (WorkspaceDockScope.maybeOf(context)
+                            case final dock?) {
+                          dock.show(DockedShell(serverId, container));
+                          return;
+                        }
+                      }
+                      setState(() => _shell = !shell);
+                    },
                   ),
                 ),
                 IconButton(

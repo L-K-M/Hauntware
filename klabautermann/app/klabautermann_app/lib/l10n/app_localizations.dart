@@ -10162,6 +10162,48 @@ abstract class AppLocalizations {
   /// **'Show details'**
   String get dockerShellHide;
 
+  /// Tooltip of the desktop workspace's button that opens the bottom dock, with the server's logs when it holds nothing of the server yet (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Show the dock'**
+  String get dockShow;
+
+  /// Tooltip of the button that collapses the desktop workspace's bottom dock to its tabs (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Hide the dock'**
+  String get dockHide;
+
+  /// Screen-reader label of the bottom dock's top edge, which a drag or the arrow keys resize (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Dock height. Use the up and down arrow keys to resize it.'**
+  String get dockResize;
+
+  /// Bottom dock: the tab of the server's journal, followed as the Logs tab reads it (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Logs'**
+  String get dockLogs;
+
+  /// Bottom dock: the tab of a run's output, named for the unit, cron line or snippet that ran (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Output: {name}'**
+  String dockRunOutput(String name);
+
+  /// Bottom dock: the tab of a shell in a container (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Shell: {container}'**
+  String dockShell(String container);
+
+  /// Tooltip of the button on a bottom dock tab that closes it, ending its follow or shell (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Close {name}'**
+  String dockClose(String name);
+
   /// Title of the page that shows a shell in a container (CTX-07).
   ///
   /// In en, this message translates to:

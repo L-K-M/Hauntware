@@ -9685,6 +9685,52 @@
   "@dockerShellHide": {
     "description": "Tooltip of the inspector button that swaps a container shell back for the container's details, closing the shell (CTX-07)."
   },
+  "dockShow": "Show the dock",
+  "@dockShow": {
+    "description": "Tooltip of the desktop workspace's button that opens the bottom dock, with the server's logs when it holds nothing of the server yet (OV-10)."
+  },
+  "dockHide": "Hide the dock",
+  "@dockHide": {
+    "description": "Tooltip of the button that collapses the desktop workspace's bottom dock to its tabs (OV-10)."
+  },
+  "dockResize": "Dock height. Use the up and down arrow keys to resize it.",
+  "@dockResize": {
+    "description": "Screen-reader label of the bottom dock's top edge, which a drag or the arrow keys resize (OV-10)."
+  },
+  "dockLogs": "Logs",
+  "@dockLogs": {
+    "description": "Bottom dock: the tab of the server's journal, followed as the Logs tab reads it (OV-10)."
+  },
+  "dockRunOutput": "Output: {name}",
+  "@dockRunOutput": {
+    "description": "Bottom dock: the tab of a run's output, named for the unit, cron line or snippet that ran (OV-10).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "backup.service"
+      }
+    }
+  },
+  "dockShell": "Shell: {container}",
+  "@dockShell": {
+    "description": "Bottom dock: the tab of a shell in a container (OV-10).",
+    "placeholders": {
+      "container": {
+        "type": "String",
+        "example": "web"
+      }
+    }
+  },
+  "dockClose": "Close {name}",
+  "@dockClose": {
+    "description": "Tooltip of the button on a bottom dock tab that closes it, ending its follow or shell (OV-10).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Shell: web"
+      }
+    }
+  },
   "dockerShellTitle": "Shell in {container}",
   "@dockerShellTitle": {
     "description": "Title of the page that shows a shell in a container (CTX-07).",

@@ -8099,6 +8099,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerShellHide => 'Show details';
 
   @override
+  String get dockShow => 'Show the dock';
+
+  @override
+  String get dockHide => 'Hide the dock';
+
+  @override
+  String get dockResize =>
+      'Dock height. Use the up and down arrow keys to resize it.';
+
+  @override
+  String get dockLogs => 'Logs';
+
+  @override
+  String dockRunOutput(String name) {
+    return 'Output: $name';
+  }
+
+  @override
+  String dockShell(String container) {
+    return 'Shell: $container';
+  }
+
+  @override
+  String dockClose(String name) {
+    return 'Close $name';
+  }
+
+  @override
   String dockerShellTitle(String container) {
     return 'Shell in $container';
   }

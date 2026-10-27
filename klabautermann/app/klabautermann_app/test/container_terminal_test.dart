@@ -13,6 +13,7 @@ import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/docker/container_details.dart';
 import 'package:klabautermann_app/ui/docker/container_terminal.dart';
 import 'package:klabautermann_app/ui/server_safety.dart';
+import 'package:klabautermann_app/ui/workspace_dock.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:seance_terminal/seance_terminal.dart' show TerminalKeyboardBar;
 
@@ -510,6 +511,23 @@ void main() {
         (engine.sentOfType<CloseTerminal>().single as CloseTerminal).terminalId,
         open.terminalId,
       );
+    });
+
+    testWidgets('on the desktop the inspector opens the shell in the '
+        'workspace dock instead (OV-10)', (tester) async {
+      final dock = WorkspaceDock();
+      addTearDown(dock.dispose);
+      await pumpScoped(
+        tester,
+        _allowed,
+        WorkspaceDockScope(dock: dock, child: inspector()),
+      );
+      await tester.tap(find.byTooltip('Open a shell'));
+      await tester.pump();
+
+      expect(dock.items, [DockedShell(_serverId, _row)]);
+      expect(find.byType(ContainerShellPane), findsNothing);
+      expect(find.byTooltip('Open a shell'), findsOneWidget);
     });
 
     testWidgets('read-only hides the entry and takes an open pane away', (
