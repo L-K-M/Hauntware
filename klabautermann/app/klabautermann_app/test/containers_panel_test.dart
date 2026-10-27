@@ -13,7 +13,9 @@ import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/docker/containers_panel.dart';
 import 'package:klabautermann_app/ui/docker/containers_view.dart';
 import 'package:klabautermann_app/ui/server_safety.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:klabautermann_app/ui/sortable_table.dart';
+import 'package:klabautermann_app/ui/workspace_dock.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/charts.dart'
@@ -181,6 +183,7 @@ Future<_Panel> _pump(
   ContainerColumnChoice? columns,
 
   bool managed = false,
+  WorkspaceDock? dock,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -234,11 +237,16 @@ Future<_Panel> _pump(
               color: theme.colorScheme.surface,
               child: ValueListenableBuilder(
                 valueListenable: visible,
-                builder: (context, shows, _) => ContainersPanel(
-                  monitoring: monitoring,
-                  serverId: _serverId,
-                  visible: shows,
-                ),
+                builder: (context, shows, _) {
+                  final panel = ContainersPanel(
+                    monitoring: monitoring,
+                    serverId: _serverId,
+                    visible: shows,
+                  );
+                  return dock == null
+                      ? panel
+                      : WorkspaceDockScope(dock: dock, child: panel);
+                },
               ),
             ),
           ),
@@ -337,6 +345,24 @@ void main() {
       ),
       isNull,
     );
+  });
+
+  testWidgets('s opens a running container\'s shell in the desktop dock '
+      '(PLT-06, OV-10)', (tester) async {
+    final dock = WorkspaceDock();
+    addTearDown(dock.dispose);
+    final panel = await _pump(tester, dock: dock, managed: true);
+    await panel.list(tester);
+
+    // A tap opens the details page; back on the list, its row is active.
+    await tester.tap(find.text('web-frontend'));
+    await tester.pumpAndSettle();
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+    await tester.pumpAndSettle();
+
+    expect(dock.items, [DockedShell(_serverId, _containers.first)]);
   });
 
   testWidgets('watches while it shows and reads nothing hidden', (

@@ -13468,6 +13468,120 @@ abstract class AppLocalizations {
   /// **'Command Palette…'**
   String get paletteCommand;
 
+  /// View menu: shows a tab of the selected server's workspace (PLT-06), ⌘1 to ⌘8 or Ctrl+1 to Ctrl+8. The tab's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to {panel}'**
+  String viewPanelCommand(String panel);
+
+  /// Help menu: lists the keys the app takes (PLT-06), ⌘/ or Ctrl+/.
+  ///
+  /// In en, this message translates to:
+  /// **'Keyboard Shortcuts'**
+  String get keyboardMapCommand;
+
+  /// Keyboard map dialog title (PLT-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Keyboard shortcuts'**
+  String get keyboardMapTitle;
+
+  /// Keyboard map: heading of the focused list's keys.
+  ///
+  /// In en, this message translates to:
+  /// **'In this list'**
+  String get keyboardMapList;
+
+  /// Keyboard map: heading of the keys every window takes.
+  ///
+  /// In en, this message translates to:
+  /// **'Everywhere'**
+  String get keyboardMapEverywhere;
+
+  /// Keyboard map: closes the dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get keyboardMapClose;
+
+  /// Keyboard map: the Escape key's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Esc'**
+  String get keyboardMapEscapeKeys;
+
+  /// Keyboard map: what Escape does.
+  ///
+  /// In en, this message translates to:
+  /// **'Close the dialog, sheet or page on top'**
+  String get keyboardMapEscape;
+
+  /// Keyboard map: the keys that move between rows.
+  ///
+  /// In en, this message translates to:
+  /// **'↑ ↓  or  J K'**
+  String get keyboardMapMoveKeys;
+
+  /// Keyboard map: what the arrow keys and J and K do in a list.
+  ///
+  /// In en, this message translates to:
+  /// **'Move between rows'**
+  String get keyboardMapMove;
+
+  /// Keyboard map: the key that opens the active row.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter'**
+  String get keyboardMapOpenKeys;
+
+  /// Keyboard map: what Enter does in a list.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the row'**
+  String get keyboardMapOpen;
+
+  /// Keyboard map: the keys that open a row's actions (the context-menu key does too).
+  ///
+  /// In en, this message translates to:
+  /// **'Shift+F10'**
+  String get keyboardMapRowActionsKeys;
+
+  /// Keyboard map: what Shift+F10 does in a list.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the row\'s actions'**
+  String get keyboardMapRowActions;
+
+  /// Keyboard map: what / does in a list with a filter field.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter the list'**
+  String get keyboardMapFilter;
+
+  /// Keyboard map: what ? does in a list.
+  ///
+  /// In en, this message translates to:
+  /// **'Show these shortcuts'**
+  String get keyboardMapShow;
+
+  /// Single-key verb (L) in a list: opens the row's logs (PLT-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Show logs'**
+  String get keyActionLogs;
+
+  /// Single-key verb (S) in the containers list: opens a shell in the container (PLT-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Open a shell'**
+  String get keyActionShell;
+
+  /// Single-key verb (R) in a list: asks to restart the row's container or unit, with its confirmation (PLT-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Restart'**
+  String get keyActionRestart;
+
   /// A mount's details: opens the disk space explorer on the mount (DSK-07).
   ///
   /// In en, this message translates to:

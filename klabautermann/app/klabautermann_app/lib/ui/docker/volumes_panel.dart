@@ -67,6 +67,9 @@ class _VolumesPanelState extends State<VolumesPanel> {
     TableSortDirection.ascending,
   );
   final _search = TextEditingController();
+
+  /// The filter field, which `/` in the table focuses (PLT-06).
+  final _searchFocus = FocusNode();
   VolumeFilter _filter = VolumeFilter.all;
 
   /// The server whose volume watch this panel holds, if any.
@@ -95,6 +98,7 @@ class _VolumesPanelState extends State<VolumesPanel> {
   void dispose() {
     _release();
     _search.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -292,6 +296,7 @@ class _VolumesPanelState extends State<VolumesPanel> {
 
     return SortableTable<VolumeEntry>(
       tableId: DockerWatchList.volumes.name,
+      filterFocus: _searchFocus,
       columns: columns,
       rows: entries,
       rowKey: _rowKey,
@@ -328,6 +333,7 @@ class _VolumesPanelState extends State<VolumesPanel> {
         constraints: const BoxConstraints(maxWidth: 420),
         child: TextField(
           controller: _search,
+          focusNode: _searchFocus,
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             prefixIcon: const Icon(Icons.search),

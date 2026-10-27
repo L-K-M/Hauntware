@@ -12753,6 +12753,88 @@
   "@paletteCommand": {
     "description": "View menu: opens the command palette (PLT-07), ⌘K or Ctrl+K."
   },
+  "viewPanelCommand": "Go to {panel}",
+  "@viewPanelCommand": {
+    "description": "View menu: shows a tab of the selected server's workspace (PLT-06), ⌘1 to ⌘8 or Ctrl+1 to Ctrl+8. The tab's name.",
+    "placeholders": {
+      "panel": {
+        "type": "String",
+        "example": "Overview"
+      }
+    }
+  },
+  "keyboardMapCommand": "Keyboard Shortcuts",
+  "@keyboardMapCommand": {
+    "description": "Help menu: lists the keys the app takes (PLT-06), ⌘/ or Ctrl+/."
+  },
+  "keyboardMapTitle": "Keyboard shortcuts",
+  "@keyboardMapTitle": {
+    "description": "Keyboard map dialog title (PLT-06)."
+  },
+  "keyboardMapList": "In this list",
+  "@keyboardMapList": {
+    "description": "Keyboard map: heading of the focused list's keys."
+  },
+  "keyboardMapEverywhere": "Everywhere",
+  "@keyboardMapEverywhere": {
+    "description": "Keyboard map: heading of the keys every window takes."
+  },
+  "keyboardMapClose": "Close",
+  "@keyboardMapClose": {
+    "description": "Keyboard map: closes the dialog."
+  },
+  "keyboardMapEscapeKeys": "Esc",
+  "@keyboardMapEscapeKeys": {
+    "description": "Keyboard map: the Escape key's name."
+  },
+  "keyboardMapEscape": "Close the dialog, sheet or page on top",
+  "@keyboardMapEscape": {
+    "description": "Keyboard map: what Escape does."
+  },
+  "keyboardMapMoveKeys": "↑ ↓  or  J K",
+  "@keyboardMapMoveKeys": {
+    "description": "Keyboard map: the keys that move between rows."
+  },
+  "keyboardMapMove": "Move between rows",
+  "@keyboardMapMove": {
+    "description": "Keyboard map: what the arrow keys and J and K do in a list."
+  },
+  "keyboardMapOpenKeys": "Enter",
+  "@keyboardMapOpenKeys": {
+    "description": "Keyboard map: the key that opens the active row."
+  },
+  "keyboardMapOpen": "Open the row",
+  "@keyboardMapOpen": {
+    "description": "Keyboard map: what Enter does in a list."
+  },
+  "keyboardMapRowActionsKeys": "Shift+F10",
+  "@keyboardMapRowActionsKeys": {
+    "description": "Keyboard map: the keys that open a row's actions (the context-menu key does too)."
+  },
+  "keyboardMapRowActions": "Show the row's actions",
+  "@keyboardMapRowActions": {
+    "description": "Keyboard map: what Shift+F10 does in a list."
+  },
+  "keyboardMapFilter": "Filter the list",
+  "@keyboardMapFilter": {
+    "description": "Keyboard map: what / does in a list with a filter field."
+  },
+  "keyboardMapShow": "Show these shortcuts",
+  "@keyboardMapShow": {
+    "description": "Keyboard map: what ? does in a list."
+  },
+  "keyActionLogs": "Show logs",
+  "@keyActionLogs": {
+    "description": "Single-key verb (L) in a list: opens the row's logs (PLT-06)."
+  },
+  "keyActionShell": "Open a shell",
+  "@keyActionShell": {
+    "description": "Single-key verb (S) in the containers list: opens a shell in the container (PLT-06)."
+  },
+  "keyActionRestart": "Restart",
+  "@keyActionRestart": {
+    "description": "Single-key verb (R) in a list: asks to restart the row's container or unit, with its confirmation (PLT-06)."
+  },
   "diskExplorerOpen": "Explore space",
   "@diskExplorerOpen": {
     "description": "A mount's details: opens the disk space explorer on the mount (DSK-07)."
