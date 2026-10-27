@@ -6384,6 +6384,36 @@ abstract class AppLocalizations {
   /// **'What will run'**
   String get actionPreviewSteps;
 
+  /// Action preview: copies the exact commands the action runs, to read or script; copying runs nothing (AUT-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Copy as commands'**
+  String get actionPreviewCopyCommands;
+
+  /// Copied action commands: a shell comment above a command that reads an edit's new content on stdin. Keep the leading # so the line stays a comment.
+  ///
+  /// In en, this message translates to:
+  /// **'# The next command reads {size} of new content on stdin.'**
+  String actionPreviewCommandsStdin(String size);
+
+  /// Copied action commands: a shell comment naming a Docker Engine API request the action sends, which a shell cannot run as it stands. Keep the leading # so the line stays a comment.
+  ///
+  /// In en, this message translates to:
+  /// **'# Docker Engine API: {request}'**
+  String actionPreviewCommandsApi(String request);
+
+  /// Action preview: the commands are on the clipboard; the action itself has not run.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied. Nothing ran.'**
+  String get actionPreviewCommandsCopied;
+
+  /// Action preview: the clipboard refused the commands, so pasting now would paste something else.
+  ///
+  /// In en, this message translates to:
+  /// **'Not copied. The clipboard still holds its earlier text.'**
+  String get actionPreviewCommandsNotCopied;
+
   /// Badge on a step that runs as root through admin mode (SAF-03). Lowercase on purpose: the account name.
   ///
   /// In en, this message translates to:

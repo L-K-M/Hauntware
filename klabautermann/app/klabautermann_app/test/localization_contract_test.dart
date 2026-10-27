@@ -207,6 +207,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The Activity table's key prefix, never shown, and the copied log's
   // line break between JSON records.
   'lib/ui/actions/activity_page.dart': {"'activity'", r"'\n'"},
+  // A copied plan's elevated step and the line breaks between steps
+  // (AUT-02).
+  'lib/ui/actions/action_preview.dart': {r"'sudo $commandLine'", r"'\n'"},
   // The ARB select key of every unused image's prune (DKE-05).
   'lib/ui/actions/docker_actions.dart': {"'imagesAll'"},
   'lib/controllers/fleet_controller.dart': {

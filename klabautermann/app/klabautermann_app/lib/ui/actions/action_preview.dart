@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:ghost_ui/ghost_ui.dart'
     show ghostFormatBinarySize, showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -186,9 +187,25 @@ class ActionPreviewView extends StatelessWidget {
             child: Text(l10n.actionPreviewTitle, style: textTheme.titleLarge),
           ),
           Text(l10n.actionPreviewTarget(preview.targetName)),
-          Semantics(
-            header: true,
-            child: Text(l10n.actionPreviewSteps, style: textTheme.titleSmall),
+          Row(
+            children: [
+              Expanded(
+                child: Semantics(
+                  header: true,
+                  child: Text(
+                    l10n.actionPreviewSteps,
+                    style: textTheme.titleSmall,
+                  ),
+                ),
+              ),
+              // AUT-02: what the action runs, to read or script; copying
+              // runs nothing.
+              TextButton.icon(
+                onPressed: () => _copyCommands(context, preview.steps),
+                icon: const Icon(Icons.copy),
+                label: Text(l10n.actionPreviewCopyCommands),
+              ),
+            ],
           ),
           for (final step in preview.steps)
             Row(
@@ -332,6 +349,38 @@ class ActionPreviewView extends StatelessWidget {
 
 /// Toasts each run's end (03 §8.5): done, cancelled, or why it did not
 /// finish or start, in the target's name.
+/// [steps] as one pasteable script (AUT-02): each shell step's exact
+/// line, `sudo` before one admin mode elevates, and the Docker API
+/// requests as comments, since a shell cannot send them as they stand.
+/// A step that reads new content on stdin says so above its line.
+String planCommandsText(AppLocalizations l10n, List<PlanStep> steps) => [
+  for (final step in steps)
+    ...switch (step) {
+      ShellStep(:final commandLine, :final elevated, :final input) => [
+        if (input != null)
+          l10n.actionPreviewCommandsStdin(ghostFormatBinarySize(input.length)),
+        elevated ? 'sudo $commandLine' : commandLine,
+      ],
+      ApiStep() || ExecStep() => [l10n.actionPreviewCommandsApi(step.display)],
+    },
+].join('\n');
+
+Future<void> _copyCommands(BuildContext context, List<PlanStep> steps) async {
+  final overlay = Overlay.of(context, rootOverlay: true);
+  final l10n = AppLocalizations.of(context);
+  try {
+    await Clipboard.setData(ClipboardData(text: planCommandsText(l10n, steps)));
+    if (overlay.mounted) {
+      showTopToast(overlay, message: l10n.actionPreviewCommandsCopied);
+    }
+  } on Exception {
+    // Windows refuses while another process holds the clipboard.
+    if (overlay.mounted) {
+      showTopToast(overlay, message: l10n.actionPreviewCommandsNotCopied);
+    }
+  }
+}
+
 class ActionResultToasts extends StatefulWidget {
   const ActionResultToasts({
     super.key,

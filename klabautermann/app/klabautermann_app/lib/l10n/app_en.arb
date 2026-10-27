@@ -6082,6 +6082,38 @@
   "@actionPreviewSteps": {
     "description": "Heading above the exact commands and API requests in the action preview."
   },
+  "actionPreviewCopyCommands": "Copy as commands",
+  "@actionPreviewCopyCommands": {
+    "description": "Action preview: copies the exact commands the action runs, to read or script; copying runs nothing (AUT-02)."
+  },
+  "actionPreviewCommandsStdin": "# The next command reads {size} of new content on stdin.",
+  "@actionPreviewCommandsStdin": {
+    "description": "Copied action commands: a shell comment above a command that reads an edit's new content on stdin. Keep the leading # so the line stays a comment.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "1.2 KiB"
+      }
+    }
+  },
+  "actionPreviewCommandsApi": "# Docker Engine API: {request}",
+  "@actionPreviewCommandsApi": {
+    "description": "Copied action commands: a shell comment naming a Docker Engine API request the action sends, which a shell cannot run as it stands. Keep the leading # so the line stays a comment.",
+    "placeholders": {
+      "request": {
+        "type": "String",
+        "example": "POST /v1.52/containers/web/restart"
+      }
+    }
+  },
+  "actionPreviewCommandsCopied": "Copied. Nothing ran.",
+  "@actionPreviewCommandsCopied": {
+    "description": "Action preview: the commands are on the clipboard; the action itself has not run."
+  },
+  "actionPreviewCommandsNotCopied": "Not copied. The clipboard still holds its earlier text.",
+  "@actionPreviewCommandsNotCopied": {
+    "description": "Action preview: the clipboard refused the commands, so pasting now would paste something else."
+  },
   "actionPreviewRoot": "root",
   "@actionPreviewRoot": {
     "description": "Badge on a step that runs as root through admin mode (SAF-03). Lowercase on purpose: the account name."
