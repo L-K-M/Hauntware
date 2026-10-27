@@ -322,6 +322,15 @@ class _OpenSshSession implements SshSession {
   @override
   void resize(TerminalSize size) {}
 
+  /// A server that cannot read its shell's directory, so it is not asked
+  /// again after connecting.
+  @override
+  Future<RemoteCommandResult> runCommand(
+    String command, {
+    Duration? timeout,
+    int maxOutputBytes = 256 * 1024,
+  }) async => const RemoteCommandResult(exitCode: 3);
+
   @override
   Future<void> close() async {
     isClosed = true;

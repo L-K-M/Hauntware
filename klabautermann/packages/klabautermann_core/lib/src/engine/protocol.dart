@@ -4199,6 +4199,13 @@ final class DockerSystemDfQuery extends DockerQuerySpec {
   const DockerSystemDfQuery();
 }
 
+/// DKE-06's security review and DKE-07's log rotation lint, on demand:
+/// the list, then an inspect of each container, up to
+/// [kDockerReviewMax]. Answered by [DockerReviewPayload].
+final class DockerReviewQuery extends DockerQuerySpec {
+  const DockerReviewQuery();
+}
+
 /// One file of the compose project [project] (03 §7.16 STK-04, M11):
 /// a config file or an environment file its containers recorded, or the
 /// `.env` in its working directory, read over SFTP once the project's
@@ -4457,6 +4464,131 @@ final class DockerSystemDfPayload extends DockerPayload {
   const DockerSystemDfPayload(this.df);
 
   final SystemDf df;
+}
+
+/// The most containers a [DockerReviewQuery] inspects, one request
+/// each; the rest are counted in [DockerReviewPayload.omitted].
+const kDockerReviewMax = 200;
+
+/// What DKE-06 and DKE-07 flag in a container's configuration, from
+/// the most to the least severe.
+enum ContainerRisk {
+  /// `HostConfig.Privileged`: every device and capability of the host.
+  privileged,
+
+  /// An engine socket bind-mounted in, which is root on the host
+  /// (03 §8.1), or a host folder that holds one (`/`, `/run`,
+  /// `/var/run`); its path is the finding's detail.
+  socketMount,
+
+  /// `NetworkMode` host.
+  hostNetwork,
+
+  /// `PidMode` host.
+  hostPid,
+
+  /// `CapAdd`; the capabilities are the detail.
+  addedCapabilities,
+
+  /// A database's port published on every address; the port is the
+  /// detail.
+  databasePublished,
+
+  /// No `User`, or root, on an engine that maps neither (rootless or a
+  /// user namespace remap).
+  rootUser,
+
+  /// The `json-file` log driver without `max-size`, which never rotates
+  /// (r5 §1.6).
+  logsUnrotated,
+
+  /// An image named without a tag or digest, or by `latest`; the
+  /// reference is the detail.
+  latestTag,
+
+  /// No health check from the image or the container, or one turned
+  /// off.
+  noHealthcheck,
+
+  /// Restart policy `no`, on a container that is not removed when it
+  /// stops and not a compose one-off run.
+  noRestartPolicy;
+
+  /// How much the risk matters: [ContainerRiskLevel.high] where the
+  /// container can take the host, [ContainerRiskLevel.medium] where it
+  /// widens what a break-in reaches or fills the disk.
+  ContainerRiskLevel get level => switch (this) {
+    privileged ||
+    socketMount ||
+    hostNetwork ||
+    hostPid ||
+    addedCapabilities ||
+    databasePublished => ContainerRiskLevel.high,
+    rootUser || logsUnrotated => ContainerRiskLevel.medium,
+    latestTag || noHealthcheck || noRestartPolicy => ContainerRiskLevel.low,
+  };
+}
+
+enum ContainerRiskLevel { high, medium, low }
+
+/// One [ContainerRisk] a container carries, with what it names: a path,
+/// capabilities, a port or an image reference.
+@immutable
+final class ContainerFinding {
+  const ContainerFinding(this.risk, {this.detail});
+
+  final ContainerRisk risk;
+  final String? detail;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ContainerFinding && other.risk == risk && other.detail == detail;
+
+  @override
+  int get hashCode => Object.hash(risk, detail);
+
+  @override
+  String toString() => 'ContainerFinding($risk, $detail)';
+}
+
+/// One container's review: its findings, most severe first, empty when
+/// it carries none.
+@immutable
+final class ContainerReview {
+  const ContainerReview({
+    required this.containerId,
+    required this.name,
+    required this.state,
+    this.project,
+    required this.findings,
+  });
+
+  final String containerId;
+  final String name;
+
+  /// The list's `State`, such as `running` or `exited`.
+  final String? state;
+
+  /// The compose project, when the container belongs to one.
+  final String? project;
+
+  final List<ContainerFinding> findings;
+}
+
+/// A [DockerReviewQuery]'s answer: each container read, in the list's
+/// order. A container removed between the list and its inspect is left
+/// out; [omitted] counts those past [kDockerReviewMax], [unreadable]
+/// those whose inspect the daemon refused.
+final class DockerReviewPayload extends DockerPayload {
+  const DockerReviewPayload(
+    this.reviews, {
+    this.omitted = 0,
+    this.unreadable = 0,
+  });
+
+  final List<ContainerReview> reviews;
+  final int omitted;
+  final int unreadable;
 }
 
 /// The containers grouped by compose project (STK-01), from the same
