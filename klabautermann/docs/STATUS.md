@@ -8,11 +8,12 @@ normative plan (`03-ARCHITECTURE.md` §2 is the decision log).
 ## Where things stand
 
 M2's host reads, M3's Docker reads, M4's actions and admin mode (the
-MVP preview) and M5's editing, shells and sync writes (v1 part 1) are
-on main. M3 and M5 met all of their automated exits and M4 all but one
-([M3 exit](#m3-exit), [M4 exit](#m4-exit) and [M5 exit](#m5-exit),
+MVP preview), M5's editing, shells and sync writes (v1 part 1) and M6's
+breadth (v1 part 2) are on main. M3, M5 and M6 met all of their
+automated exits and M4 all but one ([M3 exit](#m3-exit),
+[M4 exit](#m4-exit), [M5 exit](#m5-exit) and [M6 exit](#m6-exit),
 below); M4's remaining case, a sudo rule scoped to `docker`, waits on a
-decision.
+decision. M7, v1 hardening and release readiness, is next.
 The real-host and device checks stay open under the manual gates. What
 is on main:
 
@@ -2365,8 +2366,8 @@ is on main:
   matches, so `:containers api` searches only containers. A tab or
   container selects its server and switches the workspace there, a
   container also opening in the inspector, through
-  `WorkspaceNavigation`. Units, stacks and the keyboard model follow in
-  N60b. Tested in the palette tests of `ghost_ui` and the app.
+  `WorkspaceNavigation`. Units and stacks (N60c) and the keyboard model
+  (N60b) are below. Tested in the palette tests of `ghost_ui` and the app.
 - Threshold bands (M6 N61a, N61b, OV-11): CPU, memory and disk use are
   careful from 70 %, warning from 80 % and critical from 90 % by
   default, through `ThresholdScope`, which the fleet rows, the
@@ -2441,7 +2442,7 @@ is on main:
   the stack checks, redeploy and edit plans and host `docker pull`. A
   path that is not absolute or holds a NUL or line break fails the
   endpoint as `invalidProgram`, which the Docker tab words. The app's
-  setting is not built yet. Tested in the ladder, the router, the stack
+  setting is N63f's, below. Tested in the ladder, the router, the stack
   sources, the redeploy and edit plans and the Docker tab.
 - Diagnostic bundle (M6 N64a, CN-18): the server header's Safety menu
   offers "Diagnostic bundle…", which waits for the regular probe and
@@ -2514,6 +2515,51 @@ is on main:
   `~/.ssh/config:ro`, no home access). A key under `~/.ssh` reaches a
   Flatpak build through the agent or an import into the app's keystore;
   widening the grant to `~/.ssh:ro` waits on the owner's decision.
+- Keyboard model (M6 N60b, PLT-06, A11Y-10): every sortable list moves
+  with `j`/`k` beside the arrows and opens the keyboard map on `?`; `/`
+  focuses the filter of Containers, Images, Volumes, Networks and
+  Processes. Single keys act on the active row where its menu verb is
+  allowed: `l` logs, `s` shell (a running container, in the bottom dock
+  on the desktop) and `r` restart on Containers, `l` and `r` on
+  Services; a text field keeps its letters. View > "Go to <tab>" takes
+  `Cmd/Ctrl-1` to `8` once a server is selected, Help > Keyboard
+  Shortcuts (`Cmd/Ctrl-/`) lists the focused list's keys and the
+  window's from the command registry, and Esc pops the page that holds
+  focus once nothing else takes it. Tested in the sortable table,
+  containers, services, menu and shortcuts tests.
+- Palette units and stacks (M6 N60c, PLT-07): the palette also lists the
+  selected server's units from its `units` sample and its Compose
+  projects from the stack read. A unit opens on the Services tab and a
+  stack on Docker's Stacks sub-tab, through `WorkspaceNavigation`.
+  Tested in the app's palette tests.
+- Disk space explorer (M6 N32, DSK-07, 03 §7.3): a mount's details gain
+  "Explore space", a page that lists one folder's entries largest first
+  with their share, from `du -x -k -a -d 1` on the mount's filesystem
+  (GNU, BusyBox and BSD alike, at most 1,000 entries [E]). Folders drill
+  in and step back up, never above the mount point; each is read once
+  until Read again, within 3 minutes. In admin mode "Read as root" reads
+  through the executor, and a lower bound says so and how to count the
+  rest. `ncdu -o -` and `gdu -o-` streaming is not built: a whole-tree
+  export passes the 1 MiB a host read keeps. Tested in the host parser,
+  a real-shell `du` test, the engine and the explorer page.
+- Timer details (M6 N71, JOB-02, D57): opening a timer reads its
+  `OnCalendar=` and monotonic triggers and randomized delay with
+  `systemctl show`, then each calendar trigger's next five runs with
+  `systemd-analyze calendar`, in the system or the user's manager. A
+  failed calendar read leaves its expression without runs. Tested in
+  `timer_detail_test.dart`, the engine and the Jobs panel.
+- Dropbear (M6 N67h, N67i, CN-15): `SshLinkSeen.serverIdentification`
+  carries the server's identification line (`seance_core`, #555). On a
+  Dropbear older than 2024.84 the Docker ladder skips the socket forward
+  for the relay, and a streamlocal route through 2024.84 to 2025.88
+  (CVE-2025-14282, forwarded connections reach the engine as root) gets
+  a warning in the server header. Tested in `dropbear_test.dart`, the
+  ladder, the router and the Docker tab.
+- Docker program setting (M6 N63f, CN-16): the Docker tab's engine strip
+  sets the server's `docker`, the one on the `PATH` or a typed absolute
+  path validated as the engine does. It is kept on the device beside the
+  socket choice and sent as each link comes up. Tested in the device
+  settings store, the Docker controller and the Docker tab.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
@@ -2626,6 +2672,39 @@ admin mode for an account whose only sudo rule is NOPASSWD `docker`
 below, which M5 extends by privileged writes under SELinux, link intake
 on real devices and the container terminal on phones.
 
+## M6 exit
+
+M6, v1 part 2 (04 §13, M6 plan N01 to N71), met each automated exit on
+the evidence below. Every M6 scope row of 04 is built: the Docker
+breadth rows (volumes, networks, prune previews, pulls with progress,
+image history and update checks after S8), the host breadth rows (disk
+I/O, mounts, the disk space explorer, swap devices, interfaces, the
+listening-ports map, the firewall view, port forwards after S7,
+packages, temperatures, GPU, SMART, time, reboot and wait, the boot
+timeline, the kernel check, users and sessions, sshd posture, endpoint
+TLS expiry), triage, alerts with notifications and rollup history, the
+command palette and keyboard model, cards, top lists and the bottom
+dock, the diagnostic bundle, the polling budget, the app lock, snippets,
+the tablet split and the v1 accessibility rows. The close-out audit
+found three rows missing and built them: the keyboard model and palette
+units and stacks (N60b, N60c), the disk space explorer (N32) and timer
+next runs (N71).
+
+| Exit | Evidence | Status |
+|---|---|---|
+| Y1: every table-stakes item of 02 §4 complete | The N70 audit traced each 02 §4 ID to code on main and a STATUS entry; JOB-02's timer next runs were the one table-stakes gap, closed by N71 | met |
+| Y2: alert rules, including raise and clear hysteresis, covered by tests | N50a's `alert_evaluator_test.dart` (a breach raises only after its raise duration and clears only after its clear duration below the clear threshold, a short breach never raises, an unknown value holds the state, rule scope, removed rules and servers leaving the fleet) and `klabautermann_host`'s `threshold_test.dart` | met |
+| Y3: notification copy states the coverage limit | N51's `alert_notifications_test.dart` (the prompt and the switch say that rules are evaluated only while the app is open, before the system asks, and each notification carries the limit) and N50c's `alert_rules_test.dart` | met |
+| Y4: gap rendering covered by goldens | `time_series_goldens_test.dart` (a labelled hatched gap, a gap too narrow for its label, an open gap), N52b's `history_goldens_test.dart` (48 hours with a band per gap reason) and the chart and container log goldens | met |
+
+Left open: FL-16's admin-mode memory, deferred because remembering admin
+mode across launches would undo SAF-01's observe-only default (FL-16's
+cadence, endpoint and program overrides are built); `ncdu` and `gdu`
+streaming for the explorer (N32, above); the Flatpak `~/.ssh:ro` grant,
+which waits on the owner (PLT-09); M4's sudo rule scoped to `docker`;
+and the device checks below, which M6 extends by notifications, the app
+lock, the share sheet, port forwards and the tablet split.
+
 ## Open manual gates
 
 The milestone sign-off gates are tracked in
@@ -2670,6 +2749,14 @@ is not a device smoke test:
 - The container terminal on phones (M5, CTX-07): a shell into a
   container on an Android phone and an iPhone, with the keyboard bar,
   paste confirmation and the app backgrounded and resumed.
+- Alert notifications on devices (M6 N51, ALR-01): on each OS, the
+  app's prompt, then the system's request, a raised alert's
+  notification and its withdrawal on clear; on Linux also from the
+  Flatpak build, through the notification portal.
+- The share sheet (M6 N67c, PLT-08) on an Android phone and an iPhone,
+  and a port forward's page opening in the phone's browser (NET-11).
+- The tablet split (M6 N62, PLT-05) on an iPad and an Android tablet,
+  with a hardware keyboard for the keyboard model (PLT-06).
 
 None of those applies to M1a yet; they gate the milestones that ship the
 matching behavior; this list keeps them visible so they are not lost

@@ -219,3 +219,48 @@
   only and never runs a command.
 - Paste a theme copied in Séance or Poltergeist into Settings >
   Appearance.
+- Docker: Volumes and Networks sub-tabs that create and remove them,
+  prune with a preview of what goes, image pulls with progress, an
+  image's history, update checks against the registries, container
+  flags, bulk actions and columns, per-container CPU, memory, network
+  and block I/O charts with a note when memory nears its limit, a
+  container's processes and label links, a review of risky container
+  settings, the daemon's events, and a diagnosis for a container that
+  failed: out of memory, its exit code, a restart loop or a failing
+  health check. Container logs can be coloured by level, merged by time
+  for a stack, and exported redacted.
+- Apps: the Docker tab lists the web ports and links of running
+  containers and opens them in your browser through a port forward that
+  listens only on this device; "Forward a port…" reaches any host and
+  port the server reaches.
+- Docker access: offer to enable the Podman socket, name a server's
+  `docker` program where it is not on the `PATH`, and a warning when a
+  Dropbear server's forwarding exposes the engine as root.
+- System tab: disk activity, mounts and swap devices, a disk space
+  explorer that drills into a mount's folders, interfaces and
+  connections, listening ports, the firewall, pending updates, CPU
+  breakdown and pressure, out-of-memory kills, temperatures, GPUs, and
+  in admin mode drive health, the SSH server's settings, reboot and
+  shutdown with a wait for the server to return. Also time and clock
+  sync, boots, the processor, users and logins, and the expiry of TLS certificates on endpoints you
+  list.
+- Jobs: a timer's details show its triggers and each calendar trigger's
+  next runs.
+- Alerts: rules evaluated on this device while Klabautermann is open,
+  with separate raise and clear thresholds and durations, an alert
+  center with badges, system notifications you turn on, and an
+  on-device history of each server's usage in the Overview.
+- Overview: arrange its cards, see the top processes and containers,
+  quick actions, usage bands you can set in Settings, and share a status
+  card.
+- Fleet: a summary of what needs attention, a board with card and grid
+  layouts, and a connection tree.
+- Desktop: a command palette (⌘K or Ctrl+K) for commands, servers, tabs,
+  containers, units and stacks; keyboard navigation of every list, with
+  `/` to filter, single-key actions and a keyboard map on `?`; a bottom
+  dock for shells; and a split of the fleet and the server on tablets.
+- Settings: an app lock that asks for the device's own unlock, a polling
+  budget and per-server caps, log text size and wrapping, server times
+  in the server's zone, and your sync account's size.
+- Copy the commands an action runs, run Séance's synced snippets on a
+  server, and export a redacted diagnostic bundle.

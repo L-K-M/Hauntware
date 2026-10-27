@@ -5226,7 +5226,7 @@ abstract class AppLocalizations {
   /// **'Not connected, so the triggers were not read.'**
   String get jobsTimerTriggersNoLink;
 
-  /// Timer details: systemctl is missing or the unit name is not a timer's.
+  /// Timer details: systemctl is missing or failed, as when the manager could not be reached, or the unit name is not a timer's.
   ///
   /// In en, this message translates to:
   /// **'systemd did not say what starts this timer.'**

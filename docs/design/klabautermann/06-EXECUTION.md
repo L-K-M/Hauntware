@@ -74,6 +74,7 @@ until a person with the hardware signs them off (04, section 13).
 | Privileged file writes under SELinux on RHEL 9 (labels kept, `restorecon`) | M5 | open |
 | Link intake on real devices: Séance and Poltergeist hand-offs on each phone and desktop OS | M5 | open |
 | The container terminal on an Android phone and an iPhone | M5 | open |
+| App lock, alert notifications, the share sheet and port forwards on each phone and desktop OS; the tablet split with a hardware keyboard | M6 | open |
 | Manual checklist on every platform; owner sign-off | M7 | open |
 
 M4's checklist suggests Debian 12, Ubuntu 26.04 (sudo-rs) and RHEL 9 or

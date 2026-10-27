@@ -4821,7 +4821,7 @@
   },
   "jobsTimerTriggersUnreadable": "systemd did not say what starts this timer.",
   "@jobsTimerTriggersUnreadable": {
-    "description": "Timer details: systemctl is missing or the unit name is not a timer's."
+    "description": "Timer details: systemctl is missing or failed, as when the manager could not be reached, or the unit name is not a timer's."
   },
   "jobsTimerTriggersFailed": "The triggers could not be read. Close and open the details to try again.",
   "@jobsTimerTriggersFailed": {
