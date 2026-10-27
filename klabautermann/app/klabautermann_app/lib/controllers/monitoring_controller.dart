@@ -16,6 +16,7 @@ import 'job_history_reads.dart';
 import 'log_reads.dart';
 import 'log_streams.dart';
 import 'package_reads.dart';
+import 'port_forwards.dart';
 import 'stack_folders.dart';
 import 'tls_endpoints.dart';
 
@@ -173,6 +174,7 @@ final class MonitoringController extends ChangeNotifier {
     packages = PackageReads(_engine);
     rollups = HistoryReads(_engine);
     accounts = AccountReads(_engine);
+    forwards = PortForwardsController(_engine);
     docker = DockerController(
       _engine,
       endpointChoices: dockerEndpointChoices,
@@ -226,6 +228,10 @@ final class MonitoringController extends ChangeNotifier {
   /// the engine details the Docker tab shows (03 §5.9, §10.2): a concern
   /// of its own for this engine run, listening beside [logs].
   late final DockerController docker;
+
+  /// The port forwards this run opened (NET-11, DKE-09), a concern of its
+  /// own beside [docker].
+  late final PortForwardsController forwards;
 
   final EngineClient _engine;
   final Duration _linkGrace;
@@ -846,6 +852,7 @@ final class MonitoringController extends ChangeNotifier {
     packages.dispose();
     rollups.dispose();
     accounts.dispose();
+    forwards.dispose();
     docker.dispose();
     _onEngineDone();
     for (final refresh in _refreshes.toList()) {
