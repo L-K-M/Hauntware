@@ -4387,6 +4387,33 @@ class AppLocalizationsEn extends AppLocalizations {
       'While a server\'s Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.';
 
   @override
+  String get settingsLogTextSize => 'Log text size';
+
+  @override
+  String get settingsLogTextSizeDetail =>
+      'How large every log\'s lines are drawn, before your system\'s text size applies.';
+
+  @override
+  String settingsLogTextSizeValue(int size) {
+    return '$size px';
+  }
+
+  @override
+  String get settingsLogWrap => 'Wrap long log lines';
+
+  @override
+  String get settingsLogWrapDetail =>
+      'Show each line in full on as many rows as it needs, instead of cutting it at the edge.';
+
+  @override
+  String get settingsLogDisplayNotSaved =>
+      'The log display changed but could not be saved. It lasts until Klabautermann quits.';
+
+  @override
+  String get settingsLogDisplayNotChanged =>
+      'The log display could not be changed.';
+
+  @override
   String get settingsThresholdsTitle => 'Usage bands';
 
   @override

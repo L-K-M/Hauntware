@@ -8,6 +8,7 @@ import 'package:ghost_theme/ghost_theme.dart';
 
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/cadence_controller.dart';
+import '../../controllers/log_display.dart';
 import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/device_name.dart';
@@ -86,6 +87,17 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
   RemoteCadenceCaps? get cadenceCaps =>
       _cadenceCaps.offered ? _cadenceCaps : null;
 
+  /// The General tab's log display, from the latest snapshot; null while
+  /// the app offers none.
+  RemoteLogDisplay? get logDisplay => _logDisplay.offered ? _logDisplay : null;
+
+  late final RemoteLogDisplay _logDisplay = RemoteLogDisplay._(
+    (display) => invoke(
+      SettingsLinkMethod.setLogDisplay.name,
+      encodeLogDisplay(display),
+    ),
+  );
+
   late final RemoteCadenceCaps _cadenceCaps = RemoteCadenceCaps._(
     (serverId, cap) =>
         invoke(SettingsLinkMethod.setCadenceCap.name, [serverId, cap?.name]),
@@ -143,6 +155,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     );
     _cadence._apply(snapshot[SettingsLinkKey.cadence.name] as String?);
     _cadenceCaps._apply(snapshot[SettingsLinkKey.cadenceCaps.name] as Map?);
+    _logDisplay._apply(snapshot[SettingsLinkKey.logDisplay.name]);
     deviceName._apply(snapshot[SettingsLinkKey.deviceName.name]! as String);
     _thresholds._apply(
       snapshot[SettingsLinkKey.thresholds.name] as Map<Object?, Object?>?,
@@ -277,6 +290,36 @@ final class RemoteCadence extends ChangeNotifier implements CadenceSettings {
   @override
   Future<void> setCadence(CadencePreset preset) async {
     await _call(preset);
+  }
+}
+
+/// [LogDisplaySettings] over the link: the app's log display as the
+/// latest snapshot carries it, and changes that run in the app's isolate.
+final class RemoteLogDisplay extends ChangeNotifier
+    implements LogDisplaySettings {
+  RemoteLogDisplay._(this._call);
+
+  final Future<Object?> Function(LogDisplay display) _call;
+
+  /// Whether the app offers a log display; the first snapshot says.
+  bool offered = false;
+
+  LogDisplay _value = LogDisplay();
+
+  void _apply(Object? encoded) {
+    final display = decodeLogDisplay(encoded);
+    if (offered == (encoded != null) && display == _value) return;
+    offered = encoded != null;
+    _value = display;
+    notifyListeners();
+  }
+
+  @override
+  LogDisplay get value => _value;
+
+  @override
+  Future<void> setLogDisplay(LogDisplay display) async {
+    await _call(display);
   }
 }
 

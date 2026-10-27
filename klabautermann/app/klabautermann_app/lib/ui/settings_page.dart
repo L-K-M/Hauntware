@@ -10,6 +10,7 @@ import '../controllers/cadence_controller.dart';
 import '../controllers/app_lock_controller.dart';
 import '../controllers/appearance_controller.dart';
 import '../controllers/device_name.dart';
+import '../controllers/log_display.dart';
 import '../controllers/monitor_set.dart';
 import '../controllers/pin_publication_controller.dart';
 import '../controllers/safety_controller.dart';
@@ -44,6 +45,7 @@ class SettingsPage extends StatefulWidget {
     this.thresholds,
     this.cadence,
     this.cadenceCaps,
+    this.logDisplay,
     this.deviceName,
     this.safety,
     this.appLock,
@@ -68,6 +70,10 @@ class SettingsPage extends StatefulWidget {
   /// The per-server caps (SAF-19) in Servers; null in tests that leave
   /// them out, where Servers shows none.
   final CadenceCapSettings? cadenceCaps;
+
+  /// The log text size and wrapping (A11Y-12) in General; null in tests
+  /// that leave it out, where General shows neither.
+  final LogDisplaySettings? logDisplay;
 
   /// Null in tests that leave it out, where General shows no device name.
   final DeviceNameSettings? deviceName;
@@ -159,6 +165,7 @@ class _SettingsPageState extends State<SettingsPage>
               SettingsTab.general => GeneralTab(
                 announcements: widget.announcements,
                 cadence: widget.cadence,
+                logDisplay: widget.logDisplay,
                 deviceName: widget.deviceName,
                 appVersion: widget.appVersion,
               ),
@@ -198,6 +205,7 @@ class GeneralTab extends StatelessWidget {
     super.key,
     required this.announcements,
     this.cadence,
+    this.logDisplay,
     this.deviceName,
     required this.appVersion,
   });
@@ -206,6 +214,9 @@ class GeneralTab extends StatelessWidget {
 
   /// As [SettingsPage.cadence].
   final CadenceSettings? cadence;
+
+  /// As [SettingsPage.logDisplay].
+  final LogDisplaySettings? logDisplay;
 
   /// As [SettingsPage.deviceName].
   final DeviceNameSettings? deviceName;
@@ -256,12 +267,36 @@ class GeneralTab extends StatelessWidget {
     }
   }
 
+  /// As [_set], for the log display.
+  Future<void> _setLogDisplay(
+    BuildContext context,
+    LogDisplaySettings logDisplay,
+    LogDisplay display,
+  ) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await logDisplay.setLogDisplay(display);
+    } on LogDisplayNotSavedException catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsLogDisplayNotSaved);
+      }
+    } on Exception catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsLogDisplayNotChanged);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final cadence = this.cadence;
+    final logDisplay = this.logDisplay;
     return ListenableBuilder(
-      listenable: Listenable.merge([announcements, ?cadence]),
+      listenable: Listenable.merge([announcements, ?cadence, ?logDisplay]),
       builder: (context, _) => ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -280,6 +315,52 @@ class GeneralTab extends StatelessWidget {
             title: Text(l10n.settingsAnnounceBands),
             subtitle: Text(l10n.settingsAnnounceBandsDetail),
           ),
+          if (logDisplay != null) ...[
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.settingsLogTextSize),
+              subtitle: Text(l10n.settingsLogTextSizeDetail),
+              trailing: DropdownButton<int>(
+                value: logDisplay.value.textSize,
+                items: [
+                  for (
+                    var size = kLogTextSizeMin;
+                    size <= kLogTextSizeMax;
+                    size++
+                  )
+                    DropdownMenuItem(
+                      value: size,
+                      child: Text(l10n.settingsLogTextSizeValue(size)),
+                    ),
+                ],
+                onChanged: (size) {
+                  if (size == null) return;
+                  unawaited(
+                    _setLogDisplay(
+                      context,
+                      logDisplay,
+                      logDisplay.value.copyWith(textSize: size),
+                    ),
+                  );
+                },
+              ),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: logDisplay.value.wrap == LogWrap.on,
+              onChanged: (wrap) => unawaited(
+                _setLogDisplay(
+                  context,
+                  logDisplay,
+                  logDisplay.value.copyWith(
+                    wrap: wrap ? LogWrap.on : LogWrap.off,
+                  ),
+                ),
+              ),
+              title: Text(l10n.settingsLogWrap),
+              subtitle: Text(l10n.settingsLogWrapDetail),
+            ),
+          ],
           if (cadence != null) ...[
             const SizedBox(height: 24),
             Semantics(

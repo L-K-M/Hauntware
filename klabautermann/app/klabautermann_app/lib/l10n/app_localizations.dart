@@ -5580,6 +5580,48 @@ abstract class AppLocalizations {
   /// **'While a server\'s Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.'**
   String get settingsAnnounceBandsDetail;
 
+  /// Settings, General: label of the log text size picker (A11Y-12).
+  ///
+  /// In en, this message translates to:
+  /// **'Log text size'**
+  String get settingsLogTextSize;
+
+  /// Settings, General: explanation under the log text size picker (A11Y-12).
+  ///
+  /// In en, this message translates to:
+  /// **'How large every log\'s lines are drawn, before your system\'s text size applies.'**
+  String get settingsLogTextSizeDetail;
+
+  /// Settings, General: one log text size in the picker, in logical pixels.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} px'**
+  String settingsLogTextSizeValue(int size);
+
+  /// Settings, General: switch that makes every log wrap long lines instead of cutting them (A11Y-12).
+  ///
+  /// In en, this message translates to:
+  /// **'Wrap long log lines'**
+  String get settingsLogWrap;
+
+  /// Settings, General: explanation under the log wrap switch (A11Y-12).
+  ///
+  /// In en, this message translates to:
+  /// **'Show each line in full on as many rows as it needs, instead of cutting it at the edge.'**
+  String get settingsLogWrapDetail;
+
+  /// Settings, General: toast when the log text size or wrapping applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The log display changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get settingsLogDisplayNotSaved;
+
+  /// Settings, General: toast when the log text size or wrapping change failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The log display could not be changed.'**
+  String get settingsLogDisplayNotChanged;
+
   /// Settings, Alerts: the heading of OV-11's threshold levels.
   ///
   /// In en, this message translates to:

@@ -5326,6 +5326,40 @@
   "@settingsAnnounceBandsDetail": {
     "description": "Explanation under the threshold announcement switch on the General settings tab (A11Y-15)."
   },
+  "settingsLogTextSize": "Log text size",
+  "@settingsLogTextSize": {
+    "description": "Settings, General: label of the log text size picker (A11Y-12)."
+  },
+  "settingsLogTextSizeDetail": "How large every log's lines are drawn, before your system's text size applies.",
+  "@settingsLogTextSizeDetail": {
+    "description": "Settings, General: explanation under the log text size picker (A11Y-12)."
+  },
+  "settingsLogTextSizeValue": "{size} px",
+  "@settingsLogTextSizeValue": {
+    "description": "Settings, General: one log text size in the picker, in logical pixels.",
+    "placeholders": {
+      "size": {
+        "type": "int",
+        "example": "13"
+      }
+    }
+  },
+  "settingsLogWrap": "Wrap long log lines",
+  "@settingsLogWrap": {
+    "description": "Settings, General: switch that makes every log wrap long lines instead of cutting them (A11Y-12)."
+  },
+  "settingsLogWrapDetail": "Show each line in full on as many rows as it needs, instead of cutting it at the edge.",
+  "@settingsLogWrapDetail": {
+    "description": "Settings, General: explanation under the log wrap switch (A11Y-12)."
+  },
+  "settingsLogDisplayNotSaved": "The log display changed but could not be saved. It lasts until Klabautermann quits.",
+  "@settingsLogDisplayNotSaved": {
+    "description": "Settings, General: toast when the log text size or wrapping applied but settings.json could not be written."
+  },
+  "settingsLogDisplayNotChanged": "The log display could not be changed.",
+  "@settingsLogDisplayNotChanged": {
+    "description": "Settings, General: toast when the log text size or wrapping change failed."
+  },
   "settingsThresholdsTitle": "Usage bands",
   "@settingsThresholdsTitle": {
     "description": "Settings, Alerts: the heading of OV-11's threshold levels."

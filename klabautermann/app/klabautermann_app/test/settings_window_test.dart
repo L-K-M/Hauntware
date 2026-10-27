@@ -12,6 +12,7 @@ import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/app_lock_controller.dart';
 import 'package:klabautermann_app/controllers/cadence_controller.dart';
+import 'package:klabautermann_app/controllers/log_display.dart';
 import 'package:klabautermann_app/controllers/sync_secrets_controller.dart';
 import 'package:klabautermann_app/controllers/threshold_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
@@ -176,6 +177,7 @@ void main() {
     ThresholdSettings? thresholds,
     CadenceSettings? cadence,
     CadenceCapSettings? cadenceCaps,
+    LogDisplaySettings? logDisplay,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
@@ -189,6 +191,7 @@ void main() {
       thresholds: thresholds,
       cadence: cadence,
       cadenceCaps: cadenceCaps,
+      logDisplay: logDisplay,
       control: _control,
       link: _appLink,
       requestAppExit: () async => AppExitResponse.exit,
@@ -347,6 +350,7 @@ void main() {
     late ThresholdController thresholds;
     late CadenceController cadence;
     late CadenceCapsController cadenceCaps;
+    late LogDisplayController logDisplay;
     late SettingsWindowHost host;
 
     setUp(() async {
@@ -396,6 +400,8 @@ void main() {
       addTearDown(cadence.dispose);
       cadenceCaps = CadenceCapsController();
       addTearDown(cadenceCaps.dispose);
+      logDisplay = LogDisplayController();
+      addTearDown(logDisplay.dispose);
       host = newHost(
         appearance,
         announcements,
@@ -407,6 +413,7 @@ void main() {
         thresholds,
         cadence,
         cadenceCaps,
+        logDisplay,
       );
     });
 
@@ -550,6 +557,8 @@ void main() {
             .first,
       );
       expect(find.text('Klabautermann $kPreviewLabel'), findsOneWidget);
+      await tester.ensureVisible(find.text('Version $_appVersion'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Version $_appVersion'));
       await tester.pumpAndSettle();
 
@@ -645,7 +654,10 @@ void main() {
           .widget<SwitchListTile>(
             find.descendant(
               of: find.byType(SettingsWindowApp),
-              matching: find.byType(SwitchListTile),
+              matching: find.widgetWithText(
+                SwitchListTile,
+                'Announce threshold changes',
+              ),
             ),
           )
           .value;
@@ -715,6 +727,44 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+
+    testWidgets('the General tab\'s log display changes the app\'s through '
+        'the link (A11Y-12)', (tester) async {
+      final remote = await pumpBothWindows(
+        tester,
+        appearance,
+        tab: SettingsTab.general,
+      );
+      Finder inWindow(Finder finder) =>
+          find.descendant(of: find.byType(SettingsWindowApp), matching: finder);
+      expect(remote.logDisplay?.value, LogDisplay());
+      expect(inWindow(find.text('13 px')), findsOneWidget);
+
+      await tester.tap(inWindow(find.byType(DropdownButton<int>)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('16 px').last);
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(logDisplay.value, LogDisplay(textSize: 16));
+      expect(remote.logDisplay?.value, LogDisplay(textSize: 16));
+
+      final wrap = inWindow(
+        find.widgetWithText(SwitchListTile, 'Wrap long log lines'),
+      );
+      await tester.ensureVisible(wrap);
+      await tester.tap(wrap);
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(logDisplay.value, LogDisplay(textSize: 16, wrap: LogWrap.on));
+
+      // A change in the app reaches the showing window too.
+      await tester.runAsync(() async {
+        await logDisplay.setLogDisplay(LogDisplay(textSize: 11));
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(inWindow(find.text('11 px')), findsOneWidget);
     });
 
     testWidgets('the General tab\'s polling budget changes the app\'s '
@@ -1160,6 +1210,14 @@ void main() {
       expect(
         roundTrip(const ThresholdsNotSavedException('disk full')),
         isA<ThresholdsNotSavedException>().having(
+          (error) => error.message,
+          'message',
+          'disk full',
+        ),
+      );
+      expect(
+        roundTrip(const LogDisplayNotSavedException('disk full')),
+        isA<LogDisplayNotSavedException>().having(
           (error) => error.message,
           'message',
           'disk full',

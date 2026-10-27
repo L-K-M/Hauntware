@@ -14,6 +14,7 @@ import 'package:flutter/rendering.dart'
 import 'package:flutter/services.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import '../../controllers/log_display.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
 import 'log_level.dart';
@@ -21,19 +22,25 @@ import 'log_search.dart';
 import 'log_text.dart';
 import 'log_view_controller.dart';
 
-/// Whether a [LogView] wraps long lines.
-enum LogWrap {
-  /// One row a line, plus one a field a journal row shows; a long line
-  /// is cut at the view's edge with an ellipsis.
-  off,
+export '../../controllers/log_display.dart' show LogWrap;
 
-  /// Long lines wrap; a line is measured once per width when a layout
-  /// shows it, and keeps an earlier count or an estimate until then.
-  on,
+/// The device's log display (A11Y-12) for the log views under it; the
+/// composition root puts it above every route, and a test may leave it
+/// out, which draws logs at [kLogTextSizeDefault] without wrapping.
+class LogDisplayScope extends InheritedNotifier<LogDisplaySettings> {
+  const LogDisplayScope({
+    super.key,
+    required LogDisplaySettings display,
+    required super.child,
+  }) : super(notifier: display);
+
+  /// The display for [context], which rebuilds when it changes, or null
+  /// when none is provided.
+  static LogDisplay? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<LogDisplayScope>()
+      ?.notifier
+      ?.value;
 }
-
-/// The log text size; A11Y-12 (v1) makes it a setting from 10 to 18 px.
-const double _fontSize = 13;
 
 /// Line height as a multiple of the font size.
 const double _lineHeightFactor = 1.35;
@@ -90,14 +97,17 @@ class LogView extends StatefulWidget {
   const LogView({
     super.key,
     required this.controller,
-    this.wrap = LogWrap.off,
+    this.wrap,
     this.levelOf,
     this.fieldsOf,
     this.search,
   });
 
   final LogViewController controller;
-  final LogWrap wrap;
+
+  /// Whether long lines wrap; null follows the device's log display
+  /// ([LogDisplayScope]), off without one.
+  final LogWrap? wrap;
 
   /// The level of a line, for its colour and gutter icon. Without it no
   /// line has a level and the view has no gutter.
@@ -122,6 +132,9 @@ class _LogViewState extends State<LogView> {
   final _focusNode = FocusNode(debugLabel: 'LogView');
   bool _focusHighlight = false;
 
+  /// Whether long lines wrap now: [LogView.wrap], else the device's.
+  var _wrap = LogWrap.off;
+
   late AppLocalizations _l10n;
   _TextLayout? _text;
 
@@ -133,9 +146,8 @@ class _LogViewState extends State<LogView> {
   late _RowCounts _wrappedRows;
 
   /// The counts [LogView.wrap] lays out with, and the other mode's.
-  _RowCounts get _rows => widget.wrap == LogWrap.on ? _wrappedRows : _lineRows;
-  _RowCounts get _otherRows =>
-      widget.wrap == LogWrap.on ? _lineRows : _wrappedRows;
+  _RowCounts get _rows => _wrap == LogWrap.on ? _wrappedRows : _lineRows;
+  _RowCounts get _otherRows => _wrap == LogWrap.on ? _lineRows : _wrappedRows;
 
   /// The fields of each journal row that shows them, by seq.
   final _expanded = <int, List<(String, String?)>>{};
@@ -157,13 +169,29 @@ class _LogViewState extends State<LogView> {
     final previous = _text;
     _text = _TextLayout.of(context, previous);
     if (previous == null) {
+      _wrap = _wrapFor(widget);
       _resetRows();
-    } else if (!identical(previous, _text)) {
+      return;
+    }
+    if (!identical(previous, _text)) {
       _invalidateRows();
       // The offset counts lines or rows of the old height.
       final scale = _text!.lineHeight / previous.lineHeight;
       if (scale != 1) _holdLines((pixels) => pixels * scale);
     }
+    _applyWrap(_wrapFor(widget));
+  }
+
+  /// Whether [view] wraps: its own choice, else the device's.
+  LogWrap _wrapFor(LogView view) =>
+      view.wrap ?? LogDisplayScope.maybeOf(context)?.wrap ?? LogWrap.off;
+
+  void _applyWrap(LogWrap wrap) {
+    if (wrap == _wrap) return;
+    _wrap = wrap;
+    // The offset counts the old mode's rows, now the other counts.
+    final previous = _otherRows;
+    _holdLines((pixels) => _offsetIn(previous, pixels));
   }
 
   @override
@@ -177,15 +205,12 @@ class _LogViewState extends State<LogView> {
       _unlisten(oldWidget.controller);
       _listen(widget.controller);
       _expanded.clear();
+      _wrap = _wrapFor(widget);
       _resetRows();
       return;
     }
 
-    if (oldWidget.wrap != widget.wrap) {
-      // The offset counts the old mode's rows, now the other counts.
-      final previous = _otherRows;
-      _holdLines((pixels) => _offsetIn(previous, pixels));
-    }
+    _applyWrap(_wrapFor(widget));
     if ((oldWidget.levelOf == null) != (widget.levelOf == null)) {
       // The gutter came or went, and with it some of every row's width.
       _invalidateRows();
@@ -624,11 +649,9 @@ class _LogViewState extends State<LogView> {
     textDirection: TextDirection.ltr,
     strutStyle: text.strut,
     textScaler: text.scaler,
-    softWrap: widget.wrap == LogWrap.on,
-    maxLines: widget.wrap == LogWrap.off ? 1 : null,
-    overflow: widget.wrap == LogWrap.off
-        ? TextOverflow.ellipsis
-        : TextOverflow.clip,
+    softWrap: _wrap == LogWrap.on,
+    maxLines: _wrap == LogWrap.off ? 1 : null,
+    overflow: _wrap == LogWrap.off ? TextOverflow.ellipsis : TextOverflow.clip,
   );
 
   Widget _row(int index, _TextLayout text) {
@@ -735,6 +758,7 @@ final class _TextLayout {
     required this.theme,
     required this.scaler,
     required this.locale,
+    required this.fontSize,
     required this.base,
     required this.strut,
     required this.lineHeight,
@@ -747,10 +771,14 @@ final class _TextLayout {
     final theme = Theme.of(context);
     final scaler = MediaQuery.textScalerOf(context);
     final locale = Localizations.localeOf(context);
+    final fontSize =
+        (LogDisplayScope.maybeOf(context)?.textSize ?? kLogTextSizeDefault)
+            .toDouble();
     if (previous != null &&
         previous.theme == theme &&
         previous.scaler == scaler &&
-        previous.locale == locale) {
+        previous.locale == locale &&
+        previous.fontSize == fontSize) {
       return previous;
     }
 
@@ -758,7 +786,7 @@ final class _TextLayout {
     final base = TextStyle(
       fontFamily: families.first,
       fontFamilyFallback: families.skip(1).toList(growable: false),
-      fontSize: _fontSize,
+      fontSize: fontSize,
       height: _lineHeightFactor,
     );
     // Every row is a whole number of these lines, whatever glyphs or
@@ -780,6 +808,7 @@ final class _TextLayout {
       theme: theme,
       scaler: scaler,
       locale: locale,
+      fontSize: fontSize,
       base: base,
       strut: strut,
       lineHeight: measure(' ', height: true),
@@ -795,13 +824,16 @@ final class _TextLayout {
   final ThemeData theme;
   final TextScaler scaler;
   final Locale locale;
+
+  /// The log text size before the text scale.
+  final double fontSize;
   final LogPalette palette;
   final TextStyle base;
   final StrutStyle strut;
   final double lineHeight;
   final double advance;
 
-  double get iconSize => scaler.scale(_fontSize);
+  double get iconSize => scaler.scale(fontSize);
 
   /// The level icon's column.
   double get gutter => iconSize + 6;

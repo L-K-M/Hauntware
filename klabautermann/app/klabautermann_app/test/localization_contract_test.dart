@@ -91,6 +91,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'The polling budget was not saved: $error'",
     r"'The polling cap was not saved: $error'",
   },
+  // The not-saved diagnostic; the General tab prints it and shows its own
+  // ARB text (settingsLogDisplayNotSaved).
+  'lib/controllers/log_display.dart': {
+    r"'The log display was not saved: $error'",
+  },
   // The host syslog line's device name, written into host journals in
   // one form (M5 plan Q6).
   'lib/controllers/device_name.dart': {

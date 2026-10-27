@@ -6,6 +6,7 @@ import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/cadence_controller.dart';
+import 'package:klabautermann_app/controllers/log_display.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/settings_page.dart';
@@ -172,6 +173,69 @@ void main() {
       ),
     );
   }
+
+  Future<void> pumpLogDisplay(
+    WidgetTester tester,
+    LogDisplayController logDisplay,
+  ) async {
+    final announcements = AnnouncementController();
+    addTearDown(announcements.dispose);
+    addTearDown(logDisplay.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: GeneralTab(
+            announcements: announcements,
+            logDisplay: logDisplay,
+            appVersion: null,
+          ),
+        ),
+      ),
+    );
+  }
+
+  testWidgets('the General tab picks the log text size and wrapping '
+      '(A11Y-12)', (tester) async {
+    final logDisplay = LogDisplayController();
+    await pumpLogDisplay(tester, logDisplay);
+    expect(find.text('13 px'), findsOneWidget);
+
+    await tester.tap(find.byType(DropdownButton<int>));
+    await tester.pumpAndSettle();
+    expect(find.text('10 px'), findsWidgets);
+    expect(find.text('18 px'), findsWidgets);
+    await tester.tap(find.text('17 px').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Wrap long log lines'));
+    await tester.pumpAndSettle();
+
+    expect(logDisplay.value, LogDisplay(textSize: 17, wrap: LogWrap.on));
+  });
+
+  testWidgets('a log display that cannot be saved stays and says so', (
+    tester,
+  ) async {
+    final logDisplay = LogDisplayController(
+      save: (_, _) async => throw const FileSystemException('disk full'),
+    );
+    await pumpLogDisplay(tester, logDisplay);
+
+    await tester.tap(find.text('Wrap long log lines'));
+    await tester.pumpAndSettle();
+
+    expect(logDisplay.value.wrap, LogWrap.on);
+    expect(
+      find.text(
+        'The log display changed but could not be saved. It lasts until '
+        'Klabautermann quits.',
+      ),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+  });
 
   Future<void> pickCadence(WidgetTester tester, String label) async {
     await tester.tap(find.byType(DropdownButton<CadencePreset>));

@@ -36,6 +36,8 @@ const String _safetyKey = 'klabautermann.safety';
 const String _syncSecretsKey = 'klabautermann.sync.secrets';
 const String _deviceNameKey = 'klabautermann.audit.deviceName';
 const String _appLockKey = 'klabautermann.appLock';
+const String _logTextSizeKey = 'klabautermann.logs.textSize';
+const String _logWrapKey = 'klabautermann.logs.wrap';
 
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
 const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
@@ -405,6 +407,26 @@ final class DeviceSettingsStore {
   /// way.
   Future<void> setAppLock(bool enabled) async {
     _values[_appLockKey] = enabled;
+    await _save();
+  }
+
+  /// The log views' text size (A11Y-12), `klabautermann.logs.textSize`,
+  /// in logical pixels, or null when there is none or it is not a whole
+  /// number; the app clamps it to the sizes it offers.
+  int? get logTextSize => switch (_values[_logTextSizeKey]) {
+    final int size => size,
+    _ => null,
+  };
+
+  /// Whether the log views wrap long lines (A11Y-12),
+  /// `klabautermann.logs.wrap`; anything but `true` reads as off.
+  bool get logWrap => _values[_logWrapKey] == true;
+
+  /// Stores the log views' [textSize] and [wrap] and writes the document;
+  /// throws as [setCadence] does.
+  Future<void> setLogDisplay(int textSize, bool wrap) async {
+    _values[_logTextSizeKey] = textSize;
+    _values[_logWrapKey] = wrap;
     await _save();
   }
 
