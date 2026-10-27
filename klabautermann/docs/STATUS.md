@@ -998,8 +998,12 @@ is on main:
   checking its start ticks, and names the systemd unit or container
   that owns it. Environment values are masked by key; the working
   directory, descriptors and environment of another user's process come
-  back marked denied. The Processes tab shows it with
-  N43c.
+  back marked denied.
+- Process details sheet (M6 N43c, PRC-04, PRC-05): opening a process
+  reads its details: the unit and container that own it, working
+  directory, threads, swap, context switches, open files and limits,
+  and its environment with secret values masked until revealed for
+  30 s. An exited or reused PID says so; "Read again" reads anew.
 - Processes tab (M2, 03 §7.2, §8.9, §10.4, PRC-01, SAF-07, D48, D50,
   K33, #238): the Processes tab lists the `procs` stream while it shows,
   in the sortable table by CPU (busiest first), IEC memory, user, start
@@ -2016,6 +2020,12 @@ is on main:
   a reboot. "All servers" (N36d, PKG-06) opens the fleet update center:
   each server's updates, security updates and restart flag from its
   check of the last hour, most security updates first.
+- Certificates (M6 N41b, CRT-01): the System tab's Certificates section
+  checks the TLS certificates of endpoints you list for a server, from
+  this device and without SSH. Each shows when its certificate expires
+  and how many days are left, warning within two weeks. It also shows
+  the issuer and whether this device trusts it for the host name; a
+  failed check says why. The list is kept on this device.
 - Users and logins (M6 N40, ACC-01, ACC-02): the System tab's Users
   section reads the server's accounts and groups with `getent` and who
   is logged in with `who`, as the login user, when it shows and on
@@ -2030,6 +2040,15 @@ is on main:
   NVMe wear, bad sectors and powered-on hours, and a failed read says
   why (smartmontools missing or older than 7.0, elevation refused, link
   lost).
+- SSH server (M6 N41a, SEC-01): in admin mode, the System tab's SSH
+  server section reads sshd's effective settings for the app's own
+  connection with `sshd -T -C`, so the `Match` blocks that apply to it
+  count. It shows the ports, root, password, keyboard-interactive and
+  key login, host and accepted user key types, sessions per connection
+  and forwarding. It also names any of `AllowStreamLocalForwarding`,
+  `AllowTcpForwarding`, `PermitOpen` and `DisableForwarding` that block
+  Docker over SSH. A missing sshd, a refused configuration (with sshd's
+  error) and an sshd too old for part of `-C` each say so.
 - GPUs (M6 N37b, HW-03): collector-set version 12 adds the slow `gpu`
   collector, which asks `nvidia-smi` and reads the amdgpu sysfs files
   every 30 s. The System tab's GPUs section lists each GPU's busy share,
@@ -2054,6 +2073,18 @@ is on main:
   zones, every 10 s. The System tab's Temperatures section lists each
   sensor with its high and critical limits, and does not show where the
   host has no sensor, as VMs, or inside a container.
+- Firewall (M6 N35, NET-06): in admin mode, the System tab's Firewall
+  section reads the rules of whichever of ufw, firewalld, nftables and
+  iptables the server has: ufw's state, default policies and rules,
+  firewalld's default and active zones with their services and ports,
+  and each nftables or iptables chain with its policy and rule count.
+
+- Processor (M6 N42c, CPU-07): the System tab's new section beside the
+  identity shows the processor's model (or its vendor where it names
+  none), sockets, cores, threads per core, the CPUs the kernel counts
+  and those the login may use, from `lscpu`, or `/proc/cpuinfo` where
+  `lscpu` is missing. A big.LITTLE board lists both models. Inside a
+  container the counts that would be the host machine's read as unknown.
 - Interfaces and connections (M6 N33, NET-02, NET-03): the System tab's
   new Interfaces section lists each interface with its state,
   addresses, MTU, link speed, current receive and send rates, and
@@ -2071,6 +2102,12 @@ is on main:
   cgroup's limit ran out rather than the server's memory. "Show in
   kernel log" opens the boot's OOM report lines from the journal. An
   unreadable kernel log and a kernel without the counter say so.
+- Listening ports (M6 N34a, NET-04): the System tab's new section lists
+  each listening TCP and bound UDP port, on every address or the ones
+  named, with the processes holding it and the systemd unit or
+  container each runs in, from `ss` (or BusyBox `netstat`) and the
+  processes' cgroups. Ports whose processes belong to other users say
+  so. Docker's published ports and admin-mode owners follow in N34b.
 - CPU breakdown and pressure (M6 N42a, CPU-04, CPU-05, MEM-04): the
   Overview's CPU card adds I/O wait, steal, IRQ and soft IRQ beside
   user, system and idle, with a plain-language hint once steal, iowait
@@ -2087,6 +2124,11 @@ is on main:
   and waits where every column fits; a figure the reading cannot give
   reads as unknown, and inside a container the section is withheld as
   the host's (D50).
+- Docker events (M6 N20, DKE-03): the Docker tab's Events sub-tab lists
+  the engine's container, image, volume and network events since the
+  app started following them, newest first, with a filter per type and
+  a search. Wherever the events stream was lost, a marker says for how
+  long and whether the engine replayed what it still held.
 - Networks (M6 N11, DNW-01, DNW-02): the Docker tab gains a Networks
   sub-tab after Volumes, listing every network by name with its driver,
   scope, first subnet and its gateway, and how many containers are on
@@ -2177,6 +2219,18 @@ is on main:
   in settings.json. Each notification states the same limit (Y3). The
   app icon's badge is not built, and whether the notifications show on
   real Android, iOS, macOS, Windows and Linux desktops is a manual check.
+- Label links (M6 N17b, CTR-11): a container whose labels point at web
+  pages shows a Links section under its overview. It reads Dockhand's
+  `dockhand.url` (a plain URL or `[Name](url)`) and
+  `dockhand.port.<port>.url`, Dozzle's `dev.dozzle.url`, Traefik
+  routers' `Host(...)` rules (HTTPS where the router has TLS, a
+  certificate resolver or a `websecure` entry point; none while
+  `traefik.enable=false`) and caddy-docker-proxy site addresses. Only
+  plain `http` and `https` addresses without credentials become links,
+  and each opens in the system browser, or shows as text to copy
+  where the app has no launcher. Mute labels are not read yet:
+  Klabautermann sends no per-container notifications for them to
+  silence.
 - Container processes (M6 N17a, CTR-10): a running container's details
   end with a Processes section, read through `GET /containers/{id}/top`
   when the details show, when the container starts and on "Read again".

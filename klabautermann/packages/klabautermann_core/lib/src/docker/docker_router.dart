@@ -63,6 +63,7 @@ import '../engine/protocol.dart';
 import '../links/channel_quota.dart';
 import '../logs/log_stream_router.dart' show kLogStreamsPerServerMax;
 import 'container_logs.dart';
+import 'container_review.dart';
 import 'docker_ladder.dart';
 import 'docker_watch.dart';
 import 'inspect_masking.dart';
@@ -948,6 +949,9 @@ final class DockerRouter {
           // read is: on a relay it holds the one pooled connection.
           final df = await client.systemDf();
           return read(DockerSystemDfPayload(df.value), df.warnings);
+        case DockerReviewQuery():
+          final (payload, warnings) = await _review(client);
+          return read(payload, warnings);
         case DockerStackFileQuery(:final project, :final path):
           return read(
             await endpoint.stacks.readFile(client, project, path),
@@ -969,6 +973,64 @@ final class DockerRouter {
         routeDropped: dropped,
       );
     }
+  }
+
+  /// DKE-06 and DKE-07 over every container, up to [kDockerReviewMax],
+  /// one inspect at a time: on a relay each holds the one pooled
+  /// connection. A container removed before its inspect is left out; one
+  /// whose inspect the daemon refuses is counted.
+  Future<(DockerReviewPayload, List<String>)> _review(
+    DockerClient client,
+  ) async {
+    final info = await client.engineInfo();
+    final list = await client.listContainers();
+    final userMapped =
+        info.value.rootless ||
+        info.value.securityOptions.any(
+          (option) => option.replaceAll(' ', '').startsWith('name=userns'),
+        );
+    final warnings = [...info.warnings, ...list.warnings];
+    final reviews = <ContainerReview>[];
+    var unreadable = 0;
+    for (final summary in list.value.take(kDockerReviewMax)) {
+      final DockerParseResult<ContainerInspect> inspect;
+      try {
+        inspect = await client.inspectContainer(summary.id);
+      } on DockerNotFoundException {
+        continue;
+      } on DockerApiException {
+        // The daemon refused this one container (a 500 for one stuck in
+        // its runtime); the rest still read. A transport failure ends
+        // the review as any read's does.
+        unreadable++;
+        continue;
+      }
+      warnings.addAll(inspect.warnings);
+      reviews.add(
+        ContainerReview(
+          containerId: summary.id,
+          name: summary.name ?? inspect.value.name ?? summary.id,
+          state: summary.state,
+          project: ComposeLabels.fromContainerLabels(summary.labels)?.project,
+          findings: reviewContainer(
+            summary,
+            inspect.value,
+            userMapped: userMapped,
+          ),
+        ),
+      );
+    }
+    return (
+      DockerReviewPayload(
+        reviews,
+        omitted: (list.value.length - kDockerReviewMax).clamp(
+          0,
+          list.value.length,
+        ),
+        unreadable: unreadable,
+      ),
+      warnings,
+    );
   }
 
   /// [containerId]'s processes with CTR-10's columns, or with the

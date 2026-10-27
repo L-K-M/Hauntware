@@ -5,6 +5,7 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart' show syncLocalDirectory;
 import 'package:seance_core/seance_core.dart' show uuidV4;
 
+import '../certificates/tls_check.dart' show TlsEndpoint;
 import '../docker/docker_ladder.dart' show dockerSocketPathProblem;
 import '../engine/protocol.dart'
     show DockerEndpointCustom, DockerEndpointDetected, DockerEndpointSocket;
@@ -38,6 +39,9 @@ const String _appLockKey = 'klabautermann.appLock';
 
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
 const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
+const String _containerColumnsKey = 'klabautermann.docker.containerColumns';
+const String _tlsEndpointsKey = 'klabautermann.certificates.endpoints';
+const String _attentionKey = 'klabautermann.attention.acknowledged';
 
 // The fields of one server's entry under [_endpointOverridesKey].
 const String _overrideChoiceField = 'choice';
@@ -427,6 +431,24 @@ final class DeviceSettingsStore {
     await _save();
   }
 
+  /// The Containers tab's columns as the user chose them (CTR-08),
+  /// `klabautermann.docker.containerColumns`: the shown ones by name, in
+  /// order, which the app reads against its own column set. Null when
+  /// there is no list, or the value is not one, which the app reads as
+  /// its default columns rather than failing the file.
+  List<String>? get containerColumns => switch (_values[_containerColumnsKey]) {
+    final List<Object?> names => List.unmodifiable(names.whereType<String>()),
+    _ => null,
+  };
+
+  /// Stores [names] as the shown columns, in order, and writes the
+  /// document. Throws when the write fails or this session is read-only;
+  /// the value stays in memory either way.
+  Future<void> setContainerColumns(List<String> names) async {
+    _values[_containerColumnsKey] = [...names];
+    await _save();
+  }
+
   /// The engine socket chosen for each server on this device (CN-09,
   /// D54), by server id: `klabautermann.docker.endpointOverrides`. A
   /// server without an entry finds its socket itself. Entries read
@@ -555,6 +577,45 @@ final class DeviceSettingsStore {
         _ => {},
       };
 
+  /// The endpoints CRT-01 checks for each server, by server id, as
+  /// `host:port` labels: `klabautermann.certificates.endpoints`.
+  /// Device-local, since the check runs from this device. Read leniently,
+  /// as [stackFolders]: an entry that is not a list and items that are
+  /// not endpoints are skipped, rather than failing the file.
+  Map<String, List<TlsEndpoint>> get tlsEndpoints => {
+    for (final MapEntry(:key, :value) in _rawTlsEndpoints.entries)
+      if (value case final List<Object?> labels)
+        if ([
+              for (final label in labels)
+                if (label case final String text)
+                  if (TlsEndpoint.parse(text) case final endpoint?) endpoint,
+            ]
+            case final endpoints when endpoints.isNotEmpty)
+          key: List.unmodifiable(endpoints),
+  };
+
+  /// Stores [endpoints] as [serverId]'s, or removes its entry when empty,
+  /// and writes the document, as [setStackFolders] does.
+  Future<void> setTlsEndpoints(
+    String serverId,
+    List<TlsEndpoint> endpoints,
+  ) async {
+    final entries = _rawTlsEndpoints;
+    if (endpoints.isEmpty) {
+      entries.remove(serverId);
+    } else {
+      entries[serverId] = [for (final endpoint in endpoints) endpoint.label];
+    }
+    _values[_tlsEndpointsKey] = entries;
+    await _save();
+  }
+
+  Map<String, Object?> get _rawTlsEndpoints =>
+      switch (_values[_tlsEndpointsKey]) {
+        final Map<String, Object?> entries => {...entries},
+        _ => {},
+      };
+
   /// The safety preferences as the app stored them (M4 plan M4): an
   /// opaque JSON object the app encodes and decodes, or null when there
   /// is none (or the stored value is not an object, which reads as none,
@@ -570,6 +631,24 @@ final class DeviceSettingsStore {
   Future<void> setSafety(Map<String, Object?> safety) async {
     _values[_safetyKey] =
         jsonDecode(jsonEncode(safety)) as Map<String, Object?>;
+    await _save();
+  }
+
+  /// TRI-03's acknowledged problems as the app stored them: an opaque
+  /// JSON object the app encodes and decodes, or null when there is none
+  /// (or the stored value is not an object, which reads as none, every
+  /// problem unacknowledged, rather than failing the file). Device-local
+  /// (02 TRI-03).
+  Map<String, Object?>? get attention => switch (_values[_attentionKey]) {
+    final Map<String, Object?> json => Map.unmodifiable(json),
+    _ => null,
+  };
+
+  /// Stores a deep copy of [attention] and writes the document, as
+  /// [setSafety] does.
+  Future<void> setAttention(Map<String, Object?> attention) async {
+    _values[_attentionKey] =
+        jsonDecode(jsonEncode(attention)) as Map<String, Object?>;
     await _save();
   }
 

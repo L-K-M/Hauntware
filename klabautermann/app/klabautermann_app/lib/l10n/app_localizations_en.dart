@@ -204,7 +204,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutLicence =>
-      'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.';
+      'Klabautermann\'s own code is public domain (Unlicense). It includes third-party components that keep their own licenses, listed under View licenses.';
 
   @override
   String get statusConnected => 'Connected';
@@ -927,6 +927,116 @@ class AppLocalizationsEn extends AppLocalizations {
   String get processesCommandLineTitle => 'Command line';
 
   @override
+  String get processesDetailTitle => 'Details';
+
+  @override
+  String get processesDetailReading => 'Reading details…';
+
+  @override
+  String get processesDetailReadAgain => 'Read again';
+
+  @override
+  String processesDetailFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server denied reading this process.',
+      'missing': 'The server lacks a tool this read needs.',
+      'other': 'Reading this process\'s details failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String processesDetailEnded(String end) {
+    String _temp0 = intl.Intl.selectLogic(end, {
+      'gone': 'This process has exited.',
+      'reused':
+          'Its process ID now belongs to another process, so nothing was read.',
+      'other': 'This process has ended.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get processesDetailNoStart =>
+      'The server did not report when this process started, so its details are not read.';
+
+  @override
+  String get processesDetailUnit => 'Unit';
+
+  @override
+  String get processesDetailNoUnit => 'None';
+
+  @override
+  String get processesDetailContainer => 'Container';
+
+  @override
+  String processesDetailContainerValue(String runtime, String id) {
+    String _temp0 = intl.Intl.selectLogic(runtime, {
+      'docker': 'Docker',
+      'podman': 'Podman',
+      'containerd': 'containerd',
+      'crio': 'CRI-O',
+      'other': 'Container',
+    });
+    return '$_temp0 $id';
+  }
+
+  @override
+  String get processesDetailCwd => 'Working directory';
+
+  @override
+  String get processesDetailNotReadable => 'Not readable as this user';
+
+  @override
+  String get processesDetailThreads => 'Threads';
+
+  @override
+  String get processesDetailSwap => 'Swap';
+
+  @override
+  String get processesDetailSwitches => 'Context switches';
+
+  @override
+  String processesDetailSwitchesValue(int voluntary, int involuntary) {
+    return '$voluntary voluntary, $involuntary involuntary';
+  }
+
+  @override
+  String get processesDetailOpenFiles => 'Open files';
+
+  @override
+  String processesDetailOpenFilesOf(int count, int limit) {
+    return '$count of $limit';
+  }
+
+  @override
+  String get processesDetailProcessLimit => 'Process limit';
+
+  @override
+  String get processesDetailUnlimited => 'Unlimited';
+
+  @override
+  String get processesEnvironmentTitle => 'Environment';
+
+  @override
+  String get processesEnvironmentNone => 'No environment variables.';
+
+  @override
+  String get processesEnvironmentDenied =>
+      'The environment is not readable as this user.';
+
+  @override
+  String processesEnvironmentCapped(int count) {
+    return 'Only the first $count variables were read.';
+  }
+
+  @override
+  String processesEnvironmentEntry(String name, String value) {
+    return '$name: $value';
+  }
+
+  @override
   String processesRevealNote(int seconds) {
     return 'Select a masked argument to show it for $seconds seconds.';
   }
@@ -1428,6 +1538,117 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemProcessorTitle => 'Processor';
+
+  @override
+  String get systemProcessorReading => 'Reading the processor…';
+
+  @override
+  String get systemProcessorReadAgain => 'Read again';
+
+  @override
+  String get systemProcessorModel => 'Model';
+
+  @override
+  String get systemProcessorNoModel =>
+      'This processor does not report a model name, as is common on ARM boards.';
+
+  @override
+  String get systemProcessorSockets => 'Sockets';
+
+  @override
+  String get systemProcessorCores => 'Cores';
+
+  @override
+  String get systemProcessorThreadsPerCore => 'Threads per core';
+
+  @override
+  String get systemProcessorLogical => 'Logical CPUs';
+
+  @override
+  String get systemProcessorUsable => 'Usable CPUs';
+
+  @override
+  String systemProcessorFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server refused the processor read.',
+      'missing': 'The server lacks the tools the processor read runs.',
+      'other': 'The processor read failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemPortsTitle => 'Listening ports';
+
+  @override
+  String get systemPortsReading => 'Reading the listening ports…';
+
+  @override
+  String get systemPortsReadAgain => 'Read again';
+
+  @override
+  String systemPortsFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server refused the port read.',
+      'missing': 'The server lacks the tools the port read runs.',
+      'other': 'The port read failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemPortsNoTool =>
+      'The server has neither ss nor netstat, so its ports cannot be listed.';
+
+  @override
+  String get systemPortsHidden =>
+      'Some ports belong to other users\' processes, whose names only root may see.';
+
+  @override
+  String get systemPortsNone => 'Nothing listens on this server.';
+
+  @override
+  String systemPortsEvery(String protocol, int port) {
+    String _temp0 = intl.Intl.selectLogic(protocol, {
+      'tcp': 'TCP',
+      'udp': 'UDP',
+      'other': '$protocol',
+    });
+    return '$_temp0 $port on every address';
+  }
+
+  @override
+  String systemPortsOn(String protocol, int port, String addresses) {
+    String _temp0 = intl.Intl.selectLogic(protocol, {
+      'tcp': 'TCP',
+      'udp': 'UDP',
+      'other': '$protocol',
+    });
+    return '$_temp0 $port on $addresses';
+  }
+
+  @override
+  String systemPortsProcess(String name, int pid) {
+    return '$name (PID $pid)';
+  }
+
+  @override
+  String get systemPortsOwnerHidden => 'Held by another user\'s process';
+
+  @override
+  String systemPortsUnit(String unit) {
+    return 'Unit $unit';
+  }
+
+  @override
+  String systemPortsContainer(String id) {
+    return 'Container $id';
+  }
+
+  @override
   String get systemNetInterfacesTitle => 'Interfaces';
 
   @override
@@ -1630,6 +1851,370 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get systemFirewallTitle => 'Firewall';
+
+  @override
+  String get systemFirewallAdminNeeded =>
+      'Turn on admin mode to read the firewall: every firewall tool needs root to list its rules.';
+
+  @override
+  String get systemFirewallRead => 'Read firewall rules';
+
+  @override
+  String get systemFirewallReadAgain => 'Read again';
+
+  @override
+  String get systemFirewallReading => 'Reading the firewall rules…';
+
+  @override
+  String systemFirewallFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink':
+          'The server is not connected, so the firewall could not be read.',
+      'adminRequired': 'Admin mode ended before the firewall was read.',
+      'elevationRefused':
+          'Elevation was refused, so the firewall was not read.',
+      'unreadable':
+          'The firewall tools answered in a way this app cannot read.',
+      'transport': 'The connection failed while the firewall was read.',
+      'other': 'The firewall could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemFirewallNoTool =>
+      'No firewall tool was found on this server: none of ufw, firewalld, nft or iptables is installed.';
+
+  @override
+  String get systemFirewallUfw => 'ufw';
+
+  @override
+  String get systemFirewallFirewalld => 'firewalld';
+
+  @override
+  String get systemFirewallNftables => 'nftables';
+
+  @override
+  String get systemFirewallIptables => 'iptables (IPv4)';
+
+  @override
+  String get systemFirewallIp6tables => 'ip6tables (IPv6)';
+
+  @override
+  String systemFirewallActive(String active) {
+    String _temp0 = intl.Intl.selectLogic(active, {
+      'true': 'Active',
+      'other': 'Inactive: ufw filters nothing',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemFirewallRunning(String running) {
+    String _temp0 = intl.Intl.selectLogic(running, {
+      'true': 'Running',
+      'other': 'Not running',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemFirewallUfwDefaults(
+    String incoming,
+    String outgoing,
+    String routed,
+  ) {
+    return 'By default: incoming $incoming, outgoing $outgoing, routed $routed';
+  }
+
+  @override
+  String systemFirewallUfwRule(String to, String action, String from) {
+    return '$to: $action from $from';
+  }
+
+  @override
+  String get systemFirewallNoRules => 'No rules.';
+
+  @override
+  String systemFirewallZoneDefault(String zone) {
+    return '$zone (default zone)';
+  }
+
+  @override
+  String systemFirewallZoneInterfaces(String interfaces) {
+    return 'Interfaces: $interfaces';
+  }
+
+  @override
+  String systemFirewallZoneSources(String sources) {
+    return 'Sources: $sources';
+  }
+
+  @override
+  String systemFirewallZoneServices(String services) {
+    return 'Services allowed: $services';
+  }
+
+  @override
+  String systemFirewallZonePorts(String ports) {
+    return 'Ports allowed: $ports';
+  }
+
+  @override
+  String get systemFirewallNone => 'none';
+
+  @override
+  String systemFirewallZonesIdle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count other zones have no interface or source.',
+      one: '1 other zone has no interface or source.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemFirewallChain(String chain, String policy, int rules) {
+    String _temp0 = intl.Intl.pluralLogic(
+      rules,
+      locale: localeName,
+      other: '$rules rules',
+      one: '1 rule',
+      zero: 'no rules',
+    );
+    return '$chain: policy $policy, $_temp0';
+  }
+
+  @override
+  String get systemFirewallNoPolicy => 'none';
+
+  @override
+  String get systemSshdTitle => 'SSH server';
+
+  @override
+  String get systemSshdAdminNeeded =>
+      'Turn on admin mode to read the SSH server\'s settings: sshd needs root to print them.';
+
+  @override
+  String get systemSshdRead => 'Read SSH server settings';
+
+  @override
+  String get systemSshdReadAgain => 'Read again';
+
+  @override
+  String get systemSshdReading => 'Reading the SSH server\'s settings…';
+
+  @override
+  String systemSshdFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink':
+          'The server is not connected, so the SSH server\'s settings could not be read.',
+      'adminRequired':
+          'Admin mode ended before the SSH server\'s settings were read.',
+      'elevationRefused':
+          'Elevation was refused, so the SSH server\'s settings were not read.',
+      'missing': 'No sshd was found on this server.',
+      'refused':
+          'sshd refused to print its settings, as for an error in its configuration.',
+      'unreadable': 'sshd\'s settings could not be read.',
+      'transport':
+          'The connection failed while the SSH server\'s settings were read.',
+      'other': 'The SSH server\'s settings could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemSshdMatchRemote =>
+      'Match blocks for the server\'s own address or port are not applied: this sshd is too old to be told them.';
+
+  @override
+  String get systemSshdMatchNone =>
+      'No Match blocks are applied: these are sshd\'s settings before any Match block, as the read could not name this connection.';
+
+  @override
+  String get systemSshdPorts => 'Ports';
+
+  @override
+  String get systemSshdListen => 'Listens on';
+
+  @override
+  String get systemSshdRootLogin => 'Root login';
+
+  @override
+  String systemSshdRoot(String value) {
+    String _temp0 = intl.Intl.selectLogic(value, {
+      'yes': 'Allowed',
+      'no': 'Not allowed',
+      'keysOnly': 'With a key only',
+      'forcedCommandsOnly': 'Forced commands only',
+      'other': 'Unknown',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemSshdPassword => 'Password login';
+
+  @override
+  String get systemSshdKeyboard => 'Keyboard-interactive login';
+
+  @override
+  String get systemSshdPubkey => 'Key login';
+
+  @override
+  String systemSshdEnabled(String state) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'true': 'On',
+      'false': 'Off',
+      'other': 'Unknown',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemSshdMethods => 'Required login methods';
+
+  @override
+  String get systemSshdHostKeys => 'Host keys';
+
+  @override
+  String get systemSshdUserKeys => 'Accepted user key types';
+
+  @override
+  String get systemSshdMaxSessions => 'Sessions per connection';
+
+  @override
+  String get systemSshdTcpForwarding => 'TCP forwarding';
+
+  @override
+  String get systemSshdSocketForwarding => 'Socket forwarding';
+
+  @override
+  String systemSshdForwarding(String value) {
+    String _temp0 = intl.Intl.selectLogic(value, {
+      'all': 'Allowed',
+      'local': 'Local only',
+      'remote': 'Remote only',
+      'no': 'Off',
+      'other': 'Unknown',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemSshdPermitOpen => 'Forwarding targets';
+
+  @override
+  String get systemSshdDocker => 'Docker over SSH';
+
+  @override
+  String get systemSshdDockerAllowed => 'Not blocked by sshd\'s settings';
+
+  @override
+  String systemSshdDockerBlocked(String settings) {
+    return 'Blocked by $settings';
+  }
+
+  @override
+  String get systemSshdDockerNote =>
+      'A key\'s options in authorized_keys, such as restrict, can block it too; sshd does not show those.';
+
+  @override
+  String get systemCertificatesTitle => 'Certificates';
+
+  @override
+  String get systemCertificatesNone =>
+      'List the host names and ports whose certificates this device should check, such as this server\'s web sites.';
+
+  @override
+  String get systemCertificatesNotSaved =>
+      'The endpoints could not be saved on this device; they are kept until the app quits.';
+
+  @override
+  String get systemCertificatesCheck => 'Check again';
+
+  @override
+  String get systemCertificatesEdit => 'Edit endpoints…';
+
+  @override
+  String get systemCertificatesChecking => 'Checking…';
+
+  @override
+  String get systemCertificatesNotChecked => 'Not checked yet';
+
+  @override
+  String systemCertificatesFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'lookup': 'The host name did not resolve from this device.',
+      'connect': 'This device could not connect.',
+      'timeout': 'No answer within 10 seconds.',
+      'handshake': 'The endpoint answered, but not with TLS.',
+      'other': 'The check failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemCertificatesExpires(DateTime date, int days) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat.yMMMd(localeName);
+    final String dateString = dateDateFormat.format(date);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'in $days days',
+      one: 'in 1 day',
+      zero: 'today',
+    );
+    return 'Expires $dateString, $_temp0';
+  }
+
+  @override
+  String systemCertificatesExpired(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat.yMMMd(localeName);
+    final String dateString = dateDateFormat.format(date);
+
+    return 'Expired $dateString';
+  }
+
+  @override
+  String get systemCertificatesUntrusted =>
+      'This device does not trust this certificate for the host name: it may be self-signed, expired or issued for another name.';
+
+  @override
+  String systemCertificatesIssuer(String issuer) {
+    return 'Issued by $issuer';
+  }
+
+  @override
+  String get systemCertificatesEditTitle => 'Endpoints to check';
+
+  @override
+  String systemCertificatesHelper(int max) {
+    return 'One per line: a host name or address, with :port for a port other than 443. At most $max.';
+  }
+
+  @override
+  String systemCertificatesProblem(String problem, int max) {
+    String _temp0 = intl.Intl.selectLogic(problem, {
+      'notEndpoint':
+          'Each line needs a host name or address, with an optional :port.',
+      'tooMany': 'List at most $max endpoints.',
+      'other': 'These endpoints cannot be checked.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemCertificatesCancel => 'Cancel';
+
+  @override
+  String get systemCertificatesSave => 'Save';
 
   @override
   String get systemAccountsTitle => 'Users';
@@ -1984,6 +2569,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String chartWithSeverity(String part, String severity) {
     return '$part ($severity)';
   }
+
+  @override
+  String get chartSeverityCareful => 'careful';
 
   @override
   String get chartSeverityWarning => 'warning';
@@ -3039,6 +3627,69 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get overviewSwapNone => 'No swap is set up.';
+
+  @override
+  String get overviewSlowTitle => 'Why is it slow?';
+
+  @override
+  String get overviewSlowNone =>
+      'Nothing in the latest reading points to a slowdown.';
+
+  @override
+  String overviewSlowCpuWait(String percent) {
+    return 'Tasks waited for a CPU $percent of the last 10 seconds: the processor is the bottleneck.';
+  }
+
+  @override
+  String overviewSlowLoadHigh(double load) {
+    final intl.NumberFormat loadNumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 2,
+        );
+    final String loadString = loadNumberFormat.format(load);
+
+    return 'The load is $loadString per core: more tasks want to run than there are cores.';
+  }
+
+  @override
+  String overviewSlowSteal(String percent) {
+    return 'The hypervisor gave $percent of the CPU time to other guests.';
+  }
+
+  @override
+  String overviewSlowIoStall(String percent) {
+    return 'Tasks stalled on storage $percent of the last 10 seconds: the disks are the bottleneck.';
+  }
+
+  @override
+  String overviewSlowIowait(String percent) {
+    return 'Cores sat idle $percent of the time waiting for storage.';
+  }
+
+  @override
+  String overviewSlowSlowDisk(String device, int ms) {
+    return '$device takes $ms ms per request: it is slow or saturated.';
+  }
+
+  @override
+  String overviewSlowBusyDisk(String device, String percent) {
+    return '$device is busy $percent of the time: requests queue behind each other.';
+  }
+
+  @override
+  String overviewSlowMemoryStall(String percent) {
+    return 'Tasks stalled waiting for memory $percent of the last 10 seconds: the server is short of RAM.';
+  }
+
+  @override
+  String overviewSlowSwapHeavy(String percent) {
+    return 'Swap is $percent full and little memory is free: the server pages to disk.';
+  }
+
+  @override
+  String get overviewSlowWhere =>
+      'Processes sorts what runs by CPU and memory; System lists recent out-of-memory kills.';
 
   @override
   String get overviewPressureTitle => 'Pressure';
@@ -4917,6 +5568,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'PowerAction': 'Reboot or shut down',
       'ContainerAction': 'Container action',
       'RemoveContainer': 'Remove container',
+      'ContainerBulkAction': 'Containers action',
       'RemoveImage': 'Remove image',
       'CreateVolume': 'Create volume',
       'RemoveVolume': 'Remove volume',
@@ -5265,7 +5917,224 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerTabNetworks => 'Networks';
 
   @override
+  String get dockerTabEvents => 'Events';
+
+  @override
+  String get dockerEventsBuffer =>
+      'Events show from when Klabautermann started following them. The engine keeps only a limited buffer, so events while the stream was lost may be missing.';
+
+  @override
+  String get dockerEventsWaiting => 'Waiting for the events stream…';
+
+  @override
+  String dockerEventsFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'tooManyQueries':
+          'This server already has as many Docker watches open as Klabautermann allows.',
+      'connectionFailed':
+          'The connection to the engine failed while following its events.',
+      'other': 'The engine\'s events could not be followed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerEventsAll => 'All';
+
+  @override
+  String dockerEventsKind(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'container': 'Containers',
+      'image': 'Images',
+      'volume': 'Volumes',
+      'network': 'Networks',
+      'other': 'Other',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerEventsSearch => 'Search by name, action or image';
+
+  @override
+  String get dockerEventsNone =>
+      'No events yet. They appear here as the engine reports them.';
+
+  @override
+  String get dockerEventsNoMatch => 'No event matches the filter.';
+
+  @override
+  String dockerEventsLine(String name, String action) {
+    return '$name: $action';
+  }
+
+  @override
+  String dockerEventsImage(String image) {
+    return 'image $image';
+  }
+
+  @override
+  String dockerEventsExitCode(int code) {
+    return 'exit code $code';
+  }
+
+  @override
+  String dockerEventsGap(String from, String until, String resumed) {
+    String _temp0 = intl.Intl.selectLogic(resumed, {
+      'true':
+          'Not followed from $from to $until. The engine sent the events it still held, so some may be missing.',
+      'other':
+          'Not followed from $from to $until. Events in this span are not shown.',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get dockerTabStacks => 'Stacks';
+
+  @override
+  String get dockerTabReview => 'Review';
+
+  @override
+  String get dockerReviewIntro =>
+      'Reads each container\'s configuration and flags settings that give a container power over the host, expose a database, or let its logs fill the disk. Each container is read once per review.';
+
+  @override
+  String get dockerReviewRun => 'Review containers';
+
+  @override
+  String get dockerReviewAgain => 'Review again';
+
+  @override
+  String get dockerReviewReading => 'Reading each container\'s configuration…';
+
+  @override
+  String dockerReviewNone(int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: 'None of the $total containers carries a finding.',
+      one: 'The one container carries no finding.',
+      zero: 'The engine has no containers to review.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerReviewFlagged(int flagged, int total) {
+    return 'Containers with findings: $flagged of $total';
+  }
+
+  @override
+  String dockerReviewOmitted(int omitted, int max) {
+    String _temp0 = intl.Intl.pluralLogic(
+      omitted,
+      locale: localeName,
+      other:
+          '$omitted more containers were not read: a review reads at most $max.',
+      one: '1 more container was not read: a review reads at most $max.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerReviewUnreadable(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'The engine refused to inspect $count containers, so they are not reviewed.',
+      one: 'The engine refused to inspect 1 container, so it is not reviewed.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerReviewContainerInStack(String name, String stack) {
+    return '$name in $stack';
+  }
+
+  @override
+  String dockerReviewFinding(String level, String risk) {
+    return '$level: $risk';
+  }
+
+  @override
+  String dockerReviewLevel(String level) {
+    String _temp0 = intl.Intl.selectLogic(level, {
+      'high': 'High',
+      'medium': 'Medium',
+      'low': 'Low',
+      'other': 'Finding',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerReviewRisk(String risk) {
+    String _temp0 = intl.Intl.selectLogic(risk, {
+      'privileged': 'Privileged',
+      'socketMount': 'Engine socket mounted',
+      'hostNetwork': 'Host network',
+      'hostPid': 'Host processes visible',
+      'addedCapabilities': 'Added capabilities',
+      'databasePublished': 'Database on every address',
+      'rootUser': 'Runs as root',
+      'logsUnrotated': 'Logs never rotate',
+      'latestTag': 'Floating image tag',
+      'noHealthcheck': 'No health check',
+      'noRestartPolicy': 'No restart policy',
+      'other': 'Finding',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerReviewRiskWhy(String risk) {
+    String _temp0 = intl.Intl.selectLogic(risk, {
+      'privileged':
+          'It has every device and capability of the host, so a break-in reaches the host.',
+      'socketMount':
+          'Whoever controls the container controls the engine, which is root on the host.',
+      'hostNetwork':
+          'It shares the host\'s network and reaches every service listening on it.',
+      'hostPid': 'It sees, and can signal, every process on the host.',
+      'addedCapabilities':
+          'It holds capabilities beyond the engine\'s default set.',
+      'databasePublished':
+          'Its database port is published on every address, not only on localhost or a private network.',
+      'rootUser':
+          'Its processes run as root, and the engine maps root to root on the host.',
+      'logsUnrotated':
+          'It logs with json-file and no max-size, so its log file grows until the disk is full.',
+      'latestTag':
+          'A new pull can bring a different image. Pin a version or a digest.',
+      'noHealthcheck':
+          'The engine cannot tell when it stops working while it still runs.',
+      'noRestartPolicy': 'It stays stopped after a crash or a reboot.',
+      'other': 'It may put the host at risk.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerReviewFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notInFleet': 'This server is no longer in the fleet.',
+      'linkUnavailable': 'There is no connection to this server.',
+      'profileUnknown': 'The server\'s capability check has not answered yet.',
+      'endpointUnavailable': 'The Docker engine cannot be reached.',
+      'tooManyQueries':
+          'This server already has as many Docker reads waiting as Klabautermann allows.',
+      'daemonError':
+          'The engine refused or failed to list or inspect the containers.',
+      'connectionFailed':
+          'The connection to the engine failed during the review.',
+      'cancelled': 'The review stopped before it finished.',
+      'other': 'The containers could not be reviewed.',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get dockerEngineHeading => 'Engine';
@@ -5575,6 +6444,120 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerContainersColumnMemory => 'Memory';
 
   @override
+  String get dockerContainersColumnNetwork => 'Network';
+
+  @override
+  String get dockerContainersColumnBlockIo => 'Block I/O';
+
+  @override
+  String get dockerContainersColumnPids => 'PIDs';
+
+  @override
+  String get dockerContainersColumnIp => 'IP';
+
+  @override
+  String get dockerContainersColumnStarted => 'Started';
+
+  @override
+  String dockerContainersIo(String first, String second) {
+    return '$first / $second';
+  }
+
+  @override
+  String get dockerContainersColumns => 'Columns';
+
+  @override
+  String get dockerContainersColumnsTitle => 'Columns';
+
+  @override
+  String get dockerContainersColumnsDrag => 'Drag to reorder';
+
+  @override
+  String get dockerContainersColumnsReset => 'Reset';
+
+  @override
+  String get dockerContainersColumnsCancel => 'Cancel';
+
+  @override
+  String get dockerContainersColumnsDone => 'Done';
+
+  @override
+  String get dockerContainersColumnsNotSaved =>
+      'The columns could not be saved. They stay until Klabautermann quits.';
+
+  @override
+  String get dockerContainersSelect => 'Select';
+
+  @override
+  String get dockerContainersColumnSelect => 'Selection';
+
+  @override
+  String dockerContainersRowSelected(String selected) {
+    String _temp0 = intl.Intl.selectLogic(selected, {
+      'true': 'Selected',
+      'other': 'Not selected',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerContainersSelectOne => 'Select';
+
+  @override
+  String get dockerContainersDeselect => 'Deselect';
+
+  @override
+  String get dockerContainersSelectProject => 'Select its containers';
+
+  @override
+  String get dockerContainersDeselectProject => 'Deselect its containers';
+
+  @override
+  String dockerContainersGroupSelection(String summary, String selection) {
+    String _temp0 = intl.Intl.selectLogic(selection, {
+      'all': 'all selected',
+      'some': 'some selected',
+      'other': 'none selected',
+    });
+    return '$summary, $_temp0';
+  }
+
+  @override
+  String dockerContainersSelectedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count selected',
+      one: '1 selected',
+      zero: 'None selected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerContainersBulkVerb(String verb, int count) {
+    String _temp0 = intl.Intl.selectLogic(verb, {
+      'start': 'Start',
+      'stop': 'Stop',
+      'restart': 'Restart',
+      'remove': 'Remove',
+      'other': 'Act',
+    });
+    return '$_temp0 ($count)';
+  }
+
+  @override
+  String get dockerContainersSelectAll => 'Select all shown';
+
+  @override
+  String get dockerContainersSelectNone => 'Clear selection';
+
+  @override
+  String dockerContainersBulkMax(int max) {
+    return 'Select at most $max containers to act on them at once.';
+  }
+
+  @override
   String dockerContainerState(String state) {
     String _temp0 = intl.Intl.selectLogic(state, {
       'created': 'Created',
@@ -5585,6 +6568,28 @@ class AppLocalizationsEn extends AppLocalizations {
       'exited': 'Exited',
       'dead': 'Dead',
       'other': 'Unknown',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerContainerStateFlagged(String state, String flag) {
+    String _temp0 = intl.Intl.selectLogic(flag, {
+      'restartLoop': 'restart loop',
+      'failed': 'failed',
+      'other': 'flagged',
+    });
+    return '$state ($_temp0)';
+  }
+
+  @override
+  String dockerContainerFlagTooltip(String flag, int code) {
+    String _temp0 = intl.Intl.selectLogic(flag, {
+      'restartLoop':
+          'The engine is starting it again after it exited, as a restart policy does in a loop. The details show how often it restarted.',
+      'failed':
+          'Its last run exited with code $code, which a stop does not leave.',
+      'other': 'Exit code $code',
     });
     return '$_temp0';
   }
@@ -5901,6 +6906,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerImageHistoryComment => 'Comment';
+
+  @override
+  String get dockerLinksTitle => 'Links';
+
+  @override
+  String dockerLinksFrom(String source) {
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'dockhand': 'From a Dockhand label',
+      'dozzle': 'From a Dozzle label',
+      'traefik': 'A Traefik route',
+      'caddy': 'A Caddy site',
+      'other': 'From a label',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerLinksFromPort(String source, String port) {
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'dockhand': 'From a Dockhand label, port $port',
+      'other': 'From a label, port $port',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerLinksOpen(String name) {
+    return 'Open $name in the browser';
+  }
+
+  @override
+  String get dockerLinksNotOpened =>
+      'The link could not be opened in a browser.';
 
   @override
   String get dockerProcessesTitle => 'Processes';
@@ -6234,6 +7272,79 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String dockerDetailsManagedByNote(String manager, String label) {
     return 'Changes made outside $manager can be overwritten by it. The label $label marks it.';
+  }
+
+  @override
+  String get dockerDiagnosisTitle => 'Diagnosis';
+
+  @override
+  String dockerDiagnosisKind(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'oomLimit': 'Out of memory',
+      'oomHost': 'Out of memory on the host',
+      'killed': 'Killed',
+      'segfault': 'Crashed',
+      'notExecutable': 'Command not executable',
+      'commandNotFound': 'Command not found',
+      'runtimeError': 'The engine could not start it',
+      'exitedWithError': 'Exited with an error',
+      'exitsAtOnce': 'Exits right after starting',
+      'restartLoop': 'Restart loop',
+      'unhealthy': 'Health check failing',
+      'other': 'Something went wrong',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerDiagnosisWhy(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'oomLimit':
+          'The kernel stopped it, most likely for going over its memory limit. Raise the limit or find what keeps growing.',
+      'oomHost':
+          'The kernel stopped it while the host ran out of memory. It has no memory limit of its own.',
+      'killed':
+          'It ended with SIGKILL (exit code 137) without running out of memory: a docker kill, a stop that ran past its timeout, or another process.',
+      'segfault':
+          'It ended with a segmentation fault (exit code 139), a crash inside the program.',
+      'notExecutable':
+          'Exit code 126: the command exists but cannot run. Check its permissions and its interpreter line.',
+      'commandNotFound':
+          'Exit code 127: the entrypoint or command names a program the image does not have.',
+      'runtimeError': 'The engine reported this error for it:',
+      'exitedWithError':
+          'Its process ended with an error. Its last log lines usually say why.',
+      'exitsAtOnce':
+          'It exited with code 0 and its restart policy starts it again: its main process does not stay in the foreground.',
+      'restartLoop':
+          'Its restart policy has started it again after each exit since it was last started by hand. Its logs show what each run ended with.',
+      'unhealthy':
+          'Its health check keeps failing. Health checks shows what each check printed.',
+      'other': 'Its state says something went wrong.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerDiagnosisMemoryLimit(String limit) {
+    return 'Memory limit: $limit';
+  }
+
+  @override
+  String dockerDiagnosisExitCode(int code) {
+    return 'Exit code: $code';
+  }
+
+  @override
+  String dockerDiagnosisRestarts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Restarted $count times',
+      one: 'Restarted once',
+      zero: 'Restarting now',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -8466,4 +9577,326 @@ class AppLocalizationsEn extends AppLocalizations {
 
     return 'Checked $timeString';
   }
+
+  @override
+  String get doctorOpen => 'Run the doctor';
+
+  @override
+  String get doctorTitle => 'Doctor';
+
+  @override
+  String get doctorIntro =>
+      'Read-only checks of this server, each with what to do about a finding. Nothing on the server changes.';
+
+  @override
+  String get doctorRunning => 'Checking…';
+
+  @override
+  String doctorSummary(int problems, int warnings) {
+    String _temp0 = intl.Intl.pluralLogic(
+      problems,
+      locale: localeName,
+      other: '$problems problems',
+      one: '1 problem',
+      zero: 'No problems',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      warnings,
+      locale: localeName,
+      other: '$warnings warnings',
+      one: '1 warning',
+      zero: 'no warnings',
+    );
+    return '$_temp0, $_temp1';
+  }
+
+  @override
+  String get doctorAgain => 'Check again';
+
+  @override
+  String get doctorClose => 'Close';
+
+  @override
+  String doctorCheck(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'diskSpace': 'Disk space',
+      'inodes': 'Inodes',
+      'failedUnits': 'Failed units',
+      'securityUpdates': 'Security updates',
+      'rebootRequired': 'Reboot',
+      'timeSync': 'Time sync',
+      'certificates': 'Certificates',
+      'dockerDiskUse': 'Docker disk use',
+      'danglingImages': 'Dangling images',
+      'other': 'Check',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String doctorHint(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'diskSpace':
+          'Remove old logs, caches and unused images, or grow the filesystem. Disks on the System tab lists every mount.',
+      'inodes':
+          'Many small files use up inodes: look for caches, mail queues or session files and remove what is no longer needed.',
+      'failedUnits':
+          'Open Services to read each unit\'s log, and restart it once the cause is fixed.',
+      'securityUpdates':
+          'Install them from Updates on the System tab or with the package manager.',
+      'rebootRequired':
+          'Reboot from Power on the System tab when it suits, so the updated kernel or libraries run.',
+      'timeSync':
+          'Turn time sync on (for example with timedatectl set-ntp true) and make sure the NTP server can be reached.',
+      'certificates':
+          'Renew or replace the certificate before it expires. Certificates on the System tab shows each endpoint.',
+      'dockerDiskUse':
+          'Remove unused images, stopped containers and build cache from the Docker tab.',
+      'danglingImages':
+          'Rebuilds leave untagged images behind. Remove them from Images with the Dangling filter.',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get doctorUnknown =>
+      'Not known: the reading failed or has not arrived.';
+
+  @override
+  String get doctorChecking => 'Reading…';
+
+  @override
+  String doctorSpaceOk(String percent) {
+    return 'Every filesystem is under $percent full.';
+  }
+
+  @override
+  String doctorSpaceFull(String percent) {
+    return 'Filling up, the fullest at $percent:';
+  }
+
+  @override
+  String doctorInodesOk(String percent) {
+    return 'Every filesystem uses under $percent of its inodes.';
+  }
+
+  @override
+  String doctorInodesFull(String percent) {
+    return 'Running out of inodes, the fullest at $percent:';
+  }
+
+  @override
+  String get doctorUnitsOk => 'No unit has failed.';
+
+  @override
+  String doctorUnitsFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count units have failed:',
+      one: '1 unit has failed:',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String doctorSecurityPending(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count security updates are pending.',
+      one: '1 security update is pending.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String doctorUpdatesUnclassified(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count updates are pending, and the package manager does not say which fix security issues.',
+      one:
+          '1 update is pending, and the package manager does not say whether it fixes a security issue.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String doctorSecurityNone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'No security updates are pending; $count other updates are.',
+      one: 'No security updates are pending; 1 other update is.',
+      zero: 'No updates are pending.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get doctorRebootNo => 'No reboot is needed.';
+
+  @override
+  String get doctorRebootYes =>
+      'A reboot is needed. Packages that asked for it, where the host says:';
+
+  @override
+  String get doctorTimeOk => 'The clock is synchronized.';
+
+  @override
+  String get doctorTimeNotSynced => 'The clock is not synchronized.';
+
+  @override
+  String doctorTimeNotSyncedSkew(String skew) {
+    return 'The clock is not synchronized; it reads $skew.';
+  }
+
+  @override
+  String doctorClockOff(String skew) {
+    return 'The clock reads $skew.';
+  }
+
+  @override
+  String get doctorCertificatesNone =>
+      'No endpoints are listed for this server.';
+
+  @override
+  String get doctorCertificatesSetUp =>
+      'List endpoints under Certificates on the System tab to check them here.';
+
+  @override
+  String doctorCertificatesOk(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'All $count endpoints present valid certificates.',
+      one: 'The endpoint presents a valid certificate.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get doctorCertificatesBad =>
+      'Failing, untrusted, expired or expiring within 14 days:';
+
+  @override
+  String doctorDockerReclaimable(String size) {
+    return 'Docker could free $size of unused data.';
+  }
+
+  @override
+  String get doctorDanglingNone => 'No dangling images.';
+
+  @override
+  String doctorDangling(int count, String size) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count dangling images take $size.',
+      one: '1 dangling image takes $size.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String attentionNotice(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count problems need attention',
+      one: '1 problem needs attention',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get attentionShow => 'Show';
+
+  @override
+  String get attentionTitle => 'Attention';
+
+  @override
+  String get attentionIntro =>
+      'Problems across the fleet, from what this device has read this run. Acknowledging one hides it until it clears; acknowledgements stay on this device.';
+
+  @override
+  String get attentionNone => 'Nothing needs attention.';
+
+  @override
+  String attentionAcknowledgedHeading(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Acknowledged ($count)',
+      one: 'Acknowledged (1)',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get attentionClose => 'Close';
+
+  @override
+  String attentionAcknowledgedAt(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Acknowledged $timeString';
+  }
+
+  @override
+  String get attentionAcknowledge => 'Acknowledge';
+
+  @override
+  String get attentionReopen => 'Reopen';
+
+  @override
+  String get attentionOpenServer => 'Open server';
+
+  @override
+  String get attentionBlocked =>
+      'Connecting is blocked until you decide, for example about a changed host key.';
+
+  @override
+  String get attentionUnreachable =>
+      'Cannot be reached: the last attempt failed.';
+
+  @override
+  String attentionAlert(String metric) {
+    return 'Alert raised: $metric';
+  }
+
+  @override
+  String attentionFailedUnit(String unit) {
+    return 'Unit failed: $unit';
+  }
+
+  @override
+  String attentionDiskFull(String mount, String percent) {
+    return '$mount is $percent full';
+  }
+
+  @override
+  String attentionInodesFull(String mount, String percent) {
+    return '$mount uses $percent of its inodes';
+  }
+
+  @override
+  String attentionUnhealthy(String container) {
+    return 'Container unhealthy: $container';
+  }
+
+  @override
+  String get attentionNoteTitle => 'Acknowledge the problem';
+
+  @override
+  String get attentionNoteLabel => 'Note (optional)';
+
+  @override
+  String get attentionCancel => 'Cancel';
 }

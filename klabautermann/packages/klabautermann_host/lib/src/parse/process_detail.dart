@@ -238,7 +238,9 @@ ProcessDetail? parseProcessDetail(String raw) {
     processesLimit: limit('Max processes'),
     openFiles: denied(fds) ? null : int.tryParse(body(fds).firstOrNull ?? ''),
     openFilesDenied: denied(fds),
-    environment: environ == null || denied(environ) ? null : body(environ),
+    environment: environ == null || denied(environ)
+        ? null
+        : [for (final entry in body(environ)) entry.replaceAll('\x01', '\n')],
     environmentDenied: denied(environ),
   );
 }

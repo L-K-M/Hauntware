@@ -11,4 +11,4 @@ PRODUCT_NAME = Planchette
 PRODUCT_BUNDLE_IDENTIFIER = ch.lkmc.planchetteApp
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 ch.lkmc. All rights reserved.
+PRODUCT_COPYRIGHT = Unlicense

@@ -24,10 +24,13 @@ import 'package:seance_core/seance_core.dart'
 import '../admin/admin_mode.dart';
 import '../audit/audit_log.dart';
 import '../audit/host_audit_line.dart';
+import '../admin/firewall.dart';
 import '../admin/restarts.dart';
 import '../admin/safety_policy.dart';
 import '../admin/smart.dart';
+import '../admin/sshd_posture.dart';
 import '../admin/user_crontabs.dart';
+import '../certificates/tls_check.dart';
 import '../alerts/alert_evaluator.dart';
 import '../history/history_store.dart';
 import '../capabilities/capability_cache.dart';
@@ -163,8 +166,9 @@ final class EngineStart {
 /// whether links are on. The engine first returns its command port, then
 /// answers requests on the client's port: [Hello] gets [EngineReady] and
 /// the fleet it started with in a [CatalogReplaced], [Subscribe],
-/// [Unsubscribe] and [SetCadenceProfile] update the sampling subscriptions,
-/// which the sampling scheduler runs over each server's ready link as
+/// [Unsubscribe], [SetCadenceProfile] and [SetServerCadenceCap] update the
+/// sampling subscriptions, which the sampling scheduler runs over each
+/// server's ready link as
 /// [Sample], [Gap], [SamplingState] and [HostProfileChanged] events
 /// (03 §6.4; links off, nothing samples), [RefreshSubscription] has it
 /// read one subscription's streams at once, a server's cached profile goes
@@ -1170,6 +1174,9 @@ void engineMain(
       case SetCadenceProfile(:final profile):
         sampling.profile = profile;
         scheduler?.profileChanged();
+      case SetServerCadenceCap(:final serverId, :final cap):
+        sampling.capServer(serverId, cap);
+        scheduler?.profileChanged();
       case OpenLogStream(spec: LogStreamSpec(source: ContainerLogSource())):
         // The log router keeps every stream id; the Docker session reads.
         final reason = switch ((logs, docker)) {
@@ -1238,6 +1245,25 @@ void engineMain(
           RedactedLines(
             requestId,
             lines.map(_exportRedactor.redact).join('\n'),
+          ),
+        );
+      case CheckTlsEndpoints(:final requestId, :final endpoints):
+        // Not awaited: each check may wait out its timeout, and the queue
+        // keeps serving meanwhile. checkTlsEndpoint throws no exception;
+        // anything else still answers as a failed check, so the request
+        // is never left without an answer.
+        unawaited(
+          Future.wait([
+            for (final endpoint in endpoints.take(kTlsEndpointsMax))
+              checkTlsEndpoint(endpoint).catchError(
+                (Object error) => TlsEndpointCheck(
+                  endpoint: endpoint,
+                  failure: TlsCheckFailure.connect,
+                  detail: '$error',
+                ),
+              ),
+          ]).then(
+            (checks) => uiPort.send(TlsEndpointsChecked(requestId, checks)),
           ),
         );
       case OpenTerminal():
@@ -1461,6 +1487,7 @@ void engineMain(
             );
           case ContainerAction() ||
               RemoveContainer() ||
+              ContainerBulkAction() ||
               RemoveImage() ||
               CreateVolume() ||
               RemoveVolume() ||
@@ -1786,6 +1813,66 @@ void engineMain(
           ).then(
             uiPort.send,
             onError: (Object _) => fail(RestartReportFailure.transport),
+          ),
+        );
+      case ReadFirewall(:final serverId, :final requestId):
+        void fail(FirewallReportFailure failure) => uiPort.send(
+          FirewallReport(
+            serverId: serverId,
+            requestId: requestId,
+            failure: failure,
+          ),
+        );
+        if (links?.link(serverId) == null) {
+          fail(FirewallReportFailure.noLink);
+          return;
+        }
+        final session = admin?.session(serverId);
+        if (session == null) {
+          fail(FirewallReportFailure.adminRequired);
+          return;
+        }
+        admin?.touch(serverId);
+        unawaited(
+          lendSession(
+            serverId,
+            () =>
+                readFirewall(serverId, requestId: requestId, session: session),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => fail(FirewallReportFailure.transport),
+          ),
+        );
+      case ReadSshdPosture(:final serverId, :final requestId):
+        void fail(SshdPostureFailure failure) => uiPort.send(
+          SshdPostureReport(
+            serverId: serverId,
+            requestId: requestId,
+            failure: failure,
+          ),
+        );
+        if (links?.link(serverId) == null) {
+          fail(SshdPostureFailure.noLink);
+          return;
+        }
+        final session = admin?.session(serverId);
+        if (session == null) {
+          fail(SshdPostureFailure.adminRequired);
+          return;
+        }
+        admin?.touch(serverId);
+        unawaited(
+          lendSession(
+            serverId,
+            () => readSshdPosture(
+              serverId,
+              requestId: requestId,
+              session: session,
+              profile: profiles[serverId],
+            ),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => fail(SshdPostureFailure.transport),
           ),
         );
       case ReadPackages(:final serverId, :final requestId, :final fresh):

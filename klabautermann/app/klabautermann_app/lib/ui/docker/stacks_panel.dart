@@ -12,7 +12,7 @@ import '../actions/docker_actions.dart'
 import '../hand_off_actions.dart' show FolderHandOffs, folderHandOffsShown;
 import 'container_details.dart' show openContainerDetails;
 import 'containers_panel.dart'
-    show ContainerHealthBadge, DockerNotice, containerStateText;
+    show ContainerHealthBadge, ContainerStateBadge, DockerNotice;
 import 'containers_view.dart';
 import 'stack_file_view.dart' show openStackFiles;
 import 'stacks_view.dart';
@@ -1059,8 +1059,8 @@ class _ContainerRow extends StatelessWidget {
                           containerNameOf(container),
                           style: theme.textTheme.bodyMedium,
                         ),
-                        Text(
-                          containerStateText(l10n, container.state),
+                        ContainerStateBadge(
+                          container: container,
                           style: theme.textTheme.bodySmall,
                         ),
                         if (health != null && health != HealthStatus.none)

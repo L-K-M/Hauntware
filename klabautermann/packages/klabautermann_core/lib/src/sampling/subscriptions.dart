@@ -16,6 +16,27 @@ final class SamplingSubscriptions {
   /// The 03 §6.4 cadence column for every subscription.
   CadenceProfile profile = CadenceProfile.desktop;
 
+  /// Server id to the slowest column it may sample at (SAF-19's
+  /// per-server caps), kept apart from the [fleet] so a server that
+  /// leaves and returns keeps its cap.
+  final Map<String, CadenceProfile> _caps = {};
+
+  /// Caps [serverId]'s cadence at [cap]'s column; null lifts the cap.
+  void capServer(String serverId, CadenceProfile? cap) {
+    if (cap == null) {
+      _caps.remove(serverId);
+    } else {
+      _caps[serverId] = cap;
+    }
+  }
+
+  /// The column [serverId] samples at: [profile], or its cap when that
+  /// is slower (the columns run from the fastest to the slowest).
+  CadenceProfile profileFor(String serverId) => switch (_caps[serverId]) {
+    final cap? when cap.index > profile.index => cap,
+    _ => profile,
+  };
+
   /// Names the fleet's servers (03 §5.1): one it no longer lists loses
   /// its subscriptions, and a [Subscribe] for a server outside it is
   /// ignored, so a request that crossed the server's removal cannot bring

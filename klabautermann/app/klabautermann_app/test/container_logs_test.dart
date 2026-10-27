@@ -469,6 +469,36 @@ void main() {
     expect(text, contains('stderr FATAL:  password authentication failed'));
   });
 
+  testWidgets('Export is redacted unless Include secrets is on (SAF-07)', (
+    tester,
+  ) async {
+    final host = _ExportHost();
+    final harness = await _pump(tester, exportHost: host);
+    await _openLogs(tester);
+    await harness.running(tester);
+
+    await tester.tap(find.byTooltip('Export'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save…'));
+    await tester.pump();
+
+    final redaction = harness.engine
+        .sentOfType<RedactLines>()
+        .cast<RedactLines>()
+        .single;
+    expect(
+      redaction.lines,
+      contains(contains('stderr FATAL:  password authentication failed')),
+    );
+    await harness.emit(
+      tester,
+      RedactedLines(redaction.requestId, 'redacted by the engine'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(host.saved.single, ('web-db.log', 'redacted by the engine\n'));
+  });
+
   testWidgets('lines the engine dropped show as one row', (tester) async {
     final harness = await _pump(tester);
     await _openLogs(tester);

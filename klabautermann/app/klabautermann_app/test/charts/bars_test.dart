@@ -7,7 +7,7 @@ import 'package:klabautermann_app/ui/charts/charts.dart';
 import '../support/charts.dart';
 
 const _gib = 1024.0 * 1024 * 1024;
-const _thresholds = ChartThresholds(warning: 80, critical: 90);
+const _thresholds = ChartThresholds(careful: 70, warning: 80, critical: 90);
 
 final _palette = ChartPalette.fromTheme(chartTheme(Brightness.light));
 
@@ -127,7 +127,8 @@ void main() {
     });
 
     for (final (used, severity, colour, icon) in [
-      (12.0, null, _palette.series[0], null),
+      (10.0, null, _palette.series[0], null),
+      (12.0, 'careful', _palette.series[0], Icons.info_rounded),
       (13.0, 'warning', _palette.warning, Icons.warning_rounded),
       (15.0, 'critical', _palette.critical, Icons.error_rounded),
     ]) {
@@ -147,7 +148,9 @@ void main() {
         expect(firstRun.color, colour);
         expect(
           firstRun.fill,
-          severity == null ? BarFill.solid : BarFill.severe,
+          severity == null || severity == 'careful'
+              ? BarFill.solid
+              : BarFill.severe,
         );
         final part = severity == null
             ? 'Used ${used.round()} GiB'
@@ -157,7 +160,10 @@ void main() {
         if (icon == null) {
           expect(find.byType(Icon), findsNothing);
         } else {
-          expect(tester.widget<Icon>(find.byIcon(icon)).color, colour);
+          expect(
+            tester.widget<Icon>(find.byIcon(icon)).color,
+            severity == 'careful' ? _palette.scaleText : colour,
+          );
         }
         // The icon's slot is there either way, so the bar keeps its length.
         expect(tester.getSize(_paintIn(StackedBar)).width, 200 - 4 - 14);
@@ -430,7 +436,9 @@ void main() {
   });
 
   test('a value at a threshold has its severity', () {
-    expect(_thresholds.severityOf(79.9), ChartSeverity.normal);
+    expect(_thresholds.severityOf(69.9), ChartSeverity.normal);
+    expect(_thresholds.severityOf(70), ChartSeverity.careful);
+    expect(_thresholds.severityOf(79.9), ChartSeverity.careful);
     expect(_thresholds.severityOf(80), ChartSeverity.warning);
     expect(_thresholds.severityOf(89.9), ChartSeverity.warning);
     expect(_thresholds.severityOf(90), ChartSeverity.critical);

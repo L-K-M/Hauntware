@@ -19,4 +19,4 @@ SWIFT_OBJC_BRIDGING_HEADER = Runner/Runner-Bridging-Header.h
 PRODUCT_BUNDLE_IDENTIFIER = ch.lkmc.seanceApp
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 ch.lkmc.
+PRODUCT_COPYRIGHT = Unlicense

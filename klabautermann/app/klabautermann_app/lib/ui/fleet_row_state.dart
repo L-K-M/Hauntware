@@ -5,7 +5,6 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/fleet_controller.dart' show FleetServer;
 import '../controllers/monitoring_controller.dart' show sampleAge;
-import 'charts/charts.dart' show ChartThresholds;
 
 /// The engine's link truth as the session state `ghost_servers`' indicator
 /// resolves (03 §10.3, F4): a limited link is connected, a backoff is an
@@ -32,13 +31,6 @@ GhostProbeState? ghostProbeOf(ReachabilityStatus? status) => switch (status) {
   ReachabilityStatus.offline => GhostProbeState.offline,
   ReachabilityStatus.unknown => GhostProbeState.unknown,
 };
-
-/// The warning and critical levels of every pressure-bar cell (FL-07), in
-/// percent, until OV-11's user thresholds (v1).
-const ChartThresholds kFleetRowThresholds = ChartThresholds(
-  warning: 80,
-  critical: 90,
-);
 
 /// How old a reading of each stream may grow before its row shows it as
 /// stale (OV-04): twice the stream's slowest cadence in 03 §6.4 (the

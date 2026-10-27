@@ -3385,6 +3385,24 @@ abstract class AppLocalizations {
   /// **'Checks GitHub on launch. Nothing is downloaded until you choose to update.'**
   String get updateCheckEnabledSubtitle;
 
+  /// Settings row that opens the licenses page: the third-party notices of everything the app includes.
+  ///
+  /// In en, this message translates to:
+  /// **'Open-source licenses'**
+  String get openSourceLicensesLabel;
+
+  /// Explainer under the licenses row: the Unlicense covers only the app's own code.
+  ///
+  /// In en, this message translates to:
+  /// **'Public domain (Unlicense). The libraries, fonts, PDFium and engine it includes keep their own licenses.'**
+  String get openSourceLicensesSubtitle;
+
+  /// Line at the top of the licenses page.
+  ///
+  /// In en, this message translates to:
+  /// **'Poltergeist\'s own code is public domain (Unlicense). It includes third-party components that keep their own licenses, listed here.'**
+  String get openSourceLicensesLegalese;
+
   /// 04 §4.3's verbatim section title.
   ///
   /// In en, this message translates to:

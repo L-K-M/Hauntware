@@ -39,6 +39,7 @@ final class ChartStrings {
     required this.barPart,
     required this.listSeparator,
     required this.withSeverity,
+    required this.severityCareful,
     required this.severityWarning,
     required this.severityCritical,
     required this.stale,
@@ -102,10 +103,12 @@ final class ChartStrings {
   /// Between the parts of a bar's summary.
   final String listSeparator;
 
-  /// A [barPart] past a threshold, with [severityWarning] or
-  /// [severityCritical] (A11Y-01: the colour never speaks alone).
+  /// A [barPart] past a threshold, with [severityCareful],
+  /// [severityWarning] or [severityCritical] (A11Y-01: the colour never
+  /// speaks alone).
   final String Function(String part, String severity) withSeverity;
 
+  final String severityCareful;
   final String severityWarning;
   final String severityCritical;
 
