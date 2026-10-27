@@ -7224,6 +7224,13 @@ reading, in two columns from the System tab's 600 px panel width:
 - The CPU and memory gauges and the CPU sparkline warn at the fleet
   rows' 80 % and 90 % until OV-11, so a server's row and Overview
   agree; swap, load and the per-core figures carry no thresholds.
+- As built (M6 N61a, OV-11), those stand-ins became bands: careful from
+  70 %, warning from 80 % and critical from 90 % for CPU, memory and
+  disk, each metric's own through `ThresholdScope`, which the fleet
+  rows, the Overview's gauges, the health card's disk alarms and the
+  announcer read. Careful keeps the series colour and says so by an info
+  icon and in words; only warning and critical raise disk alarms or are
+  announced. The user's levels follow in N61b.
 - Every figure goes through the chart formatters' IEC units, and a
   test keeps the decimal `ghostFormatFileSize` and `ghostFormatByteRate`
   out of `lib/`. A figure the container withholds (D50) reads unknown

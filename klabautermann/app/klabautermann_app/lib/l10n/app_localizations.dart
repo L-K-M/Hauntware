@@ -3366,6 +3366,12 @@ abstract class AppLocalizations {
   /// **'{part} ({severity})'**
   String chartWithSeverity(String part, String severity);
 
+  /// A value past its careful threshold (OV-11), below warning: shown with an info icon in the usual colour.
+  ///
+  /// In en, this message translates to:
+  /// **'careful'**
+  String get chartSeverityCareful;
+
   /// A value past its warning threshold, shown in the warning colour with a warning icon.
   ///
   /// In en, this message translates to:

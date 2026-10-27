@@ -1,7 +1,7 @@
 import 'dart:async' show unawaited;
 import 'dart:ui' show FlutterView;
 
-import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/foundation.dart' show ValueListenable, mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart'
     show AccessibilityFocusBlockType, SemanticsService;
@@ -9,8 +9,8 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../l10n/app_localizations.dart';
 import 'charts/charts.dart' show ChartSeverity, ChartThresholds;
-import 'fleet_row_state.dart' show kFleetRowThresholds;
 import 'system_view.dart' show shownMounts;
+import 'threshold_scope.dart';
 
 /// How long a value must stay past a level, or back under it, before its
 /// band changes for A11Y-15: the threshold rules' `for` (03 §7.19), so a
@@ -20,10 +20,20 @@ import 'system_view.dart' show shownMounts;
 const Duration kBandHold = Duration(seconds: 10);
 
 /// What the Overview announces (D60): CPU busy and used memory from
-/// `core`, and each listed mount's space and inode use from `fs`, all
-/// against the fleet rows' levels until OV-11, as the health card judges
-/// the mounts.
-enum BandMetric { cpu, memory, diskSpace, diskInodes }
+/// `core`, and each listed mount's space and inode use from `fs`, each
+/// against its OV-11 warning and critical levels, as the health card
+/// judges the mounts. The careful band is shown, never announced.
+enum BandMetric {
+  cpu(ThresholdMetric.cpu),
+  memory(ThresholdMetric.memory),
+  diskSpace(ThresholdMetric.disk),
+  diskInodes(ThresholdMetric.disk);
+
+  const BandMetric(this.levels);
+
+  /// The OV-11 metric whose levels judge this value.
+  final ThresholdMetric levels;
+}
 
 /// One value's band against [levels] for A11Y-15, debounced by
 /// `threshold.dart`'s hysteresis rules: one rule per level, raised once the
@@ -32,7 +42,7 @@ enum BandMetric { cpu, memory, diskSpace, diskInodes }
 final class BandWatch {
   BandWatch(
     BandMetric metric, {
-    ChartThresholds levels = kFleetRowThresholds,
+    ChartThresholds levels = kDefaultThresholds,
     Duration hold = kBandHold,
   }) : _levels = levels,
        _warning = _rule(metric, levels.warning, hold),
@@ -68,10 +78,10 @@ final class BandWatch {
 
     final band = _band;
     if (band == null) {
-      final start = _levels.severityOf(value);
+      final start = _bandOf(value);
       ThresholdState seed(bool raised) =>
           raised ? ThresholdState(RulePhase.firing, at) : ThresholdState.idle;
-      _warned = seed(start != ChartSeverity.normal);
+      _warned = seed(start.alarms);
       _criticalled = seed(start == ChartSeverity.critical);
       _band = start;
       return null;
@@ -89,11 +99,18 @@ final class BandWatch {
         : _warned.raised
         ? ChartSeverity.warning
         : ChartSeverity.normal;
-    if (now == band || now != _levels.severityOf(value)) return null;
+    if (now == band || now != _bandOf(value)) return null;
 
     _band = now;
     return now;
   }
+
+  /// [value]'s band, with careful counted as normal: only warning and
+  /// critical are heard.
+  ChartSeverity _bandOf(double value) => switch (_levels.severityOf(value)) {
+    ChartSeverity.careful => ChartSeverity.normal,
+    final band => band,
+  };
 }
 
 /// Used memory as a share of the total, or null when either is unknown.
@@ -160,6 +177,9 @@ class ThresholdAnnouncer extends StatefulWidget {
 
 class _ThresholdAnnouncerState extends State<ThresholdAnnouncer> {
   final Map<_WatchKey, BandWatch> _watches = {};
+
+  /// The levels the watches were built with; new levels start them over.
+  Map<ThresholdMetric, ChartThresholds> _levels = const {};
   ValueListenable<Sample?>? _core;
   ValueListenable<Sample?>? _fs;
 
@@ -179,6 +199,14 @@ class _ThresholdAnnouncerState extends State<ThresholdAnnouncer> {
     _view = View.of(context);
     _direction = Directionality.of(context);
     _announces = MediaQuery.maybeSupportsAnnounceOf(context) ?? false;
+    final levels = {
+      for (final metric in ThresholdMetric.values)
+        metric: ThresholdScope.of(context, metric),
+    };
+    if (!mapEquals(levels, _levels)) {
+      _levels = levels;
+      _watches.clear();
+    }
     _sync();
   }
 
@@ -271,7 +299,10 @@ class _ThresholdAnnouncerState extends State<ThresholdAnnouncer> {
     final (metric, mountPoint) = key;
     final spoken = value?.roundToDouble();
     final band = _watches
-        .putIfAbsent(key, () => BandWatch(metric))
+        .putIfAbsent(
+          key,
+          () => BandWatch(metric, levels: _levels[metric.levels]!),
+        )
         .observe(spoken, at);
     if (band == null) return null;
 

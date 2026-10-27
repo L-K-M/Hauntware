@@ -3061,6 +3061,10 @@
       }
     }
   },
+  "chartSeverityCareful": "careful",
+  "@chartSeverityCareful": {
+    "description": "A value past its careful threshold (OV-11), below warning: shown with an info icon in the usual colour."
+  },
   "chartSeverityWarning": "warning",
   "@chartSeverityWarning": {
     "description": "A value past its warning threshold, shown in the warning colour with a warning icon."
