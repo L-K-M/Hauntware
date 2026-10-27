@@ -18,6 +18,7 @@ import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
 import 'controllers/attention.dart';
 import 'controllers/cadence_controller.dart';
+import 'controllers/pinned_services.dart';
 import 'controllers/container_columns.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/device_name.dart';
@@ -342,6 +343,15 @@ Future<void> main(List<String> args) async {
   applyCadence();
   cadence.addListener(applyCadence);
 
+  // OV-08's pinned services, kept per device in settings.json.
+  final pinnedServices = PinnedServicesController(
+    pins: {
+      for (final MapEntry(:key, :value) in settings.pinnedServices.entries)
+        key: [for (final pin in value) ?PinnedService.parse(pin)],
+    },
+    save: settings.setPinnedServices,
+  );
+
   // The synced servers' preferences (03 §4.8), as the engine reports their
   // `pref` records.
   final serverPrefs = ServerPrefsController(engine);
@@ -436,6 +446,7 @@ Future<void> main(List<String> args) async {
       coverage: coverage,
       announcements: announcements,
       cadence: cadence,
+      pinnedServices: pinnedServices,
       deviceName: deviceName,
       safety: safety,
       appLock: appLock,

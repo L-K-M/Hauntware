@@ -42,6 +42,7 @@ const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
 const String _containerColumnsKey = 'klabautermann.docker.containerColumns';
 const String _tlsEndpointsKey = 'klabautermann.certificates.endpoints';
 const String _cadenceKey = 'klabautermann.sampling.cadence';
+const String _pinnedServicesKey = 'klabautermann.overview.pinnedServices';
 const String _attentionKey = 'klabautermann.attention.acknowledged';
 
 // The fields of one server's entry under [_endpointOverridesKey].
@@ -359,6 +360,36 @@ final class DeviceSettingsStore {
     _values[_cadenceKey] = name;
     await _save();
   }
+
+  /// Each server's services pinned to its Overview's quick actions
+  /// (OV-08), `klabautermann.overview.pinnedServices`: the app's own
+  /// names for them, in the order pinned, by server id. An entry that is
+  /// not a list of strings is left out, and so is each item that is not a
+  /// string.
+  Map<String, List<String>> get pinnedServices => {
+    for (final MapEntry(:key, :value) in _rawPinnedServices.entries)
+      if (value case final List<Object?> pins)
+        key: pins.whereType<String>().toList(),
+  };
+
+  /// Stores [serverId]'s [pins], none to drop its entry, and writes the
+  /// document; throws as [setCadence] does.
+  Future<void> setPinnedServices(String serverId, List<String> pins) async {
+    final entries = _rawPinnedServices;
+    if (pins.isEmpty) {
+      entries.remove(serverId);
+    } else {
+      entries[serverId] = [...pins];
+    }
+    _values[_pinnedServicesKey] = entries;
+    await _save();
+  }
+
+  Map<String, Object?> get _rawPinnedServices =>
+      switch (_values[_pinnedServicesKey]) {
+        final Map<String, Object?> entries => {...entries},
+        _ => {},
+      };
 
   /// The device's app lock (SAF-20), `klabautermann.appLock`: off until
   /// the user turns it on. Any other value than `false` that is there

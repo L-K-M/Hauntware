@@ -3338,6 +3338,15 @@ unless the user enables admin mode for that panel.
   steal explained), PSI (absence is normal), model and topology, OOM kills
   linked to journal entries, configurable cards, top lists, quick actions,
   threshold bands, bottom dock.
+
+  As built in M6 (N61c, OV-08), the Overview's quick actions card offers
+  a terminal in Séance and the server's files in Poltergeist where those
+  apps take the hand-off (X-03, X-10), a reboot, and a restart of each
+  service pinned from its page in the Services tab, at most five per
+  server, kept per device in `settings.json` under
+  `klabautermann.overview.pinnedServices`. Each action runs through the
+  preview and confirmation it has in its own tab (SAF-04), and the card
+  is left out when this device can offer none of them.
 - **As built (M6 N42c).** CPU-07's model and topology are a host query,
   `CpuTopologyQuery`, shown in the System tab's Processor section beside
   the identity, since they do not change while the Overview samples. It

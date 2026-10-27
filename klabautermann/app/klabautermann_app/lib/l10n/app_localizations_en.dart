@@ -320,6 +320,41 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get quickActionsTitle => 'Quick actions';
+
+  @override
+  String get quickActionsFiles => 'Browse files in Poltergeist';
+
+  @override
+  String quickActionsRestart(String unit) {
+    return 'Restart $unit';
+  }
+
+  @override
+  String get quickActionsReboot => 'Reboot';
+
+  @override
+  String get quickActionsPin => 'Pin to the Overview\'s quick actions';
+
+  @override
+  String get quickActionsUnpin => 'Unpin from the Overview\'s quick actions';
+
+  @override
+  String quickActionsPinFull(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count services are already pinned, the most this server takes',
+      one: 'One service is already pinned, the most this server takes',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get quickActionsPinNotSaved =>
+      'The pin changed but could not be saved. It lasts until Klabautermann quits.';
+
+  @override
   String get fleetRowCpu => 'CPU';
 
   @override

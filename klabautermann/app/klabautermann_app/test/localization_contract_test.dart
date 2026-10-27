@@ -83,6 +83,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/cadence_controller.dart': {
     r"'The polling budget was not saved: $error'",
   },
+  // A pin's stored form (`<scope>/<unit>`) and the not-saved diagnostic;
+  // the unit page shows its own ARB toast (quickActionsPinNotSaved).
+  'lib/controllers/pinned_services.dart': {
+    r"'${scope.name}/$unit'",
+    "'/'",
+    r"'The pinned services were not saved: $error'",
+  },
   // The host syslog line's device name, written into host journals in
   // one form (M5 plan Q6).
   'lib/controllers/device_name.dart': {
@@ -905,6 +912,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
   // debugPrint of a failed theme change; the toast is ARB text.
+  // The Poltergeist link's root folder, and the pin's diagnostic.
+  'lib/ui/quick_actions.dart': {"'/'", r"'$error'"},
   'lib/ui/settings_page.dart': {r"'$error'"},
   'lib/ui/sortable_table.dart': {
     // FocusNode debug labels.
