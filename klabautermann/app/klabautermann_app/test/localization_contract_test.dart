@@ -100,6 +100,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/updates.dart': {"''", "', '"},
   // A failed check's missing detail.
   'lib/ui/fleet_updates.dart': {"''"},
+  // The space between a firewalld zone's names, as firewalld lists them,
+  // and between a chain's family, table and name.
+  'lib/ui/firewall.dart': {"' '"},
+  // The separator between the ports, addresses, key types and setting
+  // names sshd printed.
+  'lib/ui/sshd_posture.dart': {"', '"},
   // A history rollup read's request id, matched in the engine's answer.
   'lib/controllers/history_reads.dart': {r"'rollup-${_count++}'"},
   // The not-saved diagnostic; the Safety tab and the header's Safety menu
@@ -265,6 +271,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'stacks-${_count++}'",
     r"'volumes-${_count++}'",
     r"'networks-${_count++}'",
+    r"'events-${_count++}'",
     r"'stack-file-${_count++}'",
   },
   'lib/controllers/docker_endpoint_choices.dart': {
@@ -534,6 +541,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${DockerWatchList.containers.name}.row.${_rowKey(entry)}'",
     r"'\n'",
     r"'group.${project ?? ''}'",
+    // The selection column's table id (CTR-07), a key.
+    "'select'",
     "''",
   },
   'lib/ui/docker/containers_view.dart': {
@@ -553,6 +562,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'about an hour'",
     r"r'^Up (.+?)(?: ago)?(?: \(.*\))?$'",
     r"r'^(\d+) (second|minute|hour|day|week|month|year)s?$'",
+    // The exit code in a stopped or restarting container's Status text.
+    r"r'^(?:Exited|Restarting) \((-?\d+)\)'",
     "'0.0.0.0'",
     "'::'",
     // The separator `docker ps` prints between ports; machine data.
@@ -673,6 +684,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // systemd's Result word for a service that succeeded, matched in
     // its answer (JOB-05); the details word it themselves.
     "'success'",
+  },
+  'lib/ui/listening_ports.dart': {
+    // A row's key, the PIDs joined, and the addresses a port listens on,
+    // machine data the server names.
+    "','",
+    "', '",
   },
   'lib/ui/interfaces.dart': {"'lo'"},
   'lib/ui/logs/logs_panel.dart': {
@@ -802,6 +819,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${SampleStream.procs.name}.row.${row.pid}'",
     r"'\n'",
   },
+  'lib/ui/processor.dart': {r"'\n'"},
   'lib/ui/processes_view.dart': {
     // The ellipsis ending a cut command line, the space between its
     // arguments, and the filter's term separator and the line break

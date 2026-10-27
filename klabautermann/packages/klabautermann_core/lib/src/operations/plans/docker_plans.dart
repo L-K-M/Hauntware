@@ -1,5 +1,5 @@
 // The Docker action planners (M4 E15): CTR-02's state changes, CTR-06's
-// removal, IMG-02's image removal, STK-03's stack verbs, VOL-02's
+// removal, CTR-07's bulk verbs (M6 N16b), IMG-02's image removal, STK-03's stack verbs, VOL-02's
 // volume create and remove (M6 N10b), DNW-02's network removal (N11),
 // DKE-05's prune (N12) and IMG-03's pull (N13). Each reads its target over the server's Docker endpoint at
 // planning time and builds one plan of exact API steps addressed by full
@@ -43,6 +43,13 @@ const _containerKinds = {
   ContainerVerb.kill: OperationKind.kill,
 };
 
+const _bulkKinds = {
+  ContainerBulkVerb.start: OperationKind.start,
+  ContainerBulkVerb.stop: OperationKind.stop,
+  ContainerBulkVerb.restart: OperationKind.restart,
+  ContainerBulkVerb.remove: OperationKind.removeContainer,
+};
+
 const _stackKinds = {
   StackVerb.start: OperationKind.stackStart,
   StackVerb.stop: OperationKind.stackStop,
@@ -58,6 +65,7 @@ Future<PlanAttempt> planDockerAction(
     return switch (intent) {
       ContainerAction() => await _planContainer(intent, context),
       RemoveContainer() => await _planRemoveContainer(intent, context),
+      ContainerBulkAction() => await _planBulk(intent, context),
       RemoveImage() => await _planRemoveImage(intent, context),
       CreateVolume() => await _planCreateVolume(intent, context),
       RemoveVolume() => await _planRemoveVolume(intent, context),
@@ -115,6 +123,92 @@ Future<PlanAttempt> _planContainer(
       protected: protected,
       revalidate: [
         DockerTargetUnchanged(DockerTargetKind.container, name, container.id),
+      ],
+    ),
+  );
+}
+
+/// CTR-07: [ContainerBulkAction.verb] on each container the ids name now
+/// whose state takes it, in the ids' order, each by its full id. An id
+/// the engine no longer lists refuses, as a changed target does; the
+/// rest is one plan, confirmed once, at the tier its most guarded
+/// container needs.
+Future<PlanAttempt> _planBulk(
+  ContainerBulkAction intent,
+  DockerPlanContext c,
+) async {
+  final ids = intent.containerIds;
+  if (ids.isEmpty ||
+      ids.length > kContainerBulkMax ||
+      ids.any((id) => id.isEmpty) ||
+      ids.toSet().length != ids.length) {
+    return _refused(ActionRefusalReason.invalidTarget);
+  }
+
+  final listed = (await c.client.listContainers(filters: {'id': ids})).value;
+  final byId = {for (final container in listed) container.id: container};
+  final targets = <ContainerSummary>[];
+  for (final id in ids) {
+    final container = byId[id];
+    if (container == null) return _refused(ActionRefusalReason.targetChanged);
+    if (intent.verb.appliesTo(container.state)) targets.add(container);
+  }
+  if (targets.isEmpty) return _refused(ActionRefusalReason.invalidTarget);
+
+  ProtectedReason? protected;
+  var dropsSession = false;
+  for (final container in targets) {
+    final reason = containerProtection(
+      name: _nameOf(container),
+      ports: container.ports,
+      context: c.protection,
+    );
+    // The session port's reason wins: it is the one the impact names.
+    if (reason == ProtectedReason.publishesSessionPort) {
+      protected = reason;
+      dropsSession = true;
+    } else {
+      protected ??= reason;
+    }
+  }
+  final verb = intent.verb;
+  return _planned(
+    OperationPlan(
+      intent: intent,
+      kind: _bulkKinds[verb]!,
+      targetName: targets.map(_nameOf).join(', '),
+      steps: [
+        for (final container in targets)
+          verb == ContainerBulkVerb.remove
+              ? ApiStep(
+                  method: 'DELETE',
+                  path: _path(c, '/containers/${container.id}'),
+                  query: const {'v': '0', 'force': '0'},
+                )
+              : ApiStep(
+                  method: 'POST',
+                  path: _path(c, '/containers/${container.id}/${verb.name}'),
+                ),
+      ],
+      requiredLevel: _level(c),
+      runner: _runner(c),
+      hostWrites: const [HostWriteRow.engineState],
+      impact: switch (verb) {
+        ContainerBulkVerb.start => null,
+        ContainerBulkVerb.remove => containerRemovalImpact(volumes: false),
+        _ when dropsSession => const PlanImpact(ImpactKind.dropsSession),
+        // Every one a stop or restart takes is up.
+        _ => stackImpact(runningContainers: targets.length),
+      },
+      ownership: stackOwnership(targets.map((t) => t.labels)),
+      protected: protected,
+      revalidate: [
+        for (final container in targets)
+          DockerTargetUnchanged(
+            DockerTargetKind.container,
+            _nameOf(container),
+            container.id,
+          ),
       ],
     ),
   );

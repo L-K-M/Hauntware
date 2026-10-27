@@ -6,10 +6,12 @@ import 'package:ghost_fonts/testing.dart' show loadBundledMonoFonts;
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/services/hand_off.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/docker/container_details.dart';
 import 'package:klabautermann_app/ui/docker/container_details_view.dart';
 import 'package:klabautermann_app/ui/docker/containers_panel.dart';
+import 'package:klabautermann_app/ui/hand_off_actions.dart' show HandOffScope;
 import 'package:klabautermann_app/ui/processes_panel.dart' show kRevealDuration;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -71,6 +73,7 @@ Future<_Harness> _pump(
   Brightness brightness = Brightness.light,
   TargetPlatform platform = TargetPlatform.linux,
   bool phone = false,
+  HandOffLauncher? launcher,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -102,6 +105,9 @@ Future<_Harness> _pump(
       theme: theme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: launcher == null
+          ? null
+          : (context, child) => HandOffScope(launcher: launcher, child: child!),
       home: Scaffold(
         body: phone
             ? panel
@@ -226,6 +232,8 @@ void main() {
     }
     // No zero time: the container never stopped.
     expect(_inDetails(find.text('Stopped')), findsNothing);
+    // No label points at a page (CTR-11).
+    expect(_inDetails(find.text('Links')), findsNothing);
     expect(tester.takeException(), isNull);
 
     // Another row replaces it.
@@ -607,6 +615,7 @@ void main() {
       // The view still draws and reveals what was read.
       final masked = _inDetails(find.text('POSTGRES_PASSWORD'));
       await tester.ensureVisible(masked);
+      await tester.pumpAndSettle();
       await tester.tap(masked);
       await tester.pumpAndSettle();
       expect(_inDetails(find.text('hunter2')), findsOneWidget);
@@ -728,9 +737,83 @@ void main() {
       _inDetails(find.text('Restart on failure, at most 5 times')),
       findsOneWidget,
     );
+    expect(_inDetails(find.text('Diagnosis')), findsOneWidget);
+    expect(_inDetails(find.text('Out of memory on the host')), findsOneWidget);
     expect(_inDetails(find.text('Health checks')), findsNothing);
     expect(_inDetails(find.text('No mounts.')), findsOneWidget);
     expect(_inDetails(find.text('Not attached to a network.')), findsOneWidget);
+  });
+
+  group('label links (CTR-11)', () {
+    final labels = {
+      'dockhand.url': MaskedValue.plain('[Admin](https://db.example.com/ui)'),
+      'traefik.http.routers.db.rule': MaskedValue.plain(
+        'Host(`pg.example.com`)',
+      ),
+      'traefik.http.routers.db.tls': MaskedValue.plain('true'),
+      'dockhand.port.8080.url': MaskedValue.plain('http://10.0.0.5:8080'),
+    };
+
+    testWidgets('the labels\' pages are listed with where each came from, '
+        'and open in the browser', (tester) async {
+      final launcher = _Launcher();
+      final harness = await _pump(tester, launcher: launcher);
+      await _open(tester);
+      await harness.answer(
+        tester,
+        DockerContainerPayload(dockerContainerDetails(_id, labels: labels)),
+      );
+      expect(_inDetails(find.text('Links')), findsOneWidget);
+      expect(_inDetails(find.text('Admin')), findsOneWidget);
+      expect(_inDetails(find.text('https://db.example.com/ui')), findsWidgets);
+      expect(_inDetails(find.text('From a Dockhand label')), findsOneWidget);
+      expect(_inDetails(find.text('https://pg.example.com')), findsOneWidget);
+      expect(_inDetails(find.text('A Traefik route')), findsOneWidget);
+      // A port as written, never with digit grouping.
+      expect(
+        _inDetails(find.text('From a Dockhand label, port 8080')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        _inDetails(
+          find.byTooltip('Open https://pg.example.com in the browser'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(launcher.opened, [Uri.parse('https://pg.example.com')]);
+
+      launcher.answer = false;
+      await tester.tap(_inDetails(find.byTooltip('Open Admin in the browser')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('The link could not be opened in a browser.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('without a launcher the addresses are text to copy', (
+      tester,
+    ) async {
+      final harness = await _pump(tester);
+      await _open(tester);
+      await harness.answer(
+        tester,
+        DockerContainerPayload(dockerContainerDetails(_id, labels: labels)),
+      );
+      expect(
+        _inDetails(find.widgetWithText(SelectableText, 'Admin')),
+        findsOneWidget,
+      );
+      // A named link's address can be copied too.
+      expect(
+        _inDetails(
+          find.widgetWithText(SelectableText, 'https://db.example.com/ui'),
+        ),
+        findsOneWidget,
+      );
+      expect(_inDetails(find.byIcon(Icons.open_in_new)), findsNothing);
+    });
   });
 
   group('processes (CTR-10)', () {
@@ -948,4 +1031,19 @@ void main() {
       }, skip: !goldensCompareHere);
     }
   });
+}
+
+/// Opens every link with [answer] and records each.
+final class _Launcher implements HandOffLauncher {
+  final opened = <Uri>[];
+  bool answer = true;
+
+  @override
+  bool available(HandOffTarget target) => false;
+
+  @override
+  Future<bool> open(Uri link) async {
+    opened.add(link);
+    return answer;
+  }
 }

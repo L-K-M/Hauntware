@@ -85,6 +85,19 @@ final class HostQueries {
           }
         case ProcessDetailQuery(:final pid, :final startTicks):
           answer(await _processDetail(link, pid, startTicks));
+        case ListeningPortsQuery():
+          switch (await _run(link, HostCommands.listeningPorts())) {
+            case _Failed(:final payload):
+              answer(payload);
+            case _Ran(:final stdout):
+              answer(switch (parseListeningPorts(stdout)) {
+                final read? => ListeningPorts(read),
+                null => const HostQueryFailed(
+                  HostQueryFailure.failed,
+                  detail: 'The listening ports read printed something else.',
+                ),
+              });
+          }
         case OomKillsQuery():
           switch (await _run(link, HostCommands.oomKills())) {
             case _Failed(:final payload):
@@ -115,6 +128,19 @@ final class HostQueries {
                 null => const HostQueryFailed(
                   HostQueryFailure.failed,
                   detail: 'The kernel read printed something else.',
+                ),
+              });
+          }
+        case CpuTopologyQuery():
+          switch (await _run(link, HostCommands.cpuTopology())) {
+            case _Failed(:final payload):
+              answer(payload);
+            case _Ran(:final stdout):
+              answer(switch (parseCpuTopology(stdout)) {
+                final topology? => CpuTopologyRead(topology),
+                null => const HostQueryFailed(
+                  HostQueryFailure.failed,
+                  detail: 'The processor read printed something else.',
                 ),
               });
           }
