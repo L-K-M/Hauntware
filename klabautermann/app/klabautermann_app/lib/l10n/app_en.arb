@@ -1810,6 +1810,100 @@
       }
     }
   },
+  "systemPortsTitle": "Listening ports",
+  "@systemPortsTitle": {
+    "description": "System tab: the heading of the listening ports section (NET-04)."
+  },
+  "systemPortsReading": "Reading the listening ports…",
+  "@systemPortsReading": {
+    "description": "System tab, Listening ports: shown while the ports are read."
+  },
+  "systemPortsReadAgain": "Read again",
+  "@systemPortsReadAgain": {
+    "description": "System tab, Listening ports: the button that reads the ports again."
+  },
+  "systemPortsFailed": "{failure, select, noLink{Not connected to the server.} denied{The server refused the port read.} missing{The server lacks the tools the port read runs.} other{The port read failed.}}",
+  "@systemPortsFailed": {
+    "description": "System tab, Listening ports: why the port read read nothing, by reason.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "systemPortsNoTool": "The server has neither ss nor netstat, so its ports cannot be listed.",
+  "@systemPortsNoTool": {
+    "description": "System tab, Listening ports: shown when neither listing tool is installed. ss and netstat are command names, never translated."
+  },
+  "systemPortsHidden": "Some ports belong to other users' processes, whose names only root may see.",
+  "@systemPortsHidden": {
+    "description": "System tab, Listening ports: shown when the login user could not see which process holds some sockets."
+  },
+  "systemPortsNone": "Nothing listens on this server.",
+  "@systemPortsNone": {
+    "description": "System tab, Listening ports: shown when no socket listens."
+  },
+  "systemPortsEvery": "{protocol, select, tcp{TCP} udp{UDP} other{{protocol}}} {port} on every address",
+  "@systemPortsEvery": {
+    "description": "System tab, Listening ports: a port that accepts connections on all of the server's addresses.",
+    "placeholders": {
+      "protocol": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "systemPortsOn": "{protocol, select, tcp{TCP} udp{UDP} other{{protocol}}} {port} on {addresses}",
+  "@systemPortsOn": {
+    "description": "System tab, Listening ports: a port that accepts connections only on the listed addresses, such as 127.0.0.1.",
+    "placeholders": {
+      "protocol": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      },
+      "addresses": {
+        "type": "String"
+      }
+    }
+  },
+  "systemPortsProcess": "{name} (PID {pid})",
+  "@systemPortsProcess": {
+    "description": "System tab, Listening ports: a process holding the port, by its command name and process ID.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "pid": {
+        "type": "int"
+      }
+    }
+  },
+  "systemPortsOwnerHidden": "Held by another user's process",
+  "@systemPortsOwnerHidden": {
+    "description": "System tab, Listening ports: shown under a port whose process the login user may not see."
+  },
+  "systemPortsUnit": "Unit {unit}",
+  "@systemPortsUnit": {
+    "description": "System tab, Listening ports: the systemd unit the process runs in, such as nginx.service.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "systemPortsContainer": "Container {id}",
+  "@systemPortsContainer": {
+    "description": "System tab, Listening ports: the container the process runs in, by its short ID.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
   "systemNetInterfacesTitle": "Interfaces",
   "@systemNetInterfacesTitle": {
     "description": "System tab: the heading of the network interfaces section (NET-02, NET-03)."
@@ -7575,6 +7669,68 @@
   "@dockerContainersColumnMemory": {
     "description": "Containers table column: the memory the container uses, from its list stats (CST-01)."
   },
+  "dockerContainersColumnNetwork": "Network",
+  "@dockerContainersColumnNetwork": {
+    "description": "Containers table column: bytes received and sent since the container started, from its list stats (CTR-08)."
+  },
+  "dockerContainersColumnBlockIo": "Block I/O",
+  "@dockerContainersColumnBlockIo": {
+    "description": "Containers table column: bytes read from and written to disk since the container started (CTR-08)."
+  },
+  "dockerContainersColumnPids": "PIDs",
+  "@dockerContainersColumnPids": {
+    "description": "Containers table column: the processes and threads in the container (CTR-08)."
+  },
+  "dockerContainersColumnIp": "IP",
+  "@dockerContainersColumnIp": {
+    "description": "Containers table column: the container's first address on a network (CTR-08)."
+  },
+  "dockerContainersColumnStarted": "Started",
+  "@dockerContainersColumnStarted": {
+    "description": "Containers table column: how long ago a running container started, read from its status (CTR-08)."
+  },
+  "dockerContainersIo": "{first} / {second}",
+  "@dockerContainersIo": {
+    "description": "Containers table: two byte totals, received then sent, or read then written, as docker stats shows them.",
+    "placeholders": {
+      "first": {
+        "type": "String",
+        "example": "1.2 MiB"
+      },
+      "second": {
+        "type": "String",
+        "example": "200 B"
+      }
+    }
+  },
+  "dockerContainersColumns": "Columns",
+  "@dockerContainersColumns": {
+    "description": "Containers tab: the button that opens the column chooser (CTR-08)."
+  },
+  "dockerContainersColumnsTitle": "Columns",
+  "@dockerContainersColumnsTitle": {
+    "description": "Column chooser: its title."
+  },
+  "dockerContainersColumnsDrag": "Drag to reorder",
+  "@dockerContainersColumnsDrag": {
+    "description": "Column chooser: the tooltip on a column's drag handle."
+  },
+  "dockerContainersColumnsReset": "Reset",
+  "@dockerContainersColumnsReset": {
+    "description": "Column chooser: puts back the default columns."
+  },
+  "dockerContainersColumnsCancel": "Cancel",
+  "@dockerContainersColumnsCancel": {
+    "description": "Column chooser: closes it without a change."
+  },
+  "dockerContainersColumnsDone": "Done",
+  "@dockerContainersColumnsDone": {
+    "description": "Column chooser: shows the checked columns in their order."
+  },
+  "dockerContainersColumnsNotSaved": "The columns could not be saved. They stay until Klabautermann quits.",
+  "@dockerContainersColumnsNotSaved": {
+    "description": "Containers tab: the chosen columns show, but settings.json could not be written."
+  },
   "dockerContainersSelect": "Select",
   "@dockerContainersSelect": {
     "description": "Containers tab: the chip that puts a checkbox on each row and heading, to act on several containers at once (CTR-07)."
@@ -8071,6 +8227,46 @@
   "dockerImageHistoryComment": "Comment",
   "@dockerImageHistoryComment": {
     "description": "Image history sheet: the label before a layer's comment, such as the builder that made it."
+  },
+  "dockerLinksTitle": "Links",
+  "@dockerLinksTitle": {
+    "description": "Container details: the section of web pages the container's labels point at (CTR-11)."
+  },
+  "dockerLinksFrom": "{source, select, dockhand{From a Dockhand label} dozzle{From a Dozzle label} traefik{A Traefik route} caddy{A Caddy site} other{From a label}}",
+  "@dockerLinksFrom": {
+    "description": "Container details, Links: where a link came from, under its address.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerLinksFromPort": "{source, select, dockhand{From a Dockhand label, port {port}} other{From a label, port {port}}}",
+  "@dockerLinksFromPort": {
+    "description": "Container details, Links: where a link came from, for one container port.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      },
+      "port": {
+        "type": "String",
+        "example": "8080"
+      }
+    }
+  },
+  "dockerLinksOpen": "Open {name} in the browser",
+  "@dockerLinksOpen": {
+    "description": "Container details, Links: the tooltip and screen-reader label of the button that opens a link.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "https://app.example.com"
+      }
+    }
+  },
+  "dockerLinksNotOpened": "The link could not be opened in a browser.",
+  "@dockerLinksNotOpened": {
+    "description": "Container details, Links: shown when the system refused to open a link."
   },
   "dockerProcessesTitle": "Processes",
   "@dockerProcessesTitle": {
@@ -8940,6 +9136,52 @@
   "dockerLogsEmpty": "This container has no log lines.",
   "@dockerLogsEmpty": {
     "description": "Shown in place of a container's logs when reading them ended without a line."
+  },
+  "dockerLogsRangeChoose": "Choose start and end…",
+  "@dockerLogsRangeChoose": {
+    "description": "Container logs time range menu: opens a dialog to pick the range's start and end date and time."
+  },
+  "dockerLogsRangeBetween": "{since} to {until}",
+  "@dockerLogsRangeBetween": {
+    "description": "Container logs time range button when a start and end were chosen.",
+    "placeholders": {
+      "since": {
+        "type": "String",
+        "example": "Oct 26, 2026 12:00"
+      },
+      "until": {
+        "type": "String",
+        "example": "Oct 26, 2026 13:00"
+      }
+    }
+  },
+  "dockerLogsRangeTitle": "Time range",
+  "@dockerLogsRangeTitle": {
+    "description": "Title of the dialog that picks a container log time range's start and end."
+  },
+  "dockerLogsRangeFrom": "From",
+  "@dockerLogsRangeFrom": {
+    "description": "Container log time range dialog: the range's start, a date and time."
+  },
+  "dockerLogsRangeTo": "To",
+  "@dockerLogsRangeTo": {
+    "description": "Container log time range dialog: the range's end, a date and time."
+  },
+  "dockerLogsRangeOrder": "The start must come before the end.",
+  "@dockerLogsRangeOrder": {
+    "description": "Container log time range dialog: why Apply is off."
+  },
+  "dockerLogsRangeCancel": "Cancel",
+  "@dockerLogsRangeCancel": {
+    "description": "Closes the container log time range dialog without changing the range."
+  },
+  "dockerLogsRangeApply": "Apply",
+  "@dockerLogsRangeApply": {
+    "description": "Reads the container's logs in the chosen time range."
+  },
+  "dockerLogsLiveRange": "A range with an end has no new lines to follow.",
+  "@dockerLogsLiveRange": {
+    "description": "Tooltip of the off Live chip while a container's logs read a range with a chosen end."
   },
   "dockerLogsDriverUnreadable": "{reason, select, none{This container keeps no logs: driver none.} podman{Podman cannot read this container's logs: driver {driver}. Podman reads only the json-file, k8s-file and journald drivers.} cacheDisabled{Docker cannot read this container's logs: driver {driver}, cache disabled. Docker reads another driver's logs only through its local cache.} other{Docker cannot read this container's logs: its logging driver keeps none it can read.}}",
   "@dockerLogsDriverUnreadable": {

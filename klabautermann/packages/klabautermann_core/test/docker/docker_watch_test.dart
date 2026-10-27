@@ -742,6 +742,57 @@ void main() {
       expect(next.memoryUsed, 450);
     });
 
+    test('network and block I/O totals and PIDs come with each row '
+        '(CTR-08)', () async {
+      final h = _Harness();
+      h.daemon.routes['/v1.52/containers/abc/stats'] = jsonEncode({
+        ..._stats(cpu: 1000, system: 10000),
+        'networks': {
+          'eth0': {'rx_bytes': 1000, 'tx_bytes': 200},
+          'eth1': {'rx_bytes': 24},
+        },
+        'blkio_stats': {
+          'io_service_bytes_recursive': [
+            {'major': 8, 'minor': 0, 'op': 'read', 'value': 4096},
+            {'major': 8, 'minor': 0, 'op': 'write', 'value': 512},
+            {'major': 8, 'minor': 16, 'op': 'Read', 'value': 4096},
+          ],
+        },
+        'pids_stats': {'current': 7},
+      });
+
+      final first = await h.start({DockerWatchList.stats}, statsFor: {'abc'});
+      final row = (first.single.payload as DockerStatsPayload).stats.single;
+      expect(
+        (row.networkRx, row.networkTx, row.blockRead, row.blockWrite, row.pids),
+        (1024, 200, 8192, 512, 7),
+      );
+    });
+
+    test(
+      'a container without networks or I/O accounting reads as unknown',
+      () async {
+        final h = _Harness();
+        h.daemon.routes['/v1.52/containers/abc/stats'] = jsonEncode({
+          ..._stats(cpu: 1000, system: 10000),
+          'blkio_stats': {'io_service_bytes_recursive': null},
+        });
+
+        final first = await h.start({DockerWatchList.stats}, statsFor: {'abc'});
+        final row = (first.single.payload as DockerStatsPayload).stats.single;
+        expect(
+          (
+            row.networkRx,
+            row.networkTx,
+            row.blockRead,
+            row.blockWrite,
+            row.pids,
+          ),
+          (null, null, null, null, null),
+        );
+      },
+    );
+
     test('after more than 60 s away the first read has no CPU %, which '
         'would span the outage', () async {
       final h = _Harness();

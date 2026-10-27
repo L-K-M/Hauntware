@@ -18,6 +18,7 @@ const _cadenceKey = 'klabautermann.sampling.cadence';
 const _overridesKey = 'klabautermann.docker.endpointOverrides';
 const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const _monitorSetKey = 'klabautermann.monitorSet';
+const _containerColumnsKey = 'klabautermann.docker.containerColumns';
 const _safetyKey = 'klabautermann.safety';
 
 final _uuidV4 = RegExp(
@@ -685,6 +686,40 @@ void main() {
       // An empty set is a choice of its own, not the default.
       await reopened.setMonitorSet({});
       expect((await DeviceSettingsStore.open(file)).monitorSet, isEmpty);
+    });
+
+    test('keeps the chosen container columns in order across reloads; a '
+        'value that is not a list reads as none (CTR-08)', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.containerColumns, isNull);
+      await store.setContainerColumns(['memory', 'state', 'pids']);
+      expect((await DeviceSettingsStore.open(file)).containerColumns, [
+        'memory',
+        'state',
+        'pids',
+      ]);
+      expect(document()[_containerColumnsKey], ['memory', 'state', 'pids']);
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _containerColumnsKey: 'memory',
+      });
+      final damaged = await DeviceSettingsStore.open(file);
+      expect(damaged.issue, isNull);
+      expect(damaged.containerColumns, isNull);
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _containerColumnsKey: ['memory', 7, null, 'cpu'],
+      });
+      expect((await DeviceSettingsStore.open(file)).containerColumns, [
+        'memory',
+        'cpu',
+      ]);
     });
 
     for (final (name, value, expected) in [

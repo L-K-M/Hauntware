@@ -14,6 +14,7 @@ export 'src/contrast.dart';
 export 'src/family_hues.dart';
 export 'src/ghost_chords.dart';
 export 'src/ghost_command_menu.dart';
+export 'src/ghost_command_palette.dart';
 export 'src/ghost_file_columns.dart';
 export 'src/ghost_file_compact_row.dart';
 export 'src/ghost_file_format.dart';

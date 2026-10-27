@@ -20,6 +20,45 @@ enum LogTimeRange {
   final Duration? span;
 }
 
+/// CTX-03's time range for a container's logs: one of LOG-01's spans back
+/// from when the stream opens, or a chosen start and end. Only a range
+/// with an end cannot be followed.
+@immutable
+final class ContainerLogRange {
+  const ContainerLogRange([this.span = LogTimeRange.any])
+    : since = null,
+      until = null;
+
+  const ContainerLogRange.between({
+    required DateTime this.since,
+    required DateTime this.until,
+  }) : span = LogTimeRange.any;
+
+  final LogTimeRange span;
+
+  /// The chosen start and end, both inclusive.
+  final DateTime? since, until;
+
+  /// Whether the range was chosen rather than spanned back from now.
+  bool get chosen => until != null;
+
+  /// Where the read starts, [span] before [now] for a span.
+  DateTime? sinceAt(DateTime now) => switch (span.span) {
+    final span? => now.subtract(span),
+    null => since,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is ContainerLogRange &&
+      other.span == span &&
+      other.since == since &&
+      other.until == until;
+
+  @override
+  int get hashCode => Object.hash(span, since, until);
+}
+
 /// Why LOG-22's path field refuses a path.
 enum LogPathProblem { empty, notAbsolute, notNormalized, nul }
 

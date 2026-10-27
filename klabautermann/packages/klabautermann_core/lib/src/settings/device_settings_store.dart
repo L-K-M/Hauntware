@@ -39,6 +39,7 @@ const String _appLockKey = 'klabautermann.appLock';
 
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
 const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
+const String _containerColumnsKey = 'klabautermann.docker.containerColumns';
 const String _tlsEndpointsKey = 'klabautermann.certificates.endpoints';
 const String _cadenceKey = 'klabautermann.sampling.cadence';
 
@@ -443,6 +444,24 @@ final class DeviceSettingsStore {
   /// memory either way.
   Future<void> setMonitorSet(Set<String> ids) async {
     _values[_monitorSetKey] = ids.toList()..sort();
+    await _save();
+  }
+
+  /// The Containers tab's columns as the user chose them (CTR-08),
+  /// `klabautermann.docker.containerColumns`: the shown ones by name, in
+  /// order, which the app reads against its own column set. Null when
+  /// there is no list, or the value is not one, which the app reads as
+  /// its default columns rather than failing the file.
+  List<String>? get containerColumns => switch (_values[_containerColumnsKey]) {
+    final List<Object?> names => List.unmodifiable(names.whereType<String>()),
+    _ => null,
+  };
+
+  /// Stores [names] as the shown columns, in order, and writes the
+  /// document. Throws when the write fails or this session is read-only;
+  /// the value stays in memory either way.
+  Future<void> setContainerColumns(List<String> names) async {
+    _values[_containerColumnsKey] = [...names];
     await _save();
   }
 
