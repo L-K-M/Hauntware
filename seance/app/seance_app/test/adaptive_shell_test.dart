@@ -818,4 +818,55 @@ void main() {
       expect(find.byKey(AdaptivePaneLayout.narrowPaneKey), findsOneWidget);
     });
   });
+
+  testWidgets('hiding and showing the side panes keeps the terminal state', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    var mounts = 0;
+    Future<void> pump(PaneVisibility list, PaneVisibility utility) =>
+        tester.pumpWidget(
+          MaterialApp(
+            home: AdaptivePaneLayout(
+              list: list,
+              utility: utility,
+              overflow: PaneOverflow.collapsePanes,
+              listPane: const SizedBox.expand(),
+              terminalPane: _CountsMounts(onMount: () => mounts++),
+              utilityPane: const SizedBox.expand(),
+              narrowPane: const SizedBox.expand(),
+            ),
+          ),
+        );
+
+    await pump(PaneVisibility.shown, PaneVisibility.shown);
+    await pump(PaneVisibility.hidden, PaneVisibility.shown);
+    await pump(PaneVisibility.hidden, PaneVisibility.hidden);
+    await pump(PaneVisibility.shown, PaneVisibility.hidden);
+    await pump(PaneVisibility.shown, PaneVisibility.shown);
+    expect(mounts, 1);
+  });
+}
+
+/// Counts how often its state is created: once, if nothing above it moves.
+class _CountsMounts extends StatefulWidget {
+  const _CountsMounts({required this.onMount});
+
+  final VoidCallback onMount;
+
+  @override
+  State<_CountsMounts> createState() => _CountsMountsState();
+}
+
+class _CountsMountsState extends State<_CountsMounts> {
+  @override
+  void initState() {
+    super.initState();
+    widget.onMount();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.expand();
 }

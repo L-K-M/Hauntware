@@ -438,49 +438,54 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
           key: AdaptivePaneLayout.terminalPaneKey,
           child: widget.terminalPane,
         );
-        // The terminal, and when it shows, its seam and the utility pane,
-        // with the utility handle floated over that seam.
-        final Widget panes;
-        if (utilityShown) {
-          final utilityHandle = GhostResizeHandle(
-            key: AdaptivePaneLayout.utilityResizeHandleKey,
-            label: 'Resize utility panel',
-            width: widths.utility,
-            minimumWidth: AdaptiveShell.minimumUtilityWidth,
-            maximumWidth: _maximumUtilityWidth(widths),
-            edge: GhostPaneEdge.trailing,
-            widthAfterStep: (delta) => _widthAfterStep(
-              GhostPaneEdge.trailing,
-              currentWidths(),
-              constraints.maxWidth,
-              delta,
-            ),
-            onStep: (delta) =>
-                _stepPane(GhostPaneEdge.trailing, currentWidths(), delta),
-            onStart: () => _startUtilityResize(currentWidths()),
-            onDelta: _resizeUtility,
-            onEnd: _endUtilityResize,
-            handleWidth: AdaptiveShell.resizeHandleWidth,
-            valueText: _pixels,
-          );
-          panes = _straddle(
-            Row(
-              children: [
-                Expanded(child: terminal),
-                const _Seam(),
+        // Hidden panes leave empty slots rather than a different tree: the
+        // terminal and its neighbours keep their places, so hiding the
+        // sidebar or the inspector keeps the terminal's state (its scroll
+        // position, an open find bar) instead of rebuilding it.
+        const empty = SizedBox.shrink();
+        final utilityHandle = utilityShown
+            ? GhostResizeHandle(
+                key: AdaptivePaneLayout.utilityResizeHandleKey,
+                label: 'Resize utility panel',
+                width: widths.utility,
+                minimumWidth: AdaptiveShell.minimumUtilityWidth,
+                maximumWidth: _maximumUtilityWidth(widths),
+                edge: GhostPaneEdge.trailing,
+                widthAfterStep: (delta) => _widthAfterStep(
+                  GhostPaneEdge.trailing,
+                  currentWidths(),
+                  constraints.maxWidth,
+                  delta,
+                ),
+                onStep: (delta) =>
+                    _stepPane(GhostPaneEdge.trailing, currentWidths(), delta),
+                onStart: () => _startUtilityResize(currentWidths()),
+                onDelta: _resizeUtility,
+                onEnd: _endUtilityResize,
+                handleWidth: AdaptiveShell.resizeHandleWidth,
+                valueText: _pixels,
+              )
+            : empty;
+        // The terminal, its seam and the utility pane, with the utility
+        // handle floated over that seam.
+        final panes = _straddle(
+          Row(
+            children: [
+              Expanded(child: terminal),
+              if (utilityShown) const _Seam() else empty,
+              if (utilityShown)
                 SizedBox(
                   key: AdaptivePaneLayout.utilityPaneKey,
                   width: widths.utility,
                   child: widget.utilityPane,
-                ),
-              ],
-            ),
-            handle: utilityHandle,
-            end: widths.utility,
-          );
-        } else {
-          panes = terminal;
-        }
+                )
+              else
+                empty,
+            ],
+          ),
+          handle: utilityHandle,
+          end: widths.utility,
+        );
 
         final chrome = SeanceChrome.of(context, seanceThemeStyle);
         // Under the macOS header: the header and its rule over the panes.
@@ -497,90 +502,80 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
                   Expanded(child: panes),
                 ],
               );
-        Widget wrap(Widget body) => header == null
-            ? Scaffold(body: body)
-            : ClaimMacosToolbarBand(child: Scaffold(body: body));
-        if (!listShown) return wrap(content);
 
-        Widget listHandle = GhostResizeHandle(
-          key: AdaptivePaneLayout.listResizeHandleKey,
-          label: 'Resize server list',
-          width: widths.list,
-          minimumWidth: AdaptiveShell.minimumListWidth,
-          maximumWidth: _maximumListWidth(widths),
-          edge: GhostPaneEdge.leading,
-          widthAfterStep: (delta) => _widthAfterStep(
-            GhostPaneEdge.leading,
-            currentWidths(),
-            constraints.maxWidth,
-            delta,
-          ),
-          onStep: (delta) =>
-              _stepPane(GhostPaneEdge.leading, currentWidths(), delta),
-          onStart: () => _startListResize(currentWidths()),
-          onDelta: _resizeList,
-          onEnd: _endListResize,
-          handleWidth: AdaptiveShell.resizeHandleWidth,
-          valueText: _pixels,
-        );
-        if (header == null) {
-          return wrap(
-            _straddle(
-              Row(
+        Widget listHandle = listShown
+            ? GhostResizeHandle(
+                key: AdaptivePaneLayout.listResizeHandleKey,
+                label: 'Resize server list',
+                width: widths.list,
+                minimumWidth: AdaptiveShell.minimumListWidth,
+                maximumWidth: _maximumListWidth(widths),
+                edge: GhostPaneEdge.leading,
+                widthAfterStep: (delta) => _widthAfterStep(
+                  GhostPaneEdge.leading,
+                  currentWidths(),
+                  constraints.maxWidth,
+                  delta,
+                ),
+                onStep: (delta) =>
+                    _stepPane(GhostPaneEdge.leading, currentWidths(), delta),
+                onStart: () => _startListResize(currentWidths()),
+                onDelta: _resizeList,
+                onEnd: _endListResize,
+                handleWidth: AdaptiveShell.resizeHandleWidth,
+                valueText: _pixels,
+              )
+            : empty;
+        // The list handle runs the full height, so its top lies inside the
+        // band, where AppKit would take a drag on it for the window's.
+        if (listShown &&
+            header != null &&
+            MacosToolbarBandScope.unifiedToolbarOf(context)) {
+          listHandle = MacosToolbarPassthrough(child: listHandle);
+        }
+        final Widget list;
+        if (!listShown) {
+          list = empty;
+        } else if (header == null) {
+          list = SizedBox(
+            key: AdaptivePaneLayout.listPaneKey,
+            width: widths.list,
+            child: widget.listPane,
+          );
+        } else {
+          list = SizedBox(
+            key: AdaptivePaneLayout.listPaneKey,
+            width: widths.list,
+            // The traffic lights sit over the list's top, which drags the
+            // window natively: Finder's layout, and Poltergeist's.
+            child: ColoredBox(
+              color: chrome.sidebarBackground,
+              child: Column(
                 children: [
-                  SizedBox(
-                    key: AdaptivePaneLayout.listPaneKey,
-                    width: widths.list,
-                    child: widget.listPane,
-                  ),
-                  const _Seam(),
-                  Expanded(child: content),
+                  // The header and its rule, so the list starts where the
+                  // tab strip does and its filter field lines up with the
+                  // tabs.
+                  SizedBox(height: chrome.headerHeight + _headerRuleHeight),
+                  Expanded(child: widget.listPane),
                 ],
               ),
-              handle: listHandle,
-              start: widths.list,
             ),
           );
         }
-
-        // The list handle runs the full height, so its top lies inside the
-        // band, where AppKit would take a drag on it for the window's.
-        if (MacosToolbarBandScope.unifiedToolbarOf(context)) {
-          listHandle = MacosToolbarPassthrough(child: listHandle);
-        }
-        return wrap(
-          _straddle(
-            Row(
-              children: [
-                SizedBox(
-                  key: AdaptivePaneLayout.listPaneKey,
-                  width: widths.list,
-                  // The traffic lights sit over the list's top, which
-                  // drags the window natively: Finder's layout, and
-                  // Poltergeist's.
-                  child: ColoredBox(
-                    color: chrome.sidebarBackground,
-                    child: Column(
-                      children: [
-                        // The header and its rule, so the list starts
-                        // where the tab strip does and its filter field
-                        // lines up with the tabs.
-                        SizedBox(
-                          height: chrome.headerHeight + _headerRuleHeight,
-                        ),
-                        Expanded(child: widget.listPane),
-                      ],
-                    ),
-                  ),
-                ),
-                const _Seam(),
-                Expanded(child: content),
-              ],
-            ),
-            handle: listHandle,
-            start: widths.list,
+        final body = _straddle(
+          Row(
+            children: [
+              list,
+              if (listShown) const _Seam() else empty,
+              Expanded(child: content),
+            ],
           ),
+          handle: listHandle,
+          start: widths.list,
         );
+        return header == null
+            ? Scaffold(body: body)
+            : ClaimMacosToolbarBand(child: Scaffold(body: body));
       },
     );
   }
