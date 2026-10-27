@@ -161,9 +161,11 @@ export 'src/models/engine_info.dart' show EngineInfo, parseEngineInfo;
 export 'src/models/events.dart' show DockerEvent, parseDockerEvent;
 export 'src/models/image.dart'
     show
+        DistributionDescriptor,
         ImageConfig,
         ImageInspect,
         ImageSummary,
+        parseDistributionInspect,
         parseImageInspect,
         parseImageSummaries;
 export 'src/models/container_top.dart'

@@ -954,7 +954,7 @@ final class DockerRouter {
             DockerImageHistoryPayload(maskImageHistory(history.value)),
             history.warnings,
           );
-        case DockerImageUpdatesQuery(:final refresh):
+        case DockerImageUpdatesQuery(:final refresh, :final runner):
           return read(
             await checkImageUpdates(
               client: client,
@@ -962,6 +962,7 @@ final class DockerRouter {
               cache: endpoint.imageUpdates,
               now: _now(),
               refresh: refresh,
+              runner: runner,
             ),
             const [],
           );

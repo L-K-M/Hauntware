@@ -27,12 +27,23 @@ final class _Daemon extends FakeDaemon {
   final images = <Map<String, Object?>>[];
   final inspects = <String, Map<String, Object?>>{};
 
+  /// DistributionInspect's answers by reference: a status and its body.
+  final distributions = <String, (int, Object)>{};
+
   @override
   String respond(String requestLine) {
     final [_, target, ...] = requestLine.split(' ');
     final uri = Uri.parse('http://engine$target');
     final path = uri.path.substring('/v1.52'.length);
     if (path == '/images/json') return _reply(200, images);
+    if (path.startsWith('/distribution/') && path.endsWith('/json')) {
+      final name = Uri.decodeComponent(
+        path.substring('/distribution/'.length, path.length - '/json'.length),
+      );
+      final (status, body) =
+          distributions[name] ?? (404, {'message': 'not found'});
+      return _reply(status, body);
+    }
     if (path.startsWith('/images/') && path.endsWith('/json')) {
       final name = Uri.decodeComponent(
         path.substring('/images/'.length, path.length - '/json'.length),
@@ -299,5 +310,63 @@ void main() {
     expect(payload.rows.map((r) => r.comparison.status).toSet(), {
       ImageUpdateStatus.upToDate,
     });
+  });
+
+  test('the daemon route asks DistributionInspect for each tag, keeps its '
+      'refusals as the statuses they stand for, and runs nothing on the '
+      'host', () async {
+    image('sha256:i1', ['alpine:3.22'], repoDigests: ['alpine@$_old']);
+    image(
+      'sha256:i2',
+      ['localhost:5000/app:1'],
+      repoDigests: ['localhost:5000/app@$_old'],
+    );
+    image('sha256:i3', ['busybox:1'], repoDigests: ['busybox@$_old']);
+    image('sha256:i4', ['busybox:2'], repoDigests: ['busybox@$_old']);
+    daemon.distributions
+      ..['alpine:3.22'] = (
+        200,
+        {
+          'Descriptor': {
+            'mediaType': 'application/vnd.oci.image.index.v1+json',
+            'digest': _index,
+          },
+          'Platforms': const [],
+        },
+      )
+      ..['localhost:5000/app:1'] = (
+        500,
+        {
+          'message':
+              'Head "http://localhost:5000/v2/app/manifests/1": no basic '
+              'auth credentials',
+        },
+      )
+      ..['busybox:1'] = (
+        500,
+        {'message': 'toomanyrequests: You have reached your pull rate limit'},
+      );
+
+    final payload =
+        await checkImageUpdates(
+              client: client(),
+              run: host.run,
+              cache: cache,
+              now: now,
+              runner: ImageCheckRunner.daemon,
+            )
+            as DockerImageUpdatesPayload;
+    expect(host.commands, isEmpty);
+    final [alpine, private, busy] = payload.rows;
+    expect(alpine.route, ImageUpdateRoute.daemon);
+    expect(alpine.comparison.status, ImageUpdateStatus.updateAvailable);
+    expect(alpine.comparison.remoteDigest, _index);
+    expect(private.comparison.issue, ImageUpdateIssue.unauthorized);
+    expect(busy.comparison.issue, ImageUpdateIssue.rateLimited);
+    expect(
+      daemon.requests.where((r) => r.contains('/distribution/')),
+      hasLength(3),
+      reason: 'busybox:2 waits for the backoff busybox:1 started',
+    );
   });
 }

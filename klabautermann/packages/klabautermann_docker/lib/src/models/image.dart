@@ -226,3 +226,41 @@ DockerParseResult<ImageInspect> parseImageInspect(Object? decoded) {
   final r = JsonReader(asStringMap(decoded));
   return DockerParseResult(ImageInspect.parse(r), r.warnings);
 }
+
+/// What `GET /distribution/{name}/json` says the registry holds for a
+/// reference (03 §7.14 IMG-05's last resort, D68): the descriptor of the
+/// manifest the tag names, an index for a multi-platform tag.
+@immutable
+final class DistributionDescriptor {
+  const DistributionDescriptor({this.digest, this.mediaType});
+
+  final String? digest;
+  final String? mediaType;
+}
+
+/// Parses one `GET /distribution/{name}/json` document; never throws.
+DockerParseResult<DistributionDescriptor> parseDistributionInspect(
+  Object? decoded,
+) {
+  if (decoded is! Map) {
+    return const DockerParseResult(DistributionDescriptor(), [
+      'distribution inspect is not a JSON object',
+    ]);
+  }
+  final r = JsonReader(asStringMap(decoded));
+  final descriptor = r.map('Descriptor');
+  if (descriptor == null) {
+    return DockerParseResult(const DistributionDescriptor(), [
+      ...r.warnings,
+      'distribution inspect has no Descriptor',
+    ]);
+  }
+  final d = JsonReader(descriptor, r.warnings);
+  return DockerParseResult(
+    DistributionDescriptor(
+      digest: d.string('digest'),
+      mediaType: d.string('mediaType'),
+    ),
+    r.warnings,
+  );
+}

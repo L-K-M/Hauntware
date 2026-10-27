@@ -394,6 +394,18 @@ final class DockerController {
   Future<DockerPayload> readImageHistory(String serverId, String image) =>
       _ask(serverId, DockerImageHistoryQuery(image));
 
+  /// The update check of every tagged image on [serverId] (IMG-05): a
+  /// [DockerImageUpdatesPayload] or a [DockerQueryFailed]. The engine
+  /// keeps each tag's row for six hours, so asking again inside them
+  /// reads no registry unless [refresh]; [runner] picks where the reads
+  /// run (D68). Nothing of the answer stays here.
+  Future<DockerPayload> checkImageUpdates(
+    String serverId, {
+    bool refresh = false,
+    ImageCheckRunner runner = ImageCheckRunner.host,
+  }) =>
+      _ask(serverId, DockerImageUpdatesQuery(refresh: refresh, runner: runner));
+
   /// The processes of [containerId] on [serverId] (CTR-10): a
   /// [DockerContainerTopPayload] whose command lines the engine masked,
   /// or a [DockerQueryFailed]. Nothing of the answer stays here.

@@ -4216,10 +4216,28 @@ final class DockerImageHistoryQuery extends DockerQuerySpec {
 /// within six hours are kept unless [refresh]. Answered by
 /// [DockerImageUpdatesPayload].
 final class DockerImageUpdatesQuery extends DockerQuerySpec {
-  const DockerImageUpdatesQuery({this.refresh = false});
+  const DockerImageUpdatesQuery({
+    this.refresh = false,
+    this.runner = ImageCheckRunner.host,
+  });
 
   /// Reads every reference again, as the Check now action does.
   final bool refresh;
+
+  /// Where the registry reads run.
+  final ImageCheckRunner runner;
+}
+
+/// Where an update check's registry reads run (D68).
+enum ImageCheckRunner {
+  /// curl on the host, buildx where the registry wants credentials: no
+  /// Docker Hub pull is spent.
+  host,
+
+  /// The daemon's DistributionInspect, which spends a Docker Hub pull per
+  /// tag: the last resort, asked for only when the host has no curl and
+  /// the person accepts that cost.
+  daemon,
 }
 
 /// Disk use by type (02 OV-05): `/system/df` without `verbose`, which
@@ -4413,6 +4431,9 @@ enum ImageUpdateRoute {
 
   /// `docker buildx imagetools inspect` with the host CLI's credentials.
   hostCli,
+
+  /// The daemon's DistributionInspect ([ImageCheckRunner.daemon]).
+  daemon,
 }
 
 /// One reference's update check (IMG-05).

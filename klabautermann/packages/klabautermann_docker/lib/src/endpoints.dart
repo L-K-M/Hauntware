@@ -468,6 +468,26 @@ extension DockerEndpoints on DockerClient {
     return parseImageInspect(_decodeBuffered(res.body, 'image inspect').value);
   }
 
+  /// `GET /distribution/{name}/json` (03 §7.14 IMG-05, D68): the daemon
+  /// asks the registry with its own credentials, resolving the tag with
+  /// a `HEAD` and then fetching the manifest, which spends one Docker
+  /// Hub pull per call. The update check's last resort only.
+  Future<DockerParseResult<DistributionDescriptor>> distributionInspect(
+    String name, {
+    Duration? timeout,
+    DockerCancelToken? cancelToken,
+  }) async {
+    final res = await request(
+      'GET',
+      '/distribution/${_seg(name)}/json',
+      timeout: timeout,
+      cancelToken: cancelToken,
+    );
+    return parseDistributionInspect(
+      _decodeBuffered(res.body, 'distribution inspect').value,
+    );
+  }
+
   /// `DELETE /images/{name}?force=&noprune=` (03 §7.14 IMG-02).
   Future<void> removeImage(
     String name, {
