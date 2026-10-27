@@ -347,8 +347,6 @@ class ActionPreviewView extends StatelessWidget {
   }
 }
 
-/// Toasts each run's end (03 §8.5): done, cancelled, or why it did not
-/// finish or start, in the target's name.
 /// [steps] as one pasteable script (AUT-02): each shell step's exact
 /// line, `sudo` before one admin mode elevates, and the Docker API
 /// requests as comments, since a shell cannot send them as they stand.
@@ -381,6 +379,8 @@ Future<void> _copyCommands(BuildContext context, List<PlanStep> steps) async {
   }
 }
 
+/// Toasts each run's end (03 §8.5): done, cancelled, or why it did not
+/// finish or start, in the target's name.
 class ActionResultToasts extends StatefulWidget {
   const ActionResultToasts({
     super.key,
