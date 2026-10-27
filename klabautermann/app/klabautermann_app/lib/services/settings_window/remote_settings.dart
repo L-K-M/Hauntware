@@ -10,6 +10,7 @@ import '../../controllers/account_size.dart';
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/cadence_controller.dart';
 import '../../controllers/log_display.dart';
+import '../../controllers/time_display.dart';
 import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/device_name.dart';
@@ -99,6 +100,15 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     ),
   );
 
+  /// The General tab's time display, from the latest snapshot; null while
+  /// the app offers none.
+  RemoteTimeDisplay? get timeDisplay =>
+      _timeDisplay.offered ? _timeDisplay : null;
+
+  late final RemoteTimeDisplay _timeDisplay = RemoteTimeDisplay._(
+    (display) => invoke(SettingsLinkMethod.setTimeDisplay.name, display.name),
+  );
+
   late final RemoteCadenceCaps _cadenceCaps = RemoteCadenceCaps._(
     (serverId, cap) =>
         invoke(SettingsLinkMethod.setCadenceCap.name, [serverId, cap?.name]),
@@ -160,6 +170,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     _cadence._apply(snapshot[SettingsLinkKey.cadence.name] as String?);
     _cadenceCaps._apply(snapshot[SettingsLinkKey.cadenceCaps.name] as Map?);
     _logDisplay._apply(snapshot[SettingsLinkKey.logDisplay.name]);
+    _timeDisplay._apply(snapshot[SettingsLinkKey.timeDisplay.name]);
     deviceName._apply(snapshot[SettingsLinkKey.deviceName.name]! as String);
     _thresholds._apply(
       snapshot[SettingsLinkKey.thresholds.name] as Map<Object?, Object?>?,
@@ -327,6 +338,36 @@ final class RemoteLogDisplay extends ChangeNotifier
 
   @override
   Future<void> setLogDisplay(LogDisplay display) async {
+    await _call(display);
+  }
+}
+
+/// [TimeDisplaySettings] over the link: the app's time display as the
+/// latest snapshot carries it, and changes that run in the app's isolate.
+final class RemoteTimeDisplay extends ChangeNotifier
+    implements TimeDisplaySettings {
+  RemoteTimeDisplay._(this._call);
+
+  final Future<Object?> Function(TimeDisplay display) _call;
+
+  /// Whether the app offers a time display; the first snapshot says.
+  bool offered = false;
+
+  TimeDisplay _value = TimeDisplay.device;
+
+  void _apply(Object? encoded) {
+    final display = decodeTimeDisplay(encoded);
+    if (offered == (encoded != null) && display == _value) return;
+    offered = encoded != null;
+    _value = display;
+    notifyListeners();
+  }
+
+  @override
+  TimeDisplay get value => _value;
+
+  @override
+  Future<void> setTimeDisplay(TimeDisplay display) async {
     await _call(display);
   }
 }

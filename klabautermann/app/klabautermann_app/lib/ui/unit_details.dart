@@ -8,6 +8,7 @@ import 'package:planchette_editor/planchette_editor.dart'
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'time_display.dart';
 import 'processes_panel.dart' show kRevealDuration;
 
 /// Below this width the unit file takes a page of its own, as on phones
@@ -133,7 +134,10 @@ class _UnitResourcesViewState extends State<UnitResourcesView> {
   ) {
     final localizations = MaterialLocalizations.of(context);
     final unknown = l10n.chartUnknownValue;
-    final since = resources.activeSince?.toLocal();
+    final since = switch (resources.activeSince) {
+      final at? => displayTime(context, widget.serverId, at),
+      null => null,
+    };
     final cpu = resources.cpu;
     return [
       (

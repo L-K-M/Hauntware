@@ -17,6 +17,7 @@ import '../actions/docker_actions.dart'
     show ContainerActionButtons, containerActionsShown;
 import '../processes_panel.dart' show kRevealDuration;
 import '../processes_view.dart' show argumentText, clipProcessText;
+import '../time_display.dart';
 import 'container_details_view.dart';
 import 'container_diagnosis.dart';
 import 'container_links.dart';
@@ -634,7 +635,8 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
     final finished = engineTime(state?.finishedAt);
     final running = state?.running ?? false;
     final error = state?.error;
-    String time(DateTime time) => l10n.dockerDetailsTime(time.toLocal());
+    String time(DateTime time) =>
+        l10n.dockerDetailsTime(displayTime(context, widget.serverId, time));
 
     return [
       _Facts(
@@ -690,7 +692,10 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
         Text(
           end == null
               ? l10n.dockerDetailsHealthCheckUntimed(code)
-              : l10n.dockerDetailsHealthCheck(code, end.toLocal()),
+              : l10n.dockerDetailsHealthCheck(
+                  code,
+                  displayTime(context, widget.serverId, end),
+                ),
           style: theme.textTheme.labelMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),

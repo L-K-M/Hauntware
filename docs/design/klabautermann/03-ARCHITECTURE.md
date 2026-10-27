@@ -3419,6 +3419,19 @@ unless the user enables admin mode for that panel.
   `klabautermann.overview.pinnedServices`. Each action runs through the
   preview and confirmation it has in its own tab (SAF-04), and the card
   is left out when this device can offer none of them.
+
+  As built in M6 (N61e, OV-06), the cards below the health card follow
+  this device's arrangement, kept in `settings.json` under
+  `klabautermann.overview.cards` as an order and a hidden list of card
+  names. Arrange cards at the Overview's end opens a sheet that moves a
+  card by drag or by its screen reader actions and switches it off or
+  on, each change applying at once; Reset restores the default. A name
+  this version does not know is skipped, and a card the stored order
+  lacks takes its default place, so cards added later appear. A card a
+  server cannot show (Docker without an endpoint, quick actions with
+  nothing to offer) stays out whatever the arrangement. On a wide panel
+  each run of half-width cards is split between two columns, the first
+  half on the left. The arrangement does not sync yet (v1.x).
 - **As built (M6 N42c).** CPU-07's model and topology are a host query,
   `CpuTopologyQuery`, shown in the System tab's Processor section beside
   the identity, since they do not change while the Overview samples. It
@@ -7940,6 +7953,22 @@ wrapping keeps it. A changed size or mode keeps the lines in sight where
 they were. Each row is one screen-reader node, so a reader steps line by
 line.
 
+As built in M6 (N67, A11Y-07): Settings > General can show server times
+in the server's zone instead of this device's, a device setting in
+`settings.json` (`klabautermann.display.serverTimes`), offered in the
+desktop settings window too. A `TimeDisplayScope` above every route gives
+each server screen the fixed offset its probe last read
+(`HostProfile.serverZone`, §6.1), so a time across a daylight-saving
+change from that reading shows the reading's offset; the full zone rules
+stay with cron next runs (D58). Until a server's zone is read, its times show
+in this device's zone. The setting covers the dates and times server
+panels show and the history, coverage and container usage charts' time
+axes. Container log rows keep this device's zone, since their text is
+what search and export read; times this device made (alerts, operations,
+the admin mode expiry, the log range picker) stay in its zone, and the
+Jobs tab keeps its own run-time zones (D58). Relative times, such
+as image ages and "updated 2 minutes ago", read the same either way.
+
 ### 10.9 Theme
 
 MVP: `ghost_theme` (F4b, D9) builds the light and dark themes, installs
@@ -7986,6 +8015,14 @@ codec's lenient reading; v1 adds nothing beyond it.
   verbs. Flutter's table roles are not used: their debug checks require
   table, row and cell nodes to nest directly, and a virtualized list puts
   its scroll node between the table and its rows.
+- Text scaling (A11Y-09, M6 N67): panels lay out their values at the
+  operating system's text scale and wrap or scroll rather than cut a key
+  value short; the panel tests check their own layouts at 200 %, and
+  `test/text_scaling_test.dart` checks every server panel on a phone and
+  on the desktop with readings in place, every phone Settings tab and the
+  shared server editor at 200 % with no overflow. The editor's
+  authentication menu and appearance heading wrap in `ghost_servers`, so
+  Séance and Poltergeist gain the same fix.
 
 ---
 

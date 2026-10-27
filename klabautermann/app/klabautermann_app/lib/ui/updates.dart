@@ -14,6 +14,7 @@ import 'actions/action_preview.dart' show startAction;
 import 'admin_mode_chip.dart' show AdminScope;
 import 'fleet_updates.dart';
 import 'sortable_table.dart';
+import 'time_display.dart';
 import 'system_panel.dart' show PanelSection;
 
 /// The table's columns with the width each claims before text scaling.
@@ -215,7 +216,11 @@ class _UpdatesSectionState extends State<UpdatesSection> {
         if (updates.length >= kPackageUpdatesKept)
           Text(l10n.systemUpdatesCut(kPackageUpdatesKept)),
         if (check?.cachedAt case final cachedAt?)
-          Text(l10n.systemUpdatesListsFrom(cachedAt.toLocal())),
+          Text(
+            l10n.systemUpdatesListsFrom(
+              displayTime(context, widget.serverId, cachedAt),
+            ),
+          ),
         if (_reading)
           Text(l10n.systemUpdatesChecking)
         else
@@ -241,7 +246,11 @@ class _UpdatesSectionState extends State<UpdatesSection> {
                   child: Text(l10n.fleetUpdatesOpen),
                 ),
               if (report?.checkedAt case final checkedAt?)
-                Text(l10n.systemUpdatesCheckedAt(checkedAt.toLocal())),
+                Text(
+                  l10n.systemUpdatesCheckedAt(
+                    displayTime(context, widget.serverId, checkedAt),
+                  ),
+                ),
             ],
           ),
         if (_refreshStarted) Text(l10n.systemUpdatesRefreshStarted),

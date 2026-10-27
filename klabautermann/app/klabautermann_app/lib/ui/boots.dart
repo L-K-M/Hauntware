@@ -5,7 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
-import 'logs/logs_panel.dart' show localTimeText;
+import 'logs/logs_panel.dart' show serverTimeText;
 import 'system_panel.dart' show PanelSection;
 import 'system_view.dart' show uptimeText;
 
@@ -187,7 +187,8 @@ class _BootsSectionState extends State<BootsSection> {
         return [
           heading,
           if (rows.isEmpty) Text(l10n.systemBootsNone),
-          for (final row in rows) _BootLine(row: row),
+          for (final row in rows)
+            _BootLine(row: row, serverId: widget.serverId),
           if (boots.length > rows.length)
             Text(l10n.systemBootsNotListed(boots.length - rows.length)),
           if (endsFailed) Text(l10n.systemBootEndsUnknown),
@@ -204,9 +205,10 @@ class _BootsSectionState extends State<BootsSection> {
 /// One boot: which, when it started and how long it ran, and how it
 /// ended once that is read.
 class _BootLine extends StatelessWidget {
-  const _BootLine({required this.row});
+  const _BootLine({required this.row, required this.serverId});
 
   final BootRow row;
+  final String serverId;
 
   @override
   Widget build(BuildContext context) {
@@ -220,7 +222,7 @@ class _BootLine extends StatelessWidget {
     final span = first == null || last == null
         ? null
         : l10n.systemBootsSpan(
-            localTimeText(context, l10n, first),
+            serverTimeText(context, l10n, serverId, first),
             uptimeText(l10n, last.difference(first)),
           );
     final unclean = end == BootEnd.unclean;
