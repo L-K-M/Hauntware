@@ -5226,7 +5226,7 @@ abstract class AppLocalizations {
   /// **'Not connected, so the triggers were not read.'**
   String get jobsTimerTriggersNoLink;
 
-  /// Timer details: systemctl is missing or the unit name is not a timer's.
+  /// Timer details: systemctl is missing or failed, as when the manager could not be reached, or the unit name is not a timer's.
   ///
   /// In en, this message translates to:
   /// **'systemd did not say what starts this timer.'**
@@ -8296,13 +8296,13 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get dockerSocketCustomCancel;
 
-  /// Custom socket dialog error: the typed path does not start with a slash.
+  /// Custom socket or docker program dialog error: the typed path does not start with a slash.
   ///
   /// In en, this message translates to:
   /// **'Enter an absolute path, starting with /.'**
   String get dockerSocketPathNotAbsolute;
 
-  /// Custom socket dialog error: the typed path holds a line break or a NUL character.
+  /// Custom socket or docker program dialog error: the typed path holds a line break or a NUL character.
   ///
   /// In en, this message translates to:
   /// **'The path cannot contain line breaks or NUL characters.'**

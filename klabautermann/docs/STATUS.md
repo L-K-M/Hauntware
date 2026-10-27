@@ -8,11 +8,12 @@ normative plan (`03-ARCHITECTURE.md` §2 is the decision log).
 ## Where things stand
 
 M2's host reads, M3's Docker reads, M4's actions and admin mode (the
-MVP preview) and M5's editing, shells and sync writes (v1 part 1) are
-on main. M3 and M5 met all of their automated exits and M4 all but one
-([M3 exit](#m3-exit), [M4 exit](#m4-exit) and [M5 exit](#m5-exit),
+MVP preview), M5's editing, shells and sync writes (v1 part 1) and M6's
+breadth (v1 part 2) are on main. M3, M5 and M6 met all of their
+automated exits and M4 all but one ([M3 exit](#m3-exit),
+[M4 exit](#m4-exit), [M5 exit](#m5-exit) and [M6 exit](#m6-exit),
 below); M4's remaining case, a sudo rule scoped to `docker`, waits on a
-decision.
+decision. M7, v1 hardening and release readiness, is next.
 The real-host and device checks stay open under the manual gates. What
 is on main:
 
@@ -2260,6 +2261,305 @@ is on main:
   app turns inactive or when the sheet closes. It is a read, so it shows
   with actions off. Tested in the docker package, the router and the
   Images panel; no Docker fixture runs it yet.
+- Image updates (M6 N15a to N15d, IMG-05): the Images sub-tab's new
+  Update column says whether each image's tags have a newer registry
+  digest, an update in amber with an icon and its word, with an Updates
+  filter and "Check for updates". The engine answers
+  `DockerImageUpdatesQuery` as spike S8 settled it (03 D68): a host
+  script sends each tag's manifest `HEAD` with `curl` through the host's
+  network, takes an `https` realm's anonymous token (passed to `curl` on
+  a pipe), and falls back to `docker buildx imagetools inspect` with the
+  host's credentials when the registry still refuses. A tag is current
+  when the registry digest matches its `RepoDigests` entry, its
+  containerd descriptor or an available index child (`manifests=1`, API
+  1.48 on). Results are kept for 6 h per reference, a `429` leaves that
+  registry alone for the window it names, and an undecided tag says why.
+  A host without `curl` offers "Check through the engine",
+  DistributionInspect at one pull per tag, and only there. Tested in the
+  docker package, the host package (the script under dash and bash
+  against stand-in `curl` and `docker`), the engine, the router and the
+  Images panel; the script was also run by hand against Docker Hub,
+  GHCR, Quay and a local registry.
+- Container flags, bulk actions and columns (M6 N16a to N16d, CTR-07 to
+  CTR-09): a restarting container's row is flagged as a restart loop,
+  and an exited one whose code a stop does not leave as failed, by an
+  icon in the error colour beside the state with a tooltip and spoken
+  words, read from the list's state and Status text alone. Where actions
+  are allowed, the Select chip puts a checkbox on each row and project
+  heading, and the bar above the list starts, stops, restarts or removes
+  the selected containers as one `ContainerBulkAction` plan: up to 100,
+  a step per container by full id, leaving out those whose state does
+  not take the verb, confirmed at the most guarded one's tier; removal
+  never forces or takes volumes. The Columns button shows, hides and
+  orders the columns, adding Network and Block I/O (totals since the
+  container started, as `docker stats` shows them), PIDs, IP and
+  Started, kept per device under
+  `klabautermann.docker.containerColumns`. Tested in the docker planner,
+  the docker watch, the store and the Containers panel; the Docker
+  actions suite stops, starts, restarts and removes two containers as
+  bulk actions on the fixture.
+- Container usage (M6 N18, CST-02 to CST-05): a running container's
+  details chart CPU, memory against its limit, network and block I/O
+  rates and PIDs over the last 30 minutes this device read. The details
+  pin the container's stats into the container watch at the list's 5 s
+  cadence rather than hold a channel for a stats stream; a pause of over
+  20 s breaks the lines, and a total that went down, as after a restart,
+  gives no rate. Memory at or above 90 % of its limit reads as at risk,
+  in words beside an icon, in the list's Memory column and the details.
+  Top lists the running containers in one list, the busiest CPU first,
+  and every figure column sorts. Tested in the chart values, the Docker
+  controller, the usage charts and the Containers panel.
+- Container review (M6 N21a, N21b, DKE-06, DKE-07, DKE-11, DKE-17): the
+  Docker tab's new Review sub-tab reads `/info`, the container list and
+  one inspect per container, one at a time and at most 200, on request.
+  The engine judges each container before its inspect is masked and
+  sends only findings and what they name, most severe first: privileged,
+  an engine socket bind-mounted, host network or PID, `CapAdd`, a
+  database's default port published on every address, root (not on a
+  rootless or `userns` engine), `json-file` without `max-size`, a
+  floating tag, no health check and no restart policy. It also names the
+  other managers and monitors running as containers (Portainer,
+  Dockhand, Dockge, Dozzle, Beszel, Uptime Kuma, Netdata, What's Up
+  Docker) with their published ports; tools installed as host units are
+  not detected. The engine strip warns when a rootless engine's user has
+  linger off. Tested in the review rules, the router over the fake
+  daemon, the Review panel and the Docker tab.
+- Apps and port forwards (M6 N05, N22a, N22b, DKE-08, DKE-09, NET-11):
+  spike S7 found no in-app web view an SSH channel can feed on every
+  platform (`webview_flutter` 4.14.1 ships only Android, iOS and macOS),
+  so a forward is a listener on `127.0.0.1`, opened only by an explicit
+  action, and the page opens in the system browser. The engine answers
+  `OpenPortForward` and `ClosePortForward` with `PortForwardState`, each
+  connection opening one `direct-tcpip` channel to the target as the
+  server sees it; at most 16 are open. The Docker tab's new Apps sub-tab
+  lists the running containers' label links and TCP ports, a published
+  port reached at its host port and an unpublished one at the
+  container's address; Open forwards the port and opens it once it
+  listens, and "Forward a port…" takes any host and port the server
+  reaches. The sub-tab says that any app on the device can reach an open
+  forward, keeps an ended forward with its reason until dismissed, and
+  closes the server's forwards when it goes or shows another server.
+  Tested with real loopback sockets against an echo target, in the
+  engine isolate and in the Apps panel.
+- Triage (M6 N53a to N53d, TRI-01 to TRI-04): a container whose state
+  reads as wrong gets a Diagnosis section in its details, a pure rule
+  over the inspect it already read: out of memory (over its limit or on
+  the host), exit codes 137, 139, 126 and 127 and others a stop does not
+  leave, the engine's own error, a restart loop and a failing health
+  check. The Overview's "why is it slow" card lists the live reading's
+  signals past a threshold (CPU, I/O and memory pressure with fallbacks
+  without PSI, steal, a slow or busy disk, heavy swapping), and the
+  Health card's "Run the doctor" opens a read-only checklist of disks,
+  failed units, updates and reboots, time sync, certificates and, with
+  Docker, reclaimable space, each finding naming what it concerns and
+  what to do. The attention queue, opened from a notice in the fleet
+  rail and the phone list, lists blocked or failing links, raised
+  alerts, failed units, critical mounts and unhealthy containers across
+  the fleet; an acknowledgement with an optional note is kept per device
+  until a reading shows the problem cleared. Tested in the diagnosis,
+  slowness, doctor and attention rules and their views.
+- Command palette (M6 N04, N60, PLT-07): Planchette's palette moved
+  unchanged into `ghost_ui` (N04). On the desktop, View > Command
+  Palette… (`Cmd/Ctrl-K`) lists the menu commands, every fleet server,
+  the selected server's tabs and the containers its held list names. A
+  query starting with `:` narrows to the providers whose path it
+  matches, so `:containers api` searches only containers. A tab or
+  container selects its server and switches the workspace there, a
+  container also opening in the inspector, through
+  `WorkspaceNavigation`. Units and stacks (N60c) and the keyboard model
+  (N60b) are below. Tested in the palette tests of `ghost_ui` and the app.
+- Threshold bands (M6 N61a, N61b, OV-11): CPU, memory and disk use are
+  careful from 70 %, warning from 80 % and critical from 90 % by
+  default, through `ThresholdScope`, which the fleet rows, the
+  Overview's gauges, the health card's disk alarms and the announcer
+  read. A careful bar keeps its series colour and says so with an info
+  icon and in words; only warning and critical raise disk alarms or are
+  announced. Settings > Alerts sets each metric's three levels as whole
+  percents from 1 to 100 in rising order, kept per device under
+  `klabautermann.overview.thresholds` and offered in the desktop
+  settings window. Tested in the chart severity, the announcer, the
+  scope, the controller, the Alerts tab and the settings window.
+- Quick actions (M6 N61c, OV-08): the Overview's quick actions card
+  offers a terminal in Séance and the server's files in Poltergeist
+  where those apps take the hand-off, Reboot, and a Restart for each
+  service pinned from its page in the Services tab, at most five per
+  server, kept per device under `klabautermann.overview.pinnedServices`.
+  Each runs through the preview and confirmation of its own tab, and the
+  card is left out when none is available. Tested in the pin rules and
+  an Overview widget test where a pin adds a Restart that plans
+  `UnitAction(restart)`.
+- Top lists (M6 N61d, OV-07): the Overview's Top card ranks the five
+  busiest processes and, where the Docker engine answers, containers, by
+  CPU or memory. It starts closed and reads nothing; opened, it
+  subscribes `procs` and asks stats for the running containers while the
+  Overview shows, and closing or hiding it releases both. Tested in the
+  ranking helpers and the card's subscription tests.
+- Overview cards (M6 N61e, OV-06): "Arrange cards…" at the Overview's
+  end reorders the cards below the health card by drag or screen reader
+  actions, hides or shows each, and resets them, each change applying at
+  once and kept per device under `klabautermann.overview.cards`. A card
+  a server cannot show stays out, and a card added later takes its
+  default place. On a wide panel each run of half-width cards splits
+  between two columns, which changes the default desktop order. Tested
+  in the layout controller, the Overview panel and the store.
+- Bottom dock (M6 N61, OV-10): on the desktop a dock under the workspace
+  panels holds the server's journal, unit and command run output and
+  container shells as tabs, per server, each kept running while open;
+  the Logs tab streams only while it shows. The button beside the tab
+  strip opens the server's logs or toggles the dock, and its top edge
+  resizes from 120 px to 70 % of the workspace by drag or arrow keys.
+  Run output and the inspector's shell open there on the desktop; phones
+  keep sheets and pushed pages. Tested in the dock controller, run
+  output, the inspector's shell button and a full desktop app test.
+- Tablet split (M6 N62, PLT-05): below the desktop breakpoint, a window
+  whose shorter side is at least 600 dp keeps the fleet list in a 320 dp
+  column beside the selected server's screen, and a tap selects a server
+  in place. A phone held sideways keeps the stack. A server that leaves
+  the fleet clears the pane and everything it opened (SYN-08). Tested in
+  the phone shell; a real tablet and a resized desktop window are not
+  tried.
+- Fleet summary and triage (M6 N63a, FL-09, FL-10): the fleet list on
+  the desktop rail and the phone opens with a summary strip: how many
+  servers answer, how many have an open problem in the attention queue,
+  and the CPU and memory of those with a fresh reading. While a server
+  needs attention, "Needs attention" keeps only those servers and
+  "Attention first" moves them up, most problems first. Both scroll with
+  the rows. Tested in the triage rules and a fleet list widget test.
+- Fleet board and tree (M6 N63b, N63c, FL-08, FL-11): with no server
+  open, the desktop and tablet workspace shows the fleet as cards, a
+  grid, a connection tree or the rows, chosen above it and kept per
+  device under `klabautermann.fleet.density`; Auto shows cards below 12
+  servers and the grid from 12 on. The tree opens each server to its
+  compose stacks, with their running counts, and standalone containers,
+  reading the container watch only while a node is open, and a container
+  opens in the Docker tab and the inspector. The phone keeps its rows.
+  Tested in the board and tree widget tests and the store.
+- Docker program (M6 N63e, CN-16, engine part): `SetDockerProgram` names
+  a per-server `docker` for the relay ranks and compose commands where
+  the non-login exec `PATH` lacks it (`/snap/bin/docker`, a NAS's
+  `/usr/local/bin/docker`). It counts as present whatever the probe
+  found, rank 3 runs it under sudo by its absolute path, and it reaches
+  the stack checks, redeploy and edit plans and host `docker pull`. A
+  path that is not absolute or holds a NUL or line break fails the
+  endpoint as `invalidProgram`, which the Docker tab words. The app's
+  setting is N63f's, below. Tested in the ladder, the router, the stack
+  sources, the redeploy and edit plans and the Docker tab.
+- Diagnostic bundle (M6 N64a, CN-18): the server header's Safety menu
+  offers "Diagnostic bundle…", which waits for the regular probe and
+  each sampler, then reads the probe and one tick of every collector
+  without arguments except `ops`, on no extra channel. A sampler silent
+  for 60 s leaves its collectors listed as missing. The bundle opens in
+  LOG-10's export sheet, redacted unless the user includes secrets.
+  Tested in the scheduler, the host queries, the protocol and the app.
+- Polling budget (M6 N64b, N64c, SAF-19): Settings > General picks how
+  often servers are read, Automatic (Desktop on a computer, Phone on a
+  phone or tablet), Desktop, Phone or Cellular saver, and the app now
+  sends `SetCadenceProfile`, so phones no longer sample at desktop
+  rates. Settings > Servers caps a server at the Phone or Cellular saver
+  column with `SetServerCadenceCap`; the engine samples each server at
+  the slower of the two, and a cap outlives the fleet. Both are kept per
+  device and offered in the desktop settings window. Tested in the
+  sampling subscriptions and scheduler, the store, the controllers, the
+  General and Servers tabs and the settings window.
+- Copy as commands and snippets (M6 N65, AUT-01, AUT-02): every action
+  preview's "Copy as commands" puts its steps on the clipboard as one
+  script, with `sudo` before an elevated step and Docker API requests as
+  comments, and runs nothing. The engine mirrors Séance's synced
+  `snippet:` records read-only (`SnippetMirrorHandler`), never sealing
+  or pushing one, and sends them as `SnippetsChanged`. Where actions are
+  allowed, the server header's Snippets button lists them, asks for each
+  placeholder before the preview, and runs the filled command as
+  `RunSnippet`: `sh -c` as the login user, masked as a cron line is,
+  with the preview's danger findings. Tested in the actions preview, the
+  engine sync and isolate, the host plans and the Snippets view.
+- Log readability (M6 N67, A11Y-12): Settings > General, under
+  Accessibility, sets every log view's text size (10 to 18 px, 13 by
+  default) and whether long lines wrap, applied at once and kept per
+  device; the size applies before the system's text scale, and a view
+  that sets its own wrapping keeps it. Tested in the log display, the
+  settings, the settings window and the store.
+- Account size (M6 N67, SYN-09): Settings > Sync's Account size section
+  shows what Klabautermann's records take of their 1 MiB budget, warning
+  from 80 % and at 100 %, and lists each id prefix's records and size,
+  largest first, as this device last pulled them. It appears once a sync
+  operation has succeeded in this run. Tested in the core records, the
+  Sync tab and the settings window.
+- Share sheet (M6 N67c, PLT-08): the Overview's "Share status…" exports
+  plain lines from the server's last readings, without its name and host
+  name unless the user turns on "Name the server", and a container's Raw
+  JSON gets Export for the masked inspect. Both use LOG-10's sheet:
+  redacted unless the user includes secrets, then copied, saved or
+  shared. Tested in the status card and container details tests.
+- Podman socket (M6 N67d, CN-25): on a systemd host with `podman` and no
+  engine socket, the Access runtime row's fix is `systemctl --user
+  enable --now podman.socket`, or the system socket for a root login,
+  shown and copied, never run. A system socket for another login is not
+  offered, since it would make the account root-equivalent. Tested in
+  the host access check and the Access panel.
+- Server times (M6 N67, A11Y-07): Settings > General's "Show server
+  times in the server's zone", kept per device, shows the times server
+  panels report, and the history, coverage and container usage charts,
+  at the fixed offset each server's probe last read, so a time across a
+  daylight-saving change shows that reading's offset. Times this device
+  made, container log rows and Jobs' own zones stay as they were. Tested
+  in the time display, the settings, the settings window and the store.
+- Text scaling (M6 N67, A11Y-09): `text_scaling_test.dart` checks every
+  desktop server panel, every phone destination and Settings tab, and
+  the server editor at 200 % text with no overflow. The sweep found the
+  shared `ghost_servers` editor's authentication menu and appearance
+  heading overflowing a narrow phone; both now wrap, in Séance and
+  Poltergeist too. Tested by the sweep and a `ghost_servers` editor test
+  that failed before the fix.
+- Flatpak permissions (M6, PLT-09): the manifest's grants stay
+  Klabautermann's own (network, ssh-auth, Secret Service,
+  `~/.ssh/config:ro`, no home access). A key under `~/.ssh` reaches a
+  Flatpak build through the agent or an import into the app's keystore;
+  widening the grant to `~/.ssh:ro` waits on the owner's decision.
+- Keyboard model (M6 N60b, PLT-06, A11Y-10): every sortable list moves
+  with `j`/`k` beside the arrows and opens the keyboard map on `?`; `/`
+  focuses the filter of Containers, Images, Volumes, Networks and
+  Processes. Single keys act on the active row where its menu verb is
+  allowed: `l` logs, `s` shell (a running container, in the bottom dock
+  on the desktop) and `r` restart on Containers, `l` and `r` on
+  Services; a text field keeps its letters. View > "Go to <tab>" takes
+  `Cmd/Ctrl-1` to `8` once a server is selected, Help > Keyboard
+  Shortcuts (`Cmd/Ctrl-/`) lists the focused list's keys and the
+  window's from the command registry, and Esc pops the page that holds
+  focus once nothing else takes it. Tested in the sortable table,
+  containers, services, menu and shortcuts tests.
+- Palette units and stacks (M6 N60c, PLT-07): the palette also lists the
+  selected server's units from its `units` sample and its Compose
+  projects from the stack read. A unit opens on the Services tab and a
+  stack on Docker's Stacks sub-tab, through `WorkspaceNavigation`.
+  Tested in the app's palette tests.
+- Disk space explorer (M6 N32, DSK-07, 03 §7.3): a mount's details gain
+  "Explore space", a page that lists one folder's entries largest first
+  with their share, from `du -x -k -a -d 1` on the mount's filesystem
+  (GNU, BusyBox and BSD alike, at most 1,000 entries [E]). Folders drill
+  in and step back up, never above the mount point; each is read once
+  until Read again, within 3 minutes. In admin mode "Read as root" reads
+  through the executor, and a lower bound says so and how to count the
+  rest. `ncdu -o -` and `gdu -o-` streaming is not built: a whole-tree
+  export passes the 1 MiB a host read keeps. Tested in the host parser,
+  a real-shell `du` test, the engine and the explorer page.
+- Timer details (M6 N71, JOB-02, D57): opening a timer reads its
+  `OnCalendar=` and monotonic triggers and randomized delay with
+  `systemctl show`, then each calendar trigger's next five runs with
+  `systemd-analyze calendar`, in the system or the user's manager. A
+  failed calendar read leaves its expression without runs. Tested in
+  `timer_detail_test.dart`, the engine and the Jobs panel.
+- Dropbear (M6 N67h, N67i, CN-15): `SshLinkSeen.serverIdentification`
+  carries the server's identification line (`seance_core`, #555). On a
+  Dropbear older than 2024.84 the Docker ladder skips the socket forward
+  for the relay, and a streamlocal route through 2024.84 to 2025.88
+  (CVE-2025-14282, forwarded connections reach the engine as root) gets
+  a warning in the server header. Tested in `dropbear_test.dart`, the
+  ladder, the router and the Docker tab.
+- Docker program setting (M6 N63f, CN-16): the Docker tab's engine strip
+  sets the server's `docker`, the one on the `PATH` or a typed absolute
+  path validated as the engine does. It is kept on the device beside the
+  socket choice and sent as each link comes up. Tested in the device
+  settings store, the Docker controller and the Docker tab.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
@@ -2372,6 +2672,39 @@ admin mode for an account whose only sudo rule is NOPASSWD `docker`
 below, which M5 extends by privileged writes under SELinux, link intake
 on real devices and the container terminal on phones.
 
+## M6 exit
+
+M6, v1 part 2 (04 §13, M6 plan N01 to N71), met each automated exit on
+the evidence below. Every M6 scope row of 04 is built: the Docker
+breadth rows (volumes, networks, prune previews, pulls with progress,
+image history and update checks after S8), the host breadth rows (disk
+I/O, mounts, the disk space explorer, swap devices, interfaces, the
+listening-ports map, the firewall view, port forwards after S7,
+packages, temperatures, GPU, SMART, time, reboot and wait, the boot
+timeline, the kernel check, users and sessions, sshd posture, endpoint
+TLS expiry), triage, alerts with notifications and rollup history, the
+command palette and keyboard model, cards, top lists and the bottom
+dock, the diagnostic bundle, the polling budget, the app lock, snippets,
+the tablet split and the v1 accessibility rows. The close-out audit
+found three rows missing and built them: the keyboard model and palette
+units and stacks (N60b, N60c), the disk space explorer (N32) and timer
+next runs (N71).
+
+| Exit | Evidence | Status |
+|---|---|---|
+| Y1: every table-stakes item of 02 §4 complete | The N70 audit traced each 02 §4 ID to code on main and a STATUS entry except JOB-02's timer next runs, the one table-stakes gap, which N71 then closed | met |
+| Y2: alert rules, including raise and clear hysteresis, covered by tests | N50a's `alert_evaluator_test.dart` (a breach raises only after its raise duration and clears only after its clear duration below the clear threshold, a short breach never raises, an unknown value holds the state, rule scope, removed rules and servers leaving the fleet) and `klabautermann_host`'s `threshold_test.dart` | met |
+| Y3: notification copy states the coverage limit | N51's `alert_notifications_test.dart` (the prompt and the switch say that rules are evaluated only while the app is open, before the system asks, and each notification carries the limit) and N50c's `alert_rules_test.dart` | met |
+| Y4: gap rendering covered by goldens | `time_series_goldens_test.dart` (a labelled hatched gap, a gap too narrow for its label, an open gap), N52b's `history_goldens_test.dart` (48 hours with a band per gap reason) and the chart and container log goldens | met |
+
+Left open: FL-16's admin-mode memory, deferred because remembering admin
+mode across launches would undo SAF-01's observe-only default (FL-16's
+cadence, endpoint and program overrides are built); `ncdu` and `gdu`
+streaming for the explorer (N32, above); the Flatpak `~/.ssh:ro` grant,
+which waits on the owner (PLT-09); M4's sudo rule scoped to `docker`;
+and the device checks below, which M6 extends by notifications, the app
+lock, the share sheet, port forwards and the tablet split.
+
 ## Open manual gates
 
 The milestone sign-off gates are tracked in
@@ -2416,6 +2749,14 @@ is not a device smoke test:
 - The container terminal on phones (M5, CTX-07): a shell into a
   container on an Android phone and an iPhone, with the keyboard bar,
   paste confirmation and the app backgrounded and resumed.
+- Alert notifications on devices (M6 N51, ALR-01): on each OS, the
+  app's prompt, then the system's request, a raised alert's
+  notification and its withdrawal on clear; on Linux also from the
+  Flatpak build, through the notification portal.
+- The share sheet (M6 N67c, PLT-08) on an Android phone and an iPhone,
+  and a port forward's page opening in the phone's browser (NET-11).
+- The tablet split (M6 N62, PLT-05) on an iPad and an Android tablet,
+  with a hardware keyboard for the keyboard model (PLT-06).
 
 None of those applies to M1a yet; they gate the milestones that ship the
 matching behavior; this list keeps them visible so they are not lost
