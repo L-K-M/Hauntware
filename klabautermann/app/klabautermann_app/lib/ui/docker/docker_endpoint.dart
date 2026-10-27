@@ -41,6 +41,8 @@ String dockerTransportText(AppLocalizations l10n, DockerEndpointState? state) {
         l10n.dockerTransportUnsupported,
       DockerEndpointFailure.linkError => l10n.dockerTransportLinkError,
       DockerEndpointFailure.invalidChoice => l10n.dockerTransportInvalidChoice,
+      DockerEndpointFailure.invalidProgram =>
+        l10n.dockerTransportInvalidProgram,
     },
   };
 }
@@ -66,6 +68,7 @@ String dockerFailureText(
   DockerEndpointFailure.apiVersionUnknown => l10n.dockerGateApiVersionUnknown,
   DockerEndpointFailure.linkError => l10n.dockerGateLinkError,
   DockerEndpointFailure.invalidChoice => l10n.dockerGateInvalidChoice,
+  DockerEndpointFailure.invalidProgram => l10n.dockerGateInvalidProgram,
 };
 
 /// The engine [route] reaches in words, as the Docker API names it

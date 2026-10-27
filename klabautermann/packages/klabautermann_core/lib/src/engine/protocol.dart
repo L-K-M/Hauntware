@@ -87,6 +87,7 @@ import '../docker/docker_ladder.dart'
         DockerRank,
         DockerRootEquivalence,
         DockerRouteLabel,
+        dockerProgramPathProblem,
         dockerSocketPathProblem;
 import '../operations/plan_types.dart';
 
@@ -321,6 +322,10 @@ import '../operations/plan_types.dart';
 /// [RunSnippet] intent runs one, reporting its output as [RunCronJob]
 /// does.
 ///
+/// CN-16's docker program then joined v3 the same way: [SetDockerProgram]
+/// names the `docker` a server's relays and compose commands run,
+/// [DockerEndpointRoute] gained `dockerProgram` and
+/// [DockerEndpointFailure] gained `invalidProgram`.
 /// Port forwards then joined v3 the same way (03 §5.11 NET-11, DKE-09, M6
 /// plan N22): [OpenPortForward] and [ClosePortForward], answered by
 /// [PortForwardState].
@@ -902,6 +907,24 @@ final class SetDockerEndpoint extends EngineRequest {
 
   final String serverId;
   final DockerEndpointChoice choice;
+}
+
+/// Sets the program [serverId]'s Docker relays and compose commands run
+/// for `docker` (CN-16): the app's per-server path from `settings.json`
+/// (03 §4.10), or null for the `docker` on the exec `PATH`, sent as
+/// [SetDockerEndpoint] is. It serves a CLI the non-login `PATH` lacks,
+/// such as Snap's `/snap/bin/docker` or a NAS's `/usr/local/bin/docker`.
+/// The engine keeps it until another arrives or the server leaves the
+/// fleet, and a session that holds an endpoint resolves again with it at
+/// once; the same program again changes nothing. A path
+/// [dockerProgramPathProblem] refuses fails the endpoint with
+/// [DockerEndpointFailure.invalidProgram]. Ignored for a server outside
+/// the fleet.
+final class SetDockerProgram extends EngineRequest {
+  const SetDockerProgram({required this.serverId, this.program});
+
+  final String serverId;
+  final String? program;
 }
 
 /// The most port forwards the engine holds open at once [E] (03 §5.11):
@@ -5303,6 +5326,10 @@ enum DockerEndpointFailure {
   /// The endpoint choice names a socket path [dockerSocketPathProblem]
   /// refuses, so the ladder did not run.
   invalidChoice,
+
+  /// The server's `docker` program is a path [dockerProgramPathProblem]
+  /// refuses, so the ladder did not run (CN-16).
+  invalidProgram,
 }
 
 /// The route a [DockerEndpointState] names (03 §5.4, §5.9; SAF-08).
@@ -5314,10 +5341,15 @@ final class DockerEndpointRoute {
     required this.runtime,
     required this.rootEquivalence,
     this.mode,
+    this.dockerProgram = 'docker',
   });
 
   final DockerRank rank;
   final String socketPath;
+
+  /// The program compose commands run for `docker` on this server: its
+  /// [SetDockerProgram] path, or `docker` on the exec `PATH` (CN-16).
+  final String dockerProgram;
 
   /// The engine as its API names it: Podman when `_ping` carries
   /// `Libpod-API-Version` or `/version` names a Podman component, even

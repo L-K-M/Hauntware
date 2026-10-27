@@ -6146,6 +6146,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'No Engine API route: the chosen socket path is not valid';
 
   @override
+  String get dockerTransportInvalidProgram =>
+      'No Engine API route: the docker program path is not valid';
+
+  @override
   String get dockerLowSession => 'Low-session mode';
 
   @override
@@ -6233,6 +6237,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerGateInvalidChoice =>
       'The socket path chosen for this server is not a valid absolute path. Choose another socket below.';
+
+  @override
+  String get dockerGateInvalidProgram =>
+      'The docker program path set for this server is not a valid absolute path.';
 
   @override
   String get dockerRetry => 'Try again';
