@@ -98,3 +98,82 @@ final class CadenceController extends ChangeNotifier
     }
   }
 }
+
+/// The columns a server can be capped at (SAF-19): Desktop would cap
+/// nothing, since a cap never speeds a server up (03 §10.1).
+enum CadenceCap {
+  phone,
+  cellularSaver;
+
+  /// The cap [name] names, or null for null or a name this version does
+  /// not know, which caps nothing.
+  static CadenceCap? parse(String? name) =>
+      name == null ? null : values.asNameMap()[name];
+
+  /// The 6.4 column this cap holds a server to.
+  CadenceProfile get profile => switch (this) {
+    phone => CadenceProfile.phone,
+    cellularSaver => CadenceProfile.cellularSaver,
+  };
+}
+
+/// What Settings reads and changes of the per-server caps, apart from
+/// where it runs: [CadenceCapsController] in the app, and a copy kept
+/// over the settings link in the desktop settings window. The value maps
+/// each capped server's id to its cap.
+abstract interface class CadenceCapSettings
+    implements ValueListenable<Map<String, CadenceCap>> {
+  /// Caps [serverId] at [cap], null to lift it; a no-op when that is in
+  /// force and saved. Throws as [CadenceSettings.setCadence] does, with
+  /// [CadenceNotSavedException] for a cap applied but not saved.
+  Future<void> setCap(String serverId, CadenceCap? cap);
+}
+
+/// The app's per-server caps (SAF-19): the composition root restores them
+/// from `settings.json`, saves every change there and sends the engine
+/// each cap that changed. Without a save callback, as in most tests, they
+/// are held in memory only. A change applies before it is saved.
+final class CadenceCapsController extends ChangeNotifier
+    implements CadenceCapSettings {
+  CadenceCapsController({Map<String, CadenceCap> caps = const {}, this._save})
+    : _value = Map.unmodifiable(caps),
+      _saved = Map.unmodifiable(caps);
+
+  Map<String, CadenceCap> _value;
+
+  /// The caps last known to be in `settings.json`, as
+  /// [CadenceController]'s saved preset.
+  Map<String, CadenceCap> _saved;
+  final Future<void> Function(String serverId, String? name)? _save;
+
+  @override
+  Map<String, CadenceCap> get value => _value;
+
+  @override
+  Future<void> setCap(String serverId, CadenceCap? cap) async {
+    if (cap == _value[serverId] && cap == _saved[serverId]) return;
+    if (cap != _value[serverId]) {
+      _value = _with(_value, serverId, cap);
+      notifyListeners();
+    }
+    try {
+      await _save?.call(serverId, cap?.name);
+      _saved = _with(_saved, serverId, cap);
+    } on Exception catch (error, stackTrace) {
+      Error.throwWithStackTrace(
+        CadenceNotSavedException('The polling cap was not saved: $error'),
+        stackTrace,
+      );
+    }
+  }
+
+  static Map<String, CadenceCap> _with(
+    Map<String, CadenceCap> caps,
+    String serverId,
+    CadenceCap? cap,
+  ) => Map.unmodifiable({
+    for (final MapEntry(:key, :value) in caps.entries)
+      if (key != serverId) key: value,
+    serverId: ?cap,
+  });
+}

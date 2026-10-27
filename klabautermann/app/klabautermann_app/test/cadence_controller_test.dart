@@ -108,4 +108,57 @@ void main() {
     expect(saved, ['phone'], reason: 'retried once, then a no-op');
     expect(notified, 1, reason: 'the value changed once');
   });
+
+  group('per-server caps', () {
+    test('a stored name parses to its cap; anything else caps nothing', () {
+      expect(CadenceCap.parse('phone'), CadenceCap.phone);
+      expect(CadenceCap.parse('cellularSaver'), CadenceCap.cellularSaver);
+      expect(CadenceCap.parse('desktop'), isNull);
+      expect(CadenceCap.parse(null), isNull);
+      expect(CadenceCap.cellularSaver.profile, CadenceProfile.cellularSaver);
+    });
+
+    test('a cap applies, notifies and is saved; one in force does '
+        'nothing; null lifts it', () async {
+      final saved = <(String, String?)>[];
+      final caps = CadenceCapsController(
+        caps: const {'srv-2': CadenceCap.phone},
+        save: (serverId, name) async => saved.add((serverId, name)),
+      );
+      addTearDown(caps.dispose);
+      var notified = 0;
+      caps.addListener(() => notified++);
+
+      await caps.setCap('srv-1', CadenceCap.cellularSaver);
+      await caps.setCap('srv-1', CadenceCap.cellularSaver);
+      await caps.setCap('srv-2', null);
+
+      expect(caps.value, {'srv-1': CadenceCap.cellularSaver});
+      expect(saved, [('srv-1', 'cellularSaver'), ('srv-2', null)]);
+      expect(notified, 2);
+    });
+
+    test('a cap the store refused stays in force, says so, and is saved '
+        'when picked again', () async {
+      var fail = true;
+      final saved = <String?>[];
+      final caps = CadenceCapsController(
+        save: (_, name) async {
+          if (fail) throw const FileSystemException('disk full');
+          saved.add(name);
+        },
+      );
+      addTearDown(caps.dispose);
+
+      await expectLater(
+        caps.setCap('srv-1', CadenceCap.phone),
+        throwsA(isA<CadenceNotSavedException>()),
+      );
+      expect(caps.value, {'srv-1': CadenceCap.phone});
+      fail = false;
+      await caps.setCap('srv-1', CadenceCap.phone);
+      await caps.setCap('srv-1', CadenceCap.phone);
+      expect(saved, ['phone'], reason: 'retried once, then a no-op');
+    });
+  });
 }

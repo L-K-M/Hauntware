@@ -3115,7 +3115,11 @@ units are a stream of their own, apart from the Services panel's `units`
 (D45, 10.1). As built, Settings > General picks the profile per
 device: Automatic (Desktop on a computer, Phone on a phone or tablet),
 Desktop, Phone or Cellular saver, kept in `settings.json` under
-`klabautermann.sampling.cadence`; per-server caps are not built yet.
+`klabautermann.sampling.cadence`. Settings > Servers caps a server at
+the Phone or Cellular saver column, or lifts its cap, kept per device
+under `klabautermann.sampling.caps` by server id and sent to the engine as
+`SetServerCadenceCap` at start and on every change; a cap outlives the
+fleet, as the engine's does.
 Rates
 are computed in the engine isolate (D43) from counter deltas over the
 host's uptime between two replies that carry them, with wrap detection

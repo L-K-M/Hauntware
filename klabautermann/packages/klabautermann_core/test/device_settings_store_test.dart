@@ -16,6 +16,7 @@ const _syncSecretsKey = 'klabautermann.sync.secrets';
 const _deviceNameKey = 'klabautermann.audit.deviceName';
 const _thresholdsKey = 'klabautermann.overview.thresholds';
 const _cadenceKey = 'klabautermann.sampling.cadence';
+const _cadenceCapsKey = 'klabautermann.sampling.caps';
 const _overridesKey = 'klabautermann.docker.endpointOverrides';
 const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const _monitorSetKey = 'klabautermann.monitorSet';
@@ -561,6 +562,30 @@ void main() {
 
       writeDocument({_versionKey: 1, _deviceIdKey: 'device-a', _cadenceKey: 3});
       expect((await DeviceSettingsStore.open(file)).cadence, isNull);
+    });
+
+    test('keeps each server\'s polling cap across reloads, lifts one on '
+        'null and skips entries that are not names (SAF-19)', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _cadenceCapsKey: {'srv-9': 4, 'srv-2': 'phone'},
+      });
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.cadenceCaps, {'srv-2': 'phone'});
+      await store.setCadenceCap('srv-1', 'cellularSaver');
+      await store.setCadenceCap('srv-2', null);
+      expect((await DeviceSettingsStore.open(file)).cadenceCaps, {
+        'srv-1': 'cellularSaver',
+      });
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _cadenceCapsKey: 'phone',
+      });
+      expect((await DeviceSettingsStore.open(file)).cadenceCaps, isEmpty);
     });
 
     test('posts no alert notification until turned on, keeps it off once '
