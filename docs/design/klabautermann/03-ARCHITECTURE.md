@@ -842,9 +842,18 @@ Proposals awaiting the owner close the section; they are not decisions.
   of each expression come from `HostCommands.onCalendar`, a command of
   its own outside the sampler, as 7.7 describes, with one run below
   systemd 242; `timerCalendarCommands` builds those reads and
-  `TimerJobEntry.withDetail` merges their results; a later PR wires
-  both into the engine. A read with neither trigger leaves the timer's
-  triggers and delay unknown: `systemctl show` prints that for a unit
+  `TimerJobEntry.withDetail` merges their results. As built in M6
+  (N71, JOB-02), a timer's details read both when they open:
+  `ReadTimerDetail` runs `HostCommands.timerDetail`, the collector's
+  own `systemctl show`, on a channel of its own rather than through
+  the sampler, then one `systemd-analyze calendar` per expression for
+  `kTimerRunsListed` (5) runs, and `TimerDetailReport` carries the
+  detail and the calendar results, which the app merges with
+  `withDetail` into the row it shows. Meanwhile the details say the
+  triggers are being read; a failed read says why, and the table's
+  schedule cell points to the details. A calendar read that fails
+  leaves its expression without runs. A read with neither trigger
+  leaves the timer's triggers and delay unknown: `systemctl show` prints that for a unit
   no longer loaded, with a default delay, and for a timer with only
   `OnClockChange=` or `OnTimezoneChange=`. *Rejected:* evaluating the expressions inside
   the sampler (one guarded call per trigger would tie the request's
@@ -2443,7 +2452,7 @@ platform identities in 04, section 12.3):
 | `sync_enrollment.json` [E] | Enrollment state (M2, K49a, D62): the push hold, the raised notices and the enrolled account (server URL, user name, mode); never the token or vault key, which stay in the keystore (4.5), and not the device id, which stays in `settings.json`. Kept like the verdict files; a damaged file reads as not enrolled | `klabautermann_core` [E] | MVP |
 | `endpoint_pins.json` | Confirmed endpoints. As built in M2 (K41), written by the engine through the catalog library's `FileEndpointPinStore` only with exclusive access; otherwise pins last for the engine's run (4.7) | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
-| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), whether the Docker tab's root-equivalence notice was dismissed (`klabautermann.docker.rootEquivalenceNoticeDismissed`, M3, 8.4; anything but `true` shows it again), the servers pinned to the top of the fleet list (`klabautermann.fleet.pinnedServerIds`, M2, 10.3; a sorted list of server ids, anything else reading as none), FL-21's monitor set as the user chose it (`klabautermann.monitorSet`, M2, K30, 4.3 step 4; a sorted list of server ids, anything else reading as never chosen, so the platform's default applies), the engine socket chosen per server (`klabautermann.docker.endpointOverrides`, M3, CN-09, D54: by server id, the choice, `detected` or `custom`, its absolute socket path and the endpoint it was chosen for; an entry that does not read as one is skipped and kept as written; a server the fleet drops or lists under another endpoint loses its entry, as does one whose entry names no endpoint, SYN-08), the safety preferences the engine enforces (`klabautermann.safety`, M4, E19a: global read-only, admin expiry in minutes, and per server management, read-only and the user's marks; anything unreadable reads as management off, so a damaged file only takes actions away), per-server device preferences | app | MVP |
+| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), whether the Docker tab's root-equivalence notice was dismissed (`klabautermann.docker.rootEquivalenceNoticeDismissed`, M3, 8.4; anything but `true` shows it again), the servers pinned to the top of the fleet list (`klabautermann.fleet.pinnedServerIds`, M2, 10.3; a sorted list of server ids, anything else reading as none), FL-21's monitor set as the user chose it (`klabautermann.monitorSet`, M2, K30, 4.3 step 4; a sorted list of server ids, anything else reading as never chosen, so the platform's default applies), the engine socket chosen per server (`klabautermann.docker.endpointOverrides`, M3, CN-09, D54: by server id, the choice, `detected` or `custom`, its absolute socket path, the absolute `docker` program path (`program`, M6, CN-16) when one is set, and the endpoint they were set for, at least one of the choice and the program; an entry that does not read as one is skipped and kept as written; a server the fleet drops or lists under another endpoint loses its entry, as does one whose entry names no endpoint, SYN-08), the safety preferences the engine enforces (`klabautermann.safety`, M4, E19a: global read-only, admin expiry in minutes, and per server management, read-only and the user's marks; anything unreadable reads as management off, so a damaged file only takes actions away), per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
@@ -2756,6 +2765,24 @@ limit of 2 and reports `SshLinkDegraded(sessionLimitLearned)`.
   matches; an `env DOCKER_HOST=` prefix would make sudo check `env`
   and fail [R: sudoers(5)]. Command templates elsewhere in this plan omit
   the option for brevity.
+- **Docker program (CN-16, as built in M6 N63e)**: a per-server
+  device-local path names the `docker` the relays and compose commands
+  run, for a CLI the non-login exec `PATH` lacks (Snap's
+  `/snap/bin/docker`, a NAS's `/usr/local/bin/docker`). `SetDockerProgram`
+  carries it as `SetDockerEndpoint` carries the socket; the program counts
+  as present whatever the probe found, rank 3 runs it under sudo as an
+  absolute path, so a NOPASSWD rule must name that path, and a path that
+  is not absolute or holds a NUL or line break fails the endpoint as
+  `invalidProgram`. `DockerEndpointRoute.dockerProgram` carries it to the
+  compose plans. The app keeps it beside the socket choice in the same
+  `klabautermann.docker.endpointOverrides` entry (field `program`, 4.10),
+  so it leaves with the server as the choice does (SYN-08), sends it as it
+  sends the choice, and sets it under the socket picker in the Docker
+  tab's engine strip, checked before it is kept. `DOCKER_HOST` needs no override of its own: the
+  endpoint choice (CN-09) names any Unix socket, and a TCP engine is out
+  of scope, since the socket is never exposed (r5 §1.3). `journalctl`
+  keeps the exec `PATH`'s: systemd installs it in `/usr/bin` or `/bin`,
+  which every exec `PATH` holds.
 - The socket is never exposed on a local TCP port or local Unix socket: it
   is root-equivalent (r5 §1.3).
 
@@ -2835,6 +2862,19 @@ the consumer falls behind, the subscription pauses and the view shows
 TCP 2375 and 2376 are never offered. A Dropbear host older than 2024.84
 has no Unix stream forwarding and uses rank 2; 2024.84 to 2025.88 get a
 CVE-2025-14282 warning [R: r5 §1.1].
+
+As built in M6 (N67, CN-15): `seance_core`'s link reports the server's
+identification line (`SshLinkSeen.serverIdentification`), and
+`DropbearRelease` reads the release from it. The ladder skips the rank 1
+open on a Dropbear older than 2024.84 and goes straight to the exec
+probe; any other server's refused open still costs one try, since a
+refusal on a forwarding open reads as forwarding off. A socket forward
+through 2024.84 to 2025.88 names the release in its route
+(`DockerEndpointRoute.peerCredentialsExposedBy`), and the server header
+shows "Dropbear 2024.86: CVE-2025-14282" in the error colour, with a
+tooltip that says what it means and to update to 2025.89. Relays carry
+no warning: an exec relay's connection to the socket is the login
+user's own.
 
 As built in M3 (D22, `klabautermann_core/test/integration/
 docker_fallback_test.dart`), every fixture variant that refuses
@@ -2920,6 +2960,21 @@ c2 found these defects in 3.0.2. The last column gives their state on the
   `invalidTarget`, `duplicateId`, `tooMany` (16 open [E]), `noLink` or
   `bindFailed`. Any process on the device can reach a listening port
   while it is open, which the app says where it offers one (NET-11).
+- **As built (M6 N22b, DKE-08).** The Docker tab's Apps sub-tab lists
+  each running container's label links (CTR-11's `labelLinks`), opened
+  in the system browser, and its TCP ports once each: a published port
+  forwards to the server's loopback (or the address it is bound to) at
+  its host port, an unpublished one to the container's address (DKE-09;
+  loopback for host networking), and a UDP port is left out, since
+  `direct-tcpip` carries TCP only. Forward opens the page at
+  `http://127.0.0.1:<local port>` once the engine reports it listening.
+  "Forward a port…" takes any host and port the server reaches
+  (NET-11), checked with `portForwardTargetProblem`. The app's
+  `PortForwardsController` lists each forward with its local port,
+  connections and last failure, keeps an ended one with its reason
+  until dismissed, and closes the server's forwards when the sub-tab is
+  disposed or shows another server; the sub-tab says above its content
+  that any app on the device can reach an open forward.
 - **Privileged files (SAF-12, v1).** SFTP runs as the login user. Root-owned
   files use the elevation prelude in front of commands (`cat`, temp file plus
   `tee` in the same directory, `chown --reference`, `chmod --reference`,
@@ -3559,6 +3614,30 @@ the guarded kill needs it.
   when it shows and on request, and lists each swap partition or file
   with how much is used of its size and its priority, the device used
   first at the top.
+- **As built (M6 N32).** DSK-07 reads one folder at a time:
+  `HostCommands.diskUsage` runs `du -x -k -a -d 1` over the folder (the
+  same flags on GNU, BusyBox and BSD `du`), sorts it largest first and
+  keeps the folder's total and at most 1,000 entries (`kDiskUsageEntries`
+  [E]), marking each `d` for a folder that is not a symlink, then the
+  first 2 KiB of what `du` said on stderr. `parseDiskUsage` reads that
+  into a listing in bytes, incomplete when `du` could not read something
+  under the folder and cut short at 1,000 entries; without the folder's
+  own total, the errors say whether it is gone, denied or `du` missing.
+  `ReadDiskUsage` runs it as the login user over the link or, with
+  `elevated`, through admin mode's executor, under a 3 minute timeout
+  (`kDiskUsageTimeout`); one `DiskUsageReport` answers it. A mount's
+  details in the System tab's Disks section open "Explore space" on the
+  mount point, a page that lists a folder's entries with their share of
+  it, opens a folder on a tap and steps back up, never above the mount
+  point. Each folder is read once, when it first opens, with Read again
+  for a fresh read; in admin mode "Read as root" reads the same folders
+  as root. It says when sizes are a lower bound and how to count the
+  rest. *Not built:* streaming `ncdu -x -o -` or `gdu -o-`, which export
+  the whole tree in one run. On a large filesystem that export passes
+  the 1 MiB a host read keeps, and reading it needs a streamed parser,
+  so the explorer reads each folder as it opens instead, the fallback
+  this row names. The explorer is read-only; deleting stays with
+  DSK-08 (v1.x).
 - **v1.x.** "Open in Poltergeist" for deletion (DSK-08), layout (`lsblk -J
   -b`, LVM JSON reports with sudo), ZFS, mdraid, network mounts with
   stale-mount detection, cleanup suggestions with sizes and previews, fill
@@ -6397,7 +6476,7 @@ shows there.
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`, `SetServerCadenceCap(serverId, cap)` (SAF-19); app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
-| `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)`, `SetDockerEndpoint(serverId, choice)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason, choice)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
+| `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)`, `SetDockerEndpoint(serverId, choice)` (M3 below), `SetDockerProgram(serverId, program?)` (M6 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason, choice)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(planId, preview)`, `ActionProgress`, `ActionFinished`, `ActionRefused(reason, intent or planId)` |
 | `AuditQuery(serverId, before, limit)` (8.10, M4) | `AuditRecords(serverId, records, more)` |
 | `ReadHistory(serverId, tier, requestId)` (7.20, M6 N52a) | `HistoryRead(requestId, serverId, tier, range)`: the tier's buckets and gaps within its span, the filling bucket included |
@@ -7117,6 +7196,12 @@ the engine in `engine_isolate.dart` beside it):
   such a key, and URL credentials in both; a secret plain scalar
   continued on later lines and flow mappings are not masked. The text
   is neither cached nor logged.
+- **Version 3 (M6 docker program).** CN-16's program path joined
+  version 3 the same way: `SetDockerProgram(serverId, program?)` sets
+  the `docker` a server's relays and compose commands run (5.4), the
+  engine keeps it as it keeps the endpoint choice,
+  `DockerEndpointRoute` gained `dockerProgram`, and
+  `DockerEndpointFailure` gained `invalidProgram`.
 - **Version 3 (M3 endpoint choice).** CN-09's manual override joined
   version 3 the same way (D20, D54). `SetDockerEndpoint(serverId,
   choice)` carries a sealed choice: automatic, one of the sockets the

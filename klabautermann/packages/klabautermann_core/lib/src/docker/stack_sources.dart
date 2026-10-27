@@ -100,15 +100,18 @@ final _versionPattern = RegExp(
 /// looked for once.
 final class StackSources {
   /// [run] runs a command on the server in a short-action slot, and
-  /// [openFileSystem] opens its SFTP file system.
+  /// [openFileSystem] opens its SFTP file system. [dockerProgram] is the
+  /// program compose commands run for `docker` (CN-16).
   StackSources({
     required this._socketPath,
+    this._dockerProgram = 'docker',
     required this._run,
     required this._openFileSystem,
     this._admin,
   });
 
   final String _socketPath;
+  final String _dockerProgram;
   final StackCommandRunner _run;
   final Future<RemoteFileSystem> Function() _openFileSystem;
 
@@ -244,6 +247,7 @@ final class StackSources {
     final ComposeInvocation invocation;
     try {
       invocation = composeConfig(
+        binary: _dockerProgram,
         socketPath: _socketPath,
         project: found.name,
         projectDirectory: found.workingDir,
@@ -320,6 +324,7 @@ final class StackSources {
     final ComposeInvocation invocation;
     try {
       invocation = composeConfig(
+        binary: _dockerProgram,
         socketPath: _socketPath,
         project: project.name,
         projectDirectory: project.workingDir,
@@ -395,6 +400,7 @@ final class StackSources {
     final ComposeInvocation invocation;
     try {
       invocation = composeConfig(
+        binary: _dockerProgram,
         socketPath: _socketPath,
         project: project.name,
         projectDirectory: project.workingDir,
@@ -457,7 +463,11 @@ final class StackSources {
     try {
       return await (_detecting ??= () async {
         try {
-          final plugin = composeVersion(socketPath: _socketPath, json: false);
+          final plugin = composeVersion(
+            binary: _dockerProgram,
+            socketPath: _socketPath,
+            json: false,
+          );
           final result = await _command([
             'sh',
             '-c',

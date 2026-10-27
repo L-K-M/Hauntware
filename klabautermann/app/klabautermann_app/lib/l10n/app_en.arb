@@ -4807,9 +4807,25 @@
   "@jobsSourceTimer": {
     "description": "Source of a job that is a systemd timer unit."
   },
-  "jobsTimerTriggersUnread": "Triggers are not read in this version.",
+  "jobsTimerTriggersUnread": "In its details",
   "@jobsTimerTriggersUnread": {
-    "description": "Schedule of a systemd timer: this version reads no timer's OnCalendar or monotonic triggers or its RandomizedDelaySec, so they are unknown; its next run comes from systemd's own timer list."
+    "description": "Schedule column of a systemd timer: the timer list carries no OnCalendar or monotonic triggers; its details read them (JOB-02)."
+  },
+  "jobsTimerTriggersReading": "Reading the timer's triggers…",
+  "@jobsTimerTriggersReading": {
+    "description": "Timer details: systemctl show and systemd-analyze calendar are running for the timer's triggers and next runs."
+  },
+  "jobsTimerTriggersNoLink": "Not connected, so the triggers were not read.",
+  "@jobsTimerTriggersNoLink": {
+    "description": "Timer details: no link to read the triggers over."
+  },
+  "jobsTimerTriggersUnreadable": "systemd did not say what starts this timer.",
+  "@jobsTimerTriggersUnreadable": {
+    "description": "Timer details: systemctl is missing or the unit name is not a timer's."
+  },
+  "jobsTimerTriggersFailed": "The triggers could not be read. Close and open the details to try again.",
+  "@jobsTimerTriggersFailed": {
+    "description": "Timer details: the link failed or the read timed out."
   },
   "jobsDetailsWritten": "As written",
   "@jobsDetailsWritten": {
@@ -7362,6 +7378,10 @@
   "@dockerTransportInvalidChoice": {
     "description": "The server header's Docker transport label (03 §5.9, E4) when the socket path chosen for the server is not an absolute path."
   },
+  "dockerTransportInvalidProgram": "No Engine API route: the docker program path is not valid",
+  "@dockerTransportInvalidProgram": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the docker program path set for the server (CN-16) is not an absolute path."
+  },
   "dockerLowSession": "Low-session mode",
   "@dockerLowSession": {
     "description": "Server header: the server allows few SSH sessions, so Docker shares them sparingly (03 §5.2)."
@@ -7463,6 +7483,10 @@
   "dockerGateInvalidChoice": "The socket path chosen for this server is not a valid absolute path. Choose another socket below.",
   "@dockerGateInvalidChoice": {
     "description": "Docker tab, shown instead of its panels under accessPanelHiddenTitle: the chosen socket path is not valid; the socket picker follows below."
+  },
+  "dockerGateInvalidProgram": "The docker program path set for this server is not a valid absolute path.",
+  "@dockerGateInvalidProgram": {
+    "description": "Docker tab, shown instead of its panels under accessPanelHiddenTitle: the docker program path set for the server (CN-16) is not valid."
   },
   "dockerRetry": "Try again",
   "@dockerRetry": {
@@ -7880,6 +7904,46 @@
   "dockerSocketPathUnsafe": "The path cannot contain line breaks or NUL characters.",
   "@dockerSocketPathUnsafe": {
     "description": "Custom socket dialog error: the typed path holds a line break or a NUL character."
+  },
+  "dockerProgramLabel": "docker program",
+  "@dockerProgramLabel": {
+    "description": "Docker tab engine strip (CN-16): label before the docker program the server's relays and compose commands run. 'docker' is the program's name, kept lowercase."
+  },
+  "dockerProgramDefault": "docker on the PATH",
+  "@dockerProgramDefault": {
+    "description": "Docker tab engine strip (CN-16): shown as the docker program when no path is set, so the server runs the docker its PATH finds."
+  },
+  "dockerProgramChange": "Change…",
+  "@dockerProgramChange": {
+    "description": "Docker tab engine strip (CN-16): button that opens the dialog to type the docker program's path."
+  },
+  "dockerProgramChangeLabel": "Change the docker program",
+  "@dockerProgramChangeLabel": {
+    "description": "Docker tab engine strip (CN-16): what assistive technology reads for the Change… button beside the docker program."
+  },
+  "dockerProgramReset": "Use docker on the PATH",
+  "@dockerProgramReset": {
+    "description": "Docker tab engine strip (CN-16): button that clears the docker program path, so the server runs the docker its PATH finds."
+  },
+  "dockerProgramTitle": "docker program",
+  "@dockerProgramTitle": {
+    "description": "Title of the dialog that asks for the docker program's path (CN-16)."
+  },
+  "dockerProgramBody": "Klabautermann runs this docker for relays and compose commands on this server. Set it when docker is outside the PATH of a non-interactive session, as with Snap's /snap/bin/docker.",
+  "@dockerProgramBody": {
+    "description": "Body of the docker program dialog (CN-16)."
+  },
+  "dockerProgramField": "Program path",
+  "@dockerProgramField": {
+    "description": "Label of the docker program dialog's path field (CN-16)."
+  },
+  "dockerProgramHint": "/snap/bin/docker",
+  "@dockerProgramHint": {
+    "description": "Hint in the docker program dialog's path field (CN-16): an example absolute path."
+  },
+  "dockerProgramNotSaved": "Klabautermann could not save the docker program, so it applies only until Klabautermann quits.",
+  "@dockerProgramNotSaved": {
+    "description": "Top toast (CN-16) when the docker program applied but could not be saved to the settings file."
   },
   "appearanceThemeTitle": "Theme",
   "@appearanceThemeTitle": {
@@ -9692,6 +9756,26 @@
   "dockerCommandTruncated": "The output was longer than 1 MiB; the rest was dropped.",
   "@dockerCommandTruncated": {
     "description": "Shown when the command's output exceeded the kept maximum (CTX-08)."
+  },
+  "dockerDropbearCve": "Dropbear {release}: CVE-2025-14282",
+  "@dockerDropbearCve": {
+    "description": "Server header: warning that the Docker socket forward runs through a Dropbear release affected by CVE-2025-14282 (CN-15). The CVE identifier stays as is.",
+    "placeholders": {
+      "release": {
+        "type": "String",
+        "example": "2024.86"
+      }
+    }
+  },
+  "dockerDropbearCveDetail": "This server runs Dropbear {release}, where a forwarded connection reaches the engine socket as if it came from root (CVE-2025-14282). Update Dropbear to 2025.89 or later.",
+  "@dockerDropbearCveDetail": {
+    "description": "Tooltip of the server header's Dropbear warning (CN-15): what the vulnerability means for the Docker socket forward and how to fix it.",
+    "placeholders": {
+      "release": {
+        "type": "String",
+        "example": "2024.86"
+      }
+    }
   },
   "dockerShellOpen": "Open a shell",
   "@dockerShellOpen": {
@@ -12751,6 +12835,128 @@
   "@keyActionRestart": {
     "description": "Single-key verb (R) in a list: asks to restart the row's container or unit, with its confirmation (PLT-06)."
   },
+  "diskExplorerOpen": "Explore space",
+  "@diskExplorerOpen": {
+    "description": "A mount's details: opens the disk space explorer on the mount (DSK-07)."
+  },
+  "diskExplorerTitle": "Space on {mount}",
+  "@diskExplorerTitle": {
+    "description": "Disk space explorer title: the mount point it explores.",
+    "placeholders": {
+      "mount": {
+        "type": "String",
+        "example": "/var"
+      }
+    }
+  },
+  "diskExplorerRefresh": "Read again",
+  "@diskExplorerRefresh": {
+    "description": "Disk space explorer: reads the shown folder again."
+  },
+  "diskExplorerUp": "Up a folder",
+  "@diskExplorerUp": {
+    "description": "Disk space explorer: shows the folder above, never above the mount point."
+  },
+  "diskExplorerAsRoot": "Read as root",
+  "@diskExplorerAsRoot": {
+    "description": "Disk space explorer, in admin mode: reads folders as root."
+  },
+  "diskExplorerAsRootDetail": "Counts what the login user may not read.",
+  "@diskExplorerAsRootDetail": {
+    "description": "Disk space explorer: what reading as root changes."
+  },
+  "diskExplorerReading": "Reading {path}… A large folder takes a while.",
+  "@diskExplorerReading": {
+    "description": "Disk space explorer: a folder is being read with du.",
+    "placeholders": {
+      "path": {
+        "type": "String",
+        "example": "/var"
+      }
+    }
+  },
+  "diskExplorerRetry": "Try again",
+  "@diskExplorerRetry": {
+    "description": "Disk space explorer: reads a folder that failed again."
+  },
+  "diskExplorerTotal": "{size} in this folder",
+  "@diskExplorerTotal": {
+    "description": "Disk space explorer: the shown folder's total size.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "4.2 GB"
+      }
+    }
+  },
+  "diskExplorerIncomplete": "Some folders here could not be read as the login user, so the sizes are at least this. Turn on admin mode to read them as root.",
+  "@diskExplorerIncomplete": {
+    "description": "Disk space explorer: du could not read part of the folder; admin mode is off."
+  },
+  "diskExplorerIncompleteAdmin": "Some folders here could not be read as the login user, so the sizes are at least this. Read as root to count them.",
+  "@diskExplorerIncompleteAdmin": {
+    "description": "Disk space explorer: du could not read part of the folder; admin mode is on."
+  },
+  "diskExplorerIncompleteAsRoot": "Some folders here could not be read even as root, so the sizes are at least this.",
+  "@diskExplorerIncompleteAsRoot": {
+    "description": "Disk space explorer: du could not read part of the folder as root."
+  },
+  "diskExplorerTruncated": "Showing the {count} largest entries.",
+  "@diskExplorerTruncated": {
+    "description": "Disk space explorer: the folder holds more entries than listed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1000"
+      }
+    }
+  },
+  "diskExplorerEmpty": "This folder is empty.",
+  "@diskExplorerEmpty": {
+    "description": "Disk space explorer: a folder with no entries."
+  },
+  "diskExplorerEntrySize": "{size} · {percent} %",
+  "@diskExplorerEntrySize": {
+    "description": "Disk space explorer: an entry's size and its share of the folder.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "1.2 GB"
+      },
+      "percent": {
+        "type": "int",
+        "example": "42"
+      }
+    }
+  },
+  "diskExplorerNoLink": "Not connected, so nothing was read.",
+  "@diskExplorerNoLink": {
+    "description": "Disk space explorer failure: no link."
+  },
+  "diskExplorerAdminRequired": "Reading as root needs admin mode.",
+  "@diskExplorerAdminRequired": {
+    "description": "Disk space explorer failure: an elevated read without admin mode."
+  },
+  "diskExplorerRefused": "Elevation was refused, so nothing was read.",
+  "@diskExplorerRefused": {
+    "description": "Disk space explorer failure: sudo refused."
+  },
+  "diskExplorerNotFound": "This folder is not there any more.",
+  "@diskExplorerNotFound": {
+    "description": "Disk space explorer failure: the folder is gone."
+  },
+  "diskExplorerDenied": "The login user may not read this folder. Turn on admin mode to read it as root.",
+  "@diskExplorerDenied": {
+    "description": "Disk space explorer failure: permission denied."
+  },
+  "diskExplorerUnreadable": "du is not installed on this server, or printed something else.",
+  "@diskExplorerUnreadable": {
+    "description": "Disk space explorer failure: du missing or unreadable output."
+  },
+  "diskExplorerTransport": "The read failed or ran past its 3 minutes. Try a folder further down.",
+  "@diskExplorerTransport": {
+    "description": "Disk space explorer failure: link failed or the read timed out (kDiskUsageTimeout)."
+  },
   "paletteActions": "Actions",
   "@paletteActions": {
     "description": "Command palette: the path of the app's menu commands."
@@ -12988,5 +13194,205 @@
         "type": "String"
       }
     }
+  },
+  "dockerTabApps": "Apps",
+  "@dockerTabApps": {
+    "description": "Docker sub-tab (DKE-08): each running container's web addresses and ports, with port forwards."
+  },
+  "appsForwardNote": "A forward listens on 127.0.0.1 on this device while it is open, and any app on this device can reach it. Forwards close when you leave this server's Docker tab.",
+  "@appsForwardNote": {
+    "description": "Apps sub-tab, above its content (NET-11, 03 §5.11): what a port forward exposes and when it closes."
+  },
+  "appsForwardPort": "Forward a port…",
+  "@appsForwardPort": {
+    "description": "Apps sub-tab button that opens the dialog for a forward to any host and port the server reaches (NET-11)."
+  },
+  "appsForwardsTitle": "Forwards",
+  "@appsForwardsTitle": {
+    "description": "Apps sub-tab heading over the open and ended port forwards."
+  },
+  "appsListFailed": "The container list could not be read.",
+  "@appsListFailed": {
+    "description": "Apps sub-tab when the container list failed and none was read before."
+  },
+  "appsNone": "No running container publishes a TCP port or names a web address.",
+  "@appsNone": {
+    "description": "Apps sub-tab when no running container has a link or a TCP port."
+  },
+  "appsForward": "Forward",
+  "@appsForward": {
+    "description": "Button on a container port row that forwards it to this device and opens it in the browser (DKE-08, DKE-09)."
+  },
+  "appsForwardLabel": "Forward {port}",
+  "@appsForwardLabel": {
+    "description": "What assistive technology reads for a port row's Forward button.",
+    "placeholders": {
+      "port": {
+        "type": "String"
+      }
+    }
+  },
+  "appsPortPublished": "{address} → {port}/tcp",
+  "@appsPortPublished": {
+    "description": "A published container port: the host address and port Docker publishes it on, then the container port. '*' as the address means every interface.",
+    "placeholders": {
+      "address": {
+        "type": "String"
+      },
+      "port": {
+        "type": "String"
+      }
+    }
+  },
+  "appsPortUnpublished": "{port}/tcp, not published",
+  "@appsPortUnpublished": {
+    "description": "A container port Docker does not publish; a forward reaches it at the container's address (DKE-09).",
+    "placeholders": {
+      "port": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardEnded": "{target}: {reason}",
+  "@appsForwardEnded": {
+    "description": "An ended port forward: its target, then why it ended (one of the appsForwardEnd texts).",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardListening": "127.0.0.1:{localPort} → {target}",
+  "@appsForwardListening": {
+    "description": "An open port forward: the local port on this device, then the target as the server reaches it.",
+    "placeholders": {
+      "localPort": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardOpening": "{target}: opening a local port…",
+  "@appsForwardOpening": {
+    "description": "A port forward the engine has not reported listening yet.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardForwardingDisabled": "The server refused to forward the last connection. AllowTcpForwarding may be off in its sshd_config.",
+  "@appsForwardForwardingDisabled": {
+    "description": "Under an open forward whose last connection the server refused (03 §5.3)."
+  },
+  "appsForwardConnectFailed": "The last connection did not reach {target}.",
+  "@appsForwardConnectFailed": {
+    "description": "Under an open forward whose last connection could not open its channel.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardConnections": "{count, plural, =0{No connections} =1{1 connection} other{{count} connections}}",
+  "@appsForwardConnections": {
+    "description": "Under an open forward: how many connections it relays now.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsForwardOpen": "Open the forward to {target} in the browser",
+  "@appsForwardOpen": {
+    "description": "Tooltip of an open forward's open button.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardStop": "Stop forwarding {target}",
+  "@appsForwardStop": {
+    "description": "Tooltip of an open forward's stop button.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardDismiss": "Dismiss the forward to {target}",
+  "@appsForwardDismiss": {
+    "description": "Tooltip of an ended forward's dismiss button.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "appsForwardEndClosed": "stopped",
+  "@appsForwardEndClosed": {
+    "description": "Why a port forward ended, after its target in appsForwardEnded (03 §5.11)."
+  },
+  "appsForwardEndNoLink": "not connected to the server",
+  "@appsForwardEndNoLink": {
+    "description": "Why a port forward ended, after its target in appsForwardEnded (03 §5.11)."
+  },
+  "appsForwardEndLinkLost": "the connection to the server was lost",
+  "@appsForwardEndLinkLost": {
+    "description": "Why a port forward ended, after its target in appsForwardEnded (03 §5.11)."
+  },
+  "appsForwardEndBindFailed": "this device could not open a local port",
+  "@appsForwardEndBindFailed": {
+    "description": "Why a port forward ended, after its target in appsForwardEnded (03 §5.11)."
+  },
+  "appsForwardEndInvalidTarget": "the host or port is not valid",
+  "@appsForwardEndInvalidTarget": {
+    "description": "Why a port forward ended, after its target in appsForwardEnded (03 §5.11)."
+  },
+  "appsForwardEndTooMany": "too many forwards are open",
+  "@appsForwardEndTooMany": {
+    "description": "Why a port forward ended, after its target in appsForwardEnded (03 §5.11)."
+  },
+  "appsForwardEndForgotten": "the server was removed or now names another machine",
+  "@appsForwardEndForgotten": {
+    "description": "Why a port forward ended, after its target in appsForwardEnded (03 §5.11)."
+  },
+  "appsForwardDialogTitle": "Forward a port",
+  "@appsForwardDialogTitle": {
+    "description": "Title of the dialog for a forward to any host and port (NET-11)."
+  },
+  "appsForwardDialogBody": "Klabautermann forwards this host and port, as the server reaches them, to a port on this device.",
+  "@appsForwardDialogBody": {
+    "description": "Body of the forward dialog."
+  },
+  "appsForwardHost": "Host",
+  "@appsForwardHost": {
+    "description": "Forward dialog field: the host as the server reaches it."
+  },
+  "appsForwardPortField": "Port",
+  "@appsForwardPortField": {
+    "description": "Forward dialog field: the port."
+  },
+  "appsForwardHostProblem": "Enter a host name or address without spaces.",
+  "@appsForwardHostProblem": {
+    "description": "Forward dialog error when the host is empty or holds a space or control character."
+  },
+  "appsForwardPortProblem": "Enter a port from 1 to 65535.",
+  "@appsForwardPortProblem": {
+    "description": "Forward dialog error when the port is not a number from 1 to 65535."
+  },
+  "appsForwardCancel": "Cancel",
+  "@appsForwardCancel": {
+    "description": "Forward dialog button that closes it without forwarding."
+  },
+  "appsForwardStart": "Forward",
+  "@appsForwardStart": {
+    "description": "Forward dialog button that starts the forward."
   }
 }

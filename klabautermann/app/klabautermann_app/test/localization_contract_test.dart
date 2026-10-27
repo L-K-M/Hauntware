@@ -36,6 +36,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/accounts.dart': {"', '", r"'${account.uid}'", "''", "','"},
   // An account read's request id, matched in the engine's answer.
   'lib/controllers/account_reads.dart': {r"'accounts-${_count++}'"},
+  'lib/controllers/disk_usage_reads.dart': {r"'disk-usage-${_count++}'"},
+  // A folder's path on the server, built from its parent and its name.
+  'lib/ui/disk_explorer.dart': {"'/'", r"'/$name'", r"'$_path/$name'"},
+  // A timer detail read's request id, matched in the engine's answer.
+  'lib/controllers/timer_detail_reads.dart': {r"'timer-detail-${_count++}'"},
   'lib/app.dart': {
     // The settings route's Navigator name.
     "'/settings'",
@@ -93,6 +98,26 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The not-saved diagnostic; the General tab prints it and shows its own
   // ARB text (settingsLogDisplayNotSaved).
+  // Forward ids the app mints for the engine (NET-11).
+  'lib/controllers/port_forwards.dart': {r"'forward-${_count++}'"},
+  // The Apps sub-tab's Docker list values (state, network mode, port
+  // type, bound addresses), the loopback address and scheme a forward
+  // opens at, and host:port notation, none of them prose (DKE-08).
+  'lib/ui/docker/apps_panel.dart': {
+    "'running'",
+    "'host'",
+    "'tcp'",
+    "'127.0.0.1'",
+    "''",
+    "'0.0.0.0'",
+    "'::'",
+    "'http'",
+    r"'${port.hostIp ?? '*'}:$public'",
+    "'*'",
+    "':'",
+    r"'[${forward.host}]:${forward.port}'",
+    r"'${forward.host}:${forward.port}'",
+  },
   'lib/controllers/log_display.dart': {
     r"'The log display was not saved: $error'",
   },

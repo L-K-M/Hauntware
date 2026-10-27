@@ -46,7 +46,13 @@ export 'package:seance_core/seance_core.dart'
 // The signal, unit verb and power verb an ActionIntent names (PRC-02,
 // SVC-03, SYS-03).
 export 'package:klabautermann_host/klabautermann_host.dart'
-    show KillSignal, PowerVerb, SystemctlVerb;
+    show
+        KillSignal,
+        PowerVerb,
+        SystemctlVerb,
+        OnCalendarElapse,
+        OnCalendarResult,
+        TimerDetail;
 
 // FL-21's monitor set rules, which the engine enforces and the app's
 // toggles offer (03 §4.3 step 4).
@@ -94,6 +100,8 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         AccountsSnapshot,
         CpuPercentages,
         CronSnapshot,
+        DiskUsageEntry,
+        DiskUsageListing,
         DiskRate,
         FsMount,
         FsSnapshot,
@@ -319,12 +327,18 @@ export 'src/docker/docker_ladder.dart'
         DockerRank,
         DockerRootEquivalence,
         DockerRouteLabel;
-// CN-09's endpoint choice (D54): the check a typed or stored socket path
-// gets before it is kept or sent, and the Access tab's Docker facts
-// (CN-24) from a server's DockerEndpointState.
+// CN-09's endpoint choice (D54) and CN-16's docker program: the checks a
+// typed or stored path gets before it is kept or sent, and the Access
+// tab's Docker facts (CN-24) from a server's DockerEndpointState.
 export 'src/docker/docker_ladder.dart'
-    show DockerSocketPathProblem, dockerSocketPathProblem;
+    show
+        DockerSocketPathProblem,
+        dockerProgramPathProblem,
+        dockerSocketPathProblem;
 export 'src/docker/docker_access.dart' show dockerAccessFacts;
+// CN-15: the Dropbear release a socket forward runs through, when it
+// exposes forwarded connections' peer credentials.
+export 'src/docker/dropbear.dart' show DropbearRelease;
 // When an update check reads a registry again (IMG-05, D68).
 export 'src/docker/image_updates.dart'
     show kImageUpdateBackoff, kImageUpdateFresh;

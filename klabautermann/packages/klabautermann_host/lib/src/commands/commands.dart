@@ -382,6 +382,15 @@ const kMountsFindmntMarker = '== findmnt';
 const kMountsProcMarker = '== proc';
 const kMountsSwapsMarker = '== swaps';
 
+/// The line [HostCommands.diskUsage] prints before what `du` said on
+/// stderr, which `parseDiskUsage` reads for folders it could not read.
+const kDiskUsageErrorsMarker = '== du errors';
+
+/// The most entries one [HostCommands.diskUsage] read lists, largest
+/// first [E]: a folder of mail or cache files can hold far more than a
+/// list is useful for.
+const kDiskUsageEntries = 1000;
+
 /// [HostCommands.firewall]'s section markers, each printed only where its
 /// tool is installed; firewalld's carries its state.
 const kFirewallUfwMarker = '== ufw';
@@ -531,6 +540,29 @@ abstract final class HostCommands {
   }) {
     _check(ArgValidators.unitName, unit);
     return [...manager._head, '--no-ask-password', verb.wireName, '--', unit];
+  }
+
+  /// `systemctl show` of one timer's triggers and randomized delay
+  /// (JOB-02, 03 §7.7, D57): the same read as the sampler's on-demand
+  /// `timer_detail` collector, run on a channel of its own; its output is
+  /// that collector's payload, which `parseTimerDetail` reads.
+  static List<String> timerDetail(
+    String unit, {
+    UnitManager manager = const UnitManager.system(),
+  }) {
+    _check(ArgValidators.timerUnit, unit);
+    return [
+      ...manager._head,
+      'show',
+      '-p',
+      'TimersCalendar',
+      '-p',
+      'TimersMonotonic',
+      '-p',
+      'RandomizedDelayUSec',
+      '--',
+      unit,
+    ];
   }
 
   /// `systemctl cat -- <unit>`: the unit file and its drop-ins, each
@@ -1095,6 +1127,42 @@ printf '%s\\n' "\$o"''';
       'then echo "$kMountsFindmntMarker"; printf "%s\\n" "\$out"; '
       'else echo "$kMountsProcMarker"; cat /proc/self/mounts 2>/dev/null; fi; '
       'echo "$kMountsSwapsMarker"; cat /proc/swaps 2>/dev/null; exit 0';
+
+  /// DSK-07's read of one folder (03 §7.3): `du -x -k -a -d 1` over
+  /// [path] on its own filesystem, read-only, the folder's total and
+  /// each entry in it with its size in KiB, largest first and at most
+  /// [kDiskUsageEntries] of them, each marked `d` for a folder (not a
+  /// symlink) or `f` for anything else; then [kDiskUsageErrorsMarker]
+  /// and the first 2 KiB of what `du` printed on stderr, such as the
+  /// folders it could not read, in the C locale the parser matches; the
+  /// rest is drained, so `du` walks the whole folder. Portable to BusyBox and BSD `du`, which
+  /// take the same flags. `parseDiskUsage` reads it. [path] is absolute
+  /// and normalized, without a trailing slash unless it is `/`.
+  static List<String> diskUsage(String path) {
+    _check(ArgValidators.absolutePath, path);
+    if (path.contains('//') || (path.length > 1 && path.endsWith('/'))) {
+      throw HostCommandError('path not normalized', argument: path);
+    }
+    return ['sh', '-c', _kDiskUsageScript, 'klabautermann-du', path];
+  }
+
+  // fd 3 carries the listing past the command substitution, which keeps
+  // only stderr; a name with a newline in it splits into lines the
+  // parser drops, as `du` has no way to quote it.
+  static const _kDiskUsageScript =
+      'export LC_ALL=C\n'
+      't=\$(printf "\\t")\n'
+      'exec 3>&1\n'
+      'err=\$( { du -x -k -a -d 1 -- "\$1" | sort -rn | '
+      'head -n ${kDiskUsageEntries + 1} | '
+      'while IFS= read -r l; do p=\${l#*"\$t"}; '
+      'if [ -d "\$p" ] && [ ! -L "\$p" ]; then k=d; else k=f; fi; '
+      'printf "%s\\t%s\\n" "\$k" "\$l" >&3; done; } 2>&1 | '
+      '{ head -c 2048; cat >/dev/null; } )\n'
+      'exec 3>&-\n'
+      'echo "$kDiskUsageErrorsMarker"\n'
+      'printf "%s\\n" "\$err"\n'
+      'exit 0';
 
   /// The files under `/var/log` (LOG-08, 03 §7.6); `parseLogFiles`
   /// reads the output.

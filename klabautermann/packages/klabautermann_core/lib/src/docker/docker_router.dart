@@ -66,6 +66,7 @@ import 'container_logs.dart';
 import 'container_review.dart';
 import 'docker_ladder.dart';
 import 'docker_watch.dart';
+import 'dropbear.dart';
 import 'image_updates.dart';
 import 'inspect_masking.dart';
 import 'stack_sources.dart';
@@ -169,6 +170,10 @@ final class DockerRouter {
   /// socket itself. Kept apart from the sessions, which a disconnect
   /// ends, so a choice holds across links until the server is forgotten.
   final Map<String, DockerEndpointSocket> _choices = {};
+
+  /// Each server's `docker` program (CN-16), kept like the choices; a
+  /// server without one runs the `docker` on the exec `PATH`.
+  final Map<String, String> _programs = {};
 
   /// Each server's update checks (IMG-05), kept like the choices so a
   /// reconnect does not read every registry again inside six hours.
@@ -444,6 +449,26 @@ final class DockerRouter {
     _pump(session);
   }
 
+  /// Takes [request], a server's `docker` program (CN-16): a session lets
+  /// its endpoint go and resolves again with it, as for [setEndpoint].
+  /// The same program again, or one for a server outside the fleet, does
+  /// nothing.
+  void setProgram(SetDockerProgram request) {
+    final SetDockerProgram(:serverId, :program) = request;
+    if (!_fleet.contains(serverId) || _programs[serverId] == program) return;
+
+    if (program == null) {
+      _programs.remove(serverId);
+    } else {
+      _programs[serverId] = program;
+    }
+    final session = _sessions[serverId];
+    if (session == null) return;
+    _drop(session);
+    session.retries = 0;
+    _pump(session);
+  }
+
   DockerEndpointChoice _choiceOf(String serverId) =>
       _choices[serverId] ?? const DockerEndpointAuto();
 
@@ -508,6 +533,7 @@ final class DockerRouter {
     for (final serverId in serverIds) {
       _profiles.remove(serverId);
       _choices.remove(serverId);
+      _programs.remove(serverId);
       _imageUpdates.remove(serverId);
       disconnect(serverId);
     }
@@ -522,6 +548,7 @@ final class DockerRouter {
         ..._sessions.keys,
         ..._profiles.keys,
         ..._choices.keys,
+        ..._programs.keys,
       }.where((serverId) => !fleet.contains(serverId)),
     );
   }
@@ -621,6 +648,7 @@ final class DockerRouter {
       link,
       profile,
       _choices[session.serverId],
+      _programs[session.serverId],
     );
     if (epoch != session.epoch ||
         !identical(_sessions[session.serverId], session)) {
@@ -667,6 +695,7 @@ final class DockerRouter {
           )
           ..stacks = StackSources(
             socketPath: endpoint.route.socketPath,
+            dockerProgram: endpoint.route.dockerProgram,
             run: run,
             openFileSystem: link.openFileSystem,
             admin: () => _adminFor?.call(session.serverId),
@@ -740,12 +769,16 @@ final class DockerRouter {
     SshLink link,
     HostProfile profile,
     DockerEndpointSocket? choice,
+    String? program,
   ) async {
     final override = choice?.socketPath;
     // Checked before the ladder, which would throw: a stored or sent
     // path is the app's input, not a programming error.
     if (override != null && dockerSocketPathProblem(override) != null) {
       return const _Failed(DockerEndpointFailure.invalidChoice);
+    }
+    if (program != null && dockerProgramPathProblem(program) != null) {
+      return const _Failed(DockerEndpointFailure.invalidProgram);
     }
 
     final excluded = <DockerRoute>{};
@@ -760,6 +793,7 @@ final class DockerRouter {
           link,
           profile,
           override: override,
+          dockerProgram: program,
           excluding: excluded,
           adminMode: _adminFor?.call(serverId) != null,
         );
@@ -802,6 +836,10 @@ final class DockerRouter {
             ? EngineRuntime.podman
             : EngineRuntime.docker,
         mode: route.mode,
+        peerCredentialsExposedBy: route.rank == DockerRank.streamlocal
+            ? _peerCredentialsExposedBy(link)
+            : null,
+        dockerProgram: program ?? 'docker',
       );
       try {
         final negotiation = negotiateApiVersion(
@@ -1378,6 +1416,15 @@ final class DockerRouter {
     if (lowSession && session.endpoint?.route.rank != DockerRank.streamlocal) {
       session.watcher?.yieldStream();
     }
+  }
+
+  /// The Dropbear release behind [link] when it is one of CVE-2025-14282's
+  /// (CN-15).
+  static DropbearRelease? _peerCredentialsExposedBy(SshLink link) {
+    final release = DropbearRelease.fromIdentification(
+      link.seen.serverIdentification,
+    );
+    return release != null && release.exposesPeerCredentials ? release : null;
   }
 
   /// What the ladder reads of a profile: the sockets, the relays' tools

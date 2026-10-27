@@ -11,7 +11,8 @@ import 'package:klabautermann_core/src/docker/docker_router.dart';
 import 'package:klabautermann_docker/klabautermann_docker.dart'
     show kContainerTopPsArgs;
 import 'package:klabautermann_host/klabautermann_host.dart';
-import 'package:seance_core/seance_core.dart' show RemoteCommandResult, SshLink;
+import 'package:seance_core/seance_core.dart'
+    show RemoteCommandResult, SshLink, SshLinkSeen;
 import 'package:test/test.dart';
 
 import '../support/engine_daemon.dart';
@@ -201,6 +202,31 @@ void main() {
       expect(ready.negotiatedApi, const ApiVersion(1, 41));
       expect(ready.route!.runtime, EngineRuntime.podman);
       expect(ready.route!.mode, EngineMode.rootful);
+    });
+  });
+
+  group('Dropbear (CN-15)', () {
+    test('a socket forward through a Dropbear with CVE-2025-14282 names '
+        'the release; a newer one names none', () async {
+      Future<DockerEndpointRoute> routeThrough(String identification) async {
+        final h = _Harness();
+        h.forwarding
+          ..seen = SshLinkSeen(serverIdentification: identification)
+          ..daemons[_rootful] = EngineDaemon();
+        await h.open();
+        return (await h.resolve(_profile([_rootful]))).route!;
+      }
+
+      final affected = await routeThrough('SSH-2.0-dropbear_2024.86');
+      expect(affected.rank, DockerRank.streamlocal);
+      expect(
+        affected.peerCredentialsExposedBy,
+        const DropbearRelease(2024, 86),
+      );
+
+      final fixed = await routeThrough('SSH-2.0-dropbear_2025.89');
+      expect(fixed.rank, DockerRank.streamlocal);
+      expect(fixed.peerCredentialsExposedBy, isNull);
     });
   });
 
@@ -831,6 +857,71 @@ void main() {
       expect(await h.result(id), _failed(DockerQueryFailure.connectionFailed));
       expect((await h.state()).phase, DockerEndpointPhase.resolving);
       expect((await h.state()).failure, DockerEndpointFailure.unreachable);
+    });
+  });
+
+  group('docker program (CN-16)', () {
+    const snap = '/snap/bin/docker';
+
+    test('a program resolves a ready endpoint again, its route names the '
+        'program, and none goes back to the docker on the PATH', () async {
+      final h = _Harness();
+      h.forwarding.daemons[_rootful] = EngineDaemon();
+      await h.open();
+      final before = await h.resolve(_profile([_rootful]));
+      expect(before.route!.dockerProgram, 'docker');
+
+      h.router.setProgram(
+        const SetDockerProgram(serverId: _srv, program: snap),
+      );
+      expect((await h.state()).phase, DockerEndpointPhase.resolving);
+      final ready = await h.state();
+      expect(ready.phase, DockerEndpointPhase.ready);
+      expect(ready.route!.dockerProgram, snap);
+
+      h.router.setProgram(const SetDockerProgram(serverId: _srv));
+      expect((await h.state()).phase, DockerEndpointPhase.resolving);
+      expect((await h.state()).route!.dockerProgram, 'docker');
+    });
+
+    test('a program that is no absolute path fails as an invalid program '
+        'without running the ladder', () async {
+      final h = _Harness();
+      h.forwarding.daemons[_rootful] = EngineDaemon();
+      await h.open();
+      await h.resolve(_profile([_rootful]));
+      final opened = h.forwarding.opens.length;
+
+      for (final bad in ['docker', '/a\nb', '']) {
+        h.router.setProgram(SetDockerProgram(serverId: _srv, program: bad));
+        expect((await h.state()).phase, DockerEndpointPhase.resolving);
+        final failed = await h.state();
+        expect(failed.phase, DockerEndpointPhase.failed, reason: bad);
+        expect(failed.failure, DockerEndpointFailure.invalidProgram);
+      }
+      expect(h.forwarding.opens, hasLength(opened));
+      expect(h.forwarding.commands, isEmpty);
+    });
+
+    test('the same program again, or one for a server outside the fleet, '
+        'changes nothing', () async {
+      final h = _Harness();
+      h.forwarding.daemons[_rootful] = EngineDaemon();
+      await h.open();
+      await h.resolve(_profile([_rootful]));
+      const chosen = SetDockerProgram(serverId: _srv, program: snap);
+      h.router.setProgram(chosen);
+      expect((await h.state()).phase, DockerEndpointPhase.resolving);
+      expect((await h.state()).phase, DockerEndpointPhase.ready);
+
+      h.router
+        ..setProgram(chosen)
+        ..setProgram(
+          const SetDockerProgram(serverId: 'srv-elsewhere', program: snap),
+        );
+      // The next event is the query's answer: no state went out between.
+      h.query(const DockerEngineQuery());
+      expect(await h.next(), isA<DockerResult>());
     });
   });
 

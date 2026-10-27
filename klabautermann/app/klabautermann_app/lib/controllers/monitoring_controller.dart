@@ -9,6 +9,7 @@ import 'account_reads.dart';
 import 'attention.dart';
 import 'container_columns.dart';
 import 'container_terminals.dart';
+import 'disk_usage_reads.dart';
 import 'docker_controller.dart';
 import 'docker_endpoint_choices.dart';
 import 'history_reads.dart';
@@ -16,7 +17,9 @@ import 'job_history_reads.dart';
 import 'log_reads.dart';
 import 'log_streams.dart';
 import 'package_reads.dart';
+import 'port_forwards.dart';
 import 'stack_folders.dart';
+import 'timer_detail_reads.dart';
 import 'tls_endpoints.dart';
 
 /// How long a server's link outlives the last view that opened it, as long
@@ -173,6 +176,9 @@ final class MonitoringController extends ChangeNotifier {
     packages = PackageReads(_engine);
     rollups = HistoryReads(_engine);
     accounts = AccountReads(_engine);
+    diskUsage = DiskUsageReads(_engine);
+    timerDetails = TimerDetailReads(_engine);
+    forwards = PortForwardsController(_engine);
     docker = DockerController(
       _engine,
       endpointChoices: dockerEndpointChoices,
@@ -222,10 +228,22 @@ final class MonitoringController extends ChangeNotifier {
   /// own beside [logs].
   late final AccountReads accounts;
 
+  /// The disk space explorer's folder reads (DSK-07), a concern of its
+  /// own beside [logs].
+  late final DiskUsageReads diskUsage;
+
+  /// The Jobs tab's timer reads (JOB-02), a concern of its own beside
+  /// [logs].
+  late final TimerDetailReads timerDetails;
+
   /// Each server's Docker endpoint, which the server header names, and
   /// the engine details the Docker tab shows (03 §5.9, §10.2): a concern
   /// of its own for this engine run, listening beside [logs].
   late final DockerController docker;
+
+  /// The port forwards this run opened (NET-11, DKE-09), a concern of its
+  /// own beside [docker].
+  late final PortForwardsController forwards;
 
   final EngineClient _engine;
   final Duration _linkGrace;
@@ -846,6 +864,9 @@ final class MonitoringController extends ChangeNotifier {
     packages.dispose();
     rollups.dispose();
     accounts.dispose();
+    diskUsage.dispose();
+    timerDetails.dispose();
+    forwards.dispose();
     docker.dispose();
     _onEngineDone();
     for (final refresh in _refreshes.toList()) {

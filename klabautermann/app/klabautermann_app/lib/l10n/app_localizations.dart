@@ -5208,11 +5208,35 @@ abstract class AppLocalizations {
   /// **'systemd timer'**
   String get jobsSourceTimer;
 
-  /// Schedule of a systemd timer: this version reads no timer's OnCalendar or monotonic triggers or its RandomizedDelaySec, so they are unknown; its next run comes from systemd's own timer list.
+  /// Schedule column of a systemd timer: the timer list carries no OnCalendar or monotonic triggers; its details read them (JOB-02).
   ///
   /// In en, this message translates to:
-  /// **'Triggers are not read in this version.'**
+  /// **'In its details'**
   String get jobsTimerTriggersUnread;
+
+  /// Timer details: systemctl show and systemd-analyze calendar are running for the timer's triggers and next runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the timer\'s triggers…'**
+  String get jobsTimerTriggersReading;
+
+  /// Timer details: no link to read the triggers over.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected, so the triggers were not read.'**
+  String get jobsTimerTriggersNoLink;
+
+  /// Timer details: systemctl is missing or the unit name is not a timer's.
+  ///
+  /// In en, this message translates to:
+  /// **'systemd did not say what starts this timer.'**
+  String get jobsTimerTriggersUnreadable;
+
+  /// Timer details: the link failed or the read timed out.
+  ///
+  /// In en, this message translates to:
+  /// **'The triggers could not be read. Close and open the details to try again.'**
+  String get jobsTimerTriggersFailed;
 
   /// Label of a cron line's schedule fields exactly as the crontab writes them, in a job's details.
   ///
@@ -7744,6 +7768,12 @@ abstract class AppLocalizations {
   /// **'No Engine API route: the chosen socket path is not valid'**
   String get dockerTransportInvalidChoice;
 
+  /// The server header's Docker transport label (03 §5.9, E4) when the docker program path set for the server (CN-16) is not an absolute path.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: the docker program path is not valid'**
+  String get dockerTransportInvalidProgram;
+
   /// Server header: the server allows few SSH sessions, so Docker shares them sparingly (03 §5.2).
   ///
   /// In en, this message translates to:
@@ -7887,6 +7917,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The socket path chosen for this server is not a valid absolute path. Choose another socket below.'**
   String get dockerGateInvalidChoice;
+
+  /// Docker tab, shown instead of its panels under accessPanelHiddenTitle: the docker program path set for the server (CN-16) is not valid.
+  ///
+  /// In en, this message translates to:
+  /// **'The docker program path set for this server is not a valid absolute path.'**
+  String get dockerGateInvalidProgram;
 
   /// Docker tab: asks again for the Docker endpoint or the engine details after a failure.
   ///
@@ -8271,6 +8307,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The path cannot contain line breaks or NUL characters.'**
   String get dockerSocketPathUnsafe;
+
+  /// Docker tab engine strip (CN-16): label before the docker program the server's relays and compose commands run. 'docker' is the program's name, kept lowercase.
+  ///
+  /// In en, this message translates to:
+  /// **'docker program'**
+  String get dockerProgramLabel;
+
+  /// Docker tab engine strip (CN-16): shown as the docker program when no path is set, so the server runs the docker its PATH finds.
+  ///
+  /// In en, this message translates to:
+  /// **'docker on the PATH'**
+  String get dockerProgramDefault;
+
+  /// Docker tab engine strip (CN-16): button that opens the dialog to type the docker program's path.
+  ///
+  /// In en, this message translates to:
+  /// **'Change…'**
+  String get dockerProgramChange;
+
+  /// Docker tab engine strip (CN-16): what assistive technology reads for the Change… button beside the docker program.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the docker program'**
+  String get dockerProgramChangeLabel;
+
+  /// Docker tab engine strip (CN-16): button that clears the docker program path, so the server runs the docker its PATH finds.
+  ///
+  /// In en, this message translates to:
+  /// **'Use docker on the PATH'**
+  String get dockerProgramReset;
+
+  /// Title of the dialog that asks for the docker program's path (CN-16).
+  ///
+  /// In en, this message translates to:
+  /// **'docker program'**
+  String get dockerProgramTitle;
+
+  /// Body of the docker program dialog (CN-16).
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann runs this docker for relays and compose commands on this server. Set it when docker is outside the PATH of a non-interactive session, as with Snap\'s /snap/bin/docker.'**
+  String get dockerProgramBody;
+
+  /// Label of the docker program dialog's path field (CN-16).
+  ///
+  /// In en, this message translates to:
+  /// **'Program path'**
+  String get dockerProgramField;
+
+  /// Hint in the docker program dialog's path field (CN-16): an example absolute path.
+  ///
+  /// In en, this message translates to:
+  /// **'/snap/bin/docker'**
+  String get dockerProgramHint;
+
+  /// Top toast (CN-16) when the docker program applied but could not be saved to the settings file.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save the docker program, so it applies only until Klabautermann quits.'**
+  String get dockerProgramNotSaved;
 
   /// Appearance tab: heading of the preset grid.
   ///
@@ -10173,6 +10269,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The output was longer than 1 MiB; the rest was dropped.'**
   String get dockerCommandTruncated;
+
+  /// Server header: warning that the Docker socket forward runs through a Dropbear release affected by CVE-2025-14282 (CN-15). The CVE identifier stays as is.
+  ///
+  /// In en, this message translates to:
+  /// **'Dropbear {release}: CVE-2025-14282'**
+  String dockerDropbearCve(String release);
+
+  /// Tooltip of the server header's Dropbear warning (CN-15): what the vulnerability means for the Docker socket forward and how to fix it.
+  ///
+  /// In en, this message translates to:
+  /// **'This server runs Dropbear {release}, where a forwarded connection reaches the engine socket as if it came from root (CVE-2025-14282). Update Dropbear to 2025.89 or later.'**
+  String dockerDropbearCveDetail(String release);
 
   /// Tooltip of the button on a container's details that opens a shell in the container (CTX-07).
   ///
@@ -13474,6 +13582,138 @@ abstract class AppLocalizations {
   /// **'Restart'**
   String get keyActionRestart;
 
+  /// A mount's details: opens the disk space explorer on the mount (DSK-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Explore space'**
+  String get diskExplorerOpen;
+
+  /// Disk space explorer title: the mount point it explores.
+  ///
+  /// In en, this message translates to:
+  /// **'Space on {mount}'**
+  String diskExplorerTitle(String mount);
+
+  /// Disk space explorer: reads the shown folder again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get diskExplorerRefresh;
+
+  /// Disk space explorer: shows the folder above, never above the mount point.
+  ///
+  /// In en, this message translates to:
+  /// **'Up a folder'**
+  String get diskExplorerUp;
+
+  /// Disk space explorer, in admin mode: reads folders as root.
+  ///
+  /// In en, this message translates to:
+  /// **'Read as root'**
+  String get diskExplorerAsRoot;
+
+  /// Disk space explorer: what reading as root changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Counts what the login user may not read.'**
+  String get diskExplorerAsRootDetail;
+
+  /// Disk space explorer: a folder is being read with du.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading {path}… A large folder takes a while.'**
+  String diskExplorerReading(String path);
+
+  /// Disk space explorer: reads a folder that failed again.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get diskExplorerRetry;
+
+  /// Disk space explorer: the shown folder's total size.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} in this folder'**
+  String diskExplorerTotal(String size);
+
+  /// Disk space explorer: du could not read part of the folder; admin mode is off.
+  ///
+  /// In en, this message translates to:
+  /// **'Some folders here could not be read as the login user, so the sizes are at least this. Turn on admin mode to read them as root.'**
+  String get diskExplorerIncomplete;
+
+  /// Disk space explorer: du could not read part of the folder; admin mode is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Some folders here could not be read as the login user, so the sizes are at least this. Read as root to count them.'**
+  String get diskExplorerIncompleteAdmin;
+
+  /// Disk space explorer: du could not read part of the folder as root.
+  ///
+  /// In en, this message translates to:
+  /// **'Some folders here could not be read even as root, so the sizes are at least this.'**
+  String get diskExplorerIncompleteAsRoot;
+
+  /// Disk space explorer: the folder holds more entries than listed.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the {count} largest entries.'**
+  String diskExplorerTruncated(int count);
+
+  /// Disk space explorer: a folder with no entries.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder is empty.'**
+  String get diskExplorerEmpty;
+
+  /// Disk space explorer: an entry's size and its share of the folder.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} · {percent} %'**
+  String diskExplorerEntrySize(String size, int percent);
+
+  /// Disk space explorer failure: no link.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected, so nothing was read.'**
+  String get diskExplorerNoLink;
+
+  /// Disk space explorer failure: an elevated read without admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading as root needs admin mode.'**
+  String get diskExplorerAdminRequired;
+
+  /// Disk space explorer failure: sudo refused.
+  ///
+  /// In en, this message translates to:
+  /// **'Elevation was refused, so nothing was read.'**
+  String get diskExplorerRefused;
+
+  /// Disk space explorer failure: the folder is gone.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder is not there any more.'**
+  String get diskExplorerNotFound;
+
+  /// Disk space explorer failure: permission denied.
+  ///
+  /// In en, this message translates to:
+  /// **'The login user may not read this folder. Turn on admin mode to read it as root.'**
+  String get diskExplorerDenied;
+
+  /// Disk space explorer failure: du missing or unreadable output.
+  ///
+  /// In en, this message translates to:
+  /// **'du is not installed on this server, or printed something else.'**
+  String get diskExplorerUnreadable;
+
+  /// Disk space explorer failure: link failed or the read timed out (kDiskUsageTimeout).
+  ///
+  /// In en, this message translates to:
+  /// **'The read failed or ran past its 3 minutes. Try a folder further down.'**
+  String get diskExplorerTransport;
+
   /// Command palette: the path of the app's menu commands.
   ///
   /// In en, this message translates to:
@@ -13659,6 +13899,210 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{name}-inspect.json'**
   String dockerDetailsRawFileName(String name);
+
+  /// Docker sub-tab (DKE-08): each running container's web addresses and ports, with port forwards.
+  ///
+  /// In en, this message translates to:
+  /// **'Apps'**
+  String get dockerTabApps;
+
+  /// Apps sub-tab, above its content (NET-11, 03 §5.11): what a port forward exposes and when it closes.
+  ///
+  /// In en, this message translates to:
+  /// **'A forward listens on 127.0.0.1 on this device while it is open, and any app on this device can reach it. Forwards close when you leave this server\'s Docker tab.'**
+  String get appsForwardNote;
+
+  /// Apps sub-tab button that opens the dialog for a forward to any host and port the server reaches (NET-11).
+  ///
+  /// In en, this message translates to:
+  /// **'Forward a port…'**
+  String get appsForwardPort;
+
+  /// Apps sub-tab heading over the open and ended port forwards.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwards'**
+  String get appsForwardsTitle;
+
+  /// Apps sub-tab when the container list failed and none was read before.
+  ///
+  /// In en, this message translates to:
+  /// **'The container list could not be read.'**
+  String get appsListFailed;
+
+  /// Apps sub-tab when no running container has a link or a TCP port.
+  ///
+  /// In en, this message translates to:
+  /// **'No running container publishes a TCP port or names a web address.'**
+  String get appsNone;
+
+  /// Button on a container port row that forwards it to this device and opens it in the browser (DKE-08, DKE-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Forward'**
+  String get appsForward;
+
+  /// What assistive technology reads for a port row's Forward button.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward {port}'**
+  String appsForwardLabel(String port);
+
+  /// A published container port: the host address and port Docker publishes it on, then the container port. '*' as the address means every interface.
+  ///
+  /// In en, this message translates to:
+  /// **'{address} → {port}/tcp'**
+  String appsPortPublished(String address, String port);
+
+  /// A container port Docker does not publish; a forward reaches it at the container's address (DKE-09).
+  ///
+  /// In en, this message translates to:
+  /// **'{port}/tcp, not published'**
+  String appsPortUnpublished(String port);
+
+  /// An ended port forward: its target, then why it ended (one of the appsForwardEnd texts).
+  ///
+  /// In en, this message translates to:
+  /// **'{target}: {reason}'**
+  String appsForwardEnded(String target, String reason);
+
+  /// An open port forward: the local port on this device, then the target as the server reaches it.
+  ///
+  /// In en, this message translates to:
+  /// **'127.0.0.1:{localPort} → {target}'**
+  String appsForwardListening(String localPort, String target);
+
+  /// A port forward the engine has not reported listening yet.
+  ///
+  /// In en, this message translates to:
+  /// **'{target}: opening a local port…'**
+  String appsForwardOpening(String target);
+
+  /// Under an open forward whose last connection the server refused (03 §5.3).
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused to forward the last connection. AllowTcpForwarding may be off in its sshd_config.'**
+  String get appsForwardForwardingDisabled;
+
+  /// Under an open forward whose last connection could not open its channel.
+  ///
+  /// In en, this message translates to:
+  /// **'The last connection did not reach {target}.'**
+  String appsForwardConnectFailed(String target);
+
+  /// Under an open forward: how many connections it relays now.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No connections} =1{1 connection} other{{count} connections}}'**
+  String appsForwardConnections(int count);
+
+  /// Tooltip of an open forward's open button.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the forward to {target} in the browser'**
+  String appsForwardOpen(String target);
+
+  /// Tooltip of an open forward's stop button.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop forwarding {target}'**
+  String appsForwardStop(String target);
+
+  /// Tooltip of an ended forward's dismiss button.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss the forward to {target}'**
+  String appsForwardDismiss(String target);
+
+  /// Why a port forward ended, after its target in appsForwardEnded (03 §5.11).
+  ///
+  /// In en, this message translates to:
+  /// **'stopped'**
+  String get appsForwardEndClosed;
+
+  /// Why a port forward ended, after its target in appsForwardEnded (03 §5.11).
+  ///
+  /// In en, this message translates to:
+  /// **'not connected to the server'**
+  String get appsForwardEndNoLink;
+
+  /// Why a port forward ended, after its target in appsForwardEnded (03 §5.11).
+  ///
+  /// In en, this message translates to:
+  /// **'the connection to the server was lost'**
+  String get appsForwardEndLinkLost;
+
+  /// Why a port forward ended, after its target in appsForwardEnded (03 §5.11).
+  ///
+  /// In en, this message translates to:
+  /// **'this device could not open a local port'**
+  String get appsForwardEndBindFailed;
+
+  /// Why a port forward ended, after its target in appsForwardEnded (03 §5.11).
+  ///
+  /// In en, this message translates to:
+  /// **'the host or port is not valid'**
+  String get appsForwardEndInvalidTarget;
+
+  /// Why a port forward ended, after its target in appsForwardEnded (03 §5.11).
+  ///
+  /// In en, this message translates to:
+  /// **'too many forwards are open'**
+  String get appsForwardEndTooMany;
+
+  /// Why a port forward ended, after its target in appsForwardEnded (03 §5.11).
+  ///
+  /// In en, this message translates to:
+  /// **'the server was removed or now names another machine'**
+  String get appsForwardEndForgotten;
+
+  /// Title of the dialog for a forward to any host and port (NET-11).
+  ///
+  /// In en, this message translates to:
+  /// **'Forward a port'**
+  String get appsForwardDialogTitle;
+
+  /// Body of the forward dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann forwards this host and port, as the server reaches them, to a port on this device.'**
+  String get appsForwardDialogBody;
+
+  /// Forward dialog field: the host as the server reaches it.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get appsForwardHost;
+
+  /// Forward dialog field: the port.
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get appsForwardPortField;
+
+  /// Forward dialog error when the host is empty or holds a space or control character.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a host name or address without spaces.'**
+  String get appsForwardHostProblem;
+
+  /// Forward dialog error when the port is not a number from 1 to 65535.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a port from 1 to 65535.'**
+  String get appsForwardPortProblem;
+
+  /// Forward dialog button that closes it without forwarding.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get appsForwardCancel;
+
+  /// Forward dialog button that starts the forward.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward'**
+  String get appsForwardStart;
 }
 
 class _AppLocalizationsDelegate

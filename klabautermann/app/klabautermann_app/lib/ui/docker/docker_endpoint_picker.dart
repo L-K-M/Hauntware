@@ -20,6 +20,8 @@ const double _maxWidth = 480;
 /// engine at once, which resolves the endpoint again with it. When the
 /// endpoint settled on another socket, or none, a line says the chosen
 /// one did not answer, since the engine then tries the sockets it found.
+/// Under it, CN-16's `docker` program: the one on the exec `PATH`, or a
+/// path typed in a dialog and checked with [dockerProgramPathProblem].
 class DockerEndpointPicker extends StatelessWidget {
   const DockerEndpointPicker({
     super.key,
@@ -48,12 +50,48 @@ class DockerEndpointPicker extends StatelessWidget {
   }
 
   Future<void> _askCustom(BuildContext context, String? current) async {
+    final l10n = AppLocalizations.of(context);
     final path = await showDialog<String>(
       context: context,
-      builder: (context) => _CustomSocketDialog(initial: current),
+      builder: (context) => _PathDialog(
+        initial: current,
+        title: l10n.dockerSocketCustomTitle,
+        body: l10n.dockerSocketCustomBody,
+        field: l10n.dockerSocketCustomField,
+        hint: l10n.dockerSocketCustomHint,
+        problemOf: dockerSocketPathProblem,
+      ),
     );
     if (path == null || !context.mounted) return;
     await _choose(context, DockerEndpointCustom(path));
+  }
+
+  Future<void> _chooseProgram(BuildContext context, String? program) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final notSaved = AppLocalizations.of(context).dockerProgramNotSaved;
+    try {
+      await docker.chooseProgram(serverId, program);
+    } on Exception catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) showTopToast(overlay, message: notSaved);
+    }
+  }
+
+  Future<void> _askProgram(BuildContext context, String? current) async {
+    final l10n = AppLocalizations.of(context);
+    final path = await showDialog<String>(
+      context: context,
+      builder: (context) => _PathDialog(
+        initial: current,
+        title: l10n.dockerProgramTitle,
+        body: l10n.dockerProgramBody,
+        field: l10n.dockerProgramField,
+        hint: l10n.dockerProgramHint,
+        problemOf: dockerProgramPathProblem,
+      ),
+    );
+    if (path == null || !context.mounted) return;
+    await _chooseProgram(context, path);
   }
 
   @override
@@ -66,6 +104,7 @@ class DockerEndpointPicker extends StatelessWidget {
         final theme = Theme.of(context);
         final textScaler = MediaQuery.textScalerOf(context);
         final choice = docker.endpointChoices.choiceFor(serverId);
+        final program = docker.endpointChoices.programFor(serverId);
         final options = _options(l10n, choice, profile.value);
         final notInUse = _notInUse(choice, endpoint.value);
         return Column(
@@ -136,6 +175,26 @@ class DockerEndpointPicker extends StatelessWidget {
                   ],
                 ),
               ),
+            Wrap(
+              spacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(l10n.dockerProgramLabel),
+                Text(program ?? l10n.dockerProgramDefault),
+                TextButton(
+                  onPressed: () => unawaited(_askProgram(context, program)),
+                  child: Text(
+                    l10n.dockerProgramChange,
+                    semanticsLabel: l10n.dockerProgramChangeLabel,
+                  ),
+                ),
+                if (program != null)
+                  TextButton(
+                    onPressed: () => unawaited(_chooseProgram(context, null)),
+                    child: Text(l10n.dockerProgramReset),
+                  ),
+              ],
+            ),
           ],
         );
       },
@@ -174,8 +233,8 @@ class DockerEndpointPicker extends StatelessWidget {
   }
 
   /// The chosen socket's path when the endpoint settled on another socket
-  /// or on none; null otherwise. An invalid path has the gate's own
-  /// words.
+  /// or on none; null otherwise. An invalid path or docker program has
+  /// the gate's own words.
   static String? _notInUse(
     DockerEndpointChoice choice,
     DockerEndpointState? endpoint,
@@ -192,6 +251,7 @@ class DockerEndpointPicker extends StatelessWidget {
         :final route,
       )
           when failure != DockerEndpointFailure.invalidChoice &&
+              failure != DockerEndpointFailure.invalidProgram &&
               route?.socketPath != choice.socketPath =>
         choice.socketPath,
       _ => null,
@@ -214,18 +274,27 @@ final class _Option {
   int get hashCode => choice.hashCode;
 }
 
-/// Asks for a socket path, checked as the engine checks it before it is
-/// returned; null when cancelled.
-class _CustomSocketDialog extends StatefulWidget {
-  const _CustomSocketDialog({this.initial});
+/// Asks for a socket or program path, checked with [problemOf] as the
+/// engine checks it before it is returned; null when cancelled.
+class _PathDialog extends StatefulWidget {
+  const _PathDialog({
+    this.initial,
+    required this.title,
+    required this.body,
+    required this.field,
+    required this.hint,
+    required this.problemOf,
+  });
 
   final String? initial;
+  final String title, body, field, hint;
+  final DockerSocketPathProblem? Function(String path) problemOf;
 
   @override
-  State<_CustomSocketDialog> createState() => _CustomSocketDialogState();
+  State<_PathDialog> createState() => _PathDialogState();
 }
 
-class _CustomSocketDialogState extends State<_CustomSocketDialog> {
+class _PathDialogState extends State<_PathDialog> {
   late final TextEditingController _path = TextEditingController(
     text: widget.initial,
   );
@@ -239,7 +308,7 @@ class _CustomSocketDialogState extends State<_CustomSocketDialog> {
 
   void _submit() {
     final path = _path.text;
-    final problem = dockerSocketPathProblem(path);
+    final problem = widget.problemOf(path);
     if (problem != null) {
       setState(() => _problem = problem);
       return;
@@ -251,13 +320,13 @@ class _CustomSocketDialogState extends State<_CustomSocketDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: Text(l10n.dockerSocketCustomTitle),
+      title: Text(widget.title),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: 16,
         children: [
-          Text(l10n.dockerSocketCustomBody),
+          Text(widget.body),
           TextField(
             controller: _path,
             autofocus: true,
@@ -265,8 +334,8 @@ class _CustomSocketDialogState extends State<_CustomSocketDialog> {
             enableSuggestions: false,
             keyboardType: TextInputType.url,
             decoration: InputDecoration(
-              labelText: l10n.dockerSocketCustomField,
-              hintText: l10n.dockerSocketCustomHint,
+              labelText: widget.field,
+              hintText: widget.hint,
               errorText: switch (_problem) {
                 DockerSocketPathProblem.notAbsolute =>
                   l10n.dockerSocketPathNotAbsolute,

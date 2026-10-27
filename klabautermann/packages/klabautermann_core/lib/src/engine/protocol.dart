@@ -5,6 +5,9 @@ import 'dart:typed_data';
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         AccountsSnapshot,
+        DiskUsageListing,
+        OnCalendarResult,
+        TimerDetail,
         AnacronJob,
         BackupEntry,
         CpuPercentages,
@@ -81,12 +84,14 @@ import 'package:seance_core/seance_core.dart' show DangerFinding, Snippet;
 import '../catalog/klabautermann_records.dart' show SyncedRule;
 import '../certificates/tls_check.dart' show TlsEndpoint, TlsEndpointCheck;
 import '../history/history_store.dart' show HistoryRange, HistoryTier;
+import '../docker/dropbear.dart' show DropbearRelease;
 import '../docker/docker_ladder.dart'
     show
         DockerNoRouteReason,
         DockerRank,
         DockerRootEquivalence,
         DockerRouteLabel,
+        dockerProgramPathProblem,
         dockerSocketPathProblem;
 import '../operations/plan_types.dart';
 
@@ -321,6 +326,10 @@ import '../operations/plan_types.dart';
 /// [RunSnippet] intent runs one, reporting its output as [RunCronJob]
 /// does.
 ///
+/// CN-16's docker program then joined v3 the same way: [SetDockerProgram]
+/// names the `docker` a server's relays and compose commands run,
+/// [DockerEndpointRoute] gained `dockerProgram` and
+/// [DockerEndpointFailure] gained `invalidProgram`.
 /// Port forwards then joined v3 the same way (03 §5.11 NET-11, DKE-09, M6
 /// plan N22): [OpenPortForward] and [ClosePortForward], answered by
 /// [PortForwardState].
@@ -904,6 +913,24 @@ final class SetDockerEndpoint extends EngineRequest {
   final DockerEndpointChoice choice;
 }
 
+/// Sets the program [serverId]'s Docker relays and compose commands run
+/// for `docker` (CN-16): the app's per-server path from `settings.json`
+/// (03 §4.10), or null for the `docker` on the exec `PATH`, sent as
+/// [SetDockerEndpoint] is. It serves a CLI the non-login `PATH` lacks,
+/// such as Snap's `/snap/bin/docker` or a NAS's `/usr/local/bin/docker`.
+/// The engine keeps it until another arrives or the server leaves the
+/// fleet, and a session that holds an endpoint resolves again with it at
+/// once; the same program again changes nothing. A path
+/// [dockerProgramPathProblem] refuses fails the endpoint with
+/// [DockerEndpointFailure.invalidProgram]. Ignored for a server outside
+/// the fleet.
+final class SetDockerProgram extends EngineRequest {
+  const SetDockerProgram({required this.serverId, this.program});
+
+  final String serverId;
+  final String? program;
+}
+
 /// The most port forwards the engine holds open at once [E] (03 §5.11):
 /// each is a listening socket on the device.
 const int kPortForwardsMax = 16;
@@ -1361,6 +1388,47 @@ final class ReadUserCrontabs extends EngineRequest {
 
   final String serverId;
   final String requestId;
+}
+
+/// Reads one folder of [serverId] for the disk space explorer (DSK-07,
+/// 03 §7.3): its total and its entries, largest first, on the folder's
+/// own filesystem; read-only and never cached. As the login user, or with
+/// [elevated] as root through admin mode, which reads what the login user
+/// may not, so the sizes are complete. One [DiskUsageReport] with
+/// [requestId] answers it.
+final class ReadDiskUsage extends EngineRequest {
+  const ReadDiskUsage(
+    this.serverId,
+    this.path, {
+    required this.requestId,
+    this.elevated = false,
+  });
+
+  final String serverId;
+
+  /// Absolute and normalized, without a trailing slash unless it is `/`.
+  final String path;
+  final String requestId;
+  final bool elevated;
+}
+
+/// Reads one timer's triggers on [serverId] for its details (JOB-02, 03
+/// §7.7, D57): its `OnCalendar=` and monotonic triggers and randomized
+/// delay, and each calendar trigger's next runs, as the login user; in
+/// the login user's own manager when [user]. Never cached. One
+/// [TimerDetailReport] with [requestId] answers it.
+final class ReadTimerDetail extends EngineRequest {
+  const ReadTimerDetail(
+    this.serverId,
+    this.unit, {
+    required this.requestId,
+    this.user = false,
+  });
+
+  final String serverId;
+  final String unit;
+  final String requestId;
+  final bool user;
 }
 
 /// Reads every drive's SMART health on [serverId] (HW-04, 03 §7.11): in
@@ -2996,6 +3064,93 @@ enum UserCrontabsFailure {
 
   /// The link failed while reading.
   transport,
+}
+
+/// Why a [ReadDiskUsage] read nothing.
+enum DiskUsageReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// An elevated read while admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// The path is not absolute and normalized.
+  invalidPath,
+
+  /// The folder is not there.
+  notFound,
+
+  /// The login user may not read the folder.
+  denied,
+
+  /// `du` is not installed, or printed something else.
+  unreadable,
+
+  /// The link failed, or the read ran past its time.
+  transport,
+}
+
+/// The answer to [ReadDiskUsage]: [path]'s listing, or why nothing was
+/// read.
+final class DiskUsageReport extends EngineEvent {
+  const DiskUsageReport({
+    required this.serverId,
+    required this.requestId,
+    required this.path,
+    this.listing,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+  final String path;
+  final DiskUsageListing? listing;
+  final DiskUsageReportFailure? failure;
+}
+
+/// Why a [ReadTimerDetail] read nothing.
+enum TimerDetailFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// The unit name is not a timer's.
+  invalidUnit,
+
+  /// systemctl is not installed.
+  missing,
+
+  /// systemctl failed, as when the manager could not be reached.
+  unreadable,
+
+  /// The link failed, or a read ran past its time.
+  transport,
+}
+
+/// The answer to [ReadTimerDetail]: [unit]'s triggers and each calendar
+/// trigger's `systemd-analyze calendar` result keyed by expression, which
+/// `TimerJobEntry.withDetail` merges into the timer's row, or why nothing
+/// was read.
+final class TimerDetailReport extends EngineEvent {
+  TimerDetailReport({
+    required this.serverId,
+    required this.requestId,
+    required this.unit,
+    required this.user,
+    this.detail,
+    Map<String, OnCalendarResult> calendars = const {},
+    this.failure,
+  }) : calendars = Map.unmodifiable(calendars);
+
+  final String serverId;
+  final String requestId;
+  final String unit;
+  final bool user;
+  final TimerDetail? detail;
+  final Map<String, OnCalendarResult> calendars;
+  final TimerDetailFailure? failure;
 }
 
 /// Why a [ReadAccounts] read nothing.
@@ -5303,6 +5458,10 @@ enum DockerEndpointFailure {
   /// The endpoint choice names a socket path [dockerSocketPathProblem]
   /// refuses, so the ladder did not run.
   invalidChoice,
+
+  /// The server's `docker` program is a path [dockerProgramPathProblem]
+  /// refuses, so the ladder did not run (CN-16).
+  invalidProgram,
 }
 
 /// The route a [DockerEndpointState] names (03 §5.4, §5.9; SAF-08).
@@ -5314,10 +5473,21 @@ final class DockerEndpointRoute {
     required this.runtime,
     required this.rootEquivalence,
     this.mode,
+    this.peerCredentialsExposedBy,
+    this.dockerProgram = 'docker',
   });
 
   final DockerRank rank;
   final String socketPath;
+
+  /// The Dropbear release a socket forward runs through when it is one
+  /// where the engine sees forwarded connections as root (CN-15,
+  /// CVE-2025-14282); null on other servers and on relays.
+  final DropbearRelease? peerCredentialsExposedBy;
+
+  /// The program compose commands run for `docker` on this server: its
+  /// [SetDockerProgram] path, or `docker` on the exec `PATH` (CN-16).
+  final String dockerProgram;
 
   /// The engine as its API names it: Podman when `_ping` carries
   /// `Libpod-API-Version` or `/version` names a Podman component, even

@@ -15,6 +15,7 @@ import 'certificates.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
 import 'disk_activity.dart';
+import 'disk_explorer.dart' show openDiskExplorer;
 import 'drive_health.dart';
 import 'firewall.dart';
 import 'gpus.dart';
@@ -778,6 +779,16 @@ void _showMountDetails(
                 serverId: serverId,
                 mountPoint: mount.mountPoint,
                 fact: (label, value) => _Fact(label: label, value: value),
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.pie_chart_outline),
+                label: Text(l10n.diskExplorerOpen),
+                onPressed: () => openDiskExplorer(
+                  context,
+                  monitoring: monitoring,
+                  serverId: serverId,
+                  root: mount.mountPoint,
+                ),
               ),
             ],
           ),

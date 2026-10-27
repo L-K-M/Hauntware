@@ -4015,8 +4015,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get jobsSourceTimer => 'systemd timer';
 
   @override
-  String get jobsTimerTriggersUnread =>
-      'Triggers are not read in this version.';
+  String get jobsTimerTriggersUnread => 'In its details';
+
+  @override
+  String get jobsTimerTriggersReading => 'Reading the timer\'s triggers…';
+
+  @override
+  String get jobsTimerTriggersNoLink =>
+      'Not connected, so the triggers were not read.';
+
+  @override
+  String get jobsTimerTriggersUnreadable =>
+      'systemd did not say what starts this timer.';
+
+  @override
+  String get jobsTimerTriggersFailed =>
+      'The triggers could not be read. Close and open the details to try again.';
 
   @override
   String get jobsDetailsWritten => 'As written';
@@ -6146,6 +6160,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'No Engine API route: the chosen socket path is not valid';
 
   @override
+  String get dockerTransportInvalidProgram =>
+      'No Engine API route: the docker program path is not valid';
+
+  @override
   String get dockerLowSession => 'Low-session mode';
 
   @override
@@ -6233,6 +6251,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerGateInvalidChoice =>
       'The socket path chosen for this server is not a valid absolute path. Choose another socket below.';
+
+  @override
+  String get dockerGateInvalidProgram =>
+      'The docker program path set for this server is not a valid absolute path.';
 
   @override
   String get dockerRetry => 'Try again';
@@ -6593,6 +6615,38 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerSocketPathUnsafe =>
       'The path cannot contain line breaks or NUL characters.';
+
+  @override
+  String get dockerProgramLabel => 'docker program';
+
+  @override
+  String get dockerProgramDefault => 'docker on the PATH';
+
+  @override
+  String get dockerProgramChange => 'Change…';
+
+  @override
+  String get dockerProgramChangeLabel => 'Change the docker program';
+
+  @override
+  String get dockerProgramReset => 'Use docker on the PATH';
+
+  @override
+  String get dockerProgramTitle => 'docker program';
+
+  @override
+  String get dockerProgramBody =>
+      'Klabautermann runs this docker for relays and compose commands on this server. Set it when docker is outside the PATH of a non-interactive session, as with Snap\'s /snap/bin/docker.';
+
+  @override
+  String get dockerProgramField => 'Program path';
+
+  @override
+  String get dockerProgramHint => '/snap/bin/docker';
+
+  @override
+  String get dockerProgramNotSaved =>
+      'Klabautermann could not save the docker program, so it applies only until Klabautermann quits.';
 
   @override
   String get appearanceThemeTitle => 'Theme';
@@ -8106,6 +8160,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerCommandTruncated =>
       'The output was longer than 1 MiB; the rest was dropped.';
+
+  @override
+  String dockerDropbearCve(String release) {
+    return 'Dropbear $release: CVE-2025-14282';
+  }
+
+  @override
+  String dockerDropbearCveDetail(String release) {
+    return 'This server runs Dropbear $release, where a forwarded connection reaches the engine socket as if it came from root (CVE-2025-14282). Update Dropbear to 2025.89 or later.';
+  }
 
   @override
   String get dockerShellOpen => 'Open a shell';
@@ -10631,6 +10695,90 @@ class AppLocalizationsEn extends AppLocalizations {
   String get keyActionRestart => 'Restart';
 
   @override
+  String get diskExplorerOpen => 'Explore space';
+
+  @override
+  String diskExplorerTitle(String mount) {
+    return 'Space on $mount';
+  }
+
+  @override
+  String get diskExplorerRefresh => 'Read again';
+
+  @override
+  String get diskExplorerUp => 'Up a folder';
+
+  @override
+  String get diskExplorerAsRoot => 'Read as root';
+
+  @override
+  String get diskExplorerAsRootDetail =>
+      'Counts what the login user may not read.';
+
+  @override
+  String diskExplorerReading(String path) {
+    return 'Reading $path… A large folder takes a while.';
+  }
+
+  @override
+  String get diskExplorerRetry => 'Try again';
+
+  @override
+  String diskExplorerTotal(String size) {
+    return '$size in this folder';
+  }
+
+  @override
+  String get diskExplorerIncomplete =>
+      'Some folders here could not be read as the login user, so the sizes are at least this. Turn on admin mode to read them as root.';
+
+  @override
+  String get diskExplorerIncompleteAdmin =>
+      'Some folders here could not be read as the login user, so the sizes are at least this. Read as root to count them.';
+
+  @override
+  String get diskExplorerIncompleteAsRoot =>
+      'Some folders here could not be read even as root, so the sizes are at least this.';
+
+  @override
+  String diskExplorerTruncated(int count) {
+    return 'Showing the $count largest entries.';
+  }
+
+  @override
+  String get diskExplorerEmpty => 'This folder is empty.';
+
+  @override
+  String diskExplorerEntrySize(String size, int percent) {
+    return '$size · $percent %';
+  }
+
+  @override
+  String get diskExplorerNoLink => 'Not connected, so nothing was read.';
+
+  @override
+  String get diskExplorerAdminRequired => 'Reading as root needs admin mode.';
+
+  @override
+  String get diskExplorerRefused =>
+      'Elevation was refused, so nothing was read.';
+
+  @override
+  String get diskExplorerNotFound => 'This folder is not there any more.';
+
+  @override
+  String get diskExplorerDenied =>
+      'The login user may not read this folder. Turn on admin mode to read it as root.';
+
+  @override
+  String get diskExplorerUnreadable =>
+      'du is not installed on this server, or printed something else.';
+
+  @override
+  String get diskExplorerTransport =>
+      'The read failed or ran past its 3 minutes. Try a folder further down.';
+
+  @override
   String get paletteActions => 'Actions';
 
   @override
@@ -10796,4 +10944,142 @@ class AppLocalizationsEn extends AppLocalizations {
   String dockerDetailsRawFileName(String name) {
     return '$name-inspect.json';
   }
+
+  @override
+  String get dockerTabApps => 'Apps';
+
+  @override
+  String get appsForwardNote =>
+      'A forward listens on 127.0.0.1 on this device while it is open, and any app on this device can reach it. Forwards close when you leave this server\'s Docker tab.';
+
+  @override
+  String get appsForwardPort => 'Forward a port…';
+
+  @override
+  String get appsForwardsTitle => 'Forwards';
+
+  @override
+  String get appsListFailed => 'The container list could not be read.';
+
+  @override
+  String get appsNone =>
+      'No running container publishes a TCP port or names a web address.';
+
+  @override
+  String get appsForward => 'Forward';
+
+  @override
+  String appsForwardLabel(String port) {
+    return 'Forward $port';
+  }
+
+  @override
+  String appsPortPublished(String address, String port) {
+    return '$address → $port/tcp';
+  }
+
+  @override
+  String appsPortUnpublished(String port) {
+    return '$port/tcp, not published';
+  }
+
+  @override
+  String appsForwardEnded(String target, String reason) {
+    return '$target: $reason';
+  }
+
+  @override
+  String appsForwardListening(String localPort, String target) {
+    return '127.0.0.1:$localPort → $target';
+  }
+
+  @override
+  String appsForwardOpening(String target) {
+    return '$target: opening a local port…';
+  }
+
+  @override
+  String get appsForwardForwardingDisabled =>
+      'The server refused to forward the last connection. AllowTcpForwarding may be off in its sshd_config.';
+
+  @override
+  String appsForwardConnectFailed(String target) {
+    return 'The last connection did not reach $target.';
+  }
+
+  @override
+  String appsForwardConnections(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count connections',
+      one: '1 connection',
+      zero: 'No connections',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String appsForwardOpen(String target) {
+    return 'Open the forward to $target in the browser';
+  }
+
+  @override
+  String appsForwardStop(String target) {
+    return 'Stop forwarding $target';
+  }
+
+  @override
+  String appsForwardDismiss(String target) {
+    return 'Dismiss the forward to $target';
+  }
+
+  @override
+  String get appsForwardEndClosed => 'stopped';
+
+  @override
+  String get appsForwardEndNoLink => 'not connected to the server';
+
+  @override
+  String get appsForwardEndLinkLost => 'the connection to the server was lost';
+
+  @override
+  String get appsForwardEndBindFailed =>
+      'this device could not open a local port';
+
+  @override
+  String get appsForwardEndInvalidTarget => 'the host or port is not valid';
+
+  @override
+  String get appsForwardEndTooMany => 'too many forwards are open';
+
+  @override
+  String get appsForwardEndForgotten =>
+      'the server was removed or now names another machine';
+
+  @override
+  String get appsForwardDialogTitle => 'Forward a port';
+
+  @override
+  String get appsForwardDialogBody =>
+      'Klabautermann forwards this host and port, as the server reaches them, to a port on this device.';
+
+  @override
+  String get appsForwardHost => 'Host';
+
+  @override
+  String get appsForwardPortField => 'Port';
+
+  @override
+  String get appsForwardHostProblem =>
+      'Enter a host name or address without spaces.';
+
+  @override
+  String get appsForwardPortProblem => 'Enter a port from 1 to 65535.';
+
+  @override
+  String get appsForwardCancel => 'Cancel';
+
+  @override
+  String get appsForwardStart => 'Forward';
 }

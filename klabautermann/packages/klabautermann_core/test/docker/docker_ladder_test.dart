@@ -12,6 +12,7 @@ import 'package:seance_core/seance_core.dart'
         ChannelOpenException,
         ChannelRefusal,
         RemoteCommandException,
+        SshLinkSeen,
         quoteShellWord;
 import 'package:test/test.dart';
 
@@ -236,6 +237,34 @@ void main() {
       expect(route.socketPath, _rootless);
     });
 
+    test('a Dropbear before 2024.84 skips straight to the relays, without '
+        'a streamlocal open (CN-15)', () async {
+      final link = ForwardingLink()
+        ..seen = const SshLinkSeen(
+          serverIdentification: 'SSH-2.0-dropbear_2022.83',
+        )
+        ..daemons[_rootful] = PingDaemon()
+        ..probeAnswers[_rootful] = _disabled;
+
+      final route = await _route(link, _profile([_rootful], tools: _dockerCli));
+
+      expect(link.opens, isEmpty);
+      expect(route.rank, DockerRank.cliRelay);
+    });
+
+    test('a Dropbear from 2024.84 tries streamlocal first (CN-15)', () async {
+      final link = ForwardingLink()
+        ..seen = const SshLinkSeen(
+          serverIdentification: 'SSH-2.0-dropbear_2024.86',
+        )
+        ..daemons[_rootful] = PingDaemon();
+
+      final route = await _route(link, _profile([_rootful]));
+
+      expect(link.opens, [_rootful]);
+      expect(route.rank, DockerRank.streamlocal);
+    });
+
     test('disabled forwarding goes to the relay ranks', () async {
       final link = ForwardingLink()..probeAnswers[_rootful] = _disabled;
 
@@ -378,6 +407,47 @@ void main() {
 
       expect(none, DockerNoRouteReason.noRelay);
       expect(link.started, isEmpty);
+    });
+
+    test('a docker program override relays where the probe found no '
+        'docker on the exec PATH (CN-16)', () async {
+      const snap = '/snap/bin/docker';
+      final link = ForwardingLink()..probeAnswers[_rootful] = _disabled;
+      final profile = _profile(
+        [_rootful],
+        tools: const {'docker': null, 'podman': null, 'socat': null},
+      );
+
+      final route =
+          await DockerLadder.resolve(link, profile, dockerProgram: snap)
+              as DockerRoute;
+
+      expect(route.rank, DockerRank.cliRelay);
+      expect(route.relayArgv, [
+        snap,
+        '--host',
+        'unix://$_rootful',
+        'system',
+        'dial-stdio',
+      ]);
+      await _ping(link, route);
+      expect(link.started, [
+        HostCommands.commandLine(route.relayArgv, quote: quoteShellWord),
+      ]);
+    });
+
+    test('a docker program override leaves the podman CLI as it was', () async {
+      final link = ForwardingLink()..probeAnswers[_podman] = _disabled;
+
+      final route =
+          await DockerLadder.resolve(
+                link,
+                _profile([_podman], tools: _podmanCli),
+                dockerProgram: '/opt/bin/docker',
+              )
+              as DockerRoute;
+
+      expect(route.relayArgv.first, 'podman');
     });
 
     test('a CLI the probe did not report is not tried', () async {
@@ -588,6 +658,22 @@ void main() {
           reason: bad,
         );
       }
+    });
+
+    test('a docker program with a line break or NUL is refused', () {
+      for (final bad in ['docker', '/a\nb', '/a\rb', '/a\u0000b']) {
+        expect(dockerProgramPathProblem(bad), isNotNull, reason: bad);
+        expect(
+          DockerLadder.resolve(
+            ForwardingLink(),
+            _profile(const []),
+            dockerProgram: bad,
+          ),
+          throwsArgumentError,
+          reason: bad,
+        );
+      }
+      expect(dockerProgramPathProblem('/snap/bin/docker'), isNull);
     });
 
     test('the probe passes a hostile path to the shell unchanged', () async {

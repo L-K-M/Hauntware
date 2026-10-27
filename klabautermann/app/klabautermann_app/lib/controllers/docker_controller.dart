@@ -90,7 +90,8 @@ import 'docker_endpoint_choices.dart';
 /// link comes up, so the first route found already uses it, and again
 /// whenever it changes while the link is up ([chooseEndpoint], or a purge
 /// for SYN-08). The engine keeps a choice across links, so an automatic
-/// one is sent again only after a socket was.
+/// one is sent again only after a socket was. The server's `docker`
+/// program (CN-16) goes out the same way, as a [SetDockerProgram].
 ///
 /// An Access tab that shows a server ([openAccess]) has its compose CLIs
 /// read (CN-24, 03 §7.16 STK-05): one [DockerComposeQuery] once its
@@ -163,11 +164,36 @@ final class DockerController {
   Future<void> chooseEndpoint(String serverId, DockerEndpointChoice choice) =>
       endpointChoices.choose(serverId, choice);
 
-  /// Sends each linked server's choice that the engine was not given yet.
+  /// Makes [program] [serverId]'s `docker` (CN-16), or the one on the exec
+  /// `PATH` when null, and sends it as [chooseEndpoint] sends a choice.
+  Future<void> chooseProgram(String serverId, String? program) =>
+      endpointChoices.chooseProgram(serverId, program);
+
+  /// Sends each linked server's choice and program that the engine was
+  /// not given yet.
   void _onChoices() {
     for (final MapEntry(key: serverId, value: server) in _servers.entries) {
-      if (server.linked) _sendChoice(serverId, server);
+      if (!server.linked) continue;
+      _sendChoice(serverId, server);
+      _sendProgram(serverId, server);
     }
+  }
+
+  /// Sends [serverId]'s `docker` program as [_sendChoice] sends its
+  /// choice: unless the engine holds it already, the `docker` on the
+  /// exec `PATH` before any was sent, and a set path again as a link
+  /// comes up when [always].
+  void _sendProgram(
+    String serverId,
+    _DockerServer server, {
+    bool always = false,
+  }) {
+    final program = endpointChoices.programFor(serverId);
+    if (program == server.sentProgram && !(always && program != null)) return;
+    if (_stopped) return;
+
+    _send(SetDockerProgram(serverId: serverId, program: program));
+    server.sentProgram = program;
   }
 
   /// Sends [serverId]'s choice unless the engine holds it already: the
@@ -1026,6 +1052,7 @@ final class DockerController {
         // Ahead of the query that starts the endpoint, so its first
         // route already follows the choice.
         _sendChoice(serverId, server, always: true);
+        _sendProgram(serverId, server, always: true);
         _read(serverId, server);
       case DockerEndpointState(:final serverId):
         if (!_listed(serverId)) return;
@@ -1651,6 +1678,10 @@ final class _DockerServer {
 
   /// The endpoint choice last sent to the engine; null before any was.
   DockerEndpointChoice? sentChoice;
+
+  /// The `docker` program last sent to the engine; null before any was,
+  /// or after the one on the exec `PATH` was.
+  String? sentProgram;
 
   /// Whether the server's last [LinkState] was a usable link.
   bool linked = false;
