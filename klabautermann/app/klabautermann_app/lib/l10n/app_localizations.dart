@@ -5796,6 +5796,30 @@ abstract class AppLocalizations {
   /// **'The log display could not be changed.'**
   String get settingsLogDisplayNotChanged;
 
+  /// Settings, General: switch that shows the times a server reports in that server's time zone instead of this device's (A11Y-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Show server times in the server\'s zone'**
+  String get settingsServerTimes;
+
+  /// Settings, General: explanation under the server times switch (A11Y-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Times on a server\'s screens use the zone it reported when it connected. Until then, and with this off, they use this device\'s zone.'**
+  String get settingsServerTimesDetail;
+
+  /// Settings, General: toast when the server times switch applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The time display changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get settingsServerTimesNotSaved;
+
+  /// Settings, General: toast when the server times switch failed to change.
+  ///
+  /// In en, this message translates to:
+  /// **'The time display could not be changed.'**
+  String get settingsServerTimesNotChanged;
+
   /// Settings, Alerts: the heading of OV-11's threshold levels.
   ///
   /// In en, this message translates to:
@@ -10234,6 +10258,48 @@ abstract class AppLocalizations {
   /// **'Show details'**
   String get dockerShellHide;
 
+  /// Tooltip of the desktop workspace's button that opens the bottom dock, with the server's logs when it holds nothing of the server yet (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Show the dock'**
+  String get dockShow;
+
+  /// Tooltip of the button that collapses the desktop workspace's bottom dock to its tabs (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Hide the dock'**
+  String get dockHide;
+
+  /// Screen-reader label of the bottom dock's top edge, which a drag or the arrow keys resize (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Dock height. Use the up and down arrow keys to resize it.'**
+  String get dockResize;
+
+  /// Bottom dock: the tab of the server's journal, followed as the Logs tab reads it (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Logs'**
+  String get dockLogs;
+
+  /// Bottom dock: the tab of a run's output, named for the unit, cron line or snippet that ran (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Output: {name}'**
+  String dockRunOutput(String name);
+
+  /// Bottom dock: the tab of a shell in a container (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Shell: {container}'**
+  String dockShell(String container);
+
+  /// Tooltip of the button on a bottom dock tab that closes it, ending its follow or shell (OV-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Close {name}'**
+  String dockClose(String name);
+
   /// Title of the page that shows a shell in a container (CTX-07).
   ///
   /// In en, this message translates to:
@@ -13395,6 +13461,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{state} · {image}'**
   String paletteContainerDescription(String state, String image);
+
+  /// Overview: button at its end that opens the sheet to reorder and hide its cards (OV-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Arrange cards…'**
+  String get overviewEditCards;
+
+  /// Title of the sheet that arranges the Overview's cards (OV-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Overview cards'**
+  String get overviewCardsTitle;
+
+  /// The sheet that arranges the Overview's cards: under its title.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag a card to move it, or switch it off to hide it on every server. A card a server cannot show stays out there.'**
+  String get overviewCardsHint;
+
+  /// The sheet that arranges the Overview's cards: puts every card back in its default place, shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get overviewCardsReset;
+
+  /// Toast when the Overview's card arrangement applied but could not be written to this device's settings.
+  ///
+  /// In en, this message translates to:
+  /// **'The card arrangement applies now but was not saved, so it lasts until Klabautermann restarts.'**
+  String get overviewCardsNotSaved;
 
   /// Export sheet: switch that adds the server's name and host name to a status card (PLT-08).
   ///

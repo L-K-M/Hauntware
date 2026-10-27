@@ -20,6 +20,7 @@ import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
 import 'controllers/attention.dart';
 import 'controllers/cadence_controller.dart';
+import 'controllers/overview_layout.dart';
 import 'controllers/pinned_services.dart';
 import 'controllers/fleet_density.dart';
 import 'controllers/container_columns.dart';
@@ -36,6 +37,7 @@ import 'controllers/prompt_controller.dart';
 import 'controllers/server_editor_controller.dart';
 import 'controllers/server_prefs_controller.dart';
 import 'controllers/stack_folders.dart';
+import 'controllers/time_display.dart';
 import 'controllers/tls_endpoints.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
@@ -256,6 +258,11 @@ Future<void> main(List<String> args) async {
     ),
     save: settings.setLogDisplay,
   );
+  // Which zone server times show in (A11Y-07), kept per device.
+  final timeDisplay = TimeDisplayController(
+    display: settings.serverTimes ? TimeDisplay.server : TimeDisplay.device,
+    save: settings.setServerTimes,
+  );
   // Their system notifications (ALR-01), worded in the device's locale
   // as it is when each posts, and switched on per device in
   // settings.json.
@@ -373,6 +380,15 @@ Future<void> main(List<String> args) async {
     save: settings.setPinnedServices,
   );
 
+  // OV-06's Overview cards, kept per device in settings.json.
+  final overviewLayout = OverviewLayoutController(
+    layout: switch (settings.overviewCards) {
+      (:final order, :final hidden) => OverviewLayout.decode(order, hidden),
+      null => null,
+    },
+    save: settings.setOverviewCards,
+  );
+
   // FL-08's fleet board layout, kept per device in settings.json.
   final fleetDensity = FleetDensityController(
     density: FleetDensity.parse(settings.fleetDensity),
@@ -481,6 +497,7 @@ Future<void> main(List<String> args) async {
     cadence: cadence,
     cadenceCaps: cadenceCaps,
     logDisplay: logDisplay,
+    timeDisplay: timeDisplay,
   );
 
   runApp(
@@ -494,6 +511,7 @@ Future<void> main(List<String> args) async {
       thresholds: thresholds,
       cadence: cadence,
       pinnedServices: pinnedServices,
+      overviewLayout: overviewLayout,
       fleetDensity: fleetDensity,
       cadenceCaps: cadenceCaps,
       deviceName: deviceName,
@@ -506,6 +524,7 @@ Future<void> main(List<String> args) async {
       alertRules: alertRules,
       snippets: snippets,
       logDisplay: logDisplay,
+      timeDisplay: timeDisplay,
       alertNotifications: alertNotifications,
       operations: operations,
       dockerNotice: dockerNotice,

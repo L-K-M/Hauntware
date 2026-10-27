@@ -8,6 +8,7 @@ import 'charts/charts.dart';
 import 'coverage.dart' show CoverageItem, CoverageTierBadge, pausesInBackground;
 import 'fleet_row_state.dart' show kFleetRowStaleAfter;
 import 'freshness.dart';
+import 'time_display.dart';
 import 'server_surfaces.dart' show SampledSurface;
 import 'system_panel.dart' show PanelNotice, PanelSection;
 
@@ -130,6 +131,7 @@ class ServerCoverageCard extends StatelessWidget {
                       ? monitoring.clock
                       : _silent,
                   builder: (context, _) => _SessionChart(
+                    serverId: serverId,
                     history: history,
                     end: monitoring.clock.value,
                   ),
@@ -393,8 +395,13 @@ class _TierLine extends StatelessWidget {
 /// each gap with why it has no data (03 §9.5 item 5), and the legend names
 /// the source.
 class _SessionChart extends StatelessWidget {
-  const _SessionChart({required this.history, required this.end});
+  const _SessionChart({
+    required this.serverId,
+    required this.history,
+    required this.end,
+  });
 
+  final String serverId;
   final TimeSeriesRing history;
   final DateTime end;
 
@@ -424,6 +431,7 @@ class _SessionChart extends StatelessWidget {
             end: end,
             span: _sessionSpan,
             max: 100,
+            zoneOffset: TimeDisplayScope.serverOffsetOf(context, serverId),
           ),
         ),
       ],

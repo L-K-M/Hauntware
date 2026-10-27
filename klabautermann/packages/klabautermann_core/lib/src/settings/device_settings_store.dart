@@ -39,6 +39,7 @@ const String _deviceNameKey = 'klabautermann.audit.deviceName';
 const String _appLockKey = 'klabautermann.appLock';
 const String _logTextSizeKey = 'klabautermann.logs.textSize';
 const String _logWrapKey = 'klabautermann.logs.wrap';
+const String _serverTimesKey = 'klabautermann.display.serverTimes';
 
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
 const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
@@ -48,6 +49,7 @@ const String _tlsEndpointsKey = 'klabautermann.certificates.endpoints';
 const String _cadenceKey = 'klabautermann.sampling.cadence';
 const String _pinnedServicesKey = 'klabautermann.overview.pinnedServices';
 const String _fleetDensityKey = 'klabautermann.fleet.density';
+const String _overviewCardsKey = 'klabautermann.overview.cards';
 const String _cadenceCapsKey = 'klabautermann.sampling.caps';
 const String _attentionKey = 'klabautermann.attention.acknowledged';
 
@@ -403,6 +405,33 @@ final class DeviceSettingsStore {
     await _save();
   }
 
+  /// The Overview's cards as this device arranged them (OV-06),
+  /// `klabautermann.overview.cards`: the app's names for them in order,
+  /// and those hidden. Null when there is none or it is not an object of
+  /// two string lists; an item that is not a string is left out.
+  ({List<String> order, List<String> hidden})? get overviewCards =>
+      switch (_values[_overviewCardsKey]) {
+        {
+          'order': final List<Object?> order,
+          'hidden': final List<Object?> hidden,
+        } =>
+          (
+            order: order.whereType<String>().toList(),
+            hidden: hidden.whereType<String>().toList(),
+          ),
+        _ => null,
+      };
+
+  /// Stores the Overview's card [order] and [hidden] cards and writes the
+  /// document; throws as [setCadence] does.
+  Future<void> setOverviewCards(List<String> order, List<String> hidden) async {
+    _values[_overviewCardsKey] = {
+      'order': [...order],
+      'hidden': [...hidden],
+    };
+    await _save();
+  }
+
   Map<String, Object?> get _rawPinnedServices =>
       switch (_values[_pinnedServicesKey]) {
         final Map<String, Object?> entries => {...entries},
@@ -486,6 +515,18 @@ final class DeviceSettingsStore {
   Future<void> setLogDisplay(int textSize, bool wrap) async {
     _values[_logTextSizeKey] = textSize;
     _values[_logWrapKey] = wrap;
+    await _save();
+  }
+
+  /// Whether server times show in the server's zone rather than this
+  /// device's (A11Y-07), `klabautermann.display.serverTimes`; anything but
+  /// `true` reads as the device's zone.
+  bool get serverTimes => _values[_serverTimesKey] == true;
+
+  /// Stores [serverTimes] and writes the document; throws as
+  /// [setCadence] does.
+  Future<void> setServerTimes(bool serverTimes) async {
+    _values[_serverTimesKey] = serverTimes;
     await _save();
   }
 

@@ -33,15 +33,18 @@ import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/server_editor_controller.dart';
+import 'controllers/overview_layout.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
 import 'controllers/threshold_controller.dart';
+import 'controllers/time_display.dart';
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/hand_off.dart' show HandOffLauncher;
 import 'theme/app_theme.dart';
 import 'ui/actions/action_entry.dart' show OperationsScope;
 import 'ui/actions/action_preview.dart' show ActionResultToasts;
+import 'ui/overview_cards.dart' show OverviewLayoutScope;
 import 'ui/quick_actions.dart' show PinnedServicesScope;
 import 'ui/fleet_board.dart' show FleetDensityScope;
 import 'ui/adaptive_shell.dart';
@@ -66,6 +69,7 @@ import 'ui/settings_page.dart';
 import 'ui/startup_issue_notice.dart';
 import 'ui/threshold_announcer.dart' show AnnouncementScope;
 import 'ui/threshold_scope.dart' show ThresholdScope;
+import 'ui/time_display.dart' show TimeDisplayScope;
 import 'ui/workspace_navigation.dart';
 
 /// The settings route's name: Settings on phones, and on a desktop whose
@@ -87,6 +91,7 @@ class KlabautermannApp extends StatelessWidget {
     this.thresholds,
     this.cadence,
     this.pinnedServices,
+    this.overviewLayout,
     this.fleetDensity,
     this.cadenceCaps,
     this.deviceName,
@@ -99,6 +104,7 @@ class KlabautermannApp extends StatelessWidget {
     this.alertRules,
     this.snippets,
     this.logDisplay,
+    this.timeDisplay,
     this.alertNotifications,
     this.operations,
     required this.dockerNotice,
@@ -137,6 +143,10 @@ class KlabautermannApp extends StatelessWidget {
   /// OV-08's pinned services, for the Overview's quick actions and the
   /// unit pages' pins; null in tests that leave them out.
   final PinnedServicesController? pinnedServices;
+
+  /// OV-06's Overview cards; null in tests that leave them out, which see
+  /// the standard layout.
+  final OverviewLayoutController? overviewLayout;
 
   /// FL-08's fleet board layout, for the desktop workspace while no
   /// server is open; null in tests that leave it out, which keep the
@@ -198,6 +208,11 @@ class KlabautermannApp extends StatelessWidget {
   /// General; null in tests that leave it out, where logs keep their
   /// defaults.
   final LogDisplayController? logDisplay;
+
+  /// Which zone server times show in (A11Y-07), set in Settings >
+  /// General; null in tests that leave it out, where every time shows in
+  /// the device's zone.
+  final TimeDisplayController? timeDisplay;
 
   /// Raised alerts' system notifications (ALR-01), one engine run's like
   /// [fleet]. Null in tests that leave it out, where no surface offers
@@ -353,6 +368,13 @@ class KlabautermannApp extends StatelessWidget {
               ),
               null => withDensity,
             };
+            final withLayout = switch (overviewLayout) {
+              final layout? => OverviewLayoutScope(
+                layout: layout,
+                child: withPins,
+              ),
+              null => withPins,
+            };
             final scoped = DockerNoticeScope(
               notice: dockerNotice,
               child: AnnouncementScope(
@@ -361,9 +383,9 @@ class KlabautermannApp extends StatelessWidget {
                 child: switch (thresholds) {
                   final thresholds? => ThresholdScope(
                     thresholds: thresholds,
-                    child: withPins,
+                    child: withLayout,
                   ),
-                  null => withPins,
+                  null => withLayout,
                 },
               ),
             );
@@ -407,12 +429,20 @@ class KlabautermannApp extends StatelessWidget {
               ),
               null => withSnippets,
             };
-            final withNotifications = switch (alertNotifications) {
-              final notifications? => AlertNotificationsScope(
-                notifications: notifications,
+            final withTimeDisplay = switch (timeDisplay) {
+              final display? => TimeDisplayScope(
+                display: display,
+                serverProfile: monitoring.profileFor,
                 child: withLogDisplay,
               ),
               null => withLogDisplay,
+            };
+            final withNotifications = switch (alertNotifications) {
+              final notifications? => AlertNotificationsScope(
+                notifications: notifications,
+                child: withTimeDisplay,
+              ),
+              null => withTimeDisplay,
             };
             final withAlerts = switch (alerts) {
               final alerts? => AlertScope(
@@ -515,6 +545,7 @@ class KlabautermannApp extends StatelessWidget {
               cadence: cadence,
               cadenceCaps: cadenceCaps,
               logDisplay: logDisplay,
+              timeDisplay: timeDisplay,
               deviceName: deviceName,
               appVersion: appVersion,
               monitorSet: fleet.monitorSettings,
