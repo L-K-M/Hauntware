@@ -11,9 +11,9 @@ import '../l10n/app_localizations.dart';
 import 'certificates.dart' show kTlsExpirySoon;
 import 'charts/charts.dart' show ChartSeverity;
 import 'docker/images_view.dart' show imageTagsOf;
-import 'fleet_row_state.dart' show kFleetRowThresholds;
 import 'overview_panel.dart' show DiskMeasure, diskAlarms;
 import 'system_view.dart' show clockSkewText, kClockInStep;
+import 'threshold_scope.dart' show kDefaultThresholds;
 
 /// TRI-01's checks, in the order the checklist lists them.
 enum DoctorCheckKind {
@@ -650,7 +650,7 @@ class DoctorRow extends StatelessWidget {
   String _finding(AppLocalizations l10n) {
     final count = check.count ?? 0;
     final size = ghostFormatBinarySize(check.bytes ?? 0);
-    final warning = l10n.chartPercent(kFleetRowThresholds.warning / 100);
+    final warning = l10n.chartPercent(kDefaultThresholds.warning / 100);
     return switch ((check.kind, check.verdict)) {
       (_, DoctorVerdict.unknown) => l10n.doctorUnknown,
       (_, DoctorVerdict.checking) => l10n.doctorChecking,
