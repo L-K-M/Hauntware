@@ -10131,4 +10131,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get snippetsCancel => 'Cancel';
+
+  @override
+  String get paletteCommand => 'Command Palette…';
+
+  @override
+  String get paletteActions => 'Actions';
+
+  @override
+  String get paletteServers => 'Servers';
+
+  @override
+  String paletteTabs(String server) {
+    return '$server tabs';
+  }
+
+  @override
+  String paletteContainers(String server) {
+    return '$server containers';
+  }
+
+  @override
+  String paletteContainerDescription(String state, String image) {
+    return '$state · $image';
+  }
 }

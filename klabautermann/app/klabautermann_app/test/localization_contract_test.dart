@@ -829,6 +829,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'app.settings'",
     "'fleet.importSshConfig'",
     "'app.quit'",
+    "'app.commandPalette'",
   },
   'lib/ui/menus/app_menu_host.dart': {
     // A FocusNode debug label.
