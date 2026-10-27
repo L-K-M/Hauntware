@@ -172,6 +172,17 @@ class _PanelsState extends State<_Panels> {
   }
 
   @override
+  void didUpdateWidget(_Panels oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.serverId == oldWidget.serverId) return;
+    // These tabs now show another server, which a request may have
+    // selected; the tab controller changes after this build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _onNavigation();
+    });
+  }
+
+  @override
   void dispose() {
     _navigation?.removeListener(_onNavigation);
     _logs?.removeListener(_onLogsOpened);

@@ -25,8 +25,8 @@ final class PanelRequest {
 /// workspace: it selects a server, and asks the workspace for a tab and
 /// the inspector for a container. The desktop shell applies the container
 /// and the workspace's tabs the request, which they consume, so a request
-/// never outlives the switch it asked for. A narrow window's phone shell
-/// follows the selection only.
+/// never outlives the switch it asked for. A narrow window's palette
+/// offers neither, as its phone shell has no tabs or inspector to show.
 final class WorkspaceNavigation extends ChangeNotifier {
   WorkspaceNavigation(this._fleet);
 
@@ -41,23 +41,32 @@ final class WorkspaceNavigation extends ChangeNotifier {
   /// The container asked for and not yet handed to the inspector.
   InspectedContainer? get container => _container;
 
-  /// Selects [serverId] and asks its workspace for [panel].
-  void openPanel(String serverId, ServerPanel panel) {
+  /// Selects [serverId] and asks its workspace for [panel]; a container
+  /// asked for earlier and not yet taken is dropped.
+  void openPanel(String serverId, ServerPanel panel) =>
+      _open(serverId, panel, null);
+
+  /// Selects [serverId], asks for its Docker tab and hands [container] to
+  /// the inspector.
+  void openContainer(String serverId, ContainerSummary container) => _open(
+    serverId,
+    ServerPanel.docker,
+    InspectedContainer(serverId: serverId, container: container),
+  );
+
+  void _open(
+    String serverId,
+    ServerPanel panel,
+    InspectedContainer? container,
+  ) {
     _fleet.select(serverId);
+    _container = container;
     _request = PanelRequest(
       serverId: serverId,
       panel: panel,
       serial: ++_serial,
     );
     notifyListeners();
-  }
-
-  /// Selects [serverId], asks for its Docker tab and hands [container] to
-  /// the inspector.
-  void openContainer(String serverId, ContainerSummary container) {
-    _fleet.select(serverId);
-    _container = InspectedContainer(serverId: serverId, container: container);
-    openPanel(serverId, ServerPanel.docker);
   }
 
   /// [request] was shown; a newer one stays.

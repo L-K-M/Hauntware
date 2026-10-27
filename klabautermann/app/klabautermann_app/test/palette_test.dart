@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/ui/menus/app_commands.dart';
+import 'package:klabautermann_app/ui/server_surfaces.dart' show ServerPanel;
 import 'package:klabautermann_app/ui/system_panel.dart';
+import 'package:klabautermann_app/ui/workspace_navigation.dart';
 
 import 'support/docker.dart';
 import 'support/fake_engine.dart';
@@ -104,6 +106,55 @@ void main() {
       await tester.tap(inPalette('db-1').last);
       await tester.pumpAndSettle();
       expect(harness.fleet.selectedServerId, 'srv-2');
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
+
+  testWidgets(
+    'a tab asked for on another server shows once its workspace does',
+    (tester) async {
+      await pumpApp(tester, servers: twoServers, palette: true);
+      await tester.tap(find.text('web-1'));
+      await tester.pumpAndSettle();
+      final navigation = WorkspaceNavigationScope.maybeOf(
+        tester.element(find.byType(TabBar)),
+      )!;
+
+      navigation.openPanel('srv-2', ServerPanel.system);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SystemPanel), findsOne);
+      expect(navigation.request, isNull, reason: 'consumed');
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
+
+  testWidgets(
+    'a narrow window offers no tab or container rows, which it cannot show',
+    (tester) async {
+      final harness = await pumpApp(
+        tester,
+        size: const Size(800, 900),
+        servers: twoServers,
+        palette: true,
+      );
+      harness.fleet.select('srv-1');
+      await tester.pumpAndSettle();
+
+      await _openPalette(tester);
+      expect(find.byKey(_query), findsOne);
+      final palette = find.byType(Dialog);
+      expect(
+        find.descendant(of: palette, matching: find.text('db-1')),
+        findsOne,
+      );
+      // The list builds the rows in view only, so narrow it to the tabs.
+      await tester.enterText(find.byKey(_query), ':tabs sys');
+      await tester.pump();
+      expect(
+        find.descendant(of: palette, matching: find.text('System')),
+        findsNothing,
+      );
     },
     variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );

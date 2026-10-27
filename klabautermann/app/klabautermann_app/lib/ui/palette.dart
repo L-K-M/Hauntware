@@ -7,6 +7,7 @@ import 'package:ghost_ui/ghost_ui.dart' show PaletteCommand;
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'adaptive_shell.dart' show showsDesktopShell;
 import 'docker/containers_panel.dart' show containerStateText;
 import 'docker/containers_view.dart' show containerNameOf;
 import 'menus/app_commands.dart';
@@ -15,8 +16,9 @@ import 'workspace_navigation.dart';
 
 /// The command palette's rows (PLT-07, 03 §10.6), each provider's under a
 /// path of its own, so `:servers` or `:containers` narrows to one: the
-/// app's [actions] but the palette's own, every fleet server, the
-/// selected server's tabs, and the containers its held list names.
+/// app's [actions] but the palette's own, every fleet server, and, while
+/// the window shows the desktop workspace, the selected server's tabs
+/// and the containers its held list names.
 List<PaletteCommand> paletteCommands({
   required AppLocalizations l10n,
   required TargetPlatform platform,
@@ -26,7 +28,9 @@ List<PaletteCommand> paletteCommands({
   required MonitoringController monitoring,
   required WorkspaceNavigation navigation,
 }) {
-  final selected = fleet.selectedServer;
+  // A narrow window's phone shell has no workspace tabs or inspector to
+  // send rows to.
+  final selected = showsDesktopShell(context) ? fleet.selectedServer : null;
   final containers = selected == null
       ? null
       : monitoring.docker.containersFor(selected.id).value.containers;
