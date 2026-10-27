@@ -1292,6 +1292,31 @@ void main() {
       ).colorScheme;
       expect(label.style?.color, scheme.error);
     });
+
+    testWidgets('a host presenter opens the + menu under the bar, as a '
+        'pull-down opens under its button', (tester) async {
+      final anchors = <Offset>[];
+      await _pump(
+        tester,
+        SidebarBottomBar(
+          addKey: const ValueKey('add'),
+          addEntries: () => [
+            SidebarMenuAction(label: 'kit-new', onSelected: () {}),
+          ],
+          onSettings: () {},
+        ),
+        presentMenu: (entries, at) async {
+          anchors.add(at);
+          return true;
+        },
+      );
+      await tester.tap(find.byKey(const ValueKey('add')));
+      await tester.pumpAndSettle();
+
+      final bar = tester.getRect(find.byType(SidebarBottomBar));
+      expect(anchors, [bar.bottomLeft]);
+      expect(find.text('kit-new'), findsNothing);
+    });
   });
 
   // Reach without a pointer: the header's "+" has to be operable from the

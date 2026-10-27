@@ -2245,7 +2245,8 @@ class _SidebarBottomBarState extends State<SidebarBottomBar> {
   final _addMenu = MenuController();
 
   /// The "+" menu: the host's own ([SidebarKitScope.presentMenu]) when it
-  /// has one, the kit's otherwise.
+  /// has one, the kit's otherwise. The host's opens under the bar, as a
+  /// pull-down opens under its button, rather than over the "+".
   void _toggleAdd(List<SidebarMenuEntry> entries) {
     final present = SidebarKitScope._scope(context).presentMenu;
     final bar = context.findRenderObject() as RenderBox?;
@@ -2254,7 +2255,10 @@ class _SidebarBottomBarState extends State<SidebarBottomBar> {
       return;
     }
     unawaited(
-      present(_tidy(entries), bar.localToGlobal(Offset.zero)).then((shown) {
+      present(
+        _tidy(entries),
+        bar.localToGlobal(bar.size.bottomLeft(Offset.zero)),
+      ).then((shown) {
         if (!shown && mounted) _addMenu.open();
       }),
     );

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 
@@ -203,6 +204,26 @@ Future<void> importSshConfigInteractively(
   );
 }
 
+/// The picked file's text, or why it is no SSH config: too large, or not
+/// UTF-8 (a key, known_hosts or another binary file). An unreadable file
+/// throws [FileSystemException].
+@visibleForTesting
+Future<({String? text, String? rejection})> readSshConfigFile(File file) async {
+  if (await file.length() > _maximumSshConfigBytes) {
+    return (
+      text: null,
+      rejection: 'That file is too large to be an SSH config.',
+    );
+  }
+  try {
+    // Decoded here: readAsString reports bad UTF-8 as the same
+    // FileSystemException an unreadable file raises.
+    return (text: utf8.decode(await file.readAsBytes()), rejection: null);
+  } on FormatException {
+    return (text: null, rejection: 'That file is not an SSH config.');
+  }
+}
+
 Future<String?> _pickSshConfigText(BuildContext context) async {
   final home = Platform.environment['HOME'];
   final sshDirectory = home == null ? null : '$home/.ssh';
@@ -224,23 +245,11 @@ Future<String?> _pickSshConfigText(BuildContext context) async {
   final path = result?.files.single.path;
   if (path == null) return null;
   try {
-    final file = File(path);
-    if (await file.length() > _maximumSshConfigBytes) {
-      if (context.mounted) {
-        showTopToastIn(
-          context,
-          message: 'That file is too large to be an SSH config.',
-        );
-      }
-      return null;
+    final read = await readSshConfigFile(File(path));
+    if (read.rejection case final rejection? when context.mounted) {
+      showTopToastIn(context, message: rejection);
     }
-    return await file.readAsString();
-  } on FormatException {
-    // Not UTF-8: a key, known_hosts or another binary file.
-    if (context.mounted) {
-      showTopToastIn(context, message: 'That file is not an SSH config.');
-    }
-    return null;
+    return read.text;
   } on FileSystemException catch (error) {
     if (context.mounted) {
       showTopToastIn(

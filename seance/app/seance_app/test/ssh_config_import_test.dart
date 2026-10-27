@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/services/app_services.dart';
+import 'package:seance_app/ui/server_actions.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
@@ -53,5 +54,32 @@ Host typo
         ('www', 'web.example.com', 22),
       ]),
     );
+  });
+
+  group('a picked file', () {
+    test('reads as its text', () async {
+      final file = File('${directory.path}/config')
+        ..writeAsStringSync('Host web\n  HostName web.example.com\n');
+      final read = await readSshConfigFile(file);
+      expect(read.text, contains('web.example.com'));
+      expect(read.rejection, isNull);
+    });
+
+    test('that is not UTF-8 is turned away as no SSH config', () async {
+      // A private key or other binary file picked by mistake.
+      final file = File('${directory.path}/id_ed25519')
+        ..writeAsBytesSync([0xff, 0xfe, 0x00, 0x80, 0xc3]);
+      final read = await readSshConfigFile(file);
+      expect(read.text, isNull);
+      expect(read.rejection, 'That file is not an SSH config.');
+    });
+
+    test('too large to be a config is turned away unread', () async {
+      final file = File('${directory.path}/big')
+        ..writeAsBytesSync(List.filled(1024 * 1024 + 1, 0x20));
+      final read = await readSshConfigFile(file);
+      expect(read.text, isNull);
+      expect(read.rejection, 'That file is too large to be an SSH config.');
+    });
   });
 }
