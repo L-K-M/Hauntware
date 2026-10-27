@@ -14,6 +14,7 @@ import 'controllers/admin_controller.dart';
 import 'controllers/alert_center.dart';
 import 'controllers/alert_notifications.dart';
 import 'controllers/alert_rules_controller.dart';
+import 'controllers/snippets_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
 import 'controllers/attention.dart';
@@ -240,6 +241,8 @@ Future<void> main(List<String> args) async {
   final alerts = AlertCenter(engine);
   // The synced rules behind them, and the editor's writes (03 §4.8).
   final alertRules = AlertRulesController(engine);
+  // Séance's synced snippets, run on a server (AUT-01).
+  final snippets = SnippetsController(engine);
   // Their system notifications (ALR-01), worded in the device's locale
   // as it is when each posts, and switched on per device in
   // settings.json.
@@ -444,6 +447,7 @@ Future<void> main(List<String> args) async {
       admin: admin,
       alerts: alerts,
       alertRules: alertRules,
+      snippets: snippets,
       alertNotifications: alertNotifications,
       operations: operations,
       dockerNotice: dockerNotice,

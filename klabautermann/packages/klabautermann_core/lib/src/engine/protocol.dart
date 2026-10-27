@@ -315,6 +315,11 @@ import '../operations/plan_types.dart';
 /// Update checks then joined v3 the same way (03 §7.14 IMG-05, M6 plan
 /// N15): [DockerImageUpdatesQuery], answered by
 /// [DockerImageUpdatesPayload].
+///
+/// Séance's snippets then joined v3 the same way (03 §7.21 AUT-01, M6
+/// plan N65): the engine sends [SnippetsChanged] unasked, and the
+/// [RunSnippet] intent runs one, reporting its output as [RunCronJob]
+/// does.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -2620,8 +2625,8 @@ final class ActionFinished extends EngineEvent {
   /// run, such as the host syslog line (SAF-13).
   final List<int> skippedSteps;
 
-  /// What a [ContainerExec] or a [RunCronJob] printed, whether it
-  /// succeeded or failed.
+  /// What a [ContainerExec], a [RunCronJob] or a [RunSnippet] printed,
+  /// whether it succeeded or failed.
   final ExecOutput? output;
 }
 
@@ -5441,6 +5446,21 @@ final class RunCronJob extends ActionIntent {
 
   /// The line as the jobs list shows it, masked.
   final String raw;
+}
+
+/// Runs a Séance snippet's [command], its placeholders already filled,
+/// once on the server as the login user (03 §7.21, AUT-01): `sh -c`,
+/// with its output in [ActionFinished.output]. [title] names it in the
+/// preview and the audit log.
+final class RunSnippet extends ActionIntent {
+  const RunSnippet(
+    super.serverId, {
+    required this.title,
+    required this.command,
+  });
+
+  final String title;
+  final String command;
 }
 
 /// What [ContainerAction] does to a container (CTR-02).

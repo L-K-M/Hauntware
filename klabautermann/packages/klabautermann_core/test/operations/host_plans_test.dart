@@ -670,6 +670,53 @@ void main() {
       expect(stepOf(attempt).argv, ['sh', '-c', '/bin/backup']);
     });
 
+    test('a snippet runs as the login user through sh -c, its output '
+        'kept, its secret masked in the preview (AUT-01)', () async {
+      final attempt = await planHostAction(
+        const RunSnippet(
+          _server,
+          title: 'Rotate',
+          command: 'rotate --token=s3cr3t && rm -rf /tmp/cache',
+        ),
+        _context(_Link({})),
+      );
+
+      final plan = attempt.plan!;
+      expect(plan.kind, OperationKind.snippetRun);
+      expect(plan.requiredLevel, RequiredLevel.login);
+      expect(plan.preview.targetName, 'Rotate');
+      final step = stepOf(attempt);
+      expect(step.elevated, isFalse);
+      expect(step.captureOutput, isTrue);
+      expect(step.argv, [
+        'sh',
+        '-c',
+        'rotate --token=s3cr3t && rm -rf /tmp/cache',
+      ]);
+      expect(step.display, isNot(contains('s3cr3t')));
+      expect(
+        plan.danger.map((f) => f.severity),
+        contains(DangerSeverity.critical),
+      );
+    });
+
+    test('an untitled snippet is named by its command, masked', () async {
+      final attempt = await planHostAction(
+        const RunSnippet(_server, title: ' ', command: 'login --password=pw'),
+        _context(_Link({})),
+      );
+      expect(attempt.plan!.preview.targetName, startsWith('login --password='));
+      expect(attempt.plan!.preview.targetName, isNot(contains('=pw')));
+    });
+
+    test('an empty snippet is refused', () async {
+      final attempt = await planHostAction(
+        const RunSnippet(_server, title: 'Blank', command: '  '),
+        _context(_Link({})),
+      );
+      expect(attempt.refusal, ActionRefusalReason.invalidTarget);
+    });
+
     test("a line's % text is fed to the command", () async {
       const line = '0 9 * * 1 mail -s report ops%Weekly report%Thanks';
       final link = _Link({'crontab': _out('$line\n')});

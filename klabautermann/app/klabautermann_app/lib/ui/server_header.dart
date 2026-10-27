@@ -20,6 +20,7 @@ import 'hand_off_actions.dart';
 import 'admin_mode_chip.dart';
 import 'alert_rules.dart' show AlertRulesButton;
 import 'server_safety.dart';
+import 'snippets.dart' show SnippetsButton;
 
 /// The server header of 03 §10.2 and §10.5: the server's name, unless the
 /// phone's app bar carries it, its link state, the coverage chip, the
@@ -93,6 +94,7 @@ class ServerHeader extends StatelessWidget {
               monitoring: monitoring,
             ),
             AlertRulesButton(server: server, fleet: fleet),
+            SnippetsButton(serverId: server.id, serverName: server.displayName),
             AdminModeChip(serverId: server.id),
             OpenInSeanceButton(serverId: server.id),
             DetachedOperationsChip(
