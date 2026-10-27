@@ -306,13 +306,39 @@ void main() {
 
   group('runtime per host (CN-09)', () {
     test('a CLI without any socket is reported as such', () {
-      final cli = host(tools: const {'docker': null, 'podman': '/bin/podman'});
+      final cli = host(tools: const {'docker': '/usr/bin/docker'});
       expect(_of(cli, I.runtime), (
         _missing,
         R.engineCliWithoutSocket,
         null,
         false,
       ));
+    });
+
+    test('Podman without a socket offers to enable it (CN-25): the '
+        "login's own, or root's system socket", () {
+      const podman = {'podman': '/usr/bin/podman', 'docker': '/usr/bin/docker'};
+      expect(_of(host(tools: podman), I.runtime), (
+        _missing,
+        R.engineCliWithoutSocket,
+        'systemctl --user enable --now podman.socket',
+        false,
+      ));
+      expect(
+        _of(host(tools: podman, uid: 0, user: 'root'), I.runtime).$3,
+        'systemctl enable --now podman.socket',
+      );
+      expect(
+        _of(host(tools: podman, systemdDir: false), I.runtime).$3,
+        isNull,
+        reason: 'no unit to enable',
+      );
+      expect(
+        _of(host(tools: podman, systemdDir: null), I.runtime).$3,
+        isNull,
+        reason: 'systemd unknown',
+      );
+      expect(_of(host(tools: podman, uid: null), I.runtime).$3, isNull);
     });
 
     test('socket paths classify into runtime and mode', () {
