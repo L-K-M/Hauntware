@@ -8343,6 +8343,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get footprintMenu => 'Footprint';
 
   @override
+  String get diagnosticsMenu => 'Diagnostic bundle…';
+
+  @override
+  String get diagnosticsReading => 'Reading each collector once…';
+
+  @override
+  String diagnosticsTitle(String server, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sections',
+      one: '1 section',
+    );
+    return 'Diagnostic bundle for $server: $_temp0';
+  }
+
+  @override
+  String get diagnosticsHint =>
+      'The raw output of each collector, for a parser bug report. It names this server\'s processes, units, mounts and paths, so read it before you share it.';
+
+  @override
+  String diagnosticsMissing(String collectors) {
+    return 'No answer from: $collectors';
+  }
+
+  @override
+  String diagnosticsFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink':
+          'Klabautermann is not reading this server right now, so its collectors cannot be read. Open the server while it is connected and try again.',
+      'other': 'The collectors could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get diagnosticsFileName => 'diagnostics.txt';
+
+  @override
   String footprintTitle(String server) {
     return 'Footprint on $server';
   }

@@ -90,6 +90,7 @@ class ServerHeader extends StatelessWidget {
             ServerSafetyMenu(
               serverId: server.id,
               serverName: server.displayName,
+              monitoring: monitoring,
             ),
             AlertRulesButton(server: server, fleet: fleet),
             AdminModeChip(serverId: server.id),

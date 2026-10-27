@@ -10368,6 +10368,48 @@ abstract class AppLocalizations {
   /// **'Footprint'**
   String get footprintMenu;
 
+  /// Server Safety menu: reads each collector once and offers the raw output for a bug report (CN-18).
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostic bundle…'**
+  String get diagnosticsMenu;
+
+  /// Diagnostic bundle sheet: shown while the server's collectors are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading each collector once…'**
+  String get diagnosticsReading;
+
+  /// Diagnostic bundle sheet: its title, with the server's name and how many collector sections the bundle holds.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostic bundle for {server}: {count, plural, =1{1 section} other{{count} sections}}'**
+  String diagnosticsTitle(String server, int count);
+
+  /// Diagnostic bundle sheet: what the bundle holds and why to check it before sharing.
+  ///
+  /// In en, this message translates to:
+  /// **'The raw output of each collector, for a parser bug report. It names this server\'s processes, units, mounts and paths, so read it before you share it.'**
+  String get diagnosticsHint;
+
+  /// Diagnostic bundle sheet: the collectors whose sampler did not answer in time, by their wire names, which are not translated.
+  ///
+  /// In en, this message translates to:
+  /// **'No answer from: {collectors}'**
+  String diagnosticsMissing(String collectors);
+
+  /// Diagnostic bundle sheet: why no bundle was read.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Klabautermann is not reading this server right now, so its collectors cannot be read. Open the server while it is connected and try again.} other{The collectors could not be read.}}'**
+  String diagnosticsFailed(String failure);
+
+  /// The suggested file name for a saved diagnostic bundle. Keep it a valid file name.
+  ///
+  /// In en, this message translates to:
+  /// **'diagnostics.txt'**
+  String get diagnosticsFileName;
+
   /// Footprint page title. server is the server's name.
   ///
   /// In en, this message translates to:

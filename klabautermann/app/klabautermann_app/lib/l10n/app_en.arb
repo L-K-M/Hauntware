@@ -9982,6 +9982,44 @@
   "@footprintMenu": {
     "description": "Server Safety menu: opens what Klabautermann keeps on the server (SAF-14)."
   },
+  "diagnosticsMenu": "Diagnostic bundle…",
+  "@diagnosticsMenu": {
+    "description": "Server Safety menu: reads each collector once and offers the raw output for a bug report (CN-18)."
+  },
+  "diagnosticsReading": "Reading each collector once…",
+  "@diagnosticsReading": {
+    "description": "Diagnostic bundle sheet: shown while the server's collectors are read."
+  },
+  "diagnosticsTitle": "Diagnostic bundle for {server}: {count, plural, =1{1 section} other{{count} sections}}",
+  "@diagnosticsTitle": {
+    "description": "Diagnostic bundle sheet: its title, with the server's name and how many collector sections the bundle holds.",
+    "placeholders": {
+      "server": {"type": "String", "example": "web-1"},
+      "count": {"type": "int", "example": "14"}
+    }
+  },
+  "diagnosticsHint": "The raw output of each collector, for a parser bug report. It names this server's processes, units, mounts and paths, so read it before you share it.",
+  "@diagnosticsHint": {
+    "description": "Diagnostic bundle sheet: what the bundle holds and why to check it before sharing."
+  },
+  "diagnosticsMissing": "No answer from: {collectors}",
+  "@diagnosticsMissing": {
+    "description": "Diagnostic bundle sheet: the collectors whose sampler did not answer in time, by their wire names, which are not translated.",
+    "placeholders": {
+      "collectors": {"type": "String", "example": "probe, fs, procs"}
+    }
+  },
+  "diagnosticsFailed": "{failure, select, noLink{Klabautermann is not reading this server right now, so its collectors cannot be read. Open the server while it is connected and try again.} other{The collectors could not be read.}}",
+  "@diagnosticsFailed": {
+    "description": "Diagnostic bundle sheet: why no bundle was read.",
+    "placeholders": {
+      "failure": {"type": "String", "example": "noLink"}
+    }
+  },
+  "diagnosticsFileName": "diagnostics.txt",
+  "@diagnosticsFileName": {
+    "description": "The suggested file name for a saved diagnostic bundle. Keep it a valid file name."
+  },
   "footprintTitle": "Footprint on {server}",
   "@footprintTitle": {
     "description": "Footprint page title. server is the server's name.",
