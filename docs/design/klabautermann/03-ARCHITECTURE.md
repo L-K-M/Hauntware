@@ -2957,6 +2957,16 @@ hidden with its reason and, where one exists, a copyable fix command that
 the app never runs implicitly (Cockpit degradation, r3 §6.9). Unknown is
 shown as unknown, never as zero.
 
+As built in M6 (N67d, CN-25), the runtime row of a systemd host where
+`podman` exists but no engine socket does offers to enable Podman's
+socket unit: `systemctl --user enable --now podman.socket` for the
+login's rootless engine, which its user manager then starts at each
+login, or the system socket for a root login. A system socket for any
+other login is not offered: it would make that account root-equivalent
+(8.4), and it is a change the user makes deliberately, not a copied
+fix. A Docker CLI without a socket gets no fix, since the daemon's
+state is not a socket unit's.
+
 ### 6.2 Sampler protocol HWS/1 (CN-03, D22)
 
 - **Start.** A non-PTY exec of

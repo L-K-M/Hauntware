@@ -273,6 +273,26 @@ void main() {
       expect(composeQueries(harness), isEmpty);
     });
 
+    testWidgets('Podman without a socket offers its user socket (CN-25)', (
+      tester,
+    ) async {
+      await _openWeb1(
+        tester,
+        _desktop,
+        profile: debianHost(
+          overrides: {
+            'tools': {'podman': '/usr/bin/podman'},
+            'engineSockets': const <Object>[],
+          },
+        ),
+      );
+      await _openTab(tester, 'Access');
+      expect(
+        find.text('systemctl --user enable --now podman.socket'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('the runtime row says a socket chosen on this device, and '
         'when it is not in use', (tester) async {
       const custom = '/srv/engine.sock';

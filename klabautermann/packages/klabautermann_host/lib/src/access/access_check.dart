@@ -149,8 +149,8 @@ enum AccessReason {
   /// At least one engine socket exists.
   enginesDetected,
 
-  /// A `docker` or `podman` CLI exists but no socket does (the Podman
-  /// socket offer is CN-25, v1).
+  /// A `docker` or `podman` CLI exists but no socket does. With Podman
+  /// on a systemd host the row offers to enable its socket (CN-25).
   engineCliWithoutSocket,
 
   /// No engine socket and no engine CLI.
@@ -569,8 +569,12 @@ AccessRow _runtimeRow(
   if (engines.isNotEmpty) return _ok(item, AccessReason.enginesDetected);
 
   return switch ((p.toolPresent('docker'), p.toolPresent('podman'))) {
-    (true, _) ||
-    (_, true) => _missing(item, AccessReason.engineCliWithoutSocket),
+    (_, true) => _missing(
+      item,
+      AccessReason.engineCliWithoutSocket,
+      fix: _podmanSocketFix(p),
+    ),
+    (true, _) => _missing(item, AccessReason.engineCliWithoutSocket),
     (false, false) => _missing(item, AccessReason.noEngine),
     _ => _unknown(item),
   };
@@ -610,6 +614,32 @@ FixElevation _fixElevation(HostProfile p) {
   }
   if (p.doasPresent == true) return FixElevation.doas;
   return FixElevation.rootShell;
+}
+
+/// CN-25: Podman serves its API only through a socket unit, off after an
+/// install. The least-privileged one is the login's own rootless socket,
+/// which its user manager starts at each login once enabled; root's is
+/// the system socket. A system socket for another login would make it
+/// root-equivalent, so it is not offered. Without systemd there is no
+/// unit to enable.
+AccessFix? _podmanSocketFix(HostProfile p) {
+  if (p.systemdDir != true) return null;
+  return switch (p.uid) {
+    0 => AccessFix(const [
+      'systemctl',
+      'enable',
+      '--now',
+      'podman.socket',
+    ], FixElevation.none),
+    null => null,
+    _ => AccessFix(const [
+      'systemctl',
+      '--user',
+      'enable',
+      '--now',
+      'podman.socket',
+    ], FixElevation.none),
+  };
 }
 
 /// The login name, only when it passes the sampler's user-name grammar:
