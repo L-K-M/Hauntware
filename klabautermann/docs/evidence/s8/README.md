@@ -18,6 +18,11 @@ reported in `docker-ratelimit-source` are replaced by `addr-a`, `addr-b`
 and so on, one label per address. The private part made its own
 registry, account and random password; no credential is in either file.
 
+After that run the script was made sturdier for re-runs: a POSIX awk,
+the password passed to `htpasswd` over stdin, cleanup on an interrupt,
+a readiness poll for the registry and a failed push that stops the run.
+A re-run the same day gave the same evidence.
+
 ## What it shows
 
 1. **A `HEAD` does not spend Docker Hub quota.** Docker Hub counts

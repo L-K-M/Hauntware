@@ -30,10 +30,10 @@ hub_request() {
   curl -sS -o /dev/null -D - --max-time 20 "$@" \
     -H "Authorization: Bearer $token" -H "Accept: $accept" \
     "https://registry-1.docker.io/v2/$hub_repo/manifests/$hub_tag" |
-    tr -d '\r' | awk 'BEGIN { IGNORECASE = 1 }
-      /^HTTP\/2/ { status = $2 }
-      /^docker-ratelimit-source/ { source = $2 }
-      /^ratelimit-remaining/ { remaining = $2 }
+    tr -d '\r' | awk '{ low = tolower($0) }
+      low ~ /^http\// { status = $2 }
+      low ~ /^docker-ratelimit-source/ { source = $2 }
+      low ~ /^ratelimit-remaining/ { remaining = $2 }
       END { print status, source, remaining }'
 }
 
@@ -109,18 +109,31 @@ for m in json.load(sys.stdin).get("Manifests", []):
 dir=$(mktemp -d)
 user=klab
 pass=$(python3 -c 'import secrets; print(secrets.token_hex(12))')
-docker run --rm --entrypoint htpasswd httpd:2.4-alpine -Bbn "$user" "$pass" >"$dir/htpasswd"
+printf '%s\n' "$pass" |
+  docker run --rm -i --entrypoint htpasswd httpd:2.4-alpine -Bin "$user" >"$dir/htpasswd"
 docker rm -f s8-registry >/dev/null 2>&1 || true
 docker run -d --name s8-registry -p 127.0.0.1:5000:5000 -v "$dir:/auth" \
   -e REGISTRY_AUTH=htpasswd -e REGISTRY_AUTH_HTPASSWD_REALM=s8 \
   -e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd registry:3 >/dev/null
-trap 'docker rm -f s8-registry >/dev/null 2>&1; docker logout localhost:5000 >/dev/null 2>&1; rm -rf "$dir"' EXIT
-sleep 2
+cleanup() {
+  docker rm -f s8-registry >/dev/null 2>&1
+  docker logout localhost:5000 >/dev/null 2>&1
+  rm -rf "$dir"
+}
+trap cleanup EXIT
+trap 'exit 1' INT TERM
+i=0
+until curl -sS -o /dev/null --noproxy '*' http://127.0.0.1:5000/v2/ 2>/dev/null; do
+  i=$((i + 1))
+  [ "$i" -lt 30 ] || { echo "s8-registry did not come up" >&2; exit 1; }
+  sleep 1
+done
 printf '%s\n' "$pass" | docker login -u "$user" --password-stdin localhost:5000 >/dev/null
 docker tag "alpine:$hub_tag" "localhost:5000/alpine:$hub_tag"
 echo
 echo "== private registry: push from the containerd store"
-docker push -q "localhost:5000/alpine:$hub_tag" | tail -1
+pushed=$(docker push -q "localhost:5000/alpine:$hub_tag")
+printf '%s\n' "$pushed" | tail -1
 echo "-- curl -sI without credentials"
 curl -sS -I --noproxy '*' -H "Accept: $accept" "http://127.0.0.1:5000/v2/alpine/manifests/$hub_tag" | headers
 echo "-- docker buildx imagetools inspect (credentials from the CLI's store)"
