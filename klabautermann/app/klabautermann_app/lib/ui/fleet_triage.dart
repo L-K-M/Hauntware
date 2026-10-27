@@ -44,8 +44,9 @@ final class FleetSummary {
   /// Servers with at least one open problem in the attention queue.
   final int needAttention;
 
-  /// Servers whose CPU and memory reading is fresh, which the averages
-  /// and sums cover.
+  /// Servers with a fresh CPU or memory reading. The CPU average covers
+  /// those that reported CPU, the memory sums those that reported both
+  /// used and total memory.
   final int reporting;
 
   /// The mean CPU busy share of the [reporting] servers; null when none.
@@ -109,7 +110,9 @@ FleetSummary fleetSummary({
   return FleetSummary(
     total: servers.length,
     online: online,
-    needAttention: openProblems.values.where((n) => n > 0).length,
+    needAttention: servers
+        .where((server) => (openProblems[server.id] ?? 0) > 0)
+        .length,
     reporting: reporting,
     cpuPercent: cpuCount == 0 ? null : cpuSum / cpuCount,
     memoryUsedBytes: used,

@@ -67,7 +67,8 @@ void main() {
       probe: (id) => id == 'srv-c' ? ReachabilityStatus.online : null,
       overview: (id) => overviews[id],
       core: (_) => null,
-      openProblems: const {'srv-c': 1},
+      // A server that left the fleet is no longer counted.
+      openProblems: const {'srv-c': 1, 'srv-gone': 2},
       now: _now,
     );
 
