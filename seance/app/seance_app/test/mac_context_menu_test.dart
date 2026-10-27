@@ -1,5 +1,5 @@
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart' show SingleActivator;
+import 'package:flutter/widgets.dart' show Offset, SingleActivator;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/services/mac_commands.dart';
 import 'package:seance_app/services/mac_context_menu.dart';
@@ -50,6 +50,22 @@ void main() {
       expect(items[2], {'separator': true});
     },
   );
+
+  test('an anchor crosses as window points; none means the pointer', () async {
+    final sent = <Map>[];
+    messenger.setMockMethodCallHandler(macMenuChannel, (call) async {
+      sent.add(call.arguments as Map);
+      return null;
+    });
+    await showMacContextMenu(at: const Offset(120, 48.5), [
+      const MacMenuItem('Copy'),
+    ]);
+    await showMacContextMenu([const MacMenuItem('Copy')]);
+
+    expect(sent[0]['x'], 120);
+    expect(sent[0]['y'], 48.5);
+    expect(sent[1].containsKey('x'), isFalse);
+  });
 
   test('a dismissed menu runs nothing', () async {
     messenger.setMockMethodCallHandler(macMenuChannel, (call) async => null);

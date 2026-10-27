@@ -380,9 +380,11 @@ class SidebarKitScope extends InheritedWidget {
   final Color? background;
 
   /// Shows a row's verbs in the host's own menu instead of the kit's (a
-  /// native macOS context menu), answering whether it did; null, or a
-  /// false answer, keeps the kit's menu.
-  final Future<bool> Function(List<SidebarMenuEntry> entries)? presentMenu;
+  /// native macOS context menu) at [at], a global position (the click, or
+  /// the row's corner from the keyboard), answering whether it did; null,
+  /// or a false answer, keeps the kit's menu.
+  final Future<bool> Function(List<SidebarMenuEntry> entries, Offset at)?
+  presentMenu;
 
   static SidebarKitStrings of(BuildContext context) => _scope(context).strings;
 
@@ -1436,9 +1438,16 @@ class _SidebarRowState extends State<SidebarRow> with _KeyboardFocusRing {
     final entries = widget.menuEntries;
     if (entries == null) return;
     final present = SidebarKitScope._scope(context).presentMenu;
-    if (present != null) {
+    final row = _contentKey.currentContext?.findRenderObject() as RenderBox?;
+    if (present != null && row != null) {
+      // One menu at a time: a kit menu a declined presenter left open
+      // closes rather than staying under the host's.
+      if (_menu.isOpen) _menu.close();
+      final at = row.localToGlobal(
+        position ?? row.size.bottomLeft(Offset.zero),
+      );
       unawaited(
-        present(_tidy(entries())).then((shown) {
+        present(_tidy(entries()), at).then((shown) {
           if (!shown && mounted) _openKitMenu(position, focusFirst);
         }),
       );
@@ -2239,12 +2248,13 @@ class _SidebarBottomBarState extends State<SidebarBottomBar> {
   /// has one, the kit's otherwise.
   void _toggleAdd(List<SidebarMenuEntry> entries) {
     final present = SidebarKitScope._scope(context).presentMenu;
-    if (present == null) {
+    final bar = context.findRenderObject() as RenderBox?;
+    if (present == null || bar == null || _addMenu.isOpen) {
       _addMenu.isOpen ? _addMenu.close() : _addMenu.open();
       return;
     }
     unawaited(
-      present(_tidy(entries)).then((shown) {
+      present(_tidy(entries), bar.localToGlobal(Offset.zero)).then((shown) {
         if (!shown && mounted) _addMenu.open();
       }),
     );

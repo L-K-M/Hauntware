@@ -235,6 +235,12 @@ Future<String?> _pickSshConfigText(BuildContext context) async {
       return null;
     }
     return await file.readAsString();
+  } on FormatException {
+    // Not UTF-8: a key, known_hosts or another binary file.
+    if (context.mounted) {
+      showTopToastIn(context, message: 'That file is not an SSH config.');
+    }
+    return null;
   } on FileSystemException catch (error) {
     if (context.mounted) {
       showTopToastIn(

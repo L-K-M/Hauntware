@@ -96,7 +96,7 @@ Future<void> _pump(
   SidebarKitLayout layout = SidebarKitLayout.rail,
   SidebarKitDensity? density,
   double width = 240,
-  Future<bool> Function(List<SidebarMenuEntry> entries)? presentMenu,
+  Future<bool> Function(List<SidebarMenuEntry> entries, Offset at)? presentMenu,
 }) async {
   tester.view.physicalSize = const Size(600, 600);
   tester.view.devicePixelRatio = 1;
@@ -579,7 +579,7 @@ void main() {
               SidebarMenuAction(label: 'kit-two', onSelected: () {}),
             ],
           ),
-          presentMenu: (entries) async {
+          presentMenu: (entries, at) async {
             presented.add(entries);
             return shown;
           },

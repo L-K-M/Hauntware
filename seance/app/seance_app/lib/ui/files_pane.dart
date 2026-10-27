@@ -714,7 +714,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     Offset globalPosition,
   ) async {
     if (macNativeShell) {
-      final shown = await _showMacEntryMenu(entry);
+      final shown = await _showMacEntryMenu(entry, globalPosition);
       if (shown || !mounted) return;
     }
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -840,21 +840,23 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     ];
   }
 
-  /// The row's verbs as a native Mac menu at the pointer.
-  Future<bool> _showMacEntryMenu(RemoteFileEntry entry) => showMacContextMenu([
-    for (final verb in _entryVerbs(entry))
-      if (verb == null)
-        const MacMenuItem.separator()
-      else
-        MacMenuItem(
-          verb.mac ?? verb.label,
-          onSelected: verb.enabled
-              ? () {
-                  if (mounted) _dispatchEntryVerb(entry, verb.value);
-                }
-              : null,
-        ),
-  ]);
+  /// The row's verbs as a native Mac menu at [at], where the Material menu
+  /// would have opened: the click, or the row from the keyboard.
+  Future<bool> _showMacEntryMenu(RemoteFileEntry entry, Offset at) =>
+      showMacContextMenu(at: at, [
+        for (final verb in _entryVerbs(entry))
+          if (verb == null)
+            const MacMenuItem.separator()
+          else
+            MacMenuItem(
+              verb.mac ?? verb.label,
+              onSelected: verb.enabled
+                  ? () {
+                      if (mounted) _dispatchEntryVerb(entry, verb.value);
+                    }
+                  : null,
+            ),
+      ]);
 
   void _dispatchEntryVerb(RemoteFileEntry entry, String value) {
     if (value.startsWith('open_with:')) {

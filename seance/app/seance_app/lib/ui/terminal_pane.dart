@@ -802,7 +802,7 @@ class _TabChip extends StatelessWidget {
     if (!macNativeShell) {
       return _showMaterialMenu(context, globalPosition);
     }
-    final shown = await showMacContextMenu([
+    final shown = await showMacContextMenu(at: globalPosition, [
       MacMenuItem('Rename Tab…', onSelected: onRename),
       const MacMenuItem.separator(),
       MacMenuItem(
@@ -929,7 +929,7 @@ class _EditorTabChip extends StatelessWidget {
     if (!macNativeShell) {
       return _showMaterialMenu(context, globalPosition);
     }
-    final shown = await showMacContextMenu([
+    final shown = await showMacContextMenu(at: globalPosition, [
       MacMenuItem(
         'Close Tab',
         shortcut: const SingleActivator(LogicalKeyboardKey.keyW, meta: true),
@@ -1627,7 +1627,7 @@ class _SessionViewState extends State<_SessionView>
     if (!macNativeShell) {
       return _showMaterialContextMenu(context, globalPosition);
     }
-    final shown = await _showMacContextMenu();
+    final shown = await _showMacContextMenu(globalPosition);
     if (shown || !context.mounted) return;
     return _showMaterialContextMenu(context, globalPosition);
   }
@@ -1723,11 +1723,11 @@ class _SessionViewState extends State<_SessionView>
 
 extension on _SessionViewState {
   /// The right-click menu as a native one, its rows the Edit menu's.
-  Future<bool> _showMacContextMenu() {
+  Future<bool> _showMacContextMenu(Offset at) {
     final hasSelection = _terminalController.selection != null;
     SingleActivator command(LogicalKeyboardKey key) =>
         SingleActivator(key, meta: true);
-    return showMacContextMenu([
+    return showMacContextMenu(at: at, [
       MacMenuItem(
         'Copy',
         shortcut: command(LogicalKeyboardKey.keyC),

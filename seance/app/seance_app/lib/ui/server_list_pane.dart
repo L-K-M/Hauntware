@@ -731,8 +731,10 @@ class _ServerListPaneState extends State<ServerListPane> {
     SettingsTab tab = SettingsTab.general,
   ]) => openSettings(tab);
 
-  static Future<bool> _presentMacMenu(List<SidebarMenuEntry> entries) =>
-      showMacContextMenu(_macMenuItems(entries));
+  static Future<bool> _presentMacMenu(
+    List<SidebarMenuEntry> entries,
+    Offset at,
+  ) => showMacContextMenu(_macMenuItems(entries), at: at);
 
   static List<MacMenuItem> _macMenuItems(List<SidebarMenuEntry> entries) => [
     for (final entry in entries)

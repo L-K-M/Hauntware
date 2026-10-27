@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart' show SingleActivator;
+import 'package:flutter/widgets.dart' show Offset, SingleActivator;
 
 import 'mac_commands.dart';
 
@@ -37,12 +37,14 @@ final class MacMenuItem {
   final bool _separator;
 }
 
-/// Shows [items] as a native menu at the pointer, the way every Mac app's
-/// context menus open, and runs the chosen row's callback after it closes.
-/// False when the native side could not show it, so the caller can fall
-/// back to its own menu.
+/// Shows [items] as a native menu at [at], a global position in the main
+/// window's logical pixels (the click, or a control's corner for a menu
+/// opened from the keyboard), or at the pointer without one; runs the
+/// chosen row's callback after it closes. False when the native side could
+/// not show it, so the caller can fall back to its own menu.
 Future<bool> showMacContextMenu(
   List<MacMenuItem> items, {
+  Offset? at,
   MethodChannel channel = macMenuChannel,
 }) async {
   final callbacks = <String, VoidCallback>{};
@@ -65,6 +67,8 @@ Future<bool> showMacContextMenu(
   try {
     chosen = await channel.invokeMethod<String>('popUpMenu', {
       'items': encode(items),
+      if (at != null) 'x': at.dx,
+      if (at != null) 'y': at.dy,
     });
   } catch (error) {
     debugPrint('Native context menu failed: $error');

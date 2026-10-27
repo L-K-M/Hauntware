@@ -429,6 +429,9 @@ class _MacCommandHostState extends State<MacCommandHost>
     final server = state.configFor(serverId);
     if (server == null) return;
     await WindowStateService.showMainWindow();
+    // A dialog in the window has the user's attention; the Dock brings the
+    // window forward but connects nothing behind it.
+    if (modalRoutes.open.value > 0) return;
     await state.openTerminal(server);
   }
 

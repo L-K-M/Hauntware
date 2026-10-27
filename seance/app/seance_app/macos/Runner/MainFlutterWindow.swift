@@ -87,8 +87,13 @@ class MainFlutterWindow: NSWindow {
       case "showAlert":
         self.showAlert(call.arguments as? [String: Any] ?? [:], result: result)
       case "popUpMenu":
-        let items = (call.arguments as? [String: Any])?["items"] as? [[String: Any]] ?? []
-        result(ContextMenu(items).popUp())
+        let arguments = call.arguments as? [String: Any]
+        let items = arguments?["items"] as? [[String: Any]] ?? []
+        var anchor: NSPoint?
+        if let x = arguments?["x"] as? Double, let y = arguments?["y"] as? Double {
+          anchor = NSPoint(x: x, y: y)
+        }
+        result(ContextMenu(items).popUp(at: anchor, in: self.contentView))
       case "setDockBadge":
         NSApp.dockTile.badgeLabel = call.arguments as? String
         result(nil)
@@ -451,9 +456,16 @@ private final class ContextMenu: NSObject {
     build(items, into: menu)
   }
 
-  func popUp() -> String? {
-    // Returns when the menu closes; the choice landed in `choose` first.
-    menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+  /// Opens at [anchor], a top-left-origin point in [view] (Flutter's
+  /// logical pixels over the window's content), or at the pointer without
+  /// one. Returns when the menu closes; the choice landed in `choose` first.
+  func popUp(at anchor: NSPoint?, in view: NSView?) -> String? {
+    if let anchor, let view {
+      let y = view.isFlipped ? anchor.y : view.bounds.height - anchor.y
+      menu.popUp(positioning: nil, at: NSPoint(x: anchor.x, y: y), in: view)
+    } else {
+      menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    }
     return chosen
   }
 
