@@ -94,6 +94,8 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         AccountsSnapshot,
         CpuPercentages,
         CronSnapshot,
+        DiskUsageEntry,
+        DiskUsageListing,
         DiskRate,
         FsMount,
         FsSnapshot,

@@ -312,6 +312,7 @@ void main() {
         const ReadFirewall('srv-1', requestId: 'r-1'),
         const ReadSshdPosture('srv-1', requestId: 'r-1'),
         const ReadAccounts('srv-1', requestId: 'r-1'),
+        const ReadDiskUsage('srv-1', '/var', requestId: 'r-1', elevated: true),
         const ReadHistory('srv-1', HistoryTier.minute, requestId: 'h-1'),
         const AcknowledgeOperation('srv-1', '0123456789abcdef'),
         const AnswerPrompt('prompt-1', PromptTrustAnswer(true)),

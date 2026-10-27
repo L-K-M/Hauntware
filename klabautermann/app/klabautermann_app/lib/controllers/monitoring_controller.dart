@@ -9,6 +9,7 @@ import 'account_reads.dart';
 import 'attention.dart';
 import 'container_columns.dart';
 import 'container_terminals.dart';
+import 'disk_usage_reads.dart';
 import 'docker_controller.dart';
 import 'docker_endpoint_choices.dart';
 import 'history_reads.dart';
@@ -173,6 +174,7 @@ final class MonitoringController extends ChangeNotifier {
     packages = PackageReads(_engine);
     rollups = HistoryReads(_engine);
     accounts = AccountReads(_engine);
+    diskUsage = DiskUsageReads(_engine);
     docker = DockerController(
       _engine,
       endpointChoices: dockerEndpointChoices,
@@ -221,6 +223,10 @@ final class MonitoringController extends ChangeNotifier {
   /// The System tab's account reads (ACC-01, ACC-02), a concern of its
   /// own beside [logs].
   late final AccountReads accounts;
+
+  /// The disk space explorer's folder reads (DSK-07), a concern of its
+  /// own beside [logs].
+  late final DiskUsageReads diskUsage;
 
   /// Each server's Docker endpoint, which the server header names, and
   /// the engine details the Docker tab shows (03 §5.9, §10.2): a concern
@@ -846,6 +852,7 @@ final class MonitoringController extends ChangeNotifier {
     packages.dispose();
     rollups.dispose();
     accounts.dispose();
+    diskUsage.dispose();
     docker.dispose();
     _onEngineDone();
     for (final refresh in _refreshes.toList()) {

@@ -36,6 +36,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/accounts.dart': {"', '", r"'${account.uid}'", "''", "','"},
   // An account read's request id, matched in the engine's answer.
   'lib/controllers/account_reads.dart': {r"'accounts-${_count++}'"},
+  'lib/controllers/disk_usage_reads.dart': {r"'disk-usage-${_count++}'"},
+  // A folder's path on the server, built from its parent and its name.
+  'lib/ui/disk_explorer.dart': {"'/'", r"'/$name'", r"'$_path/$name'"},
   'lib/app.dart': {
     // The settings route's Navigator name.
     "'/settings'",

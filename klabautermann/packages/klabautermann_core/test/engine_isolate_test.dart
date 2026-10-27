@@ -315,6 +315,22 @@ void main() {
       expect(accounts.requestId, 'r-5');
       expect(accounts.failure, AccountsReportFailure.noLink);
 
+      // DSK-07's folder read answers without a link, elevated or not.
+      for (final elevated in [false, true]) {
+        client.send(
+          ReadDiskUsage(
+            'ssh-config:web',
+            '/var',
+            requestId: 'r-du-$elevated',
+            elevated: elevated,
+          ),
+        );
+        final usage = (await next(events)) as DiskUsageReport;
+        expect(usage.requestId, 'r-du-$elevated');
+        expect(usage.path, '/var');
+        expect(usage.failure, DiskUsageReportFailure.noLink);
+      }
+
       // A detached operation's result is acknowledged over a link.
       client.send(
         const AcknowledgeOperation('ssh-config:web', '0123456789abcdef'),

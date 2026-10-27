@@ -10544,6 +10544,90 @@ class AppLocalizationsEn extends AppLocalizations {
   String get paletteCommand => 'Command Palette…';
 
   @override
+  String get diskExplorerOpen => 'Explore space';
+
+  @override
+  String diskExplorerTitle(String mount) {
+    return 'Space on $mount';
+  }
+
+  @override
+  String get diskExplorerRefresh => 'Read again';
+
+  @override
+  String get diskExplorerUp => 'Up a folder';
+
+  @override
+  String get diskExplorerAsRoot => 'Read as root';
+
+  @override
+  String get diskExplorerAsRootDetail =>
+      'Counts what the login user may not read.';
+
+  @override
+  String diskExplorerReading(String path) {
+    return 'Reading $path… A large folder takes a while.';
+  }
+
+  @override
+  String get diskExplorerRetry => 'Try again';
+
+  @override
+  String diskExplorerTotal(String size) {
+    return '$size in this folder';
+  }
+
+  @override
+  String get diskExplorerIncomplete =>
+      'Some folders here could not be read as the login user, so the sizes are at least this. Turn on admin mode to read them as root.';
+
+  @override
+  String get diskExplorerIncompleteAdmin =>
+      'Some folders here could not be read as the login user, so the sizes are at least this. Read as root to count them.';
+
+  @override
+  String get diskExplorerIncompleteAsRoot =>
+      'Some folders here could not be read even as root, so the sizes are at least this.';
+
+  @override
+  String diskExplorerTruncated(int count) {
+    return 'Showing the $count largest entries.';
+  }
+
+  @override
+  String get diskExplorerEmpty => 'This folder is empty.';
+
+  @override
+  String diskExplorerEntrySize(String size, int percent) {
+    return '$size · $percent %';
+  }
+
+  @override
+  String get diskExplorerNoLink => 'Not connected, so nothing was read.';
+
+  @override
+  String get diskExplorerAdminRequired => 'Reading as root needs admin mode.';
+
+  @override
+  String get diskExplorerRefused =>
+      'Elevation was refused, so nothing was read.';
+
+  @override
+  String get diskExplorerNotFound => 'This folder is not there any more.';
+
+  @override
+  String get diskExplorerDenied =>
+      'The login user may not read this folder. Turn on admin mode to read it as root.';
+
+  @override
+  String get diskExplorerUnreadable =>
+      'du is not installed on this server, or printed something else.';
+
+  @override
+  String get diskExplorerTransport =>
+      'The read failed or ran past its 3 minutes. Try a folder further down.';
+
+  @override
   String get paletteActions => 'Actions';
 
   @override

@@ -76,6 +76,7 @@ import '../operations/plans/edit_plan.dart';
 import '../jobs/job_history_query.dart';
 import '../services/packages.dart';
 import '../services/accounts.dart';
+import '../services/disk_usage.dart';
 import '../services/unit_queries.dart';
 import '../operations/stack_edits.dart';
 import '../operations/plans/host_plans.dart';
@@ -1762,6 +1763,50 @@ void engineMain(
                 failure: AccountsReportFailure.transport,
               ),
             ),
+          ),
+        );
+      case ReadDiskUsage(
+        :final serverId,
+        :final path,
+        :final requestId,
+        :final elevated,
+      ):
+        void fail(DiskUsageReportFailure failure) => uiPort.send(
+          DiskUsageReport(
+            serverId: serverId,
+            requestId: requestId,
+            path: path,
+            failure: failure,
+          ),
+        );
+        final link = links?.link(serverId);
+        if (!fleetIds.contains(serverId) || link == null) {
+          fail(DiskUsageReportFailure.noLink);
+          return;
+        }
+        final session = elevated ? admin?.session(serverId) : null;
+        if (elevated) {
+          if (session == null) {
+            fail(DiskUsageReportFailure.adminRequired);
+            return;
+          }
+          admin?.touch(serverId);
+        }
+        // Not awaited, as the other reads; a lend that fails still
+        // answers.
+        unawaited(
+          lendSession(
+            serverId,
+            () => readDiskUsage(
+              serverId,
+              path,
+              requestId: requestId,
+              link: link,
+              session: session,
+            ),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => fail(DiskUsageReportFailure.transport),
           ),
         );
       case ReadSmart(:final serverId, :final requestId):
