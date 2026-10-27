@@ -16,8 +16,10 @@ import 'chart_strings.dart';
 import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
 import 'disk_activity.dart';
 import 'drive_health.dart';
+import 'firewall.dart';
 import 'gpus.dart';
 import 'interfaces.dart';
+import 'listening_ports.dart';
 import 'mounts.dart';
 import 'oom_kills.dart';
 import 'power.dart';
@@ -43,10 +45,12 @@ enum SystemSection {
   temperatures,
   gpus,
   oomKills,
+  ports,
   boots,
   driveHealth,
   updates,
   accounts,
+  firewall,
   sshd,
   certificates,
   power,
@@ -259,6 +263,11 @@ class _SystemPanelState extends State<SystemPanel> {
                 monitoring: widget.monitoring,
                 serverId: widget.serverId,
               ),
+              ListeningPortsSection(
+                key: const ValueKey(SystemSection.ports),
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
+              ),
               BootsSection(
                 key: const ValueKey(SystemSection.boots),
                 monitoring: widget.monitoring,
@@ -281,6 +290,10 @@ class _SystemPanelState extends State<SystemPanel> {
                 reads: widget.monitoring.accounts,
                 serverId: widget.serverId,
                 tableId: SystemSection.accounts.name,
+              ),
+              FirewallSection(
+                key: const ValueKey(SystemSection.firewall),
+                serverId: widget.serverId,
               ),
               SshdPostureSection(
                 key: const ValueKey(SystemSection.sshd),

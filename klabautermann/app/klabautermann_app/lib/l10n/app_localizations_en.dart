@@ -1580,6 +1580,75 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemPortsTitle => 'Listening ports';
+
+  @override
+  String get systemPortsReading => 'Reading the listening ports…';
+
+  @override
+  String get systemPortsReadAgain => 'Read again';
+
+  @override
+  String systemPortsFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server refused the port read.',
+      'missing': 'The server lacks the tools the port read runs.',
+      'other': 'The port read failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemPortsNoTool =>
+      'The server has neither ss nor netstat, so its ports cannot be listed.';
+
+  @override
+  String get systemPortsHidden =>
+      'Some ports belong to other users\' processes, whose names only root may see.';
+
+  @override
+  String get systemPortsNone => 'Nothing listens on this server.';
+
+  @override
+  String systemPortsEvery(String protocol, int port) {
+    String _temp0 = intl.Intl.selectLogic(protocol, {
+      'tcp': 'TCP',
+      'udp': 'UDP',
+      'other': '$protocol',
+    });
+    return '$_temp0 $port on every address';
+  }
+
+  @override
+  String systemPortsOn(String protocol, int port, String addresses) {
+    String _temp0 = intl.Intl.selectLogic(protocol, {
+      'tcp': 'TCP',
+      'udp': 'UDP',
+      'other': '$protocol',
+    });
+    return '$_temp0 $port on $addresses';
+  }
+
+  @override
+  String systemPortsProcess(String name, int pid) {
+    return '$name (PID $pid)';
+  }
+
+  @override
+  String get systemPortsOwnerHidden => 'Held by another user\'s process';
+
+  @override
+  String systemPortsUnit(String unit) {
+    return 'Unit $unit';
+  }
+
+  @override
+  String systemPortsContainer(String id) {
+    return 'Container $id';
+  }
+
+  @override
   String get systemNetInterfacesTitle => 'Interfaces';
 
   @override
@@ -1782,6 +1851,146 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get systemFirewallTitle => 'Firewall';
+
+  @override
+  String get systemFirewallAdminNeeded =>
+      'Turn on admin mode to read the firewall: every firewall tool needs root to list its rules.';
+
+  @override
+  String get systemFirewallRead => 'Read firewall rules';
+
+  @override
+  String get systemFirewallReadAgain => 'Read again';
+
+  @override
+  String get systemFirewallReading => 'Reading the firewall rules…';
+
+  @override
+  String systemFirewallFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink':
+          'The server is not connected, so the firewall could not be read.',
+      'adminRequired': 'Admin mode ended before the firewall was read.',
+      'elevationRefused':
+          'Elevation was refused, so the firewall was not read.',
+      'unreadable':
+          'The firewall tools answered in a way this app cannot read.',
+      'transport': 'The connection failed while the firewall was read.',
+      'other': 'The firewall could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemFirewallNoTool =>
+      'No firewall tool was found on this server: none of ufw, firewalld, nft or iptables is installed.';
+
+  @override
+  String get systemFirewallUfw => 'ufw';
+
+  @override
+  String get systemFirewallFirewalld => 'firewalld';
+
+  @override
+  String get systemFirewallNftables => 'nftables';
+
+  @override
+  String get systemFirewallIptables => 'iptables (IPv4)';
+
+  @override
+  String get systemFirewallIp6tables => 'ip6tables (IPv6)';
+
+  @override
+  String systemFirewallActive(String active) {
+    String _temp0 = intl.Intl.selectLogic(active, {
+      'true': 'Active',
+      'other': 'Inactive: ufw filters nothing',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemFirewallRunning(String running) {
+    String _temp0 = intl.Intl.selectLogic(running, {
+      'true': 'Running',
+      'other': 'Not running',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemFirewallUfwDefaults(
+    String incoming,
+    String outgoing,
+    String routed,
+  ) {
+    return 'By default: incoming $incoming, outgoing $outgoing, routed $routed';
+  }
+
+  @override
+  String systemFirewallUfwRule(String to, String action, String from) {
+    return '$to: $action from $from';
+  }
+
+  @override
+  String get systemFirewallNoRules => 'No rules.';
+
+  @override
+  String systemFirewallZoneDefault(String zone) {
+    return '$zone (default zone)';
+  }
+
+  @override
+  String systemFirewallZoneInterfaces(String interfaces) {
+    return 'Interfaces: $interfaces';
+  }
+
+  @override
+  String systemFirewallZoneSources(String sources) {
+    return 'Sources: $sources';
+  }
+
+  @override
+  String systemFirewallZoneServices(String services) {
+    return 'Services allowed: $services';
+  }
+
+  @override
+  String systemFirewallZonePorts(String ports) {
+    return 'Ports allowed: $ports';
+  }
+
+  @override
+  String get systemFirewallNone => 'none';
+
+  @override
+  String systemFirewallZonesIdle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count other zones have no interface or source.',
+      one: '1 other zone has no interface or source.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemFirewallChain(String chain, String policy, int rules) {
+    String _temp0 = intl.Intl.pluralLogic(
+      rules,
+      locale: localeName,
+      other: '$rules rules',
+      one: '1 rule',
+      zero: 'no rules',
+    );
+    return '$chain: policy $policy, $_temp0';
+  }
+
+  @override
+  String get systemFirewallNoPolicy => 'none';
 
   @override
   String get systemSshdTitle => 'SSH server';
@@ -6088,6 +6297,48 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerContainersColumnMemory => 'Memory';
 
   @override
+  String get dockerContainersColumnNetwork => 'Network';
+
+  @override
+  String get dockerContainersColumnBlockIo => 'Block I/O';
+
+  @override
+  String get dockerContainersColumnPids => 'PIDs';
+
+  @override
+  String get dockerContainersColumnIp => 'IP';
+
+  @override
+  String get dockerContainersColumnStarted => 'Started';
+
+  @override
+  String dockerContainersIo(String first, String second) {
+    return '$first / $second';
+  }
+
+  @override
+  String get dockerContainersColumns => 'Columns';
+
+  @override
+  String get dockerContainersColumnsTitle => 'Columns';
+
+  @override
+  String get dockerContainersColumnsDrag => 'Drag to reorder';
+
+  @override
+  String get dockerContainersColumnsReset => 'Reset';
+
+  @override
+  String get dockerContainersColumnsCancel => 'Cancel';
+
+  @override
+  String get dockerContainersColumnsDone => 'Done';
+
+  @override
+  String get dockerContainersColumnsNotSaved =>
+      'The columns could not be saved. They stay until Klabautermann quits.';
+
+  @override
   String get dockerContainersSelect => 'Select';
 
   @override
@@ -6508,6 +6759,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerImageHistoryComment => 'Comment';
+
+  @override
+  String get dockerLinksTitle => 'Links';
+
+  @override
+  String dockerLinksFrom(String source) {
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'dockhand': 'From a Dockhand label',
+      'dozzle': 'From a Dozzle label',
+      'traefik': 'A Traefik route',
+      'caddy': 'A Caddy site',
+      'other': 'From a label',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerLinksFromPort(String source, String port) {
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'dockhand': 'From a Dockhand label, port $port',
+      'other': 'From a label, port $port',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerLinksOpen(String name) {
+    return 'Open $name in the browser';
+  }
+
+  @override
+  String get dockerLinksNotOpened =>
+      'The link could not be opened in a browser.';
 
   @override
   String get dockerProcessesTitle => 'Processes';
@@ -7281,6 +7565,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerLogsEmpty => 'This container has no log lines.';
+
+  @override
+  String get dockerLogsRangeChoose => 'Choose start and end…';
+
+  @override
+  String dockerLogsRangeBetween(String since, String until) {
+    return '$since to $until';
+  }
+
+  @override
+  String get dockerLogsRangeTitle => 'Time range';
+
+  @override
+  String get dockerLogsRangeFrom => 'From';
+
+  @override
+  String get dockerLogsRangeTo => 'To';
+
+  @override
+  String get dockerLogsRangeOrder => 'The start must come before the end.';
+
+  @override
+  String get dockerLogsRangeCancel => 'Cancel';
+
+  @override
+  String get dockerLogsRangeApply => 'Apply';
+
+  @override
+  String get dockerLogsLiveRange =>
+      'A range with an end has no new lines to follow.';
 
   @override
   String dockerLogsDriverUnreadable(String reason, String driver) {

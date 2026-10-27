@@ -311,6 +311,11 @@ is on main:
   container window oldest first, against `LogStreamSpec`'s newest
   first, so the controller keeps that order. Tested against the fake
   engine only.
+- Container log time range (M6 N19a, CTX-03): the log view's range
+  menu reads a container's logs from LOG-01's spans back from now, still
+  following, or between a chosen start and end, read once with Live
+  stopped. The engine sends `since` and `until` and no `tail`, and a
+  follow's resume starts after its newest line.
 - Images in the app (M3, D16, 03 §7.14, §10.4): the Images sub-tab
   holds one `DockerWatch` of the images and containers per server while
   it shows, apart from the Containers view's, and sends `DockerUnwatch`
@@ -2056,6 +2061,12 @@ is on main:
   zones, every 10 s. The System tab's Temperatures section lists each
   sensor with its high and critical limits, and does not show where the
   host has no sensor, as VMs, or inside a container.
+- Firewall (M6 N35, NET-06): in admin mode, the System tab's Firewall
+  section reads the rules of whichever of ufw, firewalld, nftables and
+  iptables the server has: ufw's state, default policies and rules,
+  firewalld's default and active zones with their services and ports,
+  and each nftables or iptables chain with its policy and rule count.
+
 - Processor (M6 N42c, CPU-07): the System tab's new section beside the
   identity shows the processor's model (or its vendor where it names
   none), sockets, cores, threads per core, the CPUs the kernel counts
@@ -2079,6 +2090,12 @@ is on main:
   cgroup's limit ran out rather than the server's memory. "Show in
   kernel log" opens the boot's OOM report lines from the journal. An
   unreadable kernel log and a kernel without the counter say so.
+- Listening ports (M6 N34a, NET-04): the System tab's new section lists
+  each listening TCP and bound UDP port, on every address or the ones
+  named, with the processes holding it and the systemd unit or
+  container each runs in, from `ss` (or BusyBox `netstat`) and the
+  processes' cgroups. Ports whose processes belong to other users say
+  so. Docker's published ports and admin-mode owners follow in N34b.
 - CPU breakdown and pressure (M6 N42a, CPU-04, CPU-05, MEM-04): the
   Overview's CPU card adds I/O wait, steal, IRQ and soft IRQ beside
   user, system and idle, with a plain-language hint once steal, iowait
@@ -2190,6 +2207,18 @@ is on main:
   in settings.json. Each notification states the same limit (Y3). The
   app icon's badge is not built, and whether the notifications show on
   real Android, iOS, macOS, Windows and Linux desktops is a manual check.
+- Label links (M6 N17b, CTR-11): a container whose labels point at web
+  pages shows a Links section under its overview. It reads Dockhand's
+  `dockhand.url` (a plain URL or `[Name](url)`) and
+  `dockhand.port.<port>.url`, Dozzle's `dev.dozzle.url`, Traefik
+  routers' `Host(...)` rules (HTTPS where the router has TLS, a
+  certificate resolver or a `websecure` entry point; none while
+  `traefik.enable=false`) and caddy-docker-proxy site addresses. Only
+  plain `http` and `https` addresses without credentials become links,
+  and each opens in the system browser, or shows as text to copy
+  where the app has no launcher. Mute labels are not read yet:
+  Klabautermann sends no per-container notifications for them to
+  silence.
 - Container processes (M6 N17a, CTR-10): a running container's details
   end with a Processes section, read through `GET /containers/{id}/top`
   when the details show, when the container starts and on "Read again".

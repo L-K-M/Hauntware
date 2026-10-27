@@ -353,6 +353,12 @@ const kBootEndsRead = 10;
 /// [HostCommands.kernels]' output.
 const kKernelsMarker = '== modules';
 
+/// The markers in [HostCommands.listeningPorts]' output: which tool
+/// listed the sockets (`== ss`, `== netstat` or `== none`), then
+/// `== cgroup <pid>` before each listed process's cgroups.
+const kPortsToolMarker = '==';
+const kPortsCgroupMarker = '== cgroup';
+
 /// The markers before the usable CPU count, `lscpu`'s JSON and the
 /// `/proc/cpuinfo` lines in [HostCommands.cpuTopology]' output.
 const kCpuNprocMarker = '== nproc';
@@ -374,6 +380,17 @@ const kNetSockstatMarker = '== sockstat';
 const kMountsFindmntMarker = '== findmnt';
 const kMountsProcMarker = '== proc';
 const kMountsSwapsMarker = '== swaps';
+
+/// [HostCommands.firewall]'s section markers, each printed only where its
+/// tool is installed; firewalld's carries its state.
+const kFirewallUfwMarker = '== ufw';
+const kFirewallFirewalldMarker = '== firewalld';
+const kFirewallNftMarker = '== nft';
+const kFirewallIptablesMarker = '== iptables';
+const kFirewallIp6tablesMarker = '== ip6tables';
+
+/// The most lines [HostCommands.firewall] keeps of each tool's output [E].
+const kFirewallLinesKept = 4000;
 
 /// The line before [HostCommands.sshdPosture]'s configuration: `== sshd`
 /// and how much of the connection `-C` named, or `missing` or `failed`.
@@ -914,6 +931,30 @@ abstract final class HostCommands {
       'ls -1 /lib/modules 2>/dev/null || ls -1 /usr/lib/modules 2>/dev/null; '
       'exit 0';
 
+  /// NET-04's read: the listening TCP and UDP sockets with their
+  /// processes from `ss -Htulpn`, or BusyBox's `netstat -tulpn` where
+  /// there is no `ss`, then the cgroups of each process they name, so the
+  /// app can tell the systemd unit or container behind a port. The login
+  /// user sees only its own processes' sockets' owners.
+  /// `parseListeningPorts` reads it.
+  static List<String> listeningPorts() => const [
+    'sh',
+    '-c',
+    _kListeningPortsScript,
+  ];
+
+  static const _kListeningPortsScript =
+      'if command -v ss >/dev/null 2>&1; then '
+      'echo "$kPortsToolMarker ss"; o=\$(ss -Htulpn 2>/dev/null); '
+      'elif command -v netstat >/dev/null 2>&1; then '
+      'echo "$kPortsToolMarker netstat"; o=\$(netstat -tulpn 2>/dev/null); '
+      'else echo "$kPortsToolMarker none"; o=; fi; '
+      "printf '%s\\n' \"\$o\"; "
+      "for p in \$(printf '%s\\n' \"\$o\" | grep -oE 'pid=[0-9]+| [0-9]+/' "
+      "| tr -dc '0-9\\n' | sort -un); do "
+      'echo "$kPortsCgroupMarker \$p"; cat "/proc/\$p/cgroup" 2>/dev/null; '
+      'done; exit 0';
+
   /// CPU-07's read: the CPUs this login may run on, `lscpu`'s fields in
   /// the C locale, whose names it translates otherwise, and the
   /// `/proc/cpuinfo` lines that name the model and place each CPU, for a
@@ -958,6 +999,41 @@ abstract final class HostCommands {
       'echo "$kNetSockstatMarker"; '
       'cat /proc/net/sockstat /proc/net/sockstat6 2>/dev/null; '
       'exit 0';
+
+  /// NET-06's read (03 §7.4), run as root, since every tool here needs
+  /// it: `ufw status verbose`, firewalld's state and its zones,
+  /// `nft -j list ruleset`, and `iptables-save` and `ip6tables-save`,
+  /// each after its marker and only where installed, each cut to
+  /// [kFirewallLinesKept] lines. `parseFirewall` reads it.
+  static List<String> firewall() => const ['sh', '-c', _firewall];
+
+  static const _firewall =
+      '''
+# ufw's labels are translated; the parser reads the English ones.
+export LC_ALL=C
+keep() { head -n $kFirewallLinesKept; }
+if command -v ufw >/dev/null 2>&1; then
+  echo '$kFirewallUfwMarker'
+  ufw status verbose 2>&1 | keep
+fi
+if command -v firewall-cmd >/dev/null 2>&1; then
+  s=\$(firewall-cmd --state 2>&1)
+  echo "$kFirewallFirewalldMarker \$s"
+  [ "\$s" = running ] && firewall-cmd --list-all-zones 2>&1 | keep
+fi
+if command -v nft >/dev/null 2>&1; then
+  echo '$kFirewallNftMarker'
+  nft -j list ruleset 2>/dev/null | keep
+fi
+if command -v iptables-save >/dev/null 2>&1; then
+  echo '$kFirewallIptablesMarker'
+  iptables-save 2>/dev/null | keep
+fi
+if command -v ip6tables-save >/dev/null 2>&1; then
+  echo '$kFirewallIp6tablesMarker'
+  ip6tables-save 2>/dev/null | keep
+fi
+exit 0''';
 
   /// SEC-01's read (03 §7.10), run as root, since `sshd -T` loads the
   /// host keys: the effective configuration for this connection, with the

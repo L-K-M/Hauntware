@@ -7,6 +7,7 @@ import '../ui/charts/series_ring.dart';
 import '../ui/charts/time_series.dart';
 import 'account_reads.dart';
 import 'attention.dart';
+import 'container_columns.dart';
 import 'container_terminals.dart';
 import 'docker_controller.dart';
 import 'docker_endpoint_choices.dart';
@@ -159,10 +160,12 @@ final class MonitoringController extends ChangeNotifier {
     StackFolders? stackFolders,
     TlsEndpoints? tlsEndpoints,
     AttentionAcks? attentionAcks,
+    ContainerColumnChoice? containerColumns,
   }) : _clock = _FreshnessClock(now),
        stackFolders = stackFolders ?? StackFolders(),
        tlsEndpoints = tlsEndpoints ?? TlsEndpoints(),
-       attentionAcks = attentionAcks ?? AttentionAcks() {
+       attentionAcks = attentionAcks ?? AttentionAcks(),
+       containerColumns = containerColumns ?? ContainerColumnChoice() {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     logs = LogStreams(_engine);
     terminals = ContainerTerminals(_engine);
@@ -180,6 +183,10 @@ final class MonitoringController extends ChangeNotifier {
   /// The folders the Stacks sub-tab scans for stacks without containers
   /// (STK-08), chosen on this device.
   final StackFolders stackFolders;
+
+  /// The Containers tab's columns as chosen on this device (CTR-08),
+  /// which outlive this run as [stackFolders] do.
+  final ContainerColumnChoice containerColumns;
 
   /// The endpoints the System tab's Certificates section checks from this
   /// device (CRT-01), chosen on this device.

@@ -17,6 +17,7 @@ import 'controllers/alert_rules_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
 import 'controllers/attention.dart';
+import 'controllers/container_columns.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/device_name.dart';
 import 'controllers/pin_publication_controller.dart';
@@ -213,12 +214,18 @@ Future<void> main(List<String> args) async {
     stored: settings.attention,
     save: settings.setAttention,
   );
+  // The Containers tab's chosen columns (CTR-08), device-local.
+  final containerColumns = ContainerColumnChoice(
+    stored: settings.containerColumns,
+    save: settings.setContainerColumns,
+  );
   final monitoring = MonitoringController(
     engine,
     attentionAcks: attentionAcks,
     dockerEndpointChoices: dockerEndpointChoices,
     stackFolders: stackFolders,
     tlsEndpoints: tlsEndpoints,
+    containerColumns: containerColumns,
   );
   // The host-key and keyboard-interactive prompts the engine raises while
   // it connects, shown one at a time over every route.

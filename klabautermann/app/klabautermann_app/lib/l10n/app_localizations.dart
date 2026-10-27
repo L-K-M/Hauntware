@@ -2212,6 +2212,84 @@ abstract class AppLocalizations {
   /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the processor read.} missing{The server lacks the tools the processor read runs.} other{The processor read failed.}}'**
   String systemProcessorFailed(String failure);
 
+  /// System tab: the heading of the listening ports section (NET-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Listening ports'**
+  String get systemPortsTitle;
+
+  /// System tab, Listening ports: shown while the ports are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the listening ports…'**
+  String get systemPortsReading;
+
+  /// System tab, Listening ports: the button that reads the ports again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemPortsReadAgain;
+
+  /// System tab, Listening ports: why the port read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the port read.} missing{The server lacks the tools the port read runs.} other{The port read failed.}}'**
+  String systemPortsFailed(String failure);
+
+  /// System tab, Listening ports: shown when neither listing tool is installed. ss and netstat are command names, never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'The server has neither ss nor netstat, so its ports cannot be listed.'**
+  String get systemPortsNoTool;
+
+  /// System tab, Listening ports: shown when the login user could not see which process holds some sockets.
+  ///
+  /// In en, this message translates to:
+  /// **'Some ports belong to other users\' processes, whose names only root may see.'**
+  String get systemPortsHidden;
+
+  /// System tab, Listening ports: shown when no socket listens.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing listens on this server.'**
+  String get systemPortsNone;
+
+  /// System tab, Listening ports: a port that accepts connections on all of the server's addresses.
+  ///
+  /// In en, this message translates to:
+  /// **'{protocol, select, tcp{TCP} udp{UDP} other{{protocol}}} {port} on every address'**
+  String systemPortsEvery(String protocol, int port);
+
+  /// System tab, Listening ports: a port that accepts connections only on the listed addresses, such as 127.0.0.1.
+  ///
+  /// In en, this message translates to:
+  /// **'{protocol, select, tcp{TCP} udp{UDP} other{{protocol}}} {port} on {addresses}'**
+  String systemPortsOn(String protocol, int port, String addresses);
+
+  /// System tab, Listening ports: a process holding the port, by its command name and process ID.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (PID {pid})'**
+  String systemPortsProcess(String name, int pid);
+
+  /// System tab, Listening ports: shown under a port whose process the login user may not see.
+  ///
+  /// In en, this message translates to:
+  /// **'Held by another user\'s process'**
+  String get systemPortsOwnerHidden;
+
+  /// System tab, Listening ports: the systemd unit the process runs in, such as nginx.service.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit {unit}'**
+  String systemPortsUnit(String unit);
+
+  /// System tab, Listening ports: the container the process runs in, by its short ID.
+  ///
+  /// In en, this message translates to:
+  /// **'Container {id}'**
+  String systemPortsContainer(String id);
+
   /// System tab: the heading of the network interfaces section (NET-02, NET-03).
   ///
   /// In en, this message translates to:
@@ -2444,6 +2522,166 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 more drive was not read.} other{{count} more drives were not read.}}'**
   String systemDriveHealthNotRead(int count);
+
+  /// System tab: the heading of the firewall section (NET-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Firewall'**
+  String get systemFirewallTitle;
+
+  /// System tab, Firewall: why the read waits for admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on admin mode to read the firewall: every firewall tool needs root to list its rules.'**
+  String get systemFirewallAdminNeeded;
+
+  /// System tab, Firewall: the button that reads the rules.
+  ///
+  /// In en, this message translates to:
+  /// **'Read firewall rules'**
+  String get systemFirewallRead;
+
+  /// System tab, Firewall: the button that reads the rules again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemFirewallReadAgain;
+
+  /// System tab, Firewall: shown while the rules are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the firewall rules…'**
+  String get systemFirewallReading;
+
+  /// System tab, Firewall: why a read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so the firewall could not be read.} adminRequired{Admin mode ended before the firewall was read.} elevationRefused{Elevation was refused, so the firewall was not read.} unreadable{The firewall tools answered in a way this app cannot read.} transport{The connection failed while the firewall was read.} other{The firewall could not be read.}}'**
+  String systemFirewallFailed(String reason);
+
+  /// System tab, Firewall: the read found no firewall tool.
+  ///
+  /// In en, this message translates to:
+  /// **'No firewall tool was found on this server: none of ufw, firewalld, nft or iptables is installed.'**
+  String get systemFirewallNoTool;
+
+  /// System tab, Firewall: the heading of ufw's rules; a product name.
+  ///
+  /// In en, this message translates to:
+  /// **'ufw'**
+  String get systemFirewallUfw;
+
+  /// System tab, Firewall: the heading of firewalld's zones; a product name.
+  ///
+  /// In en, this message translates to:
+  /// **'firewalld'**
+  String get systemFirewallFirewalld;
+
+  /// System tab, Firewall: the heading of the nftables chains; a product name.
+  ///
+  /// In en, this message translates to:
+  /// **'nftables'**
+  String get systemFirewallNftables;
+
+  /// System tab, Firewall: the heading of the IPv4 iptables chains.
+  ///
+  /// In en, this message translates to:
+  /// **'iptables (IPv4)'**
+  String get systemFirewallIptables;
+
+  /// System tab, Firewall: the heading of the IPv6 iptables chains.
+  ///
+  /// In en, this message translates to:
+  /// **'ip6tables (IPv6)'**
+  String get systemFirewallIp6tables;
+
+  /// System tab, Firewall: whether ufw is enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'{active, select, true{Active} other{Inactive: ufw filters nothing}}'**
+  String systemFirewallActive(String active);
+
+  /// System tab, Firewall: whether firewalld runs.
+  ///
+  /// In en, this message translates to:
+  /// **'{running, select, true{Running} other{Not running}}'**
+  String systemFirewallRunning(String running);
+
+  /// System tab, Firewall: ufw's default policy per direction, each as ufw names it (deny, allow, reject, disabled).
+  ///
+  /// In en, this message translates to:
+  /// **'By default: incoming {incoming}, outgoing {outgoing}, routed {routed}'**
+  String systemFirewallUfwDefaults(
+    String incoming,
+    String outgoing,
+    String routed,
+  );
+
+  /// System tab, Firewall: one ufw rule, its parts as ufw prints them, such as 22/tcp: ALLOW IN from Anywhere.
+  ///
+  /// In en, this message translates to:
+  /// **'{to}: {action} from {from}'**
+  String systemFirewallUfwRule(String to, String action, String from);
+
+  /// System tab, Firewall: a tool that holds no rules.
+  ///
+  /// In en, this message translates to:
+  /// **'No rules.'**
+  String get systemFirewallNoRules;
+
+  /// System tab, Firewall: the firewalld zone new interfaces join.
+  ///
+  /// In en, this message translates to:
+  /// **'{zone} (default zone)'**
+  String systemFirewallZoneDefault(String zone);
+
+  /// System tab, Firewall: the interfaces bound to a firewalld zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Interfaces: {interfaces}'**
+  String systemFirewallZoneInterfaces(String interfaces);
+
+  /// System tab, Firewall: the source addresses bound to a firewalld zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Sources: {sources}'**
+  String systemFirewallZoneSources(String sources);
+
+  /// System tab, Firewall: the services a firewalld zone lets in.
+  ///
+  /// In en, this message translates to:
+  /// **'Services allowed: {services}'**
+  String systemFirewallZoneServices(String services);
+
+  /// System tab, Firewall: the ports a firewalld zone lets in beside its services.
+  ///
+  /// In en, this message translates to:
+  /// **'Ports allowed: {ports}'**
+  String systemFirewallZonePorts(String ports);
+
+  /// System tab, Firewall: a firewalld zone that allows no service.
+  ///
+  /// In en, this message translates to:
+  /// **'none'**
+  String get systemFirewallNone;
+
+  /// System tab, Firewall: zones that apply to no traffic, not listed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 other zone has no interface or source.} other{{count} other zones have no interface or source.}}'**
+  String systemFirewallZonesIdle(int count);
+
+  /// System tab, Firewall: one chain, named by its family, table and name, with its default policy as the tool prints it (accept, drop) and how many rules it holds.
+  ///
+  /// In en, this message translates to:
+  /// **'{chain}: policy {policy}, {rules, plural, =0{no rules} =1{1 rule} other{{rules} rules}}'**
+  String systemFirewallChain(String chain, String policy, int rules);
+
+  /// System tab, Firewall: a chain without a default policy, which only other chains jump to.
+  ///
+  /// In en, this message translates to:
+  /// **'none'**
+  String get systemFirewallNoPolicy;
 
   /// System tab: the heading of the SSH server section (SEC-01).
   ///
@@ -7820,6 +8058,84 @@ abstract class AppLocalizations {
   /// **'Memory'**
   String get dockerContainersColumnMemory;
 
+  /// Containers table column: bytes received and sent since the container started, from its list stats (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get dockerContainersColumnNetwork;
+
+  /// Containers table column: bytes read from and written to disk since the container started (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Block I/O'**
+  String get dockerContainersColumnBlockIo;
+
+  /// Containers table column: the processes and threads in the container (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'PIDs'**
+  String get dockerContainersColumnPids;
+
+  /// Containers table column: the container's first address on a network (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'IP'**
+  String get dockerContainersColumnIp;
+
+  /// Containers table column: how long ago a running container started, read from its status (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Started'**
+  String get dockerContainersColumnStarted;
+
+  /// Containers table: two byte totals, received then sent, or read then written, as docker stats shows them.
+  ///
+  /// In en, this message translates to:
+  /// **'{first} / {second}'**
+  String dockerContainersIo(String first, String second);
+
+  /// Containers tab: the button that opens the column chooser (CTR-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Columns'**
+  String get dockerContainersColumns;
+
+  /// Column chooser: its title.
+  ///
+  /// In en, this message translates to:
+  /// **'Columns'**
+  String get dockerContainersColumnsTitle;
+
+  /// Column chooser: the tooltip on a column's drag handle.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to reorder'**
+  String get dockerContainersColumnsDrag;
+
+  /// Column chooser: puts back the default columns.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get dockerContainersColumnsReset;
+
+  /// Column chooser: closes it without a change.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerContainersColumnsCancel;
+
+  /// Column chooser: shows the checked columns in their order.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get dockerContainersColumnsDone;
+
+  /// Containers tab: the chosen columns show, but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The columns could not be saved. They stay until Klabautermann quits.'**
+  String get dockerContainersColumnsNotSaved;
+
   /// Containers tab: the chip that puts a checkbox on each row and heading, to act on several containers at once (CTR-07).
   ///
   /// In en, this message translates to:
@@ -8269,6 +8585,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Comment'**
   String get dockerImageHistoryComment;
+
+  /// Container details: the section of web pages the container's labels point at (CTR-11).
+  ///
+  /// In en, this message translates to:
+  /// **'Links'**
+  String get dockerLinksTitle;
+
+  /// Container details, Links: where a link came from, under its address.
+  ///
+  /// In en, this message translates to:
+  /// **'{source, select, dockhand{From a Dockhand label} dozzle{From a Dozzle label} traefik{A Traefik route} caddy{A Caddy site} other{From a label}}'**
+  String dockerLinksFrom(String source);
+
+  /// Container details, Links: where a link came from, for one container port.
+  ///
+  /// In en, this message translates to:
+  /// **'{source, select, dockhand{From a Dockhand label, port {port}} other{From a label, port {port}}}'**
+  String dockerLinksFromPort(String source, String port);
+
+  /// Container details, Links: the tooltip and screen-reader label of the button that opens a link.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {name} in the browser'**
+  String dockerLinksOpen(String name);
+
+  /// Container details, Links: shown when the system refused to open a link.
+  ///
+  /// In en, this message translates to:
+  /// **'The link could not be opened in a browser.'**
+  String get dockerLinksNotOpened;
 
   /// Container details: the section listing the processes running inside the container (CTR-10).
   ///
@@ -9193,6 +9539,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This container has no log lines.'**
   String get dockerLogsEmpty;
+
+  /// Container logs time range menu: opens a dialog to pick the range's start and end date and time.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose start and end…'**
+  String get dockerLogsRangeChoose;
+
+  /// Container logs time range button when a start and end were chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'{since} to {until}'**
+  String dockerLogsRangeBetween(String since, String until);
+
+  /// Title of the dialog that picks a container log time range's start and end.
+  ///
+  /// In en, this message translates to:
+  /// **'Time range'**
+  String get dockerLogsRangeTitle;
+
+  /// Container log time range dialog: the range's start, a date and time.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get dockerLogsRangeFrom;
+
+  /// Container log time range dialog: the range's end, a date and time.
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get dockerLogsRangeTo;
+
+  /// Container log time range dialog: why Apply is off.
+  ///
+  /// In en, this message translates to:
+  /// **'The start must come before the end.'**
+  String get dockerLogsRangeOrder;
+
+  /// Closes the container log time range dialog without changing the range.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerLogsRangeCancel;
+
+  /// Reads the container's logs in the chosen time range.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get dockerLogsRangeApply;
+
+  /// Tooltip of the off Live chip while a container's logs read a range with a chosen end.
+  ///
+  /// In en, this message translates to:
+  /// **'A range with an end has no new lines to follow.'**
+  String get dockerLogsLiveRange;
 
   /// Shown in place of a container's logs when its logging driver keeps no logs the engine can read back (CTX-01): the none driver; on Podman, a driver other than json-file, k8s-file and journald; on Docker, a remote driver with Docker's dual-logging cache disabled; or a driver the engine could not name. driver is the driver's name as Docker reports it, such as splunk; driver and cache names stay as they are.
   ///

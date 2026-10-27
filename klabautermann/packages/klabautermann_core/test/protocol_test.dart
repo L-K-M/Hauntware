@@ -153,6 +153,11 @@ void main() {
         ),
         const HostQuery(
           serverId: 'srv-1',
+          queryId: 'h-ports',
+          query: ListeningPortsQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
           queryId: 'h-3',
           query: BootEndsQuery(),
         ),
@@ -297,6 +302,7 @@ void main() {
         const ReadSmart('srv-1', requestId: 'r-1'),
         const ReadPackages('srv-1', requestId: 'r-1', fresh: true),
         const ReadRestarts('srv-1', requestId: 'r-1'),
+        const ReadFirewall('srv-1', requestId: 'r-1'),
         const ReadSshdPosture('srv-1', requestId: 'r-1'),
         const ReadAccounts('srv-1', requestId: 'r-1'),
         const ReadHistory('srv-1', HistoryTier.minute, requestId: 'h-1'),
@@ -453,6 +459,24 @@ void main() {
                   cgroup: '/system.slice/docker-0123.scope',
                 ),
               ],
+            ),
+          ),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-ports',
+          payload: ListeningPorts(
+            ListeningPortsRead(
+              tool: PortsTool.ss,
+              sockets: [
+                ListeningSocket(
+                  protocol: PortProtocol.tcp,
+                  address: '0.0.0.0',
+                  port: 22,
+                  processes: const [PortProcess(name: 'sshd', pid: 812)],
+                ),
+              ],
+              owners: const {812: ProcessAttribution(unit: 'ssh.service')},
             ),
           ),
         ),
@@ -1732,6 +1756,15 @@ void main() {
         () => spec(source: bounded, follow: true),
         throwsA(isA<AssertionError>()),
         reason: 'a follow reads up to the present',
+      );
+
+      expect(
+        () => spec(
+          source: ContainerLogSource('db', until: DateTime.utc(2026, 10, 15)),
+          follow: true,
+        ),
+        throwsA(isA<AssertionError>()),
+        reason: 'a container follow reads up to the present too',
       );
 
       expect(spec(source: bounded).follow, isFalse);

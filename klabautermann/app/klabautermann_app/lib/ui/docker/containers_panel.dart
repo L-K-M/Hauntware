@@ -17,6 +17,7 @@ import '../sortable_table.dart';
 import 'container_details.dart';
 import 'container_logs.dart';
 import 'containers_view.dart';
+import 'docker_cells.dart' show dockerAgeText;
 
 /// The panel width from which the containers show as the sortable table;
 /// narrower, as on a phone, they show as two-line rows. It grows with the
@@ -111,6 +112,30 @@ class _ContainersPanelState extends State<ContainersPanel> {
   late final _BuiltRows _builtRows = _BuiltRows(() => _report(_builtRows.ids));
 
   DockerController get _docker => widget.monitoring.docker;
+
+  /// The columns after the name, as chosen on this device (CTR-08).
+  List<ContainerColumn> get _chosen =>
+      chosenContainerColumns(widget.monitoring.containerColumns.names);
+
+  Future<void> _chooseColumns() async {
+    final chosen = await showDialog<List<ContainerColumn>>(
+      context: context,
+      builder: (context) => _ColumnsDialog(chosen: _chosen),
+    );
+    if (chosen == null || !mounted) return;
+
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await widget.monitoring.containerColumns.setNames([
+        for (final column in chosen) column.name,
+      ]);
+    } on Object {
+      messenger?.showSnackBar(
+        SnackBar(content: Text(l10n.dockerContainersColumnsNotSaved)),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -235,7 +260,11 @@ class _ContainersPanelState extends State<ContainersPanel> {
     final list = _docker.containersFor(widget.serverId);
     final endpoint = _docker.endpointFor(widget.serverId);
     return ListenableBuilder(
-      listenable: Listenable.merge([list, endpoint]),
+      listenable: Listenable.merge([
+        list,
+        endpoint,
+        widget.monitoring.containerColumns,
+      ]),
       builder: (context, _) => _build(context, list.value, endpoint.value),
     );
   }
@@ -357,7 +386,10 @@ class _ContainersPanelState extends State<ContainersPanel> {
     required bool wide,
   }) {
     final l10n = AppLocalizations.of(context);
-    final columns = _columns(l10n, stats, widget.monitoring.clock.value);
+    final columns = _shownColumns(
+      _columns(l10n, stats, widget.monitoring.clock.value),
+      _chosen,
+    );
     final terms = searchTerms(_search.text);
     final selecting = _selecting && _bulkAllowed(context);
     final shown = containersShown(
@@ -489,6 +521,11 @@ class _ContainersPanelState extends State<ContainersPanel> {
         selected: _runningOnly,
         onSelected: (selected) => setState(() => _runningOnly = selected),
       ),
+      TextButton.icon(
+        onPressed: _chooseColumns,
+        icon: const Icon(Icons.view_column_outlined),
+        label: Text(l10n.dockerContainersColumns),
+      ),
       if (_bulkAllowed(context))
         FilterChip(
           avatar: const Icon(Icons.checklist),
@@ -607,7 +644,11 @@ class _ContainersPanelState extends State<ContainersPanel> {
   /// and the direction, which the button's tooltip names.
   Widget _sortControls(AppLocalizations l10n) {
     final theme = Theme.of(context);
-    final column = ContainerColumn.values.byName(_sort.columnId);
+    final shown = [ContainerColumn.name, ..._chosen];
+    final column = switch (ContainerColumn.values.asNameMap()[_sort.columnId]) {
+      final sorted? when shown.contains(sorted) => sorted,
+      _ => ContainerColumn.name,
+    };
     final ascending = _sort.direction == TableSortDirection.ascending;
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -623,7 +664,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
           value: column,
           isDense: ghostIsDesktopPlatform(theme.platform),
           items: [
-            for (final choice in ContainerColumn.values)
+            for (final choice in shown)
               DropdownMenuItem(
                 value: choice,
                 child: Text(_label(l10n, choice)),
@@ -843,8 +884,9 @@ class _ContainersPanelState extends State<ContainersPanel> {
     SortableTableColumn<ContainerListEntry> figure(
       ContainerColumn id,
       String? Function(ContainerListStats stats) shown,
-      Comparable<Object>? Function(ContainerListStats stats) sortKey,
-    ) {
+      Comparable<Object>? Function(ContainerListStats stats) sortKey, {
+      double width = 88,
+    }) {
       (String, bool)? read(ContainerSummary container) {
         if (!containerIsUp(container)) return null;
         final row = stats[container.id];
@@ -866,7 +908,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
           final row? when containerIsUp(container) => sortKey(row),
           _ => null,
         },
-        extent: const FixedColumnExtent(88),
+        extent: FixedColumnExtent(width),
         alignment: CellAlignment.end,
         cell: (context, container) => switch (read(container)) {
           null => const SizedBox.shrink(),
@@ -956,12 +998,64 @@ class _ContainersPanelState extends State<ContainersPanel> {
         },
         (row) => row.memoryUsed,
       ),
+      figure(
+        ContainerColumn.network,
+        (row) => _ioText(l10n, row.networkRx, row.networkTx),
+        (row) => _ioTotal(row.networkRx, row.networkTx),
+        width: 152,
+      ),
+      figure(
+        ContainerColumn.blockIo,
+        (row) => _ioText(l10n, row.blockRead, row.blockWrite),
+        (row) => _ioTotal(row.blockRead, row.blockWrite),
+        width: 152,
+      ),
+      figure(
+        ContainerColumn.pids,
+        (row) => row.pids?.toString(),
+        (row) => row.pids,
+        width: 64,
+      ),
+      column(
+        ContainerColumn.ip,
+        (container) => containerIpOf(container) ?? '',
+        containerIpOf,
+        extent: const FixedColumnExtent(120),
+      ),
+      column(
+        ContainerColumn.started,
+        (container) => switch (containerUptime(container)) {
+          final uptime? => dockerAgeText(l10n, uptime),
+          null => '',
+        },
+        // The latest start first when ascending, as the uptime is least.
+        (container) => containerUptime(container)?.inSeconds,
+        extent: const FixedColumnExtent(120),
+      ),
+    ];
+  }
+
+  /// The columns shown, the name first, then [chosen]'s in order.
+  List<SortableTableColumn<ContainerListEntry>> _shownColumns(
+    List<SortableTableColumn<ContainerListEntry>> all,
+    List<ContainerColumn> chosen,
+  ) {
+    final byId = {for (final column in all) column.id: column};
+    return [
+      byId[ContainerColumn.name.name]!,
+      for (final column in chosen) byId[column.name]!,
     ];
   }
 }
 
 /// The columns whose largest values matter, which start descending.
-const _firstDirection = {ContainerColumn.cpu, ContainerColumn.memory};
+const _firstDirection = {
+  ContainerColumn.cpu,
+  ContainerColumn.memory,
+  ContainerColumn.network,
+  ContainerColumn.blockIo,
+  ContainerColumn.pids,
+};
 
 /// The key tests find a phone row by, in the table rows' form.
 String _phoneRowKey(ContainerListEntry entry) =>
@@ -984,7 +1078,25 @@ String _label(AppLocalizations l10n, ContainerColumn column) =>
       ContainerColumn.stack => l10n.dockerContainersColumnStack,
       ContainerColumn.cpu => l10n.dockerContainersColumnCpu,
       ContainerColumn.memory => l10n.dockerContainersColumnMemory,
+      ContainerColumn.network => l10n.dockerContainersColumnNetwork,
+      ContainerColumn.blockIo => l10n.dockerContainersColumnBlockIo,
+      ContainerColumn.pids => l10n.dockerContainersColumnPids,
+      ContainerColumn.ip => l10n.dockerContainersColumnIp,
+      ContainerColumn.started => l10n.dockerContainersColumnStarted,
     };
+
+/// A pair of byte totals as `docker stats` shows them, in then out, or
+/// read then written, in IEC units (03 §10.10); null when both are
+/// unknown.
+String? _ioText(AppLocalizations l10n, int? first, int? second) {
+  if (first == null && second == null) return null;
+  String size(int? bytes) =>
+      bytes == null ? l10n.chartUnknownValue : ghostFormatBinarySize(bytes);
+  return l10n.dockerContainersIo(size(first), size(second));
+}
+
+int? _ioTotal(int? first, int? second) =>
+    first == null && second == null ? null : (first ?? 0) + (second ?? 0);
 
 /// A state in words; one the API does not list reads as the engine gave
 /// it, and none as unknown. The Stacks sub-tab's overview shares it.
@@ -1143,6 +1255,90 @@ class ContainerHealthBadge extends StatelessWidget {
               color: health == HealthStatus.unhealthy ? color : null,
             ),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// CTR-08's chooser: every column but the name, the shown ones checked
+/// and first in their order, the rest after; drag to reorder. Done
+/// answers the checked ones in order, Reset the default.
+class _ColumnsDialog extends StatefulWidget {
+  const _ColumnsDialog({required this.chosen});
+
+  final List<ContainerColumn> chosen;
+
+  @override
+  State<_ColumnsDialog> createState() => _ColumnsDialogState();
+}
+
+class _ColumnsDialogState extends State<_ColumnsDialog> {
+  late List<ContainerColumn> _order = _ordered(widget.chosen);
+  late Set<ContainerColumn> _shown = {...widget.chosen};
+
+  static List<ContainerColumn> _ordered(List<ContainerColumn> chosen) => [
+    ...chosen,
+    for (final column in ContainerColumn.chooseable)
+      if (!chosen.contains(column)) column,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(l10n.dockerContainersColumnsTitle),
+      content: SizedBox(
+        width: 320,
+        child: ReorderableListView(
+          shrinkWrap: true,
+          buildDefaultDragHandles: false,
+          onReorderItem: (from, to) => setState(() {
+            _order.insert(to, _order.removeAt(from));
+          }),
+          children: [
+            for (final (index, column) in _order.indexed)
+              CheckboxListTile(
+                key: ValueKey(column),
+                value: _shown.contains(column),
+                title: Text(_label(l10n, column)),
+                controlAffinity: ListTileControlAffinity.leading,
+                secondary: ReorderableDragStartListener(
+                  index: index,
+                  child: Tooltip(
+                    message: l10n.dockerContainersColumnsDrag,
+                    child: const Icon(Icons.drag_handle),
+                  ),
+                ),
+                onChanged: (shown) => setState(() {
+                  if (shown ?? false) {
+                    _shown.add(column);
+                  } else {
+                    _shown.remove(column);
+                  }
+                }),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => setState(() {
+            _order = _ordered(kDefaultContainerColumns);
+            _shown = {...kDefaultContainerColumns};
+          }),
+          child: Text(l10n.dockerContainersColumnsReset),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(l10n.dockerContainersColumnsCancel),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, [
+            for (final column in _order)
+              if (_shown.contains(column)) column,
+          ]),
+          child: Text(l10n.dockerContainersColumnsDone),
         ),
       ],
     );
