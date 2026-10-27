@@ -842,9 +842,18 @@ Proposals awaiting the owner close the section; they are not decisions.
   of each expression come from `HostCommands.onCalendar`, a command of
   its own outside the sampler, as 7.7 describes, with one run below
   systemd 242; `timerCalendarCommands` builds those reads and
-  `TimerJobEntry.withDetail` merges their results; a later PR wires
-  both into the engine. A read with neither trigger leaves the timer's
-  triggers and delay unknown: `systemctl show` prints that for a unit
+  `TimerJobEntry.withDetail` merges their results. As built in M6
+  (N71, JOB-02), a timer's details read both when they open:
+  `ReadTimerDetail` runs `HostCommands.timerDetail`, the collector's
+  own `systemctl show`, on a channel of its own rather than through
+  the sampler, then one `systemd-analyze calendar` per expression for
+  `kTimerRunsListed` (5) runs, and `TimerDetailReport` carries the
+  detail and the calendar results, which the app merges with
+  `withDetail` into the row it shows. Meanwhile the details say the
+  triggers are being read; a failed read says why, and the table's
+  schedule cell points to the details. A calendar read that fails
+  leaves its expression without runs. A read with neither trigger
+  leaves the timer's triggers and delay unknown: `systemctl show` prints that for a unit
   no longer loaded, with a default delay, and for a timer with only
   `OnClockChange=` or `OnTimezoneChange=`. *Rejected:* evaluating the expressions inside
   the sampler (one guarded call per trigger would tie the request's

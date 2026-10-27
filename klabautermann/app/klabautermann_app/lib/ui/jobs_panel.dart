@@ -595,6 +595,8 @@ class _JobsPanelState extends State<JobsPanel> {
                         clock.value,
                         run: _runNow,
                         lastRun: _lastRun,
+                        readTimer: (unit) => widget.monitoring.timerDetails
+                            .read(widget.serverId, unit),
                       ),
                       // JOB-08 on timer rows and JOB-19 on cron lines no
                       // other manager owns, where actions are allowed (M4
@@ -1130,6 +1132,9 @@ int _nextLines(BuildContext context, double extent, TextStyle? style) {
 
 /// A job's details in a sheet (03 §10.5: details push further), as of the
 /// reading the row came from and the clock's time [now].
+///
+/// With [readTimer], a timer row whose triggers the listing does not carry
+/// reads them when the sheet opens (JOB-02) and shows them once they come.
 void _showDetails(
   BuildContext context,
   JobEntry job,
@@ -1137,6 +1142,7 @@ void _showDetails(
   DateTime now, {
   required Widget? Function(BuildContext context, JobEntry job) run,
   Widget? Function(BuildContext context, JobEntry job)? lastRun,
+  Future<TimerDetailReport> Function(String unit)? readTimer,
 }) {
   unawaited(
     showModalBottomSheet<void>(
@@ -1150,7 +1156,16 @@ void _showDetails(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             spacing: 16,
             children: [
-              JobDetails(job: job, profile: profile, now: now),
+              switch ((job, readTimer)) {
+                (TimerJobEntry(triggers: null), final read?) =>
+                  _TimerDetailsLoader(
+                    job: job as TimerJobEntry,
+                    profile: profile,
+                    now: now,
+                    read: read,
+                  ),
+                _ => JobDetails(job: job, profile: profile, now: now),
+              },
               ?lastRun?.call(context, job),
               ?run(context, job),
             ],
@@ -1160,6 +1175,79 @@ void _showDetails(
     ),
   );
 }
+
+/// A timer's [JobDetails] that reads its triggers once when it shows
+/// (JOB-02, 03 §7.7): the row as listed meanwhile, with a note that the
+/// read runs, then the row with what the read found, or the row and why
+/// the read failed.
+class _TimerDetailsLoader extends StatefulWidget {
+  const _TimerDetailsLoader({
+    required this.job,
+    required this.profile,
+    required this.now,
+    required this.read,
+  });
+
+  final TimerJobEntry job;
+  final HostProfile? profile;
+  final DateTime now;
+  final Future<TimerDetailReport> Function(String unit) read;
+
+  @override
+  State<_TimerDetailsLoader> createState() => _TimerDetailsLoaderState();
+}
+
+class _TimerDetailsLoaderState extends State<_TimerDetailsLoader> {
+  TimerDetailReport? _report;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(
+      widget.read(widget.job.timer.unit).then((report) {
+        if (mounted) setState(() => _report = report);
+      }),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final report = _report;
+    final job = switch (report) {
+      TimerDetailReport(:final detail?) => widget.job.withDetail(
+        detail,
+        calendars: report.calendars,
+      ),
+      _ => widget.job,
+    };
+    return JobDetails(
+      job: job,
+      profile: widget.profile,
+      now: widget.now,
+      triggersNote: switch (report) {
+        null => l10n.jobsTimerTriggersReading,
+        TimerDetailReport(:final failure?) => timerDetailFailureText(
+          l10n,
+          failure,
+        ),
+        _ => null,
+      },
+    );
+  }
+}
+
+/// Why a timer's triggers were not read, in words.
+String timerDetailFailureText(
+  AppLocalizations l10n,
+  TimerDetailFailure failure,
+) => switch (failure) {
+  TimerDetailFailure.noLink => l10n.jobsTimerTriggersNoLink,
+  TimerDetailFailure.invalidUnit ||
+  TimerDetailFailure.missing ||
+  TimerDetailFailure.unreadable => l10n.jobsTimerTriggersUnreadable,
+  TimerDetailFailure.transport => l10n.jobsTimerTriggersFailed,
+};
 
 /// One job in full (JOB-02): its source, a cron line's fields as written
 /// or the unit a timer starts, every schedule in words, and its runs after
@@ -1172,9 +1260,14 @@ class JobDetails extends StatelessWidget {
     required this.job,
     this.profile,
     required this.now,
+    this.triggersNote,
   });
 
   final JobEntry job;
+
+  /// What stands for a timer's unread triggers: that they are being read,
+  /// or why they were not; null for the listing's own words.
+  final String? triggersNote;
 
   /// The monitoring clock's time when the details opened.
   final DateTime now;
@@ -1189,7 +1282,9 @@ class JobDetails extends StatelessWidget {
     final theme = Theme.of(context);
     final job = this.job;
     final schedules = switch (job) {
-      TimerJobEntry(triggers: null) => [l10n.jobsTimerTriggersUnread],
+      TimerJobEntry(triggers: null) => [
+        triggersNote ?? l10n.jobsTimerTriggersUnread,
+      ],
       _ => [for (final s in job.schedules) scheduleText(l10n, s)],
     };
     return Column(

@@ -5208,11 +5208,35 @@ abstract class AppLocalizations {
   /// **'systemd timer'**
   String get jobsSourceTimer;
 
-  /// Schedule of a systemd timer: this version reads no timer's OnCalendar or monotonic triggers or its RandomizedDelaySec, so they are unknown; its next run comes from systemd's own timer list.
+  /// Schedule column of a systemd timer: the timer list carries no OnCalendar or monotonic triggers; its details read them (JOB-02).
   ///
   /// In en, this message translates to:
-  /// **'Triggers are not read in this version.'**
+  /// **'In its details'**
   String get jobsTimerTriggersUnread;
+
+  /// Timer details: systemctl show and systemd-analyze calendar are running for the timer's triggers and next runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the timer\'s triggers…'**
+  String get jobsTimerTriggersReading;
+
+  /// Timer details: no link to read the triggers over.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected, so the triggers were not read.'**
+  String get jobsTimerTriggersNoLink;
+
+  /// Timer details: systemctl is missing or the unit name is not a timer's.
+  ///
+  /// In en, this message translates to:
+  /// **'systemd did not say what starts this timer.'**
+  String get jobsTimerTriggersUnreadable;
+
+  /// Timer details: the link failed or the read timed out.
+  ///
+  /// In en, this message translates to:
+  /// **'The triggers could not be read. Close and open the details to try again.'**
+  String get jobsTimerTriggersFailed;
 
   /// Label of a cron line's schedule fields exactly as the crontab writes them, in a job's details.
   ///
