@@ -74,7 +74,7 @@ Future<void> confirmAndCloseTab(
 /// silently does nothing while unsaved text is at stake.
 Future<bool> _editorMayClose(BuildContext context, EditorTab tab) async {
   if (!tab.dirty.value) return true;
-  if (Theme.of(context).platform == TargetPlatform.macOS) {
+  if (macNativeShell) {
     return _macEditorMayClose(tab);
   }
   final confirmed = await tab.editorKey.currentState?.confirmDiscard();
@@ -134,7 +134,7 @@ Future<bool> _runningCommandMayEnd(
   BuildContext context,
   TerminalSession session,
 ) async {
-  if (Theme.of(context).platform != TargetPlatform.macOS) return true;
+  if (!macNativeShell) return true;
   final command = session.metadata.value.runningCommand;
   if (command == null || !session.isConnected) return true;
   const terminate = 0;

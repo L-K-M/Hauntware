@@ -543,23 +543,40 @@ Do not "simplify" these away — they are load-bearing:
   into exactly (ghost_desktop's `GhostWindowSnapshot` doc has the details).
 
 - **The macOS integrated titlebar is macos_window_utils', not
-  window_manager's.** The main window draws its header under an empty
-  unified NSToolbar (a 52 pt band) over full-size content, as Poltergeist
-  does. Three things hold it together. The runner hosts the Flutter view in
-  `MacOSWindowUtilsViewController` (the package's passthrough code
-  force-casts to it), with `SeanceFlutterViewController` inside so the
-  accessibility guard stays. `MainFlutterWindowManipulator.start` resets the
-  window to a standard titlebar, so `MacosTitlebar.install()` re-applies it
-  from `main()` *before* `restoreAndTrack()` shows the hidden window. Never
-  also pass `titleBarStyle` to window_manager: its `setTitleBarStyle`
-  rewrites the same window properties. In full screen the runner hides the
-  toolbar (AppKit would keep it in an opaque strip over the header) and
-  reports it on `seance/window` from will-enter/will-exit *notifications*,
-  because window_manager owns the window delegate. Controls inside the band
+  window_manager's.** The main window draws its header under a unified
+  NSToolbar of native items (`SeanceToolbar.swift`, a 52 pt band) over
+  full-size content, as Poltergeist does. Three things hold it together.
+  The runner hosts the Flutter view in `MacOSWindowUtilsViewController`
+  (the package's passthrough code force-casts to it), with
+  `SeanceFlutterViewController` inside so the accessibility guard stays.
+  `MainFlutterWindowManipulator.start` resets the window to a standard
+  titlebar, so `MacosTitlebar.install()` re-applies it from `main()`
+  *before* `restoreAndTrack()` shows the hidden window; the runner installs
+  the toolbar itself, so install never adds one. Never also pass
+  `titleBarStyle` to window_manager: its `setTitleBarStyle` rewrites the
+  same window properties. In full screen AppKit keeps the toolbar in a strip
+  of its own above the content, and the runner reports the band gone on
+  `seance/window` from will-enter/will-exit *notifications*, because
+  window_manager owns the window delegate. Flutter controls inside the band
   take clicks only through `MacosToolbarPassthrough`; every other surface
   keeps below it (`ReserveMacosToolbarBand` above the navigator,
   `ClaimMacosToolbarBand` for the wide layout). The Settings window keeps a
-  standard titlebar: the passthrough serves one window.
+  standard titlebar with a preferences toolbar for its panes
+  (`SettingsPaneToolbar`): the passthrough serves one window.
+
+- **The macOS menu bar, toolbar and Dock menu are AppKit's; what their
+  commands mean is Dart's.** `MainMenu.swift` builds the menu bar in code
+  (the storyboard's is replaced at launch) and `CommandCenter` validates
+  every item from the states `MacCommandHost` (`ui/mac_command_host.dart`)
+  publishes on `seance/menu`, only what changed, after each frame that
+  moved them. A chosen item crosses back as `run` with its `AppCommand`
+  name, so a renamed command changes on both sides. A disabled item never
+  takes its key equivalent, which is how ⌘C and ⌘Z still reach a Flutter
+  control the menu has no use for. Edit commands go to Dart while the main
+  window is key and down the key window's responder chain otherwise (the
+  Settings window's fields). Closing the main window hides it
+  (`WindowStateService` intercepts the close on macOS) and the app stays in
+  the Dock with its sessions; Quit asks through `didRequestAppExit`.
 
 - **A second window is a second engine.** Flutter stable has no
   multi-window API (the framework's is `@internal`, master-channel only in

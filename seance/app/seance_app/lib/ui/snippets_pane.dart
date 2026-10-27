@@ -7,6 +7,7 @@ import 'package:seance_core/seance_core.dart';
 import '../app_state.dart';
 import '../family_hues.dart';
 import '../main.dart';
+import '../services/mac_commands.dart';
 import '../services/undo_history.dart';
 import '../theme.dart' show SeanceTheme;
 import 'top_toast.dart';
@@ -200,7 +201,7 @@ class _SnippetsPaneState extends State<SnippetsPane> {
     AppState state,
     Snippet snippet,
   ) async {
-    if (Theme.of(context).platform == TargetPlatform.macOS) {
+    if (macNativeShell) {
       await deleteSnippetUndoably(state, snippet);
       if (!context.mounted) return;
       showTopToastIn(

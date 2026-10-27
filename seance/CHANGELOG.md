@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+- On the Mac, Séance now has a complete menu bar: File, Edit, View,
+  Server, Window and Help hold every command, with standard shortcuts,
+  and each item is enabled, checked and titled for what it would do
+  right now. Commands stand down while a dialog is open. Edit ▸ Find
+  (⌘F, ⌘G, ⇧⌘G, ⌘E) searches the terminal, Edit ▸ Clear Scrollback
+  (⌥⌘K) clears it, File ▸ Export Text As… saves it, and Server ▸ Copy
+  SSH Command copies the `ssh` line for the server. The Dock icon's
+  menu opens a server or a local shell.
+- The Mac window has a real toolbar: the sidebar button beside the
+  traffic lights, New Tab, Connect or Disconnect and Generate Command
+  at the trailing end, and the inspector button over the inspector.
+  View ▸ Customize Toolbar… rearranges it; on macOS 26 its buttons are
+  Liquid Glass. The window's title names the active session for the
+  Window menu and Mission Control.
+- View ▸ Hide Sidebar (⌃⌘S) and Hide Inspector (⌥⌘I) give the terminal
+  the window, and ⌥⌘1 to ⌥⌘4 open Files, Git, Snippets and the
+  Assistant. A narrowed Mac window sets the side panels aside instead of
+  switching to the phone layout.
+- Closing the Mac window keeps Séance and its sessions running; the Dock
+  icon brings the window back and counts live sessions while it is
+  closed. Quitting asks first when sessions are connected or a file has
+  unsaved changes, and closing a tab asks Save, Don't Save or Cancel for
+  unsaved text, and before ending a running command.
+- Edit ▸ Undo and Redo work outside text fields: they take back snippet
+  changes and server pins and duplicates. On a Mac a deleted snippet goes
+  at once, with Undo in the menu and in its notice.
+- Context menus on the Mac are native menus. Settings switches panes from
+  a native toolbar and reopens where it was left. File ▸ Import SSH
+  Config… opens a file panel at `~/.ssh` instead of asking for the
+  file's text. Séance ▸ Check for Updates… checks on demand.
+- New Mac installs start in the Séance theme, which follows the system's
+  light or dark appearance; an existing theme choice is kept.
+
 - The Git pane and the terminal's tab now follow a TrueNAS shell, or
   any Linux shell that reports no directory, as Files already did: all
   three share one read of the shell's directory, and trust it over a

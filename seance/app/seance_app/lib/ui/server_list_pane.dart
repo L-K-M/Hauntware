@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
 import '../main.dart';
+import '../services/mac_commands.dart';
 import '../services/mac_context_menu.dart';
 import '../theme.dart';
 import 'app_menus.dart';
@@ -272,9 +273,7 @@ class _ServerListPaneState extends State<ServerListPane> {
           layout: _layoutFor(context, density),
           density: density,
           // A Mac's row menus are its own context menus.
-          presentMenu: Theme.of(context).platform == TargetPlatform.macOS
-              ? _presentMacMenu
-              : null,
+          presentMenu: macNativeShell ? _presentMacMenu : null,
           child: Builder(builder: (context) => _body(context, state)),
         );
       },

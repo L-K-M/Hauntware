@@ -96,6 +96,7 @@ Future<void> _pump(
   SidebarKitLayout layout = SidebarKitLayout.rail,
   SidebarKitDensity? density,
   double width = 240,
+  Future<bool> Function(List<SidebarMenuEntry> entries)? presentMenu,
 }) async {
   tester.view.physicalSize = const Size(600, 600);
   tester.view.devicePixelRatio = 1;
@@ -108,6 +109,7 @@ Future<void> _pump(
           strings: _strings,
           background: background,
           layout: layout,
+          presentMenu: presentMenu,
           // The kit defaults to comfortable; most of this file pins the
           // compact rail's one-line anatomy, so compact unless asked (a
           // list is comfortable by definition).
@@ -559,6 +561,47 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('open')));
       await tester.pumpAndSettle();
       expect(opened, 1);
+    });
+
+    testWidgets("a host's presenter shows the verbs instead of the kit's "
+        'menu, which comes back when it declines', (tester) async {
+      for (final shown in [true, false]) {
+        final presented = <List<SidebarMenuEntry>>[];
+        await _pump(
+          tester,
+          SidebarRow(
+            key: const ValueKey('r'),
+            mark: const Icon(Icons.dns_outlined, size: 16),
+            title: 'demo',
+            menuEntries: () => [
+              SidebarMenuAction(label: 'kit-one', onSelected: () {}),
+              const SidebarMenuDivider(),
+              SidebarMenuAction(label: 'kit-two', onSelected: () {}),
+            ],
+          ),
+          presentMenu: (entries) async {
+            presented.add(entries);
+            return shown;
+          },
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('r')),
+          buttons: kSecondaryMouseButton,
+          kind: PointerDeviceKind.mouse,
+        );
+        await tester.pumpAndSettle();
+        expect(presented, hasLength(1), reason: 'shown: $shown');
+        expect(presented.single, hasLength(3));
+        expect(
+          find.text('kit-one'),
+          shown ? findsNothing : findsOneWidget,
+          reason: 'shown: $shown',
+        );
+        if (!shown) {
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await tester.pumpAndSettle();
+        }
+      }
     });
 
     testWidgets('on macOS a Control-click opens the menu, as a right-click '

@@ -1,7 +1,13 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+/// Whether the app runs in the macOS runner, whose native menu bar, context
+/// menus, alerts and panels this channel reaches. Widget tests run on other
+/// hosts, often under a macOS theme; they keep the Flutter fallbacks.
+bool get macNativeShell => !kIsWeb && Platform.isMacOS;
 
 /// The channel the native menu bar, toolbar, Dock menu and alerts
 /// (`macos/Runner/MainMenu.swift`, `MainFlutterWindow.swift`) and Dart talk
@@ -123,6 +129,7 @@ final class MacCommandBridge {
   final Map<AppCommand, CommandState> _published = {};
   List<DockServer>? _publishedDock;
   (String, String)? _publishedTitle;
+  String? _publishedBadge;
 
   /// Starts answering the native side; null stops it.
   set handler(MacCommandHandler? handler) {
@@ -183,6 +190,8 @@ final class MacCommandBridge {
 
   /// The Dock icon's badge: [label], or none for null.
   Future<void> setDockBadge(String? label) async {
+    if (label == _publishedBadge) return;
+    _publishedBadge = label;
     try {
       await _channel.invokeMethod<void>('setDockBadge', label);
     } catch (error) {

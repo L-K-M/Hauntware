@@ -367,7 +367,7 @@ void main() {
       tester,
       platform: TargetPlatform.macOS,
       band: band,
-      size: const Size(700, 800),
+      size: const Size(600, 800),
     );
 
     // No phone layout on a Mac: the window keeps its terminal and header.
@@ -376,7 +376,7 @@ void main() {
     expect(find.byKey(AdaptivePaneLayout.utilityPaneKey), findsNothing);
     expect(
       tester.getRect(find.byKey(AdaptivePaneLayout.terminalPaneKey)).width,
-      700,
+      600,
     );
     expect(
       tester.getRect(find.byKey(HeaderToolbar.titleKey)).left,

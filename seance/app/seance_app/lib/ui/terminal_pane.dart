@@ -14,6 +14,7 @@ import 'package:xterm/xterm.dart';
 import '../app_state.dart';
 import '../family_hues.dart';
 import '../main.dart';
+import '../services/mac_commands.dart';
 import '../services/mac_context_menu.dart';
 import '../services/missing_credential.dart';
 import '../services/terminal_search.dart';
@@ -798,7 +799,7 @@ class _TabChip extends StatelessWidget {
 
   /// On a Mac the menu is a native one; the kit's is the fallback.
   Future<void> _showMenu(BuildContext context, Offset globalPosition) async {
-    if (Theme.of(context).platform != TargetPlatform.macOS) {
+    if (!macNativeShell) {
       return _showMaterialMenu(context, globalPosition);
     }
     final shown = await showMacContextMenu([
@@ -925,7 +926,7 @@ class _EditorTabChip extends StatelessWidget {
 
   /// On a Mac the menu is a native one; the kit's is the fallback.
   Future<void> _showMenu(BuildContext context, Offset globalPosition) async {
-    if (Theme.of(context).platform != TargetPlatform.macOS) {
+    if (!macNativeShell) {
       return _showMaterialMenu(context, globalPosition);
     }
     final shown = await showMacContextMenu([
@@ -1623,7 +1624,7 @@ class _SessionViewState extends State<_SessionView>
     BuildContext context,
     Offset globalPosition,
   ) async {
-    if (Theme.of(context).platform != TargetPlatform.macOS) {
+    if (!macNativeShell) {
       return _showMaterialContextMenu(context, globalPosition);
     }
     final shown = await _showMacContextMenu();

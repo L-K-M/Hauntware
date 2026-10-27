@@ -167,13 +167,13 @@ class _MacCommandHostState extends State<MacCommandHost>
     _schedule();
   }
 
-  void _windowShownChanged() {
-    _schedule();
-    // While the window is closed its sessions run on; the Dock says how
-    // many, as Mail counts unread mail there.
-    final state = _state;
+  void _windowShownChanged() => _schedule();
+
+  /// While the window is closed its sessions run on; the Dock says how
+  /// many, as Mail counts unread mail there.
+  void _updateDockBadge(AppState state) {
     final shown = WindowStateService.mainWindowShown.value;
-    final live = state == null ? 0 : _liveSessions(state).length;
+    final live = _liveSessions(state).length;
     unawaited(_bridge.setDockBadge(shown || live == 0 ? null : '$live'));
   }
 
@@ -202,6 +202,7 @@ class _MacCommandHostState extends State<MacCommandHost>
     );
     final (title, subtitle) = _windowTitle(state);
     unawaited(_bridge.setWindowTitle(title, subtitle));
+    _updateDockBadge(state);
   }
 
   // -- state ---------------------------------------------------------------

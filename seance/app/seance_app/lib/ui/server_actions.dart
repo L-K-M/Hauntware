@@ -139,7 +139,7 @@ Future<void> confirmDeleteServer(
             '${localCopyCount == 1 ? 'edit' : 'edits'}. Any changes not '
             'uploaded to the server will be deleted.';
   final bool confirmed;
-  if (Theme.of(context).platform == TargetPlatform.macOS) {
+  if (macNativeShell) {
     const delete = 1;
     // Cancel first: the default button, so Return keeps the server.
     final answer = await showMacAlert(
@@ -180,7 +180,7 @@ Future<void> importSshConfigInteractively(
   BuildContext context,
   AppState state,
 ) async {
-  final text = Theme.of(context).platform == TargetPlatform.macOS
+  final text = macNativeShell
       ? await _pickSshConfigText(context)
       : await _pasteSshConfigText(context);
   if (text == null || text.trim().isEmpty) return;
