@@ -152,6 +152,26 @@ void main() {
       expect(r.value.state!.finishedAt, isNull);
     });
 
+    test('reads added capabilities and the merged health check (DKE-06)', () {
+      final r = parseContainerInspect({
+        'Id': 'abc',
+        'HostConfig': {
+          'CapAdd': ['NET_ADMIN'],
+        },
+        'Config': {
+          'Healthcheck': {
+            'Test': ['CMD-SHELL', 'curl -f localhost'],
+          },
+        },
+      });
+      expect(r.warnings, isEmpty);
+      expect(r.value.hostConfig!.capAdd, ['NET_ADMIN']);
+      expect(r.value.config!.healthcheck, ['CMD-SHELL', 'curl -f localhost']);
+
+      final bare = parseContainerInspect({'Id': 'abc', 'Config': {}});
+      expect(bare.value.config!.healthcheck, isEmpty);
+    });
+
     test('never throws on a non-object inspect', () {
       expect(parseContainerInspect(null).warnings, isNotEmpty);
       expect(parseContainerInspect('nope').value.id, '');
