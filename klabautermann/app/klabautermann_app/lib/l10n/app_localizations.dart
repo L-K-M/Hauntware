@@ -568,6 +568,66 @@ abstract class AppLocalizations {
   /// **'Stale · {age}'**
   String fleetRowStaleAge(String age);
 
+  /// The fleet board (FL-08): the label before its layout picker, shown in the desktop workspace while no server is open.
+  ///
+  /// In en, this message translates to:
+  /// **'Layout'**
+  String get fleetDensityLabel;
+
+  /// The fleet board (FL-08): one layout in its picker. Auto shows cards for a small fleet and a grid for a large one; Tree is the connection tree (FL-11); Rows leaves the rail's rows alone.
+  ///
+  /// In en, this message translates to:
+  /// **'{density, select, auto{Auto} cards{Cards} grid{Grid} tree{Tree} other{Rows}}'**
+  String fleetDensity(String density);
+
+  /// The fleet board: toast when the picked layout applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The layout changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get fleetDensityNotSaved;
+
+  /// Connection tree (FL-11): tooltip of a server node's button that opens the server's workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {server}'**
+  String fleetTreeOpenServer(String server);
+
+  /// Connection tree (FL-11): under an opened server node until its container list arrives.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading containers…'**
+  String get fleetTreeReading;
+
+  /// Connection tree (FL-11): under an opened server node when its container list failed before any was read.
+  ///
+  /// In en, this message translates to:
+  /// **'The containers could not be read. The Docker tab says why.'**
+  String get fleetTreeReadFailed;
+
+  /// Connection tree (FL-11): under an opened server node when the Docker endpoint search failed.
+  ///
+  /// In en, this message translates to:
+  /// **'No Docker engine answers on this server.'**
+  String get fleetTreeNoDocker;
+
+  /// Connection tree (FL-11): under an opened server node whose engine lists no container.
+  ///
+  /// In en, this message translates to:
+  /// **'No containers.'**
+  String get fleetTreeNoContainers;
+
+  /// Connection tree (FL-11): a compose stack node's subtitle, its running containers out of all.
+  ///
+  /// In en, this message translates to:
+  /// **'{up} of {total} running'**
+  String fleetTreeStackUp(int up, int total);
+
+  /// A fleet board card: one pressure bar cell's share in figures, e.g. 'CPU 23 %'. label is fleetRowCpu, fleetRowMemory or fleetRowDisk.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} {percent} %'**
+  String fleetTileShare(String label, int percent);
+
   /// The CPU cell of a fleet row's pressure bar (FL-07), as its summary names it.
   ///
   /// In en, this message translates to:
