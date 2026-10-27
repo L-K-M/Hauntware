@@ -83,6 +83,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/cadence_controller.dart': {
     r"'The polling budget was not saved: $error'",
   },
+  // The not-saved diagnostic; the fleet board prints it and shows its own
+  // ARB text (fleetDensityNotSaved).
+  'lib/controllers/fleet_density.dart': {
+    r"'The fleet layout was not saved: $error'",
+  },
   // The host syslog line's device name, written into host journals in
   // one form (M5 plan Q6).
   'lib/controllers/device_name.dart': {
@@ -901,6 +906,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
   // debugPrint of a failed theme change; the toast is ARB text.
+  'lib/ui/fleet_board.dart': {r"'$error'"},
   'lib/ui/settings_page.dart': {r"'$error'"},
   'lib/ui/sortable_table.dart': {
     // FocusNode debug labels.

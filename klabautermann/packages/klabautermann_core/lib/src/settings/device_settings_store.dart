@@ -42,6 +42,7 @@ const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
 const String _containerColumnsKey = 'klabautermann.docker.containerColumns';
 const String _tlsEndpointsKey = 'klabautermann.certificates.endpoints';
 const String _cadenceKey = 'klabautermann.sampling.cadence';
+const String _fleetDensityKey = 'klabautermann.fleet.density';
 const String _attentionKey = 'klabautermann.attention.acknowledged';
 
 // The fields of one server's entry under [_endpointOverridesKey].
@@ -357,6 +358,20 @@ final class DeviceSettingsStore {
   /// or this session is read-only; the value stays in memory either way.
   Future<void> setCadence(String name) async {
     _values[_cadenceKey] = name;
+    await _save();
+  }
+
+  /// The device's fleet board layout (FL-08), `klabautermann.fleet.density`,
+  /// as the name the app stored, or null when there is none or it is not a
+  /// string; the app reads a name it does not know as its default.
+  String? get fleetDensity => switch (_values[_fleetDensityKey]) {
+    final String name => name,
+    _ => null,
+  };
+
+  /// Stores [name] and writes the document; throws as [setCadence] does.
+  Future<void> setFleetDensity(String name) async {
+    _values[_fleetDensityKey] = name;
     await _save();
   }
 

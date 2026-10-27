@@ -287,7 +287,7 @@ class ServerLinkState extends StatelessWidget {
                   ),
                 )
                 case final dot?)
-              _LinkDot(dot),
+              LinkDot(dot),
             Icon(
               fleetStatusIcon(indicator.glyph) ?? Icons.link_off,
               size: 16,
@@ -309,8 +309,10 @@ class ServerLinkState extends StatelessWidget {
 /// The indicator's dot on its own, as the sidebar kit draws it in a row's
 /// mark, which keeps its painter private: solid for live truth, a ring for
 /// a probe's observation, a bar through it for a refusal.
-class _LinkDot extends StatelessWidget {
-  const _LinkDot(this.dot);
+/// [dot] drawn on its own, outside a sidebar row: the server header's and
+/// the fleet board's tiles.
+class LinkDot extends StatelessWidget {
+  const LinkDot(this.dot, {super.key});
 
   final SidebarStatusDot dot;
 

@@ -17,6 +17,7 @@ import 'connect_rejected_banner.dart';
 import 'server_coverage.dart';
 import 'server_header.dart';
 import 'server_surfaces.dart';
+import 'fleet_board.dart';
 import 'services_panel.dart';
 import 'system_panel.dart';
 
@@ -74,7 +75,7 @@ class ServerWorkspace extends StatelessWidget {
       );
       // Centred while it fits, and scrolls when large text outgrows a
       // short window (A11Y-09), as under the first-run card (03 §9.5).
-      return LayoutBuilder(
+      final centred = LayoutBuilder(
         builder: (context, box) => SingleChildScrollView(
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: box.maxHeight),
@@ -82,6 +83,16 @@ class ServerWorkspace extends StatelessWidget {
           ),
         ),
       );
+      // FL-08's board, where the composition root provides a layout.
+      return switch (FleetDensityScope.maybeOf(context)) {
+        final density? when fleet.servers.isNotEmpty => FleetBoard(
+          fleet: fleet,
+          monitoring: monitoring,
+          density: density,
+          invitation: centred,
+        ),
+        _ => centred,
+      };
     }
 
     return DefaultTabController(

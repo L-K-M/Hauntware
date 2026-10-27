@@ -18,6 +18,7 @@ import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
 import 'controllers/attention.dart';
 import 'controllers/cadence_controller.dart';
+import 'controllers/fleet_density.dart';
 import 'controllers/container_columns.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/device_name.dart';
@@ -341,6 +342,12 @@ Future<void> main(List<String> args) async {
   applyCadence();
   cadence.addListener(applyCadence);
 
+  // FL-08's fleet board layout, kept per device in settings.json.
+  final fleetDensity = FleetDensityController(
+    density: FleetDensity.parse(settings.fleetDensity),
+    save: settings.setFleetDensity,
+  );
+
   // The synced servers' preferences (03 §4.8), as the engine reports their
   // `pref` records.
   final serverPrefs = ServerPrefsController(engine);
@@ -435,6 +442,7 @@ Future<void> main(List<String> args) async {
       coverage: coverage,
       announcements: announcements,
       cadence: cadence,
+      fleetDensity: fleetDensity,
       deviceName: deviceName,
       safety: safety,
       appLock: appLock,
