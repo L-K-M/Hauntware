@@ -172,6 +172,7 @@ final class CommandCenter: NSObject, NSMenuItemValidation, NSToolbarItemValidati
       return true
     case #selector(runItem(_:)):
       guard let name = item.representedObject as? String else { return false }
+      if sheetUp && !Self.availableUnderSheet.contains(name) { return false }
       if name == "showMainWindow" {
         // The window list names the window while it is open; this item
         // brings it back once it is closed.
@@ -187,8 +188,18 @@ final class CommandCenter: NSObject, NSMenuItemValidation, NSToolbarItemValidati
   }
 
   func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
-    state(item.itemIdentifier.rawValue).enabled
+    !sheetUp && state(item.itemIdentifier.rawValue).enabled
   }
+
+  /// A native alert is up on the main window (Dart's dialogs count as
+  /// modal on their own side): its commands wait, as under any sheet.
+  private var sheetUp: Bool { mainWindow?.attachedSheet != nil }
+
+  /// What stays available while a sheet is up: the app's own windows and
+  /// help, not the window's content.
+  private static let availableUnderSheet: Set<String> = [
+    "settings", "help", "checkForUpdates",
+  ]
 
   private static let editTitles = [
     "undo": "Undo", "redo": "Redo", "cut": "Cut", "copy": "Copy",
