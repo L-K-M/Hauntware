@@ -217,11 +217,13 @@ final class _Harness {
 
   Future<RemoteCommandResult>? _answer(String command) {
     final argv = _argv(command);
+    // `docker` on the PATH, or a server's docker program (CN-16).
+    final docker = argv.first == 'docker' || argv.first.endsWith('/docker');
     final kind = argv.first == 'find'
         ? _Run.scan
-        : argv.first == 'docker' && argv.contains('--profiles')
+        : docker && argv.contains('--profiles')
         ? _Run.profiles
-        : argv.first == 'docker'
+        : docker
         ? _Run.config
         : argv[2].contains('docker-compose')
         ? _Run.cli
@@ -330,6 +332,27 @@ void main() {
         '--hash',
         '*',
       ]);
+    });
+
+    test("the CLI check and compose commands run the server's docker "
+        'program (CN-16)', () async {
+      const snap = '/snap/bin/docker';
+      final h = _Harness(_demo());
+      h.router.setProgram(
+        const SetDockerProgram(serverId: _srv, program: snap),
+      );
+      final last = await h.verified();
+
+      expect(last.verdicts['demo'], isA<StackVerified>());
+      final cli = h.runs.singleWhere((run) => run.$1 == _Run.cli).$2;
+      expect(cli.sublist(cli.length - 5), [
+        snap,
+        '--host',
+        'unix://$_socket',
+        'compose',
+        'version',
+      ]);
+      expect(h.runs.last.$2.first, snap);
     });
 
     test('a verdict holds for the same labels, and a view opening the '

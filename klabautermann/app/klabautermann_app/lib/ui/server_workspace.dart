@@ -21,6 +21,7 @@ import 'server_surfaces.dart';
 import 'fleet_board.dart';
 import 'services_panel.dart';
 import 'system_panel.dart';
+import 'workspace_dock.dart';
 import 'workspace_navigation.dart';
 
 /// The server workspace of 03 §10.2: a header over the panel tab strip.
@@ -97,6 +98,12 @@ class ServerWorkspace extends StatelessWidget {
       };
     }
 
+    final dock = WorkspaceDockScope.maybeOf(context);
+    final panels = _Panels(
+      monitoring: monitoring,
+      serverId: server.id,
+      fleet: fleet,
+    );
     return DefaultTabController(
       length: _panels.length,
       child: HeaderedBody(
@@ -119,16 +126,40 @@ class ServerWorkspace extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TabBar(
-              isScrollable: true,
-              tabs: [for (final panel in _panels) Tab(text: panel.label(l10n))],
+            Row(
+              children: [
+                Expanded(
+                  child: TabBar(
+                    isScrollable: true,
+                    tabs: [
+                      for (final panel in _panels) Tab(text: panel.label(l10n)),
+                    ],
+                  ),
+                ),
+                if (dock != null)
+                  WorkspaceDockButton(dock: dock, serverId: server.id),
+              ],
             ),
             Expanded(
-              child: _Panels(
-                monitoring: monitoring,
-                serverId: server.id,
-                fleet: fleet,
-              ),
+              child: switch (dock) {
+                // OV-10: the dock under the panels, which keeps logs, run
+                // output and shells in sight whichever panel shows.
+                final dock? => LayoutBuilder(
+                  builder: (context, box) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: panels),
+                      WorkspaceDockPane(
+                        dock: dock,
+                        monitoring: monitoring,
+                        serverId: server.id,
+                        maxHeight: box.maxHeight,
+                      ),
+                    ],
+                  ),
+                ),
+                null => panels,
+              },
             ),
           ],
         ),

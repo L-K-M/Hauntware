@@ -286,6 +286,7 @@ class _JobsPanelState extends State<JobsPanel> {
       showCronRunOutput(
         context,
         operations: operations,
+        serverId: widget.serverId,
         planId: planId,
         title: preview.targetName,
       ),

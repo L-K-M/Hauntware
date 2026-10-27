@@ -273,6 +273,25 @@ void main() {
       );
     });
 
+    test("each step runs the server's docker program (CN-16)", () async {
+      const snap = '/snap/bin/docker';
+      final plan = _planned(
+        await _plan(
+          route: const DockerEndpointRoute(
+            rank: DockerRank.streamlocal,
+            socketPath: _socket,
+            runtime: EngineRuntime.docker,
+            rootEquivalence: DockerRootEquivalence.rootfulSocket,
+            dockerProgram: snap,
+          ),
+        ),
+      );
+
+      for (var i = 0; i < 3; i++) {
+        expect(_argv(plan, i).first, snap);
+      }
+    });
+
     test('the detached command runs each step after the one before', () async {
       final plan = _planned(await _plan());
       final [shell, flag, script] = detachedArgv(plan);

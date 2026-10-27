@@ -111,6 +111,7 @@ Future<PlanAttempt> _planStackFile(
       check: (temp) => stackCandidateCheck(
         project: found,
         socketPath: socketPath,
+        dockerProgram: source.dockerProgram ?? 'docker',
         path: path,
         temp: temp,
       ),
