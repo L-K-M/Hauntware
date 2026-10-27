@@ -1290,6 +1290,62 @@ void main() {
     });
   });
 
+  group('the docker program (CN-16)', () {
+    const snap = '/snap/bin/docker';
+
+    List<SetDockerProgram> programs() =>
+        engine.sentOfType<SetDockerProgram>().cast();
+
+    test('a stored program goes ahead of the endpoint query each time the '
+        'link comes up; none sends nothing', () async {
+      final stored = DockerEndpointChoices(
+        stored: const {
+          'srv-1': DockerEndpointOverride(
+            null,
+            endpoint: 'a@h:22',
+            program: snap,
+          ),
+        },
+      );
+      final withChoices = DockerController(engine, endpointChoices: stored);
+      addTearDown(() {
+        withChoices.dispose();
+        stored.dispose();
+      });
+
+      await emit(const LinkState('srv-1', LinkReady()));
+      await emit(const LinkState('srv-2', LinkReady()));
+      expect(programs().map((p) => (p.serverId, p.program)), [('srv-1', snap)]);
+      final sent = engine.sent.indexWhere((r) => r is SetDockerProgram);
+      final query = engine.sent.lastIndexWhere(
+        (r) => r is DockerQuery && r.serverId == 'srv-1',
+      );
+      expect(sent, lessThan(query), reason: 'the program goes first');
+      expect(engine.sent.whereType<SetDockerEndpoint>(), isEmpty);
+
+      await emit(const LinkState('srv-1', LinkIdle()));
+      await emit(const LinkState('srv-1', LinkReady()));
+      expect(programs(), hasLength(2));
+    });
+
+    test('a change goes out while the link is up, once, keeps the socket '
+        'choice, and none goes back to the PATH', () async {
+      const custom = DockerEndpointCustom('/srv/engine.sock');
+      await emit(const LinkState('srv-1', LinkReady()));
+      await docker.chooseEndpoint('srv-1', custom);
+
+      await docker.chooseProgram('srv-1', snap);
+      await docker.chooseProgram('srv-1', snap);
+      expect(programs().map((p) => p.program), [snap]);
+      expect(docker.endpointChoices.choiceFor('srv-1'), custom);
+
+      await docker.chooseProgram('srv-1', null);
+      expect(programs().map((p) => p.program), [snap, null]);
+      expect(docker.endpointChoices.choiceFor('srv-1'), custom);
+      expect(docker.endpointChoices.programFor('srv-1'), isNull);
+    });
+  });
+
   group('the endpoint choice (CN-09, D54)', () {
     const podman = DockerEndpointDetected('/run/podman/podman.sock');
     const custom = DockerEndpointCustom('/srv/engine.sock');

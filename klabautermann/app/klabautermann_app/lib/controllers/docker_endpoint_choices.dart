@@ -5,7 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'fleet_controller.dart';
 
-/// Saves one server's choice, or removes it when null:
+/// Saves one server's settings, or removes them when null:
 /// `DeviceSettingsStore.setDockerEndpointOverride`.
 typedef SaveDockerEndpointChoice =
     Future<void> Function(String serverId, DockerEndpointOverride? override);
@@ -17,7 +17,9 @@ typedef PurgeDockerEndpointChoices =
 
 /// CN-09's engine socket per server, chosen on this device (D54, 03 §4.10):
 /// automatic unless the user picked one of the sockets the probe found or
-/// typed a path in the Docker tab's engine strip. The composition root
+/// typed a path in the Docker tab's engine strip; and CN-16's `docker`
+/// program, the one on the exec `PATH` unless the user typed a path
+/// there. The composition root
 /// restores the choices from `settings.json` and saves each change there;
 /// without callbacks, as in most tests, they are held in memory only. Like
 /// the SAF-08 notice's state, it outlives an engine run: each run's
@@ -53,19 +55,44 @@ final class DockerEndpointChoices extends ChangeNotifier {
   DockerEndpointChoice choiceFor(String serverId) =>
       _overrides[serverId]?.choice ?? const DockerEndpointAuto();
 
+  /// [serverId]'s `docker` program (CN-16): null for the one on the exec
+  /// `PATH` unless a path was set on this device.
+  String? programFor(String serverId) => _overrides[serverId]?.program;
+
   /// Makes [choice] [serverId]'s, at once, and saves it. A save that fails
   /// rethrows, and the choice holds until the app quits, so the caller can
   /// say it was not kept; choosing it again tries the save again.
   Future<void> choose(String serverId, DockerEndpointChoice choice) async {
     if (choiceFor(serverId) == choice && !_unsaved.contains(serverId)) return;
 
-    final override = switch (choice) {
+    await _put(serverId, switch (choice) {
       DockerEndpointAuto() => null,
-      final DockerEndpointSocket socket => DockerEndpointOverride(
-        socket,
-        endpoint: _endpointOf(serverId),
-      ),
-    };
+      final DockerEndpointSocket socket => socket,
+    }, programFor(serverId));
+  }
+
+  /// Makes [program] [serverId]'s `docker` (CN-16), or the one on the exec
+  /// `PATH` when null, and saves it as [choose] saves a choice.
+  Future<void> chooseProgram(String serverId, String? program) async {
+    if (programFor(serverId) == program && !_unsaved.contains(serverId)) {
+      return;
+    }
+
+    await _put(serverId, _overrides[serverId]?.choice, program);
+  }
+
+  Future<void> _put(
+    String serverId,
+    DockerEndpointSocket? socket,
+    String? program,
+  ) async {
+    final override = socket == null && program == null
+        ? null
+        : DockerEndpointOverride(
+            socket,
+            endpoint: _endpointOf(serverId),
+            program: program,
+          );
     if (override == null) {
       _overrides.remove(serverId);
     } else {

@@ -6588,6 +6588,38 @@ class AppLocalizationsEn extends AppLocalizations {
       'The path cannot contain line breaks or NUL characters.';
 
   @override
+  String get dockerProgramLabel => 'docker program';
+
+  @override
+  String get dockerProgramDefault => 'docker on the PATH';
+
+  @override
+  String get dockerProgramChange => 'Change…';
+
+  @override
+  String get dockerProgramChangeLabel => 'Change the docker program';
+
+  @override
+  String get dockerProgramReset => 'Use docker on the PATH';
+
+  @override
+  String get dockerProgramTitle => 'docker program';
+
+  @override
+  String get dockerProgramBody =>
+      'Klabautermann runs this docker for relays and compose commands on this server. Set it when docker is outside the PATH of a non-interactive session, as with Snap\'s /snap/bin/docker.';
+
+  @override
+  String get dockerProgramField => 'Program path';
+
+  @override
+  String get dockerProgramHint => '/snap/bin/docker';
+
+  @override
+  String get dockerProgramNotSaved =>
+      'Klabautermann could not save the docker program, so it applies only until Klabautermann quits.';
+
+  @override
   String get appearanceThemeTitle => 'Theme';
 
   @override
