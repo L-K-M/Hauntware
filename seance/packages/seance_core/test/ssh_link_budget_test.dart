@@ -74,7 +74,13 @@ void main() {
           link.link.start('follow 2'),
           throwsA(_refusedAs(ChannelRefusal.sessionLimit)),
         );
-        expect(link.link.seen, const SshLinkSeen(learnedSessionLimit: 2));
+        expect(
+          link.link.seen,
+          const SshLinkSeen(
+            learnedSessionLimit: 2,
+            serverIdentification: peerIdentification,
+          ),
+        );
         final degraded = isA<SshLinkDegraded>().having(
           (state) => state.reason,
           'reason',
@@ -110,7 +116,10 @@ void main() {
         link.link.start('follow 2'),
         throwsA(_refusedAs(ChannelRefusal.other)),
       );
-      expect(link.link.seen, const SshLinkSeen());
+      expect(
+        link.link.seen,
+        const SshLinkSeen(serverIdentification: peerIdentification),
+      );
       expect(link.link.state, isA<SshLinkReady>());
     });
   });
