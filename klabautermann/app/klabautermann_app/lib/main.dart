@@ -14,6 +14,7 @@ import 'controllers/admin_controller.dart';
 import 'controllers/alert_center.dart';
 import 'controllers/alert_notifications.dart';
 import 'controllers/alert_rules_controller.dart';
+import 'controllers/snippets_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
 import 'controllers/attention.dart';
@@ -36,6 +37,7 @@ import 'controllers/stack_folders.dart';
 import 'controllers/tls_endpoints.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
+import 'controllers/threshold_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/app_version.dart';
 import 'services/device_authenticator.dart';
@@ -241,6 +243,8 @@ Future<void> main(List<String> args) async {
   final alerts = AlertCenter(engine);
   // The synced rules behind them, and the editor's writes (03 §4.8).
   final alertRules = AlertRulesController(engine);
+  // Séance's synced snippets, run on a server (AUT-01).
+  final snippets = SnippetsController(engine);
   // Their system notifications (ALR-01), worded in the device's locale
   // as it is when each posts, and switched on per device in
   // settings.json.
@@ -331,6 +335,12 @@ Future<void> main(List<String> args) async {
     save: settings.setAnnounceThresholdBands,
   );
 
+  // OV-11's threshold bands, kept per device in settings.json.
+  final thresholds = ThresholdController(
+    stored: settings.thresholds,
+    save: settings.setThresholds,
+  );
+
   // The polling budget (SAF-19), kept per device in settings.json; the
   // engine samples at its 6.4 column from the start and follows changes.
   final cadence = CadenceController(
@@ -351,6 +361,21 @@ Future<void> main(List<String> args) async {
     },
     save: settings.setPinnedServices,
   );
+  // Each server's cap (SAF-19), kept per device like the preset and sent
+  // to the engine from the start; a cap outlives the fleet.
+  final cadenceCaps = CadenceCapsController(
+    caps: {
+      for (final MapEntry(:key, :value) in settings.cadenceCaps.entries)
+        key: ?CadenceCap.parse(value),
+    },
+    save: settings.setCadenceCap,
+  );
+  void applyCadenceCaps() => monitoring.setCadenceCaps({
+    for (final MapEntry(:key, :value) in cadenceCaps.value.entries)
+      key: value.profile,
+  });
+  applyCadenceCaps();
+  cadenceCaps.addListener(applyCadenceCaps);
 
   // The synced servers' preferences (03 §4.8), as the engine reports their
   // `pref` records.
@@ -427,6 +452,7 @@ Future<void> main(List<String> args) async {
     defaultTargetPlatform,
     appearance: appearance,
     announcements: announcements,
+    thresholds: thresholds,
     deviceName: deviceName,
     appVersion: appVersion,
     monitorSet: fleet.monitorSettings,
@@ -435,6 +461,7 @@ Future<void> main(List<String> args) async {
     syncSecrets: syncSecrets,
     pinPublication: pinPublication,
     cadence: cadence,
+    cadenceCaps: cadenceCaps,
   );
 
   runApp(
@@ -445,8 +472,10 @@ Future<void> main(List<String> args) async {
       appearance: appearance,
       coverage: coverage,
       announcements: announcements,
+      thresholds: thresholds,
       cadence: cadence,
       pinnedServices: pinnedServices,
+      cadenceCaps: cadenceCaps,
       deviceName: deviceName,
       safety: safety,
       appLock: appLock,
@@ -455,6 +484,7 @@ Future<void> main(List<String> args) async {
       admin: admin,
       alerts: alerts,
       alertRules: alertRules,
+      snippets: snippets,
       alertNotifications: alertNotifications,
       operations: operations,
       dockerNotice: dockerNotice,

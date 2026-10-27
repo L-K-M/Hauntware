@@ -3115,7 +3115,11 @@ units are a stream of their own, apart from the Services panel's `units`
 (D45, 10.1). As built, Settings > General picks the profile per
 device: Automatic (Desktop on a computer, Phone on a phone or tablet),
 Desktop, Phone or Cellular saver, kept in `settings.json` under
-`klabautermann.sampling.cadence`; per-server caps are not built yet.
+`klabautermann.sampling.cadence`. Settings > Servers caps a server at
+the Phone or Cellular saver column, or lifts its cap, kept per device
+under `klabautermann.sampling.caps` by server id and sent to the engine as
+`SetServerCadenceCap` at start and on every change; a cap outlives the
+fleet, as the engine's does.
 Rates
 are computed in the engine isolate (D43) from counter deltas over the
 host's uptime between two replies that carry them, with wrap detection
@@ -4322,6 +4326,17 @@ TLS. The section checks when it shows, after an edit and on request.
   `klabautermann.docker.containerColumns`; a name it does not know is
   skipped. Started is read from the status's uptime, since the list
   carries no start time, so it is as coarse as the status words.
+  Usage (CST-02 to CST-05, M6 N18): every figure column sorts (CST-02).
+  A container's details chart CPU, memory against its limit, network
+  and block I/O rates (from the totals between reads) and PIDs for the
+  last 30 minutes this device read (CST-03). The details pin the
+  container's stats into the watch, so they keep coming at the list's
+  5 s cadence whatever rows show, instead of opening a `stats?stream=1`
+  follow, which would hold one more channel; a pause of over 20 s breaks
+  the lines. Memory at or above 90 % of its limit [E] reads as at risk
+  in words beside an icon, in the list and the details (CST-04). Top
+  lists the running containers in one list, the busiest CPU first, as
+  ctop does (CST-05).
 
   Restart-loop and exit flags (CTR-09): the list carries no
   `RestartCount` or `State.OOMKilled`, and inspecting every row on each
@@ -5121,6 +5136,17 @@ arrives with E22's Docker actions.
   loss re-seals nothing and a pending record has no source. The engine
   sends every live snippet, by title, as `SnippetsChanged` at start and
   after a round that changed them, as it sends `AlertRulesChanged`.
+- **As built (M6 N65c).** The server header's Snippets button, shown
+  where actions are allowed, opens the account's snippets, searchable by
+  title and command. Choosing one asks for each `{{name}}` placeholder
+  once, shows the filled command, and continues only when every value is
+  in, so a blank never turns `rm -rf /{{dir}}` into `rm -rf /`. The
+  filled command is the `RunSnippet` action: `sh -c` as the login user,
+  planned like JOB-19's run now. The preview, the linter and the audit
+  show it masked by 8.9's rules, the danger findings come from the
+  preview's linter, and its output shows in the run-now sheet. Admin
+  mode never applies: a snippet that needs root says so in its own
+  words, as in Séance's terminal.
 - **v1.x.** Custom probes, run on many with a concurrency cap; assistant
   features (explain a log excerpt, suggest a fix, diagnostics the user
   chooses to attach, explain a container) after `ChatController` is
@@ -7414,7 +7440,10 @@ reading, in two columns from the System tab's 600 px panel width:
   rows, the Overview's gauges, the health card's disk alarms and the
   announcer read. Careful keeps the series colour and says so by an info
   icon and in words; only warning and critical raise disk alarms or are
-  announced. The user's levels follow in N61b.
+  announced. Settings > Alerts sets each metric's three levels (N61b),
+  whole percents from 1 to 100 in rising order, kept per device in
+  `settings.json` under `klabautermann.overview.thresholds`; the desktop
+  settings window sets them over the link.
 - Every figure goes through the chart formatters' IEC units, and a
   test keeps the decimal `ghostFormatFileSize` and `ghostFormatByteRate`
   out of `lib/`. A figure the container withholds (D50) reads unknown

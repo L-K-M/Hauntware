@@ -5,7 +5,10 @@ import 'package:klabautermann_app/controllers/docker_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/tls_endpoints.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/ui/charts/charts.dart' show ChartThresholds;
 import 'package:klabautermann_app/ui/doctor.dart';
+import 'package:klabautermann_app/ui/threshold_scope.dart'
+    show kDefaultThresholds;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/fake_engine.dart';
@@ -100,6 +103,22 @@ void main() {
       for (final check in checks)
         if (check.verdict != DoctorVerdict.ok) check.kind,
     ], isEmpty);
+  });
+
+  test('the disk checks judge by the disk bands the user set (OV-11)', () {
+    final fs = FsSnapshot([_mount('/', use: 85, inodes: 85)]);
+    Map<DoctorCheckKind, DoctorCheck> judged(ChartThresholds levels) =>
+        _byKind(DoctorInputs(now: _now, fs: fs, diskLevels: levels));
+
+    expect(
+      judged(kDefaultThresholds)[DoctorCheckKind.diskSpace]?.verdict,
+      DoctorVerdict.warning,
+    );
+    final relaxed = judged(
+      const ChartThresholds(careful: 80, warning: 90, critical: 95),
+    );
+    expect(relaxed[DoctorCheckKind.diskSpace]?.verdict, DoctorVerdict.ok);
+    expect(relaxed[DoctorCheckKind.inodes]?.verdict, DoctorVerdict.ok);
   });
 
   test('each finding names what it concerns', () {

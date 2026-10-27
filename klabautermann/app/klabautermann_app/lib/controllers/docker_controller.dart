@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'container_usage.dart';
 import 'docker_endpoint_choices.dart';
 
 /// The app's Docker endpoints for one engine run (03 §5.9, §10.1): each
@@ -714,6 +715,43 @@ final class DockerController {
     _watch(serverId, server);
   }
 
+  /// [containerId]'s list stats on [serverId] since this device began
+  /// reading them (CST-03), kept while it is listed; a view that charts
+  /// it pins its stats with [pinStats].
+  ContainerUsageHistory usageFor(String serverId, String containerId) =>
+      _server(
+        serverId,
+      ).usage.putIfAbsent(containerId, ContainerUsageHistory.new);
+
+  /// Has the container watch read [containerId]'s stats whatever rows
+  /// show, until [unpinStats]: a details view charts them (CST-03).
+  void pinStats(String serverId, String containerId) {
+    final server = _server(serverId);
+    final pins = server.pinnedStats[containerId] ?? 0;
+    server.pinnedStats[containerId] = pins + 1;
+    // A container the list already reads changes nothing to watch.
+    if (pins == 0 &&
+        server.watchId != null &&
+        !server.statsFor.contains(containerId)) {
+      _watch(serverId, server);
+    }
+  }
+
+  /// Ends one [pinStats].
+  void unpinStats(String serverId, String containerId) {
+    final server = _servers[serverId];
+    final pins = server?.pinnedStats[containerId];
+    if (server == null || pins == null) return;
+    if (pins > 1) {
+      server.pinnedStats[containerId] = pins - 1;
+      return;
+    }
+    server.pinnedStats.remove(containerId);
+    if (server.watchId != null && !server.statsFor.contains(containerId)) {
+      _watch(serverId, server);
+    }
+  }
+
   /// A details view shows the container [containerId] (its full id) on
   /// [serverId]; [closeContainer] says it no longer does. The first view
   /// has the container inspected; every view of it shares what the
@@ -905,7 +943,7 @@ final class DockerController {
         serverId: serverId,
         watchId: watchId,
         lists: const {DockerWatchList.containers, DockerWatchList.stats},
-        statsFor: server.statsFor,
+        statsFor: server.watchedStats,
       ),
     );
   }
@@ -1071,6 +1109,22 @@ final class DockerController {
           DockerContainersPayload(:final containers),
         )) {
           _followInspected(serverId, server, containers);
+          final listed = {for (final c in containers) c.id};
+          server.usage.removeWhere((id, history) {
+            // A pinned one stays: a details view charts it.
+            if (listed.contains(id) || server.pinnedStats.containsKey(id)) {
+              return false;
+            }
+            history.dispose();
+            return true;
+          });
+        }
+        if (payload case DockerStatsPayload(:final stats)) {
+          for (final row in stats) {
+            server.usage
+                .putIfAbsent(row.containerId, ContainerUsageHistory.new)
+                .add(row);
+          }
         }
         if (list == DockerWatchList.images) {
           server.images.value = server.images.value.took(payload, at);
@@ -1610,6 +1664,20 @@ final class _DockerServer {
   /// The containers whose stats the watch reads: the rows on screen.
   Set<String> statsFor = const {};
 
+  /// The containers whose stats are read whatever rows show, as an open
+  /// details view's (CST-03), with how many views pin each.
+  final Map<String, int> pinnedStats = {};
+
+  /// Each listed container's list stats since this device began reading
+  /// them (CST-03), by id; a container that leaves the list takes its
+  /// history with it.
+  final Map<String, ContainerUsageHistory> usage = {};
+
+  /// What the container watch reads stats for: the pinned containers,
+  /// then the rows on screen, at most [kDockerStatsForMax].
+  Set<String> get watchedStats =>
+      {...pinnedStats.keys, ...statsFor}.take(kDockerStatsForMax).toSet();
+
   /// How many Overviews show the server.
   int summaryViews = 0;
 
@@ -1667,6 +1735,10 @@ final class _DockerServer {
 
   void dispose() {
     endFileReads(DockerQueryFailure.cancelled);
+    for (final history in usage.values) {
+      history.dispose();
+    }
+    usage.clear();
     endpoint.dispose();
     engine.dispose();
     compose.dispose();

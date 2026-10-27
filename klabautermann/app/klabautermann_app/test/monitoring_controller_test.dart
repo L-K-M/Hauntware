@@ -168,6 +168,28 @@ void main() {
     );
   });
 
+  test('sends a server\'s cap when it changes and lifts one left out '
+      '(SAF-19)', () async {
+    monitoring.setCadenceCaps({'srv-1': CadenceProfile.phone});
+    monitoring.setCadenceCaps({
+      'srv-1': CadenceProfile.phone,
+      'srv-2': CadenceProfile.cellularSaver,
+    });
+    monitoring.setCadenceCaps({'srv-2': CadenceProfile.cellularSaver});
+    await settle();
+
+    expect(
+      engine.sentOfType<SetServerCadenceCap>().cast<SetServerCadenceCap>().map(
+        (request) => (request.serverId, request.cap),
+      ),
+      [
+        ('srv-1', CadenceProfile.phone),
+        ('srv-2', CadenceProfile.cellularSaver),
+        ('srv-1', null),
+      ],
+    );
+  });
+
   group('refresh (PLT-02)', () {
     SamplingState phase(SamplingPhase phase) => SamplingState(
       serverId: 'srv-1',
