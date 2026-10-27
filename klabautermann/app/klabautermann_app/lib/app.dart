@@ -72,6 +72,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.coverage,
     required this.announcements,
     this.cadence,
+    this.cadenceCaps,
     this.deviceName,
     this.safety,
     this.appLock,
@@ -113,6 +114,10 @@ class KlabautermannApp extends StatelessWidget {
   /// The polling budget (SAF-19) in Settings; null in tests that leave it
   /// out.
   final CadenceController? cadence;
+
+  /// The per-server caps (SAF-19) in Settings > Servers; null in tests
+  /// that leave them out.
+  final CadenceCapsController? cadenceCaps;
 
   /// The safety preferences the engine enforces (M4 plan M4); like
   /// [appearance], they outlive an engine run. Null in tests that leave
@@ -407,6 +412,7 @@ class KlabautermannApp extends StatelessWidget {
               appearance: appearance,
               announcements: announcements,
               cadence: cadence,
+              cadenceCaps: cadenceCaps,
               deviceName: deviceName,
               appVersion: appVersion,
               monitorSet: fleet.monitorSettings,

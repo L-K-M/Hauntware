@@ -4362,6 +4362,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'The refresh rate could not be changed.';
 
   @override
+  String get settingsCadenceCapsTitle => 'Refresh limits';
+
+  @override
+  String get settingsCadenceCapsDetail =>
+      'Read a server no more often than the chosen rate, for example one on a metered link. A limit never makes a server refresh faster than the rate in General.';
+
+  @override
+  String get settingsCadenceNoCap => 'No limit';
+
+  @override
+  String get settingsCadenceCapNotSaved =>
+      'The refresh limit changed but could not be saved. It lasts until Klabautermann quits.';
+
+  @override
+  String get settingsCadenceCapNotChanged =>
+      'The refresh limit could not be changed.';
+
+  @override
   String get settingsAnnounceBands => 'Announce threshold changes';
 
   @override

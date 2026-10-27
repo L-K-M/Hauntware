@@ -5298,6 +5298,26 @@
   "@settingsCadenceNotChanged": {
     "description": "Settings, General: toast when the polling budget change failed."
   },
+  "settingsCadenceCapsTitle": "Refresh limits",
+  "@settingsCadenceCapsTitle": {
+    "description": "Settings, Servers: the heading of the per-server polling caps (SAF-19)."
+  },
+  "settingsCadenceCapsDetail": "Read a server no more often than the chosen rate, for example one on a metered link. A limit never makes a server refresh faster than the rate in General.",
+  "@settingsCadenceCapsDetail": {
+    "description": "Settings, Servers: what a per-server polling cap does (SAF-19, 03 §6.4)."
+  },
+  "settingsCadenceNoCap": "No limit",
+  "@settingsCadenceNoCap": {
+    "description": "Settings, Servers: the menu choice that lifts a server's polling cap."
+  },
+  "settingsCadenceCapNotSaved": "The refresh limit changed but could not be saved. It lasts until Klabautermann quits.",
+  "@settingsCadenceCapNotSaved": {
+    "description": "Settings, Servers: toast when a server's polling cap applied but settings.json could not be written."
+  },
+  "settingsCadenceCapNotChanged": "The refresh limit could not be changed.",
+  "@settingsCadenceCapNotChanged": {
+    "description": "Settings, Servers: toast when a server's polling cap change failed."
+  },
   "settingsAnnounceBands": "Announce threshold changes",
   "@settingsAnnounceBands": {
     "description": "Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level."

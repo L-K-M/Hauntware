@@ -15,7 +15,7 @@ import 'package:ghost_theme/ghost_theme.dart';
 import '../../controllers/announcement_controller.dart'
     show AnnouncementNotSavedException;
 import '../../controllers/cadence_controller.dart'
-    show CadenceNotSavedException, CadencePreset;
+    show CadenceCap, CadenceNotSavedException, CadencePreset;
 import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart'
     show AppearanceNotSavedException;
@@ -69,6 +69,10 @@ enum SettingsLinkMethod {
   /// [CadencePreset] name.
   setCadence,
 
+  /// The Servers tab's per-server polling cap (SAF-19); the argument is
+  /// `[serverId, name]`, a [CadenceCap] name or null to lift the cap.
+  setCadenceCap,
+
   /// The General tab's device name (M5 plan Q6); the argument is a
   /// string, blank for the default.
   setDeviceName,
@@ -113,6 +117,10 @@ enum SettingsLinkKey {
   /// The polling budget's [CadencePreset] name, or null when the app
   /// offers none.
   cadence,
+
+  /// Each capped server's [CadenceCap] name by server id, or null when
+  /// the app offers no caps.
+  cadenceCaps,
   deviceName,
   syncSecrets,
 

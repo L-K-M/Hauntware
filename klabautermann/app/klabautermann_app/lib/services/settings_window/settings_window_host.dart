@@ -35,6 +35,7 @@ SettingsWindowHost? settingsWindowHostFor(
   PinPublicationSettings? pinPublication,
   AppLockSettings? appLock,
   CadenceSettings? cadence,
+  CadenceCapSettings? cadenceCaps,
 }) => switch (platform) {
   TargetPlatform.macOS ||
   TargetPlatform.linux ||
@@ -49,6 +50,7 @@ SettingsWindowHost? settingsWindowHostFor(
     pinPublication: pinPublication,
     appLock: appLock,
     cadence: cadence,
+    cadenceCaps: cadenceCaps,
   ),
   TargetPlatform.android ||
   TargetPlatform.iOS ||
@@ -77,6 +79,7 @@ final class SettingsWindowHost {
     PinPublicationSettings? pinPublication,
     AppLockSettings? appLock,
     CadenceSettings? cadence,
+    CadenceCapSettings? cadenceCaps,
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
@@ -88,7 +91,8 @@ final class SettingsWindowHost {
        _syncSecrets = syncSecrets,
        _pinPublication = pinPublication,
        _appLock = appLock,
-       _cadence = cadence {
+       _cadence = cadence,
+       _cadenceCaps = cadenceCaps {
     _engine = GhostSettingsWindowHost(
       control: control,
       link: link,
@@ -106,6 +110,7 @@ final class SettingsWindowHost {
           ?pinPublication,
           ?appLock,
           ?cadence,
+          ?cadenceCaps,
         ],
       ),
       encodeError: encodeLinkError,
@@ -123,6 +128,7 @@ final class SettingsWindowHost {
   final PinPublicationSettings? _pinPublication;
   final AppLockSettings? _appLock;
   final CadenceSettings? _cadence;
+  final CadenceCapSettings? _cadenceCaps;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
 
   @visibleForTesting
@@ -143,6 +149,12 @@ final class SettingsWindowHost {
     SettingsLinkKey.appearance.name: encodeAppearance(_appearance.value),
     SettingsLinkKey.announceThresholdBands.name: _announcements.value,
     SettingsLinkKey.cadence.name: _cadence?.value.name,
+    SettingsLinkKey.cadenceCaps.name: switch (_cadenceCaps?.value) {
+      final caps? => {
+        for (final MapEntry(:key, :value) in caps.entries) key: value.name,
+      },
+      null => null,
+    },
     SettingsLinkKey.deviceName.name: _deviceName.value,
     SettingsLinkKey.syncSecrets.name: _syncSecrets.value,
     SettingsLinkKey.pinPublication.name: switch (_pinPublication?.value) {
@@ -182,6 +194,9 @@ final class SettingsWindowHost {
         await _announcements.setAnnounceThresholdBands(argument! as bool);
       case SettingsLinkMethod.setCadence:
         await _cadence?.setCadence(CadencePreset.parse(argument! as String));
+      case SettingsLinkMethod.setCadenceCap:
+        final [serverId as String, name as String?] = argument! as List;
+        await _cadenceCaps?.setCap(serverId, CadenceCap.parse(name));
       case SettingsLinkMethod.setDeviceName:
         await _deviceName.setDeviceName(argument! as String);
       case SettingsLinkMethod.setSyncSecrets:

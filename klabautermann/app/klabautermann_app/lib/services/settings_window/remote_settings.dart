@@ -64,6 +64,16 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     (preset) => invoke(SettingsLinkMethod.setCadence.name, preset.name),
   );
 
+  /// The Servers tab's per-server caps, from the latest snapshot; null
+  /// while the app offers none.
+  RemoteCadenceCaps? get cadenceCaps =>
+      _cadenceCaps.offered ? _cadenceCaps : null;
+
+  late final RemoteCadenceCaps _cadenceCaps = RemoteCadenceCaps._(
+    (serverId, cap) =>
+        invoke(SettingsLinkMethod.setCadenceCap.name, [serverId, cap?.name]),
+  );
+
   /// The General tab's device name, from the latest snapshot.
   late final RemoteDeviceName deviceName = RemoteDeviceName._(
     (name) => invoke(SettingsLinkMethod.setDeviceName.name, name),
@@ -115,6 +125,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
       snapshot[SettingsLinkKey.announceThresholdBands.name]! as bool,
     );
     _cadence._apply(snapshot[SettingsLinkKey.cadence.name] as String?);
+    _cadenceCaps._apply(snapshot[SettingsLinkKey.cadenceCaps.name] as Map?);
     deviceName._apply(snapshot[SettingsLinkKey.deviceName.name]! as String);
     syncSecrets._apply(snapshot[SettingsLinkKey.syncSecrets.name]! as bool);
     pinPublication._apply(
@@ -204,6 +215,43 @@ final class RemoteCadence extends ChangeNotifier implements CadenceSettings {
   @override
   Future<void> setCadence(CadencePreset preset) async {
     await _call(preset);
+  }
+}
+
+/// [CadenceCapSettings] over the link: the app's caps as the latest
+/// snapshot carries them, and changes that run in the app's isolate.
+final class RemoteCadenceCaps extends ChangeNotifier
+    implements CadenceCapSettings {
+  RemoteCadenceCaps._(this._call);
+
+  final Future<Object?> Function(String serverId, CadenceCap? cap) _call;
+
+  /// Whether the app offers per-server caps; the first snapshot says.
+  bool offered = false;
+
+  Map<String, CadenceCap> _value = const {};
+
+  void _apply(Map<Object?, Object?>? names) {
+    final caps = <String, CadenceCap>{
+      for (final MapEntry(:key, :value) in (names ?? const {}).entries)
+        if ((key, CadenceCap.parse(value as String?)) case (
+          final String serverId,
+          final cap?,
+        ))
+          serverId: cap,
+    };
+    if (offered == (names != null) && mapEquals(caps, _value)) return;
+    offered = names != null;
+    _value = Map.unmodifiable(caps);
+    notifyListeners();
+  }
+
+  @override
+  Map<String, CadenceCap> get value => _value;
+
+  @override
+  Future<void> setCap(String serverId, CadenceCap? cap) async {
+    await _call(serverId, cap);
   }
 }
 

@@ -40,6 +40,7 @@ class SettingsPage extends StatefulWidget {
     required this.appVersion,
     required this.monitorSet,
     this.cadence,
+    this.cadenceCaps,
     this.deviceName,
     this.safety,
     this.appLock,
@@ -56,6 +57,10 @@ class SettingsPage extends StatefulWidget {
   /// The polling budget (SAF-19) in General; null in tests that leave it
   /// out, where General shows none.
   final CadenceSettings? cadence;
+
+  /// The per-server caps (SAF-19) in Servers; null in tests that leave
+  /// them out, where Servers shows none.
+  final CadenceCapSettings? cadenceCaps;
 
   /// Null in tests that leave it out, where General shows no device name.
   final DeviceNameSettings? deviceName;
@@ -153,7 +158,10 @@ class _SettingsPageState extends State<SettingsPage>
               SettingsTab.appearance => AppearanceTab(
                 appearance: widget.appearance,
               ),
-              SettingsTab.servers => ServersTab(monitorSet: widget.monitorSet),
+              SettingsTab.servers => ServersTab(
+                monitorSet: widget.monitorSet,
+                cadenceCaps: widget.cadenceCaps,
+              ),
               SettingsTab.sync when widget.syncSecrets != null => SyncTab(
                 syncSecrets: widget.syncSecrets!,
                 pinPublication: widget.pinPublication,
@@ -521,18 +529,48 @@ class SyncTab extends StatelessWidget {
 /// The Servers tab: FL-21's monitor set (03 §4.3 step 4), a switch per
 /// fleet server in fleet order. A server that cannot join says why and
 /// its switch is off and disabled; one more than the set holds says the
-/// set is full when its switch is turned on.
+/// set is full when its switch is turned on. Below it, each server's
+/// polling cap (SAF-19) when [cadenceCaps] is given.
 class ServersTab extends StatelessWidget {
-  const ServersTab({super.key, required this.monitorSet});
+  const ServersTab({super.key, required this.monitorSet, this.cadenceCaps});
 
   final MonitorSetSettings monitorSet;
+
+  /// As [SettingsPage.cadenceCaps].
+  final CadenceCapSettings? cadenceCaps;
+
+  /// Caps [serverId] at [cap] and says in a toast when that applied but
+  /// was not saved, or did not apply, as General's preset does.
+  Future<void> _setCap(
+    BuildContext context,
+    CadenceCapSettings caps,
+    String serverId,
+    CadenceCap? cap,
+  ) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await caps.setCap(serverId, cap);
+    } on CadenceNotSavedException catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsCadenceCapNotSaved);
+      }
+    } on Exception catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsCadenceCapNotChanged);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final textTheme = Theme.of(context).textTheme;
+    final caps = cadenceCaps;
     return ListenableBuilder(
-      listenable: monitorSet,
+      listenable: Listenable.merge([monitorSet, ?caps]),
       builder: (context, _) {
         final candidates = monitorSet.value;
         final monitored = candidates.where((c) => c.monitored).length;
@@ -619,6 +657,37 @@ class ServersTab extends StatelessWidget {
                   null => null,
                 },
               ),
+            if (caps != null && candidates.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Semantics(
+                header: true,
+                child: Text(
+                  l10n.settingsCadenceCapsTitle,
+                  style: textTheme.titleSmall,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(l10n.settingsCadenceCapsDetail, style: textTheme.bodyMedium),
+              for (final candidate in candidates)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(candidate.label),
+                  trailing: DropdownButton<CadenceCap?>(
+                    value: caps.value[candidate.serverId],
+                    items: [
+                      DropdownMenuItem(child: Text(l10n.settingsCadenceNoCap)),
+                      for (final cap in CadenceCap.values)
+                        DropdownMenuItem(
+                          value: cap,
+                          child: Text(l10n.settingsCadencePreset(cap.name)),
+                        ),
+                    ],
+                    onChanged: (cap) => unawaited(
+                      _setCap(context, caps, candidate.serverId, cap),
+                    ),
+                  ),
+                ),
+            ],
           ],
         );
       },

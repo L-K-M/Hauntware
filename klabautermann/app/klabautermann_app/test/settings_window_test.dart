@@ -171,6 +171,7 @@ void main() {
     DeviceNameSettings? deviceName,
     AppLockSettings? appLock,
     CadenceSettings? cadence,
+    CadenceCapSettings? cadenceCaps,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
@@ -182,6 +183,7 @@ void main() {
       syncSecrets: syncSecrets ?? newSyncSecrets(),
       appLock: appLock,
       cadence: cadence,
+      cadenceCaps: cadenceCaps,
       control: _control,
       link: _appLink,
       requestAppExit: () async => AppExitResponse.exit,
@@ -338,6 +340,7 @@ void main() {
     late AppLockController appLock;
     late List<bool> appLockSaved;
     late CadenceController cadence;
+    late CadenceCapsController cadenceCaps;
     late SettingsWindowHost host;
 
     setUp(() async {
@@ -383,6 +386,8 @@ void main() {
       addTearDown(appLock.dispose);
       cadence = CadenceController();
       addTearDown(cadence.dispose);
+      cadenceCaps = CadenceCapsController();
+      addTearDown(cadenceCaps.dispose);
       host = newHost(
         appearance,
         announcements,
@@ -392,6 +397,7 @@ void main() {
         deviceName,
         appLock,
         cadence,
+        cadenceCaps,
       );
     });
 
@@ -787,7 +793,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.text('alpha'));
+      await tester.tap(find.widgetWithText(SwitchListTile, 'alpha'));
       await tester.runAsync(pumpEventQueue);
       await tester.pumpAndSettle();
 
@@ -795,6 +801,39 @@ void main() {
       expect(remote.monitorSet.value.first.monitored, isTrue);
       expect(switchOf('alpha').value, isTrue);
       expect(find.text('1 of 10 servers monitored'), findsOneWidget);
+    });
+
+    testWidgets('the Servers tab\'s refresh limits change the app\'s caps '
+        'through the link (SAF-19)', (tester) async {
+      final remote = await pumpWindow(tester, SettingsTab.servers);
+      final bravoCap = find.descendant(
+        of: find.widgetWithText(ListTile, 'bravo'),
+        matching: find.byType(DropdownButton<CadenceCap?>),
+      );
+      await tester.ensureVisible(bravoCap);
+      await tester.pumpAndSettle();
+      expect(remote.cadenceCaps?.value, isEmpty);
+
+      await tester.tap(bravoCap);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cellular saver').last);
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      expect(cadenceCaps.value, {'srv-2': CadenceCap.cellularSaver});
+      expect(remote.cadenceCaps?.value, {'srv-2': CadenceCap.cellularSaver});
+
+      // A change in the app reaches the showing window too.
+      await tester.runAsync(() async {
+        await cadenceCaps.setCap('srv-2', null);
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(remote.cadenceCaps?.value, isEmpty);
+      expect(
+        find.descendant(of: bravoCap, matching: find.text('No limit')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('the Safety tab changes the app\'s policy through the link, '

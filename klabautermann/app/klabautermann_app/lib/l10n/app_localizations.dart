@@ -5538,6 +5538,36 @@ abstract class AppLocalizations {
   /// **'The refresh rate could not be changed.'**
   String get settingsCadenceNotChanged;
 
+  /// Settings, Servers: the heading of the per-server polling caps (SAF-19).
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh limits'**
+  String get settingsCadenceCapsTitle;
+
+  /// Settings, Servers: what a per-server polling cap does (SAF-19, 03 §6.4).
+  ///
+  /// In en, this message translates to:
+  /// **'Read a server no more often than the chosen rate, for example one on a metered link. A limit never makes a server refresh faster than the rate in General.'**
+  String get settingsCadenceCapsDetail;
+
+  /// Settings, Servers: the menu choice that lifts a server's polling cap.
+  ///
+  /// In en, this message translates to:
+  /// **'No limit'**
+  String get settingsCadenceNoCap;
+
+  /// Settings, Servers: toast when a server's polling cap applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The refresh limit changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get settingsCadenceCapNotSaved;
+
+  /// Settings, Servers: toast when a server's polling cap change failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The refresh limit could not be changed.'**
+  String get settingsCadenceCapNotChanged;
+
   /// Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level.
   ///
   /// In en, this message translates to:

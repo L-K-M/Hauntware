@@ -341,6 +341,22 @@ Future<void> main(List<String> args) async {
   applyCadence();
   cadence.addListener(applyCadence);
 
+  // Each server's cap (SAF-19), kept per device like the preset and sent
+  // to the engine from the start; a cap outlives the fleet.
+  final cadenceCaps = CadenceCapsController(
+    caps: {
+      for (final MapEntry(:key, :value) in settings.cadenceCaps.entries)
+        key: ?CadenceCap.parse(value),
+    },
+    save: settings.setCadenceCap,
+  );
+  void applyCadenceCaps() => monitoring.setCadenceCaps({
+    for (final MapEntry(:key, :value) in cadenceCaps.value.entries)
+      key: value.profile,
+  });
+  applyCadenceCaps();
+  cadenceCaps.addListener(applyCadenceCaps);
+
   // The synced servers' preferences (03 §4.8), as the engine reports their
   // `pref` records.
   final serverPrefs = ServerPrefsController(engine);
@@ -424,6 +440,7 @@ Future<void> main(List<String> args) async {
     syncSecrets: syncSecrets,
     pinPublication: pinPublication,
     cadence: cadence,
+    cadenceCaps: cadenceCaps,
   );
 
   runApp(
@@ -435,6 +452,7 @@ Future<void> main(List<String> args) async {
       coverage: coverage,
       announcements: announcements,
       cadence: cadence,
+      cadenceCaps: cadenceCaps,
       deviceName: deviceName,
       safety: safety,
       appLock: appLock,
