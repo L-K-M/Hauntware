@@ -60,8 +60,7 @@ final class WindowStateStore implements GhostWindowPersistence {
 /// in `main()` before `runApp` while the runner's hidden-at-launch window
 /// waits, the saved file stores physical pixels on Windows, and the native
 /// close is observed — never intercepted — so the window always closes
-/// itself, except on macOS, where it is intercepted to hide the window
-/// instead ([mainWindowShown]).
+/// itself.
 ///
 /// Wiring contract (macOS): `MainFlutterWindow` hides the window at launch
 /// (`hiddenWindowAtLaunch()` in its `order` override) so the saved frame can
@@ -78,27 +77,6 @@ final class WindowStateService {
   static bool get _isDesktop =>
       !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
 
-  /// macOS: whether the main window is on screen. Its close button hides it
-  /// rather than closing it: Séance keeps running in the Dock with its
-  /// sessions, as Mail and Messages keep theirs, and the Dock icon or
-  /// Window ▸ Séance brings it back ([showMainWindow]).
-  static final ValueNotifier<bool> mainWindowShown = ValueNotifier(true);
-
-  /// Shows the main window again and makes it key.
-  static Future<void> showMainWindow() async {
-    await windowManager.show();
-    await windowManager.focus();
-    mainWindowShown.value = true;
-  }
-
-  /// The close button on macOS: hide, and tell the lifecycle the close is
-  /// handled, so nothing quits.
-  static Future<bool> _hideInsteadOfClosing() async {
-    await windowManager.hide();
-    mainWindowShown.value = false;
-    return true;
-  }
-
   static Future<void> restoreAndTrack() async {
     if (!_isDesktop || _instance != null) return;
     try {
@@ -108,12 +86,7 @@ final class WindowStateService {
       final dir = await getApplicationSupportDirectory();
       final lifecycle = GhostWindowLifecycle(
         persistence: WindowStateStore(File('${dir.path}/window_state.json')),
-        // macOS keeps the app, and the window's sessions, when the window
-        // closes; elsewhere the close is observed and the app ends with it.
-        closePolicy: Platform.isMacOS
-            ? GhostClosePolicy.intercept
-            : GhostClosePolicy.observe,
-        closeInstead: Platform.isMacOS ? _hideInsteadOfClosing : null,
+        closePolicy: GhostClosePolicy.observe,
         missingMonitor: MissingMonitorPolicy.rejectAndKeep,
         coordinates: GhostCoordinateSpace.physicalOnWindows,
         // The runners show the window on the first Flutter frame; asking for

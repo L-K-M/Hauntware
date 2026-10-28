@@ -742,7 +742,6 @@ void main() {
       required double width,
       PaneVisibility list = PaneVisibility.shown,
       PaneVisibility utility = PaneVisibility.shown,
-      PaneOverflow overflow = PaneOverflow.switchToNarrow,
     }) async {
       tester.view.physicalSize = Size(width, 800);
       tester.view.devicePixelRatio = 1;
@@ -752,7 +751,6 @@ void main() {
           home: AdaptivePaneLayout(
             list: list,
             utility: utility,
-            overflow: overflow,
             listPane: const SizedBox.expand(),
             terminalPane: const SizedBox.expand(),
             utilityPane: const SizedBox.expand(),
@@ -781,41 +779,46 @@ void main() {
       expect(paneWidth(tester, AdaptivePaneLayout.terminalPaneKey), 1400);
     });
 
-    testWidgets('collapsing drops the inspector first, then the list', (
-      tester,
-    ) async {
-      await pumpVisibility(
-        tester,
-        width: 800,
-        overflow: PaneOverflow.collapsePanes,
-      );
-      expect(find.byKey(AdaptivePaneLayout.narrowPaneKey), findsNothing);
-      expect(find.byKey(AdaptivePaneLayout.utilityPaneKey), findsNothing);
-      expect(find.byKey(AdaptivePaneLayout.listPaneKey), findsOneWidget);
-
-      await pumpVisibility(
-        tester,
-        width: 560,
-        overflow: PaneOverflow.collapsePanes,
-      );
-      expect(find.byKey(AdaptivePaneLayout.listPaneKey), findsNothing);
-      expect(paneWidth(tester, AdaptivePaneLayout.terminalPaneKey), 560);
-
-      // Below the terminal's own minimum it still has the window.
-      await pumpVisibility(
-        tester,
-        width: 400,
-        overflow: PaneOverflow.collapsePanes,
-      );
-      expect(find.byKey(AdaptivePaneLayout.narrowPaneKey), findsNothing);
-      expect(paneWidth(tester, AdaptivePaneLayout.terminalPaneKey), 400);
-    });
-
-    testWidgets('the phone policy still switches to the narrow layout', (
+    testWidgets('a window too narrow for its panes switches to narrow', (
       tester,
     ) async {
       await pumpVisibility(tester, width: 800);
       expect(find.byKey(AdaptivePaneLayout.narrowPaneKey), findsOneWidget);
+
+      // Hiding the inspector leaves room enough for the list beside the
+      // terminal.
+      await pumpVisibility(tester, width: 800, utility: PaneVisibility.hidden);
+      expect(find.byKey(AdaptivePaneLayout.narrowPaneKey), findsNothing);
+      expect(find.byKey(AdaptivePaneLayout.listPaneKey), findsOneWidget);
+    });
+
+    testWidgets('the list band shows with the list, the header always', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      Future<void> pump(PaneVisibility list) => tester.pumpWidget(
+        MaterialApp(
+          home: AdaptivePaneLayout(
+            list: list,
+            header: (list) => Text('header ${list.name}'),
+            listHeader: const Text('band'),
+            listPane: const SizedBox.expand(),
+            terminalPane: const SizedBox.expand(),
+            utilityPane: const SizedBox.expand(),
+            narrowPane: const SizedBox.expand(),
+          ),
+        ),
+      );
+
+      await pump(PaneVisibility.shown);
+      expect(find.text('header shown'), findsOneWidget);
+      expect(find.text('band'), findsOneWidget);
+
+      await pump(PaneVisibility.hidden);
+      expect(find.text('header hidden'), findsOneWidget);
+      expect(find.text('band'), findsNothing);
     });
   });
 
@@ -832,7 +835,6 @@ void main() {
             home: AdaptivePaneLayout(
               list: list,
               utility: utility,
-              overflow: PaneOverflow.collapsePanes,
               listPane: const SizedBox.expand(),
               terminalPane: _CountsMounts(onMount: () => mounts++),
               utilityPane: const SizedBox.expand(),

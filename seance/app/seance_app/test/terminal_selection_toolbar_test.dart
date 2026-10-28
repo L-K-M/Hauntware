@@ -186,8 +186,8 @@ void main() {
     expect(find.byType(CompositedTransformFollower), findsNothing);
   });
 
-  testWidgets('the toolbar opens above the selection, or below it at the '
-      'top of the view', (tester) async {
+  testWidgets('the toolbar opens above the selection, and never over the '
+      'selected word', (tester) async {
     await pumpTerminal(tester);
     final terminal = state!.activeSession!.engine.terminal;
     terminal.write('\r\n' * 10 + 'echo target\r\n');
@@ -199,12 +199,16 @@ void main() {
 
     await tester.tapAt(cell(tester, 20, 14));
     await settle(tester);
+    // The first row: above it is the tab strip and the header, where the
+    // toolbar may open as it does over an app bar, but not on the word.
     await tester.longPressAt(cell(tester, 2, 0));
     await settle(tester);
-    expect(
-      tester.getCenter(copyButton()).dy,
-      greaterThan(cell(tester, 2, 0).dy),
+    expect(copyButton(), findsOneWidget);
+    final button = find.ancestor(
+      of: copyButton(),
+      matching: find.byType(TextSelectionToolbarTextButton),
     );
+    expect(tester.getRect(button).contains(cell(tester, 2, 0)), isFalse);
   });
 
   testWidgets('a touch double-tap selection offers the toolbar too', (

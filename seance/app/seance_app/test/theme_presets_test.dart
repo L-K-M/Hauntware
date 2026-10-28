@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/family_hues.dart';
@@ -29,12 +27,8 @@ void main() {
     expect(first.cornerScale, 1);
   });
 
-  test('a new device starts in Terminal, or Séance on a Mac', () {
-    // A Mac starts in the theme that follows its light or dark appearance.
-    expect(
-      ThemePresets.initial,
-      same(Platform.isMacOS ? ThemePresets.seance : ThemePresets.terminal),
-    );
+  test('a new device starts in Terminal', () {
+    expect(ThemePresets.initial, same(ThemePresets.terminal));
     expect(ThemePresets.all, contains(ThemePresets.initial));
   });
 

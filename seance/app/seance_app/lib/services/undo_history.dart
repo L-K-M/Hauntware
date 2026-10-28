@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 
-/// One change Edit ▸ Undo can take back. [name] completes the menu's
-/// "Undo …" and "Redo …"; [undo] and [redo] apply its two directions.
+/// One change the app's Undo can take back. [name] says what it was in
+/// the notice ("Delete snippet undone"); [undo] and [redo] apply its two
+/// directions.
 @immutable
 final class UndoableChange {
   const UndoableChange({
@@ -27,9 +28,10 @@ final class UndoDeclined implements Exception {
   String toString() => message;
 }
 
-/// The app's own undo history: what Edit ▸ Undo and Redo do outside text
-/// fields, which keep their own. Holds the user's changes to snippets and
-/// the server list, newest last, and only for this run of the app.
+/// The app's own undo history: what the Undo and Redo shortcuts do
+/// outside text fields, which keep their own. Holds the user's changes to
+/// snippets and the server list, newest last, and only for this run of the
+/// app.
 final class AppUndoHistory extends ChangeNotifier {
   AppUndoHistory({this.limit = 50});
 

@@ -931,7 +931,9 @@ void main() {
 
     testWidgets('Import SSH config counts the hosts it skips', (tester) async {
       await boot(tester, []);
-      await pumpRail(tester);
+      // A tablet's import takes the file's text; the desktop's picks the
+      // file (ssh_config_import_test.dart).
+      await pumpRail(tester, platform: TargetPlatform.android);
       await tester.tap(find.text('Import SSH config'));
       await tester.pumpAndSettle();
       // `www` is a service ssh may resolve, so the toast must not call it

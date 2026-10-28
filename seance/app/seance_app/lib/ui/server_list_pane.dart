@@ -11,8 +11,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
 import '../main.dart';
-import '../services/mac_commands.dart';
-import '../services/mac_context_menu.dart';
 import '../theme.dart';
 import 'app_menus.dart';
 import 'ghost_servers_adapter.dart';
@@ -272,8 +270,6 @@ class _ServerListPaneState extends State<ServerListPane> {
           background: background,
           layout: _layoutFor(context, density),
           density: density,
-          // A Mac's row menus are its own context menus.
-          presentMenu: macNativeShell ? _presentMacMenu : null,
           child: Builder(builder: (context) => _body(context, state)),
         );
       },
@@ -730,26 +726,6 @@ class _ServerListPaneState extends State<ServerListPane> {
     BuildContext context, [
     SettingsTab tab = SettingsTab.general,
   ]) => openSettings(tab);
-
-  static Future<bool> _presentMacMenu(
-    List<SidebarMenuEntry> entries,
-    Offset at,
-  ) => showMacContextMenu(_macMenuItems(entries), at: at);
-
-  static List<MacMenuItem> _macMenuItems(List<SidebarMenuEntry> entries) => [
-    for (final entry in entries)
-      switch (entry) {
-        SidebarMenuAction(:final label, :final onSelected) => MacMenuItem(
-          label,
-          onSelected: onSelected,
-        ),
-        SidebarMenuDivider() => const MacMenuItem.separator(),
-        SidebarMenuSubmenu(:final label, :final children) => MacMenuItem(
-          label,
-          children: _macMenuItems(children),
-        ),
-      },
-  ];
 
   Future<void> _editServer(
     BuildContext context,

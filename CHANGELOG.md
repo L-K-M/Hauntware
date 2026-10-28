@@ -4,12 +4,10 @@
 
 ### Changed
 
-- Séance on macOS is reworked as a native Mac app: a full menu bar with
-  accurate states, a customizable toolbar, hideable sidebar and
-  inspector, native context menus and alerts, a window that closes to
-  the Dock with its sessions, quit and close guards for unsaved text and
-  live sessions, and Edit ▸ Undo for snippet and server-list changes.
-  Séance's changelog has the details.
+- Séance's window has one layout on every platform: a header with
+  sidebar and inspector buttons and their shortcuts, undo for snippet
+  and server-list changes, and Save, Don't save or Cancel when a tab
+  with unsaved text closes. Séance's changelog has the details.
 
 - Séance and Poltergeist use dartssh2 4.1.0 instead of 3.0.2. Servers
   that offer only chacha20-poly1305 connect, strict key exchange is

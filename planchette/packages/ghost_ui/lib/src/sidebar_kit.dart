@@ -356,7 +356,6 @@ class SidebarKitScope extends InheritedWidget {
     this.background,
     this.layout = SidebarKitLayout.rail,
     this.density = SidebarKitDensity.comfortable,
-    this.presentMenu,
     required super.child,
   }) : assert(
          // The list is the comfortable phone home; a compact home is the
@@ -378,13 +377,6 @@ class SidebarKitScope extends InheritedWidget {
   /// page surface). The status dot's cut-out ring takes this colour, so
   /// a wrong one draws a visible halo instead of a cut.
   final Color? background;
-
-  /// Shows a row's verbs in the host's own menu instead of the kit's (a
-  /// native macOS context menu) at [at], a global position (the click, or
-  /// the row's corner from the keyboard), answering whether it did; null,
-  /// or a false answer, keeps the kit's menu.
-  final Future<bool> Function(List<SidebarMenuEntry> entries, Offset at)?
-  presentMenu;
 
   static SidebarKitStrings of(BuildContext context) => _scope(context).strings;
 
@@ -409,22 +401,7 @@ class SidebarKitScope extends InheritedWidget {
       !identical(oldWidget.strings, strings) ||
       oldWidget.background != background ||
       oldWidget.layout != layout ||
-      oldWidget.density != density ||
-      oldWidget.presentMenu != presentMenu;
-}
-
-/// Whether [present] showed [entries] at [at]. A presenter that fails is
-/// one that did not show, so the kit's own menu opens instead.
-Future<bool> _presented(
-  Future<bool> Function(List<SidebarMenuEntry> entries, Offset at) present,
-  List<SidebarMenuEntry> entries,
-  Offset at,
-) async {
-  try {
-    return await present(entries, at);
-  } catch (_) {
-    return false;
-  }
+      oldWidget.density != density;
 }
 
 /// The colour behind the rail's rows (see [SidebarKitScope.background]).
@@ -1449,27 +1426,7 @@ class _SidebarRowState extends State<SidebarRow> with _KeyboardFocusRing {
   /// menu once it has mounted, or Shift+F10 would open a menu the keyboard
   /// could not operate: the arrows would still walk the rows behind it.
   void _openMenu({Offset? position, bool focusFirst = false}) {
-    final entries = widget.menuEntries;
-    if (entries == null) return;
-    final present = SidebarKitScope._scope(context).presentMenu;
-    final row = _contentKey.currentContext?.findRenderObject() as RenderBox?;
-    if (present != null && row != null) {
-      // One menu at a time: a kit menu a declined presenter left open
-      // closes rather than staying under the host's.
-      if (_menu.isOpen) _menu.close();
-      final at = row.localToGlobal(
-        position ?? row.size.bottomLeft(Offset.zero),
-      );
-      unawaited(() async {
-        final shown = await _presented(present, _tidy(entries()), at);
-        if (!shown && mounted) _openKitMenu(position, focusFirst);
-      }());
-      return;
-    }
-    _openKitMenu(position, focusFirst);
-  }
-
-  void _openKitMenu(Offset? position, bool focusFirst) {
+    if (widget.menuEntries == null) return;
     _menu.open(position: position);
     if (!focusFirst) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2257,26 +2214,6 @@ class SidebarBottomBar extends StatefulWidget {
 class _SidebarBottomBarState extends State<SidebarBottomBar> {
   final _addMenu = MenuController();
 
-  /// The "+" menu: the host's own ([SidebarKitScope.presentMenu]) when it
-  /// has one, the kit's otherwise. The host's opens under the bar, as a
-  /// pull-down opens under its button, rather than over the "+".
-  void _toggleAdd(List<SidebarMenuEntry> entries) {
-    final present = SidebarKitScope._scope(context).presentMenu;
-    final bar = context.findRenderObject() as RenderBox?;
-    if (present == null || bar == null || _addMenu.isOpen) {
-      _addMenu.isOpen ? _addMenu.close() : _addMenu.open();
-      return;
-    }
-    unawaited(() async {
-      final shown = await _presented(
-        present,
-        _tidy(entries),
-        bar.localToGlobal(bar.size.bottomLeft(Offset.zero)),
-      );
-      if (!shown && mounted) _addMenu.open();
-    }());
-  }
-
   @override
   Widget build(BuildContext context) {
     final chrome = _chrome(context);
@@ -2300,7 +2237,9 @@ class _SidebarBottomBarState extends State<SidebarBottomBar> {
               key: widget.addKey,
               icon: Icons.add,
               tooltip: strings.addMenu,
-              onPressed: entries.isEmpty ? null : () => _toggleAdd(entries),
+              onPressed: entries.isEmpty
+                  ? null
+                  : () => _addMenu.isOpen ? _addMenu.close() : _addMenu.open(),
             ),
           ),
           const SizedBox(width: 4),

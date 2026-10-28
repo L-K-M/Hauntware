@@ -7,7 +7,6 @@ import 'package:seance_core/seance_core.dart';
 import '../app_state.dart';
 import '../family_hues.dart';
 import '../main.dart';
-import '../services/mac_commands.dart';
 import '../services/undo_history.dart';
 import '../theme.dart' show SeanceTheme;
 import 'top_toast.dart';
@@ -193,52 +192,31 @@ class _SnippetsPaneState extends State<SnippetsPane> {
     await showSnippetEditor(context, state, existing);
   }
 
-  /// On a Mac the snippet goes at once and Edit ▸ Undo, or the toast's
-  /// Undo, brings it back, as Finder and Notes delete; elsewhere a dialog
-  /// asks first.
+  /// The snippet goes at once, and Undo brings it back: the notice's, or
+  /// the app's undo shortcut (⌘Z, Ctrl+Z), as Finder and Notes delete.
   Future<void> _delete(
     BuildContext context,
     AppState state,
     Snippet snippet,
   ) async {
-    if (macNativeShell) {
-      final change = await deleteSnippetUndoably(state, snippet);
-      if (!context.mounted) return;
-      showTopToastIn(
-        context,
-        message: 'Deleted “${snippet.title}”',
-        actionLabel: 'Undo',
-        // This deletion only, while it is still the one Undo would take
-        // back: a later change has its own.
-        onAction: () {
-          final history = state.undoHistory;
-          if (history.isNextUndo(change)) unawaited(history.undo());
-        },
-      );
-      return;
-    }
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Delete "${snippet.title}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final change = await deleteSnippetUndoably(state, snippet);
+    if (!context.mounted) return;
+    showTopToastIn(
+      context,
+      message: 'Deleted “${snippet.title}”',
+      actionLabel: 'Undo',
+      // This deletion only, while it is still the one Undo would take
+      // back: a later change has its own.
+      onAction: () {
+        final history = state.undoHistory;
+        if (history.isNextUndo(change)) unawaited(history.undo());
+      },
     );
-    if (ok == true) await deleteSnippetUndoably(state, snippet);
   }
 }
 
-/// Deletes [snippet] and records it for Edit ▸ Undo, which saves it back,
-/// and returns the recorded change.
+/// Deletes [snippet] and records it in the app's undo history, whose Undo
+/// saves it back, and returns the recorded change.
 Future<UndoableChange> deleteSnippetUndoably(
   AppState state,
   Snippet snippet,
@@ -246,7 +224,7 @@ Future<UndoableChange> deleteSnippetUndoably(
   await state.deleteSnippet(snippet.id);
   final stamps = _RestoreStamps(snippet.updatedAt);
   final change = UndoableChange(
-    name: 'Delete Snippet',
+    name: 'Delete snippet',
     undo: () => state.saveSnippet(snippet.copyWith(updatedAt: stamps.next())),
     redo: () => state.deleteSnippet(snippet.id),
   );
@@ -468,13 +446,13 @@ class _SnippetEditorState extends State<_SnippetEditor> {
     state.undoHistory.record(
       existing == null
           ? UndoableChange(
-              name: 'New Snippet',
+              name: 'New snippet',
               undo: () => state.deleteSnippet(snippet.id),
               redo: () =>
                   state.saveSnippet(snippet.copyWith(updatedAt: stamps.next())),
             )
           : UndoableChange(
-              name: 'Edit Snippet',
+              name: 'Edit snippet',
               undo: () => state.saveSnippet(
                 existing.copyWith(updatedAt: stamps.next()),
               ),

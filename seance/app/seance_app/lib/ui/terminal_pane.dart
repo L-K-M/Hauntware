@@ -14,8 +14,6 @@ import 'package:xterm/xterm.dart';
 import '../app_state.dart';
 import '../family_hues.dart';
 import '../main.dart';
-import '../services/mac_commands.dart';
-import '../services/mac_context_menu.dart';
 import '../services/missing_credential.dart';
 import '../services/terminal_search.dart';
 import '../services/web_links.dart';
@@ -43,43 +41,6 @@ import 'top_toast.dart';
 /// terminal to reflow above the soft keyboard; desktops use a hardware keyboard.
 final bool _isTouchPlatform = Platform.isAndroid || Platform.isIOS;
 
-/// What the active tab's terminal view offers the menu bar: its find bar,
-/// its selection and its focus (Edit ▸ Find, Copy). Implemented by the view
-/// itself; see [activeTerminalView].
-abstract interface class TerminalViewCommands {
-  /// The tab the view shows.
-  TerminalSession get tab;
-
-  /// Whether the terminal (not its find bar or anything else) has focus.
-  bool get terminalFocused;
-
-  bool get hasSelection;
-
-  /// Fires when [terminalFocused], [hasSelection] or the find bar change.
-  Listenable get changes;
-
-  /// Opens the find bar, or focuses its query when open.
-  void openFind();
-
-  /// The next or previous match, opening the find bar on the last query
-  /// when it is closed.
-  void findNext();
-  void findPrevious();
-
-  /// Makes the selection the find query (⌘E), and searches for it when
-  /// the bar is open.
-  void useSelectionForFind();
-
-  /// Drops the scrollback above the screen.
-  void clearScrollback();
-}
-
-/// The active tab's terminal view while one is mounted, for the menu bar.
-/// Set and cleared by the view as its tab becomes active or goes away.
-final ValueNotifier<TerminalViewCommands?> activeTerminalView = ValueNotifier(
-  null,
-);
-
 /// Right pane / second screen: the active server's terminal and editor tabs.
 ///
 /// A server can have several tabs, shown as a tab strip at the top of the
@@ -100,8 +61,8 @@ class TerminalPane extends StatelessWidget {
   final bool showAssistantAffordance;
   final bool showAppBar;
 
-  /// Whether the tab strip carries Generate command; false on macOS,
-  /// where the window's toolbar carries it instead.
+  /// Whether the tab strip carries Generate command; false under the wide
+  /// layout's header ([HeaderToolbar]), which carries it instead.
   final bool showGenerateCommandInStrip;
 
   const TerminalPane({
@@ -797,28 +758,7 @@ class _TabChip extends StatelessWidget {
     this.onRename,
   });
 
-  /// On a Mac the menu is a native one; the kit's is the fallback.
   Future<void> _showMenu(BuildContext context, Offset globalPosition) async {
-    if (!macNativeShell) {
-      return _showMaterialMenu(context, globalPosition);
-    }
-    final shown = await showMacContextMenu(at: globalPosition, [
-      MacMenuItem('Rename Tab…', onSelected: onRename),
-      const MacMenuItem.separator(),
-      MacMenuItem(
-        'Close Tab',
-        shortcut: const SingleActivator(LogicalKeyboardKey.keyW, meta: true),
-        onSelected: onClose,
-      ),
-    ]);
-    if (shown || !context.mounted) return;
-    return _showMaterialMenu(context, globalPosition);
-  }
-
-  Future<void> _showMaterialMenu(
-    BuildContext context,
-    Offset globalPosition,
-  ) async {
     // Positioning needs the overlay's box; give up rather than crash if the
     // chip is being torn down as the menu opens.
     final overlay = Overlay.of(context).context.findRenderObject();
@@ -924,26 +864,7 @@ class _EditorTabChip extends StatelessWidget {
     required this.onClose,
   });
 
-  /// On a Mac the menu is a native one; the kit's is the fallback.
   Future<void> _showMenu(BuildContext context, Offset globalPosition) async {
-    if (!macNativeShell) {
-      return _showMaterialMenu(context, globalPosition);
-    }
-    final shown = await showMacContextMenu(at: globalPosition, [
-      MacMenuItem(
-        'Close Tab',
-        shortcut: const SingleActivator(LogicalKeyboardKey.keyW, meta: true),
-        onSelected: onClose,
-      ),
-    ]);
-    if (shown || !context.mounted) return;
-    return _showMaterialMenu(context, globalPosition);
-  }
-
-  Future<void> _showMaterialMenu(
-    BuildContext context,
-    Offset globalPosition,
-  ) async {
     final overlay = Overlay.of(context).context.findRenderObject();
     if (overlay is! RenderBox) return;
     final config = tab.server;
@@ -1160,8 +1081,7 @@ class _SessionView extends StatefulWidget {
   State<_SessionView> createState() => _SessionViewState();
 }
 
-class _SessionViewState extends State<_SessionView>
-    implements TerminalViewCommands {
+class _SessionViewState extends State<_SessionView> {
   /// Zoom keys. `equal` covers the unshifted key that carries "+" on most
   /// layouts, and the numpad variants cover the keypad, so ⌘+ works whether or
   /// not the user reaches for Shift. `static final`, not `const`:
@@ -1196,23 +1116,15 @@ class _SessionViewState extends State<_SessionView>
   @override
   void initState() {
     super.initState();
-    // Expose the controller on the session so the menu bar's Edit commands
-    // can copy from the active terminal (app_menus.dart).
+    // Expose the controller on the session so the native macOS Edit menu can
+    // copy from the active terminal, and report focus so it only routes ⌘C/⌘V
+    // to the terminal when a terminal (not a text field) is focused.
     widget.tab.controller = _terminalController;
+    _focus.addListener(_reportTerminalFocus);
     _focus.addListener(_hideSelectionToolbarOnBlur);
     _terminalController.addListener(_hideSelectionToolbarWithoutSelection);
     _wasConnected = widget.tab.status == TerminalStatus.connected;
     if (_wasConnected && widget.isActive) _requestTerminalFocus();
-    _claimMenuBar();
-  }
-
-  /// Publishes this view to the menu bar while its tab is the active one.
-  void _claimMenuBar() {
-    if (widget.isActive) {
-      activeTerminalView.value = this;
-    } else if (identical(activeTerminalView.value, this)) {
-      activeTerminalView.value = null;
-    }
   }
 
   @override
@@ -1233,7 +1145,6 @@ class _SessionViewState extends State<_SessionView>
       _requestTerminalFocus();
     }
     _wasConnected = connected;
-    if (widget.isActive != oldWidget.isActive) _claimMenuBar();
   }
 
   void _requestTerminalFocus() {
@@ -1250,10 +1161,7 @@ class _SessionViewState extends State<_SessionView>
 
   @override
   void dispose() {
-    if (identical(activeTerminalView.value, this)) {
-      activeTerminalView.value = null;
-    }
-    _findState.dispose();
+    _focus.removeListener(_reportTerminalFocus);
     _focus.removeListener(_hideSelectionToolbarOnBlur);
     _terminalController.removeListener(_hideSelectionToolbarWithoutSelection);
     _selectionToolbar.remove();
@@ -1267,62 +1175,14 @@ class _SessionViewState extends State<_SessionView>
     super.dispose();
   }
 
-  // -- TerminalViewCommands ------------------------------------------------
-
-  /// Bumped when the find bar opens or closes, for [changes].
-  final ValueNotifier<int> _findState = ValueNotifier(0);
-
-  @override
-  TerminalSession get tab => widget.tab;
-
-  @override
-  bool get terminalFocused => _focus.hasFocus;
-
-  @override
-  bool get hasSelection => _terminalController.selection != null;
-
-  @override
-  late final Listenable changes = Listenable.merge([
-    _terminalController,
-    _focus,
-    _findState,
-  ]);
-
-  @override
-  void openFind() => _openFind();
-
-  @override
-  void findNext() => _stepFind(forward: true);
-
-  @override
-  void findPrevious() => _stepFind(forward: false);
-
-  void _stepFind({required bool forward}) {
-    final search = _search;
-    if (search == null) {
-      _openFind();
-      return;
+  /// Tell the macOS shell whether a terminal is focused, so the native Edit
+  /// menu routes ⌘C/⌘V/⌘A to the terminal rather than a focused text field.
+  void _reportTerminalFocus() {
+    if (Platform.isMacOS) {
+      const MethodChannel(
+        'seance/menu',
+      ).invokeMethod('setTerminalFocused', _focus.hasFocus);
     }
-    forward ? search.next() : search.previous();
-  }
-
-  @override
-  void useSelectionForFind() {
-    final selection = _terminalController.selection;
-    if (selection == null) return;
-    final selected = widget.tab.engine.terminal.buffer
-        .getText(selection)
-        .trim();
-    if (selected.isEmpty || selected.contains('\n')) return;
-    _lastFindQuery = selected;
-    _search?.search(selected);
-  }
-
-  @override
-  void clearScrollback() {
-    final terminal = widget.tab.engine.terminal;
-    terminal.eraseScrollbackOnly();
-    terminal.notifyListeners();
   }
 
   @override
@@ -1484,7 +1344,6 @@ class _SessionViewState extends State<_SessionView>
             ..caseSensitive = _lastFindCaseSensitive
             ..search(query);
     });
-    _findState.value++;
   }
 
   /// Closes the find bar, clearing its highlights, and hands the keyboard
@@ -1496,7 +1355,6 @@ class _SessionViewState extends State<_SessionView>
     _lastFindCaseSensitive = search.caseSensitive;
     setState(() => _search = null);
     search.dispose();
-    _findState.value++;
     _focus.requestFocus();
   }
 
@@ -1527,6 +1385,15 @@ class _SessionViewState extends State<_SessionView>
     // shell as the keys underneath.
     final tabShortcut = handleTabShortcut(context, widget.state, event);
     if (tabShortcut != KeyEventResult.ignored) return tabShortcut;
+    // The panes and, on Apple platforms, the app's undo, before xterm
+    // would turn the chord into bytes for the shell.
+    final windowShortcut = handleWindowShortcut(
+      context,
+      widget.state,
+      event,
+      ShortcutOrigin.terminal,
+    );
+    if (windowShortcut != KeyEventResult.ignored) return windowShortcut;
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
     if (event.logicalKey == LogicalKeyboardKey.keyK &&
@@ -1618,26 +1485,22 @@ class _SessionViewState extends State<_SessionView>
     }
   }
 
+  /// Drops the lines scrolled off the top, keeping the screen, as a
+  /// terminal's Clear Scrollback does: the shell's own `clear` leaves them.
+  void _clearScrollback() {
+    final terminal = widget.tab.engine.terminal;
+    terminal.eraseScrollbackOnly();
+    terminal.notifyListeners();
+  }
+
   /// Right-click menu: Copy (when there's a selection), Paste, Select all,
-  /// Find, and the keyboard shortcut list.
+  /// Find, Clear scrollback, and the keyboard shortcut list.
   Future<void> _showContextMenu(
     BuildContext context,
     Offset globalPosition,
   ) async {
-    if (!macNativeShell) {
-      return _showMaterialContextMenu(context, globalPosition);
-    }
-    final shown = await _showMacContextMenu(globalPosition);
-    if (shown || !context.mounted) return;
-    return _showMaterialContextMenu(context, globalPosition);
-  }
-
-  Future<void> _showMaterialContextMenu(
-    BuildContext context,
-    Offset globalPosition,
-  ) async {
-    final hasSelection = _terminalController.selection != null;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final hasSelection = _terminalController.selection != null;
     final palette = FamilyPalette.of(context);
     // The same chords _handleKeyEvent binds: ⌘ on Apple platforms,
     // Ctrl+Shift elsewhere, where plain Ctrl belongs to the shell.
@@ -1694,6 +1557,13 @@ class _SessionViewState extends State<_SessionView>
           iconColor: palette.glyph(FamilyHue.graphite),
           shortcut: keys(LogicalKeyboardKey.keyF),
         ),
+        GhostMenuItem(
+          context: context,
+          value: 'clearScrollback',
+          label: 'Clear scrollback',
+          icon: Icons.clear_all,
+          iconColor: palette.glyph(FamilyHue.graphite),
+        ),
         const GhostMenuDivider(),
         // No shortcut hint here: the item opens the list itself.
         GhostMenuItem(
@@ -1715,67 +1585,11 @@ class _SessionViewState extends State<_SessionView>
       case 'find':
         // The tab may have closed while the menu was open.
         if (mounted) _openFind();
+      case 'clearScrollback':
+        if (mounted) _clearScrollback();
       case 'shortcuts':
         if (context.mounted) await showKeyboardShortcuts(context);
     }
-  }
-}
-
-extension on _SessionViewState {
-  /// The right-click menu as a native one, its rows the Edit menu's.
-  Future<bool> _showMacContextMenu(Offset at) {
-    final hasSelection = _terminalController.selection != null;
-    SingleActivator command(LogicalKeyboardKey key) =>
-        SingleActivator(key, meta: true);
-    // The menu answers later: the tab may have closed meanwhile.
-    VoidCallback live(VoidCallback action) => () {
-      if (mounted) action();
-    };
-    return showMacContextMenu(at: at, [
-      MacMenuItem(
-        'Copy',
-        shortcut: command(LogicalKeyboardKey.keyC),
-        onSelected: hasSelection
-            ? live(() => terminalCopy(widget.tab))
-            : null,
-      ),
-      MacMenuItem(
-        'Paste',
-        shortcut: command(LogicalKeyboardKey.keyV),
-        onSelected: live(() => unawaited(terminalPaste(widget.tab))),
-      ),
-      const MacMenuItem.separator(),
-      MacMenuItem(
-        'Select All',
-        shortcut: command(LogicalKeyboardKey.keyA),
-        onSelected: live(() => terminalSelectAll(widget.tab)),
-      ),
-      MacMenuItem(
-        'Find…',
-        shortcut: command(LogicalKeyboardKey.keyF),
-        onSelected: live(_openFind),
-      ),
-      MacMenuItem(
-        'Use Selection for Find',
-        shortcut: command(LogicalKeyboardKey.keyE),
-        onSelected: hasSelection ? live(useSelectionForFind) : null,
-      ),
-      const MacMenuItem.separator(),
-      MacMenuItem(
-        'Clear Scrollback',
-        shortcut: const SingleActivator(
-          LogicalKeyboardKey.keyK,
-          meta: true,
-          alt: true,
-        ),
-        onSelected: live(clearScrollback),
-      ),
-      const MacMenuItem.separator(),
-      MacMenuItem(
-        'Keyboard Shortcuts',
-        onSelected: live(() => unawaited(showKeyboardShortcuts(context))),
-      ),
-    ]);
   }
 }
 

@@ -8,15 +8,21 @@ import 'package:flutter/services.dart';
 import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
-import '../services/mac_commands.dart';
 import '../services/undo_history.dart';
 import '../theme.dart';
 import 'server_editor.dart';
 import 'top_toast.dart';
 
-// The server verbs shared by the server list's menus and the macOS menu
-// bar, so a row's "Delete…" and Server ▸ Delete Server… ask the same
-// question and do the same thing.
+// The server list's verbs: the row menu's, and the "+" menu's import.
+
+/// Whether the import can pick the file itself on [platform]: the
+/// desktop, where the user's `~/.ssh` is a folder an open panel can show.
+bool _picksFile(TargetPlatform platform) => switch (platform) {
+  TargetPlatform.linux ||
+  TargetPlatform.macOS ||
+  TargetPlatform.windows => true,
+  _ => false,
+};
 
 /// The largest SSH config file the import reads: far beyond any real one,
 /// small enough that a wrong pick cannot exhaust memory.
@@ -77,7 +83,7 @@ Future<void> duplicateServerInteractively(
   var latest = copy;
   state.undoHistory.record(
     UndoableChange(
-      name: 'Duplicate Server',
+      name: 'Duplicate server',
       undo: () async {
         if (state.tabsForServer(latest.id).isNotEmpty) {
           throw UndoDeclined(
@@ -108,7 +114,7 @@ Future<void> duplicateServerInteractively(
 }
 
 /// Pins [server] to the top of the list, or unpins it, as an undoable
-/// change (Edit ▸ Undo Pin to Top).
+/// change.
 Future<void> toggleServerPinUndoably(
   AppState state,
   ServerConfig server,
@@ -117,7 +123,7 @@ Future<void> toggleServerPinUndoably(
   await state.toggleServerPin(server.id);
   state.undoHistory.record(
     UndoableChange(
-      name: pinning ? 'Pin to Top' : 'Unpin',
+      name: pinning ? 'Pin to top' : 'Unpin',
       undo: () => state.toggleServerPin(server.id),
       redo: () => state.toggleServerPin(server.id),
     ),
@@ -125,9 +131,6 @@ Future<void> toggleServerPinUndoably(
 }
 
 /// Ask before deleting [server], naming what goes with it, then delete it.
-/// On macOS the question is a sheet on the window, Delete marked as
-/// destructive and Cancel the default, as Finder asks before an immediate
-/// delete.
 Future<void> confirmDeleteServer(
   BuildContext context,
   AppState state,
@@ -150,49 +153,36 @@ Future<void> confirmDeleteServer(
             '$localCopyCount managed local '
             '${localCopyCount == 1 ? 'edit' : 'edits'}. Any changes not '
             'uploaded to the server will be deleted.';
-  final bool confirmed;
-  if (macNativeShell) {
-    const delete = 1;
-    // Cancel first: the default button, so Return keeps the server.
-    final answer = await showMacAlert(
-      message: title,
-      informative: '$detail You can’t undo this action.',
-      buttons: const ['Cancel', 'Delete'],
-      destructive: delete,
-    );
-    confirmed = answer?.button == delete;
-  } else {
-    confirmed =
-        await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text(title),
-            content: Text(detail),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
+  final confirmed =
+      await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text(title),
+          content: Text(detail),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
   if (confirmed) await state.deleteServer(server.id);
 }
 
-/// Import hosts from an OpenSSH config. On macOS an open panel starts in
-/// `~/.ssh` and reads the file picked; elsewhere the user pastes the
-/// file's text, which also works where no file system is reachable.
+/// Import hosts from an OpenSSH config. On the desktop an open panel
+/// starts in `~/.ssh` and reads the file picked; on phones and tablets,
+/// whose apps cannot reach that folder, the user pastes the file's text.
 Future<void> importSshConfigInteractively(
   BuildContext context,
   AppState state,
 ) async {
-  final text = macNativeShell
+  final text = _picksFile(Theme.of(context).platform)
       ? await _pickSshConfigText(context)
       : await _pasteSshConfigText(context);
   if (text == null || text.trim().isEmpty) return;
@@ -228,8 +218,13 @@ Future<({String? text, String? rejection})> readSshConfigFile(File file) async {
 }
 
 Future<String?> _pickSshConfigText(BuildContext context) async {
-  final home = Platform.environment['HOME'];
-  final sshDirectory = home == null ? null : '$home/.ssh';
+  // Windows keeps the user's folder in USERPROFILE, and OpenSSH for
+  // Windows its config under it, as the other platforms do under HOME.
+  final home =
+      Platform.environment[Platform.isWindows ? 'USERPROFILE' : 'HOME'];
+  final sshDirectory = home == null
+      ? null
+      : '$home${Platform.pathSeparator}.ssh';
   final FilePickerResult? result;
   try {
     result = await FilePicker.pickFiles(

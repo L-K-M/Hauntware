@@ -1280,13 +1280,13 @@ class AppState extends ChangeNotifier {
     await services.saveSettings();
   }
 
-  /// What Edit ▸ Undo takes back outside text fields (AppUndoHistory).
+  /// What the app's Undo takes back outside text fields (AppUndoHistory).
   final AppUndoHistory undoHistory = AppUndoHistory();
 
-  /// Whether the wide layout shows its server list (View ▸ Hide Sidebar).
+  /// Whether the wide layout shows its server list (the sidebar button).
   bool get sidebarVisible => !services.settings.sidebarHidden;
 
-  /// Whether the wide layout shows its inspector (View ▸ Hide Inspector).
+  /// Whether the wide layout shows its inspector (the inspector button).
   bool get inspectorVisible => !services.settings.inspectorHidden;
 
   /// The inspector's open page; Files until the user picks another.
@@ -1312,6 +1312,17 @@ class AppState extends ChangeNotifier {
   Future<void> setInspectorPage(InspectorPage page) async {
     if (inspectorPage == page) return;
     services.settings.inspectorPage = page == InspectorPage.files ? null : page;
+    notifyListeners();
+    await services.saveSettings();
+  }
+
+  /// Shows the inspector on [page] (the page shortcuts): one change, so the
+  /// panel mounts on that page rather than on the old one first.
+  Future<void> showInspectorPage(InspectorPage page) async {
+    if (inspectorVisible && inspectorPage == page) return;
+    services.settings
+      ..inspectorHidden = false
+      ..inspectorPage = page == InspectorPage.files ? null : page;
     notifyListeners();
     await services.saveSettings();
   }
@@ -2422,18 +2433,6 @@ class AppState extends ChangeNotifier {
       updateInfo = info;
       notifyListeners();
     }
-  }
-
-  /// Checks for a newer release now, whatever the launch check's setting
-  /// says (Séance ▸ Check for Updates…). Null when none was found, which
-  /// includes a check that could not reach GitHub.
-  Future<UpdateInfo?> checkForUpdateNow(String currentVersion) async {
-    final info = await _updateChecker.check(currentVersion);
-    if (info != null) {
-      updateInfo = info;
-      notifyListeners();
-    }
-    return info;
   }
 
   // --- Terminal appearance ---

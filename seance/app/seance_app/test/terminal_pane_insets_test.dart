@@ -10,6 +10,7 @@ import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/theme.dart';
 import 'package:seance_app/ui/adaptive_shell.dart';
+import 'package:seance_app/ui/header_toolbar.dart';
 import 'package:seance_app/ui/terminal_pane.dart';
 import 'package:seance_core/seance_core.dart';
 import 'package:xterm/xterm.dart';
@@ -135,9 +136,8 @@ void main() {
     );
   }
 
-  testWidgets('tablet: the tabs clear the status bar, the grid fills', (
-    tester,
-  ) async {
+  testWidgets('tablet: the header clears the status bar, the tabs follow '
+      'it, the grid fills', (tester) async {
     const insets = EdgeInsets.only(top: 24, bottom: 20);
     await pumpScreen(
       tester,
@@ -146,7 +146,17 @@ void main() {
       insets: insets,
     );
 
-    expect(tester.getRect(find.byType(TerminalTabStrip)).top, insets.top);
+    final header = tester.getRect(find.byType(HeaderToolbar));
+    expect(header.top, insets.top);
+    // Its rule, then the tabs: no second inset below the header.
+    expect(
+      tester.getRect(find.byType(TerminalTabStrip)).top,
+      header.bottom + 1,
+    );
+    expect(
+      tester.getRect(find.byKey(SidebarBand.sidebarToggleKey)).center.dy,
+      header.center.dy,
+    );
     expectFullHeight(tester);
   });
 

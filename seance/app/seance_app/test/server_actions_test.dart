@@ -13,7 +13,7 @@ import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
-/// The server verbs the menu bar, the row menus and the Dock share.
+/// The server list's verbs: duplicate, pin and the SSH config import.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory directory;

@@ -130,7 +130,7 @@ void main() {
     await pumpPanel(tester, panel: const SidebarPanel());
     await tester.tap(find.byTooltip('Git'));
     // Mid-slide, an unrelated change notifies (a pane toggled from the
-    // menu bar, a server's status).
+    // header, a server's status).
     await tester.pump(const Duration(milliseconds: 50));
     unawaited(state!.setSidebarVisible(false));
     // Past the slide; the panel never settles (the files pane's spinner).

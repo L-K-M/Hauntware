@@ -96,7 +96,6 @@ Future<void> _pump(
   SidebarKitLayout layout = SidebarKitLayout.rail,
   SidebarKitDensity? density,
   double width = 240,
-  Future<bool> Function(List<SidebarMenuEntry> entries, Offset at)? presentMenu,
 }) async {
   tester.view.physicalSize = const Size(600, 600);
   tester.view.devicePixelRatio = 1;
@@ -109,7 +108,6 @@ Future<void> _pump(
           strings: _strings,
           background: background,
           layout: layout,
-          presentMenu: presentMenu,
           // The kit defaults to comfortable; most of this file pins the
           // compact rail's one-line anatomy, so compact unless asked (a
           // list is comfortable by definition).
@@ -561,47 +559,6 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('open')));
       await tester.pumpAndSettle();
       expect(opened, 1);
-    });
-
-    testWidgets("a host's presenter shows the verbs instead of the kit's "
-        'menu, which comes back when it declines', (tester) async {
-      for (final shown in [true, false]) {
-        final presented = <List<SidebarMenuEntry>>[];
-        await _pump(
-          tester,
-          SidebarRow(
-            key: const ValueKey('r'),
-            mark: const Icon(Icons.dns_outlined, size: 16),
-            title: 'demo',
-            menuEntries: () => [
-              SidebarMenuAction(label: 'kit-one', onSelected: () {}),
-              const SidebarMenuDivider(),
-              SidebarMenuAction(label: 'kit-two', onSelected: () {}),
-            ],
-          ),
-          presentMenu: (entries, at) async {
-            presented.add(entries);
-            return shown;
-          },
-        );
-        await tester.tap(
-          find.byKey(const ValueKey('r')),
-          buttons: kSecondaryMouseButton,
-          kind: PointerDeviceKind.mouse,
-        );
-        await tester.pumpAndSettle();
-        expect(presented, hasLength(1), reason: 'shown: $shown');
-        expect(presented.single, hasLength(3));
-        expect(
-          find.text('kit-one'),
-          shown ? findsNothing : findsOneWidget,
-          reason: 'shown: $shown',
-        );
-        if (!shown) {
-          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-          await tester.pumpAndSettle();
-        }
-      }
     });
 
     testWidgets('on macOS a Control-click opens the menu, as a right-click '
@@ -1291,73 +1248,6 @@ void main() {
         tester.element(find.text('kit-synced')),
       ).colorScheme;
       expect(label.style?.color, scheme.error);
-    });
-
-    testWidgets('a host presenter that fails leaves the kit menus', (
-      tester,
-    ) async {
-      await _pump(
-        tester,
-        Column(
-          children: [
-            SidebarRow(
-              key: const ValueKey('r'),
-              mark: const Icon(Icons.dns_outlined, size: 16),
-              title: 'demo',
-              menuEntries: () => [
-                SidebarMenuAction(label: 'kit-row', onSelected: () {}),
-              ],
-            ),
-            SidebarBottomBar(
-              addKey: const ValueKey('add'),
-              addEntries: () => [
-                SidebarMenuAction(label: 'kit-new', onSelected: () {}),
-              ],
-              onSettings: () {},
-            ),
-          ],
-        ),
-        presentMenu: (entries, at) async => throw StateError('no native menu'),
-      );
-
-      await tester.tap(
-        find.byKey(const ValueKey('r')),
-        buttons: kSecondaryMouseButton,
-        kind: PointerDeviceKind.mouse,
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('kit-row'), findsOneWidget);
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(const ValueKey('add')));
-      await tester.pumpAndSettle();
-      expect(find.text('kit-new'), findsOneWidget);
-    });
-
-    testWidgets('a host presenter opens the + menu under the bar, as a '
-        'pull-down opens under its button', (tester) async {
-      final anchors = <Offset>[];
-      await _pump(
-        tester,
-        SidebarBottomBar(
-          addKey: const ValueKey('add'),
-          addEntries: () => [
-            SidebarMenuAction(label: 'kit-new', onSelected: () {}),
-          ],
-          onSettings: () {},
-        ),
-        presentMenu: (entries, at) async {
-          anchors.add(at);
-          return true;
-        },
-      );
-      await tester.tap(find.byKey(const ValueKey('add')));
-      await tester.pumpAndSettle();
-
-      final bar = tester.getRect(find.byType(SidebarBottomBar));
-      expect(anchors, [bar.bottomLeft]);
-      expect(find.text('kit-new'), findsNothing);
     });
   });
 

@@ -253,10 +253,10 @@ class AppSettings {
   double? paneListWidth;
   double? paneUtilityWidth;
 
-  /// Whether the wide layout hides its server list or its inspector (View ▸
-  /// Hide Sidebar, Hide Inspector), and which inspector page shows. Null is
-  /// the default page, Files; written only when set, so a file that never
-  /// used them reads back unchanged.
+  /// Whether the wide layout hides its server list or its inspector (the
+  /// header's sidebar and inspector buttons), and which inspector page
+  /// shows. Null is the default page, Files; written only when set, so a
+  /// file that never used them reads back unchanged.
   bool sidebarHidden;
   bool inspectorHidden;
   InspectorPage? inspectorPage;

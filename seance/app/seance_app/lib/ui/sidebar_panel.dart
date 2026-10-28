@@ -41,9 +41,9 @@ class _SidebarPanelState extends State<SidebarPanel>
     if (_tabs != null) return;
     final state = AppScope.of(context);
     // The wide layout's panel opens on the page the window last showed
-    // (Files at first) and follows View ▸ Files…Assistant. The narrow
-    // drawer has no Files and opens on what its button names: the
-    // Assistant once one is set up, else Snippets.
+    // (Files at first) and follows the page shortcuts. The narrow drawer
+    // has no Files and opens on what its button names: the Assistant once
+    // one is set up, else Snippets.
     final opening = widget.includeFiles
         ? state.inspectorPage
         : state.llmConfigured
@@ -70,7 +70,7 @@ class _SidebarPanelState extends State<SidebarPanel>
   }
 
   /// A tab the user opened becomes the window's inspector page, which the
-  /// View menu checks and the next launch reopens.
+  /// next launch reopens.
   void _pageChosen() {
     final tabs = _tabs;
     if (tabs == null || tabs.indexIsChanging || !widget.includeFiles) return;
@@ -81,7 +81,7 @@ class _SidebarPanelState extends State<SidebarPanel>
     }
   }
 
-  /// The page the View menu picked, shown when it differs from the open tab.
+  /// The page a shortcut picked, shown when it differs from the open tab.
   void _followState() {
     final tabs = _tabs;
     final state = _state;

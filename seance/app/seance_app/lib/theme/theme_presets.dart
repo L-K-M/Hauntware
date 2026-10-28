@@ -1,6 +1,3 @@
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 
@@ -64,22 +61,14 @@ const GhostThemeNeutrals _seanceLight = GhostThemeNeutrals(
   unknown: Color(0xFF57606A),
 );
 
-/// The preset a new device starts in, and Reset puts back: on a Mac, Séance,
-/// whose Automatic colours follow the system's light or dark appearance as
-/// the rest of the Mac does; elsewhere Terminal's green on black. A device
-/// keeps whatever palette it already chose.
-final String _initialPreset = !kIsWeb && Platform.isMacOS
-    ? 'Séance'
-    : 'Terminal';
-
 /// Séance's binding of the shared theme model: the violet seed, the brand
-/// name, the preset a new device starts in ([_initialPreset]), the terminal
-/// block its palettes carry, and every component knob the shared builder
-/// diverges on (design docs/design/ghost-theme.md §4).
-final GhostThemeStyle seanceThemeStyle = GhostThemeStyle(
+/// name, the Terminal preset a new device starts in, the terminal block its
+/// palettes carry, and every component knob the shared builder diverges on
+/// (design docs/design/ghost-theme.md §4).
+const GhostThemeStyle seanceThemeStyle = GhostThemeStyle(
   seed: SeanceTheme.seed,
   brand: 'Séance',
-  initial: _initialPreset,
+  initial: 'Terminal',
   dark: _seanceDark,
   light: _seanceLight,
   hasTerminal: true,
@@ -132,7 +121,7 @@ abstract final class ThemePresets {
   static List<ThemePalette> get all => seanceThemePresets.all;
 
   /// What a device starts with, and what Reset puts back: green on black,
-  /// for a terminal app, except on a Mac ([_initialPreset]).
+  /// for a terminal app.
   static ThemePalette get initial => seanceThemePresets.initial;
 }
 

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
-import '../services/mac_commands.dart';
 import 'session_label.dart';
 
 /// Close [tabId] behind the guards its close button has always had: an
 /// editor with unsaved changes asks first; a session asks for each of its
-/// editors (they close with it) and before deleting the managed local copies
-/// its close takes with it. Declining any of them leaves every tab open.
+/// editors (they close with it), before ending a command still running in
+/// it, and before deleting the managed local copies its close takes with
+/// it. Declining any of them leaves every tab open.
 ///
 /// The tab strip's close button and the close-tab shortcut both come here,
 /// so no way of closing a tab can skip a guard another one has (SEA-009).
@@ -74,9 +74,6 @@ Future<void> confirmAndCloseTab(
 /// silently does nothing while unsaved text is at stake.
 Future<bool> _editorMayClose(BuildContext context, EditorTab tab) async {
   if (!tab.dirty.value) return true;
-  if (macNativeShell) {
-    return _macEditorMayClose(tab);
-  }
   final confirmed = await tab.editorKey.currentState?.confirmDiscard();
   if (confirmed != null) return confirmed;
   if (!context.mounted) return false;
@@ -102,46 +99,31 @@ Future<bool> _editorMayClose(BuildContext context, EditorTab tab) async {
   return discard ?? false;
 }
 
-/// The Mac's document question for a dirty editor tab: Save (the default),
-/// Cancel, or Don't Save, as TextEdit asks. Save writes the buffer the way
-/// File ▸ Save does, uploading when the file can be, and closes only once
-/// nothing is left unsaved.
-Future<bool> _macEditorMayClose(EditorTab tab) async {
-  const save = 0;
-  const dontSave = 2;
-  final editor = tab.editorKey.currentState;
-  final answer = await showMacAlert(
-    message:
-        'Do you want to save the changes you made to '
-        '“${editorTabLabel(tab.remotePath)}”?',
-    informative: 'Your changes will be lost if you don’t save them.',
-    // Without a mounted editor there is nothing to save through.
-    buttons: [if (editor != null) 'Save', 'Cancel', 'Don’t Save'],
-    destructive: editor != null ? dontSave : 1,
-  );
-  final button = answer?.button;
-  if (editor == null) return button == 1;
-  if (button == dontSave) return true;
-  if (button != save) return false;
-  await editor.save(upload: editor.canUpload);
-  return !tab.dirty.value;
-}
-
 /// Terminal's question before a close ends a command still running in the
-/// tab (macOS; the shell's own prompt needs no asking). Elsewhere, and at
-/// a prompt, the tab closes as it always has.
+/// tab ("top", a build, a copy). At the shell's prompt, or with nothing
+/// connected, the tab closes without asking.
 Future<bool> _runningCommandMayEnd(
   BuildContext context,
   TerminalSession session,
 ) async {
-  if (!macNativeShell) return true;
   final command = session.metadata.value.runningCommand;
   if (command == null || !session.isConnected) return true;
-  const terminate = 0;
-  final answer = await showMacAlert(
-    message: 'Do you want to terminate the running process in this tab?',
-    informative: 'Closing this tab ends “$command”.',
-    buttons: const ['Terminate', 'Cancel'],
+  final end = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('End the running command?'),
+      content: Text('Closing this tab ends “${sanitizeRemoteLabel(command)}”.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Close tab'),
+        ),
+      ],
+    ),
   );
-  return answer?.button == terminate;
+  return end ?? false;
 }

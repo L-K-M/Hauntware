@@ -24,7 +24,6 @@ import 'ui/app_menus.dart';
 import 'ui/host_key_dialog.dart';
 import 'ui/keyboard_interactive_dialog.dart';
 import 'ui/link_review_dialog.dart';
-import 'ui/mac_command_host.dart';
 import 'ui/macos_toolbar_band.dart';
 import 'ui/top_toast.dart';
 
@@ -71,7 +70,8 @@ Future<void> main(List<String> args) async {
   // Séance is deliberately unsandboxed on macOS and so carries no file
   // entitlements, which file_picker otherwise demands before every open or
   // save panel ("Either the Read-Only or Read-Write entitlement is
-  // required"): without this, uploads, downloads and exports all fail.
+  // required"): without this, uploads, downloads and the SSH config import
+  // all fail there.
   if (!kIsWeb && Platform.isMacOS) {
     unawaited(
       FilePicker.skipEntitlementsChecks().catchError(
@@ -212,6 +212,7 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
     };
 
     await state.load();
+    if (Platform.isMacOS) installMacMenu(state);
     if (!kIsWeb && (Platform.isMacOS || Platform.isLinux || Platform.isWindows)) {
       settingsWindowHost = SettingsWindowHost(state);
     }
@@ -355,9 +356,6 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
       );
     } else if (_state == null) {
       home = const Scaffold(body: Center(child: CircularProgressIndicator()));
-    } else if (!kIsWeb && Platform.isMacOS) {
-      // The menu bar, toolbar and Dock menu run the app's commands.
-      home = const AppMenus(child: MacCommandHost(child: AdaptiveShell()));
     } else {
       home = const AppMenus(child: AdaptiveShell());
     }
@@ -372,8 +370,6 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
         return MaterialApp(
           title: 'Séance',
           navigatorKey: navigatorKey,
-          // The menu bar stands down while a dialog is up (macOS).
-          navigatorObservers: [modalRoutes],
           theme: themes.theme,
           darkTheme: themes.darkTheme,
           themeMode: themes.themeMode,

@@ -193,9 +193,9 @@ void main() {
       utility.top,
     );
 
-    // Generate command is the native toolbar's (SeanceToolbar.swift), so
-    // neither the header nor the strip draws one; the strip keeps "+".
-    expect(find.byTooltip('Generate command'), findsNothing);
+    // Generate command moved up into the header; the strip keeps "+".
+    expect(find.byKey(HeaderToolbar.generateCommandKey), findsOneWidget);
+    expect(inStrip(find.byTooltip('Generate command')), findsNothing);
     expect(inStrip(find.byTooltip('New tab')), findsOneWidget);
     await unmount(tester);
   });
@@ -217,10 +217,7 @@ void main() {
         band: unified ? band : null,
         more: others,
       );
-      expect(
-        find.byType(HeaderToolbar),
-        unified ? findsOneWidget : findsNothing,
-      );
+      expect(find.byType(HeaderToolbar), findsOneWidget);
 
       final strip = tester.getRect(find.byType(TerminalTabStrip));
       expect(strip.height, TerminalTabStrip.height);
@@ -242,7 +239,7 @@ void main() {
     });
   }
 
-  testWidgets('macOS: only Flutter controls take clicks through the band', (
+  testWidgets('macOS: only the controls take clicks through the band', (
     tester,
   ) async {
     final band = ValueNotifier(true);
@@ -253,32 +250,25 @@ void main() {
       of: finder,
       matching: find.byType(MacosToolbarPassthrough),
     );
-    // The full-height rail handle reaches into the band.
+    expect(
+      passthroughAbove(find.byKey(HeaderToolbar.generateCommandKey)),
+      findsOneWidget,
+    );
+    expect(
+      passthroughAbove(find.byKey(HeaderToolbar.inspectorToggleKey)),
+      findsOneWidget,
+    );
+    expect(
+      passthroughAbove(find.byKey(SidebarBand.sidebarToggleKey)),
+      findsOneWidget,
+    );
+    // The full-height rail handle reaches into the band too.
     expect(
       passthroughAbove(find.byKey(AdaptivePaneLayout.listResizeHandleKey)),
       findsOneWidget,
     );
     // The title drags and zooms the window, as a titlebar does.
     expect(passthroughAbove(find.byKey(HeaderToolbar.titleKey)), findsNothing);
-    await unmount(tester);
-  });
-
-  testWidgets('macOS: with nothing open the header still spans the band', (
-    tester,
-  ) async {
-    final band = ValueNotifier(true);
-    addTearDown(band.dispose);
-    await pumpShell(tester, platform: TargetPlatform.macOS, band: band);
-    await tester.runAsync(() => state!.closeTab('tab'));
-    await tester.pump();
-
-    // No title to stretch it: the header alone still fills the band right
-    // of the rail, so no strip of the page shows through beside it.
-    expect(state!.activeTab, isNull);
-    final header = tester.getRect(find.byType(HeaderToolbar));
-    final rail = tester.getRect(find.byKey(AdaptivePaneLayout.listPaneKey));
-    expect(header.left, rail.right + AdaptiveShell.seamWidth);
-    expect(header.right, 1280);
     await unmount(tester);
   });
 
@@ -378,46 +368,84 @@ void main() {
     await unmount(tester);
   });
 
-  testWidgets('macOS narrow window: the side panes step aside for the '
-      'terminal, and the title clears the traffic lights', (tester) async {
+  testWidgets('macOS narrow window: the app bars sit below the band', (
+    tester,
+  ) async {
     final band = ValueNotifier(true);
     addTearDown(band.dispose);
     await pumpShell(
       tester,
       platform: TargetPlatform.macOS,
       band: band,
-      size: const Size(600, 800),
+      size: const Size(700, 800),
     );
 
-    // No phone layout on a Mac: the window keeps its terminal and header.
-    expect(find.byKey(AdaptivePaneLayout.narrowPaneKey), findsNothing);
-    expect(find.byKey(AdaptivePaneLayout.listPaneKey), findsNothing);
-    expect(find.byKey(AdaptivePaneLayout.utilityPaneKey), findsNothing);
-    expect(
-      tester.getRect(find.byKey(AdaptivePaneLayout.terminalPaneKey)).width,
-      600,
+    expect(find.byType(HeaderToolbar), findsNothing);
+    final appBar = find.descendant(
+      of: find.byType(ServerListPane),
+      matching: find.byType(AppBar),
     );
     expect(
-      tester.getRect(find.byKey(HeaderToolbar.titleKey)).left,
-      greaterThanOrEqualTo(HeaderToolbar.titlebarControlsWidth),
+      tester
+          .getRect(find.descendant(of: appBar, matching: find.text('Séance')))
+          .top,
+      greaterThanOrEqualTo(macosToolbarBandHeight),
     );
     await unmount(tester);
   });
 
-  testWidgets('macOS without the titlebar keeps the standard layout', (
+  testWidgets('macOS: the sidebar button sits after the traffic lights, '
+      'over the list or leading the header', (tester) async {
+    final band = ValueNotifier(true);
+    addTearDown(band.dispose);
+    await pumpShell(tester, platform: TargetPlatform.macOS, band: band);
+
+    final rail = tester.getRect(find.byKey(AdaptivePaneLayout.listPaneKey));
+    final overList = tester.getRect(find.byKey(SidebarBand.sidebarToggleKey));
+    expect(overList.left, greaterThanOrEqualTo(76));
+    expect(overList.right, lessThan(rail.right));
+    expect(overList.center.dy, macosToolbarBandHeight / 2);
+
+    await tester.tap(find.byKey(SidebarBand.sidebarToggleKey));
+    await tester.pump();
+    expect(state!.sidebarVisible, isFalse);
+    expect(find.byKey(AdaptivePaneLayout.listPaneKey), findsNothing);
+    final leading = tester.getRect(find.byKey(HeaderToolbar.sidebarToggleKey));
+    expect(leading.left, greaterThanOrEqualTo(76));
+    expect(
+      tester.getRect(find.byKey(HeaderToolbar.titleKey)).left,
+      greaterThan(leading.right),
+    );
+
+    // Full screen has no traffic lights to keep clear of.
+    band.value = false;
+    await tester.pump();
+    expect(
+      tester.getRect(find.byKey(HeaderToolbar.sidebarToggleKey)).left,
+      lessThan(76),
+    );
+    await unmount(tester);
+  });
+
+  testWidgets('macOS without the titlebar: the header, and no passthrough', (
     tester,
   ) async {
     await pumpShell(tester, platform: TargetPlatform.macOS);
 
-    expect(find.byType(HeaderToolbar), findsNothing);
+    expect(tester.getRect(find.byType(HeaderToolbar)).top, 0);
     expect(find.byType(MacosToolbarPassthrough), findsNothing);
-    expect(tester.getRect(find.byType(ServerListPane)).top, 0);
-    // The native toolbar carries it under a standard titlebar too.
+    expect(
+      tester.getRect(find.byKey(SidebarBand.sidebarToggleKey)).left,
+      lessThan(76),
+    );
+    expect(find.byKey(HeaderToolbar.generateCommandKey), findsOneWidget);
     expect(inStrip(find.byTooltip('Generate command')), findsNothing);
     await unmount(tester);
   });
 
-  testWidgets('Linux keeps its native titlebar, and no header', (tester) async {
+  testWidgets('Linux: the same header under its native titlebar', (
+    tester,
+  ) async {
     final band = ValueNotifier(true);
     addTearDown(band.dispose);
     final navigator = await pumpShell(
@@ -426,9 +454,21 @@ void main() {
       band: band,
     );
 
-    expect(find.byType(HeaderToolbar), findsNothing);
-    expect(tester.getRect(find.byType(ServerListPane)).top, 0);
-    expect(inStrip(find.byTooltip('Generate command')), findsOneWidget);
+    final header = tester.getRect(find.byType(HeaderToolbar));
+    expect(header.top, 0);
+    expect(find.byType(MacosToolbarPassthrough), findsNothing);
+    expect(find.byKey(HeaderToolbar.generateCommandKey), findsOneWidget);
+    expect(find.byKey(HeaderToolbar.inspectorToggleKey), findsOneWidget);
+    expect(inStrip(find.byTooltip('Generate command')), findsNothing);
+    // No traffic lights: the sidebar button leads the list's band.
+    expect(
+      tester.getRect(find.byKey(SidebarBand.sidebarToggleKey)).left,
+      lessThan(76),
+    );
+    expect(
+      tester.getRect(find.byType(TerminalTabStrip)).top,
+      header.bottom + 1,
+    );
     await pushRoute(tester, navigator);
     expect(
       tester.getRect(find.text('Pushed')).top,

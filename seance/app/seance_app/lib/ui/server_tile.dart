@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:seance_core/seance_core.dart';
 
-import '../services/mac_commands.dart';
 import '../theme.dart';
 import 'server_appearance.dart';
 import 'server_status_dot.dart';
@@ -159,8 +158,7 @@ class ServerTile extends StatelessWidget {
         if (excluded) excludedDescription,
       ].join(', '),
       onActivate: (how) => _activate(how, Theme.of(context).platform),
-      menuEntries: () =>
-          _verbs(macNativeShell ? _VerbCase.title : _VerbCase.sentence),
+      menuEntries: _verbs,
     );
   }
 
@@ -186,62 +184,55 @@ class ServerTile extends StatelessWidget {
     onOpen();
   }
 
-  List<SidebarMenuEntry> _verbs(_VerbCase verbCase) {
-    final title = verbCase == _VerbCase.title;
-    return [
+  List<SidebarMenuEntry> _verbs() => [
+    SidebarMenuAction(
+      key: const ValueKey('server.menu.connect'),
+      label: 'Connect',
+      onSelected: onOpen,
+    ),
+    SidebarMenuAction(
+      key: const ValueKey('server.menu.newTab'),
+      label: 'Connect in new tab',
+      onSelected: onNewTab,
+    ),
+    const SidebarMenuDivider(),
+    // Kept in the menu while nothing is connected, greyed out, so the
+    // menu's shape does not shift under the pointer with the state.
+    SidebarMenuAction(
+      key: const ValueKey('server.menu.disconnect'),
+      label: _disconnectLabel,
+      onSelected: onDisconnect,
+    ),
+    if (onReconnect != null)
       SidebarMenuAction(
-        key: const ValueKey('server.menu.connect'),
-        label: 'Connect',
-        onSelected: onOpen,
+        key: const ValueKey('server.menu.reconnect'),
+        label: 'Reconnect',
+        onSelected: onReconnect,
       ),
-      SidebarMenuAction(
-        key: const ValueKey('server.menu.newTab'),
-        label: title ? 'Connect in New Tab' : 'Connect in new tab',
-        onSelected: onNewTab,
-      ),
-      const SidebarMenuDivider(),
-      // Kept in the menu while nothing is connected, greyed out, so the
-      // menu's shape does not shift under the pointer with the state.
-      SidebarMenuAction(
-        key: const ValueKey('server.menu.disconnect'),
-        label: title && tabCount > 1 ? 'Disconnect All' : _disconnectLabel,
-        onSelected: onDisconnect,
-      ),
-      if (onReconnect != null)
-        SidebarMenuAction(
-          key: const ValueKey('server.menu.reconnect'),
-          label: 'Reconnect',
-          onSelected: onReconnect,
-        ),
-      const SidebarMenuDivider(),
-      SidebarMenuAction(
-        key: const ValueKey('server.menu.pin'),
-        label: pinned ? 'Unpin' : (title ? 'Pin to Top' : 'Pin to top'),
-        onSelected: onTogglePin,
-      ),
-      const SidebarMenuDivider(),
-      SidebarMenuAction(
-        key: const ValueKey('server.menu.edit'),
-        label: 'Edit…',
-        onSelected: onEdit,
-      ),
-      SidebarMenuAction(
-        key: const ValueKey('server.menu.duplicate'),
-        label: 'Duplicate',
-        onSelected: onDuplicate,
-      ),
-      SidebarMenuAction(
-        key: const ValueKey('server.menu.delete'),
-        label: 'Delete…',
-        onSelected: onDelete,
-      ),
-    ];
-  }
+    const SidebarMenuDivider(),
+    SidebarMenuAction(
+      key: const ValueKey('server.menu.pin'),
+      label: pinned ? 'Unpin' : 'Pin to top',
+      onSelected: onTogglePin,
+    ),
+    const SidebarMenuDivider(),
+    SidebarMenuAction(
+      key: const ValueKey('server.menu.edit'),
+      label: 'Edit…',
+      onSelected: onEdit,
+    ),
+    SidebarMenuAction(
+      key: const ValueKey('server.menu.duplicate'),
+      label: 'Duplicate',
+      onSelected: onDuplicate,
+    ),
+    SidebarMenuAction(
+      key: const ValueKey('server.menu.delete'),
+      label: 'Delete…',
+      onSelected: onDelete,
+    ),
+  ];
 }
-
-/// How a menu's labels are cased: title case on a Mac, whose menus all
-/// read that way, and sentence case elsewhere.
-enum _VerbCase { title, sentence }
 
 /// A server's mark at the kit's size for the row (see [sidebarMarkExtent]).
 ///

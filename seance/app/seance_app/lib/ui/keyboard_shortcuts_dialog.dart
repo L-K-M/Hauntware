@@ -10,8 +10,9 @@ typedef ShortcutRow = ({String action, String keys});
 
 typedef ShortcutSection = ({String title, List<ShortcutRow> rows});
 
-/// The shortcut list as [platform] has it. The tab rows are read from
-/// [tabShortcuts], the table the key handlers use, so they cannot disagree.
+/// The shortcut list as [platform] has it. The tab and window rows are
+/// read from [tabShortcuts] and [windowShortcuts], the tables the key
+/// handlers use, so they cannot disagree.
 /// The terminal's own chords are implemented inline in its key handler
 /// (`_SessionViewState._handleKeyEvent` in terminal_pane.dart): ⌘ on Apple
 /// platforms, Ctrl+Shift elsewhere, where plain Ctrl belongs to the shell.
@@ -33,6 +34,10 @@ List<ShortcutSection> keyboardShortcutSections(TargetPlatform platform) {
   ].join(' or ');
   String goTo(int number) =>
       tabKeys((c) => c is GoToTabCommand && c.number == number);
+  String window(WindowCommand command) => [
+    for (final shortcut in windowShortcuts(platform))
+      if (shortcut.command == command) keys(shortcut.chord),
+  ].join(' or ');
 
   return [
     (
@@ -73,8 +78,31 @@ List<ShortcutSection> keyboardShortcutSections(TargetPlatform platform) {
       ],
     ),
     (
+      title: 'View',
+      rows: [
+        (
+          action: 'Show or hide the sidebar',
+          keys: window(WindowCommand.toggleSidebar),
+        ),
+        (
+          action: 'Show or hide the inspector',
+          keys: window(WindowCommand.toggleInspector),
+        ),
+        (
+          action: 'Files, Git, Snippets, Assistant',
+          keys:
+              '${window(WindowCommand.showFiles)} to '
+              '${window(WindowCommand.showAssistant)}',
+        ),
+      ],
+    ),
+    (
       title: 'App',
       rows: [
+        // The app's own history: snippet and server-list changes, outside
+        // text fields (and, off Apple platforms, the terminal).
+        (action: 'Undo', keys: window(WindowCommand.undo)),
+        (action: 'Redo', keys: window(WindowCommand.redo)),
         (action: 'Filter servers', keys: keys(serverFilterActivator(platform))),
         (
           action: 'Settings',

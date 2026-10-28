@@ -122,6 +122,56 @@ void main() {
     await tester.tap(find.text('Save'));
     await saved(tester);
 
-    expect(state.undoHistory.undoName, 'Edit Snippet');
+    expect(state.undoHistory.undoName, 'Edit snippet');
+  });
+
+  testWidgets('a deleted snippet goes at once, and its notice brings it '
+      'back', (tester) async {
+    const snippet = Snippet(
+      id: 'disk',
+      title: 'Disk usage',
+      body: 'df -h',
+      createdAt: 1,
+      updatedAt: 1,
+    );
+    await tester.runAsync(() => state.saveSnippet(snippet));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: SeanceTheme.light(platform: TargetPlatform.linux),
+        home: AppScope(
+          state: state,
+          child: const Scaffold(body: SnippetsPane()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    /// Gives the snippet store's file writes real time until [done].
+    Future<void> until(bool Function() done) async {
+      for (var i = 0; i < 40 && !done(); i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump();
+      }
+    }
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await until(() => state.snippets.isEmpty);
+
+    // No question first: the notice offers the way back.
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(state.snippets, isEmpty);
+    expect(find.text('Deleted “Disk usage”'), findsOneWidget);
+    expect(state.undoHistory.undoName, 'Delete snippet');
+
+    await tester.tap(find.text('Undo'));
+    await until(() => state.snippets.isNotEmpty);
+    expect(state.snippets.single.title, 'Disk usage');
+    expect(state.undoHistory.redoName, 'Delete snippet');
+    // The notice's timer runs out before the test ends.
+    await tester.pump(const Duration(seconds: 10));
   });
 }

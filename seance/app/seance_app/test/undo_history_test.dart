@@ -13,29 +13,29 @@ void main() {
   test('undo and redo walk the history and name the next step', () async {
     final log = <String>[];
     final history = AppUndoHistory()
-      ..record(change('Delete Snippet', log))
-      ..record(change('Pin to Top', log));
-    expect(history.undoName, 'Pin to Top');
+      ..record(change('Delete snippet', log))
+      ..record(change('Pin to top', log));
+    expect(history.undoName, 'Pin to top');
     expect(history.redoName, isNull);
 
     await history.undo();
-    expect(log, ['undo Pin to Top']);
-    expect(history.undoName, 'Delete Snippet');
-    expect(history.redoName, 'Pin to Top');
+    expect(log, ['undo Pin to top']);
+    expect(history.undoName, 'Delete snippet');
+    expect(history.redoName, 'Pin to top');
 
     await history.redo();
-    expect(log, ['undo Pin to Top', 'redo Pin to Top']);
-    expect(history.undoName, 'Pin to Top');
+    expect(log, ['undo Pin to top', 'redo Pin to top']);
+    expect(history.undoName, 'Pin to top');
   });
 
   test('a new change ends what could be redone', () async {
     final log = <String>[];
-    final history = AppUndoHistory()..record(change('Edit Snippet', log));
+    final history = AppUndoHistory()..record(change('Edit snippet', log));
     await history.undo();
-    expect(history.redoName, 'Edit Snippet');
-    history.record(change('New Snippet', log));
+    expect(history.redoName, 'Edit snippet');
+    history.record(change('New snippet', log));
     expect(history.redoName, isNull);
-    expect(history.undoName, 'New Snippet');
+    expect(history.undoName, 'New snippet');
   });
 
   test('the oldest changes fall off past the limit', () async {
@@ -54,7 +54,7 @@ void main() {
     final history = AppUndoHistory()
       ..record(
         UndoableChange(
-          name: 'Duplicate Server',
+          name: 'Duplicate server',
           undo: () async => throw StateError('vault locked'),
           redo: () async {},
         ),
@@ -69,7 +69,7 @@ void main() {
     final history = AppUndoHistory()
       ..record(
         UndoableChange(
-          name: 'Duplicate Server',
+          name: 'Duplicate server',
           undo: () async {
             if (tries++ == 0) throw const UndoDeclined('close its tabs');
           },
@@ -77,10 +77,10 @@ void main() {
         ),
       );
     await expectLater(history.undo(), throwsA(isA<UndoDeclined>()));
-    expect(history.undoName, 'Duplicate Server');
+    expect(history.undoName, 'Duplicate server');
     await history.undo();
     expect(history.undoName, isNull);
-    expect(history.redoName, 'Duplicate Server');
+    expect(history.redoName, 'Duplicate server');
   });
 
   test('a change recorded while a step applies lands after it', () async {
@@ -89,26 +89,26 @@ void main() {
     final history = AppUndoHistory()
       ..record(
         UndoableChange(
-          name: 'Delete Snippet',
+          name: 'Delete snippet',
           undo: () => gate.future,
           redo: () async {},
         ),
       );
     final undoing = history.undo();
-    history.record(change('Pin to Top', log));
+    history.record(change('Pin to top', log));
     gate.complete();
     await undoing;
     // The pin came last, and it ended what could be redone.
-    expect(history.undoName, 'Pin to Top');
+    expect(history.undoName, 'Pin to top');
     expect(history.redoName, isNull);
   });
 
   test('a notice undoes only the change it names', () {
     final log = <String>[];
-    final first = change('Delete Snippet', log);
+    final first = change('Delete snippet', log);
     final history = AppUndoHistory()..record(first);
     expect(history.isNextUndo(first), isTrue);
-    history.record(change('Pin to Top', log));
+    history.record(change('Pin to top', log));
     expect(history.isNextUndo(first), isFalse);
   });
 }
