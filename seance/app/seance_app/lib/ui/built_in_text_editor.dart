@@ -196,11 +196,14 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
             onPressed: () => Navigator.pop(context, _CloseChoice.keepEditing),
             child: const Text('Cancel'),
           ),
-          FilledButton(
-            autofocus: true,
-            onPressed: () => Navigator.pop(context, _CloseChoice.save),
-            child: const Text('Save'),
-          ),
+          // Not while a reload from the server holds the buffer: a save
+          // would do nothing and the tab would stay open unexplained.
+          if (!_reloading)
+            FilledButton(
+              autofocus: true,
+              onPressed: () => Navigator.pop(context, _CloseChoice.save),
+              child: const Text('Save'),
+            ),
         ],
       ),
     );

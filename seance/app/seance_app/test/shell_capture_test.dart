@@ -182,6 +182,10 @@ void main() {
       find.byKey(AdaptivePaneLayout.listPaneKey),
       list == PaneVisibility.shown ? findsOneWidget : findsNothing,
     );
+    expect(
+      find.byKey(AdaptivePaneLayout.utilityPaneKey),
+      utility == PaneVisibility.shown ? findsOneWidget : findsNothing,
+    );
     if (_captureOn) {
       final boundary = tester.renderObject<RenderRepaintBoundary>(
         find.byType(RepaintBoundary).first,

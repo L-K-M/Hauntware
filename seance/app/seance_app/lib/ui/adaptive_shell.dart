@@ -733,7 +733,8 @@ String _pixels(double width) => '${width.round()} pixels';
 
 /// [child] below the status bar's inset, its [color] drawn behind the bar,
 /// as an app bar's is: a tablet's header and the list's band. Zero on the
-/// desktop, and on macOS, whose toolbar band the layout claimed back.
+/// desktop, and on macOS, whose toolbar band the layout claimed back. The
+/// inset is consumed here, so nothing inside keeps it a second time.
 class _UnderStatusBar extends StatelessWidget {
   const _UnderStatusBar({required this.color, required this.child});
 
@@ -745,7 +746,11 @@ class _UnderStatusBar extends StatelessWidget {
     color: color,
     child: Padding(
       padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
-      child: child,
+      child: MediaQuery.removePadding(
+        context: context,
+        removeTop: true,
+        child: child,
+      ),
     ),
   );
 }
