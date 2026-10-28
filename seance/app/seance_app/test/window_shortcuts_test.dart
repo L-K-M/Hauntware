@@ -16,7 +16,6 @@ import 'package:seance_app/ui/app_menus.dart';
 import 'package:seance_app/ui/header_toolbar.dart';
 import 'package:seance_app/ui/inspector_page.dart';
 import 'package:seance_core/seance_core.dart';
-import 'package:xterm/xterm.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 

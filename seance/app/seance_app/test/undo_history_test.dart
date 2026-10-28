@@ -111,4 +111,32 @@ void main() {
     history.record(change('Pin to top', log));
     expect(history.isNextUndo(first), isFalse);
   });
+
+  test(
+    'a change recorded while an undo is declined stays the newest',
+    () async {
+      final gate = Completer<void>();
+      final history = AppUndoHistory()
+        ..record(
+          UndoableChange(
+            name: 'Duplicate server',
+            undo: () async {
+              await gate.future;
+              throw const UndoDeclined('Close its tabs first.');
+            },
+            redo: () async {},
+          ),
+        );
+
+      final undoing = history.undo();
+      // The user deletes a snippet while the undo is still deciding.
+      history.record(change('Delete snippet', []));
+      gate.complete();
+      await expectLater(undoing, throwsA(isA<UndoDeclined>()));
+
+      expect(history.undoName, 'Delete snippet');
+      await history.undo();
+      expect(history.undoName, 'Duplicate server');
+    },
+  );
 }

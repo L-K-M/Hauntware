@@ -1,3 +1,5 @@
+import 'dart:math' show min;
+
 import 'package:flutter/foundation.dart';
 
 /// One change the app's Undo can take back. [name] says what it was in
@@ -44,6 +46,10 @@ final class AppUndoHistory extends ChangeNotifier {
   /// A change being undone or redone, during which neither applies.
   bool _stepping = false;
 
+  /// Counts [record] calls, so a step can tell one happened while it
+  /// applied.
+  int _recorded = 0;
+
   /// The change Undo would take back, or null when there is none.
   String? get undoName => _stepping ? null : _done.lastOrNull?.name;
 
@@ -58,6 +64,7 @@ final class AppUndoHistory extends ChangeNotifier {
   /// Records a change the user just made. Anything undone before it can
   /// no longer be redone, as everywhere else.
   void record(UndoableChange change) {
+    _recorded++;
     _done.add(change);
     if (_done.length > limit) _done.removeAt(0);
     _undone.clear();
@@ -72,7 +79,8 @@ final class AppUndoHistory extends ChangeNotifier {
   /// change recorded while it applies lands after it. One that throws
   /// leaves the history and the error passes on, since a change that did
   /// not apply cannot be stepped back over; one that is [UndoDeclined]
-  /// goes back where it was.
+  /// goes back where it was: under any change recorded meanwhile, and not
+  /// into a redo list that such a change ended.
   Future<void> _step(
     List<UndoableChange> from,
     List<UndoableChange> to,
@@ -80,6 +88,8 @@ final class AppUndoHistory extends ChangeNotifier {
   ) async {
     if (_stepping || from.isEmpty) return;
     final change = from.removeLast();
+    final slot = from.length;
+    final recorded = _recorded;
     to.add(change);
     _stepping = true;
     notifyListeners();
@@ -87,7 +97,8 @@ final class AppUndoHistory extends ChangeNotifier {
       await apply(change);
     } on UndoDeclined {
       to.remove(change);
-      from.add(change);
+      final redoEnded = identical(from, _undone) && _recorded != recorded;
+      if (!redoEnded) from.insert(min(slot, from.length), change);
       rethrow;
     } catch (_) {
       to.remove(change);
