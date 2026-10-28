@@ -146,10 +146,23 @@ void main() {
         'path:/home/me/project/src',
       ]);
       expect(_values('dir C:/Users/me'), isEmpty);
+      for (final remote in [
+        'scp backup.tar.gz prod:/var/backups/',
+        'scp backup.tar.gz 192.168.1.10:/var/backups/',
+        'rsync -av dist/ backup.example.com:archives/site.tar.gz',
+        'git clone gitlab:group/repo.git',
+        'nas:/volume1/data',
+      ]) {
+        expect(
+          _values(remote).where((v) => !v.contains('/project/dist')),
+          isEmpty,
+          reason: remote,
+        );
+      }
       expect(_values('scp me@host:/etc/hosts .'), isEmpty);
     });
 
-    test('reads every entry of a path list, and paths after a message', () {
+    test('reads every entry of a path list', () {
       expect(_values('CLASSPATH=.:/usr/share/java/junit.jar'), [
         'path:/usr/share/java/junit.jar',
       ]);
@@ -157,10 +170,9 @@ void main() {
         'path:/usr/local/bin',
         'path:/usr/bin',
       ]);
-      expect(_values('java -cp app.jar:lib/dep.jar Main'), [
-        'path:/home/me/project/lib/dep.jar',
-      ]);
-      expect(_values('Error:/x/y.txt'), ['path:/x/y.txt']);
+      expect(_values('/usr/bin:/bin'), ['path:/usr/bin', 'path:/bin']);
+      // Without list context a `word:` may name a host, so it is left out.
+      expect(_values('Error:/x/y.txt'), isEmpty);
     });
 
     test('reads a path before a comment', () {
@@ -171,6 +183,20 @@ void main() {
         'path:/home/me/project/node_modules',
       ]);
       expect(_values('[root@host /etc]# ls'), isEmpty);
+      expect(_values('myhost /etc/portage # ', cwd: '/etc/portage'), isEmpty);
+    });
+
+    test('reads a path a sentence closes with three dots', () {
+      expect(_values('Writing /etc/nginx/nginx.conf...'), [
+        'path:/etc/nginx/nginx.conf',
+      ]);
+      expect(_values('Checking /usr/lib/x.so... ok'), ['path:/usr/lib/x.so']);
+    });
+
+    test('reads an IPv6 link', () {
+      expect(_values('Serving HTTP on :: port 8000 (http://[::]:8000/) ...'), [
+        'url:http://[::]:8000/',
+      ]);
     });
 
     test('does not offer a value the line limit cut', () {
@@ -180,6 +206,13 @@ void main() {
         isEmpty,
       );
       expect(_values('$pad /home/me/project/build/main.cpp.o'), isEmpty);
+    });
+
+    test('ends a path at a quote the sentence closes', () {
+      expect(_values('“Saved to /tmp/out.pdf”'), ['path:/tmp/out.pdf']);
+      expect(_values('unrecognized option: ‘--prefix=/usr/local’'), [
+        'path:/usr/local',
+      ]);
     });
 
     test('keeps an apostrophe inside a name', () {
@@ -274,6 +307,18 @@ void main() {
       terminal.write('cat /srv/abcdefghij北京/notes.txt\r\n\$ ');
       stack.scanNow();
       expect(values(), ['/srv/abcdefghij北京/notes.txt']);
+    });
+
+    test('reads a tab gap at the edge of a wrapped row as a space', () {
+      // Past the last tab stop the cursor waits at the edge, so the next
+      // column starts on the wrapped row.
+      terminal.resize(36, 10);
+      terminal.write('/srv/lib/aaaaa/bbbbb/ccccc/dd.txt\tlib/new.txt\r\n\$ ');
+      stack.scanNow();
+      expect(values(), [
+        '/srv/lib/new.txt',
+        '/srv/lib/aaaaa/bbbbb/ccccc/dd.txt',
+      ]);
     });
 
     test('reads a line the same after narrowing the window', () {

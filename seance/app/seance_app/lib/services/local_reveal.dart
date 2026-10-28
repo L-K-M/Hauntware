@@ -16,8 +16,9 @@ class LocalFileReveal {
 
   /// Selects [path] in Finder on macOS. Elsewhere asks the freedesktop file
   /// manager to select it, and opens the folder holding it when no file
-  /// manager answers that call (a Flatpak without `dbus-send`, a desktop
-  /// without the service).
+  /// manager takes that call (a Flatpak without `dbus-send`, a desktop
+  /// without the service). A bus that takes the call and stays silent is
+  /// reported instead, since its answer may still come.
   Future<void> reveal(String path) async {
     if (!path.startsWith('/')) throw ArgumentError.value(path, 'path');
     final type = await FileSystemEntity.type(path);
@@ -27,11 +28,25 @@ class LocalFileReveal {
 
     if (Platform.isMacOS) {
       final result = await Process.run('/usr/bin/open', ['-R', path]);
-      if (result.exitCode != 0) throw StateError('Finder could not show it.');
-      return;
+      if (result.exitCode == 0) return;
+      final detail = '${result.stderr}'.trim();
+      throw StateError(
+        detail.isEmpty
+            ? 'Finder could not show it.'
+            : 'Finder could not show it: $detail',
+      );
     }
 
-    if (await _showItems(path)) return;
+    switch (await _showItems(path)) {
+      case _BusAnswer.shown:
+        return;
+      case _BusAnswer.silent:
+        // The call is out on the bus and may still be answered: opening
+        // the folder as well could show it twice.
+        throw StateError('The file manager did not answer.');
+      case _BusAnswer.unavailable:
+        break;
+    }
     final folder = type == FileSystemEntityType.directory
         ? path
         : File(path).parent.path;
@@ -39,15 +54,16 @@ class LocalFileReveal {
     if (opened.type != ResultType.done) throw StateError(opened.message);
   }
 
-  /// How long the session bus may take to answer before the folder is
-  /// opened instead: a bus that accepts the call and never replies (after a
-  /// resume, a wedged file manager) must not hang the action.
+  /// How long the session bus may take to answer: a bus that accepts the
+  /// call and never replies (after a resume, a wedged file manager) must
+  /// not hang the action.
   static const _busTimeout = Duration(seconds: 5);
 
   /// The freedesktop `ShowItems` call, which selects the item in its folder.
-  static Future<bool> _showItems(String path) async {
+  static Future<_BusAnswer> _showItems(String path) async {
+    final Process call;
     try {
-      final result = await Process.run('dbus-send', [
+      call = await Process.start('dbus-send', [
         '--session',
         '--print-reply',
         '--dest=org.freedesktop.FileManager1',
@@ -58,12 +74,31 @@ class LocalFileReveal {
         // one escaped instead.
         "array:string:${Uri.file(path).toString().replaceAll(',', '%2C')}",
         'string:',
-      ]).timeout(_busTimeout);
-      return result.exitCode == 0;
-    } on TimeoutException {
-      return false;
+      ]);
     } on ProcessException {
-      return false;
+      return _BusAnswer.unavailable;
+    }
+    unawaited(call.stdout.drain<void>());
+    unawaited(call.stderr.drain<void>());
+    try {
+      final status = await call.exitCode.timeout(_busTimeout);
+      return status == 0 ? _BusAnswer.shown : _BusAnswer.unavailable;
+    } on TimeoutException {
+      call.kill();
+      return _BusAnswer.silent;
     }
   }
+}
+
+/// How the session bus answered `ShowItems`.
+enum _BusAnswer {
+  /// The file manager selected the item.
+  shown,
+
+  /// No file manager took the call (no `dbus-send`, no service, an error
+  /// reply): the folder is opened instead.
+  unavailable,
+
+  /// No reply in time.
+  silent,
 }

@@ -123,9 +123,13 @@ final _urlPattern = RegExp(r'''https?://[^\s<>"'`{}|\\^‘’“”…]+''');
 /// Characters that end a path in running text. A colon ends one too, so
 /// `PATH=/a:/b` reads as two paths and `file.dart:12:5` as a location, and
 /// so does a comma, so a list of files reads as its files. A closing curly
-/// quote does not: it is an apostrophe in a name too (`Dad’s_taxes.pdf`),
-/// and ends a path only one an opening quote started.
-const _pathChars = r'''[^\s'"`<>|;:,(){}\[\]‘“…]''';
+/// single quote does not: it is an apostrophe in a name too
+/// (`Dad’s_taxes.pdf`), and ends a path only one an opening quote started,
+/// or the path's end.
+
+/// The punctuation a sentence or a quote puts after a path.
+const _pathTrailing = '.,!?’';
+const _pathChars = r'''[^\s'"`<>|;:,(){}\[\]‘“”…]''';
 
 /// The curly quote that closes a path each opening one started.
 const _closingQuote = {'‘': '’', '“': '”'};
@@ -141,7 +145,8 @@ final _pathPattern = RegExp(
 );
 
 /// A host with a name in it: not the `...` of a placeholder `https://...`.
-final _namedHost = RegExp(r'[A-Za-z0-9]');
+/// An IPv6 literal (`http://[::]:8000/`) names its host with colons.
+final _namedHost = RegExp(r'[A-Za-z0-9:]');
 
 bool _isHighSurrogate(int unit) => unit >= 0xD800 && unit <= 0xDBFF;
 
@@ -160,6 +165,9 @@ final _invisible = RegExp(
 /// A `#` after a space is a comment (`source ~/.cargo/env # rust`), so it
 /// counts only after the bracket that closes a prompt.
 final _promptAfter = RegExp(r'^(?:[\])]+\s*[$#%❯»]|\s*[$%❯»])(?:\s|$)');
+
+/// A root prompt's `#` after a space: `myhost /etc/portage # `.
+final _rootPromptAfter = RegExp(r'^\s+#(?:\s|$)');
 
 /// fish's prompt puts `>` straight after the directory: `~/s/project> `.
 final _fishPromptAfter = RegExp(r'^>(?:\s|$)');
@@ -207,13 +215,15 @@ ContextItem? _pathItem(
       _fishPromptAfter.hasMatch(after)) {
     return null;
   }
-  // Cut short, with an ellipsis after it or three dots closing it
-  // (`/var/log/app...`), which trimming would otherwise take for a full stop.
-  if (_cutShort(text, end) || body.endsWith('...')) return null;
+  if (_cutShort(text, end)) return null;
   if (_onAnotherHost(text, match.start)) return null;
   if (_invisible.hasMatch(body)) return null;
 
-  var path = _trimEnd(body, '.,!?');
+  var path = _trimEnd(body, _pathTrailing);
+  // Three dots after a name with an extension close a sentence
+  // (`Writing /etc/nginx/nginx.conf...`); after any other name they are
+  // where a column cut it (`/var/log/app...`).
+  if (body.endsWith('...') && !_extension.hasMatch(path)) return null;
   if (path.isEmpty || path.startsWith('//') || _elision.hasMatch(path)) {
     return null;
   }
@@ -258,6 +268,12 @@ ContextItem? _pathItem(
     value = _normalize('$cwd/$path');
   }
   if (value == null || value == '/' || value == '~/') return null;
+  // A root prompt with a space before its `#` (`/etc # `) reads like a
+  // comment after a path (`source ~/.cargo/env # rust`); it is the prompt
+  // when the path is where the shell is.
+  if (value == workingDirectory && _rootPromptAfter.hasMatch(after)) {
+    return null;
+  }
   return ContextItem(kind: ContextKind.path, value: value, label: label);
 }
 
@@ -265,11 +281,15 @@ ContextItem? _pathItem(
 bool _cutShort(String text, int end) =>
     end < text.length && text.codeUnitAt(end) == 0x2026;
 
-/// Whether the path starting at [start] follows a `host:` (an scp or git
-/// remote, an rsync target) or a drive letter (`C:/Users`) rather than a
-/// path list's or a message's `:` (`PATH=bin:/usr/bin`,
-/// `CLASSPATH=.:/x.jar`, `Error:/x`). A host is a `user@` word, or a dotted
-/// name before an absolute path (`example.com:/srv`).
+/// Whether the path starting at [start] may be another machine's: it
+/// follows a `word:` that could name a host (`prod:/var/backups`,
+/// `192.168.1.10:/srv`, `git@github.com:org/repo.git`, `nas:/volume1`) or a
+/// drive (`C:/Users`). Offering a same-named file on this machine would act
+/// on the wrong one, so an unclear `word:` counts as a host. Only a path
+/// list reads as local: an entry after `=` (`PATH=bin:/usr/bin`), after
+/// `.` or `..` (`CLASSPATH=.:/x.jar`), or after an entry that is itself a
+/// path or follows another `:` (`/usr/bin:/bin`). A message's
+/// `Error:/x` is missed for it.
 bool _onAnotherHost(String text, int start) {
   if (start == 0 || text.codeUnitAt(start - 1) != 0x3A) return false;
   var wordStart = start - 1;
@@ -277,15 +297,11 @@ bool _onAnotherHost(String text, int start) {
     wordStart--;
   }
   final word = text.substring(wordStart, start - 1);
-  if (word.contains('@') && !word.contains('/')) return true;
-  if (_driveLetter.hasMatch(word)) return true;
-  return text.codeUnitAt(start) == 0x2F && _hostName.hasMatch(word);
+  if (word.isEmpty || word == '.' || word == '..') return false;
+  if (word.contains('/') || word.contains(':')) return false;
+  final assigned = wordStart > 0 && text.codeUnitAt(wordStart - 1) == 0x3D;
+  return !assigned;
 }
-
-final _driveLetter = RegExp(r'^[A-Za-z]$');
-
-/// `example.com`, `db-1.internal`: dotted labels, the last one a name.
-final _hostName = RegExp(r'^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$');
 
 /// Space, a quote or `=`: where the word before a `host:` starts.
 bool _wordBreak(int unit) =>
@@ -484,15 +500,15 @@ class TerminalContextStack extends ChangeNotifier {
       var carried = _writeRow(
         first,
         text,
-        continues: next < end && lines[next].isWrapped,
+        wideNext: next < end && _startsWide(lines[next]),
       );
       while (next < end && lines[next].isWrapped) {
-        final continues = next + 1 < end && lines[next + 1].isWrapped;
+        final wideNext = next + 1 < end && _startsWide(lines[next + 1]);
         if (text.length <= contextLineLimit) {
           carried = _writeRow(
             lines[next],
             text,
-            continues: continues,
+            wideNext: wideNext,
             behindWide: carried,
           );
         }
@@ -519,27 +535,28 @@ class TerminalContextStack extends ChangeNotifier {
     notifyListeners();
   }
 
+  static bool _startsWide(BufferLine row) =>
+      row.isWrapped && row.length > 0 && row.getWidth(0) == 2;
+
   /// Writes [row]'s cells as text. A cell nothing was written to (the gap
   /// a tab stop leaves, `ls`'s and `git diff --name-status`'s columns)
   /// reads as a space, where xterm's own `getText` drops it and glues the
   /// columns together; the cell behind a wide character is skipped.
   ///
-  /// A row that [continues] onto a wrapped one ends at its last character:
-  /// an empty cell at its edge is where a wide character did not fit, not
-  /// a gap. A wide character in its last column leaves its second cell at
-  /// the start of the next row; the return says so, for [behindWide].
+  /// When the next row is this line's wrap and opens with a wide
+  /// character ([wideNext]), one empty cell at this row's edge is where
+  /// that character did not fit, and is skipped; any other empty cells are
+  /// a gap (a tab stop at the edge) and stay spaces. A wide character in
+  /// the last column leaves its second cell at the start of the next row;
+  /// the return says so, for [behindWide].
   static bool _writeRow(
     BufferLine row,
     StringBuffer out, {
-    required bool continues,
+    required bool wideNext,
     bool behindWide = false,
   }) {
     var end = row.length;
-    if (continues) {
-      while (end > 0 && row.getCodePoint(end - 1) == 0) {
-        end--;
-      }
-    }
+    if (wideNext && end > 0 && row.getCodePoint(end - 1) == 0) end--;
     var skip = behindWide;
     for (var i = 0; i < end; i++) {
       final codePoint = row.getCodePoint(i);
