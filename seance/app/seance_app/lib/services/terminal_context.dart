@@ -130,7 +130,7 @@ final _urlPattern = RegExp(r'''https?://[^\s<>"'`{}|\\^‘’“”…]+''');
 /// or the path's end.
 
 /// The punctuation a sentence or a quote puts after a path.
-const _pathTrailing = '.,!?’';
+const _pathTrailing = '.,!?’。、';
 const _pathChars = r'''[^\s'"`<>|;:,(){}\[\]‘“”…]''';
 
 /// The curly quote that closes a path each opening one started.
@@ -153,7 +153,9 @@ final _namedHost = RegExp(r'[A-Za-z0-9:]');
 bool _isHighSurrogate(int unit) => unit >= 0xD800 && unit <= 0xDBFF;
 
 /// The lines of a diff whose paths start `a/` and `b/`.
-final _diffHeader = RegExp(r'^(?:diff --git |--- a/|\+\+\+ b/)');
+final _diffHeader = RegExp(
+  r'^(?:diff --git |--- a/|\+\+\+ b/|Binary files a/)',
+);
 
 /// Bidi controls and zero-width characters: drawn as nothing, or as
 /// reordered text, so the row would not show what the action opens.
@@ -224,13 +226,26 @@ ContextItem? _pathItem(
   if (_invisible.hasMatch(body)) return null;
   // A query string (`/api/users?id=1`) belongs to a route, not a file.
   if (body.contains('?') && body.indexOf('?') < body.length - 1) return null;
-  // `java.base/java.lang.Thread.run(Thread.java:1583)`: a stack frame's
-  // method, not a file. A location in parentheses (`app.py(12)`,
+  // `java.base/java.lang.Thread.run(Thread.java:1583)`, Go's
+  // `net/http.serverHandler.ServeHTTP({0xc000…})`: a stack frame's
+  // function, not a file. A location in parentheses (`app.py(12)`,
   // `Program.cs(12,5)`) keeps its file.
-  if (_methodCall.matchAsPrefix(text, end) != null) return null;
+  if (end < text.length &&
+      text.codeUnitAt(end) == 0x28 &&
+      _parenLocation.matchAsPrefix(text, end) == null) {
+    return null;
+  }
   if (body.startsWith('/') && _isWebRoute(text, match.start)) return null;
+  if (_afterClosingQuote(text, match.start)) return null;
+  // A mount's container side, by name (`--mount …,dst=/etc/nginx/conf.d`).
+  if (_mountTargetBefore.hasMatch(
+    text.substring(match.start < 12 ? 0 : match.start - 12, match.start),
+  )) {
+    return null;
+  }
 
-  var path = _trimEnd(body, _pathTrailing);
+  // A sanitizer frame's module offset: `(/lib/libc.so.6+0x29d8f)`.
+  var path = _trimEnd(body, _pathTrailing).replaceFirst(_moduleOffset, '');
   // Three dots after a name with an extension close a sentence
   // (`Writing /etc/nginx/nginx.conf...`); after any other name they are
   // where a column cut it (`/var/log/app...`).
@@ -352,7 +367,10 @@ class _FarSides {
     _end = tokenEnd;
     final token = _text.substring(tokenStart, tokenEnd);
     final equals = token.indexOf('=');
-    _equals = equals < 0 ? -1 : tokenStart + equals;
+    // An option's value (`--volume=./conf:/etc/nginx`, `--bind=/a:/b`) is
+    // read like its spaced form (`-v ./conf:/etc/nginx`), not as a list.
+    final assignment = equals >= 0 && !token.startsWith('-');
+    _equals = assignment ? tokenStart + equals : -1;
     final entries = token.substring(equals + 1).split(':');
     _isList = entries.length >= 3 && entries.every(_isPathEntry);
   }
@@ -387,8 +405,32 @@ bool _tokenBreak(int unit) =>
     unit == 0x27 ||
     unit == 0x60;
 
-/// `(` and a letter after a path: a method call.
-final _methodCall = RegExp(r'\([A-Za-z_]');
+/// A line, or a line and column, in parentheses after a file.
+final _parenLocation = RegExp(r'\(\d+(?:,\d+)?\)');
+
+final _mountTargetBefore = RegExp(r'\b(?:dst|target|destination)=$');
+
+final _moduleOffset = RegExp(r'\+0x[0-9A-Fa-f]+$');
+
+/// Whether the path at [start] follows a quote that closes a word rather
+/// than opening one: `"$HOME"/bin` is the variable's path, not `/bin`.
+bool _afterClosingQuote(String text, int start) {
+  if (start < 2) return false;
+  final quote = text.codeUnitAt(start - 1);
+  if (quote != 0x22 && quote != 0x27 && quote != 0x60) return false;
+  return !_opensWord(text.codeUnitAt(start - 2));
+}
+
+/// Space and the characters after which a quote opens a word: `= ( [ { , :`.
+bool _opensWord(int unit) =>
+    unit == 0x20 ||
+    unit == 0x09 ||
+    unit == 0x3D ||
+    unit == 0x28 ||
+    unit == 0x5B ||
+    unit == 0x7B ||
+    unit == 0x2C ||
+    unit == 0x3A;
 
 /// Whether the absolute path at [start] is a web route rather than a file:
 /// after an HTTP method (`"GET /wp-login.php HTTP/1.1"`, `Started GET
@@ -400,13 +442,21 @@ final _methodCall = RegExp(r'\([A-Za-z_]');
 bool _isWebRoute(String text, int start) {
   final window = text.substring(start < 24 ? 0 : start - 24, start);
   if (_requestBefore.hasMatch(window)) return true;
+  // An attribute only inside a tag: Docker's `--mount …,src=/srv/conf` is
+  // a file.
+  if (_attributeBefore.hasMatch(window)) {
+    return text.lastIndexOf('<', start) > text.lastIndexOf('>', start);
+  }
   if (!_locationBefore.hasMatch(window)) return false;
   return _redirectHeader.hasMatch(text.substring(0, start));
 }
 
 final _requestBefore = RegExp(
-  r'(?:\b(?:GET|POST|PUT|DELETE|HEAD|PATCH|OPTIONS|CONNECT|TRACE)\s+"?'
-  r'|\b(?:[Hh][Rr][Ee][Ff]|[Ss][Rr][Cc]|[Aa]ction)=["\x27]?)$',
+  r'\b(?:GET|POST|PUT|DELETE|HEAD|PATCH|OPTIONS|CONNECT|TRACE)\s+"?$',
+);
+
+final _attributeBefore = RegExp(
+  r'\b(?:[Hh][Rr][Ee][Ff]|[Ss][Rr][Cc]|[Aa]ction)=["\x27]?$',
 );
 
 final _locationBefore = RegExp(r'[Ll]ocation:\s*$');
@@ -570,9 +620,21 @@ class TerminalContextStack extends ChangeNotifier {
 
   /// Reads the finished lines now. Public for tests, which drive the
   /// terminal without waiting out the throttle.
+  ///
+  /// A failure reading the buffer itself is reported and ends that read
+  /// only: the vendored xterm can leave a row unset (CSI 3J and then a
+  /// resize), and the timer this runs from must not throw.
   @visibleForTesting
   void scanNow() {
     if (_disposed) return;
+    try {
+      _readBuffer();
+    } catch (error, stack) {
+      _report(error, stack, 'while reading the terminal buffer');
+    }
+  }
+
+  void _readBuffer() {
     final buffer = _terminal.mainBuffer;
     final lines = buffer.lines;
     final height = lines.length;
@@ -612,7 +674,7 @@ class TerminalContextStack extends ChangeNotifier {
             lines[next],
             text,
             wideNext: wideNext,
-            behindWide: carried,
+            opening: carried,
           );
         }
         next++;
@@ -647,16 +709,20 @@ class TerminalContextStack extends ChangeNotifier {
         homeDirectory: home,
       );
     } catch (error, stack) {
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          stack: stack,
-          library: 'seance terminal context',
-          context: ErrorDescription('while reading a terminal line'),
-        ),
-      );
+      _report(error, stack, 'while reading a terminal line');
       return const [];
     }
+  }
+
+  static void _report(Object error, StackTrace stack, String context) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stack,
+        library: 'seance terminal context',
+        context: ErrorDescription(context),
+      ),
+    );
   }
 
   static bool _startsWide(BufferLine row) =>
@@ -667,37 +733,46 @@ class TerminalContextStack extends ChangeNotifier {
   /// reads as a space, where xterm's own `getText` drops it and glues the
   /// columns together; the cell behind a wide character is skipped.
   ///
-  /// When the next row is this line's wrap and opens with a wide
-  /// character ([wideNext]), one empty cell at this row's edge is where
-  /// that character did not fit, and is skipped; any other empty cells are
-  /// a gap (a tab stop at the edge) and stay spaces. A wide character in
-  /// the last column leaves its second cell at the start of the next row;
-  /// the return says so, for [behindWide].
-  static bool _writeRow(
+  /// Two empty cells are not gaps:
+  ///
+  /// * when the next row is this line's wrap and opens with a wide
+  ///   character ([wideNext]), one empty cell at this row's edge is where
+  ///   that character did not fit;
+  /// * xterm's reflow, widening the window, copies a wide character's
+  ///   second cell as an empty cell of its own, so one empty cell right
+  ///   after that second cell, with text after it, is the copy.
+  ///
+  /// Either can sit across the edge, so the row says how it ended
+  /// ([_RowEnd]) and the next one opens from there ([opening]).
+  static _RowEnd _writeRow(
     BufferLine row,
     StringBuffer out, {
     required bool wideNext,
-    bool behindWide = false,
+    _RowEnd opening = _RowEnd.plain,
   }) {
     var end = row.length;
     if (wideNext && end > 0 && row.getCodePoint(end - 1) == 0) end--;
-    var skip = behindWide;
+    var state = opening;
     for (var i = 0; i < end; i++) {
       final codePoint = row.getCodePoint(i);
-      if (skip) {
-        skip = false;
-        if (codePoint == 0) continue;
-      }
+      final was = state;
+      state = _RowEnd.plain;
       if (codePoint == 0) {
+        if (was == _RowEnd.insideWide) {
+          state = _RowEnd.afterWide;
+          continue;
+        }
+        final textFollows = i + 1 < end && row.getCodePoint(i + 1) != 0;
+        if (was == _RowEnd.afterWide && (textFollows || i + 1 == end)) {
+          continue;
+        }
         out.write(' ');
         continue;
       }
       out.writeCharCode(codePoint);
-      if (row.getWidth(i) != 2) continue;
-      if (i == row.length - 1) return true;
-      skip = true;
+      if (row.getWidth(i) == 2) state = _RowEnd.insideWide;
     }
-    return false;
+    return state;
   }
 
   @override
@@ -707,4 +782,18 @@ class TerminalContextStack extends ChangeNotifier {
     _terminal.removeListener(_scheduleScan);
     super.dispose();
   }
+}
+
+/// Where a row's last cell left a wide character, for the row its line
+/// wraps onto.
+enum _RowEnd {
+  /// Not inside or just past one.
+  plain,
+
+  /// On its first cell: the second is the next cell, perhaps the next
+  /// row's first.
+  insideWide,
+
+  /// Just past its second cell, where widening's copy of that cell falls.
+  afterWide,
 }

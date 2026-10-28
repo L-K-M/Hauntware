@@ -171,6 +171,56 @@ void main() {
       expect(_values('scp me@host:/etc/hosts .'), isEmpty);
     });
 
+    test('leaves out a mount\'s container side written as an option', () {
+      expect(_values('docker run --volume=./conf:/etc/nginx/conf.d nginx'), [
+        'path:/home/me/project/conf',
+      ]);
+      expect(_values('docker run -v=/srv/data:/var/lib/postgresql/data pg'), [
+        'path:/srv/data',
+      ]);
+      expect(_values('systemd-nspawn --bind=/srv/www:/var/www'), [
+        'path:/srv/www',
+      ]);
+      expect(
+        _values('docker run --mount type=bind,src=/srv/conf,dst=/etc/nginx'),
+        ['path:/srv/conf'],
+      );
+    });
+
+    test('reads a path after a closing quote as part of the word', () {
+      expect(_values('export PATH="\$HOME"/bin:\$PATH'), isEmpty);
+      expect(_values('cp "\$HOME"/.bashrc /tmp/'), ['path:/tmp']);
+      expect(_values('echo "hello"/world.txt'), isEmpty);
+      // An opening quote still starts a path.
+      expect(_values('--prefix="/usr/local" "/tmp/x"'), [
+        'path:/usr/local',
+        'path:/tmp/x',
+      ]);
+    });
+
+    test('drops git\'s prefixes from a binary diff', () {
+      expect(
+        _values('Binary files a/assets/logo.png and b/assets/logo.png differ'),
+        [
+          'path:/home/me/project/assets/logo.png',
+          'path:/home/me/project/assets/logo.png',
+        ],
+      );
+    });
+
+    test('drops a sanitizer frame\'s module offset', () {
+      expect(
+        _values(
+          '#1 0x7f00 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x29d8f)',
+        ),
+        ['path:/lib/x86_64-linux-gnu/libc.so.6'],
+      );
+    });
+
+    test('drops an ideographic full stop', () {
+      expect(_values('已保存到 /tmp/a.txt。'), ['path:/tmp/a.txt']);
+    });
+
     test('offers the host side of a mount, not the container\'s', () {
       expect(
         _values('docker run -v /srv/postgres:/var/lib/postgresql/data pg'),
@@ -202,6 +252,21 @@ void main() {
         _values('\tat java.base/java.lang.Thread.run(Thread.java:1583)'),
         isEmpty,
       );
+    });
+
+    test('leaves out a Go stack frame\'s function', () {
+      for (final frame in [
+        'net/http.serverHandler.ServeHTTP({0xc000134000?}, 0xc000176000)',
+        'github.com/org/repo/pkg.TestFoo(0xc000007ba0)',
+        'github.com/org/repo/internal/server.Run(...)',
+        'runtime/debug.Stack()',
+        'gopkg.in/yaml.v3.(*decoder).unmarshal(0xc000, 0xc00)',
+      ]) {
+        expect(_values('\t$frame'), isEmpty, reason: frame);
+      }
+      expect(_values('\t/home/me/project/main.go:12 +0x1d'), [
+        'path:/home/me/project/main.go',
+      ]);
     });
 
     test('reads a file before its location in parentheses', () {
@@ -438,6 +503,44 @@ void main() {
       terminal.resize(20, 10);
       stack.scanNow();
       expect(values(), ['/srv/abcdefghij北京/notes.txt']);
+    });
+
+    test('reads a wide-character path the same after widening', () {
+      for (var width = 6; width <= 70; width++) {
+        for (final grow in [7, 9]) {
+          final wide = Terminal(maxLines: 1000);
+          final own = TerminalContextStack(
+            terminal: wide,
+            workingDirectory: cwd,
+            homeDirectory: () => '/home/me',
+          );
+          wide.resize(width, 10);
+          wide.write('Saved ~/文档/报告/二零二六年十月.xlsx\r\n\$ ');
+          own.scanNow();
+          wide.resize(width + grow, 10);
+          own.scanNow();
+          expect(
+            [for (final item in own.items) item.value],
+            ['/home/me/文档/报告/二零二六年十月.xlsx'],
+            reason: '$width -> ${width + grow}',
+          );
+          own.dispose();
+        }
+      }
+    });
+
+    test('reads on after the vendored xterm loses rows', () {
+      // CSI 3J and then a resize leave rows unset in the fork's buffer, and
+      // its own next write fails on them (outside this tab). The stack's
+      // read must still return.
+      terminal.resize(80, 24);
+      for (var i = 0; i < 30; i++) {
+        terminal.write('line \$i /etc/hosts\r\n');
+      }
+      terminal.write('\$ clear\r\n\x1b[H\x1b[2J\x1b[3J\$ ');
+      terminal.resize(100, 30);
+      expect(() => terminal.write('ls\r\n'), throwsA(anything));
+      expect(stack.scanNow, returnsNormally);
     });
 
     test('ignores the alternate screen', () {
