@@ -158,6 +158,9 @@ void main() {
         'restic -r sftp:user@host:/srv/restic-repo init',
         'scp backup.tar.gz [2001:db8::5]:/var/backups/',
         'kubectl cp default/web-7d9f8:/var/log/app.log',
+        'remote.origin.url=192.168.1.10:/srv/git/project.git',
+        'export BORG_REPO=nas:/volume1/borg',
+        'RESTIC_REPOSITORY=sftp:nas:/srv/restic',
       ]) {
         expect(
           _values(remote).where((v) => !v.contains('/project/dist')),
@@ -201,14 +204,70 @@ void main() {
       );
     });
 
+    test('reads a file before its location in parentheses', () {
+      expect(_values('> /home/me/project/app.py(12)main()'), [
+        'path:/home/me/project/app.py',
+      ]);
+      expect(_values('/home/me/project/Program.cs(12,5): error CS1002'), [
+        'path:/home/me/project/Program.cs',
+      ]);
+      expect(_values('src/a.ts(3,4): error TS2322'), [
+        'path:/home/me/project/src/a.ts',
+      ]);
+      expect(_values('#0 /var/www/html/index.php(12): foo()'), [
+        'path:/var/www/html/index.php',
+      ]);
+    });
+
+    test('reads a database URL without failing', () {
+      for (final line in [
+        'url: jdbc:postgresql://db:5432/app?sslmode=require',
+        'mongodb://admin:pw@mongo:27017/app?authSource=admin',
+        'redis://localhost:6379/0?db=1',
+        'DSN: postgres://u@h:5432/db?sslmode=disable',
+        'nas:/volume1/a=b',
+      ]) {
+        expect(() => _values(line), returnsNormally, reason: line);
+      }
+    });
+
+    test('reads a Location label that is not a redirect', () {
+      expect(
+        _values('Location: /home/me/.local/lib/python3.12/site-packages'),
+        ['path:/home/me/.local/lib/python3.12/site-packages'],
+      );
+      expect(_values('Editable project location: /home/me/p'), [
+        'path:/home/me/p',
+      ]);
+    });
+
+    test('leaves out a progress bar\'s totals', () {
+      expect(
+        _values(' 45%|####  | 2.23G/4.94G [00:52<01:03, 42.6MB/s]'),
+        isEmpty,
+      );
+      expect(_values('| 1.34k/1.34k ['), isEmpty);
+    });
+
+    test('reads a long path list in one pass', () {
+      final watch = Stopwatch()..start();
+      _values('/a:' * (contextLineLimit ~/ 3));
+      _values('CLASSPATH=${'/opt/lib/x.jar:' * 270}');
+      // The per-path rescans this replaced took hundreds of milliseconds.
+      expect(watch.elapsedMilliseconds, lessThan(2000));
+    });
+
     test('reads every entry of a path list', () {
       expect(_values('CLASSPATH=.:/usr/share/java/junit.jar'), [
         'path:/usr/share/java/junit.jar',
       ]);
-      expect(_values('PATH=bin:/usr/local/bin:/usr/bin'), [
+      expect(_values('PATH=/usr/local/bin:/usr/bin'), [
         'path:/usr/local/bin',
         'path:/usr/bin',
       ]);
+      // `bin` could be a host as well as a folder, so what follows it is
+      // left out; the entry after a path is read.
+      expect(_values('PATH=bin:/usr/local/bin:/usr/bin'), ['path:/usr/bin']);
       expect(_values('/usr/local/bin:/usr/bin:/bin'), [
         'path:/usr/local/bin',
         'path:/usr/bin',

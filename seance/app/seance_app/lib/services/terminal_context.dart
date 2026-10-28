@@ -99,6 +99,7 @@ List<ContextItem> detectContextItems(
 
   final scanned = masked.toString();
   final diffHeader = _diffHeader.hasMatch(text);
+  final farSides = _FarSides(scanned);
   for (final match in _pathPattern.allMatches(scanned)) {
     if (cut != null && match.end >= cut) continue;
     final item = _pathItem(
@@ -107,6 +108,7 @@ List<ContextItem> detectContextItems(
       workingDirectory: workingDirectory,
       homeDirectory: homeDirectory,
       diffHeader: diffHeader,
+      farSides: farSides,
     );
     if (item != null) found.add((match.start, item));
   }
@@ -178,7 +180,8 @@ final _extension = RegExp(r'\.[A-Za-z0-9]*[A-Za-z][A-Za-z0-9]*$');
 
 final _relativeSegment = RegExp(r'^[\w@+.-]+$');
 
-final _digits = RegExp(r'^\d+$');
+/// A number, perhaps with a unit: `28`, `2.23G`, `1.34k`, `512MiB`.
+final _quantity = RegExp(r'^\d[\d.]*[A-Za-z]{0,3}$');
 
 /// `...`, which `git diff --stat` and columns put where they cut a path.
 final _elision = RegExp(r'(?:^|/)\.{3,}(?:/|$)');
@@ -193,6 +196,7 @@ ContextItem? _pathItem(
   String? workingDirectory,
   String? homeDirectory,
   required bool diffHeader,
+  required _FarSides farSides,
 }) {
   var body = match[1]!;
   var end = match.end;
@@ -216,19 +220,15 @@ ContextItem? _pathItem(
     return null;
   }
   if (_cutShort(text, end)) return null;
-  if (_onAnotherHost(text, match.start)) return null;
+  if (farSides.contains(match.start)) return null;
   if (_invisible.hasMatch(body)) return null;
   // A query string (`/api/users?id=1`) belongs to a route, not a file.
   if (body.contains('?') && body.indexOf('?') < body.length - 1) return null;
   // `java.base/java.lang.Thread.run(Thread.java:1583)`: a stack frame's
-  // method, not a file.
-  if (end < text.length && text.codeUnitAt(end) == 0x28) return null;
-  if (body.startsWith('/') &&
-      _webRouteBefore.hasMatch(
-        text.substring(match.start < 24 ? 0 : match.start - 24, match.start),
-      )) {
-    return null;
-  }
+  // method, not a file. A location in parentheses (`app.py(12)`,
+  // `Program.cs(12,5)`) keeps its file.
+  if (_methodCall.matchAsPrefix(text, end) != null) return null;
+  if (body.startsWith('/') && _isWebRoute(text, match.start)) return null;
 
   var path = _trimEnd(body, _pathTrailing);
   // Three dots after a name with an extension close a sentence
@@ -270,8 +270,9 @@ ContextItem? _pathItem(
       if (named.isEmpty || named.any((s) => !_relativeSegment.hasMatch(s))) {
         return null;
       }
-      // `2026/10/28`, `1/2`: numbers, not places.
-      if (_digits.hasMatch(named.first)) return null;
+      // `2026/10/28`, `1/2`, a progress bar's `2.23G/4.94G`: numbers, not
+      // places.
+      if (_quantity.hasMatch(named.first)) return null;
       if (!path.endsWith('/') && !_extension.hasMatch(named.last)) {
         return null;
       }
@@ -292,47 +293,85 @@ ContextItem? _pathItem(
 bool _cutShort(String text, int end) =>
     end < text.length && text.codeUnitAt(end) == 0x2026;
 
-/// Whether the path starting at [start] is the far side of a `before:`:
-/// another machine's (`prod:/var/backups`, `192.168.1.10:/srv`,
-/// `git@github.com:org/repo.git`, `sftp:me@nas:/repo`, `[2001:db8::5]:/x`),
-/// a container's (`-v ./nginx.conf:/etc/nginx/nginx.conf`,
+/// Reads, for each path that follows a `:`, whether it is the far side of
+/// a `before:path` token: another machine's (`prod:/var/backups`,
+/// `192.168.1.10:/srv`, `git@github.com:org/repo.git`, `sftp:nas:/repo`,
+/// `[2001:db8::5]:/x`), a container's (`-v ./nginx.conf:/etc/nginx/x.conf`,
 /// `kubectl cp ns/pod:/var/log/app.log`) or a drive's (`C:/Users`).
 /// Offering a same-named file on this machine would act on the wrong one,
 /// so the far side is left out unless the token is a path list:
 ///
-/// * an assignment's value (`PATH=bin:/usr/bin`, `CLASSPATH=.:/x.jar`),
-///   unless the entry before names a host (`url=git@github.com:org/x.git`,
-///   `REPO=backup.example.com:/srv`);
+/// * an assignment's value whose entry before the path is itself a path
+///   (`PATH=/usr/bin:/bin`, `CLASSPATH=.:/x.jar`), not a host
+///   (`url=git@github.com:org/x.git`, `BORG_REPO=nas:/volume1`);
 /// * three or more entries that all look like paths, as `echo $PATH`
 ///   prints them.
 ///
-/// A message's `Error:/x` and a two-entry `/usr/bin:/bin` are missed for it.
-bool _onAnotherHost(String text, int start) {
-  if (start == 0 || text.codeUnitAt(start - 1) != 0x3A) return false;
-  var tokenStart = start - 1;
-  while (tokenStart > 0 && !_tokenBreak(text.codeUnitAt(tokenStart - 1))) {
-    tokenStart--;
-  }
-  var tokenEnd = start;
-  while (tokenEnd < text.length && !_tokenBreak(text.codeUnitAt(tokenEnd))) {
-    tokenEnd++;
-  }
-  final token = text.substring(tokenStart, tokenEnd);
-  final equals = token.indexOf('=');
-  final valueStart = equals < 0 ? 0 : equals + 1;
-  final offset = start - tokenStart;
-  // Assigned or not, the entry before names where the path is.
-  final before = token.substring(valueStart, offset - 1).split(':').last;
-  if (_namesHost(before)) return true;
-  if (equals >= 0 && equals < offset) return false;
+/// `Error:/x`, a two-entry `/usr/bin:/bin` and `PATH=bin:/usr/bin` miss
+/// their far side for it. A token is read once for all the paths in it, so
+/// a long list costs one pass.
+class _FarSides {
+  _FarSides(this._text);
 
-  final entries = token.substring(valueStart).split(':');
-  return entries.length < 3 || !entries.every(_listedPath.hasMatch);
+  final String _text;
+
+  /// The token last read, `[_start, _end)`, its first `=` (or -1), and
+  /// whether it is a list of three or more paths.
+  int _start = 0;
+  int _end = -1;
+  int _equals = -1;
+  bool _isList = false;
+
+  bool contains(int start) {
+    if (start == 0 || _text.codeUnitAt(start - 1) != 0x3A) return false;
+    if (start < _start || start >= _end) _read(start);
+    final colon = start - 1;
+    var entryStart = colon;
+    while (entryStart > _start) {
+      final unit = _text.codeUnitAt(entryStart - 1);
+      if (unit == 0x3A || unit == 0x3D) break;
+      entryStart--;
+    }
+    final before = _text.substring(entryStart, colon);
+    if (_namesHost(before)) return true;
+    if (_equals >= 0 && _equals < colon) return !_isPathEntry(before);
+    return !_isList;
+  }
+
+  void _read(int start) {
+    var tokenStart = start - 1;
+    while (tokenStart > 0 && !_tokenBreak(_text.codeUnitAt(tokenStart - 1))) {
+      tokenStart--;
+    }
+    var tokenEnd = start;
+    while (tokenEnd < _text.length &&
+        !_tokenBreak(_text.codeUnitAt(tokenEnd))) {
+      tokenEnd++;
+    }
+    _start = tokenStart;
+    _end = tokenEnd;
+    final token = _text.substring(tokenStart, tokenEnd);
+    final equals = token.indexOf('=');
+    _equals = equals < 0 ? -1 : tokenStart + equals;
+    final entries = token.substring(equals + 1).split(':');
+    _isList = entries.length >= 3 && entries.every(_isPathEntry);
+  }
 }
 
-/// A `user@` login, a bracketed IPv6 address, or a dotted host name.
+/// An entry of a path list: absolute, home- or dot-relative, with a `/`,
+/// or empty (the current directory, in `PATH=:/usr/bin`).
+bool _isPathEntry(String entry) =>
+    entry.isEmpty || _listedPath.hasMatch(entry) || entry.contains('/');
+
+/// A `user@` login, a bracketed IPv6 address, a dotted host name or an
+/// IPv4 address.
 bool _namesHost(String entry) =>
-    entry.contains('@') || entry.contains(']') || _hostName.hasMatch(entry);
+    entry.contains('@') ||
+    entry.contains(']') ||
+    _hostName.hasMatch(entry) ||
+    _ipv4.hasMatch(entry);
+
+final _ipv4 = RegExp(r'^\d{1,3}(?:\.\d{1,3}){3}$');
 
 /// `example.com`, `db-1.internal`: dotted labels, the last one a name.
 final _hostName = RegExp(r'^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$');
@@ -348,14 +387,32 @@ bool _tokenBreak(int unit) =>
     unit == 0x27 ||
     unit == 0x60;
 
-/// What puts a web route before an absolute path rather than a file: an
-/// HTTP request line (`"GET /wp-login.php HTTP/1.1"`, `Started GET
-/// "/users/1"`), a redirect, or an HTML attribute.
-final _webRouteBefore = RegExp(
+/// `(` and a letter after a path: a method call.
+final _methodCall = RegExp(r'\([A-Za-z_]');
+
+/// Whether the absolute path at [start] is a web route rather than a file:
+/// after an HTTP method (`"GET /wp-login.php HTTP/1.1"`, `Started GET
+/// "/users/1"`), an HTML attribute (`href="/about"`), or a redirect header
+/// as `curl -v` marks it (`< Location: /login`). An unmarked `Location:`
+/// reads the same in `pip show` (`Location: /usr/lib/python3/dist-packages`)
+/// and in `curl -i`'s raw headers, and the files `pip show` names matter
+/// more than a route that names nothing.
+bool _isWebRoute(String text, int start) {
+  final window = text.substring(start < 24 ? 0 : start - 24, start);
+  if (_requestBefore.hasMatch(window)) return true;
+  if (!_locationBefore.hasMatch(window)) return false;
+  return _redirectHeader.hasMatch(text.substring(0, start));
+}
+
+final _requestBefore = RegExp(
   r'(?:\b(?:GET|POST|PUT|DELETE|HEAD|PATCH|OPTIONS|CONNECT|TRACE)\s+"?'
-  r'|\b(?:[Hh][Rr][Ee][Ff]|[Ss][Rr][Cc]|[Aa]ction)=["\x27]?'
-  r'|\b[Ll]ocation:\s*)$',
+  r'|\b(?:[Hh][Rr][Ee][Ff]|[Ss][Rr][Cc]|[Aa]ction)=["\x27]?)$',
 );
+
+final _locationBefore = RegExp(r'[Ll]ocation:\s*$');
+
+/// A redirect header as `curl -v` prints it.
+final _redirectHeader = RegExp(r'^\s*[<>]\s*[Ll]ocation:\s*$');
 
 /// [value] without any run of [chars] at its end, in one pass: a
 /// backtracking `[…]+$` would take quadratic time on a long run of dots a
@@ -563,9 +620,7 @@ class TerminalContextStack extends ChangeNotifier {
       final line = text.toString().trimRight();
       if (_read[first] != line) {
         _read[first] = line;
-        fresh.addAll(
-          detectContextItems(line, workingDirectory: cwd, homeDirectory: home),
-        );
+        fresh.addAll(_detect(line, cwd, home));
       }
       row = next;
     }
@@ -579,6 +634,29 @@ class TerminalContextStack extends ChangeNotifier {
     }
     if (_items.length > capacity) _items.removeRange(capacity, _items.length);
     notifyListeners();
+  }
+
+  /// [detectContextItems] on one line a server wrote. A defect it meets on
+  /// some unforeseen output is reported, and costs that line only: the
+  /// rest of the read, and later reads, still happen.
+  static List<ContextItem> _detect(String line, String? cwd, String? home) {
+    try {
+      return detectContextItems(
+        line,
+        workingDirectory: cwd,
+        homeDirectory: home,
+      );
+    } catch (error, stack) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stack,
+          library: 'seance terminal context',
+          context: ErrorDescription('while reading a terminal line'),
+        ),
+      );
+      return const [];
+    }
   }
 
   static bool _startsWide(BufferLine row) =>
