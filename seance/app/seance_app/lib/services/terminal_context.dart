@@ -218,6 +218,17 @@ ContextItem? _pathItem(
   if (_cutShort(text, end)) return null;
   if (_onAnotherHost(text, match.start)) return null;
   if (_invisible.hasMatch(body)) return null;
+  // A query string (`/api/users?id=1`) belongs to a route, not a file.
+  if (body.contains('?') && body.indexOf('?') < body.length - 1) return null;
+  // `java.base/java.lang.Thread.run(Thread.java:1583)`: a stack frame's
+  // method, not a file.
+  if (end < text.length && text.codeUnitAt(end) == 0x28) return null;
+  if (body.startsWith('/') &&
+      _webRouteBefore.hasMatch(
+        text.substring(match.start < 24 ? 0 : match.start - 24, match.start),
+      )) {
+    return null;
+  }
 
   var path = _trimEnd(body, _pathTrailing);
   // Three dots after a name with an extension close a sentence
@@ -281,36 +292,70 @@ ContextItem? _pathItem(
 bool _cutShort(String text, int end) =>
     end < text.length && text.codeUnitAt(end) == 0x2026;
 
-/// Whether the path starting at [start] may be another machine's: it
-/// follows a `word:` that could name a host (`prod:/var/backups`,
-/// `192.168.1.10:/srv`, `git@github.com:org/repo.git`, `nas:/volume1`) or a
-/// drive (`C:/Users`). Offering a same-named file on this machine would act
-/// on the wrong one, so an unclear `word:` counts as a host. Only a path
-/// list reads as local: an entry after `=` (`PATH=bin:/usr/bin`), after
-/// `.` or `..` (`CLASSPATH=.:/x.jar`), or after an entry that is itself a
-/// path or follows another `:` (`/usr/bin:/bin`). A message's
-/// `Error:/x` is missed for it.
+/// Whether the path starting at [start] is the far side of a `before:`:
+/// another machine's (`prod:/var/backups`, `192.168.1.10:/srv`,
+/// `git@github.com:org/repo.git`, `sftp:me@nas:/repo`, `[2001:db8::5]:/x`),
+/// a container's (`-v ./nginx.conf:/etc/nginx/nginx.conf`,
+/// `kubectl cp ns/pod:/var/log/app.log`) or a drive's (`C:/Users`).
+/// Offering a same-named file on this machine would act on the wrong one,
+/// so the far side is left out unless the token is a path list:
+///
+/// * an assignment's value (`PATH=bin:/usr/bin`, `CLASSPATH=.:/x.jar`),
+///   unless the entry before names a host (`url=git@github.com:org/x.git`,
+///   `REPO=backup.example.com:/srv`);
+/// * three or more entries that all look like paths, as `echo $PATH`
+///   prints them.
+///
+/// A message's `Error:/x` and a two-entry `/usr/bin:/bin` are missed for it.
 bool _onAnotherHost(String text, int start) {
   if (start == 0 || text.codeUnitAt(start - 1) != 0x3A) return false;
-  var wordStart = start - 1;
-  while (wordStart > 0 && !_wordBreak(text.codeUnitAt(wordStart - 1))) {
-    wordStart--;
+  var tokenStart = start - 1;
+  while (tokenStart > 0 && !_tokenBreak(text.codeUnitAt(tokenStart - 1))) {
+    tokenStart--;
   }
-  final word = text.substring(wordStart, start - 1);
-  if (word.isEmpty || word == '.' || word == '..') return false;
-  if (word.contains('/') || word.contains(':')) return false;
-  final assigned = wordStart > 0 && text.codeUnitAt(wordStart - 1) == 0x3D;
-  return !assigned;
+  var tokenEnd = start;
+  while (tokenEnd < text.length && !_tokenBreak(text.codeUnitAt(tokenEnd))) {
+    tokenEnd++;
+  }
+  final token = text.substring(tokenStart, tokenEnd);
+  final equals = token.indexOf('=');
+  final valueStart = equals < 0 ? 0 : equals + 1;
+  final offset = start - tokenStart;
+  // Assigned or not, the entry before names where the path is.
+  final before = token.substring(valueStart, offset - 1).split(':').last;
+  if (_namesHost(before)) return true;
+  if (equals >= 0 && equals < offset) return false;
+
+  final entries = token.substring(valueStart).split(':');
+  return entries.length < 3 || !entries.every(_listedPath.hasMatch);
 }
 
-/// Space, a quote or `=`: where the word before a `host:` starts.
-bool _wordBreak(int unit) =>
+/// A `user@` login, a bracketed IPv6 address, or a dotted host name.
+bool _namesHost(String entry) =>
+    entry.contains('@') || entry.contains(']') || _hostName.hasMatch(entry);
+
+/// `example.com`, `db-1.internal`: dotted labels, the last one a name.
+final _hostName = RegExp(r'^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$');
+
+/// An entry of a path list: absolute, home- or dot-relative.
+final _listedPath = RegExp(r'^(?:/|~|\.)');
+
+/// Whitespace or a quote: where a `before:path` token ends.
+bool _tokenBreak(int unit) =>
     unit == 0x20 ||
     unit == 0x09 ||
     unit == 0x22 ||
     unit == 0x27 ||
-    unit == 0x60 ||
-    unit == 0x3D;
+    unit == 0x60;
+
+/// What puts a web route before an absolute path rather than a file: an
+/// HTTP request line (`"GET /wp-login.php HTTP/1.1"`, `Started GET
+/// "/users/1"`), a redirect, or an HTML attribute.
+final _webRouteBefore = RegExp(
+  r'(?:\b(?:GET|POST|PUT|DELETE|HEAD|PATCH|OPTIONS|CONNECT|TRACE)\s+"?'
+  r'|\b(?:[Hh][Rr][Ee][Ff]|[Ss][Rr][Cc]|[Aa]ction)=["\x27]?'
+  r'|\b[Ll]ocation:\s*)$',
+);
 
 /// [value] without any run of [chars] at its end, in one pass: a
 /// backtracking `[…]+$` would take quadratic time on a long run of dots a
@@ -360,8 +405,9 @@ String _trimUrl(String raw) {
   return raw.substring(0, end);
 }
 
-/// `.`, `,`, `!`, `?`, `;` and `:`: sentence punctuation after a link.
-const _urlTrailing = {0x2E, 0x2C, 0x21, 0x3F, 0x3B, 0x3A};
+/// `.`, `,`, `!`, `?`, `;` and `:`: sentence punctuation after a link, and
+/// `*`, Markdown's emphasis (`**https://example.com/docs**`).
+const _urlTrailing = {0x2E, 0x2C, 0x21, 0x3F, 0x3B, 0x3A, 0x2A};
 
 /// Collapses `.`, `..` and repeated slashes in an absolute POSIX path,
 /// keeping a trailing slash off: `/a/./b/../c/` is `/a/c`. A `..` at the

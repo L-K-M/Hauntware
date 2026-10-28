@@ -152,6 +152,12 @@ void main() {
         'rsync -av dist/ backup.example.com:archives/site.tar.gz',
         'git clone gitlab:group/repo.git',
         'nas:/volume1/data',
+        'remote.origin.url=git@github.com:L-K-M/Hauntware.git',
+        'BORG_REPO=user@nas:/volume1/backup',
+        'REPO=backup.example.com:/srv/borg',
+        'restic -r sftp:user@host:/srv/restic-repo init',
+        'scp backup.tar.gz [2001:db8::5]:/var/backups/',
+        'kubectl cp default/web-7d9f8:/var/log/app.log',
       ]) {
         expect(
           _values(remote).where((v) => !v.contains('/project/dist')),
@@ -162,6 +168,39 @@ void main() {
       expect(_values('scp me@host:/etc/hosts .'), isEmpty);
     });
 
+    test('offers the host side of a mount, not the container\'s', () {
+      expect(
+        _values('docker run -v /srv/postgres:/var/lib/postgresql/data pg'),
+        ['path:/srv/postgres'],
+      );
+      expect(_values('  - ./nginx.conf:/etc/nginx/nginx.conf:ro'), [
+        'path:/home/me/project/nginx.conf',
+      ]);
+    });
+
+    test('leaves out web routes', () {
+      for (final line in [
+        '1.2.3.4 - - "GET /wp-login.php HTTP/1.1" 404',
+        'Started GET "/users/1" for 127.0.0.1',
+        '> POST /v1/messages HTTP/2',
+        '< Location: /login?next=%2Fadmin',
+        '<a href="/about">About</a><script src="/js/main.js">',
+        '<form action="/login">',
+        'GET /api/users?id=1 200',
+      ]) {
+        expect(_values(line), isEmpty, reason: line);
+      }
+      // A file path in a sentence that ends in a question still reads.
+      expect(_values('Did you mean /etc/hosts?'), ['path:/etc/hosts']);
+    });
+
+    test('leaves out a stack frame\'s method', () {
+      expect(
+        _values('\tat java.base/java.lang.Thread.run(Thread.java:1583)'),
+        isEmpty,
+      );
+    });
+
     test('reads every entry of a path list', () {
       expect(_values('CLASSPATH=.:/usr/share/java/junit.jar'), [
         'path:/usr/share/java/junit.jar',
@@ -170,8 +209,14 @@ void main() {
         'path:/usr/local/bin',
         'path:/usr/bin',
       ]);
-      expect(_values('/usr/bin:/bin'), ['path:/usr/bin', 'path:/bin']);
-      // Without list context a `word:` may name a host, so it is left out.
+      expect(_values('/usr/local/bin:/usr/bin:/bin'), [
+        'path:/usr/local/bin',
+        'path:/usr/bin',
+        'path:/bin',
+      ]);
+      // Without list context a `before:` may name a host or a container,
+      // so the far side is left out.
+      expect(_values('/usr/bin:/bin'), ['path:/usr/bin']);
       expect(_values('Error:/x/y.txt'), isEmpty);
     });
 
@@ -191,6 +236,12 @@ void main() {
         'path:/etc/nginx/nginx.conf',
       ]);
       expect(_values('Checking /usr/lib/x.so... ok'), ['path:/usr/lib/x.so']);
+    });
+
+    test('drops Markdown emphasis around a link', () {
+      expect(_values('**https://example.com/docs**'), [
+        'url:https://example.com/docs',
+      ]);
     });
 
     test('reads an IPv6 link', () {
