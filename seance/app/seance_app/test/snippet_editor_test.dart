@@ -50,9 +50,8 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('saving a snippet unchanged leaves nothing to undo', (
-    tester,
-  ) async {
+  testWidgets('saving a snippet unchanged writes nothing and leaves nothing '
+      'to undo', (tester) async {
     const snippet = Snippet(
       id: 'disk',
       title: 'Disk usage',
@@ -86,6 +85,8 @@ void main() {
 
     expect(find.byType(Dialog), findsNothing);
     expect(state.undoHistory.undoName, isNull);
+    // Nothing written either: no new stamp to sync or sort by.
+    expect(state.snippets.single.updatedAt, 1);
   });
 
   testWidgets('an edited snippet can be undone', (tester) async {
