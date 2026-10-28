@@ -63,6 +63,94 @@ void main() {
     shellDirectory.dispose();
   });
 
+  test('reveal leaves a file the listing hides unselected', () async {
+    final remote = _FakeRemoteFileSystem();
+    remote.directories['/home/test']!.add(
+      const RemoteFileEntry(
+        path: '/home/test/.bashrc',
+        name: '.bashrc',
+        type: RemoteFileType.file,
+      ),
+    );
+    final shellDirectory = ValueNotifier<String?>(null);
+    final controller = RemoteFilesController(
+      () async => remote,
+      shellDirectory: _located(shellDirectory),
+      managedFileStore: _store(),
+      serverId: 'server',
+      editSessionId: 'session',
+      initialShowHidden: false,
+    );
+
+    await controller.reveal('/home/test/.bashrc');
+    expect(controller.currentPath, '/home/test');
+    expect(controller.selectedPaths, isEmpty);
+
+    controller.dispose();
+    shellDirectory.dispose();
+  });
+
+  test('reveal yields to the shell moving while it lists', () async {
+    final remote = _FakeRemoteFileSystem();
+    // A same-named file where the shell moves to: the old listing's
+    // selection must not land on it.
+    remote.directories['/home/test/docker'] = [
+      const RemoteFileEntry(
+        path: '/home/test/docker/system.log',
+        name: 'system.log',
+        type: RemoteFileType.file,
+      ),
+    ];
+    final shellDirectory = ValueNotifier<String?>(null);
+    final controller = RemoteFilesController(
+      () async => remote,
+      shellDirectory: _located(shellDirectory),
+      managedFileStore: _store(),
+      serverId: 'server',
+      editSessionId: 'session',
+    );
+    await controller.initialize();
+    final held = Completer<void>();
+    remote.beforeList = (path) =>
+        path == '/var/log' ? held.future : Future<void>.value();
+
+    final revealing = controller.reveal('/var/log/system.log');
+    await Future<void>.delayed(Duration.zero);
+    shellDirectory.value = '/home/test/docker';
+    await Future<void>.delayed(Duration.zero);
+    held.complete();
+    await revealing;
+
+    expect(controller.currentPath, '/home/test/docker');
+    expect(controller.selectedPaths, isEmpty);
+
+    controller.dispose();
+    shellDirectory.dispose();
+  });
+
+  test('reveal fails when the session closes under it', () async {
+    final remote = _FakeRemoteFileSystem();
+    final shellDirectory = ValueNotifier<String?>(null);
+    final controller = RemoteFilesController(
+      () async => remote,
+      shellDirectory: _located(shellDirectory),
+      managedFileStore: _store(),
+      serverId: 'server',
+      editSessionId: 'session',
+    );
+    await controller.initialize();
+    final held = Completer<void>();
+    remote.beforeList = (_) => held.future;
+
+    final revealing = controller.reveal('/var/log/system.log');
+    await Future<void>.delayed(Duration.zero);
+    controller.dispose();
+    held.complete();
+    await expectLater(revealing, throwsStateError);
+
+    shellDirectory.dispose();
+  });
+
   test('a title change leaves a manual navigation alone', () async {
     final remote = _FakeRemoteFileSystem();
     final shellDirectory = ValueNotifier<String?>('/var/log');

@@ -231,7 +231,10 @@ class RemoteFilesController extends ChangeNotifier {
   /// Opens the folder [path] names, or the folder holding the file it names
   /// with that file selected: the Context tab's Show in Files. A `~/` path
   /// is read from the SFTP home. Throws when the server cannot stat it, so
-  /// a path that only looked like one says so rather than opening nowhere.
+  /// a path that only looked like one says so rather than opening nowhere,
+  /// and when the session closes first. A file the listing hides (a dotfile
+  /// with hidden files off, a filter) is shown in its folder unselected:
+  /// selecting a row nobody can see would act on it unseen.
   Future<void> reveal(String path) async {
     await initialize();
     final remote = _requireRemote();
@@ -242,17 +245,27 @@ class RemoteFilesController extends ChangeNotifier {
       absolute = remoteJoin(home, path.substring(2));
     }
     final entry = await remote.stat(absolute);
-    if (_disposed) return;
+    _requireOpen();
     if (entry.isDirectory) {
       await navigate(absolute);
+      _requireOpen();
       return;
     }
-    await navigate(remoteParent(absolute));
-    if (_disposed || error != null) return;
+    final opening = navigate(remoteParent(absolute));
+    // A newer navigation (the shell moving, followed) takes the listing
+    // over; the selection belongs to this one.
+    final generation = _navigationGeneration;
+    await opening;
+    _requireOpen();
+    if (generation != _navigationGeneration || error != null) return;
     final name = remoteBasename(absolute);
-    for (final listed in _allEntries) {
+    for (final listed in entries) {
       if (listed.name == name) selectOnly(listed.path);
     }
+  }
+
+  void _requireOpen() {
+    if (_disposed) throw StateError('Files closed with the session.');
   }
 
   /// Whether [goUp] has somewhere to go: false at the root, and before the

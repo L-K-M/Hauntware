@@ -161,12 +161,41 @@ void main() {
     await pumpPane(tester, output: '/etc/hosts\r\n\$ ');
 
     expect(await menuFor(tester, '/etc/hosts'), [
-      'Open',
       LocalFileReveal.actionLabel,
+      'Open',
       'Copy',
       'Insert at Prompt',
       'Remove',
     ]);
+  });
+
+  testWidgets('Open refuses a local program that has no extension', (
+    tester,
+  ) async {
+    late final String program;
+    await tester.runAsync(() async {
+      final folder = await Directory.systemTemp.createTemp('seance-program-');
+      addTearDown(() => folder.delete(recursive: true));
+      program = '${folder.path}/runme';
+      await File(program).writeAsString('#!/bin/sh\necho hi\n');
+      await Process.run('chmod', ['755', program]);
+    });
+    await pumpPane(tester, output: '$program\r\n\$ ');
+
+    await menuFor(tester, program);
+    await tester.tap(find.text('Open').last);
+    await tester.pumpAndSettle();
+    // The file's mode is read on the real event loop.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+    // The toast slides in.
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.textContaining('could run as a program'), findsOneWidget);
+    // Let the toast time out.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('Clear and Remove take items off the stack', (tester) async {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -151,10 +152,11 @@ class _ContextList extends StatelessWidget {
       _ContextAction.insert,
     ],
     // A local shell's paths are on this machine. A server's are not, and
-    // Files is where this app reaches them.
+    // Files is where this app reaches them. A tap only shows a local file:
+    // opening one a server named is a choice, made from the menu.
     ContextKind.path when session.isLocal => const [
-      _ContextAction.openFile,
       _ContextAction.reveal,
+      _ContextAction.openFile,
       _ContextAction.copy,
       _ContextAction.insert,
     ],
@@ -178,7 +180,7 @@ class _ContextList extends StatelessWidget {
             say('Could not open link.');
           }
         case _ContextAction.openFile:
-          await const ExternalFileOpener().openSystemDefault(item.value);
+          await _openLocal(item.value);
         case _ContextAction.reveal:
           await const LocalFileReveal().reveal(item.value);
         case _ContextAction.showInFiles:
@@ -204,6 +206,21 @@ class _ContextList extends StatelessWidget {
     } catch (e) {
       say(e.toString());
     }
+  }
+
+  /// Hands a local file to the system's default app, unless that would run
+  /// it. The name check (`ExternalFileOpener`) knows extensions; a program
+  /// without one (`/usr/bin/ls`, a script with its execute bit) is caught
+  /// by its mode instead, since macOS's `open` runs it in Terminal.
+  static Future<void> _openLocal(String path) async {
+    final stat = await FileStat.stat(path);
+    if (stat.type == FileSystemEntityType.notFound) {
+      throw StateError('$path does not exist on this computer.');
+    }
+    if (stat.type == FileSystemEntityType.file && stat.mode & 0x49 != 0) {
+      throw ExecutableLaunchRefused(path);
+    }
+    await const ExternalFileOpener().openSystemDefault(path);
   }
 
   /// Types the item at the prompt as one shell word, without Enter: a link's

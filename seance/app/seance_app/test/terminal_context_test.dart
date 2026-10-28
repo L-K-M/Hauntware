@@ -87,11 +87,90 @@ void main() {
     });
 
     test('leaves out a prompt\'s own directory', () {
-      expect(
-        _values(r'me@host:~/src$ cat ./a.txt', home: '/home/me'),
-        ['path:/home/me/project/a.txt'],
-      );
+      expect(_values(r'me@host:~/src$ cat ./a.txt', home: '/home/me'), [
+        'path:/home/me/project/a.txt',
+      ]);
       expect(_values('root@host:/etc# ls'), isEmpty);
+    });
+
+    test('leaves out markup a page printed', () {
+      expect(
+        _values('<title>Example</title></head><body><br/><p>x</p></body>'),
+        isEmpty,
+      );
+      expect(_values('/* comment */ int x;'), isEmpty);
+    });
+
+    test('leaves out the directory other prompts show', () {
+      for (final prompt in [
+        r'me@host ~/src/project $ make',
+        r'[me@host ~/src]$ ls',
+        r'me@host ~/s/project> ls',
+        r'~/src ❯ ls',
+      ]) {
+        expect(_values(prompt, home: '/home/me'), isEmpty, reason: prompt);
+      }
+      // A redirect after a path is not a prompt.
+      expect(_values('sort /tmp/in.txt > out'), ['path:/tmp/in.txt']);
+    });
+
+    test('reads a diff header without its a/ and b/', () {
+      expect(_values('diff --git a/lib/main.dart b/lib/main.dart'), [
+        'path:/home/me/project/lib/main.dart',
+        'path:/home/me/project/lib/main.dart',
+      ]);
+      expect(_values('+++ b/src/app.ts'), ['path:/home/me/project/src/app.ts']);
+      // Elsewhere an a/ is a real folder.
+      expect(_values('cat a/b.txt'), ['path:/home/me/project/a/b.txt']);
+    });
+
+    test('leaves out what a column or --stat cut short', () {
+      expect(_values(' .../services/terminal_context.dart | 345 +++'), isEmpty);
+      expect(_values('"/docker-entrypoint.…"   Up 2 hours'), isEmpty);
+      expect(_values('see https://example.com/… now'), isEmpty);
+    });
+
+    test('reads a comma-separated list as its files', () {
+      expect(_values('img/logo.png,img/bg.png'), [
+        'path:/home/me/project/img/logo.png',
+        'path:/home/me/project/img/bg.png',
+      ]);
+      expect(_values('/a/x.txt,/b/y.txt'), ['path:/a/x.txt', 'path:/b/y.txt']);
+    });
+
+    test('leaves out another host\'s paths', () {
+      expect(_values('origin  git@github.com:org/repo.git (fetch)'), isEmpty);
+      expect(_values('rsync -av src/ host:/var/www/'), [
+        'path:/home/me/project/src',
+      ]);
+      expect(_values('scp me@host:/etc/hosts .'), isEmpty);
+    });
+
+    test('reads paths in curly quotes', () {
+      expect(_values('Saving to: ‘foo/bar.tar.gz’'), [
+        'path:/home/me/project/foo/bar.tar.gz',
+      ]);
+      expect(_values('cannot stat “/etc/hosts”'), ['path:/etc/hosts']);
+    });
+
+    test('refuses a value with bidi or invisible characters', () {
+      expect(_values('/Users/me/\u202Efdp.exe'), isEmpty);
+      expect(_values('https://evil.example/\u202Emoc.knab'), isEmpty);
+      expect(_values('/tmp/a\u200Bb.txt'), isEmpty);
+    });
+
+    test('keeps a home path inside a home it does not know yet', () {
+      expect(_values('cat ~/../../etc/x'), isEmpty);
+      expect(_values('cat ~/../../etc/x', home: '/home/me'), ['path:/etc/x']);
+    });
+
+    test('reads a long line in linear time', () {
+      final watch = Stopwatch()..start();
+      _values('https://a.b/${')' * 8000}');
+      _values('https://a.b/${'.' * 32000}x');
+      _values('/a${'.' * 16000}x');
+      _values('x /etc/a.txt ' * 40000);
+      expect(watch.elapsedMilliseconds, lessThan(1000));
     });
 
     test('leaves out the root, comments and sentence punctuation', () {
@@ -138,6 +217,12 @@ void main() {
       terminal.write('see /var/lib/some/long/name.txt ok\r\n');
       stack.scanNow();
       expect(values(), ['/var/lib/some/long/name.txt']);
+    });
+
+    test('reads tab-separated columns as separate words', () {
+      terminal.write('M\tlib/main.dart\r\n4.0K\t./build/\r\n\$ ');
+      stack.scanNow();
+      expect(values(), ['/srv/build', '/srv/lib/main.dart']);
     });
 
     test('ignores the alternate screen', () {
