@@ -12,8 +12,8 @@ import 'package:seance_app/ui/sidebar_panel.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
-/// The side panel's tabs run Files, Git, Snippets, Assistant, and Files
-/// opens first. The narrow drawer has no Files and opens on what its
+/// The side panel's tabs run Files, Context, Git, Snippets, Assistant, and
+/// Files opens first. The narrow drawer has no Files and opens on what its
 /// button names: the Assistant once one is set up, else Snippets.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -90,20 +90,29 @@ void main() {
       .properties
       .selected!;
 
-  const labels = ['Assistant', 'Snippets', 'Files', 'Git'];
+  const labels = ['Assistant', 'Snippets', 'Files', 'Context', 'Git'];
 
   for (final assistant in [false, true]) {
-    testWidgets('the panel runs Files, Git, Snippets, Assistant and opens '
-        'Files (assistant set up: $assistant)', (tester) async {
-      await pumpPanel(
-        tester,
-        panel: const SidebarPanel(),
-        assistant: assistant,
-      );
-      expect(order(tester, labels), ['Files', 'Git', 'Snippets', 'Assistant']);
-      expect(isOpen(tester, 'Files'), isTrue);
-      expect(isOpen(tester, 'Assistant'), isFalse);
-    });
+    testWidgets(
+      'the panel runs Files, Context, Git, Snippets, Assistant and opens '
+      'Files (assistant set up: $assistant)',
+      (tester) async {
+        await pumpPanel(
+          tester,
+          panel: const SidebarPanel(),
+          assistant: assistant,
+        );
+        expect(order(tester, labels), [
+          'Files',
+          'Context',
+          'Git',
+          'Snippets',
+          'Assistant',
+        ]);
+        expect(isOpen(tester, 'Files'), isTrue);
+        expect(isOpen(tester, 'Assistant'), isFalse);
+      },
+    );
   }
 
   for (final (assistant, opening) in [
@@ -116,8 +125,13 @@ void main() {
         panel: const SidebarPanel(includeFiles: false),
         assistant: assistant,
       );
-      expect(order(tester, labels), ['Git', 'Snippets', 'Assistant']);
-      for (final label in ['Git', 'Snippets', 'Assistant']) {
+      expect(order(tester, labels), [
+        'Context',
+        'Git',
+        'Snippets',
+        'Assistant',
+      ]);
+      for (final label in ['Context', 'Git', 'Snippets', 'Assistant']) {
         expect(isOpen(tester, label), label == opening, reason: label);
       }
     });

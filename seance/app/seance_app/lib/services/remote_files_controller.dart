@@ -46,6 +46,7 @@ class RemoteTransferItem {
 class RemoteFilesController extends ChangeNotifier {
   final Future<RemoteFileSystem> Function() _openRemoteFileSystem;
   final ShellLocation shellDirectory;
+
   /// Marks every file this controller downloads as untrusted for the OS.
   final DownloadProvenance _provenance;
 
@@ -224,6 +225,33 @@ class RemoteFilesController extends ChangeNotifier {
         loading = false;
         _notify();
       }
+    }
+  }
+
+  /// Opens the folder [path] names, or the folder holding the file it names
+  /// with that file selected: the Context tab's Show in Files. A `~/` path
+  /// is read from the SFTP home. Throws when the server cannot stat it, so
+  /// a path that only looked like one says so rather than opening nowhere.
+  Future<void> reveal(String path) async {
+    await initialize();
+    final remote = _requireRemote();
+    var absolute = path;
+    if (path.startsWith('~/')) {
+      final home = homePath;
+      if (home == null) throw StateError('The remote home is not known yet.');
+      absolute = remoteJoin(home, path.substring(2));
+    }
+    final entry = await remote.stat(absolute);
+    if (_disposed) return;
+    if (entry.isDirectory) {
+      await navigate(absolute);
+      return;
+    }
+    await navigate(remoteParent(absolute));
+    if (_disposed || error != null) return;
+    final name = remoteBasename(absolute);
+    for (final listed in _allEntries) {
+      if (listed.name == name) selectOnly(listed.path);
     }
   }
 

@@ -34,6 +34,35 @@ void main() {
     shellDirectory.dispose();
   });
 
+  test('reveal opens a folder, or selects a file in its folder', () async {
+    final remote = _FakeRemoteFileSystem();
+    final shellDirectory = ValueNotifier<String?>(null);
+    final controller = RemoteFilesController(
+      () async => remote,
+      shellDirectory: _located(shellDirectory),
+      managedFileStore: _store(),
+      serverId: 'server',
+      editSessionId: 'session',
+    );
+
+    await controller.reveal('/var/log/system.log');
+    expect(controller.currentPath, '/var/log');
+    expect(controller.selectedPaths, {'/var/log/system.log'});
+
+    await controller.reveal('~/folder');
+    expect(controller.currentPath, '/home/test/folder');
+    expect(controller.selectedPaths, isEmpty);
+
+    await expectLater(
+      controller.reveal('/home/test/missing.txt'),
+      throwsA(isA<RemoteFileException>()),
+    );
+    expect(controller.currentPath, '/home/test/folder');
+
+    controller.dispose();
+    shellDirectory.dispose();
+  });
+
   test('a title change leaves a manual navigation alone', () async {
     final remote = _FakeRemoteFileSystem();
     final shellDirectory = ValueNotifier<String?>('/var/log');

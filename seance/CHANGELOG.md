@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- A new **Context** tab in the side panel, between Files and Git,
+  collects the links and file paths a session prints, newest first,
+  like kitty's hints and macOS data detectors. Tap a link to open it in
+  the browser. Tap a path from a server to show it in Files, or a path
+  from a local shell to open it; its menu also shows it in Finder or
+  the file manager. Any item can be copied or inserted at the prompt as
+  one quoted word, never with Enter. Relative paths resolve against the
+  shell's directory when they are printed. Only finished lines on the
+  main screen are read, so a full-screen program or a half-typed path
+  adds nothing. The stack keeps the last 50 items and is not saved.
 - The Git pane and the terminal's tab now follow a TrueNAS shell, or
   any Linux shell that reports no directory, as Files already did: all
   three share one read of the shell's directory, and trust it over a
