@@ -53,6 +53,24 @@ void main() {
     expect(terminal.buffer.lines[2].isWrapped, isTrue);
   });
 
+  test('reflow() keeps a wide character at the edge whole when widening', () {
+    final terminal = Terminal();
+
+    // At width 8 the third wide character sits in the last column, with
+    // its second cell at the start of the next row.
+    terminal.resize(8, 10);
+    terminal.write('abc文档报x');
+    terminal.resize(12, 10);
+
+    final line = terminal.buffer.lines[0];
+    final cells = [
+      for (var i = 0; i < 10; i++)
+        line.getCodePoint(i) == 0 ? '_' : String.fromCharCode(line.getCodePoint(i)),
+    ];
+    // No empty copy of the second cell between the characters.
+    expect(cells.join(), 'abc文_档_报_x');
+  });
+
   test('reflow() can reflow wide characters', () {
     final terminal = Terminal();
 

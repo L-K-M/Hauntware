@@ -122,25 +122,27 @@ List<ContextItem> detectContextItems(
 /// a server wrote.
 final _urlPattern = RegExp(r'''https?://[^\s<>"'`{}|\\^‘’“”…]+''');
 
+/// The punctuation a sentence or a quote puts after a path.
+const _pathTrailing = '.,!?’';
+
 /// Characters that end a path in running text. A colon ends one too, so
 /// `PATH=/a:/b` reads as two paths and `file.dart:12:5` as a location, and
-/// so does a comma, so a list of files reads as its files. A closing curly
-/// single quote does not: it is an apostrophe in a name too
+/// so does a comma, so a list of files reads as its files; so does CJK
+/// prose's punctuation, which no space follows (`/etc/hosts。次に…`). A
+/// closing curly single quote does not: it is an apostrophe in a name too
 /// (`Dad’s_taxes.pdf`), and ends a path only one an opening quote started,
 /// or the path's end.
-
-/// The punctuation a sentence or a quote puts after a path.
-const _pathTrailing = '.,!?’。、';
-const _pathChars = r'''[^\s'"`<>|;:,(){}\[\]‘“”…]''';
+const _pathChars = r'''[^\s'"`<>|;:,(){}\[\]‘“”…。、，；：！？「」『』（）]''';
 
 /// The curly quote that closes a path each opening one started.
 const _closingQuote = {'‘': '’', '“': '”'};
 
 /// A path starts at the start of a line or after a space, a quote, `=`, an
 /// opening bracket, a comma or a colon: `--prefix=/usr`, `(/tmp/x)`,
-/// `‘/tmp/x’`. Not after `<`, which opens a tag (`</title>`).
+/// `‘/tmp/x’`, `保存先：/tmp/a.txt`. Not after `<`, which opens a tag
+/// (`</title>`).
 final _pathPattern = RegExp(
-  '(?<=^|[\\s\'"`=(\\[{,:‘“])'
+  '(?<=^|[\\s\'"`=(\\[{,:‘“：「『（，、。；])'
   '((?:~|\\.{1,2})?/$_pathChars*|[\\w@+.-]+/$_pathChars*)'
   r'(?::(\d+))?(?::(\d+))?',
   multiLine: true,
@@ -153,9 +155,7 @@ final _namedHost = RegExp(r'[A-Za-z0-9:]');
 bool _isHighSurrogate(int unit) => unit >= 0xD800 && unit <= 0xDBFF;
 
 /// The lines of a diff whose paths start `a/` and `b/`.
-final _diffHeader = RegExp(
-  r'^(?:diff --git |--- a/|\+\+\+ b/|Binary files a/)',
-);
+final _diffHeader = RegExp(r'^(?:diff --git |--- a/|\+\+\+ b/|Binary files )');
 
 /// Bidi controls and zero-width characters: drawn as nothing, or as
 /// reordered text, so the row would not show what the action opens.
@@ -176,9 +176,23 @@ final _rootPromptAfter = RegExp(r'^\s+#(?:\s|$)');
 /// fish's prompt puts `>` straight after the directory: `~/s/project> `.
 final _fishPromptAfter = RegExp(r'^>(?:\s|$)');
 
-/// A file extension with at least one letter: `.dart`, `.tar.gz`'s `.gz`,
-/// `.mp3`, but not a version's `.2`.
-final _extension = RegExp(r'\.[A-Za-z0-9]*[A-Za-z][A-Za-z0-9]*$');
+/// Whether [name] ends in a file extension with at least one letter:
+/// `.dart`, `.tar.gz`'s `.gz`, `.mp3`, but not a version's `.2`. Read from
+/// the last dot in one pass: a backtracking pattern takes quadratic time on
+/// a long name a server printed.
+bool _hasExtension(String name) {
+  final dot = name.lastIndexOf('.');
+  if (dot < 0 || dot == name.length - 1) return false;
+  var letter = false;
+  for (var i = dot + 1; i < name.length; i++) {
+    final unit = name.codeUnitAt(i);
+    final isLetter =
+        (unit >= 0x41 && unit <= 0x5A) || (unit >= 0x61 && unit <= 0x7A);
+    if (!isLetter && !(unit >= 0x30 && unit <= 0x39)) return false;
+    letter = letter || isLetter;
+  }
+  return letter;
+}
 
 final _relativeSegment = RegExp(r'^[\w@+.-]+$');
 
@@ -232,15 +246,19 @@ ContextItem? _pathItem(
   // `Program.cs(12,5)`) keeps its file.
   if (end < text.length &&
       text.codeUnitAt(end) == 0x28 &&
-      _parenLocation.matchAsPrefix(text, end) == null) {
+      _parenLocation.matchAsPrefix(text, end) == null &&
+      _frameOffset.matchAsPrefix(text, end) == null) {
     return null;
   }
   if (body.startsWith('/') && _isWebRoute(text, match.start)) return null;
   if (_afterClosingQuote(text, match.start)) return null;
-  // A mount's container side, by name (`--mount …,dst=/etc/nginx/conf.d`).
+  // A mount's container side, by name in its key list
+  // (`--mount type=bind,src=/srv/conf,dst=/etc/nginx/conf.d`); a lone
+  // `--target=/opt/libs` is a local directory.
   if (_mountTargetBefore.hasMatch(
-    text.substring(match.start < 12 ? 0 : match.start - 12, match.start),
-  )) {
+        text.substring(match.start < 12 ? 0 : match.start - 12, match.start),
+      ) &&
+      _inKeyList(text, match.start)) {
     return null;
   }
 
@@ -249,7 +267,7 @@ ContextItem? _pathItem(
   // Three dots after a name with an extension close a sentence
   // (`Writing /etc/nginx/nginx.conf...`); after any other name they are
   // where a column cut it (`/var/log/app...`).
-  if (body.endsWith('...') && !_extension.hasMatch(path)) return null;
+  if (body.endsWith('...') && !_hasExtension(path)) return null;
   if (path.isEmpty || path.startsWith('//') || _elision.hasMatch(path)) {
     return null;
   }
@@ -288,7 +306,7 @@ ContextItem? _pathItem(
       // `2026/10/28`, `1/2`, a progress bar's `2.23G/4.94G`: numbers, not
       // places.
       if (_quantity.hasMatch(named.first)) return null;
-      if (!path.endsWith('/') && !_extension.hasMatch(named.last)) {
+      if (!path.endsWith('/') && !_hasExtension(named.last)) {
         return null;
       }
     }
@@ -405,10 +423,28 @@ bool _tokenBreak(int unit) =>
     unit == 0x27 ||
     unit == 0x60;
 
-/// A line, or a line and column, in parentheses after a file.
-final _parenLocation = RegExp(r'\(\d+(?:,\d+)?\)');
+/// A line, or a line and column, in parentheses after a file:
+/// `app.py(12)main()`, `Program.cs(12,5):`. A `(1)` that a name goes on
+/// after (`report(1).pdf`, `dir(1)/x`) is not one.
+final _parenLocation = RegExp(r'\(\d+(?:,\d+)?\)(?![./])');
+
+/// A glibc backtrace frame's offset after its file: `./app(+0x1149)`.
+final _frameOffset = RegExp(r'\(\+0x[0-9A-Fa-f]+\)');
 
 final _mountTargetBefore = RegExp(r'\b(?:dst|target|destination)=$');
+
+/// Whether the word around [start] is a comma-separated key list.
+bool _inKeyList(String text, int start) {
+  var from = start;
+  while (from > 0 && !_tokenBreak(text.codeUnitAt(from - 1))) {
+    from--;
+  }
+  var to = start;
+  while (to < text.length && !_tokenBreak(text.codeUnitAt(to))) {
+    to++;
+  }
+  return text.substring(from, to).contains(',');
+}
 
 final _moduleOffset = RegExp(r'\+0x[0-9A-Fa-f]+$');
 
@@ -442,8 +478,10 @@ bool _opensWord(int unit) =>
 bool _isWebRoute(String text, int start) {
   final window = text.substring(start < 24 ? 0 : start - 24, start);
   if (_requestBefore.hasMatch(window)) return true;
-  // An attribute only inside a tag: Docker's `--mount …,src=/srv/conf` is
-  // a file.
+  // An attribute's quoted value is a route wherever it stands (JSX puts
+  // one per line); an unquoted one only inside a tag, so Docker's
+  // `--mount …,src=/srv/conf` is a file.
+  if (_quotedAttributeBefore.hasMatch(window)) return true;
   if (_attributeBefore.hasMatch(window)) {
     return text.lastIndexOf('<', start) > text.lastIndexOf('>', start);
   }
@@ -453,6 +491,10 @@ bool _isWebRoute(String text, int start) {
 
 final _requestBefore = RegExp(
   r'\b(?:GET|POST|PUT|DELETE|HEAD|PATCH|OPTIONS|CONNECT|TRACE)\s+"?$',
+);
+
+final _quotedAttributeBefore = RegExp(
+  r'\b(?:[Hh][Rr][Ee][Ff]|[Ss][Rr][Cc]|[Aa]ction)=["\x27]$',
 );
 
 final _attributeBefore = RegExp(
@@ -674,7 +716,7 @@ class TerminalContextStack extends ChangeNotifier {
             lines[next],
             text,
             wideNext: wideNext,
-            opening: carried,
+            behindWide: carried,
           );
         }
         next++;
@@ -733,46 +775,37 @@ class TerminalContextStack extends ChangeNotifier {
   /// reads as a space, where xterm's own `getText` drops it and glues the
   /// columns together; the cell behind a wide character is skipped.
   ///
-  /// Two empty cells are not gaps:
-  ///
-  /// * when the next row is this line's wrap and opens with a wide
-  ///   character ([wideNext]), one empty cell at this row's edge is where
-  ///   that character did not fit;
-  /// * xterm's reflow, widening the window, copies a wide character's
-  ///   second cell as an empty cell of its own, so one empty cell right
-  ///   after that second cell, with text after it, is the copy.
-  ///
-  /// Either can sit across the edge, so the row says how it ended
-  /// ([_RowEnd]) and the next one opens from there ([opening]).
-  static _RowEnd _writeRow(
+  /// When the next row is this line's wrap and opens with a wide
+  /// character ([wideNext]), one empty cell at this row's edge is where
+  /// that character did not fit, and is skipped; any other empty cells are
+  /// a gap and stay spaces. A wide character in the last column leaves its
+  /// second cell at the start of the next row; the return says so, for
+  /// [behindWide].
+  static bool _writeRow(
     BufferLine row,
     StringBuffer out, {
     required bool wideNext,
-    _RowEnd opening = _RowEnd.plain,
+    bool behindWide = false,
   }) {
     var end = row.length;
     if (wideNext && end > 0 && row.getCodePoint(end - 1) == 0) end--;
-    var state = opening;
+    var skip = behindWide;
     for (var i = 0; i < end; i++) {
       final codePoint = row.getCodePoint(i);
-      final was = state;
-      state = _RowEnd.plain;
+      if (skip) {
+        skip = false;
+        if (codePoint == 0) continue;
+      }
       if (codePoint == 0) {
-        if (was == _RowEnd.insideWide) {
-          state = _RowEnd.afterWide;
-          continue;
-        }
-        final textFollows = i + 1 < end && row.getCodePoint(i + 1) != 0;
-        if (was == _RowEnd.afterWide && (textFollows || i + 1 == end)) {
-          continue;
-        }
         out.write(' ');
         continue;
       }
       out.writeCharCode(codePoint);
-      if (row.getWidth(i) == 2) state = _RowEnd.insideWide;
+      if (row.getWidth(i) != 2) continue;
+      if (i == row.length - 1) return true;
+      skip = true;
     }
-    return state;
+    return false;
   }
 
   @override
@@ -782,18 +815,4 @@ class TerminalContextStack extends ChangeNotifier {
     _terminal.removeListener(_scheduleScan);
     super.dispose();
   }
-}
-
-/// Where a row's last cell left a wide character, for the row its line
-/// wraps onto.
-enum _RowEnd {
-  /// Not inside or just past one.
-  plain,
-
-  /// On its first cell: the second is the next cell, perhaps the next
-  /// row's first.
-  insideWide,
-
-  /// Just past its second cell, where widening's copy of that cell falls.
-  afterWide,
 }

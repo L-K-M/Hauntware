@@ -198,6 +198,13 @@ void main() {
       ]);
     });
 
+    test('drops git\'s prefix from an added binary', () {
+      expect(_values('Binary files /dev/null and b/img/new.png differ'), [
+        'path:/dev/null',
+        'path:/home/me/project/img/new.png',
+      ]);
+    });
+
     test('drops git\'s prefixes from a binary diff', () {
       expect(
         _values('Binary files a/assets/logo.png and b/assets/logo.png differ'),
@@ -217,8 +224,46 @@ void main() {
       );
     });
 
-    test('drops an ideographic full stop', () {
+    test('ends a path at CJK punctuation wherever it stands', () {
       expect(_values('已保存到 /tmp/a.txt。'), ['path:/tmp/a.txt']);
+      expect(_values('設定 /etc/nginx/nginx.conf。次に再起動します'), [
+        'path:/etc/nginx/nginx.conf',
+      ]);
+      expect(_values('/etc/hosts、/etc/passwd を編集'), [
+        'path:/etc/hosts',
+        'path:/etc/passwd',
+      ]);
+      expect(_values('已保存到 /home/me/报告.txt，请查看'), ['path:/home/me/报告.txt']);
+      expect(_values('保存先：/tmp/a.txt'), ['path:/tmp/a.txt']);
+    });
+
+    test('keeps a glibc frame\'s file and drops a copy\'s cut name', () {
+      expect(_values('./app(+0x1149)[0x55d0]'), ['path:/home/me/project/app']);
+      expect(_values('/srv/build/app(+0x2a1f) [0x5612]'), [
+        'path:/srv/build/app',
+      ]);
+      expect(_values('/home/me/Downloads/report(1).pdf'), isEmpty);
+    });
+
+    test('reads an option\'s target outside a mount', () {
+      expect(_values('pip install --target=/opt/libs requests'), [
+        'path:/opt/libs',
+      ]);
+    });
+
+    test('leaves out a quoted attribute on its own line', () {
+      expect(_values('+        src="/logo.svg"'), isEmpty);
+      expect(_values('  href="/css/app.css"'), isEmpty);
+    });
+
+    test('reads a long dotted name in linear time', () {
+      final watch = Stopwatch()..start();
+      for (var i = 0; i < 20; i++) {
+        _values('lib/x.${'a' * 4000}_');
+      }
+      // The backtracking extension pattern this replaced took about 80 ms
+      // per line.
+      expect(watch.elapsedMilliseconds, lessThan(500));
     });
 
     test('offers the host side of a mount, not the container\'s', () {
@@ -494,6 +539,12 @@ void main() {
         '/srv/lib/new.txt',
         '/srv/lib/aaaaa/bbbbb/ccccc/dd.txt',
       ]);
+    });
+
+    test('reads a tab gap after a wide character as a space', () {
+      terminal.write('/srv/文\tb/c.txt\r\n\$ ');
+      stack.scanNow();
+      expect(values(), ['/srv/b/c.txt', '/srv/文']);
     });
 
     test('reads a line the same after narrowing the window', () {
