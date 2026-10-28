@@ -174,6 +174,28 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('a command sent before the menus stood down still stands '
+      'down under a dialog', (tester) async {
+    await boot(tester);
+    await pumpHost(tester);
+    final context = tester.element(find.byType(Scaffold));
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (_) => const AlertDialog(content: Text('Dialog')),
+      ),
+    );
+    // The dialog is up, but its frame has not published the menus' new
+    // state yet: the native side still shows Hide Sidebar enabled.
+    await tester.pump();
+    await fromNative(tester, 'run', 'toggleSidebar');
+    expect(state!.sidebarVisible, isTrue);
+
+    Navigator.of(context).pop();
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('View ▸ Hide Sidebar and the inspector pages persist', (
     tester,
   ) async {

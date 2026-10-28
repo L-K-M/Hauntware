@@ -457,6 +457,13 @@ class _SnippetEditorState extends State<_SnippetEditor> {
         : existing.copyWith(title: title, body: body, updatedAt: now);
     final state = widget.state;
     await state.saveSnippet(snippet);
+    // An unchanged save leaves nothing for Undo to take back.
+    final unchanged =
+        existing != null && existing.title == title && existing.body == body;
+    if (unchanged) {
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
     final stamps = _RestoreStamps(snippet.updatedAt);
     state.undoHistory.record(
       existing == null

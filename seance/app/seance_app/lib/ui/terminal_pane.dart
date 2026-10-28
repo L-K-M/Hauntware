@@ -43,21 +43,6 @@ import 'top_toast.dart';
 /// terminal to reflow above the soft keyboard; desktops use a hardware keyboard.
 final bool _isTouchPlatform = Platform.isAndroid || Platform.isIOS;
 
-/// Right pane / second screen: the active server's terminal and editor tabs.
-///
-/// A server can have several tabs, shown as a tab strip at the top of the
-/// pane — terminal sessions and built-in text editors side by side. Tabs are
-/// one level *below* the server list: the strip only ever shows the active
-/// server's tabs, so adjacent tabs are always the same server.
-///
-/// Every open tab stays mounted in an [IndexedStack] so switching tabs (or
-/// servers) is instant — the previously-rendered terminal is shown immediately
-/// instead of being rebuilt (which flashed a blank pane for a few seconds),
-/// and an editor keeps its unsaved buffer, caret and scroll position.
-///
-/// In the wide layout the server name and disconnect controls live in the
-/// sidebar, so the app bar is dropped ([showAppBar] false). The narrow layout
-/// keeps a slim bar for back-navigation and the assistant drawer.
 /// What the active tab's terminal view offers the menu bar: its find bar,
 /// its selection and its focus (Edit ▸ Find, Copy). Implemented by the view
 /// itself; see [activeTerminalView].
@@ -95,13 +80,28 @@ final ValueNotifier<TerminalViewCommands?> activeTerminalView = ValueNotifier(
   null,
 );
 
+/// Right pane / second screen: the active server's terminal and editor tabs.
+///
+/// A server can have several tabs, shown as a tab strip at the top of the
+/// pane — terminal sessions and built-in text editors side by side. Tabs are
+/// one level *below* the server list: the strip only ever shows the active
+/// server's tabs, so adjacent tabs are always the same server.
+///
+/// Every open tab stays mounted in an [IndexedStack] so switching tabs (or
+/// servers) is instant — the previously-rendered terminal is shown immediately
+/// instead of being rebuilt (which flashed a blank pane for a few seconds),
+/// and an editor keeps its unsaved buffer, caret and scroll position.
+///
+/// In the wide layout the server name and disconnect controls live in the
+/// sidebar, so the app bar is dropped ([showAppBar] false). The narrow layout
+/// keeps a slim bar for back-navigation and the assistant drawer.
 class TerminalPane extends StatelessWidget {
   final VoidCallback? onBack;
   final bool showAssistantAffordance;
   final bool showAppBar;
 
-  /// Whether the tab strip carries Generate command; false under the macOS
-  /// header ([HeaderToolbar]), which carries it instead.
+  /// Whether the tab strip carries Generate command; false on macOS,
+  /// where the window's toolbar carries it instead.
   final bool showGenerateCommandInStrip;
 
   const TerminalPane({
@@ -1727,34 +1727,38 @@ extension on _SessionViewState {
     final hasSelection = _terminalController.selection != null;
     SingleActivator command(LogicalKeyboardKey key) =>
         SingleActivator(key, meta: true);
+    // The menu answers later: the tab may have closed meanwhile.
+    VoidCallback live(VoidCallback action) => () {
+      if (mounted) action();
+    };
     return showMacContextMenu(at: at, [
       MacMenuItem(
         'Copy',
         shortcut: command(LogicalKeyboardKey.keyC),
-        onSelected: hasSelection ? () => terminalCopy(widget.tab) : null,
+        onSelected: hasSelection
+            ? live(() => terminalCopy(widget.tab))
+            : null,
       ),
       MacMenuItem(
         'Paste',
         shortcut: command(LogicalKeyboardKey.keyV),
-        onSelected: () => unawaited(terminalPaste(widget.tab)),
+        onSelected: live(() => unawaited(terminalPaste(widget.tab))),
       ),
       const MacMenuItem.separator(),
       MacMenuItem(
         'Select All',
         shortcut: command(LogicalKeyboardKey.keyA),
-        onSelected: () => terminalSelectAll(widget.tab),
+        onSelected: live(() => terminalSelectAll(widget.tab)),
       ),
       MacMenuItem(
         'Find…',
         shortcut: command(LogicalKeyboardKey.keyF),
-        onSelected: () {
-          if (mounted) _openFind();
-        },
+        onSelected: live(_openFind),
       ),
       MacMenuItem(
         'Use Selection for Find',
         shortcut: command(LogicalKeyboardKey.keyE),
-        onSelected: hasSelection ? useSelectionForFind : null,
+        onSelected: hasSelection ? live(useSelectionForFind) : null,
       ),
       const MacMenuItem.separator(),
       MacMenuItem(
@@ -1764,14 +1768,12 @@ extension on _SessionViewState {
           meta: true,
           alt: true,
         ),
-        onSelected: clearScrollback,
+        onSelected: live(clearScrollback),
       ),
       const MacMenuItem.separator(),
       MacMenuItem(
         'Keyboard Shortcuts',
-        onSelected: () {
-          if (mounted) unawaited(showKeyboardShortcuts(context));
-        },
+        onSelected: live(() => unawaited(showKeyboardShortcuts(context))),
       ),
     ]);
   }

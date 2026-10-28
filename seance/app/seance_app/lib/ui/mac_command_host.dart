@@ -439,6 +439,10 @@ class _MacCommandHostState extends State<MacCommandHost>
   Future<void> runCommand(AppCommand command) async {
     final state = _state;
     if (state == null || !mounted) return;
+    // The menus show the state of the last published frame. A command can
+    // arrive before the next one, say just after a dialog opened: it runs
+    // only if it is still enabled now.
+    if (!(_states(state)[command]?.enabled ?? false)) return;
     final active = state.activeTab;
     final session = active is TerminalSession ? active : null;
     final server = active == null ? null : state.configFor(active.serverId);

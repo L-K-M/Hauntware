@@ -413,6 +413,20 @@ class SidebarKitScope extends InheritedWidget {
       oldWidget.presentMenu != presentMenu;
 }
 
+/// Whether [present] showed [entries] at [at]. A presenter that fails is
+/// one that did not show, so the kit's own menu opens instead.
+Future<bool> _presented(
+  Future<bool> Function(List<SidebarMenuEntry> entries, Offset at) present,
+  List<SidebarMenuEntry> entries,
+  Offset at,
+) async {
+  try {
+    return await present(entries, at);
+  } catch (_) {
+    return false;
+  }
+}
+
 /// The colour behind the rail's rows (see [SidebarKitScope.background]).
 Color _railBackground(BuildContext context) =>
     SidebarKitScope._scope(context).background ??
@@ -1446,11 +1460,10 @@ class _SidebarRowState extends State<SidebarRow> with _KeyboardFocusRing {
       final at = row.localToGlobal(
         position ?? row.size.bottomLeft(Offset.zero),
       );
-      unawaited(
-        present(_tidy(entries()), at).then((shown) {
-          if (!shown && mounted) _openKitMenu(position, focusFirst);
-        }),
-      );
+      unawaited(() async {
+        final shown = await _presented(present, _tidy(entries()), at);
+        if (!shown && mounted) _openKitMenu(position, focusFirst);
+      }());
       return;
     }
     _openKitMenu(position, focusFirst);
@@ -2254,14 +2267,14 @@ class _SidebarBottomBarState extends State<SidebarBottomBar> {
       _addMenu.isOpen ? _addMenu.close() : _addMenu.open();
       return;
     }
-    unawaited(
-      present(
+    unawaited(() async {
+      final shown = await _presented(
+        present,
         _tidy(entries),
         bar.localToGlobal(bar.size.bottomLeft(Offset.zero)),
-      ).then((shown) {
-        if (!shown && mounted) _addMenu.open();
-      }),
-    );
+      );
+      if (!shown && mounted) _addMenu.open();
+    }());
   }
 
   @override

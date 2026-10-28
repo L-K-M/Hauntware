@@ -1293,6 +1293,48 @@ void main() {
       expect(label.style?.color, scheme.error);
     });
 
+    testWidgets('a host presenter that fails leaves the kit menus', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        Column(
+          children: [
+            SidebarRow(
+              key: const ValueKey('r'),
+              mark: const Icon(Icons.dns_outlined, size: 16),
+              title: 'demo',
+              menuEntries: () => [
+                SidebarMenuAction(label: 'kit-row', onSelected: () {}),
+              ],
+            ),
+            SidebarBottomBar(
+              addKey: const ValueKey('add'),
+              addEntries: () => [
+                SidebarMenuAction(label: 'kit-new', onSelected: () {}),
+              ],
+              onSettings: () {},
+            ),
+          ],
+        ),
+        presentMenu: (entries, at) async => throw StateError('no native menu'),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('r')),
+        buttons: kSecondaryMouseButton,
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('kit-row'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('add')));
+      await tester.pumpAndSettle();
+      expect(find.text('kit-new'), findsOneWidget);
+    });
+
     testWidgets('a host presenter opens the + menu under the bar, as a '
         'pull-down opens under its button', (tester) async {
       final anchors = <Offset>[];

@@ -355,7 +355,7 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
       );
     } else if (_state == null) {
       home = const Scaffold(body: Center(child: CircularProgressIndicator()));
-    } else if (Platform.isMacOS) {
+    } else if (!kIsWeb && Platform.isMacOS) {
       // The menu bar, toolbar and Dock menu run the app's commands.
       home = const AppMenus(child: MacCommandHost(child: AdaptiveShell()));
     } else {

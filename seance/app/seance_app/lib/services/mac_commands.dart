@@ -129,7 +129,9 @@ final class MacCommandBridge {
   final Map<AppCommand, CommandState> _published = {};
   List<DockServer>? _publishedDock;
   (String, String)? _publishedTitle;
-  String? _publishedBadge;
+
+  /// The Dock starts with no badge; null after a failed send.
+  ({String? label})? _publishedBadge = (label: null);
 
   /// Starts answering the native side; null stops it.
   set handler(MacCommandHandler? handler) {
@@ -190,11 +192,12 @@ final class MacCommandBridge {
 
   /// The Dock icon's badge: [label], or none for null.
   Future<void> setDockBadge(String? label) async {
-    if (label == _publishedBadge) return;
-    _publishedBadge = label;
+    if (_publishedBadge == (label: label)) return;
+    _publishedBadge = (label: label);
     try {
       await _channel.invokeMethod<void>('setDockBadge', label);
     } catch (error) {
+      _publishedBadge = null;
       debugPrint('Dock badge not set: $error');
     }
   }

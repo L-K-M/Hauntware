@@ -97,9 +97,12 @@ Future<void> duplicateServerInteractively(
     // Checked again inside the closure, not only before showing the toast:
     // the action fires whenever the user taps it, which can be after this
     // pane is gone, and a defunct context reaches showDialog as an ancestor
-    // lookup on a deactivated widget.
+    // lookup on a deactivated widget. The copy is the latest one, as stored:
+    // Undo may have removed it, and Redo made another.
     onAction: () {
-      if (context.mounted) showServerEditor(context, state, copy);
+      final current = state.configFor(latest.id);
+      if (current == null || !context.mounted) return;
+      showServerEditor(context, state, current);
     },
   );
 }
