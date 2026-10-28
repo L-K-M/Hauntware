@@ -253,7 +253,8 @@ class RemoteFilesController extends ChangeNotifier {
     }
     final opening = navigate(remoteParent(absolute));
     // A newer navigation (the shell moving, followed) takes the listing
-    // over; the selection belongs to this one.
+    // over; the selection belongs to this one. navigate numbers itself
+    // before its first await, so this reads its own generation.
     final generation = _navigationGeneration;
     await opening;
     _requireOpen();

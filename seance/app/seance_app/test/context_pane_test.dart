@@ -91,6 +91,17 @@ void main() {
     return (session, sent);
   }
 
+  /// Lets Open's file checks run: each one completes on the real event
+  /// loop and continues in the test's fake one, so they alternate.
+  Future<void> settleFileChecks(WidgetTester tester) async {
+    for (var i = 0; i < 5; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+    }
+  }
+
   Future<List<String>> menuFor(WidgetTester tester, String label) async {
     final row = find.ancestor(
       of: find.text(label),
@@ -185,15 +196,38 @@ void main() {
     await menuFor(tester, program);
     await tester.tap(find.text('Open').last);
     await tester.pumpAndSettle();
-    // The file's mode is read on the real event loop.
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 100)),
-    );
-    await tester.pump();
+    await settleFileChecks(tester);
     // The toast slides in.
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.textContaining('could run as a program'), findsOneWidget);
     // Let the toast time out.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('Open judges a symbolic link by what it points to', (
+    tester,
+  ) async {
+    late final String link;
+    await tester.runAsync(() async {
+      final folder = await Directory.systemTemp.createTemp('seance-link-');
+      addTearDown(() => folder.delete(recursive: true));
+      // A launchable target behind a document's name, mode 644.
+      await File('${folder.path}/tool.jar').writeAsString('PK');
+      link = '${folder.path}/notes.md';
+      await Link(link).create('${folder.path}/tool.jar');
+    });
+    await pumpPane(tester, output: '$link\r\n\$ ');
+
+    await menuFor(tester, link);
+    await tester.tap(find.text('Open').last);
+    await tester.pumpAndSettle();
+    await settleFileChecks(tester);
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(
+      find.textContaining('“tool.jar” could run as a program'),
+      findsOneWidget,
+    );
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
   });

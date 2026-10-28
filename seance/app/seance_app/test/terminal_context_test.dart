@@ -128,6 +128,8 @@ void main() {
       expect(_values(' .../services/terminal_context.dart | 345 +++'), isEmpty);
       expect(_values('"/docker-entrypoint.…"   Up 2 hours'), isEmpty);
       expect(_values('see https://example.com/… now'), isEmpty);
+      expect(_values('tail /var/log/app... (truncated)'), isEmpty);
+      expect(_values('docs at https://... soon'), isEmpty);
     });
 
     test('reads a comma-separated list as its files', () {
@@ -140,10 +142,50 @@ void main() {
 
     test('leaves out another host\'s paths', () {
       expect(_values('origin  git@github.com:org/repo.git (fetch)'), isEmpty);
-      expect(_values('rsync -av src/ host:/var/www/'), [
+      expect(_values('rsync -av src/ backup.example.com:/var/www/'), [
         'path:/home/me/project/src',
       ]);
+      expect(_values('dir C:/Users/me'), isEmpty);
       expect(_values('scp me@host:/etc/hosts .'), isEmpty);
+    });
+
+    test('reads every entry of a path list, and paths after a message', () {
+      expect(_values('CLASSPATH=.:/usr/share/java/junit.jar'), [
+        'path:/usr/share/java/junit.jar',
+      ]);
+      expect(_values('PATH=bin:/usr/local/bin:/usr/bin'), [
+        'path:/usr/local/bin',
+        'path:/usr/bin',
+      ]);
+      expect(_values('java -cp app.jar:lib/dep.jar Main'), [
+        'path:/home/me/project/lib/dep.jar',
+      ]);
+      expect(_values('Error:/x/y.txt'), ['path:/x/y.txt']);
+    });
+
+    test('reads a path before a comment', () {
+      expect(_values('source ~/.cargo/env # rust', home: '/home/me'), [
+        'path:/home/me/.cargo/env',
+      ]);
+      expect(_values('node_modules/ # deps'), [
+        'path:/home/me/project/node_modules',
+      ]);
+      expect(_values('[root@host /etc]# ls'), isEmpty);
+    });
+
+    test('does not offer a value the line limit cut', () {
+      final pad = 'x' * (contextLineLimit - 30);
+      expect(
+        _values('$pad https://example.com/some/long/path/here.html'),
+        isEmpty,
+      );
+      expect(_values('$pad /home/me/project/build/main.cpp.o'), isEmpty);
+    });
+
+    test('keeps an apostrophe inside a name', () {
+      expect(_values('~/Documents/Dad’s_taxes.pdf', home: '/home/me'), [
+        'path:/home/me/Documents/Dad’s_taxes.pdf',
+      ]);
     });
 
     test('reads paths in curly quotes', () {
@@ -170,7 +212,9 @@ void main() {
       _values('https://a.b/${'.' * 32000}x');
       _values('/a${'.' * 16000}x');
       _values('x /etc/a.txt ' * 40000);
-      expect(watch.elapsedMilliseconds, lessThan(1000));
+      // The quadratic trimming this replaced took seconds per line; the
+      // bound only has to catch that, not time a busy CI runner.
+      expect(watch.elapsedMilliseconds, lessThan(5000));
     });
 
     test('leaves out the root, comments and sentence punctuation', () {
@@ -225,6 +269,22 @@ void main() {
       expect(values(), ['/srv/build', '/srv/lib/main.dart']);
     });
 
+    test('reads a wide character at the edge of a wrapped row', () {
+      terminal.resize(20, 10);
+      terminal.write('cat /srv/abcdefghij北京/notes.txt\r\n\$ ');
+      stack.scanNow();
+      expect(values(), ['/srv/abcdefghij北京/notes.txt']);
+    });
+
+    test('reads a line the same after narrowing the window', () {
+      terminal.resize(40, 10);
+      terminal.write('cat /srv/abcdefghij北京/notes.txt\r\n\$ ');
+      stack.scanNow();
+      terminal.resize(20, 10);
+      stack.scanNow();
+      expect(values(), ['/srv/abcdefghij北京/notes.txt']);
+    });
+
     test('ignores the alternate screen', () {
       terminal.write('\x1b[?1049h/etc/hosts\r\n');
       stack.scanNow();
@@ -257,7 +317,10 @@ void main() {
       }
       stack.scanNow();
       expect(stack.items, hasLength(TerminalContextStack.capacity));
-      expect(stack.items.first.value, '/f59.txt');
+      expect(
+        stack.items.first.value,
+        '/f${TerminalContextStack.capacity + 9}.txt',
+      );
     });
 
     test('resolves relative paths where the shell was', () {
@@ -276,10 +339,10 @@ void main() {
         workingDirectory: cwd,
       );
       addTearDown(own.dispose);
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(TerminalContextStack.scanDelay);
       terminal.write('/etc/hosts\r\n');
       expect(own.items, isEmpty);
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(TerminalContextStack.scanDelay);
       expect([for (final item in own.items) item.value], ['/etc/hosts']);
     });
   });

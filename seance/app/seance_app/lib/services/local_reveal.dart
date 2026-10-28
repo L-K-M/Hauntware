@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:open_file/open_file.dart';
@@ -38,6 +39,11 @@ class LocalFileReveal {
     if (opened.type != ResultType.done) throw StateError(opened.message);
   }
 
+  /// How long the session bus may take to answer before the folder is
+  /// opened instead: a bus that accepts the call and never replies (after a
+  /// resume, a wedged file manager) must not hang the action.
+  static const _busTimeout = Duration(seconds: 5);
+
   /// The freedesktop `ShowItems` call, which selects the item in its folder.
   static Future<bool> _showItems(String path) async {
     try {
@@ -52,8 +58,10 @@ class LocalFileReveal {
         // one escaped instead.
         "array:string:${Uri.file(path).toString().replaceAll(',', '%2C')}",
         'string:',
-      ]);
+      ]).timeout(_busTimeout);
       return result.exitCode == 0;
+    } on TimeoutException {
+      return false;
     } on ProcessException {
       return false;
     }

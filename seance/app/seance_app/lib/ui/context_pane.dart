@@ -212,16 +212,25 @@ class _ContextList extends StatelessWidget {
   /// it. The name check (`ExternalFileOpener`) knows extensions; a program
   /// without one (`/usr/bin/ls`, a script with its execute bit) is caught
   /// by its mode instead, since macOS's `open` runs it in Terminal.
+  ///
+  /// A symbolic link is followed first and its target is what is checked
+  /// and opened: the system opens the target, so a link named `notes.md`
+  /// to a `.app` or `.terminal` must be judged by the target's name.
   static Future<void> _openLocal(String path) async {
-    final stat = await FileStat.stat(path);
-    if (stat.type == FileSystemEntityType.notFound) {
+    if (await FileSystemEntity.type(path) == FileSystemEntityType.notFound) {
       throw StateError('$path does not exist on this computer.');
     }
-    if (stat.type == FileSystemEntityType.file && stat.mode & 0x49 != 0) {
-      throw ExecutableLaunchRefused(path);
+    final target = await File(path).resolveSymbolicLinks();
+    final stat = await FileStat.stat(target);
+    if (stat.type == FileSystemEntityType.file &&
+        stat.mode & _anyExecuteBit != 0) {
+      throw ExecutableLaunchRefused(target);
     }
-    await const ExternalFileOpener().openSystemDefault(path);
+    await const ExternalFileOpener().openSystemDefault(target);
   }
+
+  /// The owner, group and other execute bits (`0o111`).
+  static const _anyExecuteBit = 0x49;
 
   /// Types the item at the prompt as one shell word, without Enter: a link's
   /// `&` or a path's space must not split it or start a second command.
