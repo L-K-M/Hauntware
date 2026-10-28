@@ -77,7 +77,11 @@ List<ContextItem> detectContextItems(
   final masked = StringBuffer();
   var last = 0;
   for (final match in _urlPattern.allMatches(text)) {
-    final raw = _trimUrl(match[0]!);
+    // A Markdown link whose text is the link: `[https://x](https://x)`.
+    var span = match[0]!;
+    final markdown = span.indexOf('](');
+    if (markdown >= 0) span = span.substring(0, markdown);
+    final raw = _trimUrl(span);
     final uri = Uri.tryParse(raw);
     if ((cut == null || match.end < cut) &&
         uri != null &&
@@ -120,19 +124,43 @@ List<ContextItem> detectContextItems(
 /// http and https only: they are the schemes the tab can open
 /// (`openWebLink`), and the only ones safe to hand the system from output
 /// a server wrote.
-final _urlPattern = RegExp(r'''https?://[^\s<>"'`{}|\\^‘’“”…]+''');
+final _urlPattern = RegExp(r'''https?://[^\s<>"'`{}|\\^‘’“”…，。；！？、（）「」『』]+''');
 
 /// The punctuation a sentence or a quote puts after a path.
 const _pathTrailing = '.,!?’';
 
 /// Characters that end a path in running text. A colon ends one too, so
 /// `PATH=/a:/b` reads as two paths and `file.dart:12:5` as a location, and
-/// so does a comma, so a list of files reads as its files; so does CJK
-/// prose's punctuation, which no space follows (`/etc/hosts。次に…`). A
-/// closing curly single quote does not: it is an apostrophe in a name too
-/// (`Dad’s_taxes.pdf`), and ends a path only one an opening quote started,
-/// or the path's end.
-const _pathChars = r'''[^\s'"`<>|;:,(){}\[\]‘“”…。、，；：！？「」『』（）]''';
+/// so does a comma, so a list of files reads as its files, CJK's list
+/// marks (`/etc/hosts、/etc/passwd`) included. Other CJK punctuation is in
+/// names as often as after them (`旅行（京都）/`, `報告書（1）.pdf`), so
+/// [_cutAtProse] decides where it ends a path. A closing curly single quote
+/// does not: it is an apostrophe in a name too (`Dad’s_taxes.pdf`), and
+/// ends a path only one an opening quote started, or the path's end.
+const _pathChars = r'''[^\s'"`<>|;:,(){}\[\]‘“”…、，；]''';
+
+/// CJK punctuation that is in a name or after one: `。：！？「」『』（）`.
+final _cjkPunctuation = RegExp('[。：！？「」『』（）]');
+
+/// [body] cut at the first CJK punctuation that prose follows rather than
+/// the rest of a name. What follows is a name's when it holds a `/`
+/// (`旅行（京都）/IMG.jpg`, `君の名は。/夢灯籠.m4a`) or ends in an extension
+/// (`報告書（1）.pdf`); otherwise it is the sentence going on, which CJK
+/// writes without a space (`/etc/hosts（設定ファイル）を編集しました`).
+String _cutAtProse(String body) {
+  var from = 0;
+  while (true) {
+    final mark = _cjkPunctuation.firstMatch(body.substring(from));
+    if (mark == null) return body;
+    final at = from + mark.start;
+    final rest = body.substring(at + 1);
+    final named =
+        rest.isNotEmpty &&
+        (rest.contains('/') || _hasExtension(rest.split('/').last));
+    if (!named) return body.substring(0, at);
+    from = at + 1;
+  }
+}
 
 /// The curly quote that closes a path each opening one started.
 const _closingQuote = {'‘': '’', '“': '”'};
@@ -224,6 +252,11 @@ ContextItem? _pathItem(
       body = body.substring(0, close);
       end = match.start + close;
     }
+  }
+  final prose = _cutAtProse(body);
+  if (prose.length != body.length) {
+    body = prose;
+    end = match.start + prose.length;
   }
   final after = text.substring(end);
   // A prompt's directory (`me@host:~/src$`, `root@host:/etc#`) is where the

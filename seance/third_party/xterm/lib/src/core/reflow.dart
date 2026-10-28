@@ -71,8 +71,16 @@ class _LineReflow {
     // gap after the character. The row holds [oldWidth] cells at most.
     final trimmedLength = min(line.getTrimmedLength(oldWidth), oldWidth);
 
-    // A fast path for empty lines
     if (trimmedLength == 0) {
+      // A row of a line that has content pending (the row that holds only
+      // the second cell of a wide character that ended the line in the
+      // last column) is not a line of its own: taken as one, it would
+      // land before that content. Its anchors go along and the row goes.
+      if (_lines.isNotEmpty || _builder.isNotEmpty) {
+        _addPart(line, from: 0, to: 0);
+        return;
+      }
+      // A fast path for empty lines
       _lines.add(line);
       return;
     }
@@ -126,8 +134,12 @@ class _LineReflow {
         lineFilled = true;
       }
 
-      // Leave the last cell to the next iteration if it's a wide char.
-      if (lineFilled && line.getWidth(from + cellsToCopy - 1) == 2) {
+      // Leave the last cell to the next iteration if it's a wide char. A
+      // row one cell wide never has room for one, so it takes the cell
+      // anyway: leaving it would fill a row with nothing, forever.
+      if (lineFilled &&
+          newWidth > 1 &&
+          line.getWidth(from + cellsToCopy - 1) == 2) {
         cellsToCopy--;
       }
 

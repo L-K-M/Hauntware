@@ -65,11 +65,61 @@ void main() {
     final line = terminal.buffer.lines[0];
     final cells = [
       for (var i = 0; i < 10; i++)
-        line.getCodePoint(i) == 0 ? '_' : String.fromCharCode(line.getCodePoint(i)),
+        line.getCodePoint(i) == 0
+            ? '_'
+            : String.fromCharCode(line.getCodePoint(i)),
     ];
     // No empty copy of the second cell between the characters.
     expect(cells.join(), 'abc文_档_报_x');
   });
+
+  /// The text of the logical line starting at row 0: its rows, wrapped
+  /// ones joined, with a wide character's second cell left out.
+  String firstLine(Terminal terminal) {
+    final lines = terminal.buffer.lines;
+    final text = StringBuffer(lines[0].getText());
+    for (var row = 1; row < lines.length && lines[row].isWrapped; row++) {
+      text.write(lines[row].getText());
+    }
+    return text.toString();
+  }
+
+  for (final (text, from, to) in [
+    ('/srv报/abc报', 11, 6),
+    ('Saved  /home/me/projects/会议记录/二零二六年十月', 47, 24),
+    ('Saved  /home/me/projects/会议记录/二零二六年十月', 47, 34),
+    ('Saved /home/me/docs/文档/报告', 14, 16),
+  ]) {
+    test(
+        'reflow() keeps a line ending in a wide character at the edge '
+        'whole ($from -> $to)', () {
+      final terminal = Terminal();
+      terminal.resize(from, 10);
+      terminal.write(text);
+      terminal.resize(to, 10);
+
+      expect(firstLine(terminal), text);
+      // No empty row inside the line: read cell by cell, one would be a
+      // gap in the text.
+      final lines = terminal.buffer.lines;
+      for (var row = 1; row < lines.length && lines[row].isWrapped; row++) {
+        expect(lines[row].getTrimmedLength(), isPositive, reason: 'row $row');
+      }
+    });
+  }
+
+  test('reflow() to one column with a wide character finishes', () {
+    final terminal = Terminal();
+    terminal.resize(49, 6);
+    terminal.write('文\r\n');
+    terminal.resize(1, 7);
+
+    final lines = terminal.buffer.lines;
+    expect(
+      [for (var i = 0; i < lines.length; i++) lines[i].getCodePoint(0)],
+      contains('文'.runes.single),
+    );
+  }, timeout: const Timeout(Duration(seconds: 10)));
 
   test('reflow() can reflow wide characters', () {
     final terminal = Terminal();

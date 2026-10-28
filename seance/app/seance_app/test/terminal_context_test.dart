@@ -235,6 +235,32 @@ void main() {
       ]);
       expect(_values('已保存到 /home/me/报告.txt，请查看'), ['path:/home/me/报告.txt']);
       expect(_values('保存先：/tmp/a.txt'), ['path:/tmp/a.txt']);
+      expect(_values('/etc/hosts（設定ファイル）を編集しました。'), ['path:/etc/hosts']);
+      expect(_values('bash: /usr/bin/foo：权限不够'), ['path:/usr/bin/foo']);
+    });
+
+    test('keeps CJK punctuation inside a name', () {
+      for (final (line, path) in [
+        ('/srv/photos/旅行（京都）/IMG_0001.jpg', '/srv/photos/旅行（京都）/IMG_0001.jpg'),
+        ('/Users/me/Downloads/「企画書」.docx', '/Users/me/Downloads/「企画書」.docx'),
+        ('~/Documents/報告書（1）.pdf', '/home/me/Documents/報告書（1）.pdf'),
+        ('/home/me/music/君の名は。/夢灯籠.m4a', '/home/me/music/君の名は。/夢灯籠.m4a'),
+        ('/home/me/下载/新建文件夹（2）/a.txt', '/home/me/下载/新建文件夹（2）/a.txt'),
+      ]) {
+        expect(_values(line, home: '/home/me'), ['path:$path'], reason: line);
+      }
+    });
+
+    test('ends a link at CJK punctuation and Markdown\'s link syntax', () {
+      expect(_values('下载地址：https://example.com/file.zip，请查收'), [
+        'url:https://example.com/file.zip',
+      ]);
+      expect(_values('详情见 https://example.com/docs。谢谢'), [
+        'url:https://example.com/docs',
+      ]);
+      expect(_values('[https://example.com/docs](https://example.com/docs)'), [
+        'url:https://example.com/docs',
+      ]);
     });
 
     test('keeps a glibc frame\'s file and drops a copy\'s cut name', () {
