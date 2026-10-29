@@ -145,6 +145,17 @@ abstract interface class BookmarkStore extends BookmarkRepository {
   /// [SyncTrackingBookmarkStore.applySyncedRecords] instead.
   Future<Bookmark> save(Bookmark bookmark);
 
+  /// Changes only the live row's label, inside the serialized write.
+  Future<Bookmark> rename(String id, String label);
+
+  /// Restores grouping and order without replacing another window's
+  /// edits to the live row. Refuses a row that was deleted meanwhile.
+  Future<Bookmark> restorePosition(
+    String id, {
+    required String? group,
+    required String sortKey,
+  });
+
   /// Removes the bookmark with [id]; emits [BookmarkRemovedChange].
   /// Returns whether a row existed.
   Future<bool> remove(String id);
@@ -345,6 +356,54 @@ final class FileBookmarkStore implements SyncTrackingBookmarkStore {
       },
     );
     return next[stamped.id]!;
+  }
+
+  @override
+  Future<Bookmark> rename(String id, String label) =>
+      _editExisting(id, (current) => _copyBookmark(current, label: label));
+
+  @override
+  Future<Bookmark> restorePosition(
+    String id, {
+    required String? group,
+    required String sortKey,
+  }) {
+    final target = normalizeServerGroup(group);
+    return _editExisting(
+      id,
+      (current) => _copyBookmark(
+        current,
+        group: target,
+        clearGroup: target == null,
+        sortKey: sortKey,
+      ),
+    );
+  }
+
+  Future<Bookmark> _editExisting(
+    String id,
+    Bookmark Function(Bookmark current) edit,
+  ) async {
+    await _ensureLoaded();
+    final stamp = _now().toUtc();
+    late Bookmark changed;
+    final next = await _writeNext(
+      (next) {
+        final current = next[id];
+        if (current == null) {
+          throw ArgumentError.value(id, 'id', 'unknown bookmark');
+        }
+        changed = _copyBookmark(edit(current), updatedAt: stamp);
+        _checkPayloadSize(changed);
+        next[id] = changed;
+      },
+      changes: (next) => [BookmarkSavedChange(next[id]!)],
+      syncEdit: (tuples) {
+        final tuple = _localTuple(changed.updatedAt);
+        if (tuple != null) tuples[id] = tuple;
+      },
+    );
+    return next[id]!;
   }
 
   @override
@@ -840,6 +899,7 @@ final class FileBookmarkStore implements SyncTrackingBookmarkStore {
 /// `group: null` cannot mean "clear it" on its own.
 Bookmark _copyBookmark(
   Bookmark source, {
+  String? label,
   String? group,
   bool clearGroup = false,
   String? sortKey,
@@ -847,7 +907,7 @@ Bookmark _copyBookmark(
 }) => Bookmark(
   id: source.id,
   kind: source.kind,
-  label: source.label,
+  label: label ?? source.label,
   group: clearGroup ? null : (group ?? source.group),
   color: source.color,
   icon: source.icon,

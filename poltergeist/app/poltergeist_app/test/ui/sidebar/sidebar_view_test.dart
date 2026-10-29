@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostUndoDeclined, GhostUndoHistory;
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/application_error_reporter.dart';
 import 'package:poltergeist_app/services/connection_state_bridge.dart';
@@ -192,6 +194,7 @@ void main() {
     PinnedServerWriter? onPinnedChanged,
     RegisteredCommand Function(Bookmark bookmark)? bookmarkTerminalCommand,
     Future<void> Function(RegisteredCommand command)? onRunCommand,
+    GhostUndoHistory? undoHistory,
   }) async {
     // Wider than the rail: the drop tests park a drag source beside it,
     // and a context menu needs room to open where it was asked.
@@ -234,6 +237,7 @@ void main() {
 
     final sidebar = SidebarView(
       controller: controller,
+      undoHistory: undoHistory,
       connections: connections,
       onOpenFavorite: withOpen
           ? (bookmark, action) => opens.add((bookmark, action))
@@ -978,21 +982,249 @@ void main() {
       expect(find.text('renamed'), findsOneWidget);
     });
 
-    testWidgets('delete confirms then removes and cascades', (tester) async {
+    testWidgets('delete removes at once, toasts, and Undo restores', (
+      tester,
+    ) async {
       store.bookmarks = [_remote('r1'), _remote('r2')];
-      await pumpSidebar(tester);
+      final history = GhostUndoHistory();
+      addTearDown(history.dispose);
+      final controller = await pumpSidebar(tester, undoHistory: history);
 
       await openMenu(tester, 'r1');
       await tester.tap(find.byKey(const ValueKey('sidebar.menu.delete')));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('label-r1'), findsWidgets);
-      await tester.tap(find.byKey(const ValueKey('sidebar.deleteConfirm')));
-      await tester.pumpAndSettle();
-
+      // No confirmation: the row is already gone, the cascade ran, and
+      // the toast names what went with an Undo action.
       expect(store.bookmarks.map((bookmark) => bookmark.id), ['r2']);
       expect(removedIds, ['r1']);
       expect(find.byKey(const ValueKey('sidebar.favorite.r1')), findsNothing);
+      expect(find.text('Deleted “label-r1”'), findsOneWidget);
+      expect(history.undoName, 'Remove Server');
+
+      // The toast's Undo puts the record back verbatim.
+      await tester.tap(find.widgetWithText(TextButton, 'Undo'));
+      await tester.pumpAndSettle();
+      expect(
+        store.bookmarks.singleWhere((bookmark) => bookmark.id == 'r1').label,
+        'label-r1',
+      );
+      expect(find.byKey(const ValueKey('sidebar.favorite.r1')), findsOneWidget);
+
+      // Redo removes it again through the same cascade.
+      await history.redo();
+      await tester.pumpAndSettle();
+      expect(store.bookmarks.map((bookmark) => bookmark.id), ['r2']);
+      expect(removedIds, ['r1', 'r1']);
+      expect(controller.isPinned('r1'), isFalse);
+    });
+
+    testWidgets('toast Undo reports a failed favorite restore', (tester) async {
+      store.bookmarks = [_remote('r1'), _remote('r2')];
+      final history = GhostUndoHistory();
+      addTearDown(history.dispose);
+      await pumpSidebar(tester, undoHistory: history);
+      await openMenu(tester, 'r1');
+      await tester.tap(find.byKey(const ValueKey('sidebar.menu.delete')));
+      await tester.pumpAndSettle();
+
+      store.saveFailure = StateError('disk full');
+      await tester.tap(find.widgetWithText(TextButton, 'Undo'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Couldn’t undo “Remove Server”:'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      expect(store.bookmarks.map((bookmark) => bookmark.id), ['r2']);
+    });
+
+    testWidgets('delete undo restores the pin the removal dropped', (
+      tester,
+    ) async {
+      store.bookmarks = [_remote('r1'), _remote('r2')];
+      final pins = FakeStoredIdSet();
+      final history = GhostUndoHistory();
+      addTearDown(history.dispose);
+      final controller = await pumpSidebar(
+        tester,
+        pinned: {'r1'},
+        onPinnedChanged: pins.pin,
+        undoHistory: history,
+      );
+      expect(controller.isPinned('r1'), isTrue);
+
+      await openMenu(tester, 'r1');
+      await tester.tap(find.byKey(const ValueKey('sidebar.menu.delete')));
+      await tester.pumpAndSettle();
+      expect(controller.isPinned('r1'), isFalse);
+
+      await history.undo();
+      await tester.pumpAndSettle();
+      expect(controller.isPinned('r1'), isTrue);
+      expect(pins.writes.last, {'r1'});
+    });
+
+    testWidgets('rename, move and pin record one undoable change each', (
+      tester,
+    ) async {
+      store.bookmarks = [
+        _remote('a', group: 'work', sortKey: 'ma'),
+        _remote('b', group: 'home', sortKey: 'mb'),
+      ];
+      final pins = FakeStoredIdSet();
+      final history = GhostUndoHistory();
+      addTearDown(history.dispose);
+      final controller = await pumpSidebar(
+        tester,
+        onPinnedChanged: pins.pin,
+        undoHistory: history,
+      );
+      Bookmark byId(String id) =>
+          store.bookmarks.singleWhere((bookmark) => bookmark.id == id);
+      final beforeRename = byId('a');
+
+      await openMenu(tester, 'a');
+      await tester.tap(find.byKey(const ValueKey('sidebar.menu.rename')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('sidebar.renameField')),
+        'renamed',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('sidebar.renameSave')));
+      await tester.pumpAndSettle();
+      expect(history.undoName, 'Rename Server');
+
+      await openMenu(tester, 'a');
+      await tester.tap(find.byKey(const ValueKey('sidebar.menu.moveToGroup')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'home'));
+      await tester.pumpAndSettle();
+      expect(byId('a').group, 'home');
+      expect(history.undoName, 'Move to Group');
+
+      await openMenu(tester, 'a');
+      await tester.tap(find.text('Pin to top'));
+      await tester.pumpAndSettle();
+      expect(controller.isPinned('a'), isTrue);
+      expect(history.undoName, 'Pin to top');
+
+      // Unpin is a change of its own; undo it.
+      await history.undo();
+      await tester.pumpAndSettle();
+      expect(controller.isPinned('a'), isFalse);
+      expect(history.undoName, 'Move to Group');
+
+      // The move lands 'a' back in 'work'.
+      await history.undo();
+      await tester.pumpAndSettle();
+      expect(byId('a').group, 'work');
+      expect(history.undoName, 'Rename Server');
+
+      // The rename restores the captured row verbatim.
+      await history.undo();
+      await tester.pumpAndSettle();
+      expect(byId('a').label, beforeRename.label);
+      expect(byId('a').group, beforeRename.group);
+      expect(history.undoName, isNull);
+
+      // And every step redoes.
+      await history.redo();
+      await history.redo();
+      await history.redo();
+      await tester.pumpAndSettle();
+      expect(byId('a').label, 'renamed');
+      expect(byId('a').group, 'home');
+      expect(controller.isPinned('a'), isTrue);
+    });
+
+    testWidgets('rename Undo preserves another window’s placement', (
+      tester,
+    ) async {
+      store.bookmarks = [_remote('a', group: 'work', sortKey: 'ma')];
+      final history = GhostUndoHistory();
+      addTearDown(history.dispose);
+      await pumpSidebar(tester, undoHistory: history);
+      await openMenu(tester, 'a');
+      await tester.tap(find.byKey(const ValueKey('sidebar.menu.rename')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('sidebar.renameField')),
+        'renamed',
+      );
+      await tester.tap(find.byKey(const ValueKey('sidebar.renameSave')));
+      await tester.pumpAndSettle();
+
+      final moved = await store.moveToGroup('a', 'other window');
+      await history.undo();
+      final undone = (await store.byId('a'))!;
+      expect(undone.label, 'label-a');
+      expect(undone.group, moved.group);
+      expect(undone.sortKey, moved.sortKey);
+      await history.redo();
+      final redone = (await store.byId('a'))!;
+      expect(redone.label, 'renamed');
+      expect(redone.group, moved.group);
+    });
+
+    testWidgets('placement Undo preserves another window’s label', (
+      tester,
+    ) async {
+      store.bookmarks = [
+        _remote('a', group: 'work', sortKey: 'ma'),
+        _remote('b', group: 'home', sortKey: 'mb'),
+      ];
+      final history = GhostUndoHistory();
+      addTearDown(history.dispose);
+      await pumpSidebar(tester, undoHistory: history);
+      await openMenu(tester, 'a');
+      await tester.tap(find.byKey(const ValueKey('sidebar.menu.moveToGroup')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'home'));
+      await tester.pumpAndSettle();
+      final other = SidebarController(store: store);
+      addTearDown(other.dispose);
+      await other.rename('a', 'other window’s label');
+
+      await history.undo();
+      final undone = (await store.byId('a'))!;
+      expect(undone.group, 'work');
+      expect(undone.sortKey, 'ma');
+      expect(undone.label, 'other window’s label');
+      await history.redo();
+      final redone = (await store.byId('a'))!;
+      expect(redone.group, 'home');
+      expect(redone.label, 'other window’s label');
+    });
+
+    testWidgets('a rename undo declines once the record is gone', (
+      tester,
+    ) async {
+      store.bookmarks = [_remote('a'), _remote('b')];
+      final history = GhostUndoHistory();
+      addTearDown(history.dispose);
+      final controller = await pumpSidebar(tester, undoHistory: history);
+
+      await openMenu(tester, 'a');
+      await tester.tap(find.byKey(const ValueKey('sidebar.menu.rename')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('sidebar.renameField')),
+        'renamed',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('sidebar.renameSave')));
+      await tester.pumpAndSettle();
+      expect(history.undoName, 'Rename Server');
+
+      // The record leaves by a path the history never saw — another
+      // window's delete lands through the shared store the same way.
+      await controller.remove('a');
+      await tester.pumpAndSettle();
+
+      // Undo cannot resurrect it: the step declines and keeps its place.
+      expect(history.undo(), throwsA(isA<GhostUndoDeclined>()));
+      await tester.pumpAndSettle();
+      expect(store.bookmarks.map((bookmark) => bookmark.id), ['b']);
+      expect(history.undoName, 'Rename Server');
     });
 
     testWidgets('the Move to Group submenu refiles through the store', (

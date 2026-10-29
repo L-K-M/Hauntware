@@ -227,6 +227,7 @@ _DropPlan? _reorderPlan(
   double fraction, {
   required Bookmark target,
   required String? group,
+  required AppLocalizations l10n,
   required bool Function(Bookmark bookmark) accepts,
 }) {
   if (data is! Bookmark || data.id == target.id || !accepts(data)) {
@@ -240,6 +241,8 @@ _DropPlan? _reorderPlan(
         view,
         data,
         group,
+        name: l10n.sidebarReorder,
+        l10n: l10n,
         beforeId: before ? null : target.id,
         afterId: before ? target.id : null,
       ),
@@ -253,33 +256,65 @@ _DropPlan? _regroupPlan(
   SidebarView view,
   Object data, {
   required String? group,
+  required AppLocalizations l10n,
   required bool Function(Bookmark bookmark) accepts,
 }) {
   if (data is! Bookmark || data.id.isEmpty || !accepts(data)) return null;
   return _DropPlan(
     SidebarDropIndicator.into,
-    () => unawaited(_dropBookmark(view, data, group)),
+    () => unawaited(
+      _dropBookmark(view, data, group, name: l10n.sidebarMoveToGroup, l10n: l10n),
+    ),
   );
 }
 
-/// The store move both bookmark targets resolve to.
+/// The store move both bookmark targets resolve to — undoable as one
+/// change: Undo lands the record back at its captured position, Redo
+/// replays the drop's own.
 Future<void> _dropBookmark(
   SidebarView view,
   Bookmark bookmark,
   String? group, {
+  required String name,
+  required AppLocalizations l10n,
   String? beforeId,
   String? afterId,
 }) async {
   try {
-    await view.controller.drop(
+    final moved = await view.controller.drop(
       bookmark.id,
       group,
       beforeId: beforeId,
       afterId: afterId,
     );
+    view.undoHistory?.record(
+      GhostUndoableChange(
+        name: name,
+        undo: () =>
+            _restoreIfListed(view, bookmark, l10n, _HistoryFields.position),
+        redo: () =>
+            _restoreIfListed(view, moved, l10n, _HistoryFields.position),
+      ),
+    );
   } on Object catch (error, stackTrace) {
     ApplicationErrorReporter().report(error, stackTrace);
   }
+}
+
+/// Pin to top / Unpin as an undoable change: the toggle is its own
+/// inverse, so Undo and Redo both toggle (Séance's
+/// toggleServerPinUndoably).
+void _togglePinnedUndoably(_SidebarData data, String serverId) {
+  final controller = data.controller;
+  final pinning = !controller.isPinned(serverId);
+  controller.togglePinned(serverId);
+  data.view.undoHistory?.record(
+    GhostUndoableChange(
+      name: pinning ? data.l10n.sidebarPinToTop : data.l10n.sidebarUnpin,
+      undo: () async => controller.togglePinned(serverId),
+      redo: () async => controller.togglePinned(serverId),
+    ),
+  );
 }
 
 /// Adds [paths] as favorites; with [foldersOnly], paths that are not

@@ -921,18 +921,18 @@ void main() {
           (e) => e.name == 'config.txt',
         );
         unawaited(pane.editInBuiltInEditor(config));
-        await pollFor(tester, find.text('Discard unsaved changes?'));
+        await pollFor(tester, find.text('Save changes to “notes.txt”?'));
 
-        // Keep editing declines the reveal — the covering editor stays.
-        await tester.tap(find.widgetWithText(TextButton, 'Keep editing'));
+        // Cancel declines the reveal — the covering editor stays.
+        await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
         await tester.pump(const Duration(milliseconds: 300));
         expect(fieldWith('unsaved notes\n'), findsOneWidget);
 
-        // Re-invoke, then Discard: the covering editor pops and the
+        // Re-invoke, then Don't Save: the covering editor pops and the
         // buried one surfaces with its own document.
         unawaited(pane.editInBuiltInEditor(config));
-        await pollFor(tester, find.text('Discard unsaved changes?'));
-        await tester.tap(find.widgetWithText(FilledButton, 'Discard'));
+        await pollFor(tester, find.text('Save changes to “notes.txt”?'));
+        await tester.tap(find.widgetWithText(TextButton, 'Don’t save'));
         for (var i = 0; i < 40; i++) {
           await tester.pump();
           if (fieldWith('one\ntwo\n').evaluate().isNotEmpty &&

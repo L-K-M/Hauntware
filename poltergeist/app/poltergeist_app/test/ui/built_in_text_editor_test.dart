@@ -104,8 +104,109 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Discard unsaved changes?'), findsOneWidget);
+    expect(
+      find.text('Save changes to “config.txt”?'),
+      findsOneWidget,
+    );
     expect(find.text('unsaved'), findsOneWidget);
+  });
+
+  testWidgets('close guard: Cancel keeps editing, Don’t save drops the edits', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      editorApp(remotePath: '/etc/config.txt', initialText: 'one\ntwo\n'),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'unsaved');
+    await tester.pump();
+
+    Future<void> pop() async {
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    // Cancel leaves the editor open with the edits intact.
+    await pop();
+    expect(find.text('Save changes to “config.txt”?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BuiltInTextEditorScreen), findsOneWidget);
+    expect(find.text('unsaved'), findsOneWidget);
+
+    // Don't Save closes without writing. (The read is sync: dart:io
+    // futures never complete inside testWidgets' fake-async zone.)
+    await pop();
+    await tester.tap(find.widgetWithText(TextButton, 'Don’t save'));
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      if (find.byType(BuiltInTextEditorScreen).evaluate().isEmpty) break;
+    }
+    expect(find.byType(BuiltInTextEditorScreen), findsNothing);
+    expect(file.readAsStringSync(), 'one\ntwo\n');
+  });
+
+  testWidgets('close guard: Save writes and uploads, then closes', (
+    tester,
+  ) async {
+    var uploads = 0;
+    String? savedText;
+    await tester.pumpWidget(
+      editorApp(
+        remotePath: '/etc/config.txt',
+        initialText: 'one\ntwo\n',
+        saveDocument: (_, text) async {
+          savedText = text;
+          return 'baseline';
+        },
+        onUpload: () async {
+          uploads++;
+          return true;
+        },
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'edited\n');
+    await tester.pump();
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(savedText, 'edited\n');
+    expect(uploads, 1);
+    expect(find.byType(BuiltInTextEditorScreen), findsNothing);
+  });
+
+  testWidgets('close guard: a failed save keeps the editor open', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      editorApp(
+        remotePath: '/etc/config.txt',
+        initialText: 'one\ntwo\n',
+        saveDocument: (_, text) async => throw StateError('disk full'),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'edited\n');
+    await tester.pump();
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    // The write threw, the buffer is still dirty, and the close does not
+    // complete — the guard's own buttons already dismissed.
+    expect(find.byType(BuiltInTextEditorScreen), findsOneWidget);
+    expect(find.text('edited\n'), findsOneWidget);
   });
 
   testWidgets('a pop mid-save still runs the reconcile hooks after the write '
@@ -132,8 +233,8 @@ void main() {
     await tester.binding.handlePopRoute();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Discard unsaved changes?'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, 'Discard'));
+    expect(find.text('Save changes to “config.txt”?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Don’t save'));
     // The dialog dismissal and the route exit are sequential
     // transitions — pump until the screen has fully left the tree.
     for (var i = 0; i < 20; i++) {

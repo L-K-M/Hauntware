@@ -8,6 +8,8 @@ import 'package:ghost_servers/ghost_servers.dart'
         ghostHiddenLiveIndicator,
         ghostStatusDot,
         groupServers;
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostUndoDeclined, GhostUndoHistory, GhostUndoableChange;
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -26,12 +28,15 @@ import '../../services/workspace_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/family_hues.dart';
 import '../ghost_servers_adapter.dart';
+import '../menus/edit_history_commands.dart'
+    show EditHistoryTarget, stepEditHistory;
 import '../panes/pane_drop_area.dart' show paneDropModifiers;
 import '../panes/pane_format.dart' show formatPaneSize;
 import '../place_glyphs.dart';
 import '../save_to_servers.dart';
 import '../server_appearance.dart';
 import '../server_state_indicator.dart';
+import '../top_toast.dart';
 import 'sidebar_facts.dart';
 import 'sidebar_kit.dart';
 
@@ -103,6 +108,7 @@ class SidebarView extends StatefulWidget {
   const SidebarView({
     required this.controller,
     required this.onOpenFavorite,
+    this.undoHistory,
     this.connections,
     this.probes,
     this.onDisconnect,
@@ -137,6 +143,11 @@ class SidebarView extends StatefulWidget {
   /// The bookmark sections, collapse state, filter query, and the
   /// store-routed mutations.
   final SidebarController controller;
+
+  /// The app-data undo history (10 §5): the rail's undoable store edits
+  /// — rename, move, delete, pin — record into it; null leaves them
+  /// unrecorded.
+  final GhostUndoHistory? undoHistory;
 
   /// Live connection truth for saved servers' dots (02 §4: live truth
   /// outranks probes). Null leaves the dots to the probes.

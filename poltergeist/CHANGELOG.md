@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Undo and Redo cover favorite deletion, renaming, grouping, ordering,
+  pins and server duplication. Deleting a favorite offers Undo; failed
+  restores explain the error. Undo preserves other windows' later changes
+  to unrelated fields and refuses to remove a server used by a live pane.
+  Text fields keep their own editing history.
+- Closing edited text offers Save, Don't save or Cancel. A failed save
+  or upload keeps the editor open, including when you choose Save during Quit.
+- Leading controls stay clear of the full-screen traffic lights. AltGr
+  types characters without triggering the Ctrl+Alt pane shortcuts.
 - **The header band lines up.** The inspector's tabs are as tall as the
   panes' tab bars, so the line under them continues the panes' line.
   Tabs now fill their bar from top to bottom. On macOS the sidebar's

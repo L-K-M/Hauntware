@@ -1077,6 +1077,81 @@ void main() {
       expect((await a.records.getRecord('secret:s1'))!.deleted, isTrue);
     });
 
+    for (final staleRef in <String?>[null, 'old']) {
+      test('deleting with a stale snapshot retracts the current credential '
+          '(original ref: $staleRef)', () async {
+        final a = await _Device.create(
+          tempDir,
+          'a',
+          shared: true,
+          syncSecrets: true,
+        );
+        final original = await _saveServer(a, _server('original'));
+        await a.secrets!.putLocalSecret(_secret('other'), updatedAt: _epochMs);
+        final other = await _saveServer(
+          a,
+          _server('other', secretRef: 'other', syncSecret: true),
+        );
+        if (staleRef != null) {
+          await a.secrets!.putLocalSecret(
+            _secret(staleRef),
+            updatedAt: _epochMs,
+          );
+        }
+        final snapshot = await _saveServer(
+          a,
+          _server('copy', secretRef: staleRef, syncSecret: staleRef != null),
+        );
+        a.clock.ms += 1000;
+        await a.secrets!.putLocalSecret(
+          _secret('current'),
+          updatedAt: _epochMs + 9000,
+        );
+        await _saveServer(
+          a,
+          snapshot.copyWith(secretRef: 'current', syncSecret: true),
+        );
+        await a.coordinator.runRound(server);
+        expect(server.records['secret:current']!.deleted, isFalse);
+        final untouched = {
+          for (final id in [
+            'original',
+            'other',
+            'secret:other',
+            if (staleRef != null) 'secret:$staleRef',
+          ])
+            id: (await a.records.getRecord(id))!.toJson(),
+        };
+
+        // Undo still holds the snapshot from before the credential edit.
+        await _deleteServer(a, snapshot);
+
+        expect(await a.servers!.byId('copy'), isNull);
+        expect(a.catalog!.byId('copy'), isNull);
+        expect((await a.records.getRecord('copy'))!.deleted, isTrue);
+        final retraction = (await a.records.getRecord('secret:current'))!;
+        expect(retraction.deleted, isTrue);
+        expect(retraction.updatedAt, greaterThan(_epochMs + 9000));
+        expect(retraction.deviceId, a.deviceId);
+        expect(await a.secrets!.getSecret('current'), isNotNull);
+        expect(
+          (await a.servers!.byId('original'))!.toJson(),
+          original.toJson(),
+        );
+        expect((await a.servers!.byId('other'))!.toJson(), other.toJson());
+        for (final entry in untouched.entries) {
+          expect((await a.records.getRecord(entry.key))!.toJson(), entry.value);
+        }
+        await a.coordinator.runRound(server);
+        expect(server.records['secret:current']!.deleted, isTrue);
+        expect(server.records['original']!.deleted, isFalse);
+        expect(server.records['secret:other']!.deleted, isFalse);
+        if (staleRef != null) {
+          expect(server.records['secret:$staleRef']!.deleted, isFalse);
+        }
+      });
+    }
+
     test('re-including after a retraction re-dates the credential past '
         'it', () async {
       final a = await _Device.create(

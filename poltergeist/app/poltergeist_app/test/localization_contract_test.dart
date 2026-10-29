@@ -1131,6 +1131,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${p.group}:${p.order}'",
     r"'${command.id} shares menu slot ${p.group}:${p.order}'",
   },
+  // The app-data undo/redo command ids (D21 plumbing) plus the caught
+  // error's interpolation, never rendered as authored copy.
+  'lib/ui/menus/edit_history_commands.dart': {
+    "'edit.undo'",
+    "'edit.redo'",
+    r"'$error'",
+  },
   // The pane-command registry ids (D21 plumbing) and the pane view's
   // widget keys plus path-separator arithmetic — machine data, never
   // authored copy.
@@ -1473,7 +1480,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'sidebar.renameSave'",
     "'sidebar.groupField'",
     "'sidebar.groupSave'",
-    "'sidebar.deleteConfirm'",
     "'sidebar.saveServerField'",
     "'sidebar.saveServerSave'",
   },
@@ -1608,8 +1614,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'sidebar.catalog'",
     "'sidebar.catalog.'",
     "''",
-    "'id'",
-    "'unknown bookmark'",
     "'SidebarController used after dispose'",
   },
   // DEVICES enumeration: mount roots, OS ids, environment keys, drive

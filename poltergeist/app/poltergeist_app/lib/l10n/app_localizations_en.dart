@@ -528,9 +528,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sidebarDeleteTitle => 'Delete Favorite';
 
   @override
-  String sidebarDeleteBody(String label) {
-    return 'Delete \"$label\" from favorites? This cannot be undone.';
+  String sidebarDeletedNotice(String label) {
+    return 'Deleted “$label”';
   }
+
+  @override
+  String get sidebarReorder => 'Reorder';
 
   @override
   String get sidebarActionFailed =>
@@ -865,6 +868,59 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get commandDisabledNoSelectionRedo =>
       'No selection change to redo in this file list';
+
+  @override
+  String get editUndoLabel => 'Undo';
+
+  @override
+  String get editRedoLabel => 'Redo';
+
+  @override
+  String editUndoNamedLabel(String name) {
+    return 'Undo $name';
+  }
+
+  @override
+  String editRedoNamedLabel(String name) {
+    return 'Redo $name';
+  }
+
+  @override
+  String get commandDisabledNoUndo => 'Nothing to undo';
+
+  @override
+  String get commandDisabledNoRedo => 'Nothing to redo';
+
+  @override
+  String editUndone(String name) {
+    return '$name undone';
+  }
+
+  @override
+  String editRedone(String name) {
+    return '$name redone';
+  }
+
+  @override
+  String editUndoFailed(String name, String error) {
+    return 'Couldn’t undo “$name”: $error';
+  }
+
+  @override
+  String editRedoFailed(String name, String error) {
+    return 'Couldn’t redo “$name”: $error';
+  }
+
+  @override
+  String get undoChangeDuplicateServer => 'Duplicate Server';
+
+  @override
+  String get undoDeclineDeleted => 'It was deleted';
+
+  @override
+  String undoDeclineServerBound(String label) {
+    return '“$label” has open panes. Close them, then undo.';
+  }
 
   @override
   String get editSelectAllLabel => 'Select All';
@@ -2468,17 +2524,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fileEditBuiltInLabel => 'Edit in Poltergeist';
 
   @override
-  String get editorDiscardTitle => 'Discard unsaved changes?';
+  String editorSaveChangesTitle(String name) {
+    return 'Save changes to “$name”?';
+  }
 
   @override
   String get editorDiscardBody =>
       'Changes not saved to the local copy will be lost.';
 
   @override
-  String get editorDiscardKeep => 'Keep editing';
-
-  @override
-  String get editorDiscardConfirm => 'Discard';
+  String get editorDiscardDontSave => 'Don’t save';
 
   @override
   String get editorFindTooltip => 'Find';
@@ -8205,11 +8260,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String sidebarAlreadyFavorite(String label) {
     return '“$label” is already in Favorites.';
-  }
-
-  @override
-  String sidebarDeleteServerBody(String label) {
-    return 'Remove “$label” from Servers? This cannot be undone.';
   }
 
   @override

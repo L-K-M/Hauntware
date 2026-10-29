@@ -66,8 +66,8 @@ void main() {
     await tester.enterText(find.byType(TextField), 'unsaved');
     final closing = editor.close();
     await tester.pumpAndSettle();
-    expect(find.text('Discard unsaved changes?'), findsOneWidget);
-    await tester.tap(find.widgetWithText(TextButton, 'Keep editing'));
+    expect(find.text('Save changes to “config.txt”?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
     await tester.pumpAndSettle();
     await closing;
     expect(windows.windows, hasLength(2));
@@ -78,7 +78,7 @@ void main() {
 
     final discard = editor.close();
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Discard'));
+    await tester.tap(find.widgetWithText(TextButton, 'Don’t save'));
     await tester.pumpAndSettle();
     await discard;
     expect(windows.windows, hasLength(1));
@@ -100,7 +100,7 @@ void main() {
       await tester.enterText(find.byType(TextField), 'unsaved');
       final closing = editor.close();
       await tester.pumpAndSettle();
-      expect(find.text('Discard unsaved changes?'), findsOneWidget);
+      expect(find.text('Save changes to “config.txt”?'), findsOneWidget);
 
       // A Flutter dialog does not disable the native menu. Run the same
       // registered Save callback that its File menu item invokes.
@@ -110,7 +110,7 @@ void main() {
       );
       await tester.pump();
       expect(saveStarted, isTrue);
-      await tester.tap(find.widgetWithText(FilledButton, 'Discard'));
+      await tester.tap(find.widgetWithText(TextButton, 'Don’t save'));
       await tester.pump(const Duration(milliseconds: 300));
       await closing;
       final stayedOpenDuringSave = windows.windows.contains(editor);
@@ -155,7 +155,7 @@ void main() {
     );
     await windows.openWindow();
     expect(windows.windows, hasLength(2));
-    await tester.tap(find.widgetWithText(TextButton, 'Keep editing'));
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
     await tester.pumpAndSettle();
     expect(await quitting, isFalse);
     expect(editor.editorQuitPending.value, isFalse);
@@ -163,7 +163,7 @@ void main() {
 
     final accepted = guard.confirmClose();
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Discard'));
+    await tester.tap(find.widgetWithText(TextButton, 'Don’t save'));
     await tester.pumpAndSettle();
     expect(await accepted, isTrue);
     expect(editor.editorQuitPending.value, isTrue);
