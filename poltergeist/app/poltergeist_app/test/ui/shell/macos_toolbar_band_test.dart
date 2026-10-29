@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart'
     show ValueListenable, debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show macosTrafficLightsInset;
 import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/services/engine_session.dart';
@@ -319,7 +320,10 @@ void main() {
     }
   });
 
-  testWidgets('macOS full screen: the header drops the traffic-light room', (
+  // Full screen hides the band, not the titlebar: it still slides in over
+  // the header when the pointer reaches the top, with its lights where
+  // they sit in a window — so the leading controls keep their room.
+  testWidgets('macOS full screen: the header keeps the traffic-light room', (
     tester,
   ) async {
     try {
@@ -333,16 +337,28 @@ void main() {
       );
       double inset() =>
           tester.widget<HeaderToolbar>(find.byType(HeaderToolbar)).leadingInset;
-      expect(inset(), greaterThan(0));
+      double firstControlLeft() => tester
+          .getRect(
+            find
+                .descendant(
+                  of: find.byType(HeaderToolbar),
+                  matching: find.byType(InkWell),
+                )
+                .first,
+          )
+          .left;
+      expect(inset(), macosTrafficLightsInset);
+      expect(firstControlLeft(), greaterThanOrEqualTo(macosTrafficLightsInset));
 
       band.value = false;
       await tester.pump();
-      expect(inset(), 0);
+      expect(inset(), macosTrafficLightsInset);
+      expect(firstControlLeft(), greaterThanOrEqualTo(macosTrafficLightsInset));
       expect(tester.getRect(find.byType(HeaderToolbar)).top, 0);
 
       band.value = true;
       await tester.pump();
-      expect(inset(), greaterThan(0));
+      expect(inset(), macosTrafficLightsInset);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

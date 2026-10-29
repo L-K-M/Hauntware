@@ -39,11 +39,35 @@ Future<void> _renameBookmark(
   );
   if (renamed == null || renamed == bookmark.label || !context.mounted) return;
   try {
-    await view.controller.rename(bookmark.id, renamed);
+    final saved = await view.controller.rename(bookmark.id, renamed);
+    view.undoHistory?.record(
+      GhostUndoableChange(
+        name: bookmark.kind == BookmarkKind.remotePath
+            ? l10n.sidebarRenameServerTitle
+            : l10n.sidebarRenameTitle,
+        undo: () => _restoreIfListed(view, bookmark, l10n),
+        redo: () => _restoreIfListed(view, saved, l10n),
+      ),
+    );
   } on Object catch (error, stackTrace) {
     ApplicationErrorReporter().report(error, stackTrace);
     if (context.mounted) _showSidebarError(context, l10n);
   }
+}
+
+/// The store-edit undo/redo restore shared by rename and move: refuses
+/// while the record is gone — a delete since would resurrect it —
+/// and [SidebarController.restore] then re-stamps the captured row, so
+/// id, group and position land back where it stood.
+Future<void> _restoreIfListed(
+  SidebarView view,
+  Bookmark bookmark,
+  AppLocalizations l10n,
+) async {
+  if (await view.controller.byId(bookmark.id) == null) {
+    throw GhostUndoDeclined(l10n.undoDeclineDeleted);
+  }
+  await view.controller.restore(bookmark);
 }
 
 /// "Move to Group ▸ New Group…": group records are member-carried, so
@@ -63,7 +87,14 @@ Future<void> _newGroupFor(
   );
   if (group == null || !context.mounted) return;
   try {
-    await view.controller.moveToGroup(bookmark.id, group);
+    final moved = await view.controller.moveToGroup(bookmark.id, group);
+    view.undoHistory?.record(
+      GhostUndoableChange(
+        name: l10n.sidebarMoveToGroup,
+        undo: () => _restoreIfListed(view, bookmark, l10n),
+        redo: () => _restoreIfListed(view, moved, l10n),
+      ),
+    );
   } on Object catch (error, stackTrace) {
     ApplicationErrorReporter().report(error, stackTrace);
     if (context.mounted) _showSidebarError(context, l10n);
@@ -85,47 +116,63 @@ Future<void> _newPendingGroup(BuildContext context, SidebarView view) async {
   view.controller.addPendingGroup(group);
 }
 
-/// The delete verb: a confirmation, then the store remove — the engine
-/// cascade rides the controller's `onBookmarkRemoved` seam after the
-/// record is actually gone.
+/// The delete verb: at once now that Undo restores the row — the
+/// "cannot be undone" dialog it replaced held the delete because
+/// nothing could. The toast names what went and offers Undo, guarded so
+/// it fires only while this deletion is still the one Undo would take
+/// back; the removal cascade rides the controller's seam as before.
 Future<void> _deleteBookmark(
   BuildContext context,
   SidebarView view,
   Bookmark bookmark,
 ) async {
   final l10n = AppLocalizations.of(context);
-  final server = bookmark.kind == BookmarkKind.remotePath;
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(
-        server ? l10n.sidebarDeleteServerTitle : l10n.sidebarDeleteTitle,
-      ),
-      content: Text(
-        server
-            ? l10n.sidebarDeleteServerBody(bookmark.label)
-            : l10n.sidebarDeleteBody(bookmark.label),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: Text(l10n.tabCloseConfirmCancel),
-        ),
-        FilledButton(
-          key: const ValueKey('sidebar.deleteConfirm'),
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: Text(l10n.sidebarDelete),
-        ),
-      ],
-    ),
-  );
-  if (confirmed != true || !context.mounted) return;
+  final controller = view.controller;
+  final pinned = controller.isPinned(bookmark.id);
+  // Captured before the write: the deleted row's element can be gone by
+  // the time the toast goes up.
+  final overlay = Overlay.of(context, rootOverlay: true);
   try {
-    await view.controller.remove(bookmark.id);
+    await controller.remove(bookmark.id);
   } on Object catch (error, stackTrace) {
     ApplicationErrorReporter().report(error, stackTrace);
     if (context.mounted) _showSidebarError(context, l10n);
+    return;
   }
+  if (!overlay.mounted) return;
+  final history = view.undoHistory;
+  final change = GhostUndoableChange(
+    name: bookmark.kind == BookmarkKind.remotePath
+        ? l10n.sidebarDeleteServerTitle
+        : l10n.sidebarDeleteTitle,
+    undo: () => controller.restore(bookmark, pinned: pinned),
+    // The removal cascade re-runs through the controller: pinned state
+    // and live connections go with the record again.
+    redo: () async {
+      await controller.remove(bookmark.id);
+    },
+  );
+  history?.record(change);
+  showTopToast(
+    overlay,
+    message: l10n.sidebarDeletedNotice(bookmark.label),
+    actionLabel: history == null ? null : l10n.editUndoLabel,
+    // This deletion only, while it is still the one Undo would take back
+    // — a change made since has its own notice.
+    onAction: history == null
+        ? null
+        : () {
+            if (!overlay.mounted || !history.isNextUndo(change)) return;
+            unawaited(
+              stepEditHistory(
+                overlay,
+                history,
+                direction: UndoDirection.undo,
+                target: EditHistoryTarget.appData,
+              ),
+            );
+          },
+  );
 }
 
 /// "Save to Favorites…" on a live Quick Connect session: the pane's

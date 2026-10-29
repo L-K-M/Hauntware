@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show macosTrafficLightsInset;
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostUndoHistory;
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
@@ -87,6 +90,7 @@ import 'deep_link_dialogs.dart';
 import 'inspector/alerts_view.dart';
 import 'inspector/inspector_view.dart';
 import 'built_in_text_editor.dart';
+import 'catalog_duplicate_change.dart';
 import 'editor_checkout_upload.dart';
 import 'compact/compact_browser.dart' show CompactPaneSeams;
 import 'compact/compact_posture.dart';
@@ -97,6 +101,7 @@ import 'layout/pane_allocation.dart';
 import 'local_edits_review.dart';
 import 'menus/app_menu_commands.dart';
 import 'menus/app_menu_host.dart';
+import 'menus/edit_history_commands.dart';
 import 'panes/batch_rename_command.dart';
 import 'panes/batch_rename_dialog.dart';
 import 'panes/compare_files_command.dart';
@@ -573,6 +578,14 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   SidebarController? _sidebar;
   SidebarProbeOwner? _probes;
 
+  /// The app-data undo history (10 §5's Undoable store edits): one per
+  /// window because the state it guards is window-scoped — the sidebar's
+  /// edits run through this window's own controller, and Edit ▸ Undo is
+  /// the native menu of whichever window owns the change. Another
+  /// window's edits land through the shared store and notify in, but
+  /// only a change made here is this window's to take back.
+  final _undoHistory = GhostUndoHistory();
+
   /// The lifecycle forwarder feeding [_probes] (02 §4's foreground
   /// gating): owned by the shell so probe activity dies with the window.
   /// The engine session gets its own forwarding in the app composition —
@@ -1009,6 +1022,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     _lifecycleForwarder?.detach();
     _disposeProbes();
     _sidebar?.dispose();
+    _undoHistory.dispose();
     _activity.dispose();
     _alerts.dispose();
     _dragOut.dispose();
@@ -1813,6 +1827,9 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       // 00 D39's File ▸ New Window and Close Window.
       if (widget.window case final window? when window.canOpenWindows)
         ...buildWindowCommands(window: window),
+      // 10 §5's Edit ▸ Undo/Redo: registered unconditionally — the rows
+      // stay visible-disabled while the window's history is empty.
+      ...buildEditHistoryCommands(history: _undoHistory),
       if (workspace != null && widget.workspaces != null)
         ...buildWorkspaceCommands(
           workspace: workspace,
@@ -1965,6 +1982,8 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       ?preview,
       // Save to Favorites… retires once the store carries the endpoint.
       ?sidebar,
+      // Edit ▸ Undo/Redo: labels and enablement follow the history.
+      _undoHistory,
       // The focused plan row drives the compare command's enablement.
       ?_activeSyncSession,
       // View ▸ Keep Folders on Top's checkmark.
@@ -2224,18 +2243,16 @@ class _WorkspaceShellState extends State<WorkspaceShell>
 
     final header = ListenableBuilder(
       listenable: Listenable.merge([enablement, _alerts]),
-      // The traffic lights sit in the window only while the toolbar band
-      // shows; full screen hides both (MacosToolbarBandScope). Read here,
-      // so a switch rebuilds the header alone.
+      // The traffic lights sit over the header whenever the window draws
+      // under the unified titlebar — full screen only hides the toolbar
+      // band; the titlebar still slides in at the top edge with its
+      // lights where they sit in a window (Séance's rule).
       builder: (context, _) => HeaderToolbar(
         commands: commands,
         onRun: _runCommand,
         nativeTitlebar: unifiedToolbar,
-        leadingInset:
-            unifiedToolbar &&
-                !sidebarInline &&
-                MacosToolbarBandScope.visibleOf(context)
-            ? _macTrafficLightsInset
+        leadingInset: unifiedToolbar && !sidebarInline
+            ? macosTrafficLightsInset
             : 0,
         title: _HeaderTitle(workspace: workspace),
         badges: {
@@ -3624,6 +3641,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
 
     return SidebarView(
       controller: _sidebar!,
+      undoHistory: _undoHistory,
       presentation: presentation,
       filterBarExtent: filterBarExtent,
       // D22's adoption offer in the empty-servers state routes through
@@ -3763,6 +3781,17 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       return;
     }
     if (!mounted) return;
+    _undoHistory.record(
+      catalogDuplicateChange(
+        backups: backups,
+        server: server,
+        copy: copy,
+        isBound: (id) =>
+            (_workspace?.bindsServer(id) ?? false) ||
+            (widget.window?.serverBoundElsewhere(id) ?? false),
+        l10n: l10n,
+      ),
+    );
     showTopToastIn(
       context,
       message: l10n.sidebarCatalogDuplicated(copy.label),
@@ -4819,10 +4848,6 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     }
   }
 }
-
-/// Leading room for the macOS traffic lights when the header reaches the
-/// window's leading edge (sidebar hidden or in the drawer).
-const _macTrafficLightsInset = 76.0;
 
 /// The line under the header, across the panes and the inspector.
 const _headerRuleHeight = 1.0;

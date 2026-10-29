@@ -127,6 +127,7 @@ List<Widget> _favoritesSection(_SidebarData data) {
                 view,
                 payload,
                 group: group.name,
+                l10n: data.l10n,
                 accepts: _anyBookmark,
               ) ??
               _addFavoritePlan(
@@ -200,7 +201,13 @@ List<Widget> _favoritesSection(_SidebarData data) {
     _SidebarDropZone(
       key: const ValueKey('sidebar.favorites.header'),
       planner: (payload, _) =>
-          _regroupPlan(view, payload, group: null, accepts: _anyBookmark) ??
+          _regroupPlan(
+            view,
+            payload,
+            group: null,
+            l10n: data.l10n,
+            accepts: _anyBookmark,
+          ) ??
           _addFavoritePlan(
             context,
             view,
@@ -426,6 +433,7 @@ class _FavoriteRow extends StatelessWidget {
           fraction,
           target: bookmark,
           group: group,
+          l10n: data.l10n,
           accepts: _anyBookmark,
         );
         if (reorder != null || payload is Bookmark) return reorder;
@@ -550,12 +558,28 @@ List<SidebarMenuEntry> _editVerbs(
         SidebarMenuAction(
           key: const ValueKey('sidebar.menu.ungroup'),
           label: l10n.sidebarNoGroup,
-          onSelected: () => unawaited(_dropBookmark(view, bookmark, null)),
+          onSelected: () => unawaited(
+            _dropBookmark(
+              view,
+              bookmark,
+              null,
+              name: l10n.sidebarMoveToGroup,
+              l10n: l10n,
+            ),
+          ),
         ),
         for (final name in names)
           SidebarMenuAction(
             label: name,
-            onSelected: () => unawaited(_dropBookmark(view, bookmark, name)),
+            onSelected: () => unawaited(
+              _dropBookmark(
+                view,
+                bookmark,
+                name,
+                name: l10n.sidebarMoveToGroup,
+                l10n: l10n,
+              ),
+            ),
           ),
         const SidebarMenuDivider(),
         SidebarMenuAction(

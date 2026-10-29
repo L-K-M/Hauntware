@@ -205,27 +205,48 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
     allowWhileSaving: widget.onCloseRequested == null,
   );
 
+  /// The document app's three-way close choice (Séance's confirmDiscard):
+  /// Save runs the normal save path — upload included for a server file —
+  /// and the editor closes only if the buffer is clean after it; Don't
+  /// Save drops the edits; Cancel (or dismissing) keeps editing.
   Future<bool> _confirmDiscard() async {
-    if (!_dirty) return true;
+    if (!mounted) return false;
     final l10n = AppLocalizations.of(context);
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(l10n.editorDiscardTitle),
-            content: Text(l10n.editorDiscardBody),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(l10n.editorDiscardKeep),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(l10n.editorDiscardConfirm),
-              ),
-            ],
+    final choice = await showDialog<_CloseChoice>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          l10n.editorSaveChangesTitle(widget.basenameOf(_displayPath)),
+        ),
+        content: Text(l10n.editorDiscardBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, _CloseChoice.dontSave),
+            child: Text(l10n.editorDiscardDontSave),
           ),
-        ) ??
-        false;
+          TextButton(
+            onPressed: () => Navigator.pop(context, _CloseChoice.keepEditing),
+            child: Text(l10n.editorDialogCancel),
+          ),
+          FilledButton(
+            autofocus: true,
+            onPressed: () => Navigator.pop(context, _CloseChoice.save),
+            child: Text(l10n.editorDialogSave),
+          ),
+        ],
+      ),
+    );
+    switch (choice) {
+      case _CloseChoice.save:
+        await _save(upload: widget.onUpload != null);
+        // A failed or still-dirty save keeps the editor open; the close
+        // completes only on a clean buffer.
+        return mounted && !_editor.isDirty;
+      case _CloseChoice.dontSave:
+        return true;
+      case _CloseChoice.keepEditing || null:
+        return false;
+    }
   }
 
   Future<void> _save({bool upload = false}) async {
@@ -579,3 +600,6 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
     shift: shift,
   );
 }
+
+/// The three ways a dirty buffer's close can go ([_confirmDiscard]).
+enum _CloseChoice { save, dontSave, keepEditing }

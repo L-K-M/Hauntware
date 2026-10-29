@@ -18,6 +18,8 @@ import '../../services/workspace_controller.dart';
 import '../../theme/app_theme.dart' show isDesktopPlatform;
 import '../../theme/family_hues.dart';
 import '../layout/pane_allocation.dart' show desktopStageBoundary;
+import '../menus/edit_history_commands.dart'
+    show kEditRedoCommandId, kEditUndoCommandId;
 import '../top_toast.dart';
 import 'pane_view.dart' show PaneView;
 
@@ -559,10 +561,9 @@ List<RegisteredCommand> buildPaneCommands({
           SingleActivator(LogicalKeyboardKey.keyS, control: true, meta: true),
         ],
         // Windows reports AltGr as Ctrl+Alt, so AltGr+S (ś/ş on Polish
-        // and Turkish layouts) also matches this activator — a known
-        // spec-level collision with 02 §8.3's table, pending a spec
-        // decision (or suppressing app-scope activators while a text
-        // field has focus).
+        // and Turkish layouts) would otherwise type into this chord —
+        // the chord layer binds every non-Apple Alt chord left-Alt
+        // only (CommandChordScope), so the right Alt's key never fires.
         other: const [
           SingleActivator(LogicalKeyboardKey.keyS, control: true, alt: true),
         ],
@@ -808,6 +809,9 @@ List<RegisteredCommand> buildPaneCommands({
       menuPlacement: const CommandMenuPlacement(
         menu: AppMenuId.edit,
         order: 10,
+        // The app-data Undo/Redo pair opens the menu in its own section;
+        // the selection history's pair follows behind a divider.
+        group: 1,
       ),
     ),
     RegisteredCommand(
@@ -839,6 +843,7 @@ List<RegisteredCommand> buildPaneCommands({
       menuPlacement: const CommandMenuPlacement(
         menu: AppMenuId.edit,
         order: 20,
+        group: 1,
       ),
     ),
     RegisteredCommand(
@@ -1244,9 +1249,12 @@ bool keyMayRunFrom(
   FocusNode? focus,
 ) {
   // The native menu may receive an otherwise unhandled key equivalent.
-  // Preserve the chord scope's field-first rule for selection history too.
+  // Preserve the chord scope's field-first rule for both undo families:
+  // a text surface's own history wins inside an EditableText.
   if ((command.id == kEditUndoSelectionCommandId ||
-          command.id == kEditRedoSelectionCommandId) &&
+          command.id == kEditRedoSelectionCommandId ||
+          command.id == kEditUndoCommandId ||
+          command.id == kEditRedoCommandId) &&
       focus?.context?.findAncestorWidgetOfExactType<EditableText>() != null) {
     return false;
   }
@@ -1279,6 +1287,12 @@ class CommandChordScope extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final platform = Theme.of(context).platform;
+    // Windows reports AltGr as Ctrl + right Alt (some Linux layouts as
+    // right Alt alone): it must type its character, never fire a Ctrl+Alt
+    // command, so every Alt chord off the Apple platforms binds left-Alt
+    // only (02 §8.3's table's collision, resolved at the chord layer).
+    final apple =
+        platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
     return GhostChordScope(
       unmodifiedPolicy: GhostUnmodifiedChordPolicy.allowlisted,
       unmodifiedTriggers: _functionKeys,
@@ -1289,6 +1303,12 @@ class CommandChordScope extends StatelessWidget {
                   const <ShortcutActivator>[])
             GhostChordBinding(
               activator: activator,
+              leftAltOnly: !apple &&
+                  switch (activator) {
+                    SingleActivator a => a.alt,
+                    CharacterActivator a => a.alt,
+                    _ => false,
+                  },
               mayRunFrom: _listingOnly(command, activator)
                   ? _isPaneListing
                   : null,

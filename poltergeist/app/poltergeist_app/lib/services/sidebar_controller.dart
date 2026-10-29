@@ -442,6 +442,28 @@ final class SidebarController extends ChangeNotifier {
     return removed;
   }
 
+  /// The live record for [id], or null — the undo paths' existence
+  /// check, so a restore never resurrects a row deleted meanwhile.
+  Future<Bookmark?> byId(String id) {
+    _assertLive();
+    return _store.byId(id);
+  }
+
+  /// Puts [bookmark] back verbatim — the undo paths' restore: a
+  /// [BookmarkStore.save] re-stamps `updatedAt` (the LWW half of every
+  /// local edit, 04 §2.1 — it out-tuples the tombstone the delete
+  /// stamped), while id, group and sort key land it back where the
+  /// record stood. A pin the delete dropped goes back on the shortlist
+  /// with it.
+  Future<Bookmark> restore(Bookmark bookmark, {bool pinned = false}) async {
+    _assertLive();
+    final saved = await _store.save(bookmark);
+    if (pinned && !_disposed && !isPinned(bookmark.id)) {
+      _setPinned(bookmark.id, pinned: true);
+    }
+    return saved;
+  }
+
   /// Refiles [id] into [group] (null ungroups) between the named
   /// neighbors — the store's [BookmarkStore.moveToGroup] handles the
   /// sort-key math and normalization.

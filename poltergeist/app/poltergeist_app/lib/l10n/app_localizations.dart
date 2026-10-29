@@ -934,23 +934,29 @@ abstract class AppLocalizations {
   /// **'Group name'**
   String get sidebarGroupFieldLabel;
 
-  /// Favorite row context verb: remove the favorite after confirmation (02 §4).
+  /// Favorite row context verb: remove the favorite (undoable — it deletes at once and the toast offers Undo).
   ///
   /// In en, this message translates to:
   /// **'Delete'**
   String get sidebarDelete;
 
-  /// Title of the favorite-delete confirmation dialog.
+  /// Undo-history change name for deleting a sidebar favorite ("Undo Delete Favorite").
   ///
   /// In en, this message translates to:
   /// **'Delete Favorite'**
   String get sidebarDeleteTitle;
 
-  /// Body of the favorite-delete confirmation dialog.
+  /// Toast after a sidebar favorite is deleted (undoable, so it deletes at once); its action is Undo.
   ///
   /// In en, this message translates to:
-  /// **'Delete \"{label}\" from favorites? This cannot be undone.'**
-  String sidebarDeleteBody(String label);
+  /// **'Deleted “{label}”'**
+  String sidebarDeletedNotice(String label);
+
+  /// Undo-history change name recorded when a sidebar favorite is drag-reordered ("Undo Reorder").
+  ///
+  /// In en, this message translates to:
+  /// **'Reorder'**
+  String get sidebarReorder;
 
   /// Transient notice when a sidebar store write (rename, regroup, delete) throws (02 §10).
   ///
@@ -1435,6 +1441,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No selection change to redo in this file list'**
   String get commandDisabledNoSelectionRedo;
+
+  /// Edit menu command label: step the app-data undo history back one change (edit.undo).
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get editUndoLabel;
+
+  /// Edit menu command label: redo the last undone app-data change (edit.redo).
+  ///
+  /// In en, this message translates to:
+  /// **'Redo'**
+  String get editRedoLabel;
+
+  /// Edit ▸ Undo while a change waits: names the change the step would take back ("Undo Delete Favorite").
+  ///
+  /// In en, this message translates to:
+  /// **'Undo {name}'**
+  String editUndoNamedLabel(String name);
+
+  /// Edit ▸ Redo while an undone change waits: names the change the step would reapply.
+  ///
+  /// In en, this message translates to:
+  /// **'Redo {name}'**
+  String editRedoNamedLabel(String name);
+
+  /// Disabled reason for Edit ▸ Undo while the app-data undo history is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to undo'**
+  String get commandDisabledNoUndo;
+
+  /// Disabled reason for Edit ▸ Redo while no undone change waits.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to redo'**
+  String get commandDisabledNoRedo;
+
+  /// Toast after a successful app-data undo: names the change taken back ("Delete Favorite undone").
+  ///
+  /// In en, this message translates to:
+  /// **'{name} undone'**
+  String editUndone(String name);
+
+  /// Toast after a successful app-data redo: names the change reapplied.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} redone'**
+  String editRedone(String name);
+
+  /// Toast after a failed or declined app-data undo: the change stays recorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t undo “{name}”: {error}'**
+  String editUndoFailed(String name, String error);
+
+  /// Toast after a failed or declined app-data redo: the change stays recorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t redo “{name}”: {error}'**
+  String editRedoFailed(String name, String error);
+
+  /// Undo-history change name recorded when a catalog server is duplicated ("Undo Duplicate Server").
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate Server'**
+  String get undoChangeDuplicateServer;
+
+  /// Reason an app-data undo/redo declines: the record the change would edit is already gone.
+  ///
+  /// In en, this message translates to:
+  /// **'It was deleted'**
+  String get undoDeclineDeleted;
+
+  /// Reason undoing a catalog-server duplicate declines while its copy is bound to open panes.
+  ///
+  /// In en, this message translates to:
+  /// **'“{label}” has open panes. Close them, then undo.'**
+  String undoDeclineServerBound(String label);
 
   /// Command label: select every row of the focused pane's listing (edit.selectAll, 02 §2.5).
   ///
@@ -3871,11 +3955,11 @@ abstract class AppLocalizations {
   /// **'Edit in Poltergeist'**
   String get fileEditBuiltInLabel;
 
-  /// Title of the editor's unsaved-changes guard (06 §2.3), shown when leaving with dirty edits.
+  /// Title of the editor's unsaved-changes guard (06 §2.3), shown when leaving with dirty edits. {name} is the file name.
   ///
   /// In en, this message translates to:
-  /// **'Discard unsaved changes?'**
-  String get editorDiscardTitle;
+  /// **'Save changes to “{name}”?'**
+  String editorSaveChangesTitle(String name);
 
   /// Body of the editor's unsaved-changes guard (06 §2.3).
   ///
@@ -3883,17 +3967,11 @@ abstract class AppLocalizations {
   /// **'Changes not saved to the local copy will be lost.'**
   String get editorDiscardBody;
 
-  /// Declines the editor's discard confirmation: the editor stays open.
+  /// Closes the editor dropping its unsaved edits (06 §2.3's unsaved-changes guard).
   ///
   /// In en, this message translates to:
-  /// **'Keep editing'**
-  String get editorDiscardKeep;
-
-  /// Accepts the editor's discard confirmation: unsaved edits are dropped.
-  ///
-  /// In en, this message translates to:
-  /// **'Discard'**
-  String get editorDiscardConfirm;
+  /// **'Don’t save'**
+  String get editorDiscardDontSave;
 
   /// Tooltip of the editor's find-bar affordance (06 §2.3).
   ///
@@ -11527,7 +11605,7 @@ abstract class AppLocalizations {
   /// **'Rename Server'**
   String get sidebarRenameServerTitle;
 
-  /// Title of the confirmation before removing a saved server row.
+  /// Undo-history change name for deleting a saved server row ("Undo Remove Server").
   ///
   /// In en, this message translates to:
   /// **'Remove Server'**
@@ -11562,12 +11640,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'“{label}” is already in Favorites.'**
   String sidebarAlreadyFavorite(String label);
-
-  /// Body of the confirmation before removing a saved server row.
-  ///
-  /// In en, this message translates to:
-  /// **'Remove “{label}” from Servers? This cannot be undone.'**
-  String sidebarDeleteServerBody(String label);
 
   /// Announced after a device's name: its free space.
   ///

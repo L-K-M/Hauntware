@@ -6,11 +6,16 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' show Locale;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostUndoDeclined, GhostUndoHistory;
+import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/bookmark_backup_service.dart';
 import 'package:poltergeist_app/services/server_duplication.dart';
 import 'package:poltergeist_app/services/settings_store.dart';
+import 'package:poltergeist_app/ui/catalog_duplicate_change.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../support/fake_sync_backup.dart';
@@ -975,6 +980,74 @@ void main() {
       );
       // Nothing was created: the tombstoned original leaves no live rows.
       expect(await h.servers.load(), isEmpty);
+    });
+
+    test('the recorded duplicate change undoes the copy, then redoes '
+        'under a new id', () async {
+      await h.enrollSharedDirectly();
+      await h.service.saveServer(config('web'));
+      final copy = await h.service.duplicateServer(config('web'));
+      final l10n = lookupAppLocalizations(const Locale('en'));
+      final history = GhostUndoHistory();
+      addTearDown(history.dispose);
+      history.record(
+        catalogDuplicateChange(
+          backups: h.service,
+          server: config('web'),
+          copy: copy,
+          isBound: (_) => false,
+          l10n: l10n,
+        ),
+      );
+      expect(history.undoName, 'Duplicate Server');
+
+      await history.undo();
+      expect(await h.servers.byId(copy.id), isNull);
+      expect(h.service.catalog!.byId(copy.id), isNull);
+      // The original survives — only the copy went.
+      expect(await h.servers.byId('web'), isNotNull);
+
+      await history.redo();
+      // Redo duplicates again: the new copy — not the deleted one's id —
+      // is what the next Undo removes.
+      final recopy = (await h.servers.load())
+          .singleWhere((server) => server.id != 'web');
+      expect(recopy.id, isNot(copy.id));
+      await history.undo();
+      expect(await h.servers.byId(recopy.id), isNull);
+    });
+
+    test('the recorded duplicate change declines its undo while the '
+        'copy is bound', () async {
+      await h.enrollSharedDirectly();
+      await h.service.saveServer(config('web'));
+      final copy = await h.service.duplicateServer(config('web'));
+      final l10n = lookupAppLocalizations(const Locale('en'));
+      var bound = true;
+      final history = GhostUndoHistory();
+      addTearDown(history.dispose);
+      history.record(
+        catalogDuplicateChange(
+          backups: h.service,
+          server: config('web'),
+          copy: copy,
+          isBound: (_) => bound,
+          l10n: l10n,
+        ),
+      );
+
+      await expectLater(
+        history.undo(),
+        throwsA(isA<GhostUndoDeclined>()),
+      );
+      // Declined, not failed: the copy stays, and the change remains the
+      // one Undo would take back once its panes close.
+      expect(history.undoName, 'Duplicate Server');
+      expect(await h.servers.byId(copy.id), isNotNull);
+
+      bound = false;
+      await history.undo();
+      expect(await h.servers.byId(copy.id), isNull);
     });
   });
 }

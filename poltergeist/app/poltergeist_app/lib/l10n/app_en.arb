@@ -725,20 +725,25 @@
   },
   "sidebarDelete": "Delete",
   "@sidebarDelete": {
-    "description": "Favorite row context verb: remove the favorite after confirmation (02 §4)."
+    "description": "Favorite row context verb: remove the favorite (undoable — it deletes at once and the toast offers Undo)."
   },
   "sidebarDeleteTitle": "Delete Favorite",
   "@sidebarDeleteTitle": {
-    "description": "Title of the favorite-delete confirmation dialog."
+    "description": "Undo-history change name for deleting a sidebar favorite (\"Undo Delete Favorite\")."
   },
-  "sidebarDeleteBody": "Delete \"{label}\" from favorites? This cannot be undone.",
-  "@sidebarDeleteBody": {
-    "description": "Body of the favorite-delete confirmation dialog.",
+  "sidebarDeletedNotice": "Deleted “{label}”",
+  "@sidebarDeletedNotice": {
+    "description": "Toast after a sidebar favorite is deleted (undoable, so it deletes at once); its action is Undo.",
     "placeholders": {
       "label": {
-        "type": "String"
+        "type": "String",
+        "example": "Work files"
       }
     }
+  },
+  "sidebarReorder": "Reorder",
+  "@sidebarReorder": {
+    "description": "Undo-history change name recorded when a sidebar favorite is drag-reordered (\"Undo Reorder\")."
   },
   "sidebarActionFailed": "That change couldn't be saved. Try again.",
   "@sidebarActionFailed": {
@@ -1160,6 +1165,108 @@
   "commandDisabledNoSelectionRedo": "No selection change to redo in this file list",
   "@commandDisabledNoSelectionRedo": {
     "description": "Disabled reason for Redo Selection when no usable redo history is available."
+  },
+  "editUndoLabel": "Undo",
+  "@editUndoLabel": {
+    "description": "Edit menu command label: step the app-data undo history back one change (edit.undo)."
+  },
+  "editRedoLabel": "Redo",
+  "@editRedoLabel": {
+    "description": "Edit menu command label: redo the last undone app-data change (edit.redo)."
+  },
+  "editUndoNamedLabel": "Undo {name}",
+  "@editUndoNamedLabel": {
+    "description": "Edit ▸ Undo while a change waits: names the change the step would take back (\"Undo Delete Favorite\").",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Delete Favorite"
+      }
+    }
+  },
+  "editRedoNamedLabel": "Redo {name}",
+  "@editRedoNamedLabel": {
+    "description": "Edit ▸ Redo while an undone change waits: names the change the step would reapply.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Delete Favorite"
+      }
+    }
+  },
+  "commandDisabledNoUndo": "Nothing to undo",
+  "@commandDisabledNoUndo": {
+    "description": "Disabled reason for Edit ▸ Undo while the app-data undo history is empty."
+  },
+  "commandDisabledNoRedo": "Nothing to redo",
+  "@commandDisabledNoRedo": {
+    "description": "Disabled reason for Edit ▸ Redo while no undone change waits."
+  },
+  "editUndone": "{name} undone",
+  "@editUndone": {
+    "description": "Toast after a successful app-data undo: names the change taken back (\"Delete Favorite undone\").",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Delete Favorite"
+      }
+    }
+  },
+  "editRedone": "{name} redone",
+  "@editRedone": {
+    "description": "Toast after a successful app-data redo: names the change reapplied.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Delete Favorite"
+      }
+    }
+  },
+  "editUndoFailed": "Couldn’t undo “{name}”: {error}",
+  "@editUndoFailed": {
+    "description": "Toast after a failed or declined app-data undo: the change stays recorded.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Delete Favorite"
+      },
+      "error": {
+        "type": "String",
+        "example": "It was deleted"
+      }
+    }
+  },
+  "editRedoFailed": "Couldn’t redo “{name}”: {error}",
+  "@editRedoFailed": {
+    "description": "Toast after a failed or declined app-data redo: the change stays recorded.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Delete Favorite"
+      },
+      "error": {
+        "type": "String",
+        "example": "It was deleted"
+      }
+    }
+  },
+  "undoChangeDuplicateServer": "Duplicate Server",
+  "@undoChangeDuplicateServer": {
+    "description": "Undo-history change name recorded when a catalog server is duplicated (\"Undo Duplicate Server\")."
+  },
+  "undoDeclineDeleted": "It was deleted",
+  "@undoDeclineDeleted": {
+    "description": "Reason an app-data undo/redo declines: the record the change would edit is already gone."
+  },
+  "undoDeclineServerBound": "“{label}” has open panes. Close them, then undo.",
+  "@undoDeclineServerBound": {
+    "description": "Reason undoing a catalog-server duplicate declines while its copy is bound to open panes.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Web Server (copy)"
+      }
+    }
   },
   "editSelectAllLabel": "Select All",
   "@editSelectAllLabel": {
@@ -3239,21 +3346,22 @@
   "@fileEditBuiltInLabel": {
     "description": "Command label: open the selected file in the built-in text editor (file.editBuiltIn, 02 §8.3, 06 §4.2)."
   },
-  "editorDiscardTitle": "Discard unsaved changes?",
-  "@editorDiscardTitle": {
-    "description": "Title of the editor's unsaved-changes guard (06 §2.3), shown when leaving with dirty edits."
+  "editorSaveChangesTitle": "Save changes to “{name}”?",
+  "@editorSaveChangesTitle": {
+    "description": "Title of the editor's unsaved-changes guard (06 §2.3), shown when leaving with dirty edits. {name} is the file name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "editorDiscardBody": "Changes not saved to the local copy will be lost.",
   "@editorDiscardBody": {
     "description": "Body of the editor's unsaved-changes guard (06 §2.3)."
   },
-  "editorDiscardKeep": "Keep editing",
-  "@editorDiscardKeep": {
-    "description": "Declines the editor's discard confirmation: the editor stays open."
-  },
-  "editorDiscardConfirm": "Discard",
-  "@editorDiscardConfirm": {
-    "description": "Accepts the editor's discard confirmation: unsaved edits are dropped."
+  "editorDiscardDontSave": "Don’t save",
+  "@editorDiscardDontSave": {
+    "description": "Closes the editor dropping its unsaved edits (06 §2.3's unsaved-changes guard)."
   },
   "editorFindTooltip": "Find",
   "@editorFindTooltip": {
@@ -10227,7 +10335,7 @@
   },
   "sidebarDeleteServerTitle": "Remove Server",
   "@sidebarDeleteServerTitle": {
-    "description": "Title of the confirmation before removing a saved server row."
+    "description": "Undo-history change name for deleting a saved server row (\"Undo Remove Server\")."
   },
   "viewFilterSidebarLabel": "Filter Sidebar",
   "@viewFilterSidebarLabel": {
@@ -10253,15 +10361,6 @@
   "sidebarAlreadyFavorite": "“{label}” is already in Favorites.",
   "@sidebarAlreadyFavorite": {
     "description": "Shown when Add Current Folder names a folder a favorite already holds.",
-    "placeholders": {
-      "label": {
-        "type": "String"
-      }
-    }
-  },
-  "sidebarDeleteServerBody": "Remove “{label}” from Servers? This cannot be undone.",
-  "@sidebarDeleteServerBody": {
-    "description": "Body of the confirmation before removing a saved server row.",
     "placeholders": {
       "label": {
         "type": "String"

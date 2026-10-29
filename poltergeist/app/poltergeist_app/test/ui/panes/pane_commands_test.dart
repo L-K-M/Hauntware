@@ -108,6 +108,100 @@ void main() {
     expect(ran, isTrue);
   });
 
+  // Windows reports AltGr as Ctrl + right Alt, so Ctrl+Alt+S would
+  // otherwise fire on AltGr+S (ś/ş on Polish and Turkish layouts) —
+  // non-Apple Alt chords bind left-Alt only.
+  testWidgets('AltGr does not fire a Ctrl+Alt command on Windows', (
+    tester,
+  ) async {
+    var ran = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: CommandChordScope(
+          commands: [
+            command(
+              'x',
+              activators: (_) => const [
+                SingleActivator(
+                  LogicalKeyboardKey.keyS,
+                  control: true,
+                  alt: true,
+                ),
+              ],
+              onRun: () => ran = true,
+            ),
+          ],
+          child: const Scaffold(
+            body: Focus(autofocus: true, child: SizedBox.expand()),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altRight);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altRight);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(ran, isFalse);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(ran, isTrue);
+  }, variant: TargetPlatformVariant({TargetPlatform.windows}));
+
+  testWidgets('either Alt side fires a Ctrl+Alt command on macOS', (
+    tester,
+  ) async {
+    var ran = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: CommandChordScope(
+          commands: [
+            command(
+              'x',
+              activators: (_) => const [
+                SingleActivator(
+                  LogicalKeyboardKey.keyS,
+                  control: true,
+                  alt: true,
+                ),
+              ],
+              onRun: () => ran++,
+            ),
+          ],
+          child: const Scaffold(
+            body: Focus(autofocus: true, child: SizedBox.expand()),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    for (final alt in [
+      LogicalKeyboardKey.altRight,
+      LogicalKeyboardKey.altLeft,
+    ]) {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(alt);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+      await tester.sendKeyUpEvent(alt);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+    }
+    expect(ran, 2);
+  }, variant: TargetPlatformVariant({TargetPlatform.macOS}));
+
   testWidgets('duplicate activators fail the registration assert', (
     tester,
   ) async {

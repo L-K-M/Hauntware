@@ -545,7 +545,7 @@ class _SavedServerRow extends StatelessWidget {
           label: data.controller.isPinned(id)
               ? l10n.sidebarUnpin
               : l10n.sidebarPinToTop,
-          onSelected: () => data.controller.togglePinned(id),
+          onSelected: () => _togglePinnedUndoably(data, id),
         ),
         const SidebarMenuDivider(),
         ..._editVerbs(context, data, bookmark),
@@ -572,6 +572,7 @@ class _SavedServerRow extends StatelessWidget {
             fraction,
             target: bookmark,
             group: group,
+            l10n: data.l10n,
             accepts: _anyBookmark,
           );
           if (reorder != null || payload is Bookmark) return reorder;
@@ -774,7 +775,7 @@ class _CatalogServerRow extends StatelessWidget {
             label: data.controller.isPinned(server.id)
                 ? l10n.sidebarUnpin
                 : l10n.sidebarPinToTop,
-            onSelected: () => data.controller.togglePinned(server.id),
+            onSelected: () => _togglePinnedUndoably(data, server.id),
           ),
           const SidebarMenuDivider(),
           if (view.onEditCatalogServer != null)
