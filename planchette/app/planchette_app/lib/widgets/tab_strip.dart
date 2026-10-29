@@ -36,6 +36,7 @@ class TabStrip extends StatefulWidget {
     required this.onSelect,
     required this.onClose,
     this.onContextMenu,
+    this.leading,
     required this.onNew,
     required this.onOpen,
     required this.onSave,
@@ -53,6 +54,11 @@ class TabStrip extends StatefulWidget {
 
   /// A right click on a tab, with the pointer's global position for a menu.
   final void Function(int id, Offset position)? onContextMenu;
+
+  /// A widget at the strip's leading edge, before the tabs: the sidebar
+  /// toggle while a folder workspace is open with its browser hidden.
+  final Widget? leading;
+
   final VoidCallback onNew;
   final VoidCallback onOpen;
 
@@ -158,6 +164,11 @@ class _TabStripState extends State<TabStrip> {
         ),
         child: Row(
           children: [
+            if (widget.leading case final leading?)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 4),
+                child: leading,
+              ),
             Expanded(
               child: Listener(
                 // A vertical wheel scrolls the horizontal strip. The resolver

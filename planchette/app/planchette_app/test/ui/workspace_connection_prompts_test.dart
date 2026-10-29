@@ -166,19 +166,50 @@ void main() {
         '~',
       );
       await tester.enterText(find.byType(TextField), '~another-user');
-      await tester.tap(find.text('Open'));
+      await tester.pump();
+      // Open stays disabled for a path the editor refuses; Return says why.
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Open'))
+            .onPressed,
+        isNull,
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
       expect(
         find.text('Enter a folder using /path, ~ or ~/path.'),
         findsOneWidget,
       );
       await tester.enterText(find.byType(TextField), '/etc');
+      await tester.pumpAndSettle();
+      // A fixed path clears the error and re-enables Open.
+      expect(
+        find.text('Enter a folder using /path, ~ or ~/path.'),
+        findsNothing,
+      );
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
       expect(await root, '/etc');
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  testWidgets('remote workspace root submits by Return once valid', (
+    tester,
+  ) async {
+    final key = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      MaterialApp(navigatorKey: key, home: const Scaffold()),
+    );
+    final root = showRemoteWorkspaceRoot(key.currentContext!, server);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '~/sites');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(await root, '~/sites');
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('removing the prompt host settles credential resolution', (
     tester,
