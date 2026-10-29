@@ -26,6 +26,7 @@ import 'services/remote_git_controller.dart';
 import 'services/secrets_recovery.dart';
 import 'services/server_duplication.dart';
 import 'services/shell_location.dart';
+import 'services/terminal_context.dart';
 import 'services/xterm_engine.dart';
 import 'theme/app_appearance.dart';
 import 'ui/built_in_text_editor.dart';
@@ -150,6 +151,10 @@ class TerminalSession extends PaneTab {
   /// Git status/actions for the shell's reported directory, driven by the
   /// Git sidebar tab. Lives only while connected, like [files].
   RemoteGitController? git;
+
+  /// The links and paths the Context tab has found in this session's
+  /// output. Lives as long as the tab, like the scrollback it reads.
+  late final TerminalContextStack contextStack;
   final Map<String, ManagedRemoteFile> retainedLocalCopies = {};
   bool connecting;
   String? error;
@@ -237,6 +242,14 @@ class TerminalSession extends PaneTab {
        metadata = ValueNotifier<SessionMetadata>(initialMetadata),
        customName = ValueNotifier<String?>(initialCustomName) {
     log = SshConnectionLog(onUpdate: logNotifier.bump);
+    // A local shell's home is this machine's; a server's is known once its
+    // Files have opened, and a `~/` path waits for it until then.
+    contextStack = TerminalContextStack(
+      terminal: engine.terminal,
+      workingDirectory: _shellLocation,
+      homeDirectory: () =>
+          isLocal ? Platform.environment['HOME'] : files?.homePath,
+    );
     _shellLocation.addListener(_syncDirectory);
     engine.terminalTitle.addListener(_syncTitle);
     engine.activeCommand.addListener(_syncRunningCommand);
@@ -308,6 +321,7 @@ class TerminalSession extends PaneTab {
   @override
   void dispose() {
     _commandReveal?.cancel();
+    contextStack.dispose();
     _shellLocation.removeListener(_syncDirectory);
     _shellLocation.dispose();
     engine.terminalTitle.removeListener(_syncTitle);

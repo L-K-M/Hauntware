@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../family_hues.dart';
@@ -6,15 +8,16 @@ import '../theme.dart';
 import 'app_menus.dart';
 import 'settings_screen.dart';
 import 'chat_sidebar.dart';
+import 'context_pane.dart';
 import 'files_pane.dart';
 import 'git_pane.dart';
 import 'selected_tab_view.dart';
 import 'snippets_pane.dart';
 import 'terminal_pane.dart';
 
-/// The right-hand utility panel: Files, Git, Snippets and the Assistant (the
-/// LLM chat, when a provider is configured). Used both as a tiled pane on
-/// wide layouts and inside the end-drawer on narrow ones.
+/// The right-hand utility panel: Files, Context, Git, Snippets and the
+/// Assistant (the LLM chat, when a provider is configured). Used both as a
+/// tiled pane on wide layouts and inside the end-drawer on narrow ones.
 class SidebarPanel extends StatefulWidget {
   final bool includeFiles;
 
@@ -53,6 +56,24 @@ class _SidebarPanelState extends State<SidebarPanel>
     );
   }
 
+  /// Brings Files forward: its tab here, or its own screen from the narrow
+  /// drawer, which has no Files tab.
+  void _showFiles() {
+    if (!mounted) return;
+    final files = _panelTabs.indexWhere((tab) => tab.page == _PanelPage.files);
+    if (files >= 0) {
+      _tabs!.index = files;
+      return;
+    }
+    final navigator = Navigator.of(context);
+    Scaffold.maybeOf(context)?.closeEndDrawer();
+    unawaited(
+      navigator.push(
+        MaterialPageRoute<void>(builder: (_) => const FilesScreen()),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _tabs?.dispose();
@@ -60,9 +81,9 @@ class _SidebarPanelState extends State<SidebarPanel>
   }
 
   /// The tabs in order, each with its family hue (Poltergeist's D34, the
-  /// sibling apps' colour vocabulary): Files the places blue, Git the code
-  /// orange, the Snippets the saved-recipe teal, the Assistant the AI
-  /// purple.
+  /// sibling apps' colour vocabulary): Files the places blue, Context the
+  /// links cyan, Git the code orange, the Snippets the saved-recipe teal,
+  /// the Assistant the AI purple.
   List<_PanelTab> get _panelTabs => [
     if (widget.includeFiles)
       const _PanelTab(
@@ -72,6 +93,13 @@ class _SidebarPanelState extends State<SidebarPanel>
         Icons.folder,
         FamilyHue.blue,
       ),
+    const _PanelTab(
+      _PanelPage.context,
+      'Context',
+      Icons.dataset_linked_outlined,
+      Icons.dataset_linked,
+      FamilyHue.cyan,
+    ),
     const _PanelTab(
       _PanelPage.git,
       'Git',
@@ -116,6 +144,9 @@ class _SidebarPanelState extends State<SidebarPanel>
                     for (final tab in tabs)
                       switch (tab.page) {
                         _PanelPage.files => const FilesPane(),
+                        _PanelPage.context => ContextPane(
+                          showFiles: _showFiles,
+                        ),
                         _PanelPage.git => const GitPane(),
                         _PanelPage.snippets => const SnippetsPane(),
                         _PanelPage.assistant =>
@@ -140,7 +171,7 @@ class _SidebarPanelState extends State<SidebarPanel>
 const panelTabWashAlpha = 0.16;
 
 /// What a panel tab opens.
-enum _PanelPage { files, git, snippets, assistant }
+enum _PanelPage { files, context, git, snippets, assistant }
 
 class _PanelTab {
   const _PanelTab(this.page, this.label, this.glyph, this.openGlyph, this.hue);

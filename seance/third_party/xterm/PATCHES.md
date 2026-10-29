@@ -578,6 +578,43 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     elsewhere claims too when nobody reports taps, while a mouse-reporting
     remote still keeps those clicks.
 
+### Reflow keeps wide characters whole (regressions: `test/src/core/reflow_test.dart`, `app/seance_app/test/terminal_context_test.dart`)
+
+43. **Widening no longer copies a wide character's second cell twice**
+    (`core/reflow.dart#_LineReflow.add`): a wide character in a row's last
+    column keeps its second cell at the start of the next row, and
+    `getTrimmedLength` counts that second cell, so it returned one past the
+    row. Reflowing to a wider width then copied a cell from beyond the row,
+    and the second cell again from the next row: the line held an empty
+    cell after the character that the output never wrote. Text read cell
+    by cell saw a gap there, so Séance's Context tab read
+    `~/文档/报告/二零二六年十月.xlsx` as `~/文档` and the rest. The trimmed
+    length is clamped to the old width.
+
+44. **A line that ends with a wide character at the edge stays in order**
+    (`core/reflow.dart#_LineReflow.add`): when such a character is the
+    line's last, the next row holds only its second cell, and its trimmed
+    length is 0. Upstream's fast path for empty rows then took that row as
+    a line of its own while the reflowed line's tail was still pending, so
+    a blank wrapped row landed inside the line, before its end. The row is
+    now folded into the pending line (its anchors moved, the row dropped)
+    whenever content is pending, with the second cell copied when its
+    first ends that line; only a truly empty line takes the fast path.
+    A randomized round trip through widths of two columns or more keeps
+    every line's text (`test/src/core/reflow_property_test.dart`), where
+    upstream duplicated a cell at the end of many.
+
+45. **Reflowing to one column with a wide character finishes**
+    (`core/reflow.dart#_LineReflow._addPart`, pre-existing upstream): a
+    wide character is left to the next row when it does not fit, but a
+    row one cell wide never fits one, so each pass filled a row with
+    nothing, forever, with memory growing. A one-column row now takes the
+    character anyway, and its second cell goes on the next row, which
+    widening joins back (patch 44). Some round trips through one column
+    still repeat a reused row's stale cells at the end of a line; one
+    column is a degenerate width, and this ends a hang rather than making
+    it exact.
+
 ### App-layer notes (outside this package)
 
 - The app passes `shortcuts: {}` and instead routes ⌘C/⌘V/⌘A on

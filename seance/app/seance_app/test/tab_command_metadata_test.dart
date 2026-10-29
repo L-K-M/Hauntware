@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/app_state.dart';
+import 'package:seance_app/services/terminal_context.dart';
 import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_core/seance_core.dart';
 
@@ -86,6 +87,8 @@ void main() {
 
     engine.feed(Uint8List.fromList(utf8.encode('\x1b]133;D;0\x07')));
     expect(tab.metadata.value.runningCommand, isNull);
+    // The output also armed the Context tab's read.
+    await tester.pump(TerminalContextStack.scanDelay);
   });
 
   testWidgets('a replacement command restarts the delay', (tester) async {
@@ -145,6 +148,7 @@ void main() {
     engine.feed(Uint8List.fromList(utf8.encode('\x1b]133;D;0\x07')));
     expect(tab.metadata.value.runningCommand, isNull);
     expect(tab.metadata.value.workingDirectory, '/srv/app');
+    await tester.pump(TerminalContextStack.scanDelay);
   });
 
   test('a reconnect carries the place but not the command', () {
