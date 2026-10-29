@@ -3,7 +3,7 @@ import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_ui/ghost_ui.dart'
-    show GhostChordBinding, dispatchGhostChord;
+    show GhostChordBinding, GhostUndoHistory, dispatchGhostChord;
 
 import '../app_state.dart';
 import '../main.dart';
@@ -401,7 +401,7 @@ void _runTabCommand(BuildContext context, AppState state, TabCommand command) {
 }
 
 /// What a window shortcut does: show or hide a side pane, open an
-/// inspector page, or step the app's undo history ([AppUndoHistory]).
+/// inspector page, or step the app's undo history ([GhostUndoHistory]).
 enum WindowCommand {
   toggleSidebar,
   toggleInspector,

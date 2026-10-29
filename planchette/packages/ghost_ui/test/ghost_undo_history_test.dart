@@ -1,18 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:seance_app/services/undo_history.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 
 void main() {
-  UndoableChange change(String name, List<String> log) => UndoableChange(
-    name: name,
-    undo: () async => log.add('undo $name'),
-    redo: () async => log.add('redo $name'),
-  );
+  GhostUndoableChange change(String name, List<String> log) =>
+      GhostUndoableChange(
+        name: name,
+        undo: () async => log.add('undo $name'),
+        redo: () async => log.add('redo $name'),
+      );
 
   test('undo and redo walk the history and name the next step', () async {
     final log = <String>[];
-    final history = AppUndoHistory()
+    final history = GhostUndoHistory()
       ..record(change('Delete snippet', log))
       ..record(change('Pin to top', log));
     expect(history.undoName, 'Pin to top');
@@ -30,7 +31,7 @@ void main() {
 
   test('a new change ends what could be redone', () async {
     final log = <String>[];
-    final history = AppUndoHistory()..record(change('Edit snippet', log));
+    final history = GhostUndoHistory()..record(change('Edit snippet', log));
     await history.undo();
     expect(history.redoName, 'Edit snippet');
     history.record(change('New snippet', log));
@@ -40,7 +41,7 @@ void main() {
 
   test('the oldest changes fall off past the limit', () async {
     final log = <String>[];
-    final history = AppUndoHistory(limit: 2)
+    final history = GhostUndoHistory(limit: 2)
       ..record(change('one', log))
       ..record(change('two', log))
       ..record(change('three', log));
@@ -51,9 +52,9 @@ void main() {
   });
 
   test('a change that fails to apply leaves the history', () async {
-    final history = AppUndoHistory()
+    final history = GhostUndoHistory()
       ..record(
-        UndoableChange(
+        GhostUndoableChange(
           name: 'Duplicate server',
           undo: () async => throw StateError('vault locked'),
           redo: () async {},
@@ -66,17 +67,17 @@ void main() {
 
   test('a declined step stays where it was, ready to try again', () async {
     var tries = 0;
-    final history = AppUndoHistory()
+    final history = GhostUndoHistory()
       ..record(
-        UndoableChange(
+        GhostUndoableChange(
           name: 'Duplicate server',
           undo: () async {
-            if (tries++ == 0) throw const UndoDeclined('close its tabs');
+            if (tries++ == 0) throw const GhostUndoDeclined('close its tabs');
           },
           redo: () async {},
         ),
       );
-    await expectLater(history.undo(), throwsA(isA<UndoDeclined>()));
+    await expectLater(history.undo(), throwsA(isA<GhostUndoDeclined>()));
     expect(history.undoName, 'Duplicate server');
     await history.undo();
     expect(history.undoName, isNull);
@@ -86,9 +87,9 @@ void main() {
   test('a change recorded while a step applies lands after it', () async {
     final log = <String>[];
     final gate = Completer<void>();
-    final history = AppUndoHistory()
+    final history = GhostUndoHistory()
       ..record(
-        UndoableChange(
+        GhostUndoableChange(
           name: 'Delete snippet',
           undo: () => gate.future,
           redo: () async {},
@@ -106,7 +107,7 @@ void main() {
   test('a notice undoes only the change it names', () {
     final log = <String>[];
     final first = change('Delete snippet', log);
-    final history = AppUndoHistory()..record(first);
+    final history = GhostUndoHistory()..record(first);
     expect(history.isNextUndo(first), isTrue);
     history.record(change('Pin to top', log));
     expect(history.isNextUndo(first), isFalse);
@@ -116,13 +117,13 @@ void main() {
     'a change recorded while an undo is declined stays the newest',
     () async {
       final gate = Completer<void>();
-      final history = AppUndoHistory()
+      final history = GhostUndoHistory()
         ..record(
-          UndoableChange(
+          GhostUndoableChange(
             name: 'Duplicate server',
             undo: () async {
               await gate.future;
-              throw const UndoDeclined('Close its tabs first.');
+              throw const GhostUndoDeclined('Close its tabs first.');
             },
             redo: () async {},
           ),
@@ -132,7 +133,7 @@ void main() {
       // The user deletes a snippet while the undo is still deciding.
       history.record(change('Delete snippet', []));
       gate.complete();
-      await expectLater(undoing, throwsA(isA<UndoDeclined>()));
+      await expectLater(undoing, throwsA(isA<GhostUndoDeclined>()));
 
       expect(history.undoName, 'Delete snippet');
       await history.undo();

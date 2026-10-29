@@ -6,8 +6,8 @@ import 'package:flutter/foundation.dart';
 /// the notice ("Delete snippet undone"); [undo] and [redo] apply its two
 /// directions.
 @immutable
-final class UndoableChange {
-  const UndoableChange({
+final class GhostUndoableChange {
+  const GhostUndoableChange({
     required this.name,
     required this.undo,
     required this.redo,
@@ -21,8 +21,8 @@ final class UndoableChange {
 /// A step a change declines to take right now, for a reason the user can
 /// clear ("close its tabs first"): the change stays where it was, so the
 /// same Undo works once they have.
-final class UndoDeclined implements Exception {
-  const UndoDeclined(this.message);
+final class GhostUndoDeclined implements Exception {
+  const GhostUndoDeclined(this.message);
 
   final String message;
 
@@ -30,18 +30,18 @@ final class UndoDeclined implements Exception {
   String toString() => message;
 }
 
-/// The app's own undo history: what the Undo and Redo shortcuts do
-/// outside text fields, which keep their own. Holds the user's changes to
-/// snippets and the server list, newest last, and only for this run of the
-/// app.
-final class AppUndoHistory extends ChangeNotifier {
-  AppUndoHistory({this.limit = 50});
+/// An app's own undo history: what the Undo and Redo shortcuts do outside
+/// text fields, which keep their own. Holds the user's changes to the
+/// app's data (a deleted snippet, a pinned server), newest last, and only
+/// for this run of the app. Hosts word the notices and bind the keys.
+final class GhostUndoHistory extends ChangeNotifier {
+  GhostUndoHistory({this.limit = 50});
 
   /// The most changes kept; the oldest go first.
   final int limit;
 
-  final List<UndoableChange> _done = [];
-  final List<UndoableChange> _undone = [];
+  final List<GhostUndoableChange> _done = [];
+  final List<GhostUndoableChange> _undone = [];
 
   /// A change being undone or redone, during which neither applies.
   bool _stepping = false;
@@ -58,12 +58,12 @@ final class AppUndoHistory extends ChangeNotifier {
 
   /// Whether [change] is the one Undo would take back now: a notice
   /// offering to undo one change must not undo another.
-  bool isNextUndo(UndoableChange change) =>
+  bool isNextUndo(GhostUndoableChange change) =>
       !_stepping && identical(_done.lastOrNull, change);
 
   /// Records a change the user just made. Anything undone before it can
   /// no longer be redone, as everywhere else.
-  void record(UndoableChange change) {
+  void record(GhostUndoableChange change) {
     _recorded++;
     _done.add(change);
     if (_done.length > limit) _done.removeAt(0);
@@ -78,13 +78,13 @@ final class AppUndoHistory extends ChangeNotifier {
   /// Applies the newest change in [from], moving it to [to] first, so a
   /// change recorded while it applies lands after it. One that throws
   /// leaves the history and the error passes on, since a change that did
-  /// not apply cannot be stepped back over; one that is [UndoDeclined]
+  /// not apply cannot be stepped back over; one that is [GhostUndoDeclined]
   /// goes back where it was: under any change recorded meanwhile, and not
   /// into a redo list that such a change ended.
   Future<void> _step(
-    List<UndoableChange> from,
-    List<UndoableChange> to,
-    Future<void> Function(UndoableChange change) apply,
+    List<GhostUndoableChange> from,
+    List<GhostUndoableChange> to,
+    Future<void> Function(GhostUndoableChange change) apply,
   ) async {
     if (_stepping || from.isEmpty) return;
     final change = from.removeLast();
@@ -95,7 +95,7 @@ final class AppUndoHistory extends ChangeNotifier {
     notifyListeners();
     try {
       await apply(change);
-    } on UndoDeclined {
+    } on GhostUndoDeclined {
       to.remove(change);
       final redoEnded = identical(from, _undone) && _recorded != recorded;
       if (!redoEnded) from.insert(min(slot, from.length), change);

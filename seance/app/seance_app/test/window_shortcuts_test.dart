@@ -5,10 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostUndoDeclined, GhostUndoableChange;
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart';
 import 'package:seance_app/services/app_services.dart';
-import 'package:seance_app/services/undo_history.dart';
 import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/theme.dart';
 import 'package:seance_app/ui/adaptive_shell.dart';
@@ -151,7 +152,7 @@ void main() {
   void recordChange(String name) {
     counts = (undone: 0, redone: 0);
     state!.undoHistory.record(
-      UndoableChange(
+      GhostUndoableChange(
         name: name,
         undo: () async =>
             counts = (undone: counts.undone + 1, redone: counts.redone),
@@ -251,9 +252,10 @@ void main() {
     ) async {
       await bootPlain(tester, TargetPlatform.linux);
       state!.undoHistory.record(
-        UndoableChange(
+        GhostUndoableChange(
           name: 'Duplicate server',
-          undo: () async => throw const UndoDeclined('Close its tabs first.'),
+          undo: () async =>
+              throw const GhostUndoDeclined('Close its tabs first.'),
           redo: () async {},
         ),
       );

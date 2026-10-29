@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:ghost_apk_update/ghost_apk_update.dart';
 import 'package:ghost_keystore/app_lock.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
 import 'package:planchette_editor/planchette_editor.dart'
     show EditorLigatures, EditorTextSize, EditorZoom;
 import 'package:seance_core/catalog.dart' show HostKeyConflict;
@@ -26,7 +27,6 @@ import 'services/remote_git_controller.dart';
 import 'services/secrets_recovery.dart';
 import 'services/server_duplication.dart';
 import 'services/shell_location.dart';
-import 'services/undo_history.dart';
 import 'services/xterm_engine.dart';
 import 'theme/app_appearance.dart';
 import 'ui/built_in_text_editor.dart';
@@ -1280,8 +1280,8 @@ class AppState extends ChangeNotifier {
     await services.saveSettings();
   }
 
-  /// What the app's Undo takes back outside text fields (AppUndoHistory).
-  final AppUndoHistory undoHistory = AppUndoHistory();
+  /// What the app's Undo takes back outside text fields (GhostUndoHistory).
+  final GhostUndoHistory undoHistory = GhostUndoHistory();
 
   /// Whether the wide layout shows its server list (the sidebar button).
   bool get sidebarVisible => !services.settings.sidebarHidden;

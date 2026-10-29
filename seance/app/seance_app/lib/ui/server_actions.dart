@@ -5,10 +5,11 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostUndoDeclined, GhostUndoableChange;
 import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
-import '../services/undo_history.dart';
 import '../theme.dart';
 import 'server_editor.dart';
 import 'top_toast.dart';
@@ -82,11 +83,11 @@ Future<void> duplicateServerInteractively(
   // edits, that only their own close guards may end: Undo waits for them.
   var latest = copy;
   state.undoHistory.record(
-    UndoableChange(
+    GhostUndoableChange(
       name: 'Duplicate server',
       undo: () async {
         if (state.tabsForServer(latest.id).isNotEmpty) {
-          throw UndoDeclined(
+          throw GhostUndoDeclined(
             '“${latest.label}” has open tabs. Close them, then undo.',
           );
         }
@@ -122,7 +123,7 @@ Future<void> toggleServerPinUndoably(
   final pinning = !state.isServerPinned(server.id);
   await state.toggleServerPin(server.id);
   state.undoHistory.record(
-    UndoableChange(
+    GhostUndoableChange(
       name: pinning ? 'Pin to top' : 'Unpin',
       undo: () => state.toggleServerPin(server.id),
       redo: () => state.toggleServerPin(server.id),

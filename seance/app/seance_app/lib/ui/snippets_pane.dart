@@ -2,12 +2,12 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostUndoableChange;
 import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
 import '../family_hues.dart';
 import '../main.dart';
-import '../services/undo_history.dart';
 import '../theme.dart' show SeanceTheme;
 import 'top_toast.dart';
 
@@ -217,13 +217,13 @@ class _SnippetsPaneState extends State<SnippetsPane> {
 
 /// Deletes [snippet] and records it in the app's undo history, whose Undo
 /// saves it back, and returns the recorded change.
-Future<UndoableChange> deleteSnippetUndoably(
+Future<GhostUndoableChange> deleteSnippetUndoably(
   AppState state,
   Snippet snippet,
 ) async {
   await state.deleteSnippet(snippet.id);
   final stamps = _RestoreStamps(snippet.updatedAt);
-  final change = UndoableChange(
+  final change = GhostUndoableChange(
     name: 'Delete snippet',
     undo: () => state.saveSnippet(snippet.copyWith(updatedAt: stamps.next())),
     redo: () => state.deleteSnippet(snippet.id),
@@ -445,13 +445,13 @@ class _SnippetEditorState extends State<_SnippetEditor> {
     final stamps = _RestoreStamps(snippet.updatedAt);
     state.undoHistory.record(
       existing == null
-          ? UndoableChange(
+          ? GhostUndoableChange(
               name: 'New snippet',
               undo: () => state.deleteSnippet(snippet.id),
               redo: () =>
                   state.saveSnippet(snippet.copyWith(updatedAt: stamps.next())),
             )
-          : UndoableChange(
+          : GhostUndoableChange(
               name: 'Edit snippet',
               undo: () => state.saveSnippet(
                 existing.copyWith(updatedAt: stamps.next()),
