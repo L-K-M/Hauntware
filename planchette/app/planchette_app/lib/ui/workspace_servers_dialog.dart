@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:seance_core/seance_core.dart';
 
@@ -34,7 +36,16 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
   @override
   void initState() {
     super.initState();
+    for (final controller in [_baseUrl, _username, _password, _passphrase]) {
+      controller.addListener(_fieldsChanged);
+    }
     _load();
+  }
+
+  /// The Sign In gating follows what the fields hold, so every edit
+  /// rebuilds the actions.
+  void _fieldsChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _load() async {
@@ -71,6 +82,19 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
     } catch (_) {
       // Failed enrollment remains open with the catalog's error visible.
     }
+  }
+
+  /// Sign In's readiness: URL, username and password filled (the
+  /// passphrase is optional) and nothing already in flight.
+  bool get _canSignIn =>
+      _baseUrl.text.trim().isNotEmpty &&
+      _username.text.trim().isNotEmpty &&
+      _password.text.isNotEmpty;
+
+  /// Return in any field submits, the same gate the button applies.
+  void _submitSignIn() {
+    if (_catalog.busy || !_canSignIn) return;
+    unawaited(_signIn());
   }
 
   Future<void> _refresh() async {
@@ -143,6 +167,7 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
                   enabled: !busy,
                   keyboardType: TextInputType.url,
                   decoration: const InputDecoration(labelText: 'Server URL'),
+                  onSubmitted: busy ? null : (_) => _submitSignIn(),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -150,6 +175,7 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
                   readOnly: account != null,
                   enabled: !busy,
                   decoration: const InputDecoration(labelText: 'Username'),
+                  onSubmitted: busy ? null : (_) => _submitSignIn(),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -161,6 +187,7 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
                   decoration: const InputDecoration(
                     labelText: 'Account password',
                   ),
+                  onSubmitted: busy ? null : (_) => _submitSignIn(),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -172,7 +199,7 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
                   decoration: const InputDecoration(
                     labelText: 'Encryption passphrase',
                   ),
-                  onSubmitted: busy ? null : (_) => _signIn(),
+                  onSubmitted: busy ? null : (_) => _submitSignIn(),
                 ),
                 const SizedBox(height: 12),
                 SwitchListTile(
@@ -238,7 +265,7 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
             ),
           if (_showSignIn)
             FilledButton(
-              onPressed: busy ? null : _signIn,
+              onPressed: busy || !_canSignIn ? null : _submitSignIn,
               child: const Text('Sign In'),
             )
           else

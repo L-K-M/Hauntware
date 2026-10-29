@@ -22,6 +22,8 @@ final class AppSettings {
     this.ligatures = EditorLigatures.on,
     this.recentTextTools = const [],
     this.saveOptions = const TextSaveOptions(),
+    this.sidebarVisible = true,
+    this.sidebarWidth = defaultSidebarWidth,
   });
 
   /// Bounds a stored size so a bad file cannot make the editor unreadable.
@@ -33,6 +35,11 @@ final class AppSettings {
 
   /// A stored indentation width outside this range is not one.
   static const int maximumIndentWidth = 16;
+
+  /// The browser's minimum and default widths. The split view caps the
+  /// rendered width to the window, including on a smaller display.
+  static const double minimumSidebarWidth = 160;
+  static const double defaultSidebarWidth = 300;
 
   final ThemeMode themeMode;
   final int fontSize;
@@ -58,6 +65,15 @@ final class AppSettings {
   /// Opt-in whitespace cleanup. Both choices default off.
   final TextSaveOptions saveOptions;
 
+  /// Whether the folder-workspace browser shows beside the editor. Hiding
+  /// it never closes the workspace, so this survives a restart as a mere
+  /// layout choice.
+  final bool sidebarVisible;
+
+  /// The folder-workspace browser's width as the user last settled it, in
+  /// logical pixels. New windows and a relaunch start from it.
+  final double sidebarWidth;
+
   AppSettings copyWith({
     ThemeMode? themeMode,
     int? fontSize,
@@ -66,6 +82,8 @@ final class AppSettings {
     EditorLigatures? ligatures,
     List<Object?>? recentTextTools,
     TextSaveOptions? saveOptions,
+    bool? sidebarVisible,
+    double? sidebarWidth,
   }) => AppSettings(
     themeMode: themeMode ?? this.themeMode,
     fontSize: fontSize ?? this.fontSize,
@@ -74,6 +92,8 @@ final class AppSettings {
     ligatures: ligatures ?? this.ligatures,
     recentTextTools: recentTextTools ?? this.recentTextTools,
     saveOptions: saveOptions ?? this.saveOptions,
+    sidebarVisible: sidebarVisible ?? this.sidebarVisible,
+    sidebarWidth: sidebarWidth ?? this.sidebarWidth,
   );
 
   Map<String, Object?> toJson() => {
@@ -89,6 +109,9 @@ final class AppSettings {
     if (fontFamily != null) 'fontFamily': fontFamily,
     'ligatures': ligatures.name,
     if (recentTextTools.isNotEmpty) 'recentTextTools': recentTextTools,
+    // The defaults need no keys: an older file stays valid unchanged.
+    if (!sidebarVisible) 'sidebarVisible': false,
+    if (sidebarWidth != defaultSidebarWidth) 'sidebarWidth': sidebarWidth,
   };
 
   /// Read a stored document, falling back field by field. One bad value costs
@@ -109,6 +132,11 @@ final class AppSettings {
           ? List<Object?>.of(json['recentTextTools'] as List)
           : const [],
       saveOptions: _saveOptions(json),
+      sidebarVisible: json['sidebarVisible'] is bool
+          ? json['sidebarVisible'] as bool
+          : fallback.sidebarVisible,
+      sidebarWidth:
+          _sidebarWidth(json['sidebarWidth']) ?? fallback.sidebarWidth,
     );
   }
 
@@ -152,6 +180,12 @@ final class AppSettings {
     );
   }
 
+  static double? _sidebarWidth(Object? value) {
+    if (value is! num) return null;
+    final width = value.toDouble();
+    return width.isFinite && width >= minimumSidebarWidth ? width : null;
+  }
+
   @override
   bool operator ==(Object other) =>
       other is AppSettings &&
@@ -161,6 +195,8 @@ final class AppSettings {
       other.fontFamily == fontFamily &&
       other.ligatures == ligatures &&
       other.saveOptions == saveOptions &&
+      other.sidebarVisible == sidebarVisible &&
+      other.sidebarWidth == sidebarWidth &&
       _listsEqual(other.recentTextTools, recentTextTools);
 
   /// The list is JSON-shaped (it is what [TextToolHistory.encode] wrote),
@@ -178,6 +214,8 @@ final class AppSettings {
     fontFamily,
     ligatures,
     saveOptions,
+    sidebarVisible,
+    sidebarWidth,
     jsonEncode(recentTextTools),
   );
 }

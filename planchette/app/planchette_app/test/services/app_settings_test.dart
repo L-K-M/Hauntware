@@ -100,6 +100,42 @@ void main() {
       );
     });
 
+    test('the sidebar layout round-trips and validates stored widths', () {
+      const settings = AppSettings(sidebarVisible: false, sidebarWidth: 420);
+      expect(AppSettings.fromJson(settings.toJson()), settings);
+      // The defaults live in no key, so an older file keeps them.
+      expect(const AppSettings().toJson(), isNot(contains('sidebarVisible')));
+      expect(
+        AppSettings.fromJson(const {'sidebarVisible': false}).sidebarVisible,
+        isFalse,
+      );
+      for (final width in [40, double.infinity, double.nan, 'wide']) {
+        expect(
+          AppSettings.fromJson({'sidebarWidth': width}).sidebarWidth,
+          AppSettings.defaultSidebarWidth,
+          reason: '$width',
+        );
+      }
+      // The minimum and wider preferences survive a hand edit.
+      expect(
+        AppSettings.fromJson(const {'sidebarWidth': 160}).sidebarWidth,
+        160,
+      );
+      expect(
+        AppSettings.fromJson(const {'sidebarWidth': 1000}).sidebarWidth,
+        1000,
+      );
+      expect(
+        AppSettings.fromJson(const {'sidebarVisible': 'nope'}).sidebarVisible,
+        isTrue,
+      );
+    });
+
+    test('a sidebar resized on a wide display survives a restart', () {
+      const settings = AppSettings(sidebarWidth: 1300);
+      expect(AppSettings.fromJson(settings.toJson()).sidebarWidth, 1300);
+    });
+
     test('an unreadable ligature choice keeps them on', () {
       for (final stored in ['nonsense', 0, false, null]) {
         expect(

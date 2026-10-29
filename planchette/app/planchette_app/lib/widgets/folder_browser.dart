@@ -6,7 +6,60 @@ import 'package:flutter/services.dart';
 import 'package:ghost_ui/ghost_ui.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
+import '../services/app_settings.dart' show AppSettings;
 import '../services/folder_workspace.dart';
+
+/// The suite's sidebar chord, one definition for everywhere it is bound or
+/// spelled: ⌃⌘S on Apple platforms, Ctrl+Alt+S elsewhere. Off Apple
+/// platforms the binding carries `leftAltOnly`, so AltGr (which Windows
+/// reports as Ctrl + right Alt) never triggers it.
+SingleActivator sidebarShortcut(TargetPlatform platform) => switch (platform) {
+  TargetPlatform.macOS || TargetPlatform.iOS => const SingleActivator(
+    LogicalKeyboardKey.keyS,
+    control: true,
+    meta: true,
+  ),
+  _ => const SingleActivator(LogicalKeyboardKey.keyS, control: true, alt: true),
+};
+
+/// The icon button that hides or shows the folder-workspace sidebar: in the
+/// browser's header while it shows, at the tab strip's leading edge while
+/// hidden. Named for what it would do, with the chord in its tooltip.
+class WorkspaceSidebarToggle extends StatelessWidget {
+  const WorkspaceSidebarToggle({
+    super.key,
+    required this.visible,
+    required this.onToggle,
+    this.visualDensity,
+  });
+
+  /// Whether the sidebar shows now; the tooltip names the other state.
+  final bool visible;
+
+  final VoidCallback onToggle;
+
+  /// Compact where the host row is, as the tab strip's is.
+  final VisualDensity? visualDensity;
+
+  @override
+  Widget build(BuildContext context) {
+    final platform = Theme.of(context).platform;
+    final label = '${visible ? 'Hide' : 'Show'} sidebar';
+    final keys = formatShortcutActivator(sidebarShortcut(platform), platform);
+    // view_sidebar draws its panel on the reading direction's end: the
+    // browser sits at the start, so the glyph mirrors in LTR.
+    final ltr = Directionality.of(context) == TextDirection.ltr;
+    return IconButton(
+      tooltip: keys == null ? label : '$label $keys',
+      visualDensity: visualDensity,
+      onPressed: onToggle,
+      icon: Transform.flip(
+        flipX: ltr,
+        child: const Icon(Icons.view_sidebar_outlined, size: 18),
+      ),
+    );
+  }
+}
 
 /// The same file rows and order as Poltergeist, with opening as the primary
 /// action. The host owns documents and remote checkouts.
@@ -15,10 +68,15 @@ class FolderBrowser extends StatefulWidget {
     super.key,
     required this.workspace,
     required this.onOpen,
+    required this.onToggleSidebar,
     this.enabled = true,
   });
   final FolderWorkspace workspace;
   final ValueChanged<RemoteFileEntry> onOpen;
+
+  /// Hides the sidebar without closing the workspace; the browser shows
+  /// only while the sidebar is visible.
+  final VoidCallback onToggleSidebar;
   final bool enabled;
 
   @override
@@ -67,6 +125,10 @@ class _FolderBrowserState extends State<FolderBrowser> {
             padding: const EdgeInsets.only(left: 12),
             child: Row(
               children: [
+                WorkspaceSidebarToggle(
+                  visible: true,
+                  onToggle: widget.onToggleSidebar,
+                ),
                 Icon(
                   workspace.isRemote
                       ? Icons.dns_outlined
@@ -219,74 +281,159 @@ class _FolderBrowserState extends State<FolderBrowser> {
   }
 }
 
+/// The folder browser beside the editor while a folder workspace is open.
+/// The browser hides without closing the workspace ([browserShown]); its
+/// width starts from [initialBrowserWidth] and is reported, once settled by
+/// a finished drag or keyboard step, through [onBrowserWidthSettled] for
+/// the host to persist.
 class WorkspaceSplitView extends StatefulWidget {
   const WorkspaceSplitView({
     super.key,
     required this.browser,
     required this.editor,
+    this.browserShown = true,
+    this.initialBrowserWidth = AppSettings.defaultSidebarWidth,
+    this.onBrowserWidthSettled,
   });
   final Widget browser;
   final Widget editor;
+
+  /// Whether the browser shows. A hidden browser leaves its slot empty
+  /// rather than a different tree, so the editor keeps its state.
+  final bool browserShown;
+
+  /// The width the browser starts from, as last persisted. The widget owns
+  /// the live width once mounted; later changes do not reset it.
+  final double initialBrowserWidth;
+
+  /// The width worth persisting: the user's request as a finished drag or
+  /// keyboard step left it, not the transient values between.
+  final ValueChanged<double>? onBrowserWidthSettled;
 
   @override
   State<WorkspaceSplitView> createState() => _WorkspaceSplitViewState();
 }
 
 class _WorkspaceSplitViewState extends State<WorkspaceSplitView> {
-  static const _minimumBrowserWidth = 160.0;
+  static const _minimumBrowserWidth = AppSettings.minimumSidebarWidth;
   static const _minimumEditorWidth = 240.0;
-  static const _dividerWidth = 6.0;
-  double _width = 300;
+
+  /// The visible line between the panes; the wider drag handle floats over
+  /// it, so the panes' edges meet the line.
+  static const _seamWidth = 1.0;
+  static const _handleWidth = 6.0;
+
+  late double _width = widget.initialBrowserWidth;
+
+  /// The width the last build rendered, and the bounds it was clamped to.
+  /// A drag starts from what the user sees, not a stale request left by a
+  /// narrower window.
+  late double _renderedWidth = widget.initialBrowserWidth;
+  late double _renderedMaximum = double.infinity;
+  double? _dragFrom;
+  double _dragDelta = 0;
+
+  void _onStart() {
+    _dragFrom = _renderedWidth;
+    _dragDelta = 0;
+  }
+
+  void _onDelta(double dx) {
+    final from = _dragFrom;
+    if (from == null) return;
+    _dragDelta += dx;
+    setState(() {
+      _width = (from + _dragDelta).clamp(
+        _minimumBrowserWidth,
+        _renderedMaximum,
+      );
+    });
+  }
+
+  void _onEnd() {
+    if (_dragFrom == null) return;
+    _dragFrom = null;
+    widget.onBrowserWidthSettled?.call(_width);
+  }
+
+  void _onStep(double delta) {
+    setState(() {
+      _width = (_renderedWidth + delta).clamp(
+        _minimumBrowserWidth,
+        _renderedMaximum,
+      );
+    });
+    widget.onBrowserWidthSettled?.call(_width);
+  }
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final maximum =
-          constraints.maxWidth - _minimumEditorWidth - _dividerWidth;
+      final maximum = constraints.maxWidth - _minimumEditorWidth - _seamWidth;
       if (maximum < _minimumBrowserWidth) {
         return Column(
           children: [
-            SizedBox(
-              height: math.min(240, constraints.maxHeight * 0.4),
-              child: widget.browser,
-            ),
-            const Divider(height: 1),
+            widget.browserShown
+                ? SizedBox(
+                    height: math.min(240, constraints.maxHeight * 0.4),
+                    child: widget.browser,
+                  )
+                : const SizedBox.shrink(),
+            widget.browserShown
+                ? const Divider(height: 1)
+                : const SizedBox.shrink(),
             Expanded(child: widget.editor),
           ],
         );
       }
       final width = _width.clamp(_minimumBrowserWidth, maximum);
-      return Row(
+      _renderedWidth = width;
+      _renderedMaximum = maximum;
+      final overhang = (_handleWidth - _seamWidth) / 2;
+      return Stack(
         children: [
-          SizedBox(width: width, child: widget.browser),
-          Semantics(
-            label: 'File browser width',
-            onIncrease: () => setState(
-              () => _width = (width + 20).clamp(_minimumBrowserWidth, maximum),
-            ),
-            onDecrease: () => setState(
-              () => _width = (width - 20).clamp(_minimumBrowserWidth, maximum),
-            ),
-            child: MouseRegion(
-              cursor: SystemMouseCursors.resizeColumn,
-              child: GestureDetector(
-                key: const ValueKey('workspace-divider'),
-                behavior: HitTestBehavior.opaque,
-                onHorizontalDragUpdate: (details) => setState(
-                  () => _width = (_width + details.delta.dx).clamp(
-                    _minimumBrowserWidth,
-                    maximum,
-                  ),
-                ),
-                child: const SizedBox(
-                  width: _dividerWidth,
-                  height: double.infinity,
-                  child: VerticalDivider(width: _dividerWidth),
-                ),
-              ),
+          Positioned.fill(
+            child: Row(
+              children: [
+                widget.browserShown
+                    ? SizedBox(width: width, child: widget.browser)
+                    : const SizedBox.shrink(),
+                widget.browserShown
+                    ? SizedBox(
+                        width: _seamWidth,
+                        height: double.infinity,
+                        child: ColoredBox(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+                Expanded(child: widget.editor),
+              ],
             ),
           ),
-          Expanded(child: widget.editor),
+          if (widget.browserShown)
+            PositionedDirectional(
+              top: 0,
+              bottom: 0,
+              start: width - overhang,
+              width: _handleWidth,
+              child: GhostResizeHandle(
+                key: const ValueKey('workspace-divider'),
+                label: 'File browser width',
+                width: width,
+                minimumWidth: _minimumBrowserWidth,
+                maximumWidth: maximum,
+                edge: GhostPaneEdge.leading,
+                widthAfterStep: (delta) =>
+                    (width + delta).clamp(_minimumBrowserWidth, maximum),
+                onStep: _onStep,
+                onStart: _onStart,
+                onDelta: _onDelta,
+                onEnd: _onEnd,
+                handleWidth: _handleWidth,
+                valueText: (width) => '${width.round()} pixels',
+              ),
+            ),
         ],
       );
     },
