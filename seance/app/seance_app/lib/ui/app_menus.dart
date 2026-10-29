@@ -406,6 +406,7 @@ enum WindowCommand {
   toggleSidebar,
   toggleInspector,
   showFiles,
+  showContext,
   showGit,
   showSnippets,
   showAssistant,
@@ -439,8 +440,8 @@ final class WindowShortcut {
 ///
 /// The panes take Poltergeist's chords: ⌃⌘S for the sidebar and ⌥⌘I for
 /// the inspector on Apple platforms, Ctrl+Alt+S and Ctrl+Alt+I elsewhere,
-/// with the inspector's pages on the digits beside them (⌥⌘1 to ⌥⌘4,
-/// Ctrl+Alt+1 to Ctrl+Alt+4). Off Apple platforms only the left Alt
+/// with the inspector's pages on the digits beside them (⌥⌘1 to ⌥⌘5,
+/// Ctrl+Alt+1 to Ctrl+Alt+5). Off Apple platforms only the left Alt
 /// counts, as for the tab numbers: Windows reports AltGr as Ctrl + right
 /// Alt, and AltGr+S types ś on Polish layouts. xterm has no bytes for
 /// Ctrl+Alt+letter, so the terminal loses nothing to them. Undo is ⌘Z and
@@ -454,6 +455,7 @@ List<WindowShortcut> windowShortcuts(TargetPlatform platform) =>
 
 const List<WindowCommand> _pageCommands = [
   WindowCommand.showFiles,
+  WindowCommand.showContext,
   WindowCommand.showGit,
   WindowCommand.showSnippets,
   WindowCommand.showAssistant,
@@ -571,6 +573,8 @@ void runWindowCommand(
       unawaited(state.setInspectorVisible(!state.inspectorVisible));
     case WindowCommand.showFiles:
       unawaited(state.showInspectorPage(InspectorPage.files));
+    case WindowCommand.showContext:
+      unawaited(state.showInspectorPage(InspectorPage.context));
     case WindowCommand.showGit:
       unawaited(state.showInspectorPage(InspectorPage.git));
     case WindowCommand.showSnippets:

@@ -89,7 +89,7 @@ List<ShortcutSection> keyboardShortcutSections(TargetPlatform platform) {
           keys: window(WindowCommand.toggleInspector),
         ),
         (
-          action: 'Files, Git, Snippets, Assistant',
+          action: 'Files, Context, Git, Snippets, Assistant',
           keys:
               '${window(WindowCommand.showFiles)} to '
               '${window(WindowCommand.showAssistant)}',

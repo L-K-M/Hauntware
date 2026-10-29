@@ -53,6 +53,95 @@ void main() {
     expect(terminal.buffer.lines[2].isWrapped, isTrue);
   });
 
+  test('reflow() keeps a wide character at the edge whole when widening', () {
+    final terminal = Terminal();
+
+    // At width 8 the third wide character sits in the last column, with
+    // its second cell at the start of the next row.
+    terminal.resize(8, 10);
+    terminal.write('abc文档报x');
+    terminal.resize(12, 10);
+
+    final line = terminal.buffer.lines[0];
+    final cells = [
+      for (var i = 0; i < 10; i++)
+        line.getCodePoint(i) == 0
+            ? '_'
+            : String.fromCharCode(line.getCodePoint(i)),
+    ];
+    // No empty copy of the second cell between the characters.
+    expect(cells.join(), 'abc文_档_报_x');
+  });
+
+  /// The text of the logical line starting at row 0: its rows, wrapped
+  /// ones joined, with a wide character's second cell left out.
+  String firstLine(Terminal terminal) {
+    final lines = terminal.buffer.lines;
+    final text = StringBuffer(lines[0].getText());
+    for (var row = 1; row < lines.length && lines[row].isWrapped; row++) {
+      text.write(lines[row].getText());
+    }
+    return text.toString();
+  }
+
+  for (final (text, from, to) in [
+    ('/srv报/abc报', 11, 6),
+    ('Saved  /home/me/projects/会议记录/二零二六年十月', 47, 24),
+    ('Saved  /home/me/projects/会议记录/二零二六年十月', 47, 34),
+    ('Saved /home/me/docs/文档/报告', 14, 16),
+  ]) {
+    test(
+        'reflow() keeps a line ending in a wide character at the edge '
+        'whole ($from -> $to)', () {
+      final terminal = Terminal();
+      terminal.resize(from, 10);
+      terminal.write(text);
+      terminal.resize(to, 10);
+
+      expect(firstLine(terminal), text);
+      // No empty row inside the line: read cell by cell, one would be a
+      // gap in the text.
+      final lines = terminal.buffer.lines;
+      for (var row = 1; row < lines.length && lines[row].isWrapped; row++) {
+        expect(lines[row].getTrimmedLength(), isPositive, reason: 'row $row');
+      }
+    });
+  }
+
+  test('reflow() through one column keeps wide characters whole', () {
+    final terminal = Terminal();
+    terminal.resize(80, 24);
+    terminal.write('cat /srv/文档/a.txt\r\n\$ ');
+    terminal.resize(1, 24);
+    terminal.resize(80, 24);
+
+    expect(firstLine(terminal), 'cat /srv/文档/a.txt');
+  });
+
+  test('reflow() widens a line whose wrapped rows were erased', () {
+    final terminal = Terminal();
+    terminal.resize(60, 10);
+    // ECH blanks both rows of a wrapped line and, unlike EL, keeps the
+    // second one wrapped.
+    terminal.write('${'a' * 61}\r\x1b[60X\x1b[A\x1b[60X\x1b[3B\$ ');
+    terminal.resize(200, 10);
+
+    expect(terminal.viewWidth, 200);
+  });
+
+  test('reflow() to one column with a wide character finishes', () {
+    final terminal = Terminal();
+    terminal.resize(49, 6);
+    terminal.write('文\r\n');
+    terminal.resize(1, 7);
+
+    final lines = terminal.buffer.lines;
+    expect(
+      [for (var i = 0; i < lines.length; i++) lines[i].getCodePoint(0)],
+      contains('文'.runes.single),
+    );
+  }, timeout: const Timeout(Duration(seconds: 10)));
+
   test('reflow() can reflow wide characters', () {
     final terminal = Terminal();
 

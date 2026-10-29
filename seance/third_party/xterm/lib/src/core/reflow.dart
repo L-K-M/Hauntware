@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:xterm/src/core/buffer/line.dart';
 import 'package:xterm/src/utils/circular_buffer.dart';
 
@@ -17,6 +19,9 @@ class _LineBuilder {
   bool get isEmpty => _length == 0;
 
   bool get isNotEmpty => _length != 0;
+
+  /// The width of the last cell added, or 0 when there is none.
+  int get lastWidth => _length == 0 ? 0 : _result.getWidth(_length - 1);
 
   /// Adds a range of cells from [src] to the builder. Anchors within the range
   /// will be reparented to the new line returned by [take].
@@ -62,10 +67,29 @@ class _LineReflow {
   /// Adds a line to the reflow operation. This method will try to reuse the
   /// given line if possible.
   void add(BufferLine line) {
-    final trimmedLength = line.getTrimmedLength(oldWidth);
+    // A wide character in the last column keeps its second cell at the
+    // start of the next row, so its trimmed length reaches one past the
+    // row. Copying that far takes in a cell from beyond the row, and the
+    // second cell is copied again from the next row: the copy reads as a
+    // gap after the character. The row holds [oldWidth] cells at most.
+    final trimmedLength = min(line.getTrimmedLength(oldWidth), oldWidth);
 
-    // A fast path for empty lines
     if (trimmedLength == 0) {
+      // A row of a line that has content pending is not a line of its
+      // own: taken as one, it would land before that content. It is the
+      // row that holds only the second cell of a wide character that ended
+      // the line in the last column (or, from one column, every such
+      // character's), so that cell goes with its first and the row goes.
+      if (_lines.isNotEmpty || _builder.isNotEmpty) {
+        // A blank row the fast path took keeps its old, shorter length.
+        final endsWide = _builder.isNotEmpty
+            ? _builder.lastWidth == 2
+            : _lines.last.length >= newWidth &&
+                _lines.last.getWidth(newWidth - 1) == 2;
+        _addPart(line, from: 0, to: endsWide ? 1 : 0);
+        return;
+      }
+      // A fast path for empty lines
       _lines.add(line);
       return;
     }
@@ -119,8 +143,12 @@ class _LineReflow {
         lineFilled = true;
       }
 
-      // Leave the last cell to the next iteration if it's a wide char.
-      if (lineFilled && line.getWidth(from + cellsToCopy - 1) == 2) {
+      // Leave the last cell to the next iteration if it's a wide char. A
+      // row one cell wide never has room for one, so it takes the cell
+      // anyway: leaving it would fill a row with nothing, forever.
+      if (lineFilled &&
+          newWidth > 1 &&
+          line.getWidth(from + cellsToCopy - 1) == 2) {
         cellsToCopy--;
       }
 

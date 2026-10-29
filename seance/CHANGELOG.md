@@ -6,8 +6,8 @@
   header with the server's name, Generate command and buttons that hide
   the server list (the sidebar) and the side panel (the inspector), as a
   Mac app's do. ⌃⌘S and ⌥⌘I, or Ctrl+Alt+S and Ctrl+Alt+I, toggle them,
-  and ⌥⌘1 to ⌥⌘4, or Ctrl+Alt+1 to Ctrl+Alt+4, open Files, Git,
-  Snippets and the Assistant. The window remembers all three.
+  and ⌥⌘1 to ⌥⌘5, or Ctrl+Alt+1 to Ctrl+Alt+5, open Files, Context,
+  Git, Snippets and the Assistant. The window remembers all three.
 - Undo works outside text fields: ⌘Z, or Ctrl+Z outside the terminal,
   takes back snippet changes and server pins and duplicates, and a
   notice says what it undid. Deleting a snippet no longer asks first;
@@ -23,7 +23,17 @@
   Clear scrollback.
 - On macOS, file panels (uploads, downloads, the SSH config import) open
   again: file_picker refused them in the unsandboxed app.
-
+- A new **Context** tab in the side panel, between Files and Git,
+  collects the links and file paths a session prints, newest first,
+  like kitty's hints and macOS data detectors. Tap a link to open it in
+  the browser. Tap a path from a server to show it in Files, or a path
+  from a local shell to show it in Finder or the file manager; its menu
+  also opens it, unless it is a program. Any item can be copied or
+  inserted at the prompt as one quoted word, never with Enter. Relative
+  paths resolve against the shell's directory when they are printed.
+  Only finished lines on the main screen are read, so a full-screen
+  program, a half-typed path or a prompt's own directory adds nothing.
+  The stack keeps the last 50 items and is not saved.
 - The Git pane and the terminal's tab now follow a TrueNAS shell, or
   any Linux shell that reports no directory, as Files already did: all
   three share one read of the shell's directory, and trust it over a

@@ -3,4 +3,4 @@
 ///
 /// Device-local, with the panes' widths: which panels a window shows is a
 /// property of the screen in front of you, not of the account.
-enum InspectorPage { files, git, snippets, assistant }
+enum InspectorPage { files, context, git, snippets, assistant }

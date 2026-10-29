@@ -200,11 +200,13 @@ void main() {
       await press(tester, LogicalKeyboardKey.keyI, [ctrl, alt]);
       expect(inspectorShown(), isFalse);
 
-      await press(tester, LogicalKeyboardKey.digit3, [ctrl, alt]);
+      await press(tester, LogicalKeyboardKey.digit4, [ctrl, alt]);
       expect(state!.inspectorPage, InspectorPage.snippets);
       expect(inspectorShown(), isTrue);
-      await press(tester, LogicalKeyboardKey.digit2, [ctrl, alt]);
+      await press(tester, LogicalKeyboardKey.digit3, [ctrl, alt]);
       expect(state!.inspectorPage, InspectorPage.git);
+      await press(tester, LogicalKeyboardKey.digit2, [ctrl, alt]);
+      expect(state!.inspectorPage, InspectorPage.context);
       expect(shellInput, isEmpty);
     });
 
@@ -278,7 +280,7 @@ void main() {
     expect(listShown(), isFalse);
     await press(tester, LogicalKeyboardKey.keyI, [alt, meta]);
     expect(inspectorShown(), isFalse);
-    await press(tester, LogicalKeyboardKey.digit4, [alt, meta]);
+    await press(tester, LogicalKeyboardKey.digit5, [alt, meta]);
     expect(state!.inspectorPage, InspectorPage.assistant);
     expect(inspectorShown(), isTrue);
 
