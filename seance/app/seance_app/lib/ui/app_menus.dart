@@ -655,7 +655,11 @@ class AppMenus extends StatelessWidget {
             ShortcutOrigin.window,
           );
         },
-        child: child,
+        // Focus starts, and falls back, inside this scope rather than on
+        // the route's above it, which no key event here would reach: in a
+        // fresh window with no session, or after the filter field lets go,
+        // the shortcuts still see every key.
+        child: FocusScope(autofocus: true, child: child),
       ),
     );
   }

@@ -417,12 +417,19 @@ void main() {
       greaterThan(leading.right),
     );
 
-    // Full screen has no traffic lights to keep clear of.
+    // Full screen: the titlebar slides in over the header when the
+    // pointer reaches the top, so the button stays clear of its lights.
     band.value = false;
     await tester.pump();
     expect(
       tester.getRect(find.byKey(HeaderToolbar.sidebarToggleKey)).left,
-      lessThan(76),
+      greaterThanOrEqualTo(76),
+    );
+    await tester.tap(find.byKey(HeaderToolbar.sidebarToggleKey));
+    await tester.pump();
+    expect(
+      tester.getRect(find.byKey(SidebarBand.sidebarToggleKey)).left,
+      greaterThanOrEqualTo(76),
     );
     await unmount(tester);
   });

@@ -315,6 +315,35 @@ void main() {
     });
   }
 
+  // At launch with no session nothing in the window holds focus, and a
+  // click on empty space gives it none: the route's own scope has it.
+  for (final (platform, chord) in [
+    (TargetPlatform.linux, [ctrl, alt]),
+    (TargetPlatform.macOS, [ctrl, meta]),
+  ]) {
+    testWidgets('${platform.name}: the pane chord works before anything '
+        'takes focus', (tester) async {
+      await startServices(tester);
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: SeanceTheme.light(platform: platform),
+          builder: (context, child) => AppScope(state: state!, child: child!),
+          home: const AppMenus(child: AdaptiveShell()),
+        ),
+      );
+      await settle(tester);
+      await tester.tapAt(const Offset(700, 500));
+      await settle(tester);
+
+      await press(tester, LogicalKeyboardKey.keyS, chord);
+      await settle(tester);
+      expect(listShown(), isFalse);
+    });
+  }
+
   test('no window chord is a tab chord, or bound twice', () {
     for (final platform in TargetPlatform.values) {
       final chords = [

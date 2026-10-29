@@ -12,8 +12,8 @@ import 'app_menus.dart';
 import 'macos_toolbar_band.dart';
 import 'server_appearance.dart';
 
-/// Room for the traffic lights at the window's leading edge while the
-/// macOS toolbar band shows them, Poltergeist's value.
+/// Room for the traffic lights at the window's leading edge on macOS,
+/// Poltergeist's value.
 const double _macTrafficLightsInset = 76;
 
 /// The space before the first control where nothing sits ahead of it.
@@ -23,11 +23,12 @@ const double _edgeInset = 8;
 const double _gap = 8;
 
 /// Where the window's leading controls start: after the traffic lights
-/// while the macOS band shows them, at the edge everywhere else (other
-/// platforms, full screen, the Settings window).
+/// under the macOS titlebar, at the edge everywhere else (other platforms,
+/// the Settings window). Full screen keeps the inset: the titlebar slides
+/// in over the header when the pointer reaches the top of the screen, its
+/// lights where they sit in a window.
 double _leadingInset(BuildContext context) =>
-    MacosToolbarBandScope.unifiedToolbarOf(context) &&
-        MacosToolbarBandScope.visibleOf(context)
+    MacosToolbarBandScope.unifiedToolbarOf(context)
     ? _macTrafficLightsInset
     : _edgeInset;
 
