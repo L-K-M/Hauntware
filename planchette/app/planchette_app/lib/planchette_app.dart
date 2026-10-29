@@ -10,6 +10,8 @@ import 'package:path/path.dart' as paths;
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show
+        GhostChordBinding,
+        GhostChordScope,
         GhostCommandRow,
         GhostCommandSpec,
         GhostMenu,
@@ -204,6 +206,20 @@ class _DocumentShellState extends State<_DocumentShell>
       unawaited(settings.update(settings.value.copyWith(fontSize: size)));
 
   bool _settingsOpen = false;
+
+  /// Hides or shows the folder-workspace browser, a layout choice kept in
+  /// the settings: hiding it leaves the workspace (and its channel) open,
+  /// and a failed save reports through the settings' own error path.
+  void _toggleSidebar() => unawaited(
+    settings.update(
+      settings.value.copyWith(sidebarVisible: !settings.value.sidebarVisible),
+    ),
+  );
+
+  /// What the split view hands back once a resize settles; written while
+  /// the drag itself stays local to the view.
+  void _sidebarWidthSettled(double width) =>
+      unawaited(settings.update(settings.value.copyWith(sidebarWidth: width)));
 
   /// The native macOS menu stays live under the dialog, so a second request
   /// is ignored, as the palette does; a second dialog on top would make the
@@ -1267,6 +1283,19 @@ class _DocumentShellState extends State<_DocumentShell>
         ),
       ], mnemonic: 'n'),
       _ShellMenu('View', [
+        if (workspace.folders.isOpen) ...[
+          _Command(
+            settings.value.sidebarVisible ? 'Hide Sidebar' : 'Show Sidebar',
+            _toggleSidebar,
+            mnemonic: 's',
+            shortcut: sidebarShortcut(defaultTargetPlatform),
+            // The chord layer stands it down while the right Alt (AltGr)
+            // is held, off Apple platforms; see _Command.leftAltOnly.
+            leftAltOnly: !mac,
+            enabled: unlocked,
+          ),
+          const _Separator(),
+        ],
         _zoomCommand('Zoom In', EditorZoom.zoomIn, mnemonic: 'i'),
         _zoomCommand('Zoom Out', EditorZoom.zoomOut, mnemonic: 'o'),
         _zoomCommand('Actual Size', EditorZoom.actualSize, mnemonic: 'a'),
@@ -1505,6 +1534,7 @@ class _DocumentShellState extends State<_DocumentShell>
     final active = workspace.active;
     final scheme = Theme.of(context).colorScheme;
     final shortcuts = <ShortcutActivator, VoidCallback>{};
+    final chords = <GhostChordBinding>[];
     void bindShortcuts(List<_MenuEntry> items) {
       for (final entry in items) {
         switch (entry) {
@@ -1512,6 +1542,20 @@ class _DocumentShellState extends State<_DocumentShell>
             bindShortcuts(items);
           case _Command() when entry.shortcut != null:
             for (final shortcut in [entry.shortcut!, ...entry.aliases]) {
+              if (entry.leftAltOnly) {
+                // CallbackShortcuts cannot tell AltGr from the left Alt;
+                // the chord layer below can (see _Command.leftAltOnly).
+                chords.add(
+                  GhostChordBinding(
+                    activator: shortcut,
+                    leftAltOnly: true,
+                    onInvoke: () {
+                      if (entry.enabled) entry.run();
+                    },
+                  ),
+                );
+                continue;
+              }
               shortcuts[shortcut] = () {
                 if (entry.enabled) entry.run();
               };
@@ -1608,6 +1652,17 @@ class _DocumentShellState extends State<_DocumentShell>
                         position,
                         tabs.firstWhere((t) => t.id == id),
                       ),
+                      // The sidebar's way back while its browser is
+                      // hidden; the workspace itself stays open.
+                      leading:
+                          workspace.folders.isOpen &&
+                              !settings.value.sidebarVisible
+                          ? WorkspaceSidebarToggle(
+                              visible: false,
+                              onToggle: _toggleSidebar,
+                              visualDensity: VisualDensity.compact,
+                            )
+                          : null,
                       onNew: _new,
                       onOpen: () => unawaited(workspace.openDialog()),
                       onSave: _documentReady ? _save : null,
@@ -1722,6 +1777,16 @@ class _DocumentShellState extends State<_DocumentShell>
         ),
       ),
     );
+    if (chords.isNotEmpty) {
+      body = GhostChordScope(
+        bindings: chords,
+        // The bound chords are window commands that must work with the
+        // document focused; ghost_ui's AltGr guard, not an editing
+        // stand-down, keeps them off typed characters.
+        suspendWhileEditing: false,
+        child: body,
+      );
+    }
     if (mac) {
       final slot = widget.menuSlot;
       if (slot != null && window != null) {
@@ -1755,9 +1820,13 @@ class _DocumentShellState extends State<_DocumentShell>
                 browser: FolderBrowser(
                   workspace: workspace.folders,
                   onOpen: _openBrowserEntry,
+                  onToggleSidebar: _toggleSidebar,
                   enabled: !workspace.interactionLocked && !_openingWorkspace,
                 ),
                 editor: editor,
+                browserShown: settings.value.sidebarVisible,
+                initialBrowserWidth: settings.value.sidebarWidth,
+                onBrowserWidthSettled: _sidebarWidthSettled,
               )
             : editor,
       ),
@@ -1940,6 +2009,7 @@ final class _Command extends _MenuEntry {
     this.id,
     this.inPalette = true,
     this.mnemonic,
+    this.leftAltOnly = false,
   });
 
   /// The stable identifier the palette resolves the command by, so a row
@@ -1964,6 +2034,13 @@ final class _Command extends _MenuEntry {
   /// labels come from the localizable shared catalog. Null leaves the label
   /// unmarked.
   final String? mnemonic;
+
+  /// Whether the chord stands down while the right Alt is held, as
+  /// ghost_ui's chord layer enforces: Windows reports AltGr as Ctrl + right
+  /// Alt, so a plain binding would swallow typed characters (AltGr+S is ś
+  /// on Polish layouts). Such chords bind through [GhostChordScope], not
+  /// the CallbackShortcuts map.
+  final bool leftAltOnly;
 }
 
 /// The placeholder for an empty Recent submenu — it can never be chosen.
