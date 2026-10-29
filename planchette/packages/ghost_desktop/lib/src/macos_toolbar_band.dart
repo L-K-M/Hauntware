@@ -4,6 +4,13 @@ import 'package:flutter/services.dart';
 const _queryMethod = 'isToolbarBandVisible';
 const _changedMethod = 'toolbarBandChanged';
 
+/// The room the traffic lights take at a macOS window's leading edge
+/// under a unified titlebar, in logical pixels: no control of the app's
+/// header may start inside it. That holds in full screen too, where the
+/// titlebar slides in over the header when the pointer reaches the top
+/// of the screen, its lights where they sit in a window.
+const double macosTrafficLightsInset = 76;
+
 /// Whether macOS currently shows the unified toolbar band that the app's
 /// header draws under, as the runner reports it.
 ///

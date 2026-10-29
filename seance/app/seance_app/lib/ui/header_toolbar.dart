@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show macosTrafficLightsInset;
 import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 import 'package:seance_core/seance_core.dart';
@@ -12,10 +13,6 @@ import 'app_menus.dart';
 import 'macos_toolbar_band.dart';
 import 'server_appearance.dart';
 
-/// Room for the traffic lights at the window's leading edge on macOS,
-/// Poltergeist's value.
-const double _macTrafficLightsInset = 76;
-
 /// The space before the first control where nothing sits ahead of it.
 const double _edgeInset = 8;
 
@@ -23,13 +20,11 @@ const double _edgeInset = 8;
 const double _gap = 8;
 
 /// Where the window's leading controls start: after the traffic lights
-/// under the macOS titlebar, at the edge everywhere else (other platforms,
-/// the Settings window). Full screen keeps the inset: the titlebar slides
-/// in over the header when the pointer reaches the top of the screen, its
-/// lights where they sit in a window.
+/// under the macOS titlebar, in full screen too, and at the edge
+/// everywhere else (other platforms, the Settings window).
 double _leadingInset(BuildContext context) =>
     MacosToolbarBandScope.unifiedToolbarOf(context)
-    ? _macTrafficLightsInset
+    ? macosTrafficLightsInset
     : _edgeInset;
 
 /// [child] as a control inside the macOS toolbar band: there AppKit takes
