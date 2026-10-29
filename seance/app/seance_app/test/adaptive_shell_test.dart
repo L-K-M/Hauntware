@@ -676,4 +676,199 @@ void main() {
       AdaptiveShell.defaultUtilityWidth + 80,
     ));
   });
+
+  group('hidden panes', () {
+    test(
+      'a hidden pane takes no width and leaves its room to the terminal',
+      () {
+        final noList = allocateAdaptivePaneWidths(
+          availableWidth: 1200,
+          requestedListWidth: 300,
+          requestedUtilityWidth: 340,
+          list: PaneVisibility.hidden,
+        )!;
+        expect(noList.list, 0);
+        expect(noList.utility, 340);
+        expect(noList.terminal, 1200 - 340 - AdaptiveShell.seamWidth);
+
+        final noUtility = allocateAdaptivePaneWidths(
+          availableWidth: 1200,
+          requestedListWidth: 300,
+          requestedUtilityWidth: 340,
+          utility: PaneVisibility.hidden,
+        )!;
+        expect(noUtility.utility, 0);
+        expect(noUtility.list, 300);
+
+        final neither = allocateAdaptivePaneWidths(
+          availableWidth: 700,
+          requestedListWidth: 300,
+          requestedUtilityWidth: 340,
+          list: PaneVisibility.hidden,
+          utility: PaneVisibility.hidden,
+        )!;
+        expect((neither.list, neither.terminal, neither.utility), (0, 700, 0));
+      },
+    );
+
+    test('one side pane gives way to the terminal, then to narrow', () {
+      final squeezed = allocateAdaptivePaneWidths(
+        availableWidth: 760,
+        requestedListWidth: 400,
+        requestedUtilityWidth: 340,
+        utility: PaneVisibility.hidden,
+      )!;
+      expect(
+        squeezed.terminal,
+        greaterThanOrEqualTo(AdaptiveShell.minimumTerminalWidth),
+      );
+      expect(
+        squeezed.list,
+        greaterThanOrEqualTo(AdaptiveShell.minimumListWidth),
+      );
+      expect(
+        allocateAdaptivePaneWidths(
+          availableWidth: 600,
+          requestedListWidth: 300,
+          requestedUtilityWidth: 340,
+          utility: PaneVisibility.hidden,
+        ),
+        isNull,
+      );
+    });
+
+    Future<void> pumpVisibility(
+      WidgetTester tester, {
+      required double width,
+      PaneVisibility list = PaneVisibility.shown,
+      PaneVisibility utility = PaneVisibility.shown,
+    }) async {
+      tester.view.physicalSize = Size(width, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AdaptivePaneLayout(
+            list: list,
+            utility: utility,
+            listPane: const SizedBox.expand(),
+            terminalPane: const SizedBox.expand(),
+            utilityPane: const SizedBox.expand(),
+            narrowPane: const SizedBox.expand(),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('hidden panes and their dividers leave the window', (
+      tester,
+    ) async {
+      await pumpVisibility(
+        tester,
+        width: 1400,
+        list: PaneVisibility.hidden,
+        utility: PaneVisibility.hidden,
+      );
+      expect(find.byKey(AdaptivePaneLayout.listPaneKey), findsNothing);
+      expect(find.byKey(AdaptivePaneLayout.utilityPaneKey), findsNothing);
+      expect(find.byKey(AdaptivePaneLayout.listResizeHandleKey), findsNothing);
+      expect(
+        find.byKey(AdaptivePaneLayout.utilityResizeHandleKey),
+        findsNothing,
+      );
+      expect(paneWidth(tester, AdaptivePaneLayout.terminalPaneKey), 1400);
+    });
+
+    testWidgets('a window too narrow for its panes switches to narrow', (
+      tester,
+    ) async {
+      await pumpVisibility(tester, width: 800);
+      expect(find.byKey(AdaptivePaneLayout.narrowPaneKey), findsOneWidget);
+
+      // Hiding the inspector leaves room enough for the list beside the
+      // terminal.
+      await pumpVisibility(tester, width: 800, utility: PaneVisibility.hidden);
+      expect(find.byKey(AdaptivePaneLayout.narrowPaneKey), findsNothing);
+      expect(find.byKey(AdaptivePaneLayout.listPaneKey), findsOneWidget);
+    });
+
+    testWidgets('the list band shows with the list, the header always', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      Future<void> pump(PaneVisibility list) => tester.pumpWidget(
+        MaterialApp(
+          home: AdaptivePaneLayout(
+            list: list,
+            header: (list) => Text('header ${list.name}'),
+            listHeader: const Text('band'),
+            listPane: const SizedBox.expand(),
+            terminalPane: const SizedBox.expand(),
+            utilityPane: const SizedBox.expand(),
+            narrowPane: const SizedBox.expand(),
+          ),
+        ),
+      );
+
+      await pump(PaneVisibility.shown);
+      expect(find.text('header shown'), findsOneWidget);
+      expect(find.text('band'), findsOneWidget);
+
+      await pump(PaneVisibility.hidden);
+      expect(find.text('header hidden'), findsOneWidget);
+      expect(find.text('band'), findsNothing);
+    });
+  });
+
+  testWidgets('hiding and showing the side panes keeps the terminal state', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    var mounts = 0;
+    Future<void> pump(PaneVisibility list, PaneVisibility utility) =>
+        tester.pumpWidget(
+          MaterialApp(
+            home: AdaptivePaneLayout(
+              list: list,
+              utility: utility,
+              listPane: const SizedBox.expand(),
+              terminalPane: _CountsMounts(onMount: () => mounts++),
+              utilityPane: const SizedBox.expand(),
+              narrowPane: const SizedBox.expand(),
+            ),
+          ),
+        );
+
+    await pump(PaneVisibility.shown, PaneVisibility.shown);
+    await pump(PaneVisibility.hidden, PaneVisibility.shown);
+    await pump(PaneVisibility.hidden, PaneVisibility.hidden);
+    await pump(PaneVisibility.shown, PaneVisibility.hidden);
+    await pump(PaneVisibility.shown, PaneVisibility.shown);
+    expect(mounts, 1);
+  });
+}
+
+/// Counts how often its state is created: once, if nothing above it moves.
+class _CountsMounts extends StatefulWidget {
+  const _CountsMounts({required this.onMount});
+
+  final VoidCallback onMount;
+
+  @override
+  State<_CountsMounts> createState() => _CountsMountsState();
+}
+
+class _CountsMountsState extends State<_CountsMounts> {
+  @override
+  void initState() {
+    super.initState();
+    widget.onMount();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.expand();
 }

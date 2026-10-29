@@ -542,6 +542,17 @@ Do not "simplify" these away — they are load-bearing:
   setups their "logical" spaces disagree — physical is the one space both map
   into exactly (ghost_desktop's `GhostWindowSnapshot` doc has the details).
 
+- **The wide layout is the same window on every platform.** Its header
+  (`HeaderToolbar`) and the server list's band beside it (`SidebarBand`)
+  carry the title, Generate command and the sidebar and inspector
+  buttons on Linux, Windows, macOS and tablets alike; keyboard chords
+  differ per platform (`windowShortcuts`, `tabShortcuts`), nothing else
+  does. Platform code below stays platform plumbing (titlebar, file
+  panels, keychain), never a second UI: a feature lands in the shared
+  Flutter UI or not at all. macOS only moves the header into its
+  titlebar band and leaves room for the traffic lights; a tablet's
+  header takes the status bar's inset.
+
 - **The macOS integrated titlebar is macos_window_utils', not
   window_manager's.** The main window draws its header under an empty
   unified NSToolbar (a 52 pt band) over full-size content, as Poltergeist

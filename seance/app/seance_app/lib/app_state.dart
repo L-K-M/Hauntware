@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:ghost_apk_update/ghost_apk_update.dart';
 import 'package:ghost_keystore/app_lock.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
 import 'package:planchette_editor/planchette_editor.dart'
     show EditorLigatures, EditorTextSize, EditorZoom;
 import 'package:seance_core/catalog.dart' show HostKeyConflict;
@@ -30,6 +31,7 @@ import 'services/terminal_context.dart';
 import 'services/xterm_engine.dart';
 import 'theme/app_appearance.dart';
 import 'ui/built_in_text_editor.dart';
+import 'ui/inspector_page.dart';
 import 'ui/server_list_density.dart';
 import 'ui/session_label.dart';
 import 'ui/terminal_appearance.dart';
@@ -1289,6 +1291,53 @@ class AppState extends ChangeNotifier {
     }
     settings.paneListWidth = listWidth;
     settings.paneUtilityWidth = utilityWidth;
+    await services.saveSettings();
+  }
+
+  /// What the app's Undo takes back outside text fields (GhostUndoHistory).
+  final GhostUndoHistory undoHistory = GhostUndoHistory();
+
+  /// Whether the wide layout shows its server list (the sidebar button).
+  bool get sidebarVisible => !services.settings.sidebarHidden;
+
+  /// Whether the wide layout shows its inspector (the inspector button).
+  bool get inspectorVisible => !services.settings.inspectorHidden;
+
+  /// The inspector's open page; Files until the user picks another.
+  InspectorPage get inspectorPage =>
+      services.settings.inspectorPage ?? InspectorPage.files;
+
+  Future<void> setSidebarVisible(bool visible) async {
+    if (sidebarVisible == visible) return;
+    services.settings.sidebarHidden = !visible;
+    notifyListeners();
+    await services.saveSettings();
+  }
+
+  Future<void> setInspectorVisible(bool visible) async {
+    if (inspectorVisible == visible) return;
+    services.settings.inspectorHidden = !visible;
+    notifyListeners();
+    await services.saveSettings();
+  }
+
+  /// Opens [page] in the inspector. Files, the default, is stored as no
+  /// choice at all, so a settings file that never moved off it is unchanged.
+  Future<void> setInspectorPage(InspectorPage page) async {
+    if (inspectorPage == page) return;
+    services.settings.inspectorPage = page == InspectorPage.files ? null : page;
+    notifyListeners();
+    await services.saveSettings();
+  }
+
+  /// Shows the inspector on [page] (the page shortcuts): one change, so the
+  /// panel mounts on that page rather than on the old one first.
+  Future<void> showInspectorPage(InspectorPage page) async {
+    if (inspectorVisible && inspectorPage == page) return;
+    services.settings
+      ..inspectorHidden = false
+      ..inspectorPage = page == InspectorPage.files ? null : page;
+    notifyListeners();
     await services.saveSettings();
   }
 
@@ -2715,6 +2764,7 @@ class AppState extends ChangeNotifier {
     // it was holding open go.
     _keepAlive.stop();
     chat.dispose();
+    undoHistory.dispose();
     apkUpdater?.dispose();
     // Drop the callback before the service goes: it closes over `sessions`,
     // so a probe service that outlived this state would keep reading a list

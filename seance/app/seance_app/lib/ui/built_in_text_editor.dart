@@ -10,6 +10,7 @@ import '../services/editor_document.dart';
 import '../services/remote_files_controller.dart';
 import '../theme.dart';
 import 'editor_syntax.dart' show seanceEditorSyntaxTheme;
+import 'session_label.dart' show editorTabLabel;
 import 'top_toast.dart';
 
 export '../services/editor_document.dart';
@@ -174,29 +175,47 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
   }
 
   /// The tab host keeps this entry point so closing a tab uses the same shared
-  /// save/dirty guard as the other applications.
+  /// save/dirty guard as the other applications. It asks as a document app
+  /// does: Save writes the buffer as ⌘S or Ctrl+S does, uploading when the
+  /// file can be, and lets the tab close only once nothing is left unsaved.
   Future<bool> confirmDiscard() => _editor.confirmClose(() async {
     if (!mounted) return false;
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Discard unsaved changes?'),
-            content: const Text(
-              'Changes not saved to the managed local copy will be lost.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Keep editing'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Discard'),
-              ),
-            ],
+    final choice = await showDialog<_CloseChoice>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Save changes to “${editorTabLabel(widget.remotePath)}”?'),
+        content: const Text(
+          'Changes not saved to the managed local copy will be lost.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, _CloseChoice.discard),
+            child: const Text('Don’t save'),
           ),
-        ) ??
-        false;
+          TextButton(
+            onPressed: () => Navigator.pop(context, _CloseChoice.keepEditing),
+            child: const Text('Cancel'),
+          ),
+          // Not while a reload from the server holds the buffer: a save
+          // would do nothing and the tab would stay open unexplained.
+          if (!_reloading)
+            FilledButton(
+              autofocus: true,
+              onPressed: () => Navigator.pop(context, _CloseChoice.save),
+              child: const Text('Save'),
+            ),
+        ],
+      ),
+    );
+    switch (choice) {
+      case _CloseChoice.save:
+        await _save(upload: widget.onUpload != null);
+        return mounted && !_editor.isDirty;
+      case _CloseChoice.discard:
+        return true;
+      case _CloseChoice.keepEditing || null:
+        return false;
+    }
   });
 
   Future<void> _save({bool upload = false}) async {
@@ -518,3 +537,7 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
     );
   }
 }
+
+/// The answer to the close question
+/// ([BuiltInTextEditorScreenState.confirmDiscard]).
+enum _CloseChoice { save, discard, keepEditing }

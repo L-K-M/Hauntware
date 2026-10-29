@@ -3,12 +3,13 @@ import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_ui/ghost_ui.dart'
-    show GhostChordBinding, dispatchGhostChord;
+    show GhostChordBinding, GhostUndoHistory, dispatchGhostChord;
 
 import '../app_state.dart';
 import '../main.dart';
 import '../services/local_settings_backend.dart';
 import 'command_generator.dart';
+import 'inspector_page.dart';
 import 'server_list_density.dart';
 import 'server_list_pane.dart';
 import 'settings_screen.dart';
@@ -399,12 +400,225 @@ void _runTabCommand(BuildContext context, AppState state, TabCommand command) {
   }
 }
 
+/// What a window shortcut does: show or hide a side pane, open an
+/// inspector page, or step the app's undo history ([GhostUndoHistory]).
+enum WindowCommand {
+  toggleSidebar,
+  toggleInspector,
+  showFiles,
+  showContext,
+  showGit,
+  showSnippets,
+  showAssistant,
+  undo,
+  redo;
+
+  /// Whether the command steps the app's undo history, which stands down
+  /// wherever a text field or the editor keeps a history of its own.
+  bool get stepsHistory => this == undo || this == redo;
+}
+
+/// Where a key reached the window shortcuts from. The terminal hands keys
+/// to them before xterm turns them into bytes for the shell.
+enum ShortcutOrigin { terminal, window }
+
+/// One window shortcut: [chord] runs [command].
+final class WindowShortcut {
+  const WindowShortcut._(this.chord, this.command, {this.leftAltOnly = false});
+
+  final SingleActivator chord;
+  final WindowCommand command;
+
+  /// The chord stands down while the right Alt is held, as the tab
+  /// numbers do ([tabShortcuts]): AltGr+digit types a character on many
+  /// layouts.
+  final bool leftAltOnly;
+}
+
+/// The window shortcuts on [platform], one table for both places that
+/// honour them, as [tabShortcuts] is.
+///
+/// The panes take Poltergeist's chords: ⌃⌘S for the sidebar and ⌥⌘I for
+/// the inspector on Apple platforms, Ctrl+Alt+S and Ctrl+Alt+I elsewhere,
+/// with the inspector's pages on the digits beside them (⌥⌘1 to ⌥⌘5,
+/// Ctrl+Alt+1 to Ctrl+Alt+5). Off Apple platforms only the left Alt
+/// counts, as for the tab numbers: Windows reports AltGr as Ctrl + right
+/// Alt, and AltGr+S types ś on Polish layouts. xterm has no bytes for
+/// Ctrl+Alt+letter, so the terminal loses nothing to them. Undo is ⌘Z and
+/// ⇧⌘Z, or Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y, which the terminal leaves to
+/// the shell ([handleWindowShortcut]).
+List<WindowShortcut> windowShortcuts(TargetPlatform platform) =>
+    switch (platform) {
+      TargetPlatform.macOS || TargetPlatform.iOS => _appleWindowShortcuts,
+      _ => _otherWindowShortcuts,
+    };
+
+const List<WindowCommand> _pageCommands = [
+  WindowCommand.showFiles,
+  WindowCommand.showContext,
+  WindowCommand.showGit,
+  WindowCommand.showSnippets,
+  WindowCommand.showAssistant,
+];
+
+final List<WindowShortcut> _appleWindowShortcuts = [
+  const WindowShortcut._(
+    SingleActivator(LogicalKeyboardKey.keyS, meta: true, control: true),
+    WindowCommand.toggleSidebar,
+  ),
+  const WindowShortcut._(
+    SingleActivator(LogicalKeyboardKey.keyI, meta: true, alt: true),
+    WindowCommand.toggleInspector,
+  ),
+  for (final (i, command) in _pageCommands.indexed)
+    WindowShortcut._(
+      SingleActivator(_tabNumberKeys[i], meta: true, alt: true),
+      command,
+    ),
+  const WindowShortcut._(
+    SingleActivator(LogicalKeyboardKey.keyZ, meta: true),
+    WindowCommand.undo,
+  ),
+  const WindowShortcut._(
+    SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true),
+    WindowCommand.redo,
+  ),
+];
+
+final List<WindowShortcut> _otherWindowShortcuts = [
+  const WindowShortcut._(
+    SingleActivator(LogicalKeyboardKey.keyS, control: true, alt: true),
+    WindowCommand.toggleSidebar,
+    leftAltOnly: true,
+  ),
+  const WindowShortcut._(
+    SingleActivator(LogicalKeyboardKey.keyI, control: true, alt: true),
+    WindowCommand.toggleInspector,
+    leftAltOnly: true,
+  ),
+  for (final (i, command) in _pageCommands.indexed)
+    WindowShortcut._(
+      SingleActivator(_tabNumberKeys[i], control: true, alt: true),
+      command,
+      leftAltOnly: true,
+    ),
+  const WindowShortcut._(
+    SingleActivator(LogicalKeyboardKey.keyZ, control: true),
+    WindowCommand.undo,
+  ),
+  const WindowShortcut._(
+    SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true),
+    WindowCommand.redo,
+  ),
+  const WindowShortcut._(
+    SingleActivator(LogicalKeyboardKey.keyY, control: true),
+    WindowCommand.redo,
+  ),
+];
+
+/// Run the window shortcut [event] is, if it is one ([windowShortcuts]).
+///
+/// Undo and redo are left alone, unhandled, where something else keeps a
+/// history: a focused text field or the editor (which answer
+/// [UndoTextIntent]), and off Apple platforms the terminal, whose Ctrl+Z
+/// suspends the shell's job. ⌘ never reaches a shell, so on a Mac ⌘Z in
+/// the terminal undoes the app's last change.
+KeyEventResult handleWindowShortcut(
+  BuildContext context,
+  AppState state,
+  KeyEvent event,
+  ShortcutOrigin origin,
+) {
+  final platform = Theme.of(context).platform;
+  final apple =
+      platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
+  final historyStandsDown =
+      _focusKeepsTextHistory() || (!apple && origin == ShortcutOrigin.terminal);
+  return dispatchGhostChord([
+    for (final shortcut in windowShortcuts(platform))
+      if (!(shortcut.command.stepsHistory && historyStandsDown))
+        GhostChordBinding(
+          activator: shortcut.chord,
+          // A held toggle would flicker the pane; a held ⌘Z steps back
+          // change by change, as a Mac app's does.
+          repeats: shortcut.command.stepsHistory,
+          leftAltOnly: shortcut.leftAltOnly,
+          onInvoke: () => runWindowCommand(context, state, shortcut.command),
+        ),
+  ], event);
+}
+
+/// Whether the focused widget keeps its own undo history: a text field or
+/// the built-in editor, both of which answer [UndoTextIntent].
+bool _focusKeepsTextHistory() {
+  final focus = FocusManager.instance.primaryFocus?.context;
+  if (focus == null || !focus.mounted) return false;
+  return Actions.maybeFind<UndoTextIntent>(
+        focus,
+        intent: const UndoTextIntent(SelectionChangedCause.keyboard),
+      ) !=
+      null;
+}
+
+/// Runs [command]; the toolbar's pane buttons take the same path.
+void runWindowCommand(
+  BuildContext context,
+  AppState state,
+  WindowCommand command,
+) {
+  switch (command) {
+    case WindowCommand.toggleSidebar:
+      unawaited(state.setSidebarVisible(!state.sidebarVisible));
+    case WindowCommand.toggleInspector:
+      unawaited(state.setInspectorVisible(!state.inspectorVisible));
+    case WindowCommand.showFiles:
+      unawaited(state.showInspectorPage(InspectorPage.files));
+    case WindowCommand.showContext:
+      unawaited(state.showInspectorPage(InspectorPage.context));
+    case WindowCommand.showGit:
+      unawaited(state.showInspectorPage(InspectorPage.git));
+    case WindowCommand.showSnippets:
+      unawaited(state.showInspectorPage(InspectorPage.snippets));
+    case WindowCommand.showAssistant:
+      unawaited(state.showInspectorPage(InspectorPage.assistant));
+    case WindowCommand.undo || WindowCommand.redo:
+      unawaited(_stepUndoHistory(context, state, command));
+  }
+}
+
+/// Undo or redo the app's last change, and say which: with no menu
+/// naming it, the notice is how the user learns what Ctrl+Z took back
+/// ("Delete snippet undone").
+Future<void> _stepUndoHistory(
+  BuildContext context,
+  AppState state,
+  WindowCommand command,
+) async {
+  final history = state.undoHistory;
+  final undo = command == WindowCommand.undo;
+  final name = undo ? history.undoName : history.redoName;
+  if (name == null) return;
+  try {
+    await (undo ? history.undo() : history.redo());
+  } catch (error) {
+    if (!context.mounted) return;
+    showTopToastIn(
+      context,
+      message: 'Couldn’t ${undo ? 'undo' : 'redo'} “$name”: $error',
+    );
+    return;
+  }
+  if (!context.mounted) return;
+  showTopToastIn(context, message: '$name ${undo ? 'undone' : 'redone'}');
+}
+
 /// Cross-platform keyboard shortcuts for the menu commands. On macOS the native
 /// menu (wired in MainFlutterWindow.swift) owns ⌘T, ⌘, and ⌘K; this also covers
 /// Linux/Windows, where there is no system menu bar. The native menu and these
 /// shortcuts share the same Dart actions. The tab shortcuts ([tabShortcuts])
-/// are Dart's alone on every platform: the native menu has no item for them,
-/// so ⌘W reaches here instead of closing the window.
+/// and the window shortcuts ([windowShortcuts]) are Dart's alone on every
+/// platform: the native menu has no item for them, so ⌘W reaches here
+/// instead of closing the window.
 class AppMenus extends StatelessWidget {
   final Widget child;
   const AppMenus({super.key, required this.child});
@@ -435,8 +649,21 @@ class AppMenus extends StatelessWidget {
       child: Focus(
         canRequestFocus: false,
         skipTraversal: true,
-        onKeyEvent: (_, event) => handleTabShortcut(context, state, event),
-        child: child,
+        onKeyEvent: (_, event) {
+          final tab = handleTabShortcut(context, state, event);
+          if (tab != KeyEventResult.ignored) return tab;
+          return handleWindowShortcut(
+            context,
+            state,
+            event,
+            ShortcutOrigin.window,
+          );
+        },
+        // Focus starts, and falls back, inside this scope rather than on
+        // the route's above it, which no key event here would reach: in a
+        // fresh window with no session, or after the filter field lets go,
+        // the shortcuts still see every key.
+        child: FocusScope(autofocus: true, child: child),
       ),
     );
   }

@@ -1,4 +1,8 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostUndoableChange;
 import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
@@ -188,28 +192,60 @@ class _SnippetsPaneState extends State<SnippetsPane> {
     await showSnippetEditor(context, state, existing);
   }
 
+  /// The snippet goes at once, and Undo brings it back: the notice's, or
+  /// the app's undo shortcut (⌘Z, Ctrl+Z), as Finder and Notes delete.
   Future<void> _delete(
     BuildContext context,
     AppState state,
     Snippet snippet,
   ) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Delete "${snippet.title}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final change = await deleteSnippetUndoably(state, snippet);
+    if (!context.mounted) return;
+    showTopToastIn(
+      context,
+      message: 'Deleted “${snippet.title}”',
+      actionLabel: 'Undo',
+      // This deletion only, while it is still the one Undo would take
+      // back: a later change has its own.
+      onAction: () {
+        final history = state.undoHistory;
+        if (history.isNextUndo(change)) unawaited(history.undo());
+      },
     );
-    if (ok == true) await state.deleteSnippet(snippet.id);
+  }
+}
+
+/// Deletes [snippet] and records it in the app's undo history, whose Undo
+/// saves it back, and returns the recorded change.
+Future<GhostUndoableChange> deleteSnippetUndoably(
+  AppState state,
+  Snippet snippet,
+) async {
+  await state.deleteSnippet(snippet.id);
+  final stamps = _RestoreStamps(snippet.updatedAt);
+  final change = GhostUndoableChange(
+    name: 'Delete snippet',
+    undo: () => state.saveSnippet(snippet.copyWith(updatedAt: stamps.next())),
+    redo: () => state.deleteSnippet(snippet.id),
+  );
+  state.undoHistory.record(change);
+  return change;
+}
+
+/// Stamps for a snippet written back by Undo or Redo. Each must outrank
+/// every version this device stamped before it, the deletion's tombstone
+/// included, which beats its row by one: [AppState.deleteSnippet] stamps
+/// max(now, prior + 1). A plain "now" would lose to a row from a device
+/// whose clock runs ahead, and the restored snippet would vanish again.
+final class _RestoreStamps {
+  _RestoreStamps(this._latest);
+
+  int _latest;
+
+  int next() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _latest = now > _latest + 1 ? now : _latest + 2;
+    return _latest;
   }
 }
 
@@ -361,6 +397,20 @@ class _SnippetEditorState extends State<_SnippetEditor> {
     text: widget.existing?.body ?? '',
   );
 
+  /// A snippet needs both a title and a command; Save waits for them
+  /// rather than closing on a draft it would drop.
+  bool get _complete =>
+      _title.text.trim().isNotEmpty && _body.text.trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _title.addListener(_changed);
+    _body.addListener(_changed);
+  }
+
+  void _changed() => setState(() {});
+
   @override
   void dispose() {
     _title.dispose();
@@ -369,12 +419,9 @@ class _SnippetEditorState extends State<_SnippetEditor> {
   }
 
   Future<void> _save() async {
+    if (!_complete) return;
     final title = _title.text.trim();
     final body = _body.text;
-    if (title.isEmpty || body.trim().isEmpty) {
-      Navigator.of(context).pop();
-      return;
-    }
     final now = DateTime.now().millisecondsSinceEpoch;
     final existing = widget.existing;
     final snippet = existing == null
@@ -386,12 +433,50 @@ class _SnippetEditorState extends State<_SnippetEditor> {
             updatedAt: now,
           )
         : existing.copyWith(title: title, body: body, updatedAt: now);
-    await widget.state.saveSnippet(snippet);
+    final state = widget.state;
+    // An unchanged save is no change: nothing to write, sync or undo.
+    final unchanged =
+        existing != null && existing.title == title && existing.body == body;
+    if (unchanged) {
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+    await state.saveSnippet(snippet);
+    final stamps = _RestoreStamps(snippet.updatedAt);
+    state.undoHistory.record(
+      existing == null
+          ? GhostUndoableChange(
+              name: 'New snippet',
+              undo: () => state.deleteSnippet(snippet.id),
+              redo: () =>
+                  state.saveSnippet(snippet.copyWith(updatedAt: stamps.next())),
+            )
+          : GhostUndoableChange(
+              name: 'Edit snippet',
+              undo: () => state.saveSnippet(
+                existing.copyWith(updatedAt: stamps.next()),
+              ),
+              redo: () =>
+                  state.saveSnippet(snippet.copyWith(updatedAt: stamps.next())),
+            ),
+    );
     if (mounted) Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Return in the title saves, as a sheet's default button does; the
+    // command takes newlines, so ⌘Return (Ctrl+Return) saves from there.
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.enter, meta: true): _save,
+        const SingleActivator(LogicalKeyboardKey.enter, control: true): _save,
+      },
+      child: _dialog(context),
+    );
+  }
+
+  Widget _dialog(BuildContext context) {
     return AlertDialog(
       title: Text(widget.existing == null ? 'New snippet' : 'Edit snippet'),
       content: SizedBox(
@@ -402,6 +487,8 @@ class _SnippetEditorState extends State<_SnippetEditor> {
             TextField(
               controller: _title,
               autofocus: true,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _save(),
               decoration: const InputDecoration(labelText: 'Title'),
             ),
             const SizedBox(height: 12),
@@ -425,7 +512,10 @@ class _SnippetEditorState extends State<_SnippetEditor> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(onPressed: _save, child: const Text('Save')),
+        FilledButton(
+          onPressed: _complete ? _save : null,
+          child: const Text('Save'),
+        ),
       ],
     );
   }

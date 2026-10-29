@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart';
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/theme.dart';
+import 'package:seance_app/ui/inspector_page.dart';
 import 'package:seance_app/ui/sidebar_panel.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
@@ -136,4 +138,21 @@ void main() {
       }
     });
   }
+
+  testWidgets('a picked tab holds while it slides in, whatever else the '
+      'app reports meanwhile', (tester) async {
+    await pumpPanel(tester, panel: const SidebarPanel());
+    await tester.tap(find.byTooltip('Git'));
+    // Mid-slide, an unrelated change notifies (a pane toggled from the
+    // header, a server's status).
+    await tester.pump(const Duration(milliseconds: 50));
+    unawaited(state!.setSidebarVisible(false));
+    // Past the slide; the panel never settles (the files pane's spinner).
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(isOpen(tester, 'Git'), isTrue);
+    expect(state!.inspectorPage, InspectorPage.git);
+  });
 }

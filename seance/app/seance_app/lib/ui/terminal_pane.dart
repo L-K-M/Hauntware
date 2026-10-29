@@ -61,8 +61,8 @@ class TerminalPane extends StatelessWidget {
   final bool showAssistantAffordance;
   final bool showAppBar;
 
-  /// Whether the tab strip carries Generate command; false under the macOS
-  /// header ([HeaderToolbar]), which carries it instead.
+  /// Whether the tab strip carries Generate command; false under the wide
+  /// layout's header ([HeaderToolbar]), which carries it instead.
   final bool showGenerateCommandInStrip;
 
   const TerminalPane({
@@ -1385,6 +1385,15 @@ class _SessionViewState extends State<_SessionView> {
     // shell as the keys underneath.
     final tabShortcut = handleTabShortcut(context, widget.state, event);
     if (tabShortcut != KeyEventResult.ignored) return tabShortcut;
+    // The panes and, on Apple platforms, the app's undo, before xterm
+    // would turn the chord into bytes for the shell.
+    final windowShortcut = handleWindowShortcut(
+      context,
+      widget.state,
+      event,
+      ShortcutOrigin.terminal,
+    );
+    if (windowShortcut != KeyEventResult.ignored) return windowShortcut;
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
     if (event.logicalKey == LogicalKeyboardKey.keyK &&
@@ -1476,8 +1485,16 @@ class _SessionViewState extends State<_SessionView> {
     }
   }
 
+  /// Drops the lines scrolled off the top, keeping the screen, as a
+  /// terminal's Clear Scrollback does: the shell's own `clear` leaves them.
+  void _clearScrollback() {
+    final terminal = widget.tab.engine.terminal;
+    terminal.eraseScrollbackOnly();
+    terminal.notifyListeners();
+  }
+
   /// Right-click menu: Copy (when there's a selection), Paste, Select all,
-  /// Find, and the keyboard shortcut list.
+  /// Find, Clear scrollback, and the keyboard shortcut list.
   Future<void> _showContextMenu(
     BuildContext context,
     Offset globalPosition,
@@ -1540,6 +1557,13 @@ class _SessionViewState extends State<_SessionView> {
           iconColor: palette.glyph(FamilyHue.graphite),
           shortcut: keys(LogicalKeyboardKey.keyF),
         ),
+        GhostMenuItem(
+          context: context,
+          value: 'clearScrollback',
+          label: 'Clear scrollback',
+          icon: Icons.clear_all,
+          iconColor: palette.glyph(FamilyHue.graphite),
+        ),
         const GhostMenuDivider(),
         // No shortcut hint here: the item opens the list itself.
         GhostMenuItem(
@@ -1561,6 +1585,8 @@ class _SessionViewState extends State<_SessionView> {
       case 'find':
         // The tab may have closed while the menu was open.
         if (mounted) _openFind();
+      case 'clearScrollback':
+        if (mounted) _clearScrollback();
       case 'shortcuts':
         if (context.mounted) await showKeyboardShortcuts(context);
     }

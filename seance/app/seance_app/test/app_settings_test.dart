@@ -7,6 +7,7 @@ import 'package:seance_app/services/assistant_settings_sync.dart';
 import 'package:seance_app/services/external_file_opener.dart';
 import 'package:seance_app/theme/app_appearance.dart';
 import 'package:seance_app/theme/theme_presets.dart';
+import 'package:seance_app/ui/inspector_page.dart';
 import 'package:seance_app/ui/server_list_density.dart';
 
 void main() {
@@ -336,6 +337,33 @@ void main() {
     final restored = AppSettings.fromJson(settings.toJson());
     expect(restored.paneListWidth, 420);
     expect(restored.paneUtilityWidth, 512.5);
+  });
+
+  test('hidden panes and the inspector page round-trip, unset by default', () {
+    final fresh = AppSettings();
+    expect(fresh.sidebarHidden, isFalse);
+    expect(fresh.inspectorHidden, isFalse);
+    expect(fresh.inspectorPage, isNull);
+    // Defaults stay out of the JSON, so a file that never used them reads
+    // back byte-identical.
+    for (final key in ['sidebarHidden', 'inspectorHidden', 'inspectorPage']) {
+      expect(fresh.toJson().containsKey(key), isFalse, reason: key);
+    }
+
+    final restored = AppSettings.fromJson(
+      AppSettings(
+        sidebarHidden: true,
+        inspectorHidden: true,
+        inspectorPage: InspectorPage.snippets,
+      ).toJson(),
+    );
+    expect(restored.sidebarHidden, isTrue);
+    expect(restored.inspectorHidden, isTrue);
+    expect(restored.inspectorPage, InspectorPage.snippets);
+
+    // A page this build does not know reads as the default.
+    final unknown = AppSettings().toJson()..['inspectorPage'] = 'terminal';
+    expect(AppSettings.fromJson(unknown).inspectorPage, isNull);
   });
 
   test('malformed pane widths read as unset', () {

@@ -344,18 +344,74 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Discard unsaved changes?'), findsOneWidget);
+    expect(find.text('Save changes to “config.txt”?'), findsOneWidget);
     expect(find.text('unsaved'), findsOneWidget);
 
-    await tester.tap(find.text('Keep editing'));
+    await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(await closing, isFalse);
 
     final discarding = key.currentState!.confirmDiscard();
     await tester.pump();
-    await tester.tap(find.text('Discard'));
+    await tester.tap(find.text('Don’t save'));
     await tester.pumpAndSettle();
     expect(await discarding, isTrue);
+  });
+
+  testWidgets("the close question's Save saves first, as Ctrl+S does", (
+    tester,
+  ) async {
+    final key = GlobalKey<BuiltInTextEditorScreenState>();
+    String? savedText;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BuiltInTextEditorScreen(
+          key: key,
+          file: file,
+          remotePath: '/etc/config.txt',
+          initialText: 'one\ntwo\n',
+          saveDocument: (_, text) async => savedText = text,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'kept\n');
+    await tester.pump();
+
+    final closing = key.currentState!.confirmDiscard();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(savedText, 'kept\n');
+    expect(await closing, isTrue);
+  });
+
+  testWidgets('a save that fails keeps the tab open', (tester) async {
+    final key = GlobalKey<BuiltInTextEditorScreenState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BuiltInTextEditorScreen(
+          key: key,
+          file: file,
+          remotePath: '/etc/config.txt',
+          initialText: 'one\n',
+          saveDocument: (_, _) async => throw const FileSystemException('full'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'lost?\n');
+    await tester.pump();
+
+    final closing = key.currentState!.confirmDiscard();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(await closing, isFalse);
   });
 
   testWidgets('a clean buffer closes without asking', (tester) async {

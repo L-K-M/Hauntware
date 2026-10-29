@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- The window has the same layout on Linux, Windows, macOS and tablets: a
+  header with the server's name, Generate command and buttons that hide
+  the server list (the sidebar) and the side panel (the inspector), as a
+  Mac app's do. ⌃⌘S and ⌥⌘I, or Ctrl+Alt+S and Ctrl+Alt+I, toggle them,
+  and ⌥⌘1 to ⌥⌘5, or Ctrl+Alt+1 to Ctrl+Alt+5, open Files, Context,
+  Git, Snippets and the Assistant. The window remembers all three.
+- Undo works outside text fields: ⌘Z, or Ctrl+Z outside the terminal,
+  takes back snippet changes and server pins and duplicates, and a
+  notice says what it undid. Deleting a snippet no longer asks first;
+  its notice offers Undo.
+- Closing an editor tab with unsaved text asks Save, Don't save or
+  Cancel, and Save saves as Ctrl+S does. Closing a terminal tab while a
+  command runs in it asks first.
+- The snippet editor's Save waits for a title and a command, Return in
+  the title saves, ⌘Return or Ctrl+Return saves from the command, and
+  saving an unchanged snippet writes nothing.
+- On the desktop, Import SSH config picks the file, starting in
+  `~/.ssh`, instead of asking for its text. The terminal's menu has
+  Clear scrollback.
+- On macOS, file panels (uploads, downloads, the SSH config import) open
+  again: file_picker refused them in the unsandboxed app.
 - A new **Context** tab in the side panel, between Files and Git,
   collects the links and file paths a session prints, newest first,
   like kitty's hints and macOS data detectors. Tap a link to open it in

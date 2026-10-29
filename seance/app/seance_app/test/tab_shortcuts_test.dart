@@ -300,14 +300,14 @@ void main() {
       );
 
       await press(tester, LogicalKeyboardKey.keyW, [ctrl, shift]);
-      expect(find.text('Discard unsaved changes?'), findsOneWidget);
-      await tester.tap(find.text('Keep editing'));
+      expect(find.text('Save changes to “motd”?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
       await settle(tester);
       expect(tabIds(), ['a', 'e']);
       expect(activeTab(), 'e');
 
       await press(tester, LogicalKeyboardKey.keyW, [ctrl, shift]);
-      await tester.tap(find.text('Discard'));
+      await tester.tap(find.text('Don’t save'));
       await settle(tester);
       expect(tabIds(), ['a']);
       expect(activeTab(), 'a');
@@ -378,6 +378,11 @@ void main() {
         'Zoom out': '⌘-',
         'Actual size': '⌘0',
         'Generate command': '⌘K',
+        'Show or hide the sidebar': '⌃⌘S',
+        'Show or hide the inspector': '⌥⌘I',
+        'Files, Context, Git, Snippets, Assistant': '⌥⌘1 to ⌥⌘5',
+        'Undo': '⌘Z',
+        'Redo': '⇧⌘Z',
         'Filter servers': '⌥⌘F',
         'Settings': '⌘,',
       });
@@ -399,6 +404,11 @@ void main() {
         'Zoom out': 'Ctrl+Shift+-',
         'Actual size': 'Ctrl+Shift+0',
         'Generate command': 'Ctrl+Shift+K',
+        'Show or hide the sidebar': 'Ctrl+Alt+S',
+        'Show or hide the inspector': 'Ctrl+Alt+I',
+        'Files, Context, Git, Snippets, Assistant': 'Ctrl+Alt+1 to Ctrl+Alt+5',
+        'Undo': 'Ctrl+Z',
+        'Redo': 'Ctrl+Shift+Z or Ctrl+Y',
         'Filter servers': 'Ctrl+Alt+F',
         'Settings': 'Ctrl+,',
       });

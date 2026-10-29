@@ -5,8 +5,9 @@ import 'session_label.dart';
 
 /// Close [tabId] behind the guards its close button has always had: an
 /// editor with unsaved changes asks first; a session asks for each of its
-/// editors (they close with it) and before deleting the managed local copies
-/// its close takes with it. Declining any of them leaves every tab open.
+/// editors (they close with it), before ending a command still running in
+/// it, and before deleting the managed local copies its close takes with
+/// it. Declining any of them leaves every tab open.
 ///
 /// The tab strip's close button and the close-tab shortcut both come here,
 /// so no way of closing a tab can skip a guard another one has (SEA-009).
@@ -27,8 +28,11 @@ Future<void> confirmAndCloseTab(
   // deleted): a declined unsaved-buffer confirm aborts the whole close.
   final session = tab;
   for (final editor in state.editorTabsOwnedBy(session)) {
+    if (!context.mounted) return;
     if (!await _editorMayClose(context, editor)) return;
   }
+  if (!context.mounted) return;
+  if (!await _runningCommandMayEnd(context, session)) return;
   final localCopyCount =
       (session.files?.localCopies.length ?? 0) +
       session.retainedLocalCopies.length;
@@ -93,4 +97,33 @@ Future<bool> _editorMayClose(BuildContext context, EditorTab tab) async {
     ),
   );
   return discard ?? false;
+}
+
+/// Terminal's question before a close ends a command still running in the
+/// tab ("top", a build, a copy). At the shell's prompt, or with nothing
+/// connected, the tab closes without asking.
+Future<bool> _runningCommandMayEnd(
+  BuildContext context,
+  TerminalSession session,
+) async {
+  final command = session.metadata.value.runningCommand;
+  if (command == null || !session.isConnected) return true;
+  final end = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('End the running command?'),
+      content: Text('Closing this tab ends “${sanitizeRemoteLabel(command)}”.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Close tab'),
+        ),
+      ],
+    ),
+  );
+  return end ?? false;
 }

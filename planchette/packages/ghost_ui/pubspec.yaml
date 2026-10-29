@@ -3,7 +3,7 @@ description: >-
   Shared Flutter UI for the Ghost app family: Planchette,
   Poltergeist, and Seance: family hues, contrast math, middle-ellipsis text,
   top toasts, menus, sidebars, desktop/touch file-list rendering, badge
-  images, and a colour picker.
+  images, a colour picker, and an app-level undo history.
 version: 1.9.3
 publish_to: none
 

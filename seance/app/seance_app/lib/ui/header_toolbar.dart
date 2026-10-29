@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show macosTrafficLightsInset;
+import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 import 'package:seance_core/seance_core.dart';
 
@@ -6,79 +8,182 @@ import '../app_state.dart';
 import '../family_hues.dart';
 import '../main.dart';
 import '../theme.dart';
+import 'adaptive_shell.dart' show PaneVisibility;
 import 'app_menus.dart';
 import 'macos_toolbar_band.dart';
 import 'server_appearance.dart';
 
-/// The wide layout's header on macOS, drawn under the unified toolbar band
-/// the way Poltergeist's is (`MacosTitlebar.install`): the window's title
-/// and its toolbar in one row, with the traffic lights over the rail to its
-/// left instead of a standard titlebar above everything.
+/// The space before the first control where nothing sits ahead of it.
+const double _edgeInset = 8;
+
+/// The space a leading control or the title keeps from what follows.
+const double _gap = 8;
+
+/// Where the window's leading controls start: after the traffic lights
+/// under the macOS titlebar, in full screen too, and at the edge
+/// everywhere else (other platforms, the Settings window).
+double _leadingInset(BuildContext context) =>
+    MacosToolbarBandScope.unifiedToolbarOf(context)
+    ? macosTrafficLightsInset
+    : _edgeInset;
+
+/// [child] as a control inside the macOS toolbar band: there AppKit takes
+/// every click for window drag unless a passthrough view hands it back.
+/// Plain Flutter on every other platform.
+Widget _clickable(BuildContext context, Widget child) =>
+    MacosToolbarBandScope.unifiedToolbarOf(context)
+    ? MacosToolbarPassthrough(child: child)
+    : child;
+
+/// [child] with the passthrough views inside it registered, on macOS.
+Widget _passthroughScope(BuildContext context, Widget child) =>
+    MacosToolbarBandScope.unifiedToolbarOf(context)
+    ? MacosToolbarPassthroughScope(child: child)
+    : child;
+
+/// The wide layout's header, on every platform: the window's title and
+/// its toolbar in one row, Poltergeist's arrangement. On macOS it draws
+/// under the unified toolbar band (`MacosTitlebar.install`), with the
+/// traffic lights over the server list to its left instead of a standard
+/// titlebar above everything; elsewhere it sits under the native title bar.
+///
+///     ┌──────────────┬──────────────────────────────────────────────┐
+///     │ ●●●  [◧]     │ [badge] prod-db         [✦ Generate…] [◨]   │
+///     │ (SidebarBand)│         user@host                            │
+///     ├──────────────┼──────────────────────────────────────────────┤
+///     │ servers      │ tabs, terminal               │ inspector     │
 ///
 /// The title is the active server's badge and label with `user@host` under
 /// it, what a titlebar would otherwise say. It stays out of the click
-/// passthrough, so dragging it moves the window and double-clicking it
-/// zooms, as a titlebar does; the buttons are wrapped in
-/// [MacosToolbarPassthrough] so their clicks reach Flutter rather than
-/// AppKit's titlebar. Generate command lives here as the primary, labelled
-/// button (Poltergeist's Connect), and leaves the tab strip below.
+/// passthrough, so on macOS dragging it moves the window and
+/// double-clicking it zooms, as a titlebar does; the buttons take their
+/// clicks through [MacosToolbarPassthrough]. Generate command lives here
+/// as the primary, labelled button (Poltergeist's Connect), and leaves the
+/// tab strip below. The inspector button ends the row; the sidebar button
+/// leads it while the server list is hidden, and sits over the list
+/// ([SidebarBand]) while it shows.
 class HeaderToolbar extends StatelessWidget {
-  const HeaderToolbar({super.key});
+  const HeaderToolbar({super.key, this.sidebar = PaneVisibility.shown});
 
   static const titleKey = ValueKey('header.title');
   static const subtitleKey = ValueKey('header.subtitle');
   static const generateCommandKey = ValueKey('header.generateCommand');
+  static const sidebarToggleKey = ValueKey('header.sidebarToggle');
+  static const inspectorToggleKey = ValueKey('header.inspectorToggle');
+
+  /// Whether the server list shows beside the header, carrying the sidebar
+  /// button; while it is hidden the header carries it.
+  final PaneVisibility sidebar;
 
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final chrome = SeanceChrome.of(context, seanceThemeStyle);
     final platform = Theme.of(context).platform;
-    // Only a window with the unified toolbar has passthrough views to
-    // register; anywhere else the header is plain Flutter.
-    final native = MacosToolbarBandScope.unifiedToolbarOf(context);
-    Widget pass(Widget child) =>
-        native ? MacosToolbarPassthrough(child: child) : child;
+    final leadsWithSidebar = sidebar == PaneVisibility.hidden;
 
     final header = Material(
       color: chrome.headerBackground,
+      // As wide as it is let be, title or not: with nothing open it would
+      // shrink to its padding, and the page would show beside it.
       child: SizedBox(
+        width: double.infinity,
         height: chrome.headerHeight,
         child: Padding(
-          padding: const EdgeInsetsDirectional.only(start: 12, end: 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: ListenableBuilder(
-                  listenable: state,
-                  builder: (context, _) => _HeaderTitle(state: state),
-                ),
-              ),
-              const SizedBox(width: 8),
-              pass(
-                _Capsule(
-                  children: [
-                    _ToolbarButton(
-                      key: generateCommandKey,
-                      icon: Icons.auto_fix_high,
-                      // The assistant's purple (Poltergeist's D34), as in
-                      // the tab strip it replaces.
-                      hue: FamilyHue.purple,
-                      label: 'Generate command',
-                      shortcut: platform == TargetPlatform.macOS
-                          ? '⌘K'
-                          : 'Ctrl+Shift+K',
-                      onPressed: () => openCommandGenerator(state),
+          padding: EdgeInsetsDirectional.only(
+            start: leadsWithSidebar ? _leadingInset(context) : 12,
+            end: _edgeInset,
+          ),
+          child: ListenableBuilder(
+            listenable: state,
+            builder: (context, _) => Row(
+              children: [
+                if (leadsWithSidebar) ...[
+                  _clickable(
+                    context,
+                    _PaneToggleButton(
+                      key: sidebarToggleKey,
+                      command: WindowCommand.toggleSidebar,
+                      visible: state.sidebarVisible,
                     ),
-                  ],
+                  ),
+                  const SizedBox(width: _gap),
+                ],
+                Expanded(child: _HeaderTitle(state: state)),
+                const SizedBox(width: _gap),
+                _clickable(
+                  context,
+                  _Capsule(
+                    children: [
+                      _ToolbarButton(
+                        key: generateCommandKey,
+                        icon: Icons.auto_fix_high,
+                        // The assistant's purple (Poltergeist's D34), as in
+                        // the tab strip it replaces.
+                        hue: FamilyHue.purple,
+                        label: 'Generate command',
+                        shortcut: platform == TargetPlatform.macOS
+                            ? '⌘K'
+                            : 'Ctrl+Shift+K',
+                        onPressed: () => openCommandGenerator(state),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: _gap),
+                _clickable(
+                  context,
+                  _PaneToggleButton(
+                    key: inspectorToggleKey,
+                    command: WindowCommand.toggleInspector,
+                    visible: state.inspectorVisible,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
-    return native ? MacosToolbarPassthroughScope(child: header) : header;
+    return _passthroughScope(context, header);
+  }
+}
+
+/// The server list's top while the header shows: level with the header,
+/// with the sidebar button after the traffic lights on macOS and at the
+/// leading edge elsewhere. On macOS the empty rest drags the window.
+class SidebarBand extends StatelessWidget {
+  const SidebarBand({super.key});
+
+  static const sidebarToggleKey = ValueKey('sidebarBand.sidebarToggle');
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final chrome = SeanceChrome.of(context, seanceThemeStyle);
+    return _passthroughScope(
+      context,
+      SizedBox(
+        height: chrome.headerHeight,
+        child: Padding(
+          padding: EdgeInsetsDirectional.only(start: _leadingInset(context)),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: ListenableBuilder(
+              listenable: state,
+              builder: (context, _) => _clickable(
+                context,
+                _PaneToggleButton(
+                  key: sidebarToggleKey,
+                  command: WindowCommand.toggleSidebar,
+                  visible: state.sidebarVisible,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -233,6 +338,70 @@ class _ToolbarButton extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// An icon-only button that shows or hides a side pane: the sidebar's
+/// glyph has its panel on the leading side, the inspector's on the
+/// trailing side. Named for what it would do ("Hide sidebar"), with the
+/// pane's shortcut in its tooltip.
+class _PaneToggleButton extends StatelessWidget {
+  const _PaneToggleButton({
+    super.key,
+    required this.command,
+    required this.visible,
+  });
+
+  /// [WindowCommand.toggleSidebar] or [WindowCommand.toggleInspector].
+  final WindowCommand command;
+
+  /// Whether the pane shows now.
+  final bool visible;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final chrome = SeanceChrome.of(context, seanceThemeStyle);
+    final platform = Theme.of(context).platform;
+    final pane = command == WindowCommand.toggleSidebar
+        ? 'sidebar'
+        : 'inspector';
+    final label = '${visible ? 'Hide' : 'Show'} $pane';
+    final chord = windowShortcuts(
+      platform,
+    ).firstWhere((shortcut) => shortcut.command == command).chord;
+    final keys = formatShortcutActivator(chord, platform);
+    // view_sidebar draws its panel on the right: mirrored for the panel on
+    // the reading direction's start.
+    final leading = command == WindowCommand.toggleSidebar;
+    final ltr = Directionality.of(context) == TextDirection.ltr;
+    void toggle() => runWindowCommand(context, state, command);
+    return Tooltip(
+      message: keys == null ? label : '$label $keys',
+      child: Semantics(
+        button: true,
+        label: label,
+        excludeSemantics: true,
+        onTap: toggle,
+        child: InkWell(
+          onTap: toggle,
+          borderRadius: BorderRadius.circular(chrome.corner(6)),
+          hoverColor: chrome.hoverFill,
+          child: SizedBox(
+            width: 30,
+            height: 26,
+            child: Transform.flip(
+              flipX: leading == ltr,
+              child: Icon(
+                Icons.view_sidebar_outlined,
+                size: 18,
+                color: chrome.secondaryText,
+              ),
             ),
           ),
         ),

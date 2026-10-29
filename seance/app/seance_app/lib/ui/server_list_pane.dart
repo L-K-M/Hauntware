@@ -15,6 +15,7 @@ import '../theme.dart';
 import 'app_menus.dart';
 import 'ghost_servers_adapter.dart';
 import 'inbox_view.dart';
+import 'server_actions.dart';
 import 'server_editor.dart';
 import 'server_filter.dart';
 import 'server_grouping.dart';
@@ -23,7 +24,6 @@ import 'server_status_dot.dart';
 import 'server_tile.dart';
 import 'settings_screen.dart';
 import 'sidebar/sidebar_kit.dart';
-import 'top_toast.dart';
 
 /// Where the server list is mounted, which decides its chrome.
 enum ServerListPosture {
@@ -622,7 +622,7 @@ class _ServerListPaneState extends State<ServerListPane> {
       onEdit: () => _editServer(context, state, server),
       onDuplicate: () => _duplicateServer(context, state, server),
       onDelete: () => _deleteServer(context, state, server),
-      onTogglePin: () => state.toggleServerPin(server.id),
+      onTogglePin: () => toggleServerPinUndoably(state, server),
       // Disconnect every live terminal; reconnect the lone dead one.
       onDisconnect: live.isEmpty
           ? null
@@ -735,155 +735,20 @@ class _ServerListPaneState extends State<ServerListPane> {
     await showServerEditor(context, state, server);
   }
 
-  /// Copy a server, then offer the editor — duplicating is almost always the
-  /// first half of "…and change one thing", and the toast's action is a
-  /// shorter route back than finding the new row and reopening its menu.
   Future<void> _duplicateServer(
     BuildContext context,
     AppState state,
     ServerConfig server,
-  ) async {
-    final ServerConfig copy;
-    try {
-      copy = await state.duplicateServer(server);
-    } on SourceServerChanged catch (error) {
-      // Verbatim: this one is written as a whole sentence *for* this toast,
-      // and "Could not duplicate: …Nothing was created." says it twice.
-      if (context.mounted) {
-        showTopToastIn(context, message: '$error');
-      } else {
-        // Nowhere to show it. Logged so the refusal is not the failure that
-        // vanished — the same reason the branch below logs.
-        developer.log(
-          'Could not duplicate "${server.label}": $error',
-          name: 'seance.app',
-          level: 900,
-          error: error,
-        );
-      }
-      return;
-    } catch (error, stackTrace) {
-      // The vault throws when the OS keyring is locked. Say so rather than
-      // leaving the menu looking like it did nothing — and name the server,
-      // because a toast is all the user gets and two rows can fail apart.
-      // The error itself stays verbatim: `VaultLockedException.toString()` is
-      // the sentence that says what to do about it.
-      final message = 'Could not duplicate "${server.label}": $error';
-      // Logged whether or not there is a toast to show: the toast and the
-      // log are for different readers. With the trace, because this catch is
-      // broad, and for the failures it was not written for the message names
-      // the server and nothing else — no throw site to tell a locked keyring
-      // from a bug in the vault.
-      developer.log(
-        message,
-        name: 'seance.app',
-        level: 900,
-        error: error,
-        stackTrace: stackTrace,
-      );
-      if (context.mounted) showTopToastIn(context, message: message);
-      return;
-    }
-    if (!context.mounted) return;
-    showTopToastIn(
-      context,
-      message: 'Duplicated as "${copy.label}"',
-      actionLabel: 'Edit',
-      // Checked again inside the closure, not only before showing the toast:
-      // the action fires whenever the user taps it, which can be after this
-      // pane is gone, and a defunct context reaches showDialog as an ancestor
-      // lookup on a deactivated widget.
-      onAction: () {
-        if (context.mounted) _editServer(context, state, copy);
-      },
-    );
-  }
+  ) => duplicateServerInteractively(context, state, server);
 
   Future<void> _deleteServer(
     BuildContext context,
     AppState state,
     ServerConfig server,
-  ) async {
-    final localCopyCount = state
-        .tabsForServer(server.id)
-        .whereType<TerminalSession>()
-        .fold<int>(
-          0,
-          (count, session) =>
-              count +
-              (session.files?.localCopies.length ?? 0) +
-              session.retainedLocalCopies.length,
-        );
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Delete "${server.label}"?'),
-        content: Text(
-          localCopyCount == 0
-              ? 'This removes the server and any stored secret.'
-              : 'This removes the server, its stored secret, and '
-                    '$localCopyCount managed local '
-                    '${localCopyCount == 1 ? 'edit' : 'edits'}. Any changes not '
-                    'uploaded to the server will be deleted.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) await state.deleteServer(server.id);
-  }
+  ) => confirmDeleteServer(context, state, server);
 
-  Future<void> _importConfig(BuildContext context, AppState state) async {
-    final controller = TextEditingController();
-    final text = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Import SSH config'),
-        content: SizedBox(
-          width: 480,
-          child: TextField(
-            controller: controller,
-            maxLines: 12,
-            style: SeanceTheme.mono,
-            decoration: const InputDecoration(
-              hintText: 'Paste the contents of ~/.ssh/config …',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Import'),
-          ),
-        ],
-      ),
-    );
-    if (text != null && text.trim().isNotEmpty) {
-      final (:imported, :skipped) = await state.importSshConfig(text);
-      if (context.mounted) {
-        showTopToastIn(
-          context,
-          message: skipped == 0
-              ? 'Imported $imported host(s)'
-              : 'Imported $imported host(s). Skipped $skipped with an '
-                    'unsupported Port.',
-        );
-      }
-    }
-  }
+  Future<void> _importConfig(BuildContext context, AppState state) =>
+      importSshConfigInteractively(context, state);
 }
 
 /// The pinned "this machine" row above the servers.
