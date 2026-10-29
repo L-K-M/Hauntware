@@ -358,10 +358,8 @@ class _WorkspaceSplitViewState extends State<WorkspaceSplitView> {
 
   void _onStep(double delta) {
     setState(() {
-      _width = (_renderedWidth + delta).clamp(
-        _minimumBrowserWidth,
-        _renderedMaximum,
-      );
+      _width = (_width.clamp(_minimumBrowserWidth, _renderedMaximum) + delta)
+          .clamp(_minimumBrowserWidth, _renderedMaximum);
     });
     widget.onBrowserWidthSettled?.call(_width);
   }

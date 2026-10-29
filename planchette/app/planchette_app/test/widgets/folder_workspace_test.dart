@@ -433,9 +433,10 @@ void main() {
           const Offset(-40, 0),
         );
         await tester.pumpAndSettle();
-        expect(tester.getSize(browser).width, lessThan(332));
+        final dragged = tester.getSize(browser).width;
+        expect(dragged, lessThan(332));
         await settings.flush();
-        expect(settings.value.sidebarWidth, lessThan(332));
+        expect(settings.value.sidebarWidth, dragged);
         await tester.pumpWidget(const SizedBox.shrink());
         expect(tester.takeException(), isNull);
       },
@@ -515,6 +516,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.getSize(browser).width, 443);
       expect(settled, [443]);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(browser).width, 411);
+      expect(settled, [443, 427, 411]);
       await tester.pumpWidget(const SizedBox.shrink());
     }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 
