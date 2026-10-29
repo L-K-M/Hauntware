@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
 import 'package:klabautermann_app/app.dart';
+import 'package:klabautermann_app/ui/actions/quit_guard.dart';
 import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/alert_center.dart';
 import 'package:klabautermann_app/controllers/alert_notifications.dart';
@@ -214,7 +215,15 @@ Future<AppHarness> pumpApp(
     windowPanes: windowPanes ?? WindowPanesController(),
     undoHistory: undoHistory ?? GhostUndoHistory(),
   );
+  final quitGuard = switch (harness.operations) {
+    final operations? => AppQuitGuard(
+      operations: operations,
+      contextOf: () => appNavigatorKey.currentContext,
+    ),
+    null => null,
+  };
   addTearDown(() async {
+    quitGuard?.dispose();
     harness.dispose();
     await engine.close();
   });

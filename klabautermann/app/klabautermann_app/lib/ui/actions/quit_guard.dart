@@ -1,7 +1,36 @@
+import 'dart:ui' show AppExitResponse;
+
 import 'package:flutter/material.dart';
 
 import '../../controllers/operations_controller.dart';
 import '../../l10n/app_localizations.dart';
+
+/// Window close, application Quit and the Settings engine share one
+/// decision, including when closing the last window triggers Quit too.
+final class AppQuitGuard {
+  AppQuitGuard({required this._operations, required this._contextOf}) {
+    _exitRequests = AppLifecycleListener(onExitRequested: _requestExit);
+  }
+
+  final OperationsController _operations;
+  final BuildContext? Function() _contextOf;
+  late final AppLifecycleListener _exitRequests;
+  Future<bool>? _pending;
+  bool _accepted = false;
+
+  Future<bool> confirm() {
+    if (_accepted) return Future.value(true);
+    return _pending ??= _ask().whenComplete(() => _pending = null);
+  }
+
+  Future<bool> _ask() async =>
+      _accepted = await confirmQuitWhileRunning(_operations, _contextOf);
+
+  Future<AppExitResponse> _requestExit() async =>
+      await confirm() ? AppExitResponse.exit : AppExitResponse.cancel;
+
+  void dispose() => _exitRequests.dispose();
+}
 
 /// The main window's close gate (the intercepting [GhostClosePolicy]):
 /// asks before quitting while detached operations still run. They keep

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- The desktop header shows the selected server and controls the sidebar
+  and inspector. View-menu commands, keyboard shortcuts and remembered
+  visibility work across desktop platforms.
+- Undo and Redo cover server pins and alert-rule changes. Deleting a rule
+  offers Undo, including after leaving its page; failed restores explain
+  the error. The rule editor waits for valid input before enabling Save.
+- Closing or quitting with running detached operations asks first.
+  Detached work continues on its server after the app quits.
 - Initial scaffold: the `klabautermann_host`, `klabautermann_docker` and
   `klabautermann_core` packages, the five-platform app shell (desktop
   three-pane layout, phone master-detail stack, settings route), light

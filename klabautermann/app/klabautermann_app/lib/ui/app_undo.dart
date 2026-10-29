@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show UndoDirection;
 import 'package:ghost_ui/ghost_ui.dart'
-    show GhostUndoableChange, GhostUndoHistory, showTopToast, showTopToastIn;
+    show GhostUndoableChange, GhostUndoHistory, showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show SyncedRule, uuidV4;
 
@@ -29,28 +30,29 @@ class UndoHistoryScope extends InheritedNotifier<GhostUndoHistory> {
 /// it; a delete toast's Undo action calls [GhostUndoHistory.undo]
 /// directly, guarded by `isNextUndo` for its own change only.
 Future<void> stepUndoHistory(
-  BuildContext context,
+  OverlayState overlay,
   GhostUndoHistory history, {
-  required bool undo,
+  required UndoDirection direction,
 }) async {
-  final l10n = AppLocalizations.of(context);
+  final undo = direction == UndoDirection.undo;
+  final l10n = AppLocalizations.of(overlay.context);
   final name = undo ? history.undoName : history.redoName;
   if (name == null) return;
   try {
     await (undo ? history.undo() : history.redo());
   } catch (error) {
-    if (!context.mounted) return;
-    showTopToastIn(
-      context,
+    if (!overlay.mounted) return;
+    showTopToast(
+      overlay,
       message: undo
           ? l10n.toastUndoFailed(name, '$error')
           : l10n.toastRedoFailed(name, '$error'),
     );
     return;
   }
-  if (!context.mounted) return;
-  showTopToastIn(
-    context,
+  if (!overlay.mounted) return;
+  showTopToast(
+    overlay,
     message: undo ? l10n.toastChangeUndone(name) : l10n.toastChangeRedone(name),
   );
 }
@@ -78,12 +80,8 @@ Future<void> pinServerUndoably(
   history?.record(
     GhostUndoableChange(
       name: pinning ? l10n.changePinServer : l10n.changeUnpinServer,
-      undo: () => pinning
-          ? fleet.unpin(server.id)
-          : fleet.pin(server.id),
-      redo: () => pinning
-          ? fleet.pin(server.id)
-          : fleet.unpin(server.id),
+      undo: () => pinning ? fleet.unpin(server.id) : fleet.pin(server.id),
+      redo: () => pinning ? fleet.pin(server.id) : fleet.unpin(server.id),
     ),
   );
 }
@@ -126,23 +124,18 @@ Future<String> putAlertRuleUndoably(
   // Minting the id here lets Undo remove the rule a fresh put made.
   final id = existing?.id ?? uuidV4();
   await rules.put(edited.rule, id: id, target: edited.target);
-  history?.record(
-    switch (existing) {
-      final existing? => GhostUndoableChange(
-        name: l10n.changeEditAlertRule,
-        undo: () => rules.put(
-          existing.rule,
-          id: existing.id,
-          target: existing.target,
-        ),
-        redo: () => rules.put(edited.rule, id: id, target: edited.target),
-      ),
-      null => GhostUndoableChange(
-        name: l10n.changeNewAlertRule,
-        undo: () => rules.remove(id),
-        redo: () => rules.put(edited.rule, id: id, target: edited.target),
-      ),
-    },
-  );
+  history?.record(switch (existing) {
+    final existing? => GhostUndoableChange(
+      name: l10n.changeEditAlertRule,
+      undo: () =>
+          rules.put(existing.rule, id: existing.id, target: existing.target),
+      redo: () => rules.put(edited.rule, id: id, target: edited.target),
+    ),
+    null => GhostUndoableChange(
+      name: l10n.changeNewAlertRule,
+      undo: () => rules.remove(id),
+      redo: () => rules.put(edited.rule, id: id, target: edited.target),
+    ),
+  });
   return id;
 }

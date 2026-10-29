@@ -1,8 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show UndoDirection;
 import 'package:ghost_ui/ghost_ui.dart'
-    show GhostUndoableChange, showTopToast, showTopToastIn;
+    show GhostUndoableChange, showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/alert_rules_controller.dart';
@@ -278,6 +279,7 @@ class AlertRulesPage extends StatelessWidget {
   Future<void> _delete(BuildContext context, SyncedRule rule) async {
     final l10n = AppLocalizations.of(context);
     final overlay = Overlay.of(context);
+    final history = UndoHistoryScope.maybeOf(context);
     late final GhostUndoableChange? change;
     try {
       change = await deleteAlertRuleUndoably(context, rules, rule);
@@ -287,18 +289,23 @@ class AlertRulesPage extends StatelessWidget {
       }
       return;
     }
-    if (!context.mounted) return;
+    if (!overlay.mounted) return;
     final recorded = change;
-    showTopToastIn(
-      context,
+    showTopToast(
+      overlay,
       message: l10n.alertRuleDeleted,
-      actionLabel: recorded == null ? null : l10n.editUndo,
-      onAction: recorded == null
+      actionLabel: recorded == null || history == null ? null : l10n.editUndo,
+      onAction: recorded == null || history == null
           ? null
           : () {
-              final history = UndoHistoryScope.maybeOf(context);
-              if (history != null && history.isNextUndo(recorded)) {
-                unawaited(history.undo());
+              if (overlay.mounted && history.isNextUndo(recorded)) {
+                unawaited(
+                  stepUndoHistory(
+                    overlay,
+                    history,
+                    direction: UndoDirection.undo,
+                  ),
+                );
               }
             },
     );

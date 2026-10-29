@@ -305,7 +305,11 @@ List<AppCommand> buildAppCommands({
             ? const [SingleActivator(LogicalKeyboardKey.keyZ, meta: true)]
             : const [SingleActivator(LogicalKeyboardKey.keyZ, control: true)],
         repeats: true,
-        run: (context) => stepUndoHistory(context, undoHistory, undo: true),
+        run: (context) => stepUndoHistory(
+          Overlay.of(context, rootOverlay: true),
+          undoHistory,
+          direction: UndoDirection.undo,
+        ),
         menuPlacement: const CommandMenuPlacement(
           menu: AppMenuId.edit,
           order: 10,
@@ -335,7 +339,11 @@ List<AppCommand> buildAppCommands({
                 SingleActivator(LogicalKeyboardKey.keyY, control: true),
               ],
         repeats: true,
-        run: (context) => stepUndoHistory(context, undoHistory, undo: false),
+        run: (context) => stepUndoHistory(
+          Overlay.of(context, rootOverlay: true),
+          undoHistory,
+          direction: UndoDirection.redo,
+        ),
         menuPlacement: const CommandMenuPlacement(
           menu: AppMenuId.edit,
           order: 20,

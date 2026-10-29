@@ -1,3 +1,5 @@
+import 'dart:ui' show AppExitResponse;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -131,6 +133,47 @@ void main() {
       expect(put.ruleId, 'r-web1');
       expect(put.target, 'srv-1');
     });
+
+    testWidgets('rule Undo survives leaving the page and reports refusal', (
+      tester,
+    ) async {
+      final harness = await pumpApp(
+        tester,
+        servers: _servers,
+        alerts: true,
+        syncAccount: testSyncAccount,
+      );
+      harness.engine.emit(_rules);
+      await tester.tap(find.text('web-1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Alert rules'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Delete rule'));
+      await tester.pumpAndSettle();
+      final remove =
+          harness.engine.sentOfType<RemoveRule>().single as RemoveRule;
+      harness.engine.emit(CatalogWritten(requestId: remove.requestId));
+      await tester.pumpAndSettle();
+
+      appNavigatorKey.currentState!.pop();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      final put = harness.engine.sentOfType<PutRule>().single as PutRule;
+      harness.engine.emit(
+        CatalogWriteRefused(
+          requestId: put.requestId,
+          failure: CatalogWriteFailure.notEnrolled,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Couldn’t undo “Delete alert rule”'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('the quit guard (K4)', () {
@@ -153,6 +196,51 @@ void main() {
         ),
         isTrue,
       );
+      expect(find.byType(AlertDialog), findsNothing);
+    });
+
+    testWidgets('application exit asks before quitting with running work', (
+      tester,
+    ) async {
+      final harness = await pumpApp(tester, operations: true);
+      harness.engine.emit(OperationsChanged('srv-1', operations: [running()]));
+      await tester.pumpAndSettle();
+
+      final exiting = tester.binding.handleRequestAppExit();
+      await tester.pumpAndSettle();
+      expect(find.text('Quit while 1 operation is running?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(await exiting, AppExitResponse.cancel);
+    });
+
+    testWidgets('overlapping close requests share one question', (
+      tester,
+    ) async {
+      final harness = await pumpApp(tester, operations: true);
+      harness.engine.emit(OperationsChanged('srv-1', operations: [running()]));
+      await tester.pumpAndSettle();
+      final guard = AppQuitGuard(
+        operations: harness.operations!,
+        contextOf: () => appNavigatorKey.currentContext,
+      );
+      addTearDown(guard.dispose);
+
+      final windowClose = guard.confirm();
+      final applicationQuit = guard.confirm();
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(await windowClose, isFalse);
+      expect(await applicationQuit, isFalse);
+
+      final retry = guard.confirm();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Quit'));
+      await tester.pumpAndSettle();
+      expect(await retry, isTrue);
+      expect(await guard.confirm(), isTrue);
       expect(find.byType(AlertDialog), findsNothing);
     });
 

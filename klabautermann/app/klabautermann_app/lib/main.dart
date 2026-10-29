@@ -157,17 +157,11 @@ Future<void> main(List<String> args) async {
   // it would leave the app without a window. The quit guard's controller
   // does not exist yet, so the gate reads it late-bound: a close that
   // could beat the first frame answers true.
-  OperationsController? quitGuardOperations;
+  AppQuitGuard? quitGuard;
   await restoreMainWindow(
     stateFile: supportFile(windowStateFileName),
     platform: defaultTargetPlatform,
-    confirmClose: () => switch (quitGuardOperations) {
-      final operations? => confirmQuitWhileRunning(
-        operations,
-        () => appNavigatorKey.currentContext,
-      ),
-      null => Future.value(true),
-    },
+    confirmClose: () => quitGuard?.confirm() ?? Future.value(true),
   );
 
   // D18: all SSH, sampling, parsing, Docker, sync and rule evaluation run
@@ -321,8 +315,10 @@ Future<void> main(List<String> args) async {
     engine,
     auditInMemory: engine.ready.auditInMemory,
   );
-  // The quit guard's confirmClose already reads this late-bound (above).
-  quitGuardOperations = operations;
+  quitGuard = AppQuitGuard(
+    operations: operations,
+    contextOf: () => appNavigatorKey.currentContext,
+  );
   // Pull-only sync (03 §4.3, D14): the sign-in and rounds the user asks
   // for, and the OS keystore the engine's sync reaches through this
   // isolate, which alone can call the keystore plugin (D62).
