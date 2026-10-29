@@ -286,6 +286,21 @@ void main() {
       ]);
     });
 
+    test('splits CJK log lines at a label before the next path', () {
+      expect(_values('[INFO] 工作目录：/srv/app。配置：/srv/app/config.yml'), [
+        'path:/srv/app',
+        'path:/srv/app/config.yml',
+      ]);
+      expect(_values('ログ：/var/log/syslog！確認：/var/log/auth.log'), [
+        'path:/var/log/syslog',
+        'path:/var/log/auth.log',
+      ]);
+      expect(_values('从：/data/a：到：/data/b'), ['path:/data/a', 'path:/data/b']);
+      expect(_values('/anime/Dr.STONE！/01.mkv'), [
+        'path:/anime/Dr.STONE！/01.mkv',
+      ]);
+    });
+
     test('ends a link at CJK punctuation and Markdown\'s link syntax', () {
       expect(_values('下载地址：https://example.com/file.zip，请查收'), [
         'url:https://example.com/file.zip',

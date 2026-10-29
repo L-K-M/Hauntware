@@ -192,14 +192,23 @@ String _cutAtProse(String body) {
     } else if (_openers.containsValue(mark)) {
       named = leadsOn && !segment.contains(_anyOpener);
     } else {
-      // After a file's name (`config.yml。`) it is the sentence going on.
+      // `：` right before a `/` labels the path that starts there
+      // (`工作目录：/srv/app。配置：/srv/app/config.yml`). After a file's
+      // name (`config.yml。`) the sentence goes on, but marks right before
+      // a `/` are a folder's (`Dr.STONE！/`).
+      final labels = (mark == '：' && slash == 0) || segment.endsWith('：');
+      final endsFolder = slash >= 0 && _foldersMarks.hasMatch(segment);
       final name = body.substring(body.lastIndexOf('/', at) + 1, at);
-      named = leadsOn && !_hasExtension(name);
+      named = leadsOn && !labels && (endsFolder || !_hasExtension(name));
     }
     if (!named) return body.substring(0, at);
     from = at + 1;
   }
 }
+
+/// What may sit between one of `。！？` and the `/` that ends its folder's
+/// name: more of them (`けいおん！！/`).
+final _foldersMarks = RegExp('^[。！？]*\$');
 
 /// The CJK brackets a name may hold, opener to closer.
 const _openers = {'「': '」', '『': '』', '（': '）'};
