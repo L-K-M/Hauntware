@@ -10,6 +10,9 @@
   the error. The rule editor waits for valid input before enabling Save.
 - Closing or quitting with running detached operations asks first.
   Detached work continues on its server after the app quits.
+- Quitting stays possible while locked, and a refused rule Undo remains
+  available after restoring keychain access. History shortcuts reach page
+  routes, and opening container details reveals a hidden inspector.
 - Initial scaffold: the `klabautermann_host`, `klabautermann_docker` and
   `klabautermann_core` packages, the five-platform app shell (desktop
   three-pane layout, phone master-detail stack, settings route), light

@@ -1,15 +1,21 @@
+import 'dart:async' show unawaited;
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostUndoableChange;
+import 'package:ghost_keystore/ghost_keystore.dart'
+    show appLockBackgroundTimeout;
 import 'package:klabautermann_app/app.dart' show appNavigatorKey;
+import 'package:klabautermann_app/controllers/app_lock_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/ui/actions/quit_guard.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/harness.dart';
+import 'support/device_authenticator.dart';
 import 'support/sync_sign_in.dart';
 
 const _servers = [
@@ -164,7 +170,7 @@ void main() {
       harness.engine.emit(
         CatalogWriteRefused(
           requestId: put.requestId,
-          failure: CatalogWriteFailure.notEnrolled,
+          failure: CatalogWriteFailure.keystoreUnavailable,
         ),
       );
       await tester.pumpAndSettle();
@@ -173,7 +179,81 @@ void main() {
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);
+      expect(harness.undoHistory.undoName, 'Delete alert rule');
+      final retry = harness.undoHistory.undo();
+      await tester.pumpAndSettle();
+      final retried = harness.engine.sentOfType<PutRule>().last as PutRule;
+      harness.engine.emit(_rules);
+      harness.engine.emit(CatalogWritten(requestId: retried.requestId));
+      await retry;
+      expect(harness.undoHistory.redoName, 'Delete alert rule');
     });
+
+    testWidgets(
+      'history keys reach page routes but leave dialogs alone',
+      (tester) async {
+        final harness = await pumpApp(tester);
+        var undone = 0;
+        void record() => harness.undoHistory.record(
+          GhostUndoableChange(
+            name: 'Pin server',
+            undo: () async => undone++,
+            redo: () async {},
+          ),
+        );
+        Future<void> undo() async {
+          await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+          await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+          await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+          await tester.pumpAndSettle();
+        }
+
+        record();
+        unawaited(
+          appNavigatorKey.currentState!.push(
+            MaterialPageRoute<void>(
+              builder: (_) => Scaffold(
+                body: TextButton(
+                  autofocus: true,
+                  onPressed: () {},
+                  child: const Text('Page action'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await undo();
+        expect(undone, 1);
+
+        record();
+        unawaited(
+          showDialog<void>(
+            context: appNavigatorKey.currentContext!,
+            builder: (context) => AlertDialog(
+              actions: [
+                TextButton(
+                  autofocus: true,
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await undo();
+        expect(undone, 1);
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        await undo();
+        expect(undone, 2);
+      },
+      variant: TargetPlatformVariant(const {
+        TargetPlatform.linux,
+        TargetPlatform.windows,
+      }),
+    );
   });
 
   group('the quit guard (K4)', () {
@@ -212,6 +292,62 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(await exiting, AppExitResponse.cancel);
+    });
+
+    testWidgets('a locked app can quit without an inaccessible question', (
+      tester,
+    ) async {
+      final lock = AppLockController(
+        authenticator: FakeDeviceAuthenticator()..accept = false,
+        supported: true,
+        enabled: true,
+      );
+      addTearDown(lock.dispose);
+      final harness = await pumpApp(tester, operations: true, appLock: lock);
+      harness.engine.emit(OperationsChanged('srv-1', operations: [running()]));
+      await tester.pump();
+      expect(lock.locked, isTrue);
+      AppExitResponse? answer;
+      final exiting = tester.binding.handleRequestAppExit().then(
+        (response) => answer = response,
+      );
+      await tester.pump();
+      expect(answer, AppExitResponse.exit);
+      expect(find.byType(AlertDialog), findsNothing);
+      await exiting;
+    });
+
+    testWidgets('locking during a quit question cannot trap the request', (
+      tester,
+    ) async {
+      var elapsed = Duration.zero;
+      final device = FakeDeviceAuthenticator();
+      final lock = AppLockController(
+        authenticator: device,
+        supported: true,
+        enabled: true,
+        elapsed: () => elapsed,
+      );
+      addTearDown(lock.dispose);
+      final harness = await pumpApp(tester, operations: true, appLock: lock);
+      expect(lock.locked, isFalse);
+      harness.engine.emit(OperationsChanged('srv-1', operations: [running()]));
+      await tester.pump();
+      AppExitResponse? answer;
+      final exiting = tester.binding.handleRequestAppExit().then(
+        (response) => answer = response,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      device.accept = false;
+      lock.onLifecycle(AppLifecycleState.hidden);
+      elapsed += appLockBackgroundTimeout + const Duration(seconds: 1);
+      lock.onLifecycle(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(lock.locked, isTrue);
+      expect(answer, AppExitResponse.exit);
+      await exiting;
     });
 
     testWidgets('overlapping close requests share one question', (

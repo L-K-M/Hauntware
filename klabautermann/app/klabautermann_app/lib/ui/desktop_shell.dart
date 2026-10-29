@@ -97,6 +97,7 @@ class _DesktopShellState extends State<DesktopShell> {
     super.initState();
     widget.fleet.addListener(_onFleetChanged);
     widget.navigation?.addListener(_onNavigation);
+    _inspection.addListener(_revealInspection);
   }
 
   @override
@@ -128,6 +129,13 @@ class _DesktopShellState extends State<DesktopShell> {
     if (widget.navigation?.takeContainer() case final container?) {
       _inspection.value = container;
     }
+  }
+
+  void _revealInspection() {
+    if (!mounted || _inspection.value == null || widget.panes.inspectorShown) {
+      return;
+    }
+    unawaited(toggleWindowPane(context, widget.panes, WindowPane.inspector));
   }
 
   /// [child] under the palette's navigation, which the workspace's tabs

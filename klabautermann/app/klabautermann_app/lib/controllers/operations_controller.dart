@@ -92,6 +92,8 @@ final class OperationsController extends ChangeNotifier {
   late final StreamSubscription<EngineEvent> _events;
   Completer<PlanAnswer>? _pending;
   final Map<String, RunState> _runs = {};
+  final Map<String, String> _planServers = {};
+  final Set<({String serverId, String operationId})> _unlistedDetached = {};
   final Map<String, OperationsChanged> _detached = {};
   final Map<String, String> _targets = {};
 
@@ -129,19 +131,22 @@ final class OperationsController extends ChangeNotifier {
   /// Detached operations still running across every server the engine
   /// listed — [DetachedOperationState.running], and [unknown], whose
   /// record says running though its wrapper could not be checked. The
-  /// quit guard asks about these before the window closes.
-  int get runningDetachedCount => _detached.values.fold(
-    0,
-    (count, changed) =>
-        count +
-        changed.operations
-            .where(
-              (op) =>
-                  op.state == DetachedOperationState.running ||
-                  op.state == DetachedOperationState.unknown,
-            )
-            .length,
-  );
+  /// quit guard also counts launches until a listing observes them, so
+  /// quitting immediately after launch cannot miss running work.
+  int get runningDetachedCount =>
+      _unlistedDetached.length +
+      _detached.values.fold(
+        0,
+        (count, changed) =>
+            count +
+            changed.operations
+                .where(
+                  (op) =>
+                      op.state == DetachedOperationState.running ||
+                      op.state == DetachedOperationState.unknown,
+                )
+                .length,
+      );
 
   /// Whether [serverId]'s operation directories could not all be read, so
   /// the list may lack operations.
@@ -249,6 +254,7 @@ final class OperationsController extends ChangeNotifier {
   void _onEngineEvent(EngineEvent event) {
     switch (event) {
       case ActionPlanned(:final planId, :final preview):
+        _planServers[planId] = preview.intent.serverId;
         _targets[planId] = preview.targetName;
         _answer(PlanReady(planId, preview));
       case ActionRefused(:final reason, :final planId?):
@@ -259,11 +265,28 @@ final class OperationsController extends ChangeNotifier {
         _runs[planId] = RunInProgress(stepIndex, stepCount);
         notifyListeners();
       case ActionFinished(:final planId):
+        final serverId = _planServers[planId];
+        final operationId = event.operationId;
+        if (serverId != null &&
+            operationId != null &&
+            event.outcome == ActionOutcome.succeeded &&
+            !(_detached[serverId]?.operations.any(
+                  (op) => op.id == operationId,
+                ) ??
+                false)) {
+          _unlistedDetached.add((serverId: serverId, operationId: operationId));
+        }
         _end(planId, RunFinished(event));
       case ImagePullProgress(:final planId):
         _pulls[planId] = event;
         notifyListeners();
       case OperationsChanged(:final serverId):
+        final listed = {for (final operation in event.operations) operation.id};
+        _unlistedDetached.removeWhere(
+          (operation) =>
+              operation.serverId == serverId &&
+              listed.contains(operation.operationId),
+        );
         _detached[serverId] = event;
         notifyListeners();
       case FootprintState(:final serverId):

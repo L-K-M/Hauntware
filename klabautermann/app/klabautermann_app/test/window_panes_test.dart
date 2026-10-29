@@ -6,10 +6,13 @@ import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/window_panes.dart';
 import 'package:klabautermann_app/ui/desktop_shell.dart';
+import 'package:klabautermann_app/ui/docker/container_details.dart';
 import 'package:klabautermann_app/ui/fleet_rail.dart';
 import 'package:klabautermann_app/ui/inspector_pane.dart';
 import 'package:klabautermann_app/ui/menus/app_commands.dart';
+import 'package:klabautermann_app/ui/server_workspace.dart';
 
+import 'support/docker.dart';
 import 'support/fake_engine.dart';
 import 'support/harness.dart';
 
@@ -31,6 +34,29 @@ void main() {
   }
 
   group('the desktop panes (K1)', () {
+    testWidgets('opening container details reveals a hidden inspector', (
+      tester,
+    ) async {
+      final harness = await pumpApp(tester, servers: twoServers);
+      harness.fleet.select('srv-1');
+      await tester.pumpAndSettle();
+      final container = dockerContainer('container-1');
+
+      for (var attempt = 0; attempt < 2; attempt++) {
+        await harness.windowPanes.setShown(WindowPane.inspector, false);
+        await tester.pump();
+        openContainerDetails(
+          tester.element(find.byType(ServerWorkspace)),
+          monitoring: harness.monitoring,
+          serverId: 'srv-1',
+          container: container,
+        );
+        await tester.pump();
+        expect(harness.windowPanes.inspectorShown, isTrue);
+        expect(find.byType(ContainerInspectorBody), findsOneWidget);
+      }
+    });
+
     testWidgets('the rail and inspector show at start; the rail is 260 '
         'and the inspector 300', (tester) async {
       await pumpApp(tester, servers: twoServers);

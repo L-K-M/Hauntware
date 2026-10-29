@@ -63,9 +63,40 @@ class _AppMenuHostState extends State<AppMenuHost> {
   );
 
   @override
+  void initState() {
+    super.initState();
+    FocusManager.instance.addLateKeyEventHandler(_pageHistoryKey);
+  }
+
+  @override
   void dispose() {
+    FocusManager.instance.removeLateKeyEventHandler(_pageHistoryKey);
     _initialFocus.dispose();
     super.dispose();
+  }
+
+  /// Page routes sit beside the home route's chord scope. History keys
+  /// reach them after focused controls decline; dialogs keep their keys.
+  KeyEventResult _pageHistoryKey(KeyEvent event) {
+    final focus = FocusManager.instance.primaryFocus?.context;
+    if (focus == null ||
+        focus.findAncestorWidgetOfExactType<EditableText>() != null) {
+      return KeyEventResult.ignored;
+    }
+    final route = ModalRoute.of(focus);
+    if (route is! PageRoute || !route.isCurrent) return KeyEventResult.ignored;
+    final platform = Theme.of(context).platform;
+    return dispatchGhostChord([
+      for (final command in widget.commands)
+        if (command.id == kEditUndoCommandId ||
+            command.id == kEditRedoCommandId)
+          for (final activator in command.activators(platform))
+            GhostChordBinding(
+              activator: activator,
+              repeats: command.repeats,
+              onInvoke: () => _run(command.id),
+            ),
+    ], event);
   }
 
   void _run(String? id) {

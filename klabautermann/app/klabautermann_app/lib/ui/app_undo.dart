@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show UndoDirection;
 import 'package:ghost_ui/ghost_ui.dart'
-    show GhostUndoableChange, GhostUndoHistory, showTopToast;
+    show GhostUndoableChange, GhostUndoHistory, GhostUndoDeclined, showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show SyncedRule, uuidV4;
 
@@ -102,8 +102,10 @@ Future<GhostUndoableChange?> deleteAlertRuleUndoably(
   if (history == null) return null;
   final change = GhostUndoableChange(
     name: l10n.changeDeleteAlertRule,
-    undo: () => rules.put(synced.rule, id: synced.id, target: synced.target),
-    redo: () => rules.remove(synced.id),
+    undo: () => _ruleHistoryStep(
+      () => rules.put(synced.rule, id: synced.id, target: synced.target),
+    ),
+    redo: () => _ruleHistoryStep(() => rules.remove(synced.id)),
   );
   history.record(change);
   return change;
@@ -127,15 +129,32 @@ Future<String> putAlertRuleUndoably(
   history?.record(switch (existing) {
     final existing? => GhostUndoableChange(
       name: l10n.changeEditAlertRule,
-      undo: () =>
-          rules.put(existing.rule, id: existing.id, target: existing.target),
-      redo: () => rules.put(edited.rule, id: id, target: edited.target),
+      undo: () => _ruleHistoryStep(
+        () =>
+            rules.put(existing.rule, id: existing.id, target: existing.target),
+      ),
+      redo: () => _ruleHistoryStep(
+        () => rules.put(edited.rule, id: id, target: edited.target),
+      ),
     ),
     null => GhostUndoableChange(
       name: l10n.changeNewAlertRule,
-      undo: () => rules.remove(id),
-      redo: () => rules.put(edited.rule, id: id, target: edited.target),
+      undo: () => _ruleHistoryStep(() => rules.remove(id)),
+      redo: () => _ruleHistoryStep(
+        () => rules.put(edited.rule, id: id, target: edited.target),
+      ),
     ),
   });
   return id;
+}
+
+/// A typed refusal guarantees nothing was written, so retain the
+/// recovery snapshot for retry. A lost engine acknowledgement is unknown.
+Future<void> _ruleHistoryStep(Future<void> Function() write) async {
+  try {
+    await write();
+  } on AlertRuleNotSavedException catch (error) {
+    if (error.failure == null) rethrow;
+    throw GhostUndoDeclined('$error');
+  }
 }

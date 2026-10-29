@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
 import 'package:klabautermann_app/app.dart';
+import 'package:klabautermann_app/controllers/app_lock_controller.dart';
 import 'package:klabautermann_app/ui/actions/quit_guard.dart';
 import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/alert_center.dart';
@@ -165,6 +166,7 @@ Future<AppHarness> pumpApp(
   bool palette = false,
   WindowPanesController? windowPanes,
   GhostUndoHistory? undoHistory,
+  AppLockController? appLock,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -219,6 +221,7 @@ Future<AppHarness> pumpApp(
     final operations? => AppQuitGuard(
       operations: operations,
       contextOf: () => appNavigatorKey.currentContext,
+      lock: appLock,
     ),
     null => null,
   };
@@ -260,6 +263,7 @@ Future<AppHarness> pumpApp(
       navigation: palette ? WorkspaceNavigation(harness.fleet) : null,
       windowPanes: harness.windowPanes,
       undoHistory: harness.undoHistory,
+      appLock: appLock,
     ),
   );
   await tester.pumpAndSettle();

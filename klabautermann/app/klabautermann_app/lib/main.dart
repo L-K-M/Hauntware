@@ -315,10 +315,6 @@ Future<void> main(List<String> args) async {
     engine,
     auditInMemory: engine.ready.auditInMemory,
   );
-  quitGuard = AppQuitGuard(
-    operations: operations,
-    contextOf: () => appNavigatorKey.currentContext,
-  );
   // Pull-only sync (03 §4.3, D14): the sign-in and rounds the user asks
   // for, and the OS keystore the engine's sync reaches through this
   // isolate, which alone can call the keystore plugin (D62).
@@ -350,6 +346,11 @@ Future<void> main(List<String> args) async {
     enabled: settings.appLock,
     save: settings.setAppLock,
     onLocked: admin.turnOffAll,
+  );
+  quitGuard = AppQuitGuard(
+    operations: operations,
+    contextOf: () => appNavigatorKey.currentContext,
+    lock: appLock,
   );
   EngineKeystoreResponder(
     engine,

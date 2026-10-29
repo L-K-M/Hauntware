@@ -100,6 +100,59 @@ void main() {
       );
     });
 
+    test(
+      'a launched detached operation counts before its first listing',
+      () async {
+        const operationId = '0123456789abcdef';
+        final planning = operations.plan(_intent);
+        engine.emit(ActionPlanned('plan-1', _preview()));
+        await planning;
+        engine.emit(
+          const ActionFinished(
+            planId: 'plan-1',
+            outcome: ActionOutcome.succeeded,
+            operationId: operationId,
+          ),
+        );
+        await pumpEventQueue();
+        expect(operations.runningDetachedCount, 1);
+
+        DetachedOperation op(DetachedOperationState state) => DetachedOperation(
+          id: operationId,
+          directory: OpDirectoryKind.user,
+          state: state,
+          startedAt: DateTime.utc(2026, 10, 18),
+        );
+        engine.emit(
+          OperationsChanged(
+            'srv-2',
+            operations: [op(DetachedOperationState.done)],
+          ),
+        );
+        await pumpEventQueue();
+        expect(operations.runningDetachedCount, 1);
+        engine.emit(
+          OperationsChanged(
+            'srv-1',
+            operations: [op(DetachedOperationState.running)],
+          ),
+        );
+        await pumpEventQueue();
+        expect(operations.runningDetachedCount, 1);
+        engine.emit(
+          OperationsChanged(
+            'srv-1',
+            operations: [op(DetachedOperationState.done)],
+          ),
+        );
+        await pumpEventQueue();
+        expect(operations.runningDetachedCount, 0);
+        engine.emit(OperationsChanged('srv-1', operations: const []));
+        await pumpEventQueue();
+        expect(operations.runningDetachedCount, 0);
+      },
+    );
+
     test('a run follows its progress to its end', () async {
       final ends = <(String, RunState)>[];
       operations.ends.listen(ends.add);
