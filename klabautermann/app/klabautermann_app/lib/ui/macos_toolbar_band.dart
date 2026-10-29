@@ -28,6 +28,14 @@ class MacosToolbarBandScope extends InheritedNotifier<ValueListenable<bool>> {
           ?.notifier
           ?.value ??
       false;
+
+  /// Whether this window draws its header under the unified toolbar: on
+  /// macOS, with the titlebar installed, in full screen too (where the
+  /// band itself is hidden but the header stays at the top).
+  static bool unifiedToolbarOf(BuildContext context) =>
+      Theme.of(context).platform == TargetPlatform.macOS &&
+      context.dependOnInheritedWidgetOfExactType<MacosToolbarBandScope>() !=
+          null;
 }
 
 /// What the main window's `MaterialApp.builder` wraps the navigator in:
@@ -67,20 +75,51 @@ class ReserveMacosToolbarBand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final band =
-        Theme.of(context).platform == TargetPlatform.macOS &&
-            MacosToolbarBandScope.visibleOf(context)
-        ? macosToolbarBandHeight
-        : 0.0;
-    final data = MediaQuery.of(context);
-    return MediaQuery(
-      data: data.copyWith(
-        padding: data.padding.copyWith(top: data.padding.top + band),
-        viewPadding: data.viewPadding.copyWith(
-          top: data.viewPadding.top + band,
-        ),
-      ),
-      child: child,
-    );
+    return _shiftTop(context, _bandHeight(context), child);
   }
+}
+
+/// Takes the band [ReserveMacosToolbarBand] added back out for the
+/// desktop shell, whose header and rail band draw under it and wrap
+/// their controls in `MacosToolbarPassthrough`. Without this the shell's
+/// safe areas would push its content down a band and every scroll view
+/// in it would pad its top by 52 pt.
+///
+/// While an opaque route covers the shell, the offstage bands' passthrough
+/// views stay registered with the window. Clicks on those rects reach
+/// Flutter over the covering route's empty band padding, where nothing is
+/// interactive, so the only cost is that the window cannot be dragged
+/// from those few spots until the route pops.
+class ClaimMacosToolbarBand extends StatelessWidget {
+  const ClaimMacosToolbarBand({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return _shiftTop(context, -_bandHeight(context), child);
+  }
+}
+
+/// Zero off macOS and in full screen. The [MediaQuery] from [_shiftTop]
+/// stays in the tree either way: dropping it when the band goes would
+/// re-parent everything below it and lose its state.
+double _bandHeight(BuildContext context) =>
+    Theme.of(context).platform == TargetPlatform.macOS &&
+        MacosToolbarBandScope.visibleOf(context)
+    ? macosToolbarBandHeight
+    : 0;
+
+Widget _shiftTop(BuildContext context, double delta, Widget child) {
+  final data = MediaQuery.of(context);
+  double shifted(double top) => (top + delta).clamp(0, double.infinity);
+  return MediaQuery(
+    data: data.copyWith(
+      padding: data.padding.copyWith(top: shifted(data.padding.top)),
+      viewPadding: data.viewPadding.copyWith(
+        top: shifted(data.viewPadding.top),
+      ),
+    ),
+    child: child,
+  );
 }

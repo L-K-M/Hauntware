@@ -437,7 +437,14 @@ void main() {
       final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
       expect(
         [for (final menu in bar.menus) (menu as PlatformMenu).label],
-        ['Klabautermann $kPreviewLabel', 'File', 'View', 'Window', 'Help'],
+        [
+          'Klabautermann $kPreviewLabel',
+          'File',
+          'Edit',
+          'View',
+          'Window',
+          'Help',
+        ],
       );
       expect('${pushes.last}', contains('Settings…'));
 

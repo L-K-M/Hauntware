@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:ghost_licenses/ghost_licenses.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show CheckedPlatformMenuDelegate, GhostUndoHistory;
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -39,6 +41,7 @@ import 'controllers/server_prefs_controller.dart';
 import 'controllers/stack_folders.dart';
 import 'controllers/time_display.dart';
 import 'controllers/tls_endpoints.dart';
+import 'controllers/window_panes.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
 import 'controllers/threshold_controller.dart';
@@ -57,6 +60,7 @@ import 'services/stored_safety.dart';
 import 'services/system_notifications.dart';
 import 'services/window_state.dart';
 import 'settings_window_app.dart';
+import 'ui/actions/quit_guard.dart';
 import 'ui/alerts.dart' show alertNotificationText;
 import 'ui/already_running_app.dart';
 import 'ui/workspace_navigation.dart' show WorkspaceNavigation;
@@ -122,6 +126,14 @@ Future<void> main(List<String> args) async {
   final toolbarBand = defaultTargetPlatform == TargetPlatform.macOS
       ? await installMacosTitlebar()
       : null;
+  // Checked menu items' states reach the native menu over
+  // klabautermann/menu_checks (Poltergeist's MenuChecks.swift); Flutter's
+  // menu plugin cannot set NSMenuItem.state itself. Other platforms draw
+  // their checks in the in-window menu bar.
+  if (defaultTargetPlatform == TargetPlatform.macOS) {
+    WidgetsBinding.instance.platformMenuDelegate =
+        CheckedPlatformMenuDelegate(channelName: 'klabautermann/menu_checks');
+  }
 
   // settings.json (03 §4.10), owned by this isolate. Opened before the
   // engine isolate so the device id is minted and saved before anything
@@ -142,10 +154,20 @@ Future<void> main(List<String> args) async {
   // tracking it. On macOS this is also what shows the window, which the
   // runner keeps hidden until it is placed, so it runs before anything
   // below that can throw, such as the engine handshake: a throw ahead of
-  // it would leave the app without a window.
+  // it would leave the app without a window. The quit guard's controller
+  // does not exist yet, so the gate reads it late-bound: a close that
+  // could beat the first frame answers true.
+  OperationsController? quitGuardOperations;
   await restoreMainWindow(
     stateFile: supportFile(windowStateFileName),
     platform: defaultTargetPlatform,
+    confirmClose: () => switch (quitGuardOperations) {
+      final operations? => confirmQuitWhileRunning(
+        operations,
+        () => appNavigatorKey.currentContext,
+      ),
+      null => Future.value(true),
+    },
   );
 
   // D18: all SSH, sampling, parsing, Docker, sync and rule evaluation run
@@ -299,6 +321,8 @@ Future<void> main(List<String> args) async {
     engine,
     auditInMemory: engine.ready.auditInMemory,
   );
+  // The quit guard's confirmClose already reads this late-bound (above).
+  quitGuardOperations = operations;
   // Pull-only sync (03 §4.3, D14): the sign-in and rounds the user asks
   // for, and the OS keystore the engine's sync reaches through this
   // isolate, which alone can call the keystore plugin (D62).
@@ -394,6 +418,17 @@ Future<void> main(List<String> args) async {
     density: FleetDensity.parse(settings.fleetDensity),
     save: settings.setFleetDensity,
   );
+  // The desktop shell's side panes (03 §10.2), kept per device in
+  // settings.json like the density.
+  final windowPanes = WindowPanesController(
+    sidebar: settings.shellSidebarShown,
+    inspector: settings.shellInspectorShown,
+    saveSidebar: settings.setShellSidebarShown,
+    saveInspector: settings.setShellInspectorShown,
+  );
+  // The app's own undo history (K3): one for the run; edit.undo/redo and
+  // the delete toast's Undo step it.
+  final undoHistory = GhostUndoHistory();
   // Each server's cap (SAF-19), kept per device like the preset and sent
   // to the engine from the start; a cap outlives the fleet.
   final cadenceCaps = CadenceCapsController(
@@ -539,6 +574,8 @@ Future<void> main(List<String> args) async {
       appVersion: appVersion,
       handOff: handOff,
       navigation: WorkspaceNavigation(fleet),
+      windowPanes: windowPanes,
+      undoHistory: undoHistory,
     ),
   );
 }

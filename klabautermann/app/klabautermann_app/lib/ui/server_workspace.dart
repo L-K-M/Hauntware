@@ -32,6 +32,7 @@ class ServerWorkspace extends StatelessWidget {
     super.key,
     required this.fleet,
     required this.monitoring,
+    this.showTitle = true,
   });
 
   final FleetController fleet;
@@ -39,6 +40,10 @@ class ServerWorkspace extends StatelessWidget {
   /// Opens the selected server, holds the visible panel's subscription and
   /// feeds the panels' per-server sample listenables (03 §10.1).
   final MonitoringController monitoring;
+
+  /// Whether the server's header repeats its name; false where the
+  /// window's header already does (the desktop shell).
+  final bool showTitle;
 
   static const List<ServerPanel> _panels = ServerPanel.values;
 
@@ -112,6 +117,7 @@ class ServerWorkspace extends StatelessWidget {
           server: server,
           fleet: fleet,
           monitoring: monitoring,
+          showTitle: showTitle,
         ),
         // An iOS or Android tablet takes this layout and pauses in the
         // background too (03 §9.5 item 6).

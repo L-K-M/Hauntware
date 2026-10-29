@@ -80,10 +80,10 @@ GhostDesktopPlatform? ghostDesktopPlatformFor(TargetPlatform platform) {
 ///   `runApp`, so the runners on Linux and Windows show the window on the
 ///   first frame ([GhostShowTrigger.runner]) and the macOS runner keeps it
 ///   hidden until [GhostWindowLifecycle.show] has placed it.
-/// - The native close is observed, never intercepted
-///   ([GhostClosePolicy.observe]): nothing guards a quit yet, so the window
-///   closes itself as before, the settings window's runners included, and
-///   the close is only the last chance to save the frame.
+/// - The native close is intercepted ([GhostClosePolicy.intercept]) so
+///   [confirmClose] can veto it: the app's gate asks before quitting
+///   while detached operations still run (`confirmQuitWhileRunning` in
+///   lib/ui/actions/quit_guard.dart), and answers true otherwise.
 /// - A frame that no longer fits the connected displays is clamped onto
 ///   the one it overlapped most, or centred on the primary one
 ///   ([MissingMonitorPolicy.clampToNearest], Poltergeist's rule), so the
@@ -100,11 +100,13 @@ GhostWindowLifecycle mainWindowLifecycle({
   GhostWindowAdapter? window,
   GhostDisplayAdapter? displays,
   GhostDesktopPlatform? platform,
+  Future<bool> Function()? confirmClose,
   void Function() Function(Duration, Future<void> Function())? scheduleDebounce,
 }) {
   return GhostWindowLifecycle(
     persistence: persistence,
-    closePolicy: GhostClosePolicy.observe,
+    closePolicy: GhostClosePolicy.intercept,
+    confirmClose: confirmClose,
     missingMonitor: MissingMonitorPolicy.clampToNearest,
     coordinates: GhostCoordinateSpace.physicalOnWindows,
     showTrigger: GhostShowTrigger.runner,
@@ -134,6 +136,7 @@ Future<GhostWindowLifecycle?> restoreMainWindow({
   required TargetPlatform platform,
   GhostWindowAdapter? window,
   GhostDisplayAdapter? displays,
+  Future<bool> Function()? confirmClose,
 }) async {
   final desktop = ghostDesktopPlatformFor(platform);
   if (desktop == null) return null;
@@ -143,6 +146,7 @@ Future<GhostWindowLifecycle?> restoreMainWindow({
     window: window,
     displays: displays,
     platform: desktop,
+    confirmClose: confirmClose,
   );
   try {
     await lifecycle.prepare();

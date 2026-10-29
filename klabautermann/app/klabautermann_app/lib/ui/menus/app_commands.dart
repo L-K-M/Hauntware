@@ -1,19 +1,22 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
 import 'package:window_manager/window_manager.dart';
 
 import '../../controllers/fleet_controller.dart';
+import '../../controllers/window_panes.dart';
 import '../../l10n/app_localizations.dart';
 import '../about_dialog.dart';
+import '../app_undo.dart';
 import '../server_surfaces.dart' show ServerPanel;
 import '../ssh_config_import_action.dart';
+import '../window_pane_actions.dart';
 
 /// The app's top-level menus in menu-bar order (03 §10.2). [app] is the
 /// macOS application menu: commands reach it only through
-/// [CommandMenuPlacement.appMenuOnMac], never by naming it. Edit and a
-/// server menu join when commands for them exist; a menu with no rows is
-/// left out.
-enum AppMenuId { app, file, view, window, help }
+/// [CommandMenuPlacement.appMenuOnMac], never by naming it. A server menu
+/// joins when commands for it exist; a menu with no rows is left out.
+enum AppMenuId { app, file, edit, view, window, help }
 
 /// A command's place in a top-level menu, declared where the command is
 /// registered (Poltergeist's `CommandMenuPlacement`): menus are a rendering
@@ -52,7 +55,10 @@ final class AppCommand {
     required this.menuPlacement,
     required this.run,
     this.enabled = _alwaysEnabled,
+    this.checked,
     this.activators = _noActivators,
+    this.leftAltOnly = false,
+    this.repeats = false,
   });
 
   /// Dotted lowerCamel, grouped by noun (`app.*`, `fleet.*`).
@@ -66,8 +72,21 @@ final class AppCommand {
   /// and never runs, from the menu or its shortcut.
   final bool Function() enabled;
 
+  /// A toggle's on state, read when the menus are built; null marks the
+  /// row uncheckable.
+  final bool Function()? checked;
+
   /// The shortcut chords on a platform; empty when the command has none.
   final List<ShortcutActivator> Function(TargetPlatform platform) activators;
+
+  /// Whether the chords hold only when the left Alt is down: set for
+  /// every non-Apple Ctrl+Alt chord so AltGr, which Windows reports as
+  /// Ctrl+Alt, is not captured (ghost_ui's `GhostChordBinding`).
+  final bool leftAltOnly;
+
+  /// Whether a held chord repeats its run (Undo, which steps back change
+  /// by change); a toggle leaves it off so a held key does not flicker.
+  final bool repeats;
 
   /// Runs the command with the menu host's [BuildContext], resolved at
   /// invocation. Implementations must not keep [context] and must check
@@ -101,6 +120,18 @@ const String kAppKeyboardShortcutsCommandId = 'app.keyboardShortcuts';
 /// View ▸ the selected server's tabs (PLT-06), one command per
 /// [ServerPanel]: `view.panel.<name>`.
 String viewPanelCommandId(ServerPanel panel) => 'view.panel.${panel.name}';
+
+/// View ▸ the fleet rail's toggle (⌃⌘S / Ctrl+Alt+S), on desktops.
+const String kViewToggleSidebarCommandId = 'view.toggleSidebar';
+
+/// View ▸ the inspector's toggle (⌥⌘I / Ctrl+Alt+I), on desktops.
+const String kViewToggleInspectorCommandId = 'view.toggleInspector';
+
+/// Edit ▸ Undo, of the app's own history (⌘Z / Ctrl+Z), on desktops.
+const String kEditUndoCommandId = 'edit.undo';
+
+/// Edit ▸ Redo (⇧⌘Z / Ctrl+Shift+Z, Ctrl+Y), on desktops.
+const String kEditRedoCommandId = 'edit.redo';
 
 /// The digit keys of the tab commands, in [ServerPanel] order.
 const List<LogicalKeyboardKey> _panelDigits = [
@@ -166,6 +197,8 @@ List<AppCommand> buildAppCommands({
   required FleetController fleet,
   required VoidCallback onOpenSettings,
   required String? appVersion,
+  WindowPanesController? panes,
+  GhostUndoHistory? undoHistory,
   Future<void> Function()? requestClose,
   Future<void> Function(BuildContext context)? onOpenPalette,
   void Function(BuildContext context, ServerPanel panel)? onOpenPanel,
@@ -221,6 +254,94 @@ List<AppCommand> buildAppCommands({
             group: 1,
           ),
         ),
+    if (desktop && panes != null) ...[
+      // The suite's pane toggles (common.md): ⌃⌘S and ⌥⌘I on macOS,
+      // Ctrl+Alt+S and Ctrl+Alt+I elsewhere, the left Alt only so AltGr
+      // is not captured. Checked rows name the pane they show.
+      AppCommand(
+        id: kViewToggleSidebarCommandId,
+        label: (l10n) => panes.sidebarShown
+            ? l10n.sidebarToggleHide
+            : l10n.sidebarToggleShow,
+        checked: () => panes.sidebarShown,
+        activators: (platform) => [
+          windowPaneChord(WindowPane.sidebar, platform),
+        ],
+        leftAltOnly: platform != TargetPlatform.macOS,
+        run: (context) =>
+            toggleWindowPane(context, panes, WindowPane.sidebar),
+        menuPlacement: const CommandMenuPlacement(
+          menu: AppMenuId.view,
+          order: 20,
+        ),
+      ),
+      AppCommand(
+        id: kViewToggleInspectorCommandId,
+        label: (l10n) => panes.inspectorShown
+            ? l10n.inspectorToggleHide
+            : l10n.inspectorToggleShow,
+        checked: () => panes.inspectorShown,
+        activators: (platform) => [
+          windowPaneChord(WindowPane.inspector, platform),
+        ],
+        leftAltOnly: platform != TargetPlatform.macOS,
+        run: (context) =>
+            toggleWindowPane(context, panes, WindowPane.inspector),
+        menuPlacement: const CommandMenuPlacement(
+          menu: AppMenuId.view,
+          order: 30,
+        ),
+      ),
+    ],
+    if (desktop && undoHistory != null) ...[
+      AppCommand(
+        id: kEditUndoCommandId,
+        label: (l10n) => switch (undoHistory.undoName) {
+          final name? => l10n.editUndoNamed(name),
+          null => l10n.editUndo,
+        },
+        enabled: () => undoHistory.undoName != null,
+        activators: (platform) => platform == TargetPlatform.macOS
+            ? const [SingleActivator(LogicalKeyboardKey.keyZ, meta: true)]
+            : const [SingleActivator(LogicalKeyboardKey.keyZ, control: true)],
+        repeats: true,
+        run: (context) => stepUndoHistory(context, undoHistory, undo: true),
+        menuPlacement: const CommandMenuPlacement(
+          menu: AppMenuId.edit,
+          order: 10,
+        ),
+      ),
+      AppCommand(
+        id: kEditRedoCommandId,
+        label: (l10n) => switch (undoHistory.redoName) {
+          final name? => l10n.editRedoNamed(name),
+          null => l10n.editRedo,
+        },
+        enabled: () => undoHistory.redoName != null,
+        activators: (platform) => platform == TargetPlatform.macOS
+            ? const [
+                SingleActivator(
+                  LogicalKeyboardKey.keyZ,
+                  meta: true,
+                  shift: true,
+                ),
+              ]
+            : const [
+                SingleActivator(
+                  LogicalKeyboardKey.keyZ,
+                  control: true,
+                  shift: true,
+                ),
+                SingleActivator(LogicalKeyboardKey.keyY, control: true),
+              ],
+        repeats: true,
+        run: (context) => stepUndoHistory(context, undoHistory, undo: false),
+        menuPlacement: const CommandMenuPlacement(
+          menu: AppMenuId.edit,
+          order: 20,
+        ),
+      ),
+    ],
     if (desktop && onShowKeyboardMap != null)
       AppCommand(
         id: kAppKeyboardShortcutsCommandId,

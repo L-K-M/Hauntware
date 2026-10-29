@@ -4,6 +4,7 @@ import '../controllers/coverage_controller.dart';
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../controllers/sync_controller.dart';
+import '../controllers/window_panes.dart';
 import 'desktop_shell.dart';
 import 'phone_shell.dart';
 import 'workspace_navigation.dart';
@@ -28,6 +29,7 @@ class AdaptiveShell extends StatelessWidget {
     this.onAddServer,
     this.sync,
     this.navigation,
+    required this.panes,
   });
 
   final FleetController fleet;
@@ -43,6 +45,9 @@ class AdaptiveShell extends StatelessWidget {
   /// Where the command palette sends the desktop workspace.
   final WorkspaceNavigation? navigation;
 
+  /// The desktop shell's side panes; the phone shell never reads them.
+  final WindowPanesController panes;
+
   @override
   Widget build(BuildContext context) {
     if (showsDesktopShell(context)) {
@@ -54,6 +59,7 @@ class AdaptiveShell extends StatelessWidget {
         onAddServer: onAddServer,
         sync: sync,
         navigation: navigation,
+        panes: panes,
       );
     }
     return PhoneShell(

@@ -126,6 +126,23 @@ final class OperationsController extends ChangeNotifier {
   List<DetachedOperation> detachedOf(String serverId) =>
       _detached[serverId]?.operations ?? const [];
 
+  /// Detached operations still running across every server the engine
+  /// listed — [DetachedOperationState.running], and [unknown], whose
+  /// record says running though its wrapper could not be checked. The
+  /// quit guard asks about these before the window closes.
+  int get runningDetachedCount => _detached.values.fold(
+    0,
+    (count, changed) =>
+        count +
+        changed.operations
+            .where(
+              (op) =>
+                  op.state == DetachedOperationState.running ||
+                  op.state == DetachedOperationState.unknown,
+            )
+            .length,
+  );
+
   /// Whether [serverId]'s operation directories could not all be read, so
   /// the list may lack operations.
   bool detachedIncomplete(String serverId) {

@@ -37,6 +37,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // An account read's request id, matched in the engine's answer.
   'lib/controllers/account_reads.dart': {r"'accounts-${_count++}'"},
   'lib/controllers/disk_usage_reads.dart': {r"'disk-usage-${_count++}'"},
+  // The keys tests find the pane toggles by.
+  'lib/ui/desktop_shell.dart': {
+    "'shell.sidebarToggle'",
+    "'shell.inspectorToggle'",
+    "'shell.serverTitle'",
+  },
   // A folder's path on the server, built from its parent and its name.
   'lib/ui/disk_explorer.dart': {"'/'", r"'/$name'", r"'$_path/$name'"},
   // A timer detail read's request id, matched in the engine's answer.
@@ -72,6 +78,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // Sync state file debugPrint diagnostics; StartupIssueNotice tells
     // the user in ARB text.
     r"'${issue.fileName}: ${issue.kind.name} ${issue.detail ?? ''}'",
+    // The menu_checks method channel's name, matched by the macOS runner's
+    // MenuChecks.swift peer; never rendered.
+    "'klabautermann/menu_checks'",
   },
   // The not-saved diagnostic; the Appearance tab prints it and shows its
   // own ARB text (themeNotSaved).
@@ -142,6 +151,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // ARB text (fleetDensityNotSaved).
   'lib/controllers/fleet_density.dart': {
     r"'The fleet layout was not saved: $error'",
+  },
+  // The not-saved diagnostic; the toast shows its own ARB text
+  // (windowLayoutNotSaved).
+  'lib/controllers/window_panes.dart': {
+    r"'The window layout was not saved: $error'",
   },
   // The host syslog line's device name, written into host journals in
   // one form (M5 plan Q6).
@@ -740,6 +754,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // debugPrint of a dismissal that was not saved; the toast is ARB text.
     r"'$error'",
   },
+  'lib/ui/app_undo.dart': {
+    // debugPrints of a failed undo/redo or pin save; the toasts show ARB
+    // text.
+    r"'$error'",
+  },
   'lib/ui/fleet_row_state.dart': {
     // The root mount point whose use the pressure bar shows.
     "'/'",
@@ -760,9 +779,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // or group header by.
     "' imported'",
     r"'fleet.section.$key'",
-    // The pin-not-saved diagnostic; the toast shows ARB text
-    // (fleetPinNotSaved).
-    r"'$error'",
     // The line break between the row tooltip's facts, each ARB text.
     r"'\n'",
     // An assert message; programmer diagnostic, never rendered.
@@ -897,6 +913,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'app.commandPalette'",
     "'app.keyboardShortcuts'",
     r"'view.panel.${panel.name}'",
+    "'view.toggleSidebar'",
+    "'view.toggleInspector'",
+    "'edit.undo'",
+    "'edit.redo'",
   },
   'lib/ui/menus/app_menu_host.dart': {
     // A FocusNode debug label.

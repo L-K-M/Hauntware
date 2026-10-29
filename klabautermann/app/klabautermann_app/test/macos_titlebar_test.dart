@@ -118,7 +118,9 @@ void main() {
         .first;
 
     /// Measured from the shell's top: on Linux and Windows the menu strip
-    /// sits above the shell.
+    /// sits above the shell. The panes start under the shell's own
+    /// 52 pt band and its divider on every platform (03 §10.2).
+    const belowShellBand = macosToolbarBandHeight + 1;
     void expectPanesBelow(WidgetTester tester, double top) {
       final shell = tester.getTopLeft(find.byType(DesktopShell)).dy;
       for (final pane in [FleetRail, ServerWorkspace, InspectorPane]) {
@@ -139,9 +141,14 @@ void main() {
       await pumpApp(tester, servers: twoServers, toolbarBand: band);
 
       expect(find.byType(DesktopShell), findsOneWidget);
-      expectPanesBelow(tester, macosToolbarBandHeight);
+      expectPanesBelow(tester, belowShellBand);
       expect(tester.getTopLeft(paneFill(FleetRail)).dy, 0);
-      expect(tester.getTopLeft(paneFill(InspectorPane)).dy, 0);
+      // The header spans the workspace and the inspector above it, so
+      // only the rail's colour runs up behind the traffic lights.
+      expect(
+        tester.getTopLeft(paneFill(InspectorPane)).dy,
+        belowShellBand,
+      );
       // The rail's list does not pad for the band a second time: the
       // filter above its sections starts right under the coverage chip.
       expect(
@@ -150,7 +157,8 @@ void main() {
       );
     }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
-    testWidgets('gives the band back in full screen', (tester) async {
+    testWidgets('gives the band back in full screen; the shell\'s own band '
+        'stays', (tester) async {
       final band = ValueNotifier(true);
       addTearDown(band.dispose);
       await pumpApp(tester, servers: twoServers, toolbarBand: band);
@@ -158,23 +166,22 @@ void main() {
       band.value = false;
       await tester.pumpAndSettle();
 
-      expectPanesBelow(tester, 0);
+      expectPanesBelow(tester, belowShellBand);
     }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
-    testWidgets('reserves nothing when the titlebar was not installed', (
-      tester,
-    ) async {
+    testWidgets('reserves nothing extra when the titlebar was not '
+        'installed', (tester) async {
       await pumpApp(tester, servers: twoServers);
 
-      expectPanesBelow(tester, 0);
+      expectPanesBelow(tester, belowShellBand);
     }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
-    testWidgets('reserves nothing off macOS', (tester) async {
+    testWidgets('reserves nothing extra off macOS', (tester) async {
       final band = ValueNotifier(true);
       addTearDown(band.dispose);
       await pumpApp(tester, servers: twoServers, toolbarBand: band);
 
-      expectPanesBelow(tester, 0);
+      expectPanesBelow(tester, belowShellBand);
     }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
     testWidgets('keeps the narrow layout\'s app bar below the band', (

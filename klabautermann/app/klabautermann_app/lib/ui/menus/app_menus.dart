@@ -14,6 +14,7 @@ GhostCommandSpec appCommandSpec(
   id: command.id,
   label: command.label(l10n),
   enabled: command.enabled(),
+  checked: command.checked?.call(),
   activators: command.activators(platform),
 );
 
@@ -147,6 +148,7 @@ List<List<GhostMenuRow>> _menuGroups(
 String _menuTitle(AppMenuId id, AppLocalizations l10n) => switch (id) {
   AppMenuId.app => l10n.appTitle,
   AppMenuId.file => l10n.menuFile,
+  AppMenuId.edit => l10n.menuEdit,
   AppMenuId.view => l10n.menuView,
   AppMenuId.window => l10n.menuWindow,
   AppMenuId.help => l10n.menuHelp,

@@ -29,6 +29,7 @@
 		33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC11122044BFA00003C045 /* MainFlutterWindow.swift */; };
 		D7A6C0DE2F8E4A1B00000001 /* KlabautermannFlutterViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = D7A6C0DE2F8E4A1B00000002 /* KlabautermannFlutterViewController.m */; };
 		D7A6C0DE2F8E4A1B00000005 /* SettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A6C0DE2F8E4A1B00000006 /* SettingsWindow.swift */; };
+		D7A6C0DE2F8E4A1B00000007 /* MenuChecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A6C0DE2F8E4A1B00000008 /* MenuChecks.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 /* End PBXBuildFile section */
 
@@ -77,6 +78,7 @@
 		D7A6C0DE2F8E4A1B00000003 /* KlabautermannFlutterViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = KlabautermannFlutterViewController.h; sourceTree = "<group>"; };
 		D7A6C0DE2F8E4A1B00000004 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		D7A6C0DE2F8E4A1B00000006 /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
+		D7A6C0DE2F8E4A1B00000008 /* MenuChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuChecks.swift; sourceTree = "<group>"; };
 		33CEB47222A05771004F2AC0 /* Flutter-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Flutter-Debug.xcconfig"; sourceTree = "<group>"; };
 		33CEB47422A05771004F2AC0 /* Flutter-Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Flutter-Release.xcconfig"; sourceTree = "<group>"; };
 		33CEB47722A0578A004F2AC0 /* Flutter-Generated.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "Flutter-Generated.xcconfig"; path = "ephemeral/Flutter-Generated.xcconfig"; sourceTree = "<group>"; };
@@ -175,6 +177,7 @@
 				33CC10F02044A3C60003C045 /* AppDelegate.swift */,
 				33CC11122044BFA00003C045 /* MainFlutterWindow.swift */,
 				D7A6C0DE2F8E4A1B00000006 /* SettingsWindow.swift */,
+				D7A6C0DE2F8E4A1B00000008 /* MenuChecks.swift */,
 				D7A6C0DE2F8E4A1B00000002 /* KlabautermannFlutterViewController.m */,
 				D7A6C0DE2F8E4A1B00000003 /* KlabautermannFlutterViewController.h */,
 				D7A6C0DE2F8E4A1B00000004 /* Runner-Bridging-Header.h */,
@@ -389,6 +392,7 @@
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,
 				D7A6C0DE2F8E4A1B00000001 /* KlabautermannFlutterViewController.m in Sources */,
 				D7A6C0DE2F8E4A1B00000005 /* SettingsWindow.swift in Sources */,
+				D7A6C0DE2F8E4A1B00000007 /* MenuChecks.swift in Sources */,
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
 			);

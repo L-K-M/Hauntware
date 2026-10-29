@@ -199,11 +199,34 @@ void main() {
       // The Linux and Windows runners show the window on the first frame.
       expect(window.calls, isNot(contains('show')));
       expect(window.listening, isTrue);
-      // The close is observed: the window still closes itself.
-      expect(
-        window.calls.where((call) => call.startsWith('setPreventClose')),
-        isEmpty,
+      // The close is intercepted (K4): the native window holds the close
+      // for the quit guard, which answers through confirmClose.
+      expect(window.calls, contains('setPreventClose(true)'));
+    });
+
+    test('asks confirmClose before closing; a veto leaves the window up, '
+        'writes no state, and an OK destroys it', () async {
+      var answer = false;
+      final window = FakeWindow();
+      final lifecycle = await restoreMainWindow(
+        stateFile: file,
+        platform: TargetPlatform.linux,
+        window: window,
+        displays: FakeDisplays(display),
+        confirmClose: () async => answer,
       );
+
+      // The veto saves nothing and the window survives, listener on.
+      expect(await lifecycle!.close(), isFalse);
+      expect(await file.exists(), isFalse);
+      expect(window.calls, isNot(contains('destroy')));
+      expect(window.listening, isTrue);
+
+      // The next close re-runs the whole path, guard included.
+      answer = true;
+      expect(await lifecycle.close(), isTrue);
+      expect(window.calls, contains('destroy'));
+      expect(await file.exists(), isTrue);
     });
 
     test('clamps a frame from a monitor that is gone onto the primary '
@@ -415,7 +438,7 @@ void main() {
       );
     });
 
-    test('saves on close without holding the window open', () async {
+    test('saves on close, then lets the window go', () async {
       window.bounds = const Rect.fromLTWH(40, 30, 1000, 700);
       window.emitClose();
       await settle();
@@ -424,7 +447,9 @@ void main() {
         persistence.saves.single,
         const GhostWindowSnapshot(bounds: Rect.fromLTWH(40, 30, 1000, 700)),
       );
-      expect(window.calls, isNot(contains('destroy')));
+      // With no confirmClose wired, the intercepted close proceeds: the
+      // save lands, then the window destroys itself.
+      expect(window.calls, contains('destroy'));
     });
   });
 }

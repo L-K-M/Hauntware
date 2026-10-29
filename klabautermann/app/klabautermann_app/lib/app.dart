@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
-import 'package:ghost_ui/ghost_ui.dart' show showCommandPalette;
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostUndoHistory, showCommandPalette;
 import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show
@@ -38,12 +39,14 @@ import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
 import 'controllers/threshold_controller.dart';
 import 'controllers/time_display.dart';
+import 'controllers/window_panes.dart';
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/hand_off.dart' show HandOffLauncher;
 import 'theme/app_theme.dart';
 import 'ui/actions/action_entry.dart' show OperationsScope;
 import 'ui/actions/action_preview.dart' show ActionResultToasts;
+import 'ui/app_undo.dart' show UndoHistoryScope;
 import 'ui/overview_cards.dart' show OverviewLayoutScope;
 import 'ui/quick_actions.dart' show PinnedServicesScope;
 import 'ui/fleet_board.dart' show FleetDensityScope;
@@ -76,6 +79,11 @@ import 'ui/workspace_navigation.dart';
 /// The settings route's name: Settings on phones, and on a desktop whose
 /// runner cannot open the settings window (D32).
 const String kSettingsRoute = '/settings';
+
+/// The app navigator: the quit guard's confirm dialog, raised from the
+/// window lifecycle's `confirmClose`, needs its context and has none of
+/// the callers' own (03 §4.10, Séance's navigatorKey).
+final appNavigatorKey = GlobalKey<NavigatorState>();
 
 /// The composition root's view (03 §10.1): one `MaterialApp` whose only
 /// rebuild input is [AppearanceController]; fleet, monitoring and prompt
@@ -120,6 +128,8 @@ class KlabautermannApp extends StatelessWidget {
     this.appVersion,
     this.handOff,
     this.navigation,
+    required this.windowPanes,
+    required this.undoHistory,
   });
 
   final FleetController fleet;
@@ -236,6 +246,15 @@ class KlabautermannApp extends StatelessWidget {
   /// without it the app offers no palette.
   final WorkspaceNavigation? navigation;
 
+  /// The desktop shell's side panes, kept per device in settings.json by
+  /// the composition root; in-memory in tests that construct one.
+  final WindowPanesController windowPanes;
+
+  /// The app's own undo history (K3): one for the run, holding pin and
+  /// alert-rule changes; `edit.undo`/`edit.redo` and the delete toast's
+  /// Undo action step it.
+  final GhostUndoHistory undoHistory;
+
   /// The sync account (03 §4.3), one engine run's like [fleet]; null in
   /// tests that leave sync out, which shows the sync control idle.
   final SyncController? sync;
@@ -343,6 +362,7 @@ class KlabautermannApp extends StatelessWidget {
           appearance.value,
         );
         return MaterialApp(
+          navigatorKey: appNavigatorKey,
           onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
@@ -462,10 +482,18 @@ class KlabautermannApp extends StatelessWidget {
               ),
               null => withAlerts,
             };
-            return switch (appLock) {
-              final appLock? => AppLockGate(lock: appLock, child: withHandOff),
-              null => withHandOff,
-            };
+            // The app's undo history is one for the run (K3); the alert
+            // rules and the fleet rows record on it through this scope.
+            return UndoHistoryScope(
+              history: undoHistory,
+              child: switch (appLock) {
+                final appLock? => AppLockGate(
+                  lock: appLock,
+                  child: withHandOff,
+                ),
+                null => withHandOff,
+              },
+            );
           },
           // The shell's settings callback and the menus' commands need a
           // context under the MaterialApp's Navigator; the
@@ -499,6 +527,8 @@ class KlabautermannApp extends StatelessWidget {
                       fleet: fleet,
                       onOpenSettings: openSettings,
                       appVersion: appVersion,
+                      panes: windowPanes,
+                      undoHistory: undoHistory,
                       onOpenPalette: navigation == null
                           ? null
                           : (context) => showCommandPalette(
@@ -528,7 +558,13 @@ class KlabautermannApp extends StatelessWidget {
                       onShowKeyboardMap: (context) => showKeyboardMap(context),
                     );
                     return AppMenuHost(
-                      listenable: fleet,
+                      // Pane checks and undo labels follow their
+                      // listenables beside the fleet's command state.
+                      listenable: Listenable.merge([
+                        fleet,
+                        windowPanes,
+                        undoHistory,
+                      ]),
                       commands: commands,
                       // The add verbs follow the enrollment (P16).
                       child: KeyboardMapScope(
@@ -549,6 +585,7 @@ class KlabautermannApp extends StatelessWidget {
                             coverage: coverage,
                             onOpenSettings: openSettings,
                             sync: sync,
+                            panes: windowPanes,
                             onAddServer: switch (_serverEditing) {
                               final editing? when editing.enabled =>
                                 () => unawaited(
