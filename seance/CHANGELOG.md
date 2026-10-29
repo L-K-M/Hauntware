@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Deleting a saved server retracts its current shared credential, even if
+  the deletion uses a snapshot from before the credential changed. Other
+  servers' credentials and the local vault are unchanged.
 - The window has the same layout on Linux, Windows, macOS and tablets: a
   header with the server's name, Generate command and buttons that hide
   the server list (the sidebar) and the side panel (the inspector), as a

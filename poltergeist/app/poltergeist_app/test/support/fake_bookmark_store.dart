@@ -125,6 +125,29 @@ final class FakeBookmarkStore implements BookmarkStore {
     return stamped;
   }
 
+  Bookmark _existing(String id) => bookmarks.firstWhere(
+    (row) => row.id == id,
+    orElse: () => throw ArgumentError.value(id, 'id', 'unknown bookmark'),
+  );
+
+  @override
+  Future<Bookmark> rename(String id, String label) async =>
+      save(_copy(_existing(id), label: label));
+
+  @override
+  Future<Bookmark> restorePosition(
+    String id, {
+    required String? group,
+    required String sortKey,
+  }) async => save(
+    _copy(
+      _existing(id),
+      group: normalizeServerGroup(group),
+      clearGroup: normalizeServerGroup(group) == null,
+      sortKey: sortKey,
+    ),
+  );
+
   @override
   Future<bool> remove(String id) async {
     final before = bookmarks.length;

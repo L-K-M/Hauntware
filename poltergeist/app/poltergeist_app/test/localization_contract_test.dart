@@ -1614,8 +1614,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'sidebar.catalog'",
     "'sidebar.catalog.'",
     "''",
-    "'id'",
-    "'unknown bookmark'",
     "'SidebarController used after dispose'",
   },
   // DEVICES enumeration: mount roots, OS ids, environment keys, drive

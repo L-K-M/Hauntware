@@ -45,8 +45,9 @@ Future<void> _renameBookmark(
         name: bookmark.kind == BookmarkKind.remotePath
             ? l10n.sidebarRenameServerTitle
             : l10n.sidebarRenameTitle,
-        undo: () => _restoreIfListed(view, bookmark, l10n),
-        redo: () => _restoreIfListed(view, saved, l10n),
+        undo: () =>
+            _restoreIfListed(view, bookmark, l10n, _HistoryFields.label),
+        redo: () => _restoreIfListed(view, saved, l10n, _HistoryFields.label),
       ),
     );
   } on Object catch (error, stackTrace) {
@@ -55,19 +56,25 @@ Future<void> _renameBookmark(
   }
 }
 
-/// The store-edit undo/redo restore shared by rename and move: refuses
-/// while the record is gone — a delete since would resurrect it —
-/// and [SidebarController.restore] then re-stamps the captured row, so
-/// id, group and position land back where it stood.
+enum _HistoryFields { label, position }
+
+/// Restore only the fields the operation owns, preserving other windows'
+/// edits. A missing record is never resurrected by rename or move Undo.
 Future<void> _restoreIfListed(
   SidebarView view,
   Bookmark bookmark,
   AppLocalizations l10n,
+  _HistoryFields fields,
 ) async {
   if (await view.controller.byId(bookmark.id) == null) {
     throw GhostUndoDeclined(l10n.undoDeclineDeleted);
   }
-  await view.controller.restore(bookmark);
+  switch (fields) {
+    case _HistoryFields.label:
+      await view.controller.rename(bookmark.id, bookmark.label);
+    case _HistoryFields.position:
+      await view.controller.restorePosition(bookmark);
+  }
 }
 
 /// "Move to Group ▸ New Group…": group records are member-carried, so
@@ -91,8 +98,10 @@ Future<void> _newGroupFor(
     view.undoHistory?.record(
       GhostUndoableChange(
         name: l10n.sidebarMoveToGroup,
-        undo: () => _restoreIfListed(view, bookmark, l10n),
-        redo: () => _restoreIfListed(view, moved, l10n),
+        undo: () =>
+            _restoreIfListed(view, bookmark, l10n, _HistoryFields.position),
+        redo: () =>
+            _restoreIfListed(view, moved, l10n, _HistoryFields.position),
       ),
     );
   } on Object catch (error, stackTrace) {

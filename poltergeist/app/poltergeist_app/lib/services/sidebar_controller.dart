@@ -404,16 +404,20 @@ final class SidebarController extends ChangeNotifier {
     }
   }
 
-  /// The row's local rename: a full-record [BookmarkStore.save] so the
-  /// `updatedAt` stamp lands (the LWW half of every local edit, 04 §2.1).
+  /// Renames the live row without replacing another window's fields.
   Future<Bookmark> rename(String id, String label) {
     _assertLive();
-    return _store.byId(id).then((bookmark) {
-      if (bookmark == null) {
-        throw ArgumentError.value(id, 'id', 'unknown bookmark');
-      }
-      return _store.save(_withLabel(bookmark, label));
-    });
+    return _store.rename(id, label);
+  }
+
+  /// Restores grouping/order only; another window's other fields stay live.
+  Future<Bookmark> restorePosition(Bookmark position) {
+    _assertLive();
+    return _store.restorePosition(
+      position.id,
+      group: position.group,
+      sortKey: position.sortKey,
+    );
   }
 
   /// The row's delete: removes the record, then forwards the id to the
@@ -615,28 +619,6 @@ final class _StoredIdSet {
     return true;
   }
 }
-
-/// The only field the sidebar's rename owns: the model exposes no
-/// `copyWith`, so the edit is spelled out field by field — a record
-/// rebuilt here stays inside the pinned schema by construction.
-Bookmark _withLabel(Bookmark source, String label) => Bookmark(
-  id: source.id,
-  kind: source.kind,
-  label: label,
-  group: source.group,
-  color: source.color,
-  icon: source.icon,
-  server: source.server,
-  localPath: source.localPath,
-  remotePath: source.remotePath,
-  left: source.left,
-  right: source.right,
-  sync: source.sync,
-  preferredPane: source.preferredPane,
-  sortKey: source.sortKey,
-  createdAt: source.createdAt,
-  updatedAt: source.updatedAt,
-);
 
 /// Saves a live session's endpoint and [path] into [store] as a server
 /// row: a fresh id (a Quick Connect id never enters the store), the live

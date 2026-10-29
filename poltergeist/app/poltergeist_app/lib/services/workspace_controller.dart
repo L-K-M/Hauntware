@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:poltergeist_core/poltergeist_core.dart' show Bookmark;
 
 import 'pane_controller.dart';
 import 'pane_tabs_controller.dart';
@@ -294,22 +295,38 @@ class WorkspaceController extends ChangeNotifier {
   /// Positional [excluding] matches the strips' `serverStillShared`
   /// typedef, so a tear-off wires the seam without an adapter.
   bool serverStillBound(String serverId, PaneController excluding) =>
-      _bindsServer(serverId, excluding: excluding);
+      _hasLiveBinding(
+        (bookmark) => bookmark.id == serverId,
+        excluding: excluding,
+      );
 
   /// Whether any tab in this workspace binds [serverId] live: another
   /// window's half of the last-binding check (00 D39).
-  bool bindsServer(String serverId) => _bindsServer(serverId);
+  bool bindsServer(String serverId) =>
+      _hasLiveBinding((bookmark) => bookmark.id == serverId);
 
-  bool _bindsServer(String serverId, {PaneController? excluding}) {
+  /// Catalog deletion also protects favorites that reference its config.
+  /// Pool alias checks above continue to match bookmark IDs only.
+  bool bindsCatalogServer(String serverId) => _hasLiveBinding(
+    (bookmark) =>
+        bookmark.id == serverId || bookmark.server?.serverConfigId == serverId,
+  );
+
+  bool _hasLiveBinding(
+    bool Function(Bookmark bookmark) matches, {
+    PaneController? excluding,
+  }) {
     for (final pane in [left, right]) {
       for (final tab in pane.tabs) {
         final controller = tab.controller;
+        final bookmark = controller.remoteBookmark;
         // A session-restored tab keeps the bookmark for its badge and
         // reconnect but holds no pool reference — only live bindings
         // count toward last-binding close semantics (02 §3, 03 §3.2).
         if (!identical(controller, excluding) &&
             controller.hasLiveRemoteBinding &&
-            controller.remoteBookmark?.id == serverId) {
+            bookmark != null &&
+            matches(bookmark)) {
           return true;
         }
       }

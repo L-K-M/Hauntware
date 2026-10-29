@@ -206,8 +206,8 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
   );
 
   /// The document app's three-way close choice (Séance's confirmDiscard):
-  /// Save runs the normal save path — upload included for a server file —
-  /// and the editor closes only if the buffer is clean after it; Don't
+  /// Save writes even during Quit, including upload for a server file,
+  /// and closes only after a successful save with no newer edits; Don't
   /// Save drops the edits; Cancel (or dismissing) keeps editing.
   Future<bool> _confirmDiscard() async {
     if (!mounted) return false;
@@ -238,10 +238,16 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
     );
     switch (choice) {
       case _CloseChoice.save:
-        await _save(upload: widget.onUpload != null);
-        // A failed or still-dirty save keeps the editor open; the close
-        // completes only on a clean buffer.
-        return mounted && !_editor.isDirty;
+        final result = await _save(
+          upload: widget.onUpload != null,
+          access: pe.EditorSaveAccess.confirmedClose,
+        );
+        return mounted &&
+            result != null &&
+            (!result.publishRequested || result.published) &&
+            !result.hasUnsavedChanges &&
+            !_editor.isBusy &&
+            !_editor.isDirty;
       case _CloseChoice.dontSave:
         return true;
       case _CloseChoice.keepEditing || null:
@@ -249,12 +255,16 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
     }
   }
 
-  Future<void> _save({bool upload = false}) async {
+  Future<pe.EditorSaveResult?> _save({
+    bool upload = false,
+    pe.EditorSaveAccess access = pe.EditorSaveAccess.normal,
+  }) async {
     try {
       final result = await _editor.save(
         mode: upload ? pe.EditorSaveMode.primary : pe.EditorSaveMode.local,
+        access: access,
       );
-      if (result == null || !mounted) return;
+      if (result == null || !mounted) return null;
       final l10n = AppLocalizations.of(context);
       widget.showToast(
         context,
@@ -266,8 +276,10 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
                   : l10n.editorSavedLocallyNotUploaded
             : l10n.editorSavedLocally,
       );
+      return result;
     } catch (error) {
       if (mounted) widget.showToast(context, error.toString());
+      return null;
     }
   }
 

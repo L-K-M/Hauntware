@@ -290,8 +290,10 @@ Future<void> _dropBookmark(
     view.undoHistory?.record(
       GhostUndoableChange(
         name: name,
-        undo: () => _restoreIfListed(view, bookmark, l10n),
-        redo: () => _restoreIfListed(view, moved, l10n),
+        undo: () =>
+            _restoreIfListed(view, bookmark, l10n, _HistoryFields.position),
+        redo: () =>
+            _restoreIfListed(view, moved, l10n, _HistoryFields.position),
       ),
     );
   } on Object catch (error, stackTrace) {

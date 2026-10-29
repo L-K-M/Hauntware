@@ -439,6 +439,59 @@ void main() {
       expect(reloaded.map((bookmark) => bookmark.id).toSet(), {'a', 'b'});
     });
 
+    for (final labelFirst in [true, false]) {
+      test(
+        'queued label/position edits merge while ${labelFirst ? 'label' : 'position'} waits for disk',
+        () async {
+          final gate = Completer<void>();
+          final parked = Completer<void>();
+          var parkNext = false;
+          final path = pathIn('field-edits.json');
+          final store = FileBookmarkStore(
+            path: path,
+            atomicWriter: (file, contents) async {
+              if (parkNext) {
+                parkNext = false;
+                parked.complete();
+                await gate.future;
+              }
+              await const TransferJournalIo().atomicRewrite(file, contents);
+            },
+          );
+          await store.upsertAll([
+            _localBookmark('a', label: 'old', group: 'old group', sortKey: 'm'),
+          ]);
+          parkNext = true;
+          final first = labelFirst
+              ? store.rename('a', 'new label')
+              : store.restorePosition('a', group: 'new group', sortKey: 'q');
+          await parked.future;
+          final second = labelFirst
+              ? store.restorePosition('a', group: 'new group', sortKey: 'q')
+              : store.rename('a', 'new label');
+          gate.complete();
+          await Future.wait([first, second]);
+          final actual = (await FileBookmarkStore(path: path).byId('a'))!;
+          expect(actual.label, 'new label');
+          expect(actual.group, 'new group');
+          expect(actual.sortKey, 'q');
+          expect(actual.localPath, '~/Downloads');
+        },
+      );
+    }
+
+    test('field edits cannot resurrect a deleted bookmark', () async {
+      final store = FileBookmarkStore(path: pathIn('deleted.json'));
+      await store.upsertAll([_localBookmark('a', sortKey: 'm')]);
+      await store.remove('a');
+      await expectLater(store.rename('a', 'new label'), throwsArgumentError);
+      await expectLater(
+        store.restorePosition('a', group: 'new group', sortKey: 'q'),
+        throwsArgumentError,
+      );
+      expect(await store.load(), isEmpty);
+    });
+
     test('persists rows built by the ssh_config import service', () async {
       const home = '/home/tester';
       const configPath = '$home/.ssh/config';

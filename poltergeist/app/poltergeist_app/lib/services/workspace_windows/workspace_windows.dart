@@ -151,8 +151,16 @@ final class WorkspaceWindow {
   /// [serverId]: closing this window's last tab on a server must not
   /// disconnect it under another window (03 §3.2's last-binding rule,
   /// across windows).
-  bool serverBoundElsewhere(String serverId) =>
-      _owner._serverBoundOutside(this, serverId);
+  bool serverBoundElsewhere(String serverId) => _owner._serverBoundOutside(
+    this,
+    (workspace) => workspace.bindsServer(serverId),
+  );
+
+  bool catalogServerBoundElsewhere(String serverId) =>
+      _owner._serverBoundOutside(
+        this,
+        (workspace) => workspace.bindsCatalogServer(serverId),
+      );
 
   void attachContent(WorkspaceWindowContent content) => _content = content;
 
@@ -529,10 +537,14 @@ final class WorkspaceWindows extends ChangeNotifier
     await _host.activate(window.viewId);
   }
 
-  bool _serverBoundOutside(WorkspaceWindow window, String serverId) {
+  bool _serverBoundOutside(
+    WorkspaceWindow window,
+    bool Function(WorkspaceController workspace) bound,
+  ) {
     for (final other in _windows) {
       if (identical(other, window)) continue;
-      if (other._content?.workspace?.bindsServer(serverId) ?? false) {
+      final workspace = other._content?.workspace;
+      if (workspace != null && bound(workspace)) {
         return true;
       }
     }

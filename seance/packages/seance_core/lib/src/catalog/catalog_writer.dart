@@ -173,7 +173,11 @@ final class CatalogWriter {
         deleted: true,
       ),
     );
-    await _secrets.retractOrphaned(server.secretRef, deletedAt, this);
+    await _secrets.retractOrphaned(
+      (prior ?? server).secretRef,
+      deletedAt,
+      this,
+    );
     await _refreshCatalog();
     return WriteOutcome.written;
   }

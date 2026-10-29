@@ -360,6 +360,16 @@ final class FakeSyncTrackingBookmarkStore
   Future<Bookmark> save(Bookmark bookmark) => _inner.save(bookmark);
 
   @override
+  Future<Bookmark> rename(String id, String label) => _inner.rename(id, label);
+
+  @override
+  Future<Bookmark> restorePosition(
+    String id, {
+    required String? group,
+    required String sortKey,
+  }) => _inner.restorePosition(id, group: group, sortKey: sortKey);
+
+  @override
   Future<bool> remove(String id) => _inner.remove(id);
 
   @override

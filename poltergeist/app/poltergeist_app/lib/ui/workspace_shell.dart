@@ -3787,8 +3787,8 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         server: server,
         copy: copy,
         isBound: (id) =>
-            (_workspace?.bindsServer(id) ?? false) ||
-            (widget.window?.serverBoundElsewhere(id) ?? false),
+            (_workspace?.bindsCatalogServer(id) ?? false) ||
+            (widget.window?.catalogServerBoundElsewhere(id) ?? false),
         l10n: l10n,
       ),
     );

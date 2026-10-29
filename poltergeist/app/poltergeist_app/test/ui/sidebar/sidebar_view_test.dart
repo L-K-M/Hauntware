@@ -1136,6 +1136,65 @@ void main() {
       expect(controller.isPinned('a'), isTrue);
     });
 
+    testWidgets('rename Undo preserves another window’s placement', (
+      tester,
+    ) async {
+      store.bookmarks = [_remote('a', group: 'work', sortKey: 'ma')];
+      final history = GhostUndoHistory();
+      addTearDown(history.dispose);
+      await pumpSidebar(tester, undoHistory: history);
+      await openMenu(tester, 'a');
+      await tester.tap(find.byKey(const ValueKey('sidebar.menu.rename')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('sidebar.renameField')),
+        'renamed',
+      );
+      await tester.tap(find.byKey(const ValueKey('sidebar.renameSave')));
+      await tester.pumpAndSettle();
+
+      final moved = await store.moveToGroup('a', 'other window');
+      await history.undo();
+      final undone = (await store.byId('a'))!;
+      expect(undone.label, 'label-a');
+      expect(undone.group, moved.group);
+      expect(undone.sortKey, moved.sortKey);
+      await history.redo();
+      final redone = (await store.byId('a'))!;
+      expect(redone.label, 'renamed');
+      expect(redone.group, moved.group);
+    });
+
+    testWidgets('placement Undo preserves another window’s label', (
+      tester,
+    ) async {
+      store.bookmarks = [
+        _remote('a', group: 'work', sortKey: 'ma'),
+        _remote('b', group: 'home', sortKey: 'mb'),
+      ];
+      final history = GhostUndoHistory();
+      addTearDown(history.dispose);
+      await pumpSidebar(tester, undoHistory: history);
+      await openMenu(tester, 'a');
+      await tester.tap(find.byKey(const ValueKey('sidebar.menu.moveToGroup')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'home'));
+      await tester.pumpAndSettle();
+      final other = SidebarController(store: store);
+      addTearDown(other.dispose);
+      await other.rename('a', 'other window’s label');
+
+      await history.undo();
+      final undone = (await store.byId('a'))!;
+      expect(undone.group, 'work');
+      expect(undone.sortKey, 'ma');
+      expect(undone.label, 'other window’s label');
+      await history.redo();
+      final redone = (await store.byId('a'))!;
+      expect(redone.group, 'home');
+      expect(redone.label, 'other window’s label');
+    });
+
     testWidgets('a rename undo declines once the record is gone', (
       tester,
     ) async {
