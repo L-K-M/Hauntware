@@ -269,6 +269,23 @@ void main() {
       );
     });
 
+    test('keeps CJK names with several bracket groups or marks whole', () {
+      expect(_values('/home/u/報告書（案）（修正）.docx'), [
+        'path:/home/u/報告書（案）（修正）.docx',
+      ]);
+      expect(_values('/x/（1）（2）/a.txt'), ['path:/x/（1）（2）/a.txt']);
+      expect(_values('/music/「A」「B」/x.mp3'), ['path:/music/「A」「B」/x.mp3']);
+      expect(_values('cp /Music/けいおん！！/01.mp3 .'), [
+        'path:/Music/けいおん！！/01.mp3',
+      ]);
+      expect(_values('/Volumes/USB：バックアップ/2024/a.txt'), [
+        'path:/Volumes/USB：バックアップ/2024/a.txt',
+      ]);
+      expect(_values('/music/君の名は。サントラ/01.m4a'), [
+        'path:/music/君の名は。サントラ/01.m4a',
+      ]);
+    });
+
     test('ends a link at CJK punctuation and Markdown\'s link syntax', () {
       expect(_values('下载地址：https://example.com/file.zip，请查收'), [
         'url:https://example.com/file.zip',

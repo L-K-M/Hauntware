@@ -118,6 +118,17 @@ void main() {
     expect(firstLine(terminal), 'cat /srv/文档/a.txt');
   });
 
+  test('reflow() widens a line whose wrapped rows were erased', () {
+    final terminal = Terminal();
+    terminal.resize(60, 10);
+    // ECH blanks both rows of a wrapped line and, unlike EL, keeps the
+    // second one wrapped.
+    terminal.write('${'a' * 61}\r\x1b[60X\x1b[A\x1b[60X\x1b[3B\$ ');
+    terminal.resize(200, 10);
+
+    expect(terminal.viewWidth, 200);
+  });
+
   test('reflow() to one column with a wide character finishes', () {
     final terminal = Terminal();
     terminal.resize(49, 6);

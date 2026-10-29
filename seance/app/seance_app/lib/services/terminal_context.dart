@@ -157,20 +157,20 @@ const _pathChars = r'''[^\s'"`<>|;:,(){}\[\]‘“”…、，；]''';
 final _cjkPunctuation = RegExp('[。：！？「」『』（）]');
 
 /// [body] cut at the first CJK punctuation that prose follows rather than
-/// the rest of a name. Each mark is judged by what follows it up to the
-/// next `/`, the rest of its own name:
+/// the rest of a name. What a name's mark leads into must look like a name:
+/// a `/` (`旅行（京都）/IMG.jpg`, `君の名は。/夢灯籠.m4a`) or an extension
+/// (`報告書（案）（修正）.docx`). Otherwise the sentence goes on, which CJK
+/// writes without a space (`/etc/hosts（設定ファイル）を編集しました`).
 ///
-/// * an opening bracket (`「『（`) is a name's when its closer is there
-///   (`旅行（京都）/`, `報告書（1）.pdf`);
-/// * a closing one (`」』）`) is a name's when no new opener is there,
-///   so `「/etc/hosts」と「/etc/resolv.conf」` reads as two paths;
-/// * `。：！？` is a name's only right before a `/` (`君の名は。/曲.m4a`) or
-///   an extension that ends the path.
-///
-/// What a name's mark leads into must still look like a name: a `/` or an
-/// extension after it. Otherwise the sentence goes on, which CJK writes
-/// without a space (`/etc/hosts（設定ファイル）を編集しました`).
+/// Brackets pair up as well. An opener (`「『（`) is a name's only when its
+/// closer follows within the same segment. A closer (`」』）`) is a name's
+/// when it closes such an opener; one the path opened outside of, as in
+/// `「/etc/hosts」と「/etc/resolv.conf」`, ends the path when a new opener
+/// follows it in the segment, so that line reads as two paths. `。：！？`
+/// right after a file's name end it too (`config.yml。代わりに…`), while a
+/// folder's name may hold them (`けいおん！！/01.mp3`, `仕事：2024/`).
 String _cutAtProse(String body) {
+  final open = <String>[];
   var from = 0;
   while (true) {
     final found = _cjkPunctuation.firstMatch(body.substring(from));
@@ -181,15 +181,20 @@ String _cutAtProse(String body) {
     final slash = rest.indexOf('/');
     final segment = slash < 0 ? rest : rest.substring(0, slash);
     final leadsOn = slash >= 0 || _hasExtension(rest);
+    final closer = _openers[mark];
     final bool named;
-    if (_openers.containsKey(mark)) {
-      named = leadsOn && segment.contains(_openers[mark]!);
+    if (closer != null) {
+      named = leadsOn && segment.contains(closer);
+      if (named) open.add(mark);
+    } else if (open.isNotEmpty && _openers[open.last] == mark) {
+      open.removeLast();
+      named = true;
     } else if (_openers.containsValue(mark)) {
       named = leadsOn && !segment.contains(_anyOpener);
     } else {
-      named = segment.isEmpty
-          ? slash >= 0
-          : slash < 0 && _hasExtension(segment);
+      // After a file's name (`config.yml。`) it is the sentence going on.
+      final name = body.substring(body.lastIndexOf('/', at) + 1, at);
+      named = leadsOn && !_hasExtension(name);
     }
     if (!named) return body.substring(0, at);
     from = at + 1;

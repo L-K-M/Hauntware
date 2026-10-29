@@ -81,9 +81,11 @@ class _LineReflow {
       // the line in the last column (or, from one column, every such
       // character's), so that cell goes with its first and the row goes.
       if (_lines.isNotEmpty || _builder.isNotEmpty) {
+        // A blank row the fast path took keeps its old, shorter length.
         final endsWide = _builder.isNotEmpty
             ? _builder.lastWidth == 2
-            : _lines.last.getWidth(newWidth - 1) == 2;
+            : _lines.last.length >= newWidth &&
+                _lines.last.getWidth(newWidth - 1) == 2;
         _addPart(line, from: 0, to: endsWide ? 1 : 0);
         return;
       }
