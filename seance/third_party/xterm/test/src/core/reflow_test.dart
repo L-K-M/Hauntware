@@ -108,6 +108,16 @@ void main() {
     });
   }
 
+  test('reflow() through one column keeps wide characters whole', () {
+    final terminal = Terminal();
+    terminal.resize(80, 24);
+    terminal.write('cat /srv/文档/a.txt\r\n\$ ');
+    terminal.resize(1, 24);
+    terminal.resize(80, 24);
+
+    expect(firstLine(terminal), 'cat /srv/文档/a.txt');
+  });
+
   test('reflow() to one column with a wide character finishes', () {
     final terminal = Terminal();
     terminal.resize(49, 6);

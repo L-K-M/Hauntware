@@ -598,15 +598,22 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     a line of its own while the reflowed line's tail was still pending, so
     a blank wrapped row landed inside the line, before its end. The row is
     now folded into the pending line (its anchors moved, the row dropped)
-    whenever content is pending; only a truly empty line takes the fast
-    path.
+    whenever content is pending, with the second cell copied when its
+    first ends that line; only a truly empty line takes the fast path.
+    A randomized round trip through widths of two columns or more keeps
+    every line's text (`test/src/core/reflow_property_test.dart`), where
+    upstream duplicated a cell at the end of many.
 
 45. **Reflowing to one column with a wide character finishes**
     (`core/reflow.dart#_LineReflow._addPart`, pre-existing upstream): a
     wide character is left to the next row when it does not fit, but a
     row one cell wide never fits one, so each pass filled a row with
     nothing, forever, with memory growing. A one-column row now takes the
-    character anyway.
+    character anyway, and its second cell goes on the next row, which
+    widening joins back (patch 44). Some round trips through one column
+    still repeat a reused row's stale cells at the end of a line; one
+    column is a degenerate width, and this ends a hang rather than making
+    it exact.
 
 ### App-layer notes (outside this package)
 

@@ -251,6 +251,24 @@ void main() {
       }
     });
 
+    test('reads two quoted or bracketed CJK paths as two', () {
+      expect(_values('ファイル「/etc/hosts」と「/etc/resolv.conf」を確認してください'), [
+        'path:/etc/hosts',
+        'path:/etc/resolv.conf',
+      ]);
+      expect(_values('「/tmp/a.txt」を「/tmp/b.txt」にコピーしました'), [
+        'path:/tmp/a.txt',
+        'path:/tmp/b.txt',
+      ]);
+      expect(_values('/var/log/syslog（または/var/log/messages）を確認'), [
+        'path:/var/log/syslog',
+      ]);
+      expect(
+        _values('見つかりません：/opt/app/config.yml。代わりに/etc/app/config.ymlを使用します'),
+        ['path:/opt/app/config.yml'],
+      );
+    });
+
     test('ends a link at CJK punctuation and Markdown\'s link syntax', () {
       expect(_values('下载地址：https://example.com/file.zip，请查收'), [
         'url:https://example.com/file.zip',

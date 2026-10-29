@@ -104,7 +104,14 @@ List<ContextItem> detectContextItems(
   final scanned = masked.toString();
   final diffHeader = _diffHeader.hasMatch(text);
   final farSides = _FarSides(scanned);
-  for (final match in _pathPattern.allMatches(scanned)) {
+  var position = 0;
+  while (position < scanned.length) {
+    final match = _firstFrom(_pathPattern, scanned, position);
+    if (match == null) break;
+    // A path cut short (at a closing quote, at CJK prose) leaves its text's
+    // tail to read again: `「/etc/hosts」と「/etc/resolv.conf」`.
+    final (_, end) = _pathBody(match, scanned);
+    position = end > match.start ? end : match.end;
     if (cut != null && match.end >= cut) continue;
     final item = _pathItem(
       match,
@@ -119,6 +126,13 @@ List<ContextItem> detectContextItems(
 
   found.sort((a, b) => a.$1.compareTo(b.$1));
   return [for (final (_, item) in found) item];
+}
+
+RegExpMatch? _firstFrom(RegExp pattern, String text, int start) {
+  for (final match in pattern.allMatches(text, start)) {
+    return match;
+  }
+  return null;
 }
 
 /// http and https only: they are the schemes the tab can open
@@ -143,24 +157,49 @@ const _pathChars = r'''[^\s'"`<>|;:,(){}\[\]‘“”…、，；]''';
 final _cjkPunctuation = RegExp('[。：！？「」『』（）]');
 
 /// [body] cut at the first CJK punctuation that prose follows rather than
-/// the rest of a name. What follows is a name's when it holds a `/`
-/// (`旅行（京都）/IMG.jpg`, `君の名は。/夢灯籠.m4a`) or ends in an extension
-/// (`報告書（1）.pdf`); otherwise it is the sentence going on, which CJK
-/// writes without a space (`/etc/hosts（設定ファイル）を編集しました`).
+/// the rest of a name. Each mark is judged by what follows it up to the
+/// next `/`, the rest of its own name:
+///
+/// * an opening bracket (`「『（`) is a name's when its closer is there
+///   (`旅行（京都）/`, `報告書（1）.pdf`);
+/// * a closing one (`」』）`) is a name's when no new opener is there,
+///   so `「/etc/hosts」と「/etc/resolv.conf」` reads as two paths;
+/// * `。：！？` is a name's only right before a `/` (`君の名は。/曲.m4a`) or
+///   an extension that ends the path.
+///
+/// What a name's mark leads into must still look like a name: a `/` or an
+/// extension after it. Otherwise the sentence goes on, which CJK writes
+/// without a space (`/etc/hosts（設定ファイル）を編集しました`).
 String _cutAtProse(String body) {
   var from = 0;
   while (true) {
-    final mark = _cjkPunctuation.firstMatch(body.substring(from));
-    if (mark == null) return body;
-    final at = from + mark.start;
+    final found = _cjkPunctuation.firstMatch(body.substring(from));
+    if (found == null) return body;
+    final at = from + found.start;
+    final mark = body[at];
     final rest = body.substring(at + 1);
-    final named =
-        rest.isNotEmpty &&
-        (rest.contains('/') || _hasExtension(rest.split('/').last));
+    final slash = rest.indexOf('/');
+    final segment = slash < 0 ? rest : rest.substring(0, slash);
+    final leadsOn = slash >= 0 || _hasExtension(rest);
+    final bool named;
+    if (_openers.containsKey(mark)) {
+      named = leadsOn && segment.contains(_openers[mark]!);
+    } else if (_openers.containsValue(mark)) {
+      named = leadsOn && !segment.contains(_anyOpener);
+    } else {
+      named = segment.isEmpty
+          ? slash >= 0
+          : slash < 0 && _hasExtension(segment);
+    }
     if (!named) return body.substring(0, at);
     from = at + 1;
   }
 }
+
+/// The CJK brackets a name may hold, opener to closer.
+const _openers = {'「': '」', '『': '』', '（': '）'};
+
+final _anyOpener = RegExp('[「『（]');
 
 /// The curly quote that closes a path each opening one started.
 const _closingQuote = {'‘': '’', '“': '”'};
@@ -234,6 +273,23 @@ final _elision = RegExp(r'(?:^|/)\.{3,}(?:/|$)');
 /// other punctuation that only looks like a path.
 final _absoluteStart = RegExp(r'^/[\w.~@+-]');
 
+/// The path [match] names, and where it ends in [text]: cut at the curly
+/// quote that closes the one it opened after, and at CJK prose
+/// ([_cutAtProse]). Text past a cut may hold another path, which the scan
+/// reads from there.
+(String, int) _pathBody(RegExpMatch match, String text) {
+  var body = match[1]!;
+  final opener = match.start == 0 ? null : text[match.start - 1];
+  final closer = _closingQuote[opener];
+  if (closer != null) {
+    final close = body.indexOf(closer);
+    if (close >= 0) body = body.substring(0, close);
+  }
+  body = _cutAtProse(body);
+  if (body.length == match[1]!.length) return (body, match.end);
+  return (body, match.start + body.length);
+}
+
 ContextItem? _pathItem(
   RegExpMatch match,
   String text, {
@@ -242,22 +298,7 @@ ContextItem? _pathItem(
   required bool diffHeader,
   required _FarSides farSides,
 }) {
-  var body = match[1]!;
-  var end = match.end;
-  final opener = match.start == 0 ? null : text[match.start - 1];
-  final closer = _closingQuote[opener];
-  if (closer != null) {
-    final close = body.indexOf(closer);
-    if (close >= 0) {
-      body = body.substring(0, close);
-      end = match.start + close;
-    }
-  }
-  final prose = _cutAtProse(body);
-  if (prose.length != body.length) {
-    body = prose;
-    end = match.start + prose.length;
-  }
+  final (body, end) = _pathBody(match, text);
   final after = text.substring(end);
   // A prompt's directory (`me@host:~/src$`, `root@host:/etc#`) is where the
   // shell is, printed again before every command, not something the output

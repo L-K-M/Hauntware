@@ -20,6 +20,9 @@ class _LineBuilder {
 
   bool get isNotEmpty => _length != 0;
 
+  /// The width of the last cell added, or 0 when there is none.
+  int get lastWidth => _length == 0 ? 0 : _result.getWidth(_length - 1);
+
   /// Adds a range of cells from [src] to the builder. Anchors within the range
   /// will be reparented to the new line returned by [take].
   void add(BufferLine src, int start, int length) {
@@ -72,12 +75,16 @@ class _LineReflow {
     final trimmedLength = min(line.getTrimmedLength(oldWidth), oldWidth);
 
     if (trimmedLength == 0) {
-      // A row of a line that has content pending (the row that holds only
-      // the second cell of a wide character that ended the line in the
-      // last column) is not a line of its own: taken as one, it would
-      // land before that content. Its anchors go along and the row goes.
+      // A row of a line that has content pending is not a line of its
+      // own: taken as one, it would land before that content. It is the
+      // row that holds only the second cell of a wide character that ended
+      // the line in the last column (or, from one column, every such
+      // character's), so that cell goes with its first and the row goes.
       if (_lines.isNotEmpty || _builder.isNotEmpty) {
-        _addPart(line, from: 0, to: 0);
+        final endsWide = _builder.isNotEmpty
+            ? _builder.lastWidth == 2
+            : _lines.last.getWidth(newWidth - 1) == 2;
+        _addPart(line, from: 0, to: endsWide ? 1 : 0);
         return;
       }
       // A fast path for empty lines
