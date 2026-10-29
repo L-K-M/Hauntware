@@ -7,7 +7,6 @@ import 'package:flutter/semantics.dart'
     show AccessibilityFocusBlockType, SemanticsService;
 import 'package:ghost_servers/ghost_servers.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
-import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/fleet_controller.dart';
@@ -19,6 +18,7 @@ import 'charts/charts.dart';
 import 'fleet_rail.dart' show FleetEmptyState, linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
 import 'alerts.dart';
+import 'app_undo.dart';
 import 'attention.dart' show AttentionWatch, openProblemsByServer;
 import 'fleet_summary.dart';
 import 'fleet_triage.dart';
@@ -236,9 +236,7 @@ class _FleetServerListState extends State<FleetServerList> {
       if (server.origin == FleetEntryOrigin.synced)
         SidebarMenuAction(
           label: pinned ? l10n.fleetRowUnpin : l10n.fleetRowPin,
-          onSelected: () => unawaited(
-            _savingPins(pinned ? fleet.unpin(server.id) : fleet.pin(server.id)),
-          ),
+          onSelected: () => unawaited(pinServerUndoably(context, fleet, server)),
         ),
       SidebarMenuAction(
         label: monitored ? l10n.fleetRowStopMonitoring : l10n.fleetRowMonitor,
@@ -271,19 +269,6 @@ class _FleetServerListState extends State<FleetServerList> {
       ],
     ];
   };
-
-  /// Waits for a pin change to save, and says so when it could not: the
-  /// change lasts until the app quits.
-  Future<void> _savingPins(Future<void> change) async {
-    final overlay = Overlay.of(context, rootOverlay: true);
-    final notSaved = AppLocalizations.of(context).fleetPinNotSaved;
-    try {
-      await change;
-    } on Exception catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) showTopToast(overlay, message: notSaved);
-    }
-  }
 
   void _dismissFilter() {
     if (_query.isNotEmpty) {

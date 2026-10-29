@@ -52,6 +52,8 @@ const String _fleetDensityKey = 'klabautermann.fleet.density';
 const String _overviewCardsKey = 'klabautermann.overview.cards';
 const String _cadenceCapsKey = 'klabautermann.sampling.caps';
 const String _attentionKey = 'klabautermann.attention.acknowledged';
+const String _shellSidebarKey = 'klabautermann.shell.sidebar';
+const String _shellInspectorKey = 'klabautermann.shell.inspector';
 
 // The fields of one server's entry under [_endpointOverridesKey].
 const String _overrideChoiceField = 'choice';
@@ -449,6 +451,28 @@ final class DeviceSettingsStore {
   /// Stores [name] and writes the document; throws as [setCadence] does.
   Future<void> setFleetDensity(String name) async {
     _values[_fleetDensityKey] = name;
+    await _save();
+  }
+
+  /// Whether the desktop shell shows its fleet rail
+  /// (`klabautermann.shell.sidebar`), defaulting to shown; anything but a
+  /// `false` reads as shown rather than failing the file.
+  bool get shellSidebarShown => _values[_shellSidebarKey] != false;
+
+  /// Stores [shown] and writes the document; throws as [setCadence] does.
+  Future<void> setShellSidebarShown(bool shown) async {
+    _values[_shellSidebarKey] = shown;
+    await _save();
+  }
+
+  /// Whether the desktop shell shows its inspector
+  /// (`klabautermann.shell.inspector`), defaulting to shown, as
+  /// [shellSidebarShown] does.
+  bool get shellInspectorShown => _values[_shellInspectorKey] != false;
+
+  /// Stores [shown] and writes the document; throws as [setCadence] does.
+  Future<void> setShellInspectorShown(bool shown) async {
+    _values[_shellInspectorKey] = shown;
     await _save();
   }
 

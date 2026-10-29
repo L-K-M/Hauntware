@@ -183,7 +183,100 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuFile => 'File';
 
   @override
+  String get menuEdit => 'Edit';
+
+  @override
   String get menuView => 'View';
+
+  @override
+  String get sidebarToggleShow => 'Show Sidebar';
+
+  @override
+  String get sidebarToggleHide => 'Hide Sidebar';
+
+  @override
+  String get inspectorToggleShow => 'Show Inspector';
+
+  @override
+  String get inspectorToggleHide => 'Hide Inspector';
+
+  @override
+  String paneToggleTooltip(String label, String keys) {
+    return '$label $keys';
+  }
+
+  @override
+  String get windowPanesNotSaved =>
+      'Klabautermann could not save your window layout, so the change lasts only until it quits.';
+
+  @override
+  String get editUndo => 'Undo';
+
+  @override
+  String editUndoNamed(String name) {
+    return 'Undo $name';
+  }
+
+  @override
+  String get editRedo => 'Redo';
+
+  @override
+  String editRedoNamed(String name) {
+    return 'Redo $name';
+  }
+
+  @override
+  String toastChangeUndone(String name) {
+    return '$name undone';
+  }
+
+  @override
+  String toastChangeRedone(String name) {
+    return '$name redone';
+  }
+
+  @override
+  String toastUndoFailed(String name, String error) {
+    return 'Couldn’t undo “$name”: $error';
+  }
+
+  @override
+  String toastRedoFailed(String name, String error) {
+    return 'Couldn’t redo “$name”: $error';
+  }
+
+  @override
+  String get changePinServer => 'Pin server';
+
+  @override
+  String get changeUnpinServer => 'Unpin server';
+
+  @override
+  String get changeDeleteAlertRule => 'Delete alert rule';
+
+  @override
+  String get changeEditAlertRule => 'Edit alert rule';
+
+  @override
+  String get changeNewAlertRule => 'New alert rule';
+
+  @override
+  String quitWhileRunningTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Quit while $count operations are running?',
+      one: 'Quit while 1 operation is running?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get quitWhileRunningBody =>
+      'They keep running on their servers, and Klabautermann picks up their results the next time it connects.';
+
+  @override
+  String get quitWhileRunningQuit => 'Quit';
 
   @override
   String get menuWindow => 'Window';
@@ -9784,11 +9877,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get alertRuleDelete => 'Delete rule';
 
   @override
-  String get alertRuleDeleteConfirm =>
-      'Delete this rule? It is removed on every device that syncs your account.';
-
-  @override
-  String get alertRuleDeleteAction => 'Delete';
+  String get alertRuleDeleted => 'Alert rule deleted';
 
   @override
   String alertRuleCondition(String op, String metric, String value) {

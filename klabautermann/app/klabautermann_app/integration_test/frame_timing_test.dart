@@ -17,6 +17,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
 import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
@@ -25,6 +26,7 @@ import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/prompt_controller.dart';
+import 'package:klabautermann_app/controllers/window_panes.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/replay.dart';
@@ -123,6 +125,8 @@ void main() {
         coverage: coverage,
         announcements: announcements,
         dockerNotice: dockerNotice,
+        windowPanes: WindowPanesController(),
+        undoHistory: GhostUndoHistory(),
       ),
     );
     await _until(

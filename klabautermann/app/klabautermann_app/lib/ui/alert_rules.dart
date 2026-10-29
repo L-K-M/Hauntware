@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
+import 'package:flutter/services.dart' show UndoDirection;
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostUndoableChange, showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/alert_rules_controller.dart';
@@ -9,6 +11,7 @@ import '../controllers/fleet_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'alert_notifications.dart';
 import 'alerts.dart';
+import 'app_undo.dart';
 import 'server_editing.dart';
 
 /// Hands the [AlertRulesController] to the server header and the alert
@@ -261,9 +264,9 @@ class AlertRulesPage extends StatelessWidget {
             id,
       ),
     );
-    if (edited == null) return;
+    if (edited == null || !context.mounted) return;
     try {
-      await rules.put(edited.rule, id: existing?.id, target: edited.target);
+      await putAlertRuleUndoably(context, rules, edited, existing: existing);
     } on Object catch (error) {
       if (overlay.mounted) {
         showTopToast(overlay, message: alertRuleFailureText(l10n, error));
@@ -271,34 +274,41 @@ class AlertRulesPage extends StatelessWidget {
     }
   }
 
+  /// The rule goes at once and Undo brings it back — the notice's, or the
+  /// app's undo shortcut (⌘Z, Ctrl+Z), as Finder and Notes delete.
   Future<void> _delete(BuildContext context, SyncedRule rule) async {
     final l10n = AppLocalizations.of(context);
-    final materialL10n = MaterialLocalizations.of(context);
     final overlay = Overlay.of(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        content: Text(l10n.alertRuleDeleteConfirm),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(materialL10n.cancelButtonLabel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(l10n.alertRuleDeleteAction),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
+    final history = UndoHistoryScope.maybeOf(context);
+    late final GhostUndoableChange? change;
     try {
-      await rules.remove(rule.id);
+      change = await deleteAlertRuleUndoably(context, rules, rule);
     } on Object catch (error) {
       if (overlay.mounted) {
         showTopToast(overlay, message: alertRuleFailureText(l10n, error));
       }
+      return;
     }
+    if (!overlay.mounted) return;
+    final recorded = change;
+    showTopToast(
+      overlay,
+      message: l10n.alertRuleDeleted,
+      actionLabel: recorded == null || history == null ? null : l10n.editUndo,
+      onAction: recorded == null || history == null
+          ? null
+          : () {
+              if (overlay.mounted && history.isNextUndo(recorded)) {
+                unawaited(
+                  stepUndoHistory(
+                    overlay,
+                    history,
+                    direction: UndoDirection.undo,
+                  ),
+                );
+              }
+            },
+    );
   }
 }
 
@@ -370,6 +380,11 @@ class _AlertRuleEditorState extends State<AlertRuleEditor> {
     _clearFor = TextEditingController(
       text: _minutesText(rule?.clear.duration ?? Duration.zero),
     );
+    // The Save button stays enabled only while every field is valid
+    // (ALR-01), so a change recomputes without showing errors.
+    for (final field in [_raise, _raiseFor, _clear, _clearFor]) {
+      field.addListener(_refreshValidity);
+    }
   }
 
   @override
@@ -432,6 +447,18 @@ class _AlertRuleEditorState extends State<AlertRuleEditor> {
   static Duration _minutes(String text) => Duration(
     milliseconds: (_parse(text)! * Duration.millisecondsPerMinute).round(),
   );
+
+  /// A field's text changed; [build]'s [_canSave] reads the fields again.
+  void _refreshValidity() => setState(() {});
+
+  /// Whether the form's validators would all pass, run without showing
+  /// their errors: [TextFormField.validator] still owns the messages the
+  /// fields show after a failed save or a blur.
+  bool _canSave(AppLocalizations l10n) =>
+      _validateValue(l10n, _raise.text) == null &&
+      _validateClear(l10n, _clear.text) == null &&
+      _validateMinutes(l10n, _raiseFor.text) == null &&
+      _validateMinutes(l10n, _clearFor.text) == null;
 
   void _save() {
     if (!(_form.currentState?.validate() ?? false)) return;
@@ -551,6 +578,7 @@ class _AlertRuleEditorState extends State<AlertRuleEditor> {
                         suffixText: suffix,
                       ),
                       validator: (text) => _validateValue(l10n, text),
+                      onFieldSubmitted: (_) => _save(),
                     ),
                   ),
                   Expanded(
@@ -563,6 +591,7 @@ class _AlertRuleEditorState extends State<AlertRuleEditor> {
                         labelText: l10n.alertRuleForLabel,
                       ),
                       validator: (text) => _validateMinutes(l10n, text),
+                      onFieldSubmitted: (_) => _save(),
                     ),
                   ),
                 ],
@@ -583,6 +612,7 @@ class _AlertRuleEditorState extends State<AlertRuleEditor> {
                         suffixText: suffix,
                       ),
                       validator: (text) => _validateClear(l10n, text),
+                      onFieldSubmitted: (_) => _save(),
                     ),
                   ),
                   Expanded(
@@ -595,6 +625,7 @@ class _AlertRuleEditorState extends State<AlertRuleEditor> {
                         labelText: l10n.alertRuleForLabel,
                       ),
                       validator: (text) => _validateMinutes(l10n, text),
+                      onFieldSubmitted: (_) => _save(),
                     ),
                   ),
                 ],
@@ -638,7 +669,10 @@ class _AlertRuleEditorState extends State<AlertRuleEditor> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(materialL10n.cancelButtonLabel),
         ),
-        FilledButton(onPressed: _save, child: Text(l10n.alertRuleSave)),
+        FilledButton(
+          onPressed: _canSave(l10n) ? _save : null,
+          child: Text(l10n.alertRuleSave),
+        ),
       ],
     );
   }

@@ -5,6 +5,7 @@ import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:ghost_ui/ghost_ui.dart' show SelectedTabView;
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
+import 'package:klabautermann_app/ui/desktop_shell.dart';
 import 'package:klabautermann_app/ui/fleet_rows.dart' show FleetServerList;
 import 'package:klabautermann_app/ui/server_header.dart';
 import 'package:klabautermann_app/ui/server_workspace.dart';
@@ -142,7 +143,12 @@ void main() {
       'and a word, and the runtime once the probe answers', (tester) async {
     final harness = await _openWeb1(tester, const Size(1280, 800));
 
-    expect(_inHeader(find.text('web-1')), findsOneWidget);
+    // The shell band carries the name; the header does not repeat it.
+    expect(
+      tester.widget<Text>(find.byKey(DesktopShell.serverTitleKey)).data,
+      'web-1',
+    );
+    expect(_inHeader(find.text('web-1')), findsNothing);
     expect(_inHeader(find.text('Disconnected')), findsOneWidget);
     expect(_inHeader(find.byIcon(Icons.link_off)), findsOneWidget);
     expect(_dot(tester), isNull, reason: 'nothing known, nothing to show');
@@ -337,12 +343,15 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(_inHeader(find.text(_twoEnginesText)), findsOneWidget);
-      // The phone's app bar carries the name; the header does not repeat
-      // it.
-      expect(
-        _inHeader(find.text('web-1')),
-        name == 'phone' ? findsNothing : findsOneWidget,
-      );
+      // The app bar (phone) and the shell band (desktops) carry the name;
+      // the header does not repeat it.
+      expect(_inHeader(find.text('web-1')), findsNothing);
+      if (name != 'phone') {
+        expect(
+          tester.widget<Text>(find.byKey(DesktopShell.serverTitleKey)).data,
+          'web-1',
+        );
+      }
     });
   }
 

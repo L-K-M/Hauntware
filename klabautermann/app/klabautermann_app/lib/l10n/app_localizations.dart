@@ -346,11 +346,149 @@ abstract class AppLocalizations {
   /// **'File'**
   String get menuFile;
 
+  /// Title of the Edit menu, which holds Undo and Redo on desktops.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get menuEdit;
+
   /// Title of the View menu (macOS, where it holds Enter Full Screen).
   ///
   /// In en, this message translates to:
   /// **'View'**
   String get menuView;
+
+  /// The View menu command and button that show the desktop shell's fleet rail, while it is hidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Show Sidebar'**
+  String get sidebarToggleShow;
+
+  /// The View menu command and button that hide the desktop shell's fleet rail, while it shows.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide Sidebar'**
+  String get sidebarToggleHide;
+
+  /// The View menu command and button that show the desktop shell's inspector, while it is hidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Show Inspector'**
+  String get inspectorToggleShow;
+
+  /// The View menu command and button that hide the desktop shell's inspector, while it shows.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide Inspector'**
+  String get inspectorToggleHide;
+
+  /// A side pane's toggle button tooltip: what it does, followed by its keyboard shortcut, such as "Hide Sidebar ⌃⌘S".
+  ///
+  /// In en, this message translates to:
+  /// **'{label} {keys}'**
+  String paneToggleTooltip(String label, String keys);
+
+  /// Top toast when showing or hiding a desktop side pane applied but could not be written to the device's settings file; the change holds for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save your window layout, so the change lasts only until it quits.'**
+  String get windowPanesNotSaved;
+
+  /// The Edit menu's Undo command while nothing can be undone, and the delete notice's Undo action.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get editUndo;
+
+  /// The Edit menu's Undo command while a change waits to be undone; name is the change's, such as "Pin server".
+  ///
+  /// In en, this message translates to:
+  /// **'Undo {name}'**
+  String editUndoNamed(String name);
+
+  /// The Edit menu's Redo command while nothing can be redone.
+  ///
+  /// In en, this message translates to:
+  /// **'Redo'**
+  String get editRedo;
+
+  /// The Edit menu's Redo command while an undone change waits to be redone; name is the change's.
+  ///
+  /// In en, this message translates to:
+  /// **'Redo {name}'**
+  String editRedoNamed(String name);
+
+  /// Top toast after an undo took; name is the change that was undone, such as "Pin server".
+  ///
+  /// In en, this message translates to:
+  /// **'{name} undone'**
+  String toastChangeUndone(String name);
+
+  /// Top toast after a redo took; name is the change that was redone.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} redone'**
+  String toastChangeRedone(String name);
+
+  /// Top toast when undoing the named change failed; error is what went wrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t undo “{name}”: {error}'**
+  String toastUndoFailed(String name, String error);
+
+  /// Top toast when redoing the named change failed; error is what went wrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t redo “{name}”: {error}'**
+  String toastRedoFailed(String name, String error);
+
+  /// An undoable change's name: pinning a server to the fleet rail's PINNED section.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin server'**
+  String get changePinServer;
+
+  /// An undoable change's name: taking a pinned server off the fleet rail's PINNED section.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin server'**
+  String get changeUnpinServer;
+
+  /// An undoable change's name: deleting an alert rule.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete alert rule'**
+  String get changeDeleteAlertRule;
+
+  /// An undoable change's name: changing an alert rule's fields.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit alert rule'**
+  String get changeEditAlertRule;
+
+  /// An undoable change's name: adding an alert rule.
+  ///
+  /// In en, this message translates to:
+  /// **'New alert rule'**
+  String get changeNewAlertRule;
+
+  /// The quit confirmation's title while detached operations still run; count is how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Quit while 1 operation is running?} other{Quit while {count} operations are running?}}'**
+  String quitWhileRunningTitle(int count);
+
+  /// The quit confirmation's body: quitting does not stop detached operations, whose results arrive on the next connect.
+  ///
+  /// In en, this message translates to:
+  /// **'They keep running on their servers, and Klabautermann picks up their results the next time it connects.'**
+  String get quitWhileRunningBody;
+
+  /// The quit confirmation's button that closes the window anyway.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit'**
+  String get quitWhileRunningQuit;
 
   /// Title of the Window menu (macOS, where it holds Minimize, Zoom and Bring All to Front).
   ///
@@ -12496,17 +12634,11 @@ abstract class AppLocalizations {
   /// **'Delete rule'**
   String get alertRuleDelete;
 
-  /// Confirmation before a rule is deleted.
+  /// Top toast after a rule row's delete took; its action undoes the delete.
   ///
   /// In en, this message translates to:
-  /// **'Delete this rule? It is removed on every device that syncs your account.'**
-  String get alertRuleDeleteConfirm;
-
-  /// The confirmation's delete button.
-  ///
-  /// In en, this message translates to:
-  /// **'Delete'**
-  String get alertRuleDeleteAction;
+  /// **'Alert rule deleted'**
+  String get alertRuleDeleted;
 
   /// A rule row's title: when the rule raises. op is the comparison, metric the metric's name, such as CPU busy, and value the threshold, such as 90%.
   ///
