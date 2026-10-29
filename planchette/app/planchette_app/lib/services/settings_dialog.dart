@@ -335,10 +335,17 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
   void _apply(AppSettings next) => unawaited(widget.settings.update(next));
 
-  /// Put back what was in force when the dialog opened. A live-preview dialog
-  /// that leaves a cancelled text size behind is worse than no dialog.
+  /// Restore the preview without replacing layout changes from another
+  /// window or the View menu.
   void _cancel() {
-    unawaited(widget.settings.update(_starting));
+    unawaited(
+      widget.settings.update(
+        _starting.copyWith(
+          sidebarVisible: _value.sidebarVisible,
+          sidebarWidth: _value.sidebarWidth,
+        ),
+      ),
+    );
     Navigator.of(context).pop();
   }
 }

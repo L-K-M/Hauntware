@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Hide or show the folder sidebar from View, its toolbar buttons or
+  `Ctrl+Alt+S` (`Control+Command+S` on macOS). Hiding keeps the workspace
+  connected. Its visibility and width survive a restart, and the divider
+  supports keyboard resizing.
 - Settings › Text › Font opens a searchable catalog of 23 bundled fonts.
   Preview code, ambiguous glyphs, bold and italics before applying a
   choice. Ligatures default to on and can be turned off in the picker.
@@ -16,6 +20,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   hand-edited settings file stays selected.
 
 ### Fixed
+- Sign In and Open wait for valid fields; Return submits the forms.
 - The grep cheat sheet in the find bar shows its patterns in the
   document's font. On macOS and Windows they were in the proportional
   system font.

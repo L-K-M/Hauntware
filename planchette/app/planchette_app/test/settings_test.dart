@@ -80,6 +80,29 @@ void main() {
     expect(brightnessOf(tester), Brightness.dark);
   });
 
+  testWidgets('Cancel keeps layout changes made while Settings is open', (
+    tester,
+  ) async {
+    await mount(tester, mode: ThemeMode.light);
+    await openSettings(tester);
+    await tester.tap(find.text('Dark'));
+    await tester.pumpAndSettle();
+
+    // Another window, or the native View menu, can still change layout.
+    await settings.update(
+      settings.value.copyWith(sidebarVisible: false, sidebarWidth: 420),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    await settings.flush();
+
+    expect(settings.value.themeMode, ThemeMode.light);
+    expect(settings.value.sidebarVisible, isFalse);
+    expect(settings.value.sidebarWidth, 420);
+    expect((await settingsStore.load())!.sidebarVisible, isFalse);
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
   testWidgets('a stored text size reaches every document, then and later', (
     tester,
   ) async {

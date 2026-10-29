@@ -143,6 +143,42 @@ void main() {
     },
   );
 
+  testWidgets('Sign In stays disabled until the form is filled', (
+    tester,
+  ) async {
+    final catalog = _Catalog();
+    addTearDown(catalog.dispose);
+    await open(tester, catalog);
+    FilledButton button() => tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Sign In'),
+    );
+    expect(button().onPressed, isNull);
+    await tester.enterText(field('Server URL'), 'https://suite.example');
+    await tester.pump();
+    expect(button().onPressed, isNull);
+    await tester.enterText(field('Username'), 'owner');
+    await tester.pump();
+    expect(button().onPressed, isNull);
+    await tester.enterText(field('Account password'), 'authentication');
+    await tester.pump();
+    expect(button().onPressed, isNotNull);
+  });
+
+  testWidgets('Return in a filled sign-in form submits it', (tester) async {
+    final catalog = _Catalog();
+    addTearDown(catalog.dispose);
+    await open(tester, catalog);
+    await tester.enterText(field('Server URL'), 'https://suite.example');
+    await tester.enterText(field('Username'), 'owner');
+    // The passphrase is optional; Return from the password field is enough.
+    await tester.enterText(field('Account password'), 'authentication');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(catalog.enrollment?.$3, 'authentication');
+    expect(find.text('Search servers'), findsOneWidget);
+  });
+
   testWidgets('failed enrollment stays open and busy disables submission', (
     tester,
   ) async {
@@ -150,6 +186,10 @@ void main() {
       ..signInError = 'Check your encryption passphrase.';
     addTearDown(catalog.dispose);
     await open(tester, catalog);
+    await tester.enterText(field('Server URL'), 'https://suite.example');
+    await tester.enterText(field('Username'), 'owner');
+    await tester.enterText(field('Account password'), 'authentication');
+    await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Sign In'));
     await tester.pumpAndSettle();
     expect(find.text('Check your encryption passphrase.'), findsOneWidget);
