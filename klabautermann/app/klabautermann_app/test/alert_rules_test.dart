@@ -202,13 +202,15 @@ void main() {
 
     Finder field(String label) =>
         find.widgetWithText(TextFormField, label).first;
+    // An invalid form disables Save rather than failing one (ALR-01).
     await tester.enterText(field('Raise at'), '85');
     await tester.enterText(field('Clear at'), '88');
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(
-      find.text('The clear value must not be above the raise value.'),
-      findsOneWidget,
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'))
+          .onPressed,
+      isNull,
     );
     expect(harness.engine.sentOfType<PutRule>(), isEmpty);
 
@@ -216,6 +218,13 @@ void main() {
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Held for (minutes)').first,
       '2.5',
+    );
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'))
+          .onPressed,
+      isNotNull,
     );
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
@@ -233,6 +242,35 @@ void main() {
     expect(put.rule.evalScope, RuleEvalScope.client);
     harness.engine.emit(CatalogWritten(requestId: put.requestId));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('Return in a field saves a valid form, and not an invalid '
+      'one', (tester) async {
+    final harness = await _openWeb1Rules(tester);
+
+    await tester.tap(find.text('Add rule'));
+    await tester.pumpAndSettle();
+
+    Finder field(String label) =>
+        find.widgetWithText(TextFormField, label).first;
+    // Default raise and clear are valid: Return in the field saves.
+    await tester.tap(field('Raise at'));
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(find.text('New rule'), findsNothing);
+    expect(harness.engine.sentOfType<PutRule>(), hasLength(1));
+
+    // An invalid form ignores Return.
+    await tester.tap(find.text('Add rule'));
+    await tester.pumpAndSettle();
+    await tester.enterText(field('Raise at'), 'abc');
+    await tester.tap(field('Clear at'));
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(find.text('New rule'), findsOneWidget);
+    expect(harness.engine.sentOfType<PutRule>(), hasLength(1));
   });
 
   testWidgets('editing keeps a rule\'s id and scope, and a refused delete '
@@ -253,9 +291,9 @@ void main() {
     expect(put.rule.scope, RuleScope.group);
     expect(put.rule.raise.value, 3);
 
+    // No confirmation (K3): the remove goes at once; a refusal is the
+    // error toast, not a dialog.
     await tester.tap(find.byTooltip('Delete rule').first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
     final remove = harness.engine.sentOfType<RemoveRule>().single as RemoveRule;
     expect(remove.ruleId, 'r-web1');

@@ -141,9 +141,150 @@
   "@menuFile": {
     "description": "Title of the File menu."
   },
+  "menuEdit": "Edit",
+  "@menuEdit": {
+    "description": "Title of the Edit menu, which holds Undo and Redo on desktops."
+  },
   "menuView": "View",
   "@menuView": {
     "description": "Title of the View menu (macOS, where it holds Enter Full Screen)."
+  },
+  "sidebarToggleShow": "Show Sidebar",
+  "@sidebarToggleShow": {
+    "description": "The View menu command and button that show the desktop shell's fleet rail, while it is hidden."
+  },
+  "sidebarToggleHide": "Hide Sidebar",
+  "@sidebarToggleHide": {
+    "description": "The View menu command and button that hide the desktop shell's fleet rail, while it shows."
+  },
+  "inspectorToggleShow": "Show Inspector",
+  "@inspectorToggleShow": {
+    "description": "The View menu command and button that show the desktop shell's inspector, while it is hidden."
+  },
+  "inspectorToggleHide": "Hide Inspector",
+  "@inspectorToggleHide": {
+    "description": "The View menu command and button that hide the desktop shell's inspector, while it shows."
+  },
+  "paneToggleTooltip": "{label} {keys}",
+  "@paneToggleTooltip": {
+    "description": "A side pane's toggle button tooltip: what it does, followed by its keyboard shortcut, such as \"Hide Sidebar ⌃⌘S\".",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "keys": {
+        "type": "String"
+      }
+    }
+  },
+  "windowPanesNotSaved": "Klabautermann could not save your window layout, so the change lasts only until it quits.",
+  "@windowPanesNotSaved": {
+    "description": "Top toast when showing or hiding a desktop side pane applied but could not be written to the device's settings file; the change holds for this session."
+  },
+  "editUndo": "Undo",
+  "@editUndo": {
+    "description": "The Edit menu's Undo command while nothing can be undone, and the delete notice's Undo action."
+  },
+  "editUndoNamed": "Undo {name}",
+  "@editUndoNamed": {
+    "description": "The Edit menu's Undo command while a change waits to be undone; name is the change's, such as \"Pin server\".",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "editRedo": "Redo",
+  "@editRedo": {
+    "description": "The Edit menu's Redo command while nothing can be redone."
+  },
+  "editRedoNamed": "Redo {name}",
+  "@editRedoNamed": {
+    "description": "The Edit menu's Redo command while an undone change waits to be redone; name is the change's.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "toastChangeUndone": "{name} undone",
+  "@toastChangeUndone": {
+    "description": "Top toast after an undo took; name is the change that was undone, such as \"Pin server\".",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "toastChangeRedone": "{name} redone",
+  "@toastChangeRedone": {
+    "description": "Top toast after a redo took; name is the change that was redone.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "toastUndoFailed": "Couldn’t undo “{name}”: {error}",
+  "@toastUndoFailed": {
+    "description": "Top toast when undoing the named change failed; error is what went wrong.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "toastRedoFailed": "Couldn’t redo “{name}”: {error}",
+  "@toastRedoFailed": {
+    "description": "Top toast when redoing the named change failed; error is what went wrong.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "changePinServer": "Pin server",
+  "@changePinServer": {
+    "description": "An undoable change's name: pinning a server to the fleet rail's PINNED section."
+  },
+  "changeUnpinServer": "Unpin server",
+  "@changeUnpinServer": {
+    "description": "An undoable change's name: taking a pinned server off the fleet rail's PINNED section."
+  },
+  "changeDeleteAlertRule": "Delete alert rule",
+  "@changeDeleteAlertRule": {
+    "description": "An undoable change's name: deleting an alert rule."
+  },
+  "changeEditAlertRule": "Edit alert rule",
+  "@changeEditAlertRule": {
+    "description": "An undoable change's name: changing an alert rule's fields."
+  },
+  "changeNewAlertRule": "New alert rule",
+  "@changeNewAlertRule": {
+    "description": "An undoable change's name: adding an alert rule."
+  },
+  "quitWhileRunningTitle": "{count, plural, =1{Quit while 1 operation is running?} other{Quit while {count} operations are running?}}",
+  "@quitWhileRunningTitle": {
+    "description": "The quit confirmation's title while detached operations still run; count is how many.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "quitWhileRunningBody": "They keep running on their servers, and Klabautermann picks up their results the next time it connects.",
+  "@quitWhileRunningBody": {
+    "description": "The quit confirmation's body: quitting does not stop detached operations, whose results arrive on the next connect."
+  },
+  "quitWhileRunningQuit": "Quit",
+  "@quitWhileRunningQuit": {
+    "description": "The quit confirmation's button that closes the window anyway."
   },
   "menuWindow": "Window",
   "@menuWindow": {
@@ -11765,13 +11906,9 @@
   "@alertRuleDelete": {
     "description": "Tooltip of a rule row's delete button."
   },
-  "alertRuleDeleteConfirm": "Delete this rule? It is removed on every device that syncs your account.",
-  "@alertRuleDeleteConfirm": {
-    "description": "Confirmation before a rule is deleted."
-  },
-  "alertRuleDeleteAction": "Delete",
-  "@alertRuleDeleteAction": {
-    "description": "The confirmation's delete button."
+  "alertRuleDeleted": "Alert rule deleted",
+  "@alertRuleDeleted": {
+    "description": "Top toast after a rule row's delete took; its action undoes the delete."
   },
   "alertRuleCondition": "{op, select, greaterThan{{metric} above {value}} greaterOrEqual{{metric} at or above {value}} lessThan{{metric} below {value}} other{{metric} at or below {value}}}",
   "@alertRuleCondition": {

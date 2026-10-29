@@ -437,7 +437,14 @@ void main() {
       final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
       expect(
         [for (final menu in bar.menus) (menu as PlatformMenu).label],
-        ['Klabautermann $kPreviewLabel', 'File', 'View', 'Window', 'Help'],
+        [
+          'Klabautermann $kPreviewLabel',
+          'File',
+          'Edit',
+          'View',
+          'Window',
+          'Help',
+        ],
       );
       expect('${pushes.last}', contains('Settings…'));
 
@@ -471,6 +478,62 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
       await tester.pumpAndSettle();
       expect(opened, [SettingsTab.general, SettingsTab.general]);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+    testWidgets('macOS: native Undo leaves a read-only focused field alone', (
+      tester,
+    ) async {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.menu,
+        (_) async => null,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.menu,
+          null,
+        ),
+      );
+      var undone = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.macOS),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: AppMenuHost(
+            commands: [
+              AppCommand(
+                id: kEditUndoCommandId,
+                label: (_) => 'Undo Pin server',
+                activators: (_) => const [
+                  SingleActivator(LogicalKeyboardKey.keyZ, meta: true),
+                ],
+                run: (_) async => undone++,
+                menuPlacement: const CommandMenuPlacement(
+                  menu: AppMenuId.edit,
+                  order: 10,
+                ),
+              ),
+            ],
+            child: const Scaffold(
+              body: TextField(readOnly: true, autofocus: true),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<EditableText>(find.byType(EditableText))
+            .focusNode
+            .hasFocus,
+        isTrue,
+      );
+      final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
+      _item(bar, 'Undo Pin server').onSelected!();
+      await tester.pumpAndSettle();
+      expect(undone, 0);
     }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
     testWidgets('macOS: About Klabautermann opens the app\'s About dialog, '

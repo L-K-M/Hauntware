@@ -63,9 +63,40 @@ class _AppMenuHostState extends State<AppMenuHost> {
   );
 
   @override
+  void initState() {
+    super.initState();
+    FocusManager.instance.addLateKeyEventHandler(_pageHistoryKey);
+  }
+
+  @override
   void dispose() {
+    FocusManager.instance.removeLateKeyEventHandler(_pageHistoryKey);
     _initialFocus.dispose();
     super.dispose();
+  }
+
+  /// Page routes sit beside the home route's chord scope. History keys
+  /// reach them after focused controls decline; dialogs keep their keys.
+  KeyEventResult _pageHistoryKey(KeyEvent event) {
+    final focus = FocusManager.instance.primaryFocus?.context;
+    if (focus == null ||
+        focus.findAncestorWidgetOfExactType<EditableText>() != null) {
+      return KeyEventResult.ignored;
+    }
+    final route = ModalRoute.of(focus);
+    if (route is! PageRoute || !route.isCurrent) return KeyEventResult.ignored;
+    final platform = Theme.of(context).platform;
+    return dispatchGhostChord([
+      for (final command in widget.commands)
+        if (command.id == kEditUndoCommandId ||
+            command.id == kEditRedoCommandId)
+          for (final activator in command.activators(platform))
+            GhostChordBinding(
+              activator: activator,
+              repeats: command.repeats,
+              onInvoke: () => _run(command.id),
+            ),
+    ], event);
   }
 
   void _run(String? id) {
@@ -105,7 +136,8 @@ class _AppMenuHostState extends State<AppMenuHost> {
           for (final activator in command.activators(platform))
             GhostChordBinding(
               activator: activator,
-              repeats: false,
+              repeats: command.repeats,
+              leftAltOnly: command.leftAltOnly,
               onInvoke: () => _run(command.id),
             ),
       ],
@@ -167,12 +199,36 @@ class _AppMenuHostState extends State<AppMenuHost> {
     }
     final built = ghostPlatformMenus(
       menus,
-      activate: (spec, _) =>
-          () => _run(spec.id),
+      activate: (spec, shortcut) =>
+          () => _activateNative(spec.id, shortcut),
     );
     _menuSignature = signature;
     _platformMenus = built;
     return built;
+  }
+
+  /// Runs a menu item activated natively (click or key equivalent).
+  ///
+  /// A natively bound key equivalent reaches the menu before a focused
+  /// text field sees the keystroke, so a chord a text surface owns
+  /// outright (the suite's ⌘Z/⇧⌘Z, ghost_ui's `ghostEditingTextIntent`)
+  /// re-dispatches the matching text intent to that field instead of
+  /// running the command. When the field's handler is absent or disabled
+  /// (a read-only field's Undo, say), the command runs as usual rather
+  /// than the key equivalent being swallowed.
+  void _activateNative(String? id, MenuSerializableShortcut? shortcut) {
+    final intent = shortcut == null ? null : ghostEditingTextIntent(shortcut);
+    final focusContext = FocusManager.instance.primaryFocus?.context;
+    if (intent != null &&
+        focusContext != null &&
+        focusContext.findAncestorWidgetOfExactType<EditableText>() != null) {
+      final action = Actions.maybeFind(focusContext, intent: intent);
+      if (action != null && action.isEnabled(intent)) {
+        Actions.invoke(focusContext, intent);
+        return;
+      }
+    }
+    _run(id);
   }
 }
 

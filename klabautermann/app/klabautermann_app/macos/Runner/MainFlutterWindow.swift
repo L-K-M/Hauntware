@@ -7,6 +7,10 @@ class MainFlutterWindow: NSWindow {
   /// Settings in a window of its own (SettingsWindow.swift).
   private var settingsWindow: SettingsWindowHost?
 
+  /// The checked states of Flutter's PlatformMenuBar items
+  /// (MenuChecks.swift).
+  private var menuChecks: MenuChecks?
+
   /// `klabautermann/window`: the toolbar band's state for the Dart side
   /// (ghost_desktop's MacosToolbarBandChannel).
   private var windowChannel: FlutterMethodChannel?
@@ -55,6 +59,12 @@ class MainFlutterWindow: NSWindow {
 
     settingsWindow = SettingsWindowHost(
       mainWindow: self,
+      messenger: flutterViewController.engine.binaryMessenger)
+
+    // `klabautermann/menu_checks` (Poltergeist's MenuChecks.swift): puts
+    // the checked state Flutter's menu plugin cannot set on the View
+    // menu's pane toggles.
+    menuChecks = MenuChecks(
       messenger: flutterViewController.engine.binaryMessenger)
 
     // Full screen: AppKit keeps a window's toolbar permanently visible in

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
+import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/app_identity.dart';
@@ -18,6 +19,7 @@ import 'package:klabautermann_app/controllers/log_display.dart';
 import 'package:klabautermann_app/controllers/time_display.dart';
 import 'package:klabautermann_app/controllers/sync_secrets_controller.dart';
 import 'package:klabautermann_app/controllers/threshold_controller.dart';
+import 'package:klabautermann_app/controllers/window_panes.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/device_name.dart';
@@ -499,12 +501,16 @@ void main() {
       final prompts = PromptController(engine);
       final coverage = CoverageController(firstRunCardDismissed: true);
       final dockerNotice = DockerNoticeController();
+      final windowPanes = WindowPanesController();
+      final undoHistory = GhostUndoHistory();
       addTearDown(() async {
         fleet.dispose();
         monitoring.dispose();
         prompts.dispose();
         coverage.dispose();
         dockerNotice.dispose();
+        windowPanes.dispose();
+        undoHistory.dispose();
         await engine.close();
       });
       final remote = await connectWindow(tester, tab);
@@ -521,6 +527,8 @@ void main() {
                 coverage: coverage,
                 announcements: announcements,
                 dockerNotice: dockerNotice,
+                windowPanes: windowPanes,
+                undoHistory: undoHistory,
               ),
             ),
             Expanded(child: SettingsWindowApp(remote: remote)),

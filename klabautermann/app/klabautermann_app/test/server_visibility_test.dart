@@ -229,6 +229,8 @@ void main() {
         coverage: harness.coverage,
         announcements: harness.announcements,
         dockerNotice: harness.dockerNotice,
+        windowPanes: harness.windowPanes,
+        undoHistory: harness.undoHistory,
       ),
     );
     await tester.pumpAndSettle();

@@ -1,7 +1,10 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
 import 'package:klabautermann_app/app.dart';
+import 'package:klabautermann_app/controllers/app_lock_controller.dart';
+import 'package:klabautermann_app/ui/actions/quit_guard.dart';
 import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/alert_center.dart';
 import 'package:klabautermann_app/controllers/alert_notifications.dart';
@@ -19,6 +22,7 @@ import 'package:klabautermann_app/controllers/prompt_controller.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/controllers/server_editor_controller.dart';
 import 'package:klabautermann_app/controllers/sync_controller.dart';
+import 'package:klabautermann_app/controllers/window_panes.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/services/hand_off.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
@@ -56,6 +60,8 @@ final class AppHarness {
     this.alertRules,
     this.alertNotifications,
     this.operations,
+    required this.windowPanes,
+    required this.undoHistory,
   });
 
   final FakeEngineClient engine;
@@ -73,6 +79,8 @@ final class AppHarness {
   final AlertRulesController? alertRules;
   final AlertNotificationsController? alertNotifications;
   final OperationsController? operations;
+  final WindowPanesController windowPanes;
+  final GhostUndoHistory undoHistory;
 
   void dispose() {
     fleet.dispose();
@@ -94,6 +102,8 @@ final class AppHarness {
     alertRules?.dispose();
     alertNotifications?.dispose();
     operations?.dispose();
+    windowPanes.dispose();
+    undoHistory.dispose();
   }
 }
 
@@ -154,6 +164,9 @@ Future<AppHarness> pumpApp(
   HandOffLauncher? handOff,
   Duration linkGrace = Duration.zero,
   bool palette = false,
+  WindowPanesController? windowPanes,
+  GhostUndoHistory? undoHistory,
+  AppLockController? appLock,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -201,8 +214,19 @@ Future<AppHarness> pumpApp(
           )
         : null,
     operations: operations ? OperationsController(engine) : null,
+    windowPanes: windowPanes ?? WindowPanesController(),
+    undoHistory: undoHistory ?? GhostUndoHistory(),
   );
+  final quitGuard = switch (harness.operations) {
+    final operations? => AppQuitGuard(
+      operations: operations,
+      contextOf: () => appNavigatorKey.currentContext,
+      lock: appLock,
+    ),
+    null => null,
+  };
   addTearDown(() async {
+    quitGuard?.dispose();
     harness.dispose();
     await engine.close();
   });
@@ -237,6 +261,9 @@ Future<AppHarness> pumpApp(
       appVersion: appVersion,
       handOff: handOff,
       navigation: palette ? WorkspaceNavigation(harness.fleet) : null,
+      windowPanes: harness.windowPanes,
+      undoHistory: harness.undoHistory,
+      appLock: appLock,
     ),
   );
   await tester.pumpAndSettle();
