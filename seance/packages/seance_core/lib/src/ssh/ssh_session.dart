@@ -761,12 +761,18 @@ class SshSession implements SessionTransport {
       // for the session would keep this device's own server off it.
       preferredPort: port >= 1024 ? port : 0,
     );
-    // A failed bind leaves nothing to reuse; the next call tries again.
-    opening.then<void>((_) {}, onError: (Object _) {
+    // A failed bind, or a forward that closed on its own, leaves nothing to
+    // reuse; the next call binds again.
+    void forget() {
       if (identical(_loopbackForwards[key], opening)) {
         _loopbackForwards.remove(key);
       }
-    });
+    }
+
+    opening.then<void>(
+      (forward) => forward.done.then((_) => forget()),
+      onError: (Object _) => forget(),
+    );
     return opening;
   }
 

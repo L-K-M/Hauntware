@@ -111,6 +111,7 @@ void main() {
     await ended.timeout(const Duration(seconds: 5));
     expect(stream.closed, isTrue);
     expect(forward.isClosed, isTrue);
+    await forward.done.timeout(const Duration(seconds: 1));
     await expectLater(
       Socket.connect(InternetAddress.loopbackIPv4, forward.port),
       throwsA(isA<SocketException>()),

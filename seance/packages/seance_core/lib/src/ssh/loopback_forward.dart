@@ -57,10 +57,16 @@ final class LoopbackForward {
 
   bool get isClosed => _closed;
 
+  /// Completes once the forward has closed, by [close] or on its own when
+  /// its listener fails.
+  Future<void> get done => _done.future;
+  final _done = Completer<void>();
+
   /// Stops listening and ends every relayed connection.
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    _done.complete();
     await _accepting.cancel();
     await _listener.close();
     for (final (:client, :stream) in [..._connections]) {
