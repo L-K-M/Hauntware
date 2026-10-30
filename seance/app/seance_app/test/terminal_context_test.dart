@@ -350,6 +350,13 @@ void main() {
         'path:/srv/db',
       ]);
       expect(_values('    source: ./conf'), ['path:/home/me/project/conf']);
+      expect(_values('    target: "/etc/nginx/conf.d"'), isEmpty);
+      expect(_values("  - mountPath: '/var/lib/data'"), isEmpty);
+      // On a later line of a multi-line text, too.
+      expect(
+        _values('volumes:\n  - source: ./conf\n    target: /etc/nginx\n'),
+        ['path:/home/me/project/conf'],
+      );
     });
 
     test('reads bracketed route segments as part of a path', () {

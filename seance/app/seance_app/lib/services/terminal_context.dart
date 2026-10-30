@@ -358,7 +358,8 @@ ContextItem? _pathItem(
   // A mount's container side as a key of Compose's or Kubernetes' YAML
   // (`target: /etc/nginx`, `- mountPath: /data`) or of `docker inspect`
   // (`"Destination": "/var/lib/mysql"`).
-  if (_yamlMountKey.hasMatch(text.substring(0, match.start)) ||
+  final lineStart = text.lastIndexOf('\n', match.start) + 1;
+  if (_yamlMountKey.hasMatch(text.substring(lineStart, match.start)) ||
       _jsonMountKey.hasMatch(
         text.substring(match.start < 20 ? 0 : match.start - 20, match.start),
       )) {
@@ -548,9 +549,10 @@ final _frameOffset = RegExp(r'\(\+0x[0-9A-Fa-f]+\)');
 
 final _mountTargetBefore = RegExp(r'\b(?:dst|target|destination)=$');
 
-/// A YAML key that names a mount's container side, alone on its line.
+/// A YAML key that names a mount's container side, alone on its line, and
+/// the quote its value may open with.
 final _yamlMountKey = RegExp(
-  r'^\s*(?:-\s+)?(?:target|destination|mountPath|containerPath):\s*$',
+  r'''^\s*(?:-\s+)?(?:target|destination|mountPath|containerPath):\s*['"]?$''',
 );
 
 /// A `docker inspect` key that names a mount's container side.
