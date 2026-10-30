@@ -35,14 +35,20 @@ void main() {
       }
     });
 
-    test('keeps the path and query through the forward', () {
-      expect(
-        throughLoopback(
-          Uri.parse('http://localhost:3000/a/b?c=1#d'),
-          41234,
-        ).toString(),
-        'http://127.0.0.1:41234/a/b?c=1#d',
-      );
+    test('keeps the path, query and localhost name through the forward', () {
+      for (final (link, here) in [
+        ('http://localhost:3000/a/b?c=1#d', 'http://localhost:41234/a/b?c=1#d'),
+        ('https://app.localhost:8443/', 'https://app.localhost:41234/'),
+        ('http://127.0.0.1:8000/docs', 'http://127.0.0.1:41234/docs'),
+        ('http://[::1]:8080/', 'http://127.0.0.1:41234/'),
+        ('http://0.0.0.0:8000/', 'http://127.0.0.1:41234/'),
+      ]) {
+        expect(
+          throughLoopback(Uri.parse(link), 41234).toString(),
+          here,
+          reason: link,
+        );
+      }
     });
   });
 
@@ -74,7 +80,7 @@ void main() {
       );
 
       expect(transport.targets, [('localhost', 3000)]);
-      expect(here!.host, '127.0.0.1');
+      expect(here!.host, 'localhost');
       expect(here.port, transport.forwards.single.port);
       expect(here.path, '/app');
       expect(here.query, 'x=1');

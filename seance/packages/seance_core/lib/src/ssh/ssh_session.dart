@@ -756,7 +756,10 @@ class SshSession implements SessionTransport {
 
     final opening = _loopbackForwards[key] = LoopbackForward.bind(
       () async => ChannelByteDuplex(await client.forwardLocal(host, port)),
-      preferredPort: port,
+      // A port below 1024 is not taken here even when free: macOS and
+      // Windows let any process bind one on loopback, and holding 80 or 443
+      // for the session would keep this device's own server off it.
+      preferredPort: port >= 1024 ? port : 0,
     );
     // A failed bind leaves nothing to reuse; the next call tries again.
     opening.then<void>((_) {}, onError: (Object _) {
