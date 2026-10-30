@@ -66,9 +66,14 @@ final class LoopbackForward {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    _done.complete();
-    await _accepting.cancel();
-    await _listener.close();
+    // Done once the port is free again, so a forward bound after it can
+    // take the same one.
+    try {
+      await _accepting.cancel();
+      await _listener.close();
+    } finally {
+      _done.complete();
+    }
     for (final (:client, :stream) in [..._connections]) {
       client.destroy();
       unawaited(stream.close());
