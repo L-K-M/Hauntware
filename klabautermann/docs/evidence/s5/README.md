@@ -140,7 +140,8 @@ M7's performance pass reran the two ahead-of-time scenarios on main at
 `m7-phone-aot.json` (`--scenario phone --seconds 300`) and
 `m7-ten-hosts-core-2s-aot.json` (`--scenario tenHostsCoreAt2s --seconds
 120`), on 2026-10-30 with Dart 3.13.2 in the same kind of shared 4-CPU
-container. The engine's per-tick cost and memory did not move since M2:
+container. The engine's median per-tick cost, reply bytes and memory match
+M2's; the tail values vary with the shared machine's load:
 
 | Figure | Phone, M2 | Phone, M7 | Ten hosts, M2 | Ten hosts, M7 |
 |---|---|---|---|---|
@@ -153,8 +154,7 @@ container. The engine's per-tick cost and memory did not move since M2:
 The replay reads the same hand-written fixtures, so the figures cover the
 frame reader, the sample pipeline and the journal path; M3 to M6's new
 collectors (`gpu`, `smart` and the other slow ones) are not replayed, as
-under "Not covered" above. The tail values move with the shared
-machine's load. Like part 1's, these numbers set no budget.
+under "Not covered" above. Like part 1's, these numbers set no budget.
 
 ## Part 2: UI frame timing under Xvfb
 

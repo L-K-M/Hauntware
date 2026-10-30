@@ -2715,9 +2715,9 @@ open below and under the manual gates.
 | Scope | Evidence | Status |
 |---|---|---|
 | `INSTALL.md` and the coverage explainer | [INSTALL.md](INSTALL.md) (assets, checksums, each platform's first launch, the Flatpak's `~/.ssh` limit, what the app needs and leaves on a server) and [COVERAGE.md](COVERAGE.md) (T0 in the app's own words, gaps, phones' background pause, the planned opt-in tiers) | done |
-| Performance pass, engine side | The engine budget harness reran on main after M6 ([evidence](evidence/s5/README.md#m7-rerun)): per-tick engine time, reply bytes and the resident set match M2's; CI's frame-timing job keeps measuring the UI on main pushes | done |
+| Performance pass, engine side | The engine budget harness reran on main after M6 ([evidence](evidence/s5/README.md#m7-rerun)): the median per-tick engine time, reply bytes and the resident set match M2's, and the tails vary with the shared machine's load; CI's frame-timing job keeps measuring the UI on main pushes | done |
 | Release dry run | `scripts/release.sh --check` with `lkm-release` 1.1.0 resolves the suite at 1.9.3 across 28 pubspecs with a clean tree and names the Klabautermann preview apps in its CI note; v1.9.3 is already tagged, so the next release takes a new version. Every PR's CI builds the clients a release ships | done |
-| Hardening from main's CI | A host that resets the SSH handshake ended the engine isolate (an unawaited dartssh2 close failing with broken pipe); seance_core's tapped socket now absorbs it, with a regression test | done |
+| Hardening from main's CI | A host that resets the SSH handshake ended the engine isolate (an unawaited dartssh2 close failing with broken pipe); seance_core's tapped socket now absorbs it, with a regression test in `seance_core/test/ssh_client_limitation_test.dart` (#573) | done |
 | Tier A fixture expansion from user-style captures | Needs captures from users' hosts | open |
 | Battery pass and device frame timing | Needs phones | open |
 | Manual checklist on every platform; owner sign-off | 06's manual gates | open |
