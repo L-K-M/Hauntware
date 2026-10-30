@@ -9,7 +9,10 @@ library;
 String? serverItselfHost(Uri link) {
   if (link.scheme != 'http' && link.scheme != 'https') return null;
   final host = link.host.toLowerCase();
-  if (host == 'localhost' || host.endsWith('.localhost')) return host;
+  if (host == 'localhost') return host;
+  // Only browsers and some resolvers map `*.localhost` to loopback, so the
+  // server connects to its address; the URL opened here keeps the name.
+  if (host.endsWith('.localhost')) return '127.0.0.1';
   if (host == '0.0.0.0') return '127.0.0.1';
   if (host == '::') return '::1';
   if (host == '::1') return host;

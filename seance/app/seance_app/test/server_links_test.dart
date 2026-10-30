@@ -11,7 +11,7 @@ void main() {
     test('names the loopback hosts a server prints about itself', () {
       for (final (link, host) in [
         ('http://localhost:3000/', 'localhost'),
-        ('http://app.localhost:5173/', 'app.localhost'),
+        ('http://app.localhost:5173/', '127.0.0.1'),
         ('http://127.0.0.1:8000/docs', '127.0.0.1'),
         ('http://127.1.2.3/', '127.1.2.3'),
         ('http://[::1]:8080/', '::1'),
