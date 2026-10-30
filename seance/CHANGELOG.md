@@ -37,6 +37,11 @@
   Only finished lines on the main screen are read, so a full-screen
   program, a half-typed path or a prompt's own directory adds nothing.
   The stack keeps the last 50 items and is not saved.
+- Resizing the window no longer scrambles or loses the terminal's rows
+  once its scrollback is full or after `clear` empties it, and a round
+  trip through a one-column window keeps the text whole. Erasing to the
+  start of a line (`ESC[1K`) at its first column no longer drops the
+  rest of the output.
 - The Git pane and the terminal's tab now follow a TrueNAS shell, or
   any Linux shell that reports no directory, as Files already did: all
   three share one read of the shell's directory, and trust it over a

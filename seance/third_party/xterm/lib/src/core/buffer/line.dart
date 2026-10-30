@@ -152,9 +152,16 @@ class BufferLine with IndexedItem {
       eraseCell(start - 1, style);
     }
 
-    // reset cell one to the right if end is second cell of a wide char
-    if (end < _length && getWidth(end - 1) == 2) {
-      eraseCell(end - 1, style);
+    // [seance fork] reset the cell at end if it is the empty second cell of
+    // a wide char the range ends on, not a character written over it.
+    // Upstream erased end - 1, which the loop below erases anyway, and read
+    // cell -1 for an empty range (PATCHES.md 47).
+    if (end > 0 &&
+        end < _length &&
+        getWidth(end - 1) == 2 &&
+        getWidth(end) == 0 &&
+        getCodePoint(end) == 0) {
+      eraseCell(end, style);
     }
 
     end = min(end, _length);

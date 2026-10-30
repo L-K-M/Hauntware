@@ -13,10 +13,9 @@ String _firstLine(Terminal terminal) {
   return text.toString();
 }
 
-/// Reflowing through any widths of two columns or more and back keeps a
-/// line's text, wide characters included (PATCHES.md 43 and 44). Upstream
-/// 4.0.0 duplicated a cell at the end of such lines; one column is still
-/// not covered (PATCHES.md 45).
+/// Reflowing through any widths and back keeps a line's text, wide
+/// characters included (PATCHES.md 43 to 45 and 48). Upstream 4.0.0
+/// duplicated a cell at the end of such lines and hung at one column.
 void main() {
   test('reflow() keeps a line\'s text through random resizes', () {
     const alphabet = 'ab/.c文档报二零';
@@ -28,11 +27,11 @@ void main() {
           alphabet.codeUnitAt(random.nextInt(alphabet.length)),
       ]);
       final terminal = Terminal();
-      final widths = [2 + random.nextInt(40)];
+      final widths = [1 + random.nextInt(41)];
       terminal.resize(widths.first, 10);
       terminal.write(text);
       for (var k = 0; k < 4; k++) {
-        widths.add(2 + random.nextInt(45));
+        widths.add(1 + random.nextInt(46));
         terminal.resize(widths.last, 10);
       }
       terminal.resize(80, 10);
