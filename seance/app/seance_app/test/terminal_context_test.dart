@@ -342,6 +342,33 @@ void main() {
       expect(watch.elapsedMilliseconds, lessThan(500));
     });
 
+    test('leaves out a mount\'s container side in YAML and JSON', () {
+      expect(_values('    target: /etc/nginx/conf.d'), isEmpty);
+      expect(_values('  - mountPath: /var/lib/data'), isEmpty);
+      expect(_values('        "Destination": "/var/lib/mysql",'), isEmpty);
+      expect(_values('{"Type":"bind","Source":"/srv/db","Target":"/data"}'), [
+        'path:/srv/db',
+      ]);
+      expect(_values('    source: ./conf'), ['path:/home/me/project/conf']);
+    });
+
+    test('reads bracketed route segments as part of a path', () {
+      expect(_values('app/blog/[slug]/page.tsx'), [
+        'path:/home/me/project/app/blog/[slug]/page.tsx',
+      ]);
+      expect(_values('pages/[...slug].tsx'), [
+        'path:/home/me/project/pages/[...slug].tsx',
+      ]);
+      expect(_values('app/[[...rest]]/page.tsx'), [
+        'path:/home/me/project/app/[[...rest]]/page.tsx',
+      ]);
+      expect(_values('app/(marketing)/about/page.tsx'), [
+        'path:/home/me/project/app/(marketing)/about/page.tsx',
+      ]);
+      expect(_values('[INFO] /var/log/syslog'), ['path:/var/log/syslog']);
+      expect(_values('see [docs](/guide/start.md)'), ['path:/guide/start.md']);
+    });
+
     test('offers the host side of a mount, not the container\'s', () {
       expect(
         _values('docker run -v /srv/postgres:/var/lib/postgresql/data pg'),

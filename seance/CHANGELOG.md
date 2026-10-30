@@ -42,6 +42,11 @@
   trip through a one-column window keeps the text whole. Erasing to the
   start of a line (`ESC[1K`) at its first column no longer drops the
   rest of the output.
+- The Context tab reads framework route folders such as
+  `app/blog/[slug]/page.tsx` and `app/(marketing)/about/page.tsx` as one
+  path, and leaves out a mount's container side in Compose and
+  Kubernetes YAML (`target:`, `mountPath:`) and in `docker inspect`
+  (`"Destination":`).
 - The Git pane and the terminal's tab now follow a TrueNAS shell, or
   any Linux shell that reports no directory, as Files already did: all
   three share one read of the shell's directory, and trust it over a
