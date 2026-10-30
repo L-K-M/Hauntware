@@ -65,9 +65,9 @@ jobs:
         timeout-minutes: 170
         continue-on-error: true
         # Pin privileged third-party actions to an immutable commit.
-        # b44215f = v0.0.16. Verify before bumping:
-        #   git ls-remote https://github.com/L-K-M/zai-code-review 'refs/tags/v0.0.16*'
-        uses: L-K-M/zai-code-review@b44215f6c1b4fb7eeacad0756449d45b66f3c4ff
+        # 7e2222d = v0.0.17. Verify before bumping:
+        #   git ls-remote https://github.com/L-K-M/zai-code-review 'refs/tags/v0.0.17*'
+        uses: L-K-M/zai-code-review@7e2222dd5ea9f0c36f9c3683118752ab424d2b35
         with:
           ZAI_API_KEY: ${{ env.ZAI_API_KEY }}
           # Xiaomi MiMo reviews the chunks Z.ai still fails on (rate limits,
@@ -101,7 +101,9 @@ jobs:
           # at all (finish reason "length", 116k to 123k reasoning characters),
           # and each of those cost a wasted request plus the two smaller ones
           # the action then retries with. Bigger chunks would hit that more
-          # often, not less.
+          # often, not less. Since v0.0.17 a section that overflows is first
+          # retried whole at low reasoning effort: splitting alone failed at
+          # every size on #568's dense code and ran out of time twice.
           MAX_CHUNK_CHARS: 25000
           ZAI_REVIEWER_NAME: GLM 5.3 Code Review
           GITHUB_TOKEN: ${{ github.token }}
@@ -116,8 +118,8 @@ jobs:
         # the first attempt — no review-semantics change.
         if: ${{ env.ZAI_API_KEY != '' && steps.review.outcome == 'failure' }}
         timeout-minutes: 170
-        # Same immutable pin as the first attempt (b44215f = v0.0.16).
-        uses: L-K-M/zai-code-review@b44215f6c1b4fb7eeacad0756449d45b66f3c4ff
+        # Same immutable pin as the first attempt (7e2222d = v0.0.17).
+        uses: L-K-M/zai-code-review@7e2222dd5ea9f0c36f9c3683118752ab424d2b35
         with:
           ZAI_API_KEY: ${{ env.ZAI_API_KEY }}
           # Xiaomi MiMo reviews the chunks Z.ai still fails on (rate limits,
