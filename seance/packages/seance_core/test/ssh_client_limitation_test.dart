@@ -5,7 +5,7 @@
 // RFC 4253's layout rather than against the library it watches.
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show SocketException;
+import 'dart:io' show InternetAddress, ServerSocket, SocketException;
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -457,6 +457,26 @@ void main() {
         expect(offer, isNull);
       });
     });
+
+    // A host that resets the connection, as a restarting container's
+    // published port does, fails dartssh2's first writes; its transport
+    // then closes the socket without awaiting it, and that close fails
+    // with the same error. Any uncaught error fails the test, as it would
+    // end the isolate that holds the link.
+    test('a host that resets the handshake leaves no uncaught error', () async {
+      final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(server.close);
+      server.listen((socket) => socket.destroy());
+
+      for (var attempt = 0; attempt < 5; attempt++) {
+        final socket = await SSHSocket.connect('127.0.0.1', server.port);
+        // Lets the reset arrive before the client writes.
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        final client = SSHClient(ServerKexTap().observe(socket), username: 'u');
+        await expectLater(client.authenticated, throwsA(anything));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
   });
 
   group('ServerKexInit', () {
@@ -720,10 +740,7 @@ void main() {
     test('a server that disconnects before its KEXINIT stays other', () async {
       // A DISCONNECT carries the server's own reason.
       final failure = await _connectFailure(
-        _ScriptedServer(
-          latin1.encode(_identification),
-          then: _Then.disconnect,
-        ),
+        _ScriptedServer(latin1.encode(_identification), then: _Then.disconnect),
       );
       expect(failure, _ofKind(SshConnectFailureKind.other));
     });
