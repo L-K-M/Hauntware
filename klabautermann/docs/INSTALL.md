@@ -28,7 +28,7 @@ shasum -a 256 -c SHA256SUMS.mac   # expect: ...zip: OK
 
 # Windows (PowerShell)
 Get-FileHash .\klabautermann-preview-windows-x64.zip -Algorithm SHA256
-# compare the printed hash with the release-notes line for that file
+# compare it, ignoring case, with the release-notes line for that file
 ```
 
 The checksums are computed by CI beside the artifacts, so they catch a
@@ -66,8 +66,9 @@ choose **More info**, then **Run anyway**.
 Four assets; pick one:
 
 - `klabautermann_<version>-1_amd64.deb` (Debian, Ubuntu):
-  `sudo apt install ./klabautermann_*_amd64.deb`. apt resolves the
-  dependencies from the package.
+  `sudo apt install ./klabautermann_*_amd64.deb`. apt reads the
+  dependency list from the package and installs it from your configured
+  repositories.
 - `klabautermann-preview-linux-x64.flatpak` (any distribution with
   Flatpak): `flatpak install klabautermann-preview-linux-x64.flatpak`. It
   pulls the GNOME runtime from Flathub on first install.
@@ -110,8 +111,10 @@ download updates.
 
 The APK is signed with a committed, deliberately public key. That is what
 lets each release's APK upgrade an installed one in place; it also means
-a matching signature proves nothing about origin, which is why the
-checksum check above matters. If the key is ever replaced, existing
+anyone can build an APK that Android accepts as an update, so a matching
+signature proves nothing about origin. Install only an APK you downloaded
+from this repository's Releases page, checked against `SHA256SUMS` on a
+computer before you copy it to the phone. If the key is ever replaced, existing
 installs must be uninstalled first, and the release notes will say so.
 
 A phone reads servers only while Klabautermann is in the foreground (see
