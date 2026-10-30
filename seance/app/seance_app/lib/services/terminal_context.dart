@@ -153,6 +153,16 @@ const _pathTrailing = '.,!?’';
 /// ends a path only one an opening quote started, or the path's end.
 const _pathChars = r'''[^\s'"`<>|;:,(){}\[\]‘“”…、，；]''';
 
+/// A route segment that frameworks name with brackets, which otherwise end
+/// a path: Next.js's `[slug]`, `[...slug]`, `[[...slug]]` and `(group)`,
+/// SvelteKit's `[id]`. It fills a whole segment, so `[INFO]` before a path
+/// or a Markdown `[text](/path)` stays outside.
+const _routeSegment =
+    r'(?<=/)(?:\[\[?(?:\.\.\.)?[\w-]+\]\]?|\([\w-]+\))(?=[/.\s]|$)';
+
+/// What a path is made of after its first `/`.
+const _pathPart = '(?:$_routeSegment|$_pathChars)';
+
 /// CJK punctuation that is in a name or after one: `。：！？「」『』（）`.
 final _cjkPunctuation = RegExp('[。：！？「」『』（）]');
 
@@ -224,7 +234,7 @@ const _closingQuote = {'‘': '’', '“': '”'};
 /// (`</title>`).
 final _pathPattern = RegExp(
   '(?<=^|[\\s\'"`=(\\[{,:‘“：「『（，、。；])'
-  '((?:~|\\.{1,2})?/$_pathChars*|[\\w@+.-]+/$_pathChars*)'
+  '((?:~|\\.{1,2})?/$_pathPart*|[\\w@+.-]+/$_pathPart*)'
   r'(?::(\d+))?(?::(\d+))?',
   multiLine: true,
 );
@@ -276,6 +286,11 @@ bool _hasExtension(String name) {
 }
 
 final _relativeSegment = RegExp(r'^[\w@+.-]+$');
+
+/// A segment [_routeSegment] admits, with any extension after it.
+final _routeName = RegExp(
+  r'^(?:\[\[?(?:\.\.\.)?[\w-]+\]\]?|\([\w-]+\))(?:\.[\w.-]+)?$',
+);
 
 /// A number, perhaps with a unit: `28`, `2.23G`, `1.34k`, `512MiB`.
 final _quantity = RegExp(r'^\d[\d.]*[A-Za-z]{0,3}$');
@@ -340,6 +355,16 @@ ContextItem? _pathItem(
   }
   if (body.startsWith('/') && _isWebRoute(text, match.start)) return null;
   if (_afterClosingQuote(text, match.start)) return null;
+  // A mount's container side as a key of Compose's or Kubernetes' YAML
+  // (`target: /etc/nginx`, `- mountPath: /data`) or of `docker inspect`
+  // (`"Destination": "/var/lib/mysql"`).
+  final lineStart = text.lastIndexOf('\n', match.start) + 1;
+  if (_yamlMountKey.hasMatch(text.substring(lineStart, match.start)) ||
+      _jsonMountKey.hasMatch(
+        text.substring(match.start < 20 ? 0 : match.start - 20, match.start),
+      )) {
+    return null;
+  }
   // A mount's container side, by name in its key list
   // (`--mount type=bind,src=/srv/conf,dst=/etc/nginx/conf.d`); a lone
   // `--target=/opt/libs` is a local directory.
@@ -388,7 +413,10 @@ ContextItem? _pathItem(
       final named = path.endsWith('/')
           ? segments.sublist(0, segments.length - 1)
           : segments;
-      if (named.isEmpty || named.any((s) => !_relativeSegment.hasMatch(s))) {
+      if (named.isEmpty ||
+          named.any(
+            (s) => !_relativeSegment.hasMatch(s) && !_routeName.hasMatch(s),
+          )) {
         return null;
       }
       // `2026/10/28`, `1/2`, a progress bar's `2.23G/4.94G`: numbers, not
@@ -520,6 +548,15 @@ final _parenLocation = RegExp(r'\(\d+(?:,\d+)?\)(?![./])');
 final _frameOffset = RegExp(r'\(\+0x[0-9A-Fa-f]+\)');
 
 final _mountTargetBefore = RegExp(r'\b(?:dst|target|destination)=$');
+
+/// A YAML key that names a mount's container side, alone on its line, and
+/// the quote its value may open with.
+final _yamlMountKey = RegExp(
+  r'''^\s*(?:-\s+)?(?:target|destination|mountPath|containerPath):\s*['"]?$''',
+);
+
+/// A `docker inspect` key that names a mount's container side.
+final _jsonMountKey = RegExp(r'"(?:Destination|Target)"\s*:\s*"$');
 
 /// Whether the word around [start] is a comma-separated key list.
 bool _inKeyList(String text, int start) {
