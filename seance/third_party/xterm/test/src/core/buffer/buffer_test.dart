@@ -329,6 +329,14 @@ void main() {
       expect(terminal.buffer.lines[0].toString(), 'd');
     });
 
+    test('leaves a character written over a wide one\'s second cell', () {
+      final terminal = Terminal();
+      // x lands in the second cell of 文; ECH then erases column 0 only.
+      terminal.write('文\x1b[Dx\r\x1b[X');
+
+      expect(terminal.buffer.lines[0].toString(), 'x');
+    });
+
     test('ED 1 erases the screen above at the start of a line', () {
       final terminal = Terminal();
       terminal.write('abc\r\nxyz\r\x1b[1Jdef');
@@ -345,6 +353,11 @@ void main() {
       terminal.write('0123456789\x1b[P');
 
       expect(terminal.buffer.lines[0].toString(), '012345678');
+
+      // The pending wrap is cleared, so the next character takes the cell.
+      terminal.write('X');
+      expect(terminal.buffer.lines[0].toString(), '012345678X');
+      expect(terminal.buffer.lines[1].toString(), '');
     });
   });
 

@@ -120,8 +120,9 @@ class _LineReflow {
       }
 
       // The cells copied to later rows are cleared: a reused row keeps its
-      // buffer, and widening it again would show them a second time.
-      for (var i = newWidth; i < line.length; i++) {
+      // buffer, and widening it again would show them a second time. Styled
+      // blanks past them were not copied and stay.
+      for (var i = newWidth; i < trimmedLength; i++) {
         line.resetCell(i);
       }
     }

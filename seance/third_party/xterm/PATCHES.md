@@ -626,11 +626,12 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     so `CSI 1 K` or `CSI 1 J` at the start of a line threw out of
     `Terminal.write` and dropped the rest of that chunk, and when a range
     ended on a wide character it erased the first cell twice and left
-    the second. EL 1 erased up to the cursor rather than through it, as
+    the second (now erased only while it is that character's empty half,
+    so a character written over it stays). EL 1 erased up to the cursor rather than through it, as
     the standard and the method's own comment say. DCH with a wrap
     pending asked the line to delete past its end, which fails an
     assertion in debug builds; it now works on the last column, where
-    the cursor is shown, as xterm does.
+    the cursor is shown, and clears the pending wrap, as xterm does.
 
 48. **A round trip through one column restores the line**
     (`core/reflow.dart#_LineReflow.add`, pre-existing upstream): a row

@@ -188,6 +188,18 @@ void main() {
     }
   });
 
+  test('reflow() keeps styled blanks after a narrow round trip', () {
+    final terminal = Terminal();
+    terminal.resize(80, 10);
+    // EL paints the rest of the row blue.
+    terminal.write('\x1b[44mhi\x1b[K\x1b[0m\r\n');
+    final blue = terminal.buffer.lines[0].getBackground(60);
+    terminal.resize(40, 10);
+    terminal.resize(80, 10);
+
+    expect(terminal.buffer.lines[0].getBackground(60), blue);
+  });
+
   test('reflow() to one column with a wide character finishes', () {
     final terminal = Terminal();
     terminal.resize(49, 6);

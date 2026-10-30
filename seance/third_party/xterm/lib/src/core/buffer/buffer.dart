@@ -456,11 +456,13 @@ class Buffer {
 
   void deleteChars(int count) {
     // [seance fork] A pending wrap leaves the cursor one past the last
-    // column; DCH works on the cell it is shown on, as xterm does, where
-    // upstream asked the line to delete beyond its end (PATCHES.md 47).
+    // column; DCH works on the cell it is shown on and clears the pending
+    // wrap, as xterm does, where upstream asked the line to delete beyond
+    // its end (PATCHES.md 47).
     final start = cursorX;
     count = min(count, viewWidth - start);
     currentLine.removeCells(start, count, terminal.cursor);
+    _cursorX = start;
   }
 
   /// Remove all lines above the top of the viewport.
