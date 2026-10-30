@@ -26,6 +26,7 @@ import 'services/remote_files_controller.dart';
 import 'services/remote_git_controller.dart';
 import 'services/secrets_recovery.dart';
 import 'services/server_duplication.dart';
+import 'services/server_links.dart';
 import 'services/shell_location.dart';
 import 'services/terminal_context.dart';
 import 'services/xterm_engine.dart';
@@ -336,6 +337,24 @@ class TerminalSession extends PaneTab {
 
   /// A shell on this machine rather than a connection to a server.
   bool get isLocal => config == null;
+
+  /// [link] as this device opens it, when the server printed it about
+  /// itself (`http://localhost:3000/`): through a forward this session
+  /// opens to the server's own port, kept until the session ends. Null for
+  /// any other link, and for a local shell, whose localhost is this one.
+  /// Throws a [StateError] while disconnected, rather than open the link on
+  /// this device.
+  Future<Uri?> openableHere(Uri link) async {
+    if (isLocal) return null;
+    final host = serverItselfHost(link);
+    if (host == null) return null;
+    final transport = session;
+    if (transport is! SshSession || transport.isClosed) {
+      throw StateError('Reconnect this session to open its own links.');
+    }
+    final forward = await transport.forwardToLoopback(host, link.port);
+    return throughLoopback(link, forward.port);
+  }
 
   /// What names this session in the app bar and the server list.
   String get displayLabel => config?.label ?? 'Local shell';

@@ -12,6 +12,8 @@ import 'package:seance_protocol/seance_protocol.dart';
 import '../hostkey/tofu.dart';
 import '../terminal/session_transport.dart';
 import '../terminal/terminal_engine.dart';
+import 'byte_duplex.dart';
+import 'loopback_forward.dart';
 import 'remote_command.dart';
 import 'remote_file_system.dart';
 import 'remote_process.dart';
@@ -740,6 +742,33 @@ class SshSession implements SessionTransport {
     shell.done.then((_) => _remoteClosed()).catchError((_) => _remoteClosed());
   }
 
+  /// Forwards a port on this device's loopback to [host]:[port] as the
+  /// server sees them, so a link the server printed about itself
+  /// (`http://localhost:3000/`) opens here. One forward serves each target
+  /// for the life of the session, which closes it.
+  Future<LoopbackForward> forwardToLoopback(String host, int port) {
+    if (_closed || client.isClosed) {
+      throw StateError('The SSH session is disconnected.');
+    }
+    final key = '$host:$port';
+    final open = _loopbackForwards[key];
+    if (open != null) return open;
+
+    final opening = _loopbackForwards[key] = LoopbackForward.bind(
+      () async => ChannelByteDuplex(await client.forwardLocal(host, port)),
+      preferredPort: port,
+    );
+    // A failed bind leaves nothing to reuse; the next call tries again.
+    opening.then<void>((_) {}, onError: (Object _) {
+      if (identical(_loopbackForwards[key], opening)) {
+        _loopbackForwards.remove(key);
+      }
+    });
+    return opening;
+  }
+
+  final Map<String, Future<LoopbackForward>> _loopbackForwards = {};
+
   /// Opens one SFTP subsystem beside this session's shell and reuses it for the
   /// life of the authenticated transport.
   Future<RemoteFileSystem> openRemoteFileSystem({
@@ -862,13 +891,23 @@ class SshSession implements SessionTransport {
     _closed = true;
     final subscriptions = List<StreamSubscription<dynamic>>.of(_subs);
     final sftpClient = _sftpClient;
+    final forwards = [..._loopbackForwards.values];
     _subs.clear();
     _sftpClient = null;
     _remoteFileSystem = null;
+    _loopbackForwards.clear();
 
     await runSequentialCleanup(
       [
         for (final subscription in subscriptions) subscription.cancel,
+        for (final forward in forwards)
+          () async {
+            try {
+              await (await forward).close();
+            } on Object {
+              // A forward that never bound has nothing to close.
+            }
+          },
         if (sftpClient != null) sftpClient.close,
         shell.close,
         client.close,

@@ -176,8 +176,13 @@ class _ContextList extends StatelessWidget {
     try {
       switch (action) {
         case _ContextAction.openLink:
-          if (!await openWebLink(Uri.parse(item.value))) {
+          final link = Uri.parse(item.value);
+          // A server's link to itself opens through a tunnel to it.
+          final here = await session.openableHere(link);
+          if (!await openWebLink(here ?? link)) {
             say('Could not open link.');
+          } else if (here != null) {
+            say('Opened through a tunnel to ${session.displayLabel}.');
           }
         case _ContextAction.openFile:
           await _openLocal(item.value);

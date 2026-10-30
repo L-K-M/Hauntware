@@ -17,6 +17,7 @@ export 'src/terminal/paste_sanitizer.dart';
 export 'src/terminal/shell_command.dart';
 
 export 'src/ssh/byte_duplex.dart' show ByteDuplex;
+export 'src/ssh/loopback_forward.dart' show LoopbackForward;
 export 'src/ssh/channel_budget.dart'
     show ChannelRefusal, ChannelOpenException, SshLinkSeen;
 export 'src/ssh/credential_resolver.dart';

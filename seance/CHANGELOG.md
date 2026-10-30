@@ -47,6 +47,11 @@
   path, and leaves out a mount's container side in Compose and
   Kubernetes YAML (`target:`, `mountPath:`) and in `docker inspect`
   (`"Destination":`).
+- In the Context tab, Open in Browser on a link a server printed about
+  itself (`http://localhost:3000/`, `http://0.0.0.0:8000/`) opens it
+  through a tunnel to that server, as `ssh -L` would, on the same port
+  here when it is free. The tunnel listens only on this device and
+  closes with the session.
 - The Git pane and the terminal's tab now follow a TrueNAS shell, or
   any Linux shell that reports no directory, as Files already did: all
   three share one read of the shell's directory, and trust it over a
