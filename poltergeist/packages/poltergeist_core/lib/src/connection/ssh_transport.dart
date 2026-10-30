@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
 import 'package:meta/meta.dart';
@@ -147,6 +148,9 @@ Future<void> preflightDartSshHostKey({
   required HostKeyPrompter onHostKey,
   Duration timeout = SshTransport.defaultOpenTimeout,
   SshConnectionLog? log,
+  // Runs between the TCP connect and the client's first write, so a test
+  // can let a reset arrive first.
+  @visibleForTesting Future<void> Function()? onConnected,
 }) async {
   final attemptLog = log ?? SshConnectionLog();
   final target = '${config.username}@${config.host}:${config.port}';
@@ -162,9 +166,10 @@ Future<void> preflightDartSshHostKey({
     );
   }
 
+  await onConnected?.call();
   final verdict = Completer<bool>();
   final client = SSHClient(
-    socket,
+    _QuietCloseSocket(socket),
     username: config.username,
     algorithms: suiteSshAlgorithms,
     onVerifyHostKey: (type, fingerprint) async {
@@ -425,4 +430,37 @@ class _DartSftpChannel implements SftpChannel {
     _owner._openChannels.remove(this);
     return closeSshResource(_close);
   }
+}
+
+/// An [SSHSocket] whose [close] never fails, the same guard seance_core's
+/// key-exchange tap gives the authenticated connect. When the server
+/// resets the connection, dartssh2's first writes fail, its transport
+/// learns of it through the stream and [done], and then closes the socket
+/// without awaiting it; that close fails with the same error, which would
+/// otherwise go uncaught and end the isolate.
+class _QuietCloseSocket implements SSHSocket {
+  _QuietCloseSocket(this._socket);
+
+  final SSHSocket _socket;
+
+  @override
+  Stream<Uint8List> get stream => _socket.stream;
+
+  @override
+  StreamSink<List<int>> get sink => _socket.sink;
+
+  @override
+  Future<void> get done => _socket.done;
+
+  @override
+  Future<void> close() => _socket.close().catchError((Object _) {});
+
+  @override
+  void destroy() => _socket.destroy();
+
+  @override
+  Future<void> flush() => _socket.flush();
+
+  @override
+  String toString() => _socket.toString();
 }

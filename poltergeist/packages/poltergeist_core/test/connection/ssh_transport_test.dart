@@ -118,6 +118,41 @@ void main() {
     expect(lists[2], contains('aes128-cbc'));
   });
 
+  test('a host that resets the host-key preflight leaves no uncaught error',
+      () async {
+    // dartssh2 closes its socket without awaiting the close when the peer
+    // hangs up. After a reset that close fails with a broken pipe, which
+    // would go uncaught and end the isolate; the test zone reports it, also
+    // during the trailing pause. The hook holds the client back until the
+    // reset has arrived, so its first write meets it.
+    final listener = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(listener.close);
+    listener.listen((connection) => connection.destroy());
+
+    for (var attempt = 0; attempt < 5; attempt++) {
+      await expectLater(
+        preflightDartSshHostKey(
+          config: ServerConfig(
+            id: 's',
+            label: 's',
+            host: InternetAddress.loopbackIPv4.address,
+            port: listener.port,
+            username: 'me',
+            authMethod: AuthMethod.password,
+            createdAt: 0,
+            updatedAt: 0,
+          ),
+          tofu: TofuVerifier(InMemoryHostKeyStore()),
+          onHostKey: (_) async => fail('no host key was presented'),
+          onConnected: () =>
+              Future<void>.delayed(const Duration(milliseconds: 20)),
+        ),
+        throwsA(isA<SshConnectException>()),
+      );
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  });
+
   test('a channel-open timeout classifies as disconnected, not unsupported',
       () {
     final error = classifySftpOpenFailure(
