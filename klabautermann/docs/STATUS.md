@@ -13,7 +13,8 @@ breadth (v1 part 2) are on main. M3, M5 and M6 met all of their
 automated exits and M4 all but one ([M3 exit](#m3-exit),
 [M4 exit](#m4-exit), [M5 exit](#m5-exit) and [M6 exit](#m6-exit),
 below); M4's remaining case, a sudo rule scoped to `docker`, waits on a
-decision. M7, v1 hardening and release readiness, is next.
+decision. M7, v1 hardening and release readiness, is under way
+([M7 progress](#m7-progress), below).
 The real-host and device checks stay open under the manual gates. What
 is on main:
 
@@ -2704,6 +2705,25 @@ streaming for the explorer (N32, above); the Flatpak `~/.ssh:ro` grant,
 which waits on the owner (PLT-09); M4's sudo rule scoped to `docker`;
 and the device checks below, which M6 extends by notifications, the app
 lock, the share sheet, port forwards and the tablet split.
+
+## M7 progress
+
+M7, v1 hardening and release readiness (04 §13), is under way. The parts
+that run without devices, real hosts or the owner are done; the rest stay
+open below and under the manual gates.
+
+| Scope | Evidence | Status |
+|---|---|---|
+| `INSTALL.md` and the coverage explainer | [INSTALL.md](INSTALL.md) (assets, checksums, each platform's first launch, the Flatpak's `~/.ssh` limit, what the app needs and leaves on a server) and [COVERAGE.md](COVERAGE.md) (T0 in the app's own words, gaps, phones' background pause, the planned opt-in tiers) | done |
+| Performance pass, engine side | The engine budget harness reran on main after M6 ([evidence](evidence/s5/README.md#m7-rerun)): the median per-tick engine time, reply bytes and the resident set match M2's, and the tails vary with the shared machine's load; CI's frame-timing job keeps measuring the UI on main pushes | done |
+| Release dry run | `scripts/release.sh --check` with `lkm-release` 1.1.0 resolves the suite at 1.9.3 across 28 pubspecs with a clean tree and names the Klabautermann preview apps in its CI note; v1.9.3 is already tagged, so the next release takes a new version. Every PR's CI builds the clients a release ships | done |
+| Hardening from main's CI | A host that resets the SSH handshake ended the engine isolate (an unawaited dartssh2 close failing with broken pipe); seance_core's tapped socket now absorbs it, with a regression test in `seance_core/test/ssh_client_limitation_test.dart` (#573) | done |
+| Tier A fixture expansion from user-style captures | Needs captures from users' hosts | open |
+| Battery pass and device frame timing | Needs phones | open |
+| Manual checklist on every platform; owner sign-off | 06's manual gates | open |
+| Preview label removed from the asset names, the in-app title and about screen and the release notes (decision 16) | Follows the owner's sign-off | open |
+
+Cutting the v1 release stays a separate explicit task (root `AGENTS.md`).
 
 ## Open manual gates
 

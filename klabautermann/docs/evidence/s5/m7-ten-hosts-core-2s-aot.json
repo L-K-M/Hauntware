@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "tool": "klabautermann_core/tool/engine_budget.dart",
+  "measuredAt": "2026-10-30T11:27:51.568442Z",
+  "runtime": {
+    "dart": "3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"",
+    "mode": "aot"
+  },
+  "machine": {
+    "os": "Linux 6.18.44-fc-v185 #1 SMP PREEMPT_DYNAMIC @0",
+    "cpus": 4,
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "loadavg": {
+      "start": "0.31 0.43 0.56 1/123 1869",
+      "end": "1.84 0.77 0.65 1/146 2475"
+    }
+  },
+  "plan": {
+    "name": "tenHostsCoreAt2s",
+    "hosts": [
+      "alpine-322",
+      "debian-12",
+      "debian-12-lxc",
+      "debian-12-lxc-lxcfs",
+      "rhel-8",
+      "ubuntu-2404",
+      "alpine-322",
+      "debian-12",
+      "debian-12-lxc",
+      "debian-12-lxc-lxcfs"
+    ],
+    "overviewEveryMs": 10000,
+    "openHosts": 10,
+    "coreEveryMs": 2000,
+    "logLinesPerSecond": 1000,
+    "journalRows": 4,
+    "journalRowBytesMean": 459.5,
+    "warmupSeconds": 10.0,
+    "measureSeconds": 120.0,
+    "heap": "off"
+  },
+  "windowSeconds": 120.001,
+  "ticks": {
+    "count": 600,
+    "perSecond": 5.0,
+    "skipped": 0,
+    "engineMs": {
+      "p50": 0.23,
+      "p99": 0.585,
+      "max": 2.207,
+      "mean": 0.258
+    },
+    "frameMs": {
+      "p50": 0.057,
+      "p99": 0.321,
+      "max": 0.784,
+      "mean": 0.066
+    },
+    "pipelineMs": {
+      "p50": 0.139,
+      "p99": 0.44,
+      "max": 1.922,
+      "mean": 0.161
+    },
+    "sendMs": {
+      "p50": 0.028,
+      "p99": 0.087,
+      "max": 0.245,
+      "mean": 0.031
+    },
+    "eventsPerTick": 2.0,
+    "replyBytes": {
+      "core": {
+        "min": 601,
+        "median": 960,
+        "max": 1225
+      }
+    },
+    "replyBytesPerSecond": 4726.648
+  },
+  "log": {
+    "linesFed": 120011,
+    "linesPerSecond": 999.911,
+    "inputBytesPerSecond": 460538.829,
+    "batches": 2379,
+    "batchesPerSecond": 19.825,
+    "recordsPerBatch": {
+      "min": 18,
+      "median": 50,
+      "max": 90
+    },
+    "parseMsPerSecond": 10.766,
+    "batchSendMs": {
+      "p50": 0.036,
+      "p99": 0.122,
+      "max": 2.067,
+      "mean": 0.041
+    },
+    "dropped": 0,
+    "malformed": 0,
+    "maxPending": 131,
+    "runLinesParsed": 130001,
+    "pendingAtEnd": 31
+  },
+  "engine": {
+    "busyMsPerSecond": 12.874,
+    "busyPercentOfOneCore": 1.287
+  },
+  "process": {
+    "cpuMsPerSecond": 28.0,
+    "rssBytes": {
+      "max": 22188032,
+      "series": [
+        21053440,
+        21106688,
+        21184512,
+        21286912,
+        21327872,
+        21381120,
+        21983232,
+        22032384,
+        22077440,
+        22106112,
+        22188032
+      ]
+    },
+    "replayReplyBytes": 614359
+  },
+  "heapAfterFullCollectionBytes": null,
+  "ui": {
+    "messages": 3896,
+    "samples": 1300,
+    "samplesByServer": {
+      "host-0-alpine-322": 130,
+      "host-1-debian-12": 130,
+      "host-2-debian-12-lxc": 130,
+      "host-3-debian-12-lxc-lxcfs": 130,
+      "host-4-rhel-8": 130,
+      "host-5-ubuntu-2404": 130,
+      "host-6-alpine-322": 130,
+      "host-7-debian-12": 130,
+      "host-8-debian-12-lxc": 130,
+      "host-9-debian-12-lxc-lxcfs": 130
+    },
+    "samplesWithCpu": 768,
+    "samplesWithDiskRates": 384,
+    "serversProfiled": 10,
+    "logRecords": 129970,
+    "logDropped": 0
+  }
+}

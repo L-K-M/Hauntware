@@ -133,6 +133,29 @@ numbers), and nothing here sets a budget.
 - **Cadences.** The phone schedule is this harness's reading of 03 §6.4;
   K22's scheduler decides the real one.
 
+### M7 rerun
+
+M7's performance pass reran the two ahead-of-time scenarios on main at
+`645670e8`, after M6, with the harness as its review fixes left it:
+`m7-phone-aot.json` (`--scenario phone --seconds 300`) and
+`m7-ten-hosts-core-2s-aot.json` (`--scenario tenHostsCoreAt2s --seconds
+120`), on 2026-10-30 with Dart 3.13.2 in the same kind of shared 4-CPU
+container. The engine's median per-tick cost, reply bytes and memory match
+M2's; the tail values vary with the shared machine's load:
+
+| Figure | Phone, M2 | Phone, M7 | Ten hosts, M2 | Ten hosts, M7 |
+|---|---|---|---|---|
+| Engine ms per tick, p50 / p99 | 0.213 / 1.102 | 0.211 / 1.602 | 0.235 / 1.540 | 0.230 / 0.585 |
+| Engine ms per tick, max | 4.993 | 2.836 | 63.292 | 2.207 |
+| Reply bytes per second | 682 | 681 | 4,727 | 4,727 |
+| Journal follow, lines/s | 1,000 | 1,000 | 1,000 | 1,000 |
+| Resident set, max | 21.5 MiB | 20.5 MiB | 20.4 MiB | 21.2 MiB |
+
+The replay reads the same hand-written fixtures, so the figures cover the
+frame reader, the sample pipeline and the journal path; M3 to M6's new
+collectors (`gpu`, `smart` and the other slow ones) are not replayed, as
+under "Not covered" above. Like part 1's, these numbers set no budget.
+
 ## Part 2: UI frame timing under Xvfb
 
 `local-frame-timing-xvfb.json` is the report of
