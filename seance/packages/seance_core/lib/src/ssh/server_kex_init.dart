@@ -353,8 +353,13 @@ final class _TappedSocket implements SSHSocket {
   @override
   Future<void> get done => _socket.done;
 
+  /// Never fails. When the server resets the connection, dartssh2's
+  /// first writes fail, its transport learns of it through the stream and
+  /// [done], and then closes the socket without awaiting it; that close
+  /// fails with the same error, which would otherwise go uncaught and end
+  /// the isolate.
   @override
-  Future<void> close() => _socket.close();
+  Future<void> close() => _socket.close().catchError((Object _) {});
 
   @override
   void destroy() => _socket.destroy();
