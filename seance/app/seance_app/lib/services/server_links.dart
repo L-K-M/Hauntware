@@ -24,9 +24,11 @@ String? serverItselfHost(Uri link) {
 
 /// [link] as this device reaches it through a forward listening on
 /// loopback [port]. A `localhost` name stays, so a certificate issued for
-/// it, a `*.localhost` virtual host and cookies scoped to it still match;
-/// browsers resolve it to the loopback address the forward listens on. An
-/// address (`127.0.0.1`, `[::1]`, `0.0.0.0`) becomes `127.0.0.1`.
+/// it, a `*.localhost` virtual host and cookies scoped to it still match.
+/// The forward listens on `127.0.0.1` only; where `localhost` also
+/// resolves to `::1`, browsers fall back to `127.0.0.1` when `::1` refuses
+/// the connection. An address (`127.0.0.1`, `[::1]`, `0.0.0.0`) becomes
+/// `127.0.0.1`.
 Uri throughLoopback(Uri link, int port) {
   final host = link.host.toLowerCase();
   final named = host == 'localhost' || host.endsWith('.localhost');
