@@ -2,6 +2,48 @@ import 'package:test/test.dart';
 import 'package:xterm/src/terminal.dart';
 
 void main() {
+  /// The text of every buffer line, top to bottom.
+  List<String> rows(Terminal terminal) {
+    final lines = terminal.buffer.lines;
+    return [for (var i = 0; i < lines.length; i++) lines[i].toString()];
+  }
+
+  test('reflow() keeps the order of a scrollback that has wrapped', () {
+    final terminal = Terminal(maxLines: 40);
+    terminal.resize(10, 5);
+    for (var i = 0; i < 30; i++) {
+      terminal.write('row$i-xxxxxxxxxx\r\n');
+    }
+    terminal.resize(30, 5);
+
+    // The first row is the tail of a line whose start the ring evicted.
+    final text = rows(terminal).where((row) => row.startsWith('row')).toList();
+    expect(text.last, 'row29-xxxxxxxxxx');
+    expect(text, everyElement(endsWith('-xxxxxxxxxx')));
+    final numbers = [
+      for (final row in text)
+        int.parse(RegExp(r'^row(\d+)').firstMatch(row)![1]!),
+    ];
+    expect(numbers, [for (var i = numbers.first; i < 30; i++) i]);
+
+    terminal.resize(20, 5);
+    expect(
+        rows(terminal).where((row) => row.isNotEmpty).last, 'row29-xxxxxxxxxx');
+  });
+
+  test('reflow() keeps the rows left after the scrollback is cleared', () {
+    final terminal = Terminal(maxLines: 100);
+    terminal.resize(20, 5);
+    for (var i = 0; i < 12; i++) {
+      terminal.write('line $i\r\n');
+    }
+    // CSI 3J drops the scrollback above the screen.
+    terminal.write('\x1b[3J');
+    terminal.resize(30, 5);
+
+    expect(rows(terminal).take(4), ['line 8', 'line 9', 'line 10', 'line 11']);
+  });
+
   test('reflow() can reflow a single line', () {
     final terminal = Terminal();
 
@@ -127,6 +169,23 @@ void main() {
     terminal.resize(200, 10);
 
     expect(terminal.viewWidth, 200);
+  });
+
+  test('reflow() through one column keeps a line that starts wide', () {
+    for (final (width, text, back) in [
+      (40, '文c零报', 80),
+      (39, '零报二c', 18),
+      (80, '文档 is here', 80),
+    ]) {
+      final terminal = Terminal();
+      terminal.resize(width, 10);
+      terminal.write('$text\r\n\$ ');
+      terminal.resize(1, 10);
+      terminal.resize(back, 10);
+
+      expect(rows(terminal).take(2), [text, r'$ '], reason: text);
+      expect(terminal.buffer.lines[0].isWrapped, isFalse, reason: text);
+    }
   });
 
   test('reflow() to one column with a wide character finishes', () {

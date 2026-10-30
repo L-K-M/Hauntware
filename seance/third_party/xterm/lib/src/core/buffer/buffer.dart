@@ -284,7 +284,9 @@ class Buffer {
   /// cursor.
   void eraseLineToCursor() {
     currentLine.isWrapped = false;
-    currentLine.eraseRange(0, _cursorX, terminal.cursor);
+    // [seance fork] Through the cursor cell, as EL 1 is specified and this
+    // comment always said; upstream stopped before it (PATCHES.md 47).
+    currentLine.eraseRange(0, cursorX + 1, terminal.cursor);
   }
 
   /// Erases the line at the current cursor position.
@@ -453,7 +455,10 @@ class Buffer {
   }
 
   void deleteChars(int count) {
-    final start = _cursorX.clamp(0, viewWidth);
+    // [seance fork] A pending wrap leaves the cursor one past the last
+    // column; DCH works on the cell it is shown on, as xterm does, where
+    // upstream asked the line to delete beyond its end (PATCHES.md 47).
+    final start = cursorX;
     count = min(count, viewWidth - start);
     currentLine.removeCells(start, count, terminal.cursor);
   }

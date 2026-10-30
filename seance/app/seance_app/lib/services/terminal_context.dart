@@ -752,8 +752,9 @@ class TerminalContextStack extends ChangeNotifier {
   /// terminal without waiting out the throttle.
   ///
   /// A failure reading the buffer itself is reported and ends that read
-  /// only: the vendored xterm can leave a row unset (CSI 3J and then a
-  /// resize), and the timer this runs from must not throw.
+  /// only: the vendored xterm has left rows unset before (CSI 3J and then
+  /// a resize, its PATCHES.md 46), and the timer this runs from must not
+  /// throw.
   @visibleForTesting
   void scanNow() {
     if (_disposed) return;

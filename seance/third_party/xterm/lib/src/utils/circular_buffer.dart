@@ -275,13 +275,15 @@ class IndexAwareCircularBuffer<T extends IndexedItem> {
       _dropChild(i);
     }
 
+    // [seance fork] The ring restarts at slot 0 before the replacement is
+    // placed: upstream reset it afterwards, so once the scrollback had
+    // wrapped (or CSI 3J had trimmed it) the lines were read back rotated,
+    // with empty slots in between (PATCHES.md 46).
+    _startIndex = 0;
+
     var copyStart = 0;
     if (replacement.length > maxLength) {
       copyStart = replacement.length - maxLength;
-    }
-
-    for (var i = 0; i < copyStart; i++) {
-      _dropChild(i);
     }
 
     final copyLength = replacement.length - copyStart;
@@ -289,7 +291,6 @@ class IndexAwareCircularBuffer<T extends IndexedItem> {
       _adoptChild(i, replacement[copyStart + i]);
     }
 
-    _startIndex = 0;
     _length = copyLength;
   }
 

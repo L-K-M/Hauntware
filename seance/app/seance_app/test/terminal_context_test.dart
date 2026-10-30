@@ -656,18 +656,18 @@ void main() {
       }
     });
 
-    test('reads on after the vendored xterm loses rows', () {
-      // CSI 3J and then a resize leave rows unset in the fork's buffer, and
-      // its own next write fails on them (outside this tab). The stack's
-      // read must still return.
+    test('reads on after clear and a resize', () {
+      // CSI 3J and then a resize once left rows unset in the vendored
+      // xterm (its PATCHES.md 46), and its next write failed on them.
       terminal.resize(80, 24);
       for (var i = 0; i < 30; i++) {
         terminal.write('line \$i /etc/hosts\r\n');
       }
       terminal.write('\$ clear\r\n\x1b[H\x1b[2J\x1b[3J\$ ');
       terminal.resize(100, 30);
-      expect(() => terminal.write('ls\r\n'), throwsA(anything));
-      expect(stack.scanNow, returnsNormally);
+      terminal.write('ls /srv/after\r\n\$ ');
+      stack.scanNow();
+      expect(values().first, '/srv/after');
     });
 
     test('ignores the alternate screen', () {

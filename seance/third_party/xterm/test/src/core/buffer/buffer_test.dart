@@ -306,6 +306,48 @@ void main() {
     });
   });
 
+  group('Buffer.eraseLineToCursor()', () {
+    test('erases through the cursor cell', () {
+      final terminal = Terminal();
+      terminal.write('abcdef\x1b[3G\x1b[1K');
+
+      // Erased cells hold no character, which toString leaves out.
+      expect(terminal.buffer.lines[0].toString(), 'def');
+    });
+
+    test('works at the start of a line and keeps the rest of the output', () {
+      final terminal = Terminal();
+      terminal.write('abc\r\x1b[1Kdef');
+
+      expect(terminal.buffer.lines[0].toString(), 'def');
+    });
+
+    test('erases a whole wide character it ends on', () {
+      final terminal = Terminal();
+      terminal.write('ab文d\x1b[3G\x1b[1K');
+
+      expect(terminal.buffer.lines[0].toString(), 'd');
+    });
+
+    test('ED 1 erases the screen above at the start of a line', () {
+      final terminal = Terminal();
+      terminal.write('abc\r\nxyz\r\x1b[1Jdef');
+
+      expect(terminal.buffer.lines[0].toString(), '');
+      expect(terminal.buffer.lines[1].toString(), 'def');
+    });
+  });
+
+  group('Buffer.deleteChars()', () {
+    test('deletes the last cell while a wrap is pending', () {
+      final terminal = Terminal();
+      terminal.resize(10, 5);
+      terminal.write('0123456789\x1b[P');
+
+      expect(terminal.buffer.lines[0].toString(), '012345678');
+    });
+  });
+
   group('AnchorTrimBehavior', () {
     Terminal fullTerminal() {
       final terminal = Terminal(maxLines: 30);

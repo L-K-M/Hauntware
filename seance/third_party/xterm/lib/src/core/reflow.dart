@@ -107,18 +107,28 @@ class _LineReflow {
     } else {
       _lines.add(line);
 
+      // A wide character in the last column moves to the next row, except
+      // on a row one column wide, which keeps it as every later row does
+      // (patch 45): moving it would leave this row blank (PATCHES.md 48).
+      final movesWide = newWidth > 1 && line.getWidth(newWidth - 1) == 2;
       if (trimmedLength > newWidth) {
-        if (line.getWidth(newWidth - 1) == 2) {
+        if (movesWide) {
           _addPart(line, from: newWidth - 1, to: trimmedLength);
         } else {
           _addPart(line, from: newWidth, to: trimmedLength);
         }
       }
+
+      // The cells copied to later rows are cleared: a reused row keeps its
+      // buffer, and widening it again would show them a second time.
+      for (var i = newWidth; i < line.length; i++) {
+        line.resetCell(i);
+      }
     }
 
     line.resize(newWidth);
 
-    if (line.getWidth(newWidth - 1) == 2) {
+    if (newWidth > 1 && line.getWidth(newWidth - 1) == 2) {
       line.resetCell(newWidth - 1);
     }
   }

@@ -578,7 +578,7 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     elsewhere claims too when nobody reports taps, while a mouse-reporting
     remote still keeps those clicks.
 
-### Reflow keeps wide characters whole (regressions: `test/src/core/reflow_test.dart`, `app/seance_app/test/terminal_context_test.dart`)
+### Reflow and erasing keep the text whole (regressions: `test/src/core/reflow_test.dart`, `test/src/core/reflow_property_test.dart`, `test/src/core/buffer/buffer_test.dart`, `app/seance_app/test/terminal_context_test.dart`)
 
 43. **Widening no longer copies a wide character's second cell twice**
     (`core/reflow.dart#_LineReflow.add`): a wide character in a row's last
@@ -610,10 +610,37 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     row one cell wide never fits one, so each pass filled a row with
     nothing, forever, with memory growing. A one-column row now takes the
     character anyway, and its second cell goes on the next row, which
-    widening joins back (patch 44). Some round trips through one column
-    still repeat a reused row's stale cells at the end of a line; one
-    column is a degenerate width, and this ends a hang rather than making
-    it exact.
+    widening joins back (patch 44). Patch 48 makes the round trip exact.
+
+46. **Reflow after the scrollback has wrapped keeps every row**
+    (`utils/circular_buffer.dart#replaceWith`, pre-existing upstream):
+    `replaceWith` placed the reflowed lines at the ring's current start
+    and only then reset that start to slot 0. Once the scrollback had
+    filled and wrapped, or CSI 3J had trimmed it, every resize read the
+    rows back rotated with empty slots between them, and the next read
+    or resize threw a null-check error. The start is reset first.
+
+47. **Erasing to the cursor includes it and works at column 0**
+    (`core/buffer/line.dart#eraseRange`, `core/buffer/buffer.dart`,
+    pre-existing upstream): `eraseRange` read cell -1 for an empty range,
+    so `CSI 1 K` or `CSI 1 J` at the start of a line threw out of
+    `Terminal.write` and dropped the rest of that chunk, and when a range
+    ended on a wide character it erased the first cell twice and left
+    the second. EL 1 erased up to the cursor rather than through it, as
+    the standard and the method's own comment say. DCH with a wrap
+    pending asked the line to delete past its end, which fails an
+    assertion in debug builds; it now works on the last column, where
+    the cursor is shown, as xterm does.
+
+48. **A round trip through one column restores the line**
+    (`core/reflow.dart#_LineReflow.add`, pre-existing upstream): a row
+    narrowed to one column moved a wide character that started it to
+    the next row, leaving itself blank, and a reused row kept the cells
+    it handed on in its buffer, so widening showed them a second time.
+    A one-column row keeps the character that starts it, as later rows
+    already did (patch 45), and the handed-on cells are cleared. The
+    randomized round trip in `test/src/core/reflow_property_test.dart`
+    now covers one column.
 
 ### App-layer notes (outside this package)
 
