@@ -453,6 +453,35 @@ rotation. Only the shared runner-image calibration moves. Budget
 thresholds, landed flags, enforcement, and per-scenario configs are
 unchanged.
 
+## Baseline refresh: runner image rotation (2026-10-31)
+
+Main run 40489638863 exposed the controlled `ubuntu-latest` rotation from
+`20261023.334.3` to `20261026.354.1`. After seven consecutive main runs
+with the tier-B runner-image drift notice, main failed on
+`baseline stale`. Six main runs on the new image share the complete
+recorded fingerprint, including `AMD EPYC 7763 64-Core Processor`:
+40850909878, 40889669710, 41053019746, 41053719874, 41083812970, and
+41204678397. Pooled medians: P1 1235.376 ms (n=18), P2 12989.269 ms
+(n=18), and P4 53.724 ms (n=30). P1 and P2 are 12% and 16% slower than on
+the previous image. P6 still has no entry: all eighteen rows errored at
+745–792 captured frames against the required minimum of 1800.
+
+The new image also changes the readdir order of the P5 fixture. All 15
+new-image runs recorded `first-file=…/entry-06844.txt`, and all 34
+old-image runs since Oct 26 recorded `entry-02814.txt`. P5's calibrated
+scenario config moves with the runner image, so its unchanged threshold
+applies again instead of drift-skipping. The pooled tier-A medians are
+P3 598.280 ms, P5 605.048 ms, and P7 16418.048 entries/s. All pass the
+unchanged budgets.
+
+The 34 old-image runs were excluded, and so were nine new-image runs on
+`AMD EPYC 9V45` or `9V74` CPUs. Those CPUs keep printing the CPU-axis
+notice after this refresh; it tracks runner assignment. Thresholds,
+landed flags, and enforcement are unchanged. The proxy in the refreshing
+environment refused `gh run list` paging, so the artifacts were
+downloaded through the `repos/` API into the layout `refresh.dart pool`
+reads.
+
 ## Baseline refresh: runner image rotation (2026-10-25)
 
 Main run 40135900306 exposed the controlled `ubuntu-latest` rotation from

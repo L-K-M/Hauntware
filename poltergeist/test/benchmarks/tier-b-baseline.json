@@ -1,7 +1,7 @@
 {
   "schema": "poltergeist-d12-baseline-2",
   "fingerprint": {
-    "runnerImage": "ubuntu-latest@20261023.334.3",
+    "runnerImage": "ubuntu-latest@20261026.354.1",
     "arch": "linux_x64",
     "dartVersion": "3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"",
     "flutterVersion": "3.47.2",
@@ -11,21 +11,21 @@
   },
   "scenarios": {
     "P1": {
-      "median": 1100.812,
+      "median": 1235.376,
       "unit": "ms",
-      "repetitions": 12,
+      "repetitions": 18,
       "scenarioConfig": "local-entries-10000-first-paint"
     },
     "P2": {
-      "median": 11233.333,
+      "median": 12989.269,
       "unit": "ms",
-      "repetitions": 12,
+      "repetitions": 18,
       "scenarioConfig": "local-entries-100000-first-paint"
     },
     "P4": {
-      "median": 52.09,
+      "median": 53.724,
       "unit": "ms",
-      "repetitions": 20,
+      "repetitions": 30,
       "scenarioConfig": "local-tabs-5-entries-10000-tab-switch"
     }
   }
