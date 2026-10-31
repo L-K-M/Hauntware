@@ -1120,7 +1120,7 @@ void main() {
       expect(calibration, isNotNull);
       expect(
         calibration!.runnerImage,
-        'ubuntu-latest@20261023.334.3',
+        'ubuntu-latest@20261026.354.1',
       );
       expect(calibration.arch, 'linux_x64');
       expect(
@@ -1191,7 +1191,7 @@ void main() {
         'p5/v1;drop=/home/poltergeist/bench/fixtures/entries-10000;'
         'kind=directory;root-entries=10000;'
         'first-file=/home/poltergeist/bench/fixtures/entries-10000/'
-        'entry-02814.txt;warmups=2;repetitions=5;start=lease+first-byte;'
+        'entry-06844.txt;warmups=2;repetitions=5;start=lease+first-byte;'
         'hash=off',
       );
       expect(
@@ -1252,7 +1252,7 @@ void main() {
       expect(baseline.fingerprint.dartVersion, isNotNull);
       expect(
         baseline.fingerprint.runnerImage,
-        'ubuntu-latest@20261023.334.3',
+        'ubuntu-latest@20261026.354.1',
       );
       expect(baseline.fingerprint.arch, isNotNull);
       expect(baseline.fingerprint.cpuModel, isNotNull);
@@ -1304,20 +1304,20 @@ void main() {
       // Pin values too so an edited median, repetition count, or config
       // fails alongside a dropped or fabricated entry. The configs are
       // the ones the cited pooled artifacts actually recorded.
-      expect(baseline.scenarios['P1']!.median, 1100.812);
-      expect(baseline.scenarios['P1']!.repetitions, 12);
+      expect(baseline.scenarios['P1']!.median, 1235.376);
+      expect(baseline.scenarios['P1']!.repetitions, 18);
       expect(
         baseline.scenarios['P1']!.scenarioConfig,
         'local-entries-10000-first-paint',
       );
-      expect(baseline.scenarios['P2']!.median, 11233.333);
-      expect(baseline.scenarios['P2']!.repetitions, 12);
+      expect(baseline.scenarios['P2']!.median, 12989.269);
+      expect(baseline.scenarios['P2']!.repetitions, 18);
       expect(
         baseline.scenarios['P2']!.scenarioConfig,
         'local-entries-100000-first-paint',
       );
-      expect(baseline.scenarios['P4']!.median, 52.09);
-      expect(baseline.scenarios['P4']!.repetitions, 20);
+      expect(baseline.scenarios['P4']!.median, 53.724);
+      expect(baseline.scenarios['P4']!.repetitions, 30);
       expect(
         baseline.scenarios['P4']!.scenarioConfig,
         'local-tabs-5-entries-10000-tab-switch',

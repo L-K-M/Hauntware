@@ -4,6 +4,19 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## D12 runner-image baseline refresh (2026-10-31)
+
+`ubuntu-latest` rotated from `20261023.334.3` to `20261026.354.1`. After
+seven consecutive main runs with the tier-B runner-image drift notice,
+main's D12 job failed on `baseline stale`. Six exact-fingerprint main
+runs on `AMD EPYC 7763` yield P1 1235.376 ms (n=18), P2 12989.269 ms
+(n=18), and P4 53.724 ms (n=30). P6 stays absent because all rows errored
+below its frame-capture floor. The tier-A runner calibration moves.
+P5's calibrated config moves too, because the new image lists the
+fixture's files in a different order. Thresholds, landed flags, and
+enforcement are unchanged. The enforced `ab` checker passes against the
+pooled artifacts and clears the escalating drift state.
+
 ## D12 baseline refresh tool (2026-10-25)
 
 `test/benchmarks/refresh.dart` automates the measurement steps of a
