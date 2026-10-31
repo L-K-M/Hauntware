@@ -1,7 +1,7 @@
 name: seance_app
 description: "Séance — a personal cross-platform SSH client."
 publish_to: none
-version: 1.9.3+1090399
+version: 1.9.4+1090499
 
 environment:
   sdk: ^3.12.0

@@ -3,7 +3,7 @@ description: >-
   The third-party notices Flutter's NOTICES cannot hold, for every Ghost
   app's licenses page: on Android, the Maven libraries the AboutLibraries
   Gradle plugin lists in the APK (res/raw/aboutlibraries.json).
-version: 1.9.3
+version: 1.9.4
 publish_to: none
 
 environment:

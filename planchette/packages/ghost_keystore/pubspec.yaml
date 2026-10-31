@@ -4,7 +4,7 @@ description: >-
   Poltergeist and Klabautermann: MasterKeyManager over
   flutter_secure_storage, parameterized by each product's entry names so
   every product keeps its own entries; and the device-local app lock.
-version: 1.9.3
+version: 1.9.4
 publish_to: none
 
 environment:

@@ -4,7 +4,7 @@ description: >-
   program and its frame parser, per-collector payload parsers, the
   capability probe model, and counter-to-rate maths (docs/design/
   klabautermann 03, section 6).
-version: 1.9.3
+version: 1.9.4
 publish_to: none
 resolution: workspace
 

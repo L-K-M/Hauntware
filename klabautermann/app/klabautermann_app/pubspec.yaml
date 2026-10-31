@@ -1,7 +1,7 @@
 name: klabautermann_app
 description: Klabautermann fleet manager for servers and Docker.
 publish_to: none
-version: 1.9.3+1090399
+version: 1.9.4+1090499
 
 environment:
   sdk: ^3.12.0

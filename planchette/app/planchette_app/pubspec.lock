@@ -310,49 +310,49 @@ packages:
       path: "../../packages/ghost_desktop"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   ghost_fonts:
     dependency: "direct main"
     description:
       path: "../../packages/ghost_fonts"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   ghost_keystore:
     dependency: "direct main"
     description:
       path: "../../packages/ghost_keystore"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   ghost_licenses:
     dependency: "direct main"
     description:
       path: "../../packages/ghost_licenses"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   ghost_marks:
     dependency: transitive
     description:
       path: "../../packages/ghost_marks"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   ghost_servers:
     dependency: "direct main"
     description:
       path: "../../packages/ghost_servers"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   ghost_ui:
     dependency: "direct main"
     description:
       path: "../../packages/ghost_ui"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   hooks:
     dependency: transitive
     description:
@@ -583,14 +583,14 @@ packages:
       path: "../../packages/planchette_core"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   planchette_editor:
     dependency: "direct main"
     description:
       path: "../../packages/planchette_editor"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   platform:
     dependency: transitive
     description:
@@ -621,7 +621,7 @@ packages:
       path: "../../../poltergeist/packages/poltergeist_core"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   posix:
     dependency: transitive
     description:
@@ -692,14 +692,14 @@ packages:
       path: "../../../seance/packages/seance_core"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   seance_protocol:
     dependency: transitive
     description:
       path: "../../../seance/packages/seance_protocol"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   sky_engine:
     dependency: transitive
     description: flutter

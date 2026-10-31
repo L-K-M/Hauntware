@@ -145,21 +145,21 @@ packages:
       path: "../../../planchette/packages/ghost_fonts"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   ghost_theme:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_theme"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   ghost_ui:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_ui"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   http:
     dependency: transitive
     description:
@@ -310,14 +310,14 @@ packages:
       path: "../seance_core"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   seance_protocol:
     dependency: transitive
     description:
       path: "../seance_protocol"
       relative: true
     source: path
-    version: "1.9.3"
+    version: "1.9.4"
   sky_engine:
     dependency: transitive
     description: flutter

@@ -3,7 +3,7 @@ description: >-
   Pure-Dart engine layer for Klabautermann: the D18 engine isolate, its
   plain-data request/event protocol (03 §10.1), and the services the app
   composes over (docs/design/klabautermann/03, sections 3.2 and 10.1).
-version: 1.9.3
+version: 1.9.4
 publish_to: none
 resolution: workspace
 

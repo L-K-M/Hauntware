@@ -4,7 +4,7 @@ description: >-
   Poltergeist, and Seance: family hues, contrast math, middle-ellipsis text,
   top toasts, menus, sidebars, desktop/touch file-list rendering, badge
   images, a colour picker, and an app-level undo history.
-version: 1.9.3
+version: 1.9.4
 publish_to: none
 
 environment:
