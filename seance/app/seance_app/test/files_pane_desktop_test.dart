@@ -62,7 +62,6 @@ void main() {
     updatedAt: 1,
   );
 
-  /// The files pane over a connected session backed by [remote].
   /// A primary click on [position] whose events carry [at] as their stamp.
   Future<void> pressAt(
     WidgetTester tester,
@@ -83,6 +82,7 @@ void main() {
     await tester.pump();
   }
 
+  /// The files pane over a connected session backed by [remote].
   Future<RemoteFilesController> pumpFilesPane(
     WidgetTester tester,
     _ListFileSystem remote, {
