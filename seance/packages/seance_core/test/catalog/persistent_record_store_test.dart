@@ -513,6 +513,22 @@ void main() {
   });
 
   group('account scope', () {
+    test('persists an envelope floor and rejects a rollback after reopen',
+        () async {
+      final store = open(scope: alice);
+      await store.initialize();
+      expect(await store.recordEnvelopeFloor(), 1);
+
+      await store.observeRecordEnvelopeFloor(2);
+      final reopened = open(scope: alice);
+      expect(await reopened.recordEnvelopeFloor(), 2);
+      await expectLater(
+        reopened.observeRecordEnvelopeFloor(1),
+        throwsA(isA<RecordEnvelopeFloorDowngradeException>()),
+      );
+      expect(await reopened.recordEnvelopeFloor(), 2);
+    });
+
     test('a missing scoped store is bound eagerly', () async {
       final store = open(scope: alice);
       await store.initialize();

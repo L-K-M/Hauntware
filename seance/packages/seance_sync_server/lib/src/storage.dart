@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:seance_protocol/seance_protocol.dart';
 
+import 'legacy_migration_validation.dart';
+
 /// A registered account. The server holds only a salted *hash* of the auth
 /// verifier plus the non-secret KDF salt/params a new device needs. It never
 /// sees the vault key or any plaintext.
@@ -14,6 +16,8 @@ class Account {
   final String argonSalt; // base64, echoed back at prelogin
   final Argon2Params argonParams;
   final String? vaultKeyCheck; // opaque, returned only after authentication
+  final int recordEnvelopeFloor;
+  final int recordEnvelopeFloorSeq;
 
   const Account({
     required this.username,
@@ -23,7 +27,21 @@ class Account {
     required this.argonSalt,
     required this.argonParams,
     this.vaultKeyCheck,
+    this.recordEnvelopeFloor = kCurrentRecordEnvelopeVersion,
+    this.recordEnvelopeFloorSeq = 0,
   });
+
+  Account withRecordEnvelopeFloor(int floor, {int? atSeq}) => Account(
+        username: username,
+        generation: generation,
+        authVerifierHash: authVerifierHash,
+        verifierSalt: verifierSalt,
+        argonSalt: argonSalt,
+        argonParams: argonParams,
+        vaultKeyCheck: vaultKeyCheck,
+        recordEnvelopeFloor: floor,
+        recordEnvelopeFloorSeq: atSeq ?? recordEnvelopeFloorSeq,
+      );
 }
 
 /// One authenticated session, bound to the exact account incarnation that
@@ -73,6 +91,11 @@ class StorageCursorRejectedException implements Exception {
 /// A single stored row cannot fit the operator's configured response page.
 class StoragePageTooSmallException implements Exception {
   const StoragePageTooSmallException();
+}
+
+/// The account claims a v2-only checkpoint while a legacy row still exists.
+class StorageEnvelopeFloorViolationException implements Exception {
+  const StorageEnvelopeFloorViolationException();
 }
 
 /// A write would grow an account past its durable storage budget.
@@ -223,6 +246,34 @@ abstract class Storage {
     int? throughSeq,
     required PullPageLimits limits,
     PushLimits? advertisedLimits,
+  });
+
+  /// Enumerate legacy rows by id. Current writers cannot add legacy rows, so
+  /// removing rows concurrently cannot invalidate the lexical cursor.
+  Future<LegacyRecordPage> legacyRecordPage(
+    String username, {
+    String? afterId,
+    required PullPageLimits limits,
+  });
+  Future<LegacyRecordPage> legacyRecordPageFor(
+    AuthPrincipal principal, {
+    String? afterId,
+    required PullPageLimits limits,
+  });
+
+  /// Atomically replace exact observed v1 rows and, when requested, advance
+  /// the account floor only after proving no non-v2 row remains.
+  Future<LegacyMigrationResponse> migrateLegacyRecords(
+    String username,
+    List<LegacyRecordMigration> migrations, {
+    required bool finalize,
+    AccountQuota? quota,
+  });
+  Future<LegacyMigrationResponse> migrateLegacyRecordsFor(
+    AuthPrincipal principal,
+    List<LegacyRecordMigration> migrations, {
+    required bool finalize,
+    AccountQuota? quota,
   });
 
   // Compatibility primitives; sync handlers must use the atomic operations.
@@ -559,6 +610,8 @@ class InMemoryStorage implements Storage {
       argonSalt: account.argonSalt,
       argonParams: account.argonParams,
       vaultKeyCheck: vaultKeyCheck,
+      recordEnvelopeFloor: account.recordEnvelopeFloor,
+      recordEnvelopeFloorSeq: account.recordEnvelopeFloorSeq,
     );
     return vaultKeyCheck;
   }
@@ -638,7 +691,11 @@ class InMemoryStorage implements Storage {
         .where((r) => (r.seq ?? 0) > since && (r.seq ?? 0) <= watermark)
         .toList()
       ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
-    return PullResponse(records: records, latestSeq: watermark);
+    return PullResponse(
+      records: records,
+      latestSeq: watermark,
+      recordEnvelopeFloor: _recordEnvelopeFloor(username, watermark),
+    );
   }
 
   @override
@@ -688,6 +745,7 @@ class InMemoryStorage implements Storage {
     return PullResponse(
       records: records,
       latestSeq: through,
+      recordEnvelopeFloor: _recordEnvelopeFloor(username, through),
       throughSeq: through,
       hasMore: hasMore,
       limits: advertisedLimits,
@@ -715,6 +773,161 @@ class InMemoryStorage implements Storage {
       throughSeq: throughSeq,
       limits: limits,
       advertisedLimits: advertisedLimits,
+    );
+  }
+
+  int _recordEnvelopeFloor(String username, [int? throughSeq]) {
+    final account = _accounts[username];
+    if (account == null) return kLegacyRecordEnvelopeVersion;
+    if (account.recordEnvelopeFloor == kCurrentRecordEnvelopeVersion &&
+        throughSeq != null &&
+        throughSeq < account.recordEnvelopeFloorSeq) {
+      return kLegacyRecordEnvelopeVersion;
+    }
+    return account.recordEnvelopeFloor;
+  }
+
+  @override
+  Future<LegacyRecordPage> legacyRecordPage(
+    String username, {
+    String? afterId,
+    required PullPageLimits limits,
+  }) async {
+    final floor = _recordEnvelopeFloor(username);
+    final candidates = (_records[username]?.values ?? const <EncryptedRecord>[])
+        .where((record) =>
+            record.envelopeVersion == kLegacyRecordEnvelopeVersion &&
+            (afterId == null || record.id.compareTo(afterId) > 0))
+        .toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+    if (floor == kCurrentRecordEnvelopeVersion && candidates.isNotEmpty) {
+      throw const StorageEnvelopeFloorViolationException();
+    }
+    final records = <EncryptedRecord>[];
+    var recordBytes = 0;
+    for (final candidate in candidates) {
+      if (records.length == limits.maxRecords) break;
+      final nextBytes = recordBytes + candidate.encodedJsonBytes();
+      final fits = LegacyRecordPage.bodyBytesFor(
+            recordCount: records.length + 1,
+            recordBytes: nextBytes,
+            nextId: candidate.id,
+            hasMore: false,
+            recordEnvelopeFloor: floor,
+          ) <=
+          limits.maxBodyBytes;
+      if (!fits) {
+        if (records.isEmpty) throw const StoragePageTooSmallException();
+        break;
+      }
+      records.add(candidate);
+      recordBytes = nextBytes;
+    }
+    final nextId = records.isEmpty ? null : records.last.id;
+    return LegacyRecordPage(
+      records: records,
+      nextId: nextId,
+      hasMore: candidates.length > records.length,
+      recordEnvelopeFloor: floor,
+    );
+  }
+
+  @override
+  Future<LegacyRecordPage> legacyRecordPageFor(
+    AuthPrincipal principal, {
+    String? afterId,
+    required PullPageLimits limits,
+  }) {
+    _requireCurrent(principal);
+    return legacyRecordPage(
+      principal.username,
+      afterId: afterId,
+      limits: limits,
+    );
+  }
+
+  @override
+  Future<LegacyMigrationResponse> migrateLegacyRecords(
+    String username,
+    List<LegacyRecordMigration> migrations, {
+    required bool finalize,
+    AccountQuota? quota,
+  }) async {
+    validateLegacyMigrationBatch(migrations);
+    final current = _records[username] ?? const <String, EncryptedRecord>{};
+    final staged = Map<String, EncryptedRecord>.of(current);
+    var seq = _seq[username] ?? 0;
+    var migrated = 0;
+    var stale = 0;
+    for (final migration in migrations) {
+      final existing = staged[migration.expected.id];
+      if (existing == null ||
+          !sameEncryptedRecord(existing, migration.expected)) {
+        stale++;
+        continue;
+      }
+
+      staged.remove(migration.expected.id);
+      final replacement = migration.replacement;
+      final target = staged[replacement.id];
+      if (target == null ||
+          (target.envelopeVersion == kCurrentRecordEnvelopeVersion &&
+              identical(Lww.resolve(target, replacement), replacement))) {
+        seq++;
+        staged[replacement.id] = replacement.withSeq(seq);
+      }
+      migrated++;
+    }
+
+    if (migrated != 0 && quota != null) {
+      enforceAccountQuota(
+        beforeCount: current.length,
+        beforeBytes: _recordBytes(current.values),
+        afterCount: staged.length,
+        afterBytes: _recordBytes(staged.values),
+        quota: quota,
+      );
+    }
+    _records[username] = staged;
+    _seq[username] = seq;
+
+    var floor = _recordEnvelopeFloor(username);
+    if (finalize &&
+        floor < kCurrentRecordEnvelopeVersion &&
+        !staged.values.any((record) =>
+            record.envelopeVersion != kCurrentRecordEnvelopeVersion)) {
+      final account = _accounts[username];
+      if (account != null) {
+        floor = kCurrentRecordEnvelopeVersion;
+        seq++;
+        _seq[username] = seq;
+        _accounts[username] = account.withRecordEnvelopeFloor(
+          floor,
+          atSeq: seq,
+        );
+      }
+    }
+    return LegacyMigrationResponse(
+      migrated: migrated,
+      stale: stale,
+      latestSeq: seq,
+      recordEnvelopeFloor: floor,
+    );
+  }
+
+  @override
+  Future<LegacyMigrationResponse> migrateLegacyRecordsFor(
+    AuthPrincipal principal,
+    List<LegacyRecordMigration> migrations, {
+    required bool finalize,
+    AccountQuota? quota,
+  }) {
+    _requireCurrent(principal);
+    return migrateLegacyRecords(
+      principal.username,
+      migrations,
+      finalize: finalize,
+      quota: quota,
     );
   }
 

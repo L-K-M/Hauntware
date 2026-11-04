@@ -33,6 +33,9 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
   var pullCalls = 0;
   var pushCalls = 0;
 
+  /// Existing accounts created before authenticated envelopes advertise one.
+  int recordEnvelopeFloor = kCurrentRecordEnvelopeVersion;
+
   /// When set, the next [pull] throws it — the 401 dead-account fixture.
   Object? nextPullError;
 
@@ -81,6 +84,7 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
     return LoginResponse(
       token: token!,
       vaultKeyCheck: request.vaultKeyCheck,
+      recordEnvelopeFloor: recordEnvelopeFloor,
     );
   }
 
@@ -109,6 +113,7 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
     return LoginResponse(
       token: token!,
       vaultKeyCheck: account.vaultKeyCheck,
+      recordEnvelopeFloor: recordEnvelopeFloor,
     );
   }
 
@@ -149,7 +154,11 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
         .where((r) => (r.seq ?? 0) > since)
         .toList()
       ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
-    return PullResponse(records: list, latestSeq: _seq);
+    return PullResponse(
+      records: list,
+      latestSeq: _seq,
+      recordEnvelopeFloor: recordEnvelopeFloor,
+    );
   }
 
   @override

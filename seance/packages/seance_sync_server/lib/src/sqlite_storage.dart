@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:seance_protocol/seance_protocol.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import 'legacy_migration_validation.dart';
 import 'storage.dart';
 
 enum _TransactionMode { read, write }
@@ -41,7 +42,10 @@ class SqliteStorage implements Storage {
         verifier_salt TEXT NOT NULL,
         argon_salt TEXT NOT NULL,
         argon_params TEXT NOT NULL,
-        vault_key_check TEXT
+        vault_key_check TEXT,
+        record_envelope_floor INTEGER NOT NULL DEFAULT 2
+          CHECK(record_envelope_floor IN (1, 2)),
+        record_envelope_floor_seq INTEGER NOT NULL DEFAULT 0
       );
     ''');
       final accountColumns = _db
@@ -53,6 +57,21 @@ class SqliteStorage implements Storage {
       }
       if (!accountColumns.contains('generation')) {
         _db.execute('ALTER TABLE accounts ADD COLUMN generation TEXT;');
+      }
+      if (!accountColumns.contains('record_envelope_floor')) {
+        // Every account predating the authenticated-envelope checkpoint may
+        // still contain v1 rows. New accounts are inserted explicitly at 2.
+        _db.execute(
+          'ALTER TABLE accounts ADD COLUMN record_envelope_floor '
+          'INTEGER NOT NULL DEFAULT 1 '
+          'CHECK(record_envelope_floor IN (1, 2));',
+        );
+      }
+      if (!accountColumns.contains('record_envelope_floor_seq')) {
+        _db.execute(
+          'ALTER TABLE accounts ADD COLUMN record_envelope_floor_seq '
+          'INTEGER NOT NULL DEFAULT 0;',
+        );
       }
       final missingGenerations = _db.select(
         'SELECT username FROM accounts WHERE generation IS NULL '
@@ -288,6 +307,8 @@ class SqliteStorage implements Storage {
         (jsonDecode(r['argon_params'] as String) as Map).cast(),
       ),
       vaultKeyCheck: r['vault_key_check'] as String?,
+      recordEnvelopeFloor: r['record_envelope_floor'] as int,
+      recordEnvelopeFloorSeq: r['record_envelope_floor_seq'] as int,
     );
   }
 
@@ -299,8 +320,9 @@ class SqliteStorage implements Storage {
   void _insertAccount(Account account) {
     _db.execute(
       'INSERT INTO accounts (username, generation, auth_verifier_hash, '
-      'verifier_salt, argon_salt, argon_params, vault_key_check) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'verifier_salt, argon_salt, argon_params, vault_key_check, '
+      'record_envelope_floor, record_envelope_floor_seq) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         account.username,
         account.generation,
@@ -309,6 +331,8 @@ class SqliteStorage implements Storage {
         account.argonSalt,
         jsonEncode(account.argonParams.toJson()),
         account.vaultKeyCheck,
+        account.recordEnvelopeFloor,
+        account.recordEnvelopeFloorSeq,
       ],
     );
     _db.execute('INSERT OR IGNORE INTO seqs (username, value) VALUES (?, 0)', [
@@ -468,6 +492,24 @@ class SqliteStorage implements Storage {
     return rows.isEmpty ? null : rows.first['generation'] as String;
   }
 
+  int _recordEnvelopeFloor(String username, [int? throughSeq]) {
+    final rows = _db.select(
+      'SELECT record_envelope_floor, record_envelope_floor_seq '
+      'FROM accounts WHERE username = ?',
+      [username],
+    );
+    if (rows.isEmpty) return kLegacyRecordEnvelopeVersion;
+    final row = rows.single;
+    final floor = row['record_envelope_floor'] as int;
+    final checkpoint = row['record_envelope_floor_seq'] as int;
+    if (floor == kCurrentRecordEnvelopeVersion &&
+        throughSeq != null &&
+        throughSeq < checkpoint) {
+      return kLegacyRecordEnvelopeVersion;
+    }
+    return floor;
+  }
+
   bool _isCurrent(AuthPrincipal principal) {
     final rows = _db.select(
       'SELECT 1 FROM accounts a JOIN tokens t ON t.username = a.username '
@@ -623,6 +665,7 @@ class SqliteStorage implements Storage {
         return PullResponse(
           records: _recordsSince(username, since, through: watermark),
           latestSeq: watermark,
+          recordEnvelopeFloor: _recordEnvelopeFloor(username, watermark),
         );
       });
 
@@ -636,6 +679,8 @@ class SqliteStorage implements Storage {
     return PullResponse(
       records: _recordsSince(principal.username, since, through: watermark),
       latestSeq: watermark,
+      recordEnvelopeFloor:
+          _recordEnvelopeFloor(principal.username, watermark),
     );
   });
 
@@ -684,6 +729,7 @@ class SqliteStorage implements Storage {
   }) {
     final latest = _latestSeq(username);
     final through = throughSeq ?? latest;
+    final floor = _recordEnvelopeFloor(username, through);
     if (through < since || through > latest) {
       throw const StorageCursorRejectedException();
     }
@@ -708,6 +754,7 @@ class SqliteStorage implements Storage {
               recordCount: records.length + 1,
               recordBytes: nextBytes,
               latestSeq: through,
+              recordEnvelopeFloor: floor,
               throughSeq: through,
               hasMore: false,
               limits: advertisedLimits,
@@ -727,9 +774,197 @@ class SqliteStorage implements Storage {
     return PullResponse(
       records: records,
       latestSeq: through,
+      recordEnvelopeFloor: floor,
       throughSeq: through,
       hasMore: hasMore,
       limits: advertisedLimits,
+    );
+  }
+
+  @override
+  Future<LegacyRecordPage> legacyRecordPage(
+    String username, {
+    String? afterId,
+    required PullPageLimits limits,
+  }) async => _transaction(
+    _TransactionMode.read,
+    () => _legacyRecordPage(username, afterId: afterId, limits: limits),
+  );
+
+  @override
+  Future<LegacyRecordPage> legacyRecordPageFor(
+    AuthPrincipal principal, {
+    String? afterId,
+    required PullPageLimits limits,
+  }) async => _transaction(_TransactionMode.read, () {
+    _requireCurrent(principal);
+    return _legacyRecordPage(
+      principal.username,
+      afterId: afterId,
+      limits: limits,
+    );
+  });
+
+  LegacyRecordPage _legacyRecordPage(
+    String username, {
+    String? afterId,
+    required PullPageLimits limits,
+  }) {
+    final floor = _recordEnvelopeFloor(username);
+    final statement = _db.prepare(
+      afterId == null
+          ? 'SELECT * FROM records WHERE username = ? '
+                'AND envelope_version = ? ORDER BY id ASC'
+          : 'SELECT * FROM records WHERE username = ? '
+                'AND envelope_version = ? AND id > ? ORDER BY id ASC',
+    );
+    final cursor = statement.selectCursor([
+      username,
+      kLegacyRecordEnvelopeVersion,
+      if (afterId != null) afterId,
+    ]);
+    final records = <EncryptedRecord>[];
+    var recordBytes = 0;
+    var hasMore = false;
+    try {
+      while (cursor.moveNext()) {
+        final candidate = _rowToRecord(cursor.current);
+        if (floor == kCurrentRecordEnvelopeVersion) {
+          throw const StorageEnvelopeFloorViolationException();
+        }
+        if (records.length == limits.maxRecords) {
+          hasMore = true;
+          break;
+        }
+        final nextBytes = recordBytes + candidate.encodedJsonBytes();
+        final fits = LegacyRecordPage.bodyBytesFor(
+              recordCount: records.length + 1,
+              recordBytes: nextBytes,
+              nextId: candidate.id,
+              hasMore: false,
+              recordEnvelopeFloor: floor,
+            ) <=
+            limits.maxBodyBytes;
+        if (!fits) {
+          if (records.isEmpty) throw const StoragePageTooSmallException();
+          hasMore = true;
+          break;
+        }
+        records.add(candidate);
+        recordBytes = nextBytes;
+      }
+    } finally {
+      statement.dispose();
+    }
+    return LegacyRecordPage(
+      records: records,
+      nextId: records.isEmpty ? null : records.last.id,
+      hasMore: hasMore,
+      recordEnvelopeFloor: floor,
+    );
+  }
+
+  @override
+  Future<LegacyMigrationResponse> migrateLegacyRecords(
+    String username,
+    List<LegacyRecordMigration> migrations, {
+    required bool finalize,
+    AccountQuota? quota,
+  }) async => _transaction(_TransactionMode.write, () {
+    return _migrateLegacyRecords(
+      username,
+      migrations,
+      finalize: finalize,
+      quota: quota,
+    );
+  });
+
+  @override
+  Future<LegacyMigrationResponse> migrateLegacyRecordsFor(
+    AuthPrincipal principal,
+    List<LegacyRecordMigration> migrations, {
+    required bool finalize,
+    AccountQuota? quota,
+  }) async => _transaction(_TransactionMode.write, () {
+    _requireCurrent(principal);
+    return _migrateLegacyRecords(
+      principal.username,
+      migrations,
+      finalize: finalize,
+      quota: quota,
+    );
+  });
+
+  LegacyMigrationResponse _migrateLegacyRecords(
+    String username,
+    List<LegacyRecordMigration> migrations, {
+    required bool finalize,
+    AccountQuota? quota,
+  }) {
+    validateLegacyMigrationBatch(migrations);
+    final before = quota == null ? null : _recordUsage(username);
+    var migrated = 0;
+    var stale = 0;
+    for (final migration in migrations) {
+      final existing = _getRecord(username, migration.expected.id);
+      if (existing == null ||
+          !sameEncryptedRecord(existing, migration.expected)) {
+        stale++;
+        continue;
+      }
+
+      _db.execute(
+        'DELETE FROM records WHERE username = ? AND id = ?',
+        [username, migration.expected.id],
+      );
+      final replacement = migration.replacement;
+      final target = _getRecord(username, replacement.id);
+      if (target == null ||
+          (target.envelopeVersion == kCurrentRecordEnvelopeVersion &&
+              identical(Lww.resolve(target, replacement), replacement))) {
+        _putRecord(username, replacement.withSeq(_nextSeq(username)));
+      }
+      migrated++;
+    }
+
+    if (migrated != 0 && quota != null) {
+      final after = _recordUsage(username);
+      enforceAccountQuota(
+        beforeCount: before!.$1,
+        beforeBytes: before.$2,
+        afterCount: after.$1,
+        afterBytes: after.$2,
+        quota: quota,
+      );
+    }
+
+    if (finalize &&
+        _recordEnvelopeFloor(username) < kCurrentRecordEnvelopeVersion) {
+      final remaining = _db.select(
+        'SELECT 1 FROM records WHERE username = ? '
+        'AND envelope_version != ? LIMIT 1',
+        [username, kCurrentRecordEnvelopeVersion],
+      );
+      if (remaining.isEmpty && _accountGeneration(username) != null) {
+        final checkpoint = _nextSeq(username);
+        _db.execute(
+          'UPDATE accounts SET record_envelope_floor = ?, '
+          'record_envelope_floor_seq = ? '
+          'WHERE username = ? AND record_envelope_floor < ?',
+          [
+            kCurrentRecordEnvelopeVersion,
+            checkpoint,
+            username,
+            kCurrentRecordEnvelopeVersion,
+          ],
+        );
+      }
+    }
+    return LegacyMigrationResponse(
+      migrated: migrated,
+      stale: stale,
+      latestSeq: _latestSeq(username),
+      recordEnvelopeFloor: _recordEnvelopeFloor(username),
     );
   }
 

@@ -23,6 +23,37 @@ abstract class LocalRecordStore {
   Future<void> setHighWaterSeq(int seq);
 }
 
+/// A server advertised an older envelope floor than this account previously
+/// observed. Accepting it would make a server rollback silently re-enable
+/// unauthenticated conflict metadata.
+final class RecordEnvelopeFloorDowngradeException implements Exception {
+  const RecordEnvelopeFloorDowngradeException({
+    required this.observed,
+    required this.advertised,
+  });
+
+  final int observed;
+  final int advertised;
+
+  @override
+  String toString() =>
+      'Record envelope floor regressed from $observed to $advertised';
+}
+
+/// Durable, account-scoped memory of the strongest server envelope floor.
+///
+/// The value is monotone. A scoped store binds it to the same endpoint and
+/// username as the records and cursors, so one account cannot bless another.
+/// This detects a downgrade after the device has observed the stronger floor;
+/// a brand-new device cannot detect a complete, internally consistent rollback
+/// to an older floor-2 snapshot without a checkpoint outside that server.
+abstract interface class RecordEnvelopeFloorStore implements LocalRecordStore {
+  Future<int> recordEnvelopeFloor();
+
+  /// Persist [floor], or throw when it is below the value already observed.
+  Future<void> observeRecordEnvelopeFloor(int floor);
+}
+
 /// A mirror that can settle the exact operation a push sent.
 ///
 /// A local edit may replace [sent] while the request is in flight. Settling by
@@ -69,12 +100,29 @@ class InMemoryLocalRecordStore
     implements
         PushSettlingRecordStore,
         LocalPublicationStore,
-        RecoverableSyncCursorStore {
+        RecoverableSyncCursorStore,
+        RecordEnvelopeFloorStore {
   final Map<String, EncryptedRecord> _records = {};
   final Set<String> _dirty = {};
   final Map<String, EncryptedRecord> _displaced = {};
   int _highWater = 0;
   bool _cursorRecoveryPending = false;
+  int _recordEnvelopeFloor = kLegacyRecordEnvelopeVersion;
+
+  @override
+  Future<int> recordEnvelopeFloor() async => _recordEnvelopeFloor;
+
+  @override
+  Future<void> observeRecordEnvelopeFloor(int floor) async {
+    _validateRecordEnvelopeFloor(floor);
+    if (floor < _recordEnvelopeFloor) {
+      throw RecordEnvelopeFloorDowngradeException(
+        observed: _recordEnvelopeFloor,
+        advertised: floor,
+      );
+    }
+    _recordEnvelopeFloor = floor;
+  }
 
   @override
   Future<List<EncryptedRecord>> allRecords() async => _records.values.toList();
@@ -186,5 +234,12 @@ class InMemoryLocalRecordStore
   @override
   Future<void> completeCursorRecovery() async {
     _cursorRecoveryPending = false;
+  }
+}
+
+void _validateRecordEnvelopeFloor(int floor) {
+  if (floor < kLegacyRecordEnvelopeVersion ||
+      floor > kCurrentRecordEnvelopeVersion) {
+    throw FormatException('Unsupported record envelope floor $floor');
   }
 }

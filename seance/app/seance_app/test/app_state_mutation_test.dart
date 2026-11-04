@@ -15,6 +15,28 @@ import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
+MockClient _currentServerClient(
+  Future<http.Response> Function(http.Request) handler,
+) {
+  return MockClient((request) async {
+    if (request.method == 'GET' &&
+        request.url.path == '/v1/records/legacy') {
+      return http.Response(
+        jsonEncode(
+          const LegacyRecordPage(
+            records: [],
+            nextId: null,
+            hasMore: false,
+            recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
+          ).toJson(),
+        ),
+        HttpStatus.ok,
+      );
+    }
+    return handler(request);
+  });
+}
+
 /// The mutation queue's re-entrancy guard: it must catch the one shape of
 /// call that deadlocks the queue, and nothing else.
 void main() {
@@ -167,7 +189,7 @@ void main() {
       final releasePull = Completer<void>();
       final remote = <EncryptedRecord>[];
       var sequence = 0;
-      final transport = MockClient((request) async {
+      final transport = _currentServerClient((request) async {
         if (request.method == 'GET') {
           if (!pullStarted.isCompleted) {
             pullStarted.complete();

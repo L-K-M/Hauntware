@@ -30,7 +30,28 @@ Future<String> _vaultKeyCheck({
 }
 
 class _TrackedClient extends MockClient {
-  _TrackedClient(super.handler);
+  _TrackedClient(Future<http.Response> Function(http.Request) handler)
+    : super((request) async {
+        // These lifetime tests exercise ordinary sync and enrollment. Model
+        // a server whose legacy migration has already finished so the new
+        // compatibility probe does not get mistaken for an ordinary pull by
+        // each test-specific handler.
+        if (request.method == 'GET' &&
+            request.url.path == '/v1/records/legacy') {
+          return http.Response(
+            jsonEncode(
+              const LegacyRecordPage(
+                records: [],
+                nextId: null,
+                hasMore: false,
+                recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
+              ).toJson(),
+            ),
+            HttpStatus.ok,
+          );
+        }
+        return handler(request);
+      });
   int closes = 0;
 
   @override
@@ -39,7 +60,6 @@ class _TrackedClient extends MockClient {
     super.close();
   }
 }
-
 
 /// A keystore that serves reads and ordinary writes but can refuse the vault
 /// master key specifically, which is how a locked keyring fails the one write
@@ -767,6 +787,63 @@ void main() {
     );
     expect(services.vaultKey, oldKey);
     expect(await services.masterKeys.getApiKey('sync.token'), 'session-token');
+    expect(transport.closes, 1);
+  });
+
+  test('a legacy live payload proves only the vault key during login',
+      () async {
+    final keys = await VaultCrypto.deriveKeys(
+      passphrase: 'password',
+      salt: List<int>.filled(16, 0),
+    );
+    final legacy = EncryptedRecord(
+      envelopeVersion: kLegacyRecordEnvelopeVersion,
+      id: 'untrusted-outer-id',
+      updatedAt: 999999,
+      deviceId: 'untrusted-device',
+      deleted: false,
+      seq: 1,
+      blob: await VaultCrypto.sealJson(keys.vaultKey, {
+        'kind': RecordKind.serverConfig.name,
+        'data': const <String, dynamic>{'id': 'canonical-id'},
+      }),
+    );
+    final transport = _TrackedClient((request) async {
+      if (request.url.path == '/v1/prelogin') {
+        return http.Response(jsonEncode({
+          'argonSalt': base64Encode(List<int>.filled(16, 0)),
+          'argonParams': const Argon2Params().toJson(),
+        }), HttpStatus.ok);
+      }
+      if (request.url.path == '/v1/sync') {
+        return http.Response(
+          jsonEncode(PullResponse(
+            records: [legacy],
+            latestSeq: 1,
+            recordEnvelopeFloor: kLegacyRecordEnvelopeVersion,
+          ).toJson()),
+          HttpStatus.ok,
+        );
+      }
+      return http.Response(jsonEncode({
+        'token': 'legacy-token',
+        'recordEnvelopeFloor': kLegacyRecordEnvelopeVersion,
+      }), HttpStatus.ok);
+    });
+
+    await http.runWithClient(
+      () => services.loginSync(
+        baseUrl: _baseUrl,
+        username: 'user',
+        password: 'password',
+        encryptionPassphrase: 'password',
+      ),
+      () => transport,
+    );
+
+    expect(await services.masterKeys.getApiKey('sync.token'), 'legacy-token');
+    expect(await services.configStore.getServer('canonical-id'), isNull,
+        reason: 'legacy outer metadata must not enter local stores at login');
     expect(transport.closes, 1);
   });
 

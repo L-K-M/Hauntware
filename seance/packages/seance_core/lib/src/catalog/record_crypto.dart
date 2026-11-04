@@ -27,6 +27,13 @@ final class RecordCrypto {
   Future<DecryptedRecord> open(EncryptedRecord record) =>
       _codec.decrypt(record);
 
+  /// Open only the authenticated `{kind, data}` from a legacy live envelope.
+  /// Callers must match it to independent current local state before sealing.
+  Future<LegacyRecordPayload> openLegacyForMigration(
+    EncryptedRecord record,
+  ) =>
+      _codec.decryptLegacyForMigration(record);
+
   /// Wrap and encrypt a [DecryptedRecord] for this vault key.
   Future<EncryptedRecord> seal(DecryptedRecord record) =>
       _codec.encrypt(record);

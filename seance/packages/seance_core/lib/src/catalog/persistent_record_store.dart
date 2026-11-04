@@ -123,6 +123,7 @@ String _stamp(DateTime now) => now
 /// { "version": 1,
 ///   "highWaterSeq": 41,
 ///   "lastAppliedSeq": 40,
+///   "recordEnvelopeFloor": 2,
 ///   "cursorRecoveryPending": true,
 ///   "records":   [ {"...EncryptedRecord json...", "dirty": false} ],
 ///   "displaced": [ {"...EncryptedRecord json..."} ] }
@@ -146,7 +147,8 @@ final class PersistentLocalRecordStore
         SyncRecordStore,
         PushSettlingRecordStore,
         LocalPublicationStore,
-        RecoverableSyncCursorStore {
+        RecoverableSyncCursorStore,
+        RecordEnvelopeFloorStore {
   PersistentLocalRecordStore({
     required String path,
     this.scope,
@@ -203,6 +205,7 @@ final class PersistentLocalRecordStore
   int _highWaterSeq = 0;
   int _lastAppliedSeq = 0;
   bool _cursorRecoveryPending = false;
+  int _recordEnvelopeFloor = kLegacyRecordEnvelopeVersion;
 
   /// Set when a corrupt file was quarantined during load — the durable
   /// recovery-notice seam (04 §3.1): the app reads it once to surface the
@@ -410,6 +413,31 @@ final class PersistentLocalRecordStore
         _cursorRecoveryPending = false;
       });
 
+  @override
+  Future<int> recordEnvelopeFloor() async {
+    await _ensureLoaded();
+    await _writeTail;
+    return _recordEnvelopeFloor;
+  }
+
+  @override
+  Future<void> observeRecordEnvelopeFloor(int floor) async {
+    if (floor < kLegacyRecordEnvelopeVersion ||
+        floor > kCurrentRecordEnvelopeVersion) {
+      throw FormatException('Unsupported record envelope floor $floor');
+    }
+    await _ensureLoaded();
+    await _writeTail;
+    if (floor < _recordEnvelopeFloor) {
+      throw RecordEnvelopeFloorDowngradeException(
+        observed: _recordEnvelopeFloor,
+        advertised: floor,
+      );
+    }
+    if (floor == _recordEnvelopeFloor) return;
+    await _mutate(() => _recordEnvelopeFloor = floor);
+  }
+
   /// Every mutation is serialized and persisted atomically before the
   /// call returns — a crash mid-round can lose at most the in-flight
   /// mutation, never a torn document. The queue heals on a failed write so
@@ -527,11 +555,13 @@ final class PersistentLocalRecordStore
     final highWater = doc['highWaterSeq'];
     final lastApplied = doc['lastAppliedSeq'];
     final cursorRecoveryPending = doc['cursorRecoveryPending'];
+    final recordEnvelopeFloor = doc['recordEnvelopeFloor'];
     final displaced = doc['displaced'];
     if (records is! List ||
         (highWater != null && highWater is! int) ||
         (lastApplied != null && lastApplied is! int) ||
         (cursorRecoveryPending != null && cursorRecoveryPending is! bool) ||
+        (recordEnvelopeFloor != null && recordEnvelopeFloor is! int) ||
         (displaced != null && displaced is! List)) {
       throw const FormatException('record store root');
     }
@@ -550,6 +580,12 @@ final class PersistentLocalRecordStore
     _highWaterSeq = highWater as int? ?? 0;
     _lastAppliedSeq = lastApplied as int? ?? 0;
     _cursorRecoveryPending = cursorRecoveryPending as bool? ?? false;
+    _recordEnvelopeFloor =
+        recordEnvelopeFloor as int? ?? kLegacyRecordEnvelopeVersion;
+    if (_recordEnvelopeFloor < kLegacyRecordEnvelopeVersion ||
+        _recordEnvelopeFloor > kCurrentRecordEnvelopeVersion) {
+      throw const FormatException('record store envelope floor');
+    }
   }
 
   Future<void> _recoverMalformed(Object error, StackTrace stack) async {
@@ -566,6 +602,7 @@ final class PersistentLocalRecordStore
     _highWaterSeq = 0;
     _lastAppliedSeq = 0;
     _cursorRecoveryPending = false;
+    _recordEnvelopeFloor = kLegacyRecordEnvelopeVersion;
   }
 
   void _readEntry(Map<String, dynamic> json) {
@@ -584,6 +621,8 @@ final class PersistentLocalRecordStore
           if (scope != null) 'account': scope!.toJson(),
           'highWaterSeq': _highWaterSeq,
           'lastAppliedSeq': _lastAppliedSeq,
+          if (_recordEnvelopeFloor > kLegacyRecordEnvelopeVersion)
+            'recordEnvelopeFloor': _recordEnvelopeFloor,
           if (_cursorRecoveryPending) 'cursorRecoveryPending': true,
           'records': [
             for (final record in _records.values)

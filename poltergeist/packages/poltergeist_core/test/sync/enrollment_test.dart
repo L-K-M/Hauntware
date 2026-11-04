@@ -325,6 +325,42 @@ void main() {
       expect(await device.bookmarks.byId('remote'), isNotNull);
     });
 
+    test('a legacy live payload proves the key without entering the mirror',
+        () async {
+      final device = await _Device.create(tempDir, 'a');
+      final account =
+          await server.addAccount(username: 'ghost-1', password: 'pw');
+      server.recordEnvelopeFloor = kLegacyRecordEnvelopeVersion;
+      final bookmark = _bookmark('legacy');
+      server.seed(EncryptedRecord(
+        envelopeVersion: kLegacyRecordEnvelopeVersion,
+        id: 'bookmark:${bookmark.id}',
+        updatedAt: _epochMs + 999999,
+        deviceId: 'untrusted-device',
+        deleted: false,
+        seq: null,
+        blob: await VaultCrypto.sealJson(account.keys.vaultKey, {
+          'kind': RecordKind.bookmark.name,
+          'data': bookmark.toJson(),
+        }),
+      ));
+
+      final result = await device.enrollment.login(
+        api: server,
+        baseUrl: 'https://sync.example.com',
+        username: 'ghost-1',
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+        mode: SyncAccountMode.separate,
+      );
+
+      expect(result.passphraseUnverified, isFalse);
+      expect(result.passphraseWarning, isNull);
+      expect(await device.records.getRecord('bookmark:legacy'), isNull,
+          reason: 'legacy public conflict metadata is not trusted at login');
+      expect(await device.records.highWaterSeq(), 1);
+    });
+
     test('authenticates every pulled envelope before it can settle a local '
         'edit', () async {
       final device = await _Device.create(tempDir, 'a');

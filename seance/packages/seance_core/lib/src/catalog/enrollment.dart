@@ -10,10 +10,13 @@ import 'dart:convert';
 import 'package:seance_protocol/seance_protocol.dart';
 
 import '../sync/sync_engine.dart';
+import '../sync/legacy_envelope_migration.dart';
 import 'persistent_record_store.dart';
 import 'record_coordinator.dart' show isDecryptableSyncId;
 import 'record_crypto.dart';
 import 'record_handler.dart';
+import 'server_config_handler.dart';
+import 'host_key_handler.dart';
 
 /// 04 §4.3's verbatim copy for 403 `registration_closed` on a Design B
 /// register — the UI renders this string (ARB-mirrored when the settings
@@ -252,6 +255,10 @@ final class SyncEnrollment {
         registered.vaultKeyCheck ?? '',
         username: username,
       );
+      await observeRecordEnvelopeFloor(
+        _records,
+        registered.recordEnvelopeFloor,
+      );
     } on ApiError catch (error) {
       if (error.code == 'registration_closed') {
         throw const RegistrationClosedException();
@@ -304,6 +311,10 @@ final class SyncEnrollment {
       username: username,
       authVerifier: base64.encode(keys.authVerifier),
     ));
+    await observeRecordEnvelopeFloor(
+      _records,
+      login.recordEnvelopeFloor,
+    );
     final keyCheck = login.vaultKeyCheck;
     if (keyCheck != null) {
       try {
@@ -317,6 +328,19 @@ final class SyncEnrollment {
       }
     }
     final response = await api.pull(since: 0);
+    if (response.recordEnvelopeFloor == kCurrentRecordEnvelopeVersion &&
+        response.records.any(
+          (record) =>
+              record.envelopeVersion < kCurrentRecordEnvelopeVersion,
+        )) {
+      throw const FormatException(
+        'Authenticated-envelope account returned a legacy record',
+      );
+    }
+    await observeRecordEnvelopeFloor(
+      _records,
+      response.recordEnvelopeFloor,
+    );
     final crypto = RecordCrypto(RecordCodec(keys.vaultKey));
     final handlersByPrefix = <String?, RecordHandler>{
       for (final handler in _handlers) handler.prefix: handler,
@@ -356,6 +380,20 @@ final class SyncEnrollment {
       if (!isDecryptableSyncId(record.id, _handlers)) continue;
       if (authenticated.containsKey(record)) {
         unverified = false;
+      } else if (record.envelopeVersion == kLegacyRecordEnvelopeVersion) {
+        try {
+          final legacy = await crypto.openLegacyForMigration(record);
+          if (legacy.kind == _trialKindForId(record.id, _handlers)) {
+            // This proves only possession of the vault key. Legacy outer
+            // metadata remains unauthenticated, so the row is deliberately
+            // absent from [authenticated] and cannot enter the LWW mirror.
+            unverified = false;
+          } else {
+            warning = syncPassphraseCheckFailedMessage;
+          }
+        } catch (_) {
+          warning = syncPassphraseCheckFailedMessage;
+        }
       } else {
         warning = syncPassphraseCheckFailedMessage;
       }
@@ -449,4 +487,21 @@ final class SyncEnrollment {
         SyncAccount(baseUrl: baseUrl, username: username, mode: mode));
     await _state.setNotice(syncNoticeAccountAuthFailed, false);
   }
+}
+
+RecordKind? _trialKindForId(
+  String id,
+  Iterable<RecordHandler> handlers,
+) {
+  final prefix = syncIdPrefix(id);
+  if (prefix == ServerConfigHandler.idPrefix) {
+    return RecordKind.serverConfig;
+  }
+  if (prefix == HostKeyHandler.idPrefix) return RecordKind.hostKey;
+  for (final handler in handlers) {
+    if (handler.prefix == prefix && handler.trialDecryptable) {
+      return handler.kind;
+    }
+  }
+  return null;
 }

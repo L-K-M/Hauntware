@@ -22,6 +22,7 @@ import 'package:seance_protocol/seance_protocol.dart';
 import '../store/stores.dart';
 import '../sync/push_batcher.dart';
 import '../sync/sync_engine.dart';
+import '../sync/legacy_envelope_migration.dart';
 import 'catalog_controller.dart';
 import 'catalog_snapshot.dart';
 import 'catalog_writer.dart';
@@ -156,6 +157,8 @@ const _genericHandlerTraits = [
 /// The sync server's error code for a push it refuses as too large to
 /// store (`SyncEngine` answers the same code).
 const String _payloadTooLarge = 'payload_too_large';
+
+Future<T> _runLocalDirectly<T>(Future<T> Function() action) => action();
 
 /// See the library doc. The coordinator never owns transport: [runRound]
 /// takes the [SyncApi] seam per call and tests fake it.
@@ -371,6 +374,7 @@ final class RecordCoordinator {
   final SyncEnrollmentState? _enrollment;
 
   final int _maxRounds;
+  bool _legacyMigrationPrepared = false;
 
   /// The shared write path (03 §4.4): every local edit seals through it.
   CatalogWriter get writer => _writer;
@@ -603,6 +607,23 @@ final class RecordCoordinator {
   /// account (tokens never expire server-side, so there is no refresh):
   /// the durable notice is raised and the round ends — local-only.
   Future<SyncRoundResult> runRound(SyncApi api) async {
+    if (!_pullOnly && !await _pushesHeld()) {
+      try {
+        await migrateLegacyEnvelopes(
+          api,
+          store: _records,
+          runLocal: _runLocalDirectly,
+          openLegacy: _crypto.openLegacyForMigration,
+          openCurrent: _crypto.open,
+          isEligible: _eligibleLegacyMigration,
+          prepareLocal: _prepareLegacyMigration,
+        );
+      } on ApiError catch (error) {
+        // Preserve the established dead-account posture. The ordinary pull
+        // below records the durable auth notice and ends local-only.
+        if (error.code != 'unauthorized') rethrow;
+      }
+    }
     final report = ApplyReport();
     var pulled = 0;
     var pushed = 0;
@@ -796,6 +817,10 @@ final class RecordCoordinator {
           (await _records.dirtyRecords()).map((r) => r.id).toSet();
       final holdActive = await _pushesHeld();
       await for (final page in pullPages(api, since: since)) {
+        await observeRecordEnvelopeFloor(
+          _records,
+          page.recordEnvelopeFloor,
+        );
         pulled += page.records.length;
         limits = page.limits ?? limits;
         for (final remote in page.records) {
@@ -818,9 +843,17 @@ final class RecordCoordinator {
           // dropped or parked behind the dirty rival it lost to.
           await _records.putRemote(remote);
         }
+        // Floor finalization allocates a sequence checkpoint without a row.
+        // A complete final page proves the gap contains no omitted records,
+        // so close it or every later round re-pulls the same empty tail.
+        if (page.throughSeq != null &&
+            !page.hasMore &&
+            page.latestSeq > snapshot) {
+          snapshot = page.latestSeq;
+        }
         // Commit only an observed sequence after every complete page. A later
-        // request failure resumes here; the advertised snapshot end never
-        // skips a row that was not delivered.
+        // request failure resumes there; only the final page can safely close
+        // the gap to the advertised snapshot end.
         await _records.setHighWaterSeq(snapshot);
       }
       return (pulled: pulled, limits: limits);
@@ -834,11 +867,30 @@ final class RecordCoordinator {
     }
   }
 
+  Future<void> _prepareLegacyMigration() async {
+    if (_legacyMigrationPrepared) return;
+    await reSealAfterStoreLoss();
+    _legacyMigrationPrepared = true;
+  }
+
+  bool _eligibleLegacyMigration(DecryptedRecord record) {
+    final handler = _handlers[syncIdPrefix(record.id)];
+    if (handler == null || handler.kind != record.kind) return false;
+    if (handler.prefix == null && _catalog == null) return false;
+    if (identical(handler, _secretHandler) && !_secretHandler.publishes) {
+      return false;
+    }
+    return true;
+  }
+
   Future<bool> _validBeforeMerge(
     EncryptedRecord record,
     Set<String> dirtyIds, {
     required bool holdActive,
   }) async {
+    // Opaque/held routes still participate in mirror LWW. Never let a v1
+    // tuple shadow the authenticated v2 row another device migrates later.
+    if (record.envelopeVersion != kCurrentRecordEnvelopeVersion) return false;
     final handler = _handlers[syncIdPrefix(record.id)];
     if (handler == null) return true;
 

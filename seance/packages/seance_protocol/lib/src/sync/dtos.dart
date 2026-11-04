@@ -94,16 +94,26 @@ class LoginRequest {
 class LoginResponse {
   final String token;
   final String? vaultKeyCheck;
-  const LoginResponse({required this.token, this.vaultKeyCheck});
+  final int recordEnvelopeFloor;
+
+  const LoginResponse({
+    required this.token,
+    this.vaultKeyCheck,
+    this.recordEnvelopeFloor = kCurrentRecordEnvelopeVersion,
+  });
 
   Map<String, dynamic> toJson() => {
         'token': token,
         if (vaultKeyCheck != null) 'vaultKeyCheck': vaultKeyCheck,
+        'recordEnvelopeFloor': recordEnvelopeFloor,
       };
   factory LoginResponse.fromJson(Map<String, dynamic> json) =>
       LoginResponse(
         token: json['token'] as String,
         vaultKeyCheck: json['vaultKeyCheck'] as String?,
+        recordEnvelopeFloor:
+            (json['recordEnvelopeFloor'] as num?)?.toInt() ??
+                kLegacyRecordEnvelopeVersion,
       );
 }
 
@@ -237,6 +247,12 @@ class PullResponse {
   final List<EncryptedRecord> records;
   final int latestSeq;
 
+  /// Lowest record-envelope generation the account can still contain.
+  ///
+  /// A value of 2 is an irreversible account checkpoint: clients that have
+  /// observed it must reject a later response advertising 1.
+  final int recordEnvelopeFloor;
+
   /// The fixed account watermark this page belongs to. Null is a legacy,
   /// unpaged response.
   final int? throughSeq;
@@ -254,6 +270,7 @@ class PullResponse {
   const PullResponse({
     required this.records,
     required this.latestSeq,
+    this.recordEnvelopeFloor = kCurrentRecordEnvelopeVersion,
     this.limits,
     this.throughSeq,
     this.hasMore = false,
@@ -262,6 +279,7 @@ class PullResponse {
   Map<String, dynamic> toJson() => {
         'records': records.map((r) => r.toJson()).toList(),
         'latestSeq': latestSeq,
+        'recordEnvelopeFloor': recordEnvelopeFloor,
         if (limits != null) 'limits': limits!.toJson(),
         if (throughSeq != null) ...{
           'throughSeq': throughSeq,
@@ -276,6 +294,7 @@ class PullResponse {
         recordBytes:
             records.fold(0, (sum, record) => sum + record.encodedJsonBytes()),
         latestSeq: latestSeq,
+        recordEnvelopeFloor: recordEnvelopeFloor,
         throughSeq: throughSeq,
         hasMore: hasMore,
         limits: limits,
@@ -286,18 +305,21 @@ class PullResponse {
     required int recordCount,
     required int recordBytes,
     required int latestSeq,
+    int recordEnvelopeFloor = kCurrentRecordEnvelopeVersion,
     int? throughSeq,
     required bool hasMore,
     PushLimits? limits,
   }) {
     final entries =
-        2 + (limits == null ? 0 : 1) + (throughSeq == null ? 0 : 2);
+        3 + (limits == null ? 0 : 1) + (throughSeq == null ? 0 : 2);
     return jsonObjectFramingBytes(entries) +
         jsonKeyBytes('records') +
         jsonArrayFramingBytes(recordCount) +
         recordBytes +
         jsonKeyBytes('latestSeq') +
         jsonIntBytes(latestSeq) +
+        jsonKeyBytes('recordEnvelopeFloor') +
+        jsonIntBytes(recordEnvelopeFloor) +
         (limits == null
             ? 0
             : jsonKeyBytes('limits') + limits.encodedJsonBytes()) +
@@ -314,6 +336,9 @@ class PullResponse {
             .map((e) => EncryptedRecord.fromJson((e as Map).cast()))
             .toList(),
         latestSeq: (json['latestSeq'] as num).toInt(),
+        recordEnvelopeFloor:
+            (json['recordEnvelopeFloor'] as num?)?.toInt() ??
+                kLegacyRecordEnvelopeVersion,
         // Anything that is not a well-formed advertisement counts as "not
         // advertised": the field is advisory and has a documented fallback, so
         // a mangled value must not take the records and watermark down with
@@ -321,6 +346,165 @@ class PullResponse {
         limits: PushLimits.tryFromJson(json['limits']),
         throughSeq: (json['throughSeq'] as num?)?.toInt(),
         hasMore: json['hasMore'] as bool? ?? false,
+      );
+}
+
+/// One bounded page of legacy v1 records, ordered by plaintext record id.
+///
+/// New protocol writers cannot create v1 records, so an id cursor remains
+/// stable while concurrent migration requests remove rows from the set.
+class LegacyRecordPage {
+  final List<EncryptedRecord> records;
+  final String? nextId;
+  final bool hasMore;
+  final int recordEnvelopeFloor;
+
+  const LegacyRecordPage({
+    required this.records,
+    required this.nextId,
+    required this.hasMore,
+    required this.recordEnvelopeFloor,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'records': records.map((record) => record.toJson()).toList(),
+        if (nextId != null) 'nextId': nextId,
+        'hasMore': hasMore,
+        'recordEnvelopeFloor': recordEnvelopeFloor,
+      };
+
+  int encodedSizeBytes() => bodyBytesFor(
+        recordCount: records.length,
+        recordBytes:
+            records.fold(0, (sum, record) => sum + record.encodedJsonBytes()),
+        nextId: nextId,
+        hasMore: hasMore,
+        recordEnvelopeFloor: recordEnvelopeFloor,
+      );
+
+  static int bodyBytesFor({
+    required int recordCount,
+    required int recordBytes,
+    required String? nextId,
+    required bool hasMore,
+    required int recordEnvelopeFloor,
+  }) {
+    final entries = nextId == null ? 3 : 4;
+    return jsonObjectFramingBytes(entries) +
+        jsonKeyBytes('records') +
+        jsonArrayFramingBytes(recordCount) +
+        recordBytes +
+        (nextId == null
+            ? 0
+            : jsonKeyBytes('nextId') + jsonStringBytes(nextId)) +
+        jsonKeyBytes('hasMore') +
+        jsonBoolBytes(hasMore) +
+        jsonKeyBytes('recordEnvelopeFloor') +
+        jsonIntBytes(recordEnvelopeFloor);
+  }
+
+  factory LegacyRecordPage.fromJson(Map<String, dynamic> json) =>
+      LegacyRecordPage(
+        records: (json['records'] as List)
+            .map((entry) =>
+                EncryptedRecord.fromJson((entry as Map).cast()))
+            .toList(),
+        nextId: json['nextId'] as String?,
+        hasMore: json['hasMore'] as bool? ?? false,
+        recordEnvelopeFloor:
+            (json['recordEnvelopeFloor'] as num).toInt(),
+      );
+}
+
+/// Exact compare-and-swap replacement of one observed legacy row.
+///
+/// [expected] is never trusted as conflict metadata; it is only the complete
+/// row image the server compares. [replacement] is a freshly authenticated v2
+/// record derived from canonical local state.
+class LegacyRecordMigration {
+  final EncryptedRecord expected;
+  final EncryptedRecord replacement;
+
+  const LegacyRecordMigration({
+    required this.expected,
+    required this.replacement,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'expected': expected.toJson(),
+        'replacement': replacement.toJson(),
+      };
+
+  factory LegacyRecordMigration.fromJson(Map<String, dynamic> json) =>
+      LegacyRecordMigration(
+        expected: EncryptedRecord.fromJson(
+          (json['expected'] as Map).cast(),
+        ),
+        replacement: EncryptedRecord.fromJson(
+          (json['replacement'] as Map).cast(),
+        ),
+      );
+}
+
+/// Exact-CAS legacy replacements, optionally followed by a floor checkpoint.
+class LegacyMigrationRequest {
+  final int protocolVersion;
+  final List<LegacyRecordMigration> migrations;
+  final bool finalize;
+
+  const LegacyMigrationRequest({
+    this.protocolVersion = kProtocolVersion,
+    required this.migrations,
+    this.finalize = false,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'protocolVersion': protocolVersion,
+        'migrations':
+            migrations.map((migration) => migration.toJson()).toList(),
+        'finalize': finalize,
+      };
+
+  factory LegacyMigrationRequest.fromJson(Map<String, dynamic> json) =>
+      LegacyMigrationRequest(
+        protocolVersion:
+            (json['protocolVersion'] as num?)?.toInt() ?? kProtocolVersion,
+        migrations: (json['migrations'] as List)
+            .map((entry) =>
+                LegacyRecordMigration.fromJson((entry as Map).cast()))
+            .toList(),
+        finalize: json['finalize'] as bool? ?? false,
+      );
+}
+
+/// Result of an atomic legacy migration batch.
+class LegacyMigrationResponse {
+  final int migrated;
+  final int stale;
+  final int latestSeq;
+  final int recordEnvelopeFloor;
+
+  const LegacyMigrationResponse({
+    required this.migrated,
+    required this.stale,
+    required this.latestSeq,
+    required this.recordEnvelopeFloor,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'migrated': migrated,
+        'stale': stale,
+        'latestSeq': latestSeq,
+        'recordEnvelopeFloor': recordEnvelopeFloor,
+      };
+
+  factory LegacyMigrationResponse.fromJson(Map<String, dynamic> json) =>
+      LegacyMigrationResponse(
+        migrated: (json['migrated'] as num).toInt(),
+        stale: (json['stale'] as num).toInt(),
+        latestSeq: (json['latestSeq'] as num).toInt(),
+        recordEnvelopeFloor:
+            (json['recordEnvelopeFloor'] as num).toInt(),
       );
 }
 

@@ -12,6 +12,7 @@ import 'package:shelf_router/shelf_router.dart';
 import 'config.dart';
 import 'favicon.dart';
 import 'inbox_docs.dart';
+import 'legacy_migration_validation.dart';
 import 'rate_limiter.dart';
 import 'storage.dart';
 
@@ -107,6 +108,7 @@ class SyncServer {
       recordCount: 1,
       recordBytes: sequenceGrowth,
       latestSeq: _maxStorageSequence,
+      recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
       throughSeq: _maxStorageSequence,
       hasMore: false,
       limits: configured,
@@ -159,6 +161,7 @@ class SyncServer {
           recordCount: 1,
           recordBytes: stored.encodedJsonBytes(),
           latestSeq: _maxStorageSequence,
+          recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
           throughSeq: _maxStorageSequence,
           hasMore: false,
           limits: _advertisedPushLimits,
@@ -205,6 +208,8 @@ class SyncServer {
       ..post('/v1/login', _login)
       ..get('/v1/sync', _sync)
       ..put('/v1/records', _push)
+      ..get('/v1/records/legacy', _legacyRecords)
+      ..put('/v1/records/legacy', _migrateLegacyRecords)
       ..delete('/v1/session', _revokeSession)
       ..delete('/v1/sessions', _revokeAllSessions)
       ..put('/v1/account/vault-key-check', _initializeVaultKeyCheck)
@@ -314,7 +319,11 @@ class SyncServer {
       return _error(409, 'account_exists', 'Username already registered');
     }
     return _json(
-      LoginResponse(token: token, vaultKeyCheck: r.vaultKeyCheck).toJson(),
+      LoginResponse(
+        token: token,
+        vaultKeyCheck: r.vaultKeyCheck,
+        recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
+      ).toJson(),
     );
   }
 
@@ -391,6 +400,7 @@ class SyncServer {
       LoginResponse(
         token: token,
         vaultKeyCheck: account.vaultKeyCheck,
+        recordEnvelopeFloor: account.recordEnvelopeFloor,
       ).toJson(),
     );
   }
@@ -435,6 +445,7 @@ class SyncServer {
       PullResponse(
         records: snapshot.records,
         latestSeq: snapshot.latestSeq,
+        recordEnvelopeFloor: snapshot.recordEnvelopeFloor,
         throughSeq: snapshot.throughSeq,
         hasMore: snapshot.hasMore,
         limits: _advertisedPushLimits,
@@ -494,6 +505,82 @@ class SyncServer {
     );
     return _json(pushed.toJson());
   });
+
+  Future<Response> _legacyRecords(Request req) =>
+      _withAuth(req, (principal) async {
+        final protocolVersion = int.tryParse(
+          req.headers['x-seance-protocol-version'] ?? '',
+        );
+        if (protocolVersion != kProtocolVersion) {
+          return _error(
+            400,
+            'protocol_version',
+            'Protocol version mismatch',
+          );
+        }
+        final afterId = req.url.queryParameters['after'];
+        final page = await storage.legacyRecordPageFor(
+          principal,
+          afterId: afterId,
+          limits: PullPageLimits(
+            maxRecords: settings.maxRecordsPerPull,
+            maxBodyBytes: settings.maxPullBodyBytes,
+          ),
+        );
+        return _json(page.toJson());
+      });
+
+  Future<Response> _migrateLegacyRecords(Request req) =>
+      _withAuth(req, (principal) async {
+        final body = await _readJson(
+          req,
+          settings.maxBodyBytes + settings.maxPullBodyBytes,
+        );
+        if (body == null) {
+          return _error(400, 'bad_request', 'Malformed JSON');
+        }
+        final LegacyMigrationRequest migration;
+        try {
+          migration = LegacyMigrationRequest.fromJson(body);
+          validateLegacyMigrationBatch(migration.migrations);
+        } catch (_) {
+          return _error(400, 'bad_request', 'Invalid migration payload');
+        }
+        if (migration.protocolVersion != kProtocolVersion) {
+          return _error(
+            400,
+            'protocol_version',
+            'Protocol version mismatch',
+          );
+        }
+        if (migration.migrations.length > settings.maxRecordsPerPush) {
+          return _error(
+            413,
+            'payload_too_large',
+            'Too many records in one migration batch',
+          );
+        }
+        for (final candidate in migration.migrations) {
+          if (candidate.replacement.blob.length > settings.maxBlobBytes ||
+              !_recordFitsPullPage(candidate.replacement)) {
+            return _error(
+              413,
+              'payload_too_large',
+              'A replacement record exceeds the configured limit',
+            );
+          }
+        }
+        final result = await storage.migrateLegacyRecordsFor(
+          principal,
+          migration.migrations,
+          finalize: migration.finalize,
+          quota: AccountQuota(
+            maxRecords: settings.maxRecordsPerAccount,
+            maxBytes: settings.maxAccountBytes,
+          ),
+        );
+        return _json(result.toJson());
+      });
 
   Future<Response> _revokeSession(Request req) =>
       _withAuth(req, (principal) async {
@@ -645,6 +732,12 @@ class SyncServer {
           500,
           'pull_limit_too_small',
           'The configured pull body limit cannot hold one stored item',
+        );
+      } on StorageEnvelopeFloorViolationException {
+        return _error(
+          500,
+          'record_envelope_floor_violation',
+          'The record envelope checkpoint is inconsistent',
         );
       } on AccountQuotaExceededException {
         return _error(

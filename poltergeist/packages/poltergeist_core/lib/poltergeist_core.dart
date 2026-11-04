@@ -141,6 +141,8 @@ export 'package:seance_core/seance_core.dart'
         LocalRecordStore,
         LoginRequest,
         LoginResponse,
+        kCurrentRecordEnvelopeVersion,
+        kLegacyRecordEnvelopeVersion,
         PreloginResponse,
         PullResponse,
         PushResponse,

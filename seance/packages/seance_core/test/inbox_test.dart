@@ -78,7 +78,6 @@ class _FakeInbox implements InboxApi {
     return id;
   }
 }
-
 class _PagedFakeInbox extends _FakeInbox implements PagedInboxApi {
   _PagedFakeInbox({this.pageSize = 1});
 
@@ -507,7 +506,10 @@ void main() {
       updatedAt: _t0.millisecondsSinceEpoch + 365 * 86400000,
       deviceId: 'server',
     ));
-    await b.sync.run(records);
+    await expectLater(
+      b.sync.run(records),
+      throwsA(isA<FormatException>()),
+    );
     expect((await b.apps.getApp(pairing.appId))?.key, pairing.key);
   });
 

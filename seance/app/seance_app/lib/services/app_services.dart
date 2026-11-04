@@ -882,7 +882,14 @@ class AppServices {
     required String username,
     required String token,
     required List<int> key,
+    required int recordEnvelopeFloor,
   }) async {
+    if (recordEnvelopeFloor < kLegacyRecordEnvelopeVersion ||
+        recordEnvelopeFloor > kCurrentRecordEnvelopeVersion) {
+      throw FormatException(
+        'Unsupported record envelope floor $recordEnvelopeFloor',
+      );
+    }
     final previousUrl = settings.syncBaseUrl;
     final previousUsername = settings.syncUsername;
     settings.syncBaseUrl = null;
@@ -905,6 +912,7 @@ class AppServices {
       ),
       resetExisting: true,
     );
+    await _syncRecords!.observeRecordEnvelopeFloor(recordEnvelopeFloor);
     settings.syncBaseUrl = baseUrl;
     settings.syncUsername = username;
     try {
@@ -955,6 +963,7 @@ class AppServices {
         username: username,
         token: client.token!,
         key: keys.vaultKey,
+        recordEnvelopeFloor: registered.recordEnvelopeFloor,
       );
     });
   });
@@ -997,6 +1006,13 @@ class AppServices {
           authVerifier: base64.encode(keys.authVerifier),
         ),
       );
+      if (sameEnrollment) {
+        await _requireSyncStores();
+        await _syncRecords!.observeRecordEnvelopeFloor(
+          login.recordEnvelopeFloor,
+        );
+      }
+      var recordEnvelopeFloor = login.recordEnvelopeFloor;
       final keyCheck = login.vaultKeyCheck;
       if (keyCheck != null) {
         try {
@@ -1017,11 +1033,26 @@ class AppServices {
       // vault or persisting enrollment, so a typo cannot overwrite synced data.
       if (keyCheck == null) {
         final remote = await client.pull(since: 0);
+        if (remote.recordEnvelopeFloor < recordEnvelopeFloor) {
+          throw RecordEnvelopeFloorDowngradeException(
+            observed: recordEnvelopeFloor,
+            advertised: remote.recordEnvelopeFloor,
+          );
+        }
+        recordEnvelopeFloor = remote.recordEnvelopeFloor;
         var verified = false;
         for (final record in remote.records) {
           if (record.deleted || record.blob.isEmpty) continue;
           try {
-            await RecordCodec(keys.vaultKey).decrypt(record);
+            final codec = RecordCodec(keys.vaultKey);
+            if (record.envelopeVersion == kLegacyRecordEnvelopeVersion) {
+              // A v1 payload authenticates only kind and data. That is enough
+              // to prove the vault key during enrollment, but never enough to
+              // merge its public id or conflict tuple into local state.
+              await codec.decryptLegacyForMigration(record);
+            } else {
+              await codec.decrypt(record);
+            }
           } catch (_) {
             throw StateError(
               'The vault encryption passphrase could not decrypt this account. '
@@ -1063,6 +1094,7 @@ class AppServices {
         username: username,
         token: client.token!,
         key: keys.vaultKey,
+        recordEnvelopeFloor: recordEnvelopeFloor,
       );
     });
   });

@@ -4,12 +4,19 @@ import 'package:http/http.dart' as http;
 import 'package:seance_protocol/seance_protocol.dart';
 
 import '../inbox/inbox_api.dart';
+import 'legacy_envelope_migration.dart';
 import 'sync_engine.dart';
 
 /// HTTP client for the Séance sync server. Handles account setup and auth, then
 /// serves as the [SyncApi] the [SyncEngine] drives. All record payloads are
 /// already end-to-end encrypted before they reach this layer.
-class HttpSyncClient implements SyncApi, PagedSyncApi, InboxApi, PagedInboxApi {
+class HttpSyncClient
+    implements
+        SyncApi,
+        PagedSyncApi,
+        LegacyMigrationApi,
+        InboxApi,
+        PagedInboxApi {
   final String baseUrl;
   final http.Client _client;
   final bool _ownsClient;
@@ -197,6 +204,7 @@ class HttpSyncClient implements SyncApi, PagedSyncApi, InboxApi, PagedInboxApi {
     final records = <EncryptedRecord>[];
     PushLimits? limits;
     int? through;
+    int? recordEnvelopeFloor;
     var cursor = since;
     var latestSeq = since;
     while (true) {
@@ -233,6 +241,12 @@ class HttpSyncClient implements SyncApi, PagedSyncApi, InboxApi, PagedInboxApi {
       }
 
       records.addAll(page.records);
+      recordEnvelopeFloor ??= page.recordEnvelopeFloor;
+      if (page.recordEnvelopeFloor != recordEnvelopeFloor) {
+        throw const FormatException(
+          'Sync page changed its record envelope floor',
+        );
+      }
       limits = page.limits ?? limits;
       latestSeq = page.latestSeq;
       if (!page.hasMore) {
@@ -241,6 +255,7 @@ class HttpSyncClient implements SyncApi, PagedSyncApi, InboxApi, PagedInboxApi {
           latestSeq: latestSeq,
           limits: limits,
           throughSeq: through,
+          recordEnvelopeFloor: recordEnvelopeFloor,
         );
       }
       cursor = observed;
@@ -282,6 +297,45 @@ class HttpSyncClient implements SyncApi, PagedSyncApi, InboxApi, PagedInboxApi {
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
     return PushResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  @override
+  Future<LegacyRecordPage> pullLegacyPage({String? afterId}) async {
+    final res = await _client
+        .get(
+          _uri('/v1/records/legacy', {
+            if (afterId != null) 'after': afterId,
+          }),
+          headers: _authHeaders,
+        )
+        .timeout(timeout);
+    if (res.statusCode >= 400) _fail(res);
+    return LegacyRecordPage.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
+  }
+
+  @override
+  Future<LegacyMigrationResponse> migrateLegacy(
+    List<LegacyRecordMigration> migrations, {
+    bool finalize = false,
+  }) async {
+    final res = await _client
+        .put(
+          _uri('/v1/records/legacy'),
+          headers: _authHeaders,
+          body: jsonEncode(
+            LegacyMigrationRequest(
+              migrations: migrations,
+              finalize: finalize,
+            ).toJson(),
+          ),
+        )
+        .timeout(timeout);
+    if (res.statusCode >= 400) _fail(res);
+    return LegacyMigrationResponse.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
   }
 
   @override

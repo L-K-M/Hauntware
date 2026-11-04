@@ -33,15 +33,25 @@ abstract interface class PagedSyncApi {
 /// malformed response cannot advance a caller's durable cursor.
 Stream<PullResponse> pullPages(SyncApi api, {required int since}) async* {
   if (api is! PagedSyncApi) {
-    yield await api.pull(since: since);
+    final response = await api.pull(since: since);
+    _validatePullEnvelopeFloor(response);
+    yield response;
     return;
   }
   final paged = api as PagedSyncApi;
 
   var cursor = since;
   int? through;
+  int? envelopeFloor;
   while (true) {
     final page = await paged.pullPage(since: cursor, throughSeq: through);
+    _validatePullEnvelopeFloor(page);
+    envelopeFloor ??= page.recordEnvelopeFloor;
+    if (page.recordEnvelopeFloor != envelopeFloor) {
+      throw const FormatException(
+        'Sync snapshot record envelope floor changed',
+      );
+    }
     final pageThrough = page.throughSeq;
     if (pageThrough == null) {
       if (through != null || page.hasMore) {
@@ -74,6 +84,23 @@ Stream<PullResponse> pullPages(SyncApi api, {required int since}) async* {
     if (!page.hasMore) return;
     cursor = next;
     through = pageThrough;
+  }
+}
+
+void _validatePullEnvelopeFloor(PullResponse response) {
+  final floor = response.recordEnvelopeFloor;
+  if (floor < kLegacyRecordEnvelopeVersion ||
+      floor > kCurrentRecordEnvelopeVersion) {
+    throw FormatException('Unsupported record envelope floor $floor');
+  }
+  if (floor >= kCurrentRecordEnvelopeVersion &&
+      response.records.any(
+        (record) =>
+            record.envelopeVersion < kCurrentRecordEnvelopeVersion,
+      )) {
+    throw const FormatException(
+      'Authenticated-envelope account returned a legacy record',
+    );
   }
 }
 
@@ -332,6 +359,10 @@ class SyncEngine {
     await for (final page in pullPages(api, since: since)) {
       limits = page.limits ?? limits;
       await runLocal(() async {
+        await _observeRecordEnvelopeFloor(
+          store,
+          page.recordEnvelopeFloor,
+        );
         await refreshLocal?.call(
           cursorRecoveryPending
               ? SyncLocalRefreshMode.cursorRecovery
@@ -358,9 +389,19 @@ class SyncEngine {
             applied++;
           }
         }
+        // A complete final page proves there are no omitted rows through the
+        // advertised watermark. The server may allocate a sequence-only
+        // checkpoint when an account irreversibly reaches envelope floor 2;
+        // no record can carry that seq, so advancing only to observed rows
+        // would request the same empty tail forever.
+        if (page.throughSeq != null &&
+            !page.hasMore &&
+            page.latestSeq > snapshotHighWater) {
+          snapshotHighWater = page.latestSeq;
+        }
         // Advance only through a sequence actually observed on this complete
-        // page. A later timeout resumes here, never at the advertised
-        // watermark.
+        // non-final page. A later timeout resumes there; only the final page
+        // can safely close the gap to its advertised watermark.
         await store.setHighWaterSeq(snapshotHighWater);
       });
     }
@@ -459,6 +500,20 @@ class SyncEngine {
       remainingIds!.removeWhere(sentById.containsKey);
     }
     return (accepted: accepted, rejected: rejected);
+  }
+}
+
+Future<void> _observeRecordEnvelopeFloor(
+  LocalRecordStore store,
+  int floor,
+) async {
+  if (floor < kLegacyRecordEnvelopeVersion ||
+      floor > kCurrentRecordEnvelopeVersion) {
+    throw FormatException('Unsupported record envelope floor $floor');
+  }
+  final floors = store;
+  if (floors is RecordEnvelopeFloorStore) {
+    await floors.observeRecordEnvelopeFloor(floor);
   }
 }
 

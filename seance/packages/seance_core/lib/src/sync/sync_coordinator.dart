@@ -10,6 +10,7 @@ import '../catalog/record_coordinator.dart' show HostKeyConflict;
 import '../inbox/inbox_service.dart';
 import '../inbox/inbox_stores.dart';
 import '../store/stores.dart';
+import 'legacy_envelope_migration.dart';
 import 'local_record_store.dart';
 import 'sync_engine.dart';
 
@@ -1699,6 +1700,14 @@ class SyncCoordinator {
     await runLocal(
       () => collectLocal(cancelMissing: !resumingRecovery),
     );
+    await migrateLegacyEnvelopes(
+      api,
+      store: local,
+      runLocal: runLocal,
+      openLegacy: codec.decryptLegacyForMigration,
+      openCurrent: codec.decrypt,
+      isEligible: _eligibleLegacyMigration,
+    );
     final engine = SyncEngine(local, remoteValidator: _validRemoteRecord);
     // The latest pass's answer, not the union of both: a second pass pushes
     // every refused record that is still dirty again, so it knows which are
@@ -1823,4 +1832,17 @@ class SyncCoordinator {
       return false;
     }
   }
+
+  bool _eligibleLegacyMigration(DecryptedRecord record) => switch (record.kind) {
+        RecordKind.serverConfig || RecordKind.hostKey => true,
+        RecordKind.secret => syncSecrets && secretVault != null,
+        RecordKind.snippet => snippetStore != null,
+        RecordKind.assistantSettings => assistantStore != null,
+        RecordKind.inboxApp => inboxAppStore != null,
+        RecordKind.inboxStatus => inboxStatusStore != null,
+        RecordKind.bookmark ||
+        RecordKind.klabautermann ||
+        RecordKind.unknown =>
+          false,
+      };
 }

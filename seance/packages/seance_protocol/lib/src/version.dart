@@ -1,4 +1,10 @@
 /// The wire-protocol version. Sent in every sync request so an old client and
 /// a new server (or vice versa) can detect a mismatch instead of corrupting
 /// data. Bump only on a breaking change to the record envelope or endpoints.
-const int kProtocolVersion = 3;
+const int kProtocolVersion = 4;
+
+/// Record-envelope generation accepted for all new writes.
+const int kCurrentRecordEnvelopeVersion = 2;
+
+/// The unauthenticated envelope generation retained only for migration.
+const int kLegacyRecordEnvelopeVersion = 1;
