@@ -266,7 +266,7 @@ void main() {
         services.buildLlmProvider,
         services.buildSearchProvider,
         services.runSync,
-        () => services.withInbox((_) async => 'inbox'),
+        () => services.withInbox((_, __) async => 'inbox'),
         () => LocalSettingsBackend(state).fetchModels(
           const ModelQuery(
             kind: LlmProviderKind.anthropic,

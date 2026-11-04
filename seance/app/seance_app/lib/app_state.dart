@@ -17,6 +17,7 @@ import 'package:xterm/xterm.dart' show TerminalController;
 
 import 'services/app_services.dart';
 import 'services/app_settings.dart';
+import 'services/assistant_settings_sync.dart';
 import 'services/background_keep_alive.dart';
 import 'services/chat_session.dart';
 import 'services/default_snippets.dart';
@@ -870,8 +871,8 @@ class AppState extends ChangeNotifier {
 
   /// Called after the LLM provider settings change: invalidate any cached chat
   /// provider (so a new API key takes effect) and refresh sidebar visibility.
-  Future<void> reloadLlmProvider() async {
-    llmConfigVersion++;
+  Future<void> reloadLlmProvider({bool advanceVersion = true}) async {
+    if (advanceVersion) llmConfigVersion++;
     await refreshLlmConfigured();
     notifyListeners();
   }
@@ -1003,20 +1004,29 @@ class AppState extends ChangeNotifier {
   /// the other's config removal lands, would each see the other as a live
   /// referent and both leave the entry behind with nothing able to name it.
   ///
-  /// Saving and applying a sync round share it for the same reason from the
-  /// other side: both write the config store and the vault, so either landing
-  /// between a delete's reference count and its vault delete, or between a
-  /// duplicate's plan and its save, is the same read-then-write hazard. With
-  /// them on the queue, a credential rewritten in place under an unchanged
-  /// ref — which is what editing a server's password does — can no longer
-  /// happen while a duplicate is reading it.
+  /// Saving and the short capture/commit phases of a sync round share it for
+  /// the same reason from the other side: both read or write the config store
+  /// and vault. Pulls and pushes deliberately do not hold it.
   ///
   /// No timeout, deliberately. A mutation waiting on an OS keychain prompt
   /// holds everything queued behind it, deletes included, until the prompt is
   /// answered; the answer to that is to surface the pending prompt, not to
   /// time out a queue whose whole job is keeping a check and its write
   /// together.
-  Future<T> _mutate<T>(Future<T> Function() action) async {
+  Future<T> _mutate<T>(Future<T> Function() action) =>
+      _queueMutation(action, advancesSyncInput: true);
+
+  /// A sync capture or commit uses the same queue without invalidating its own
+  /// optimistic snapshot.
+  Future<T> _syncPhase<T>(Future<T> Function() action) =>
+      _queueMutation(action, advancesSyncInput: false);
+
+  int _syncInputGeneration = 0;
+
+  Future<T> _queueMutation<T>(
+    Future<T> Function() action, {
+    required bool advancesSyncInput,
+  }) async {
     // A queued action that calls a queued method waits on its own completion,
     // and since the queue has no timeout the app's mutations simply stop with
     // no error to find. Detected by zone: an unrelated second caller arriving
@@ -1063,6 +1073,9 @@ class AppState extends ChangeNotifier {
         try {
           return await action();
         } finally {
+          // A failed action may already have changed one of several stores.
+          // Invalidate prepared snapshots even when its error propagates.
+          if (advancesSyncInput) _syncInputGeneration++;
           _activeMutationZone = null;
         }
       });
@@ -1367,12 +1380,14 @@ class AppState extends ChangeNotifier {
     final now = DateTime.now().millisecondsSinceEpoch;
     final result = SshConfigImporter.parse(text);
     final hosts = result.hosts;
-    for (final h in hosts) {
-      await services.configStore.putServer(
-        h.toServerConfig(id: uuidV4(), now: now),
-      );
-    }
-    servers = await services.configStore.listServers();
+    await _mutate(() async {
+      for (final h in hosts) {
+        await services.configStore.putServer(
+          h.toServerConfig(id: uuidV4(), now: now),
+        );
+      }
+      servers = await services.configStore.listServers();
+    });
     services.probe.updateServers(servers);
     notifyListeners();
     _scheduleAutoSync();
@@ -1902,7 +1917,11 @@ class AppState extends ChangeNotifier {
     required bool keepLocal,
   }) async {
     try {
-      return await services.resolvePinConflict(conflict, keepLocal: keepLocal);
+      return await services.resolvePinConflict(
+        conflict,
+        keepLocal: keepLocal,
+        phaseGate: _mutate,
+      );
     } finally {
       notifyListeners();
     }
@@ -1922,8 +1941,7 @@ class AppState extends ChangeNotifier {
       lastSyncError = _shortError(e);
       rethrow;
     } finally {
-      syncing = false;
-      notifyListeners();
+      _finishSync();
     }
   }
 
@@ -1946,59 +1964,137 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Persists the switches that determine what the next sync snapshot reads.
+  Future<({bool wasSyncingAssistant, String? saveError})> saveSyncPreferences({
+    required bool autoSync,
+    required bool syncSecrets,
+    required bool syncAssistant,
+  }) => _mutate(() async {
+    final settings = services.settings;
+    final wasAutoSync = settings.autoSync;
+    final wasSyncSecrets = settings.syncSecrets;
+    final wasSyncingAssistant = settings.syncAssistant;
+    settings.autoSync = autoSync;
+    settings.syncSecrets = syncSecrets;
+    settings.syncAssistant = syncAssistant;
+    try {
+      await services.saveSettings();
+      return (wasSyncingAssistant: wasSyncingAssistant, saveError: null);
+    } catch (error) {
+      settings.autoSync = wasAutoSync;
+      settings.syncSecrets = wasSyncSecrets;
+      settings.syncAssistant = wasSyncingAssistant;
+      return (wasSyncingAssistant: wasSyncingAssistant, saveError: '$error');
+    }
+  });
+
+  /// Rolls back an assistant-sync switch whose adopt-first round failed.
+  Future<void> disableAssistantSync() => _mutate(() async {
+    services.settings.syncAssistant = false;
+    await services.saveSettings();
+  });
+
+  /// Create a sync account without holding the local mutation queue across
+  /// its network and key-derivation work.
+  Future<void> registerSync({
+    required String baseUrl,
+    required String username,
+    required String password,
+    required String encryptionPassphrase,
+  }) => services.registerSync(
+    baseUrl: baseUrl,
+    username: username,
+    password: password,
+    encryptionPassphrase: encryptionPassphrase,
+    phaseGate: _mutate,
+  );
+
+  /// Enrol this device without holding the local mutation queue across the
+  /// remote passphrase check.
+  Future<void> loginSync({
+    required String baseUrl,
+    required String username,
+    required String password,
+    required String encryptionPassphrase,
+  }) => services.loginSync(
+    baseUrl: baseUrl,
+    username: username,
+    password: password,
+    encryptionPassphrase: encryptionPassphrase,
+    phaseGate: _mutate,
+  );
+
   /// One sync round + refresh of the domain lists from the (possibly updated)
   /// stores. Shared by manual and automatic sync.
   Future<SyncOutcome> _runSyncAndRefresh() async {
-    // On the mutation queue: a round writes the config store and the vault
-    // (tombstones delete both), so it is a mutation like any other and must
-    // not interleave with a delete's reference count or a duplicate's plan.
-    // The re-reads are inside it too — outside, a mutation could land while
-    // `listServers` was still resolving and then have its own assignment
-    // overwritten by this older snapshot.
-    //
-    // That does hold the queue across network I/O, so what bounds it is worth
-    // writing down here rather than leaving to be rediscovered: every request
-    // carries `HttpSyncClient.timeout` (30 s by default), a timeout throws
-    // rather than retrying so the round ends at the first dead request, and
-    // `_mutate` releases in a `finally`. A black-holed network therefore
-    // costs one timeout, not a wedged app. A slow-but-alive one costs more —
-    // `SyncEngine.sync` runs up to five rounds and `SyncCoordinator.run` up
-    // to two passes — and the fix for that is splitting the coordinator's
-    // fetch from its apply so only the apply serializes, which is a change to
-    // `seance_core`, not to this line.
     var adoptedAssistant = false;
+    var assistantVersionAdvanced = false;
+    var capturedGeneration = 0;
+    var captured = false;
+
+    Future<T> capture<T>(Future<T> Function() phase) => _syncPhase(() async {
+      final result = await phase();
+      capturedGeneration = _syncInputGeneration;
+      captured = true;
+      return result;
+    });
+
+    Future<T> commit<T>(Future<T> Function() phase) => _syncPhase(() {
+      if (!captured || capturedGeneration != _syncInputGeneration) {
+        throw const SyncSnapshotChanged();
+      }
+      return phase();
+    });
+
+    Future<void> refreshDomainLists() => _syncPhase(() async {
+      servers = await services.configStore.listServers();
+      snippets = await services.snippetStore.listSnippets();
+    });
+
+    Future<void> reflectCommittedStateAfterFailure() async {
+      try {
+        await refreshDomainLists();
+        await _syncPhase(_loadInbox);
+        services.probe.updateServers(servers);
+        _recomputeSuggestions();
+      } catch (error, stackTrace) {
+        // The sync error is the actionable failure. A secondary local refresh
+        // must not replace it; the next load or round repairs the view.
+        developer.log(
+          'Could not refresh local state after a failed sync',
+          name: 'seance.app',
+          level: 900,
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+
     try {
-      final outcome = await _mutate(() async {
-        try {
-          final result = await services.runSync();
-          servers = await services.configStore.listServers();
-          snippets = await services.snippetStore.listSnippets();
-          return result;
-        } on SyncRecordsRefused {
-          // The round applied everything else before reporting the records
-          // the server refused as too large, and it will refuse them again on
-          // every round until they shrink. Refreshed only on success, another
-          // device's edits would reach the stores and never the screen.
-          servers = await services.configStore.listServers();
-          snippets = await services.snippetStore.listSnippets();
-          services.probe.updateServers(servers);
-          _recomputeSuggestions();
-          rethrow;
-        } finally {
-          // Sampled while this round still holds the queue, so the answer
-          // cannot depend on what runs between the release and this method's
-          // continuation. `runSync` resets the flag as its first statement,
-          // and a round queued behind this one — a manual sync during an
-          // automatic one, or the reverse — starts as soon as the queue is
-          // released. Today the caller resumes first (an async return reaches
-          // its awaiter a microtask ahead of the completer's release), so a
-          // read in the outer `finally` happens to see this round's answer;
-          // which of the two gets there first is a scheduling detail nothing
-          // here should rest on.
-          adoptedAssistant = services.assistantSettingsChanged;
-          _lastRoundAdoptedAssistant = adoptedAssistant;
-        }
-      });
+      final SyncOutcome outcome;
+      try {
+        outcome = await services.runSync(
+          capture: capture,
+          commit: commit,
+          onAssistantSettingsApplied: () {
+            // The editor's stale-form guard must move in the same local phase
+            // as the adoption, not after a possible second network pass.
+            llmConfigVersion++;
+            assistantVersionAdvanced = true;
+          },
+          onAssistantSettingsChanged: (changed) {
+            adoptedAssistant = changed;
+            _lastRoundAdoptedAssistant = changed;
+          },
+        );
+        await refreshDomainLists();
+      } catch (error, stackTrace) {
+        // Pulls commit before a possible redating pass. Reflect every domain
+        // that may already be durable, regardless of the later failure, while
+        // preserving that original error for the caller.
+        await reflectCommittedStateAfterFailure();
+        Error.throwWithStackTrace(error, stackTrace);
+      }
       services.probe.updateServers(servers);
       _recomputeSuggestions();
       // Apps and statuses may have arrived: a new app's items can be opened
@@ -2009,8 +2105,8 @@ class AppState extends ChangeNotifier {
       // A pulled assistant configuration changes the provider, the model or
       // the key, none of which an already-built chat provider notices.
       //
-      // In a `finally` because `runSync` sets the flag in one too: a round can
-      // adopt the record and *then* fail, the pull running before the push.
+      // In a `finally` because `runSync` samples the flag in one too: a round
+      // can adopt the record and *then* fail, the pull running before the push.
       // Consumed only on success, that adoption would be invisible — the next
       // successful round finds the settings already adopted, reports nothing
       // applied, and the chat provider answers with the old model and key
@@ -2031,7 +2127,9 @@ class AppState extends ChangeNotifier {
       // rebuilds the provider anyway.
       if (adoptedAssistant) {
         try {
-          await reloadLlmProvider();
+          await reloadLlmProvider(
+            advanceVersion: !assistantVersionAdvanced,
+          );
         } catch (_) {
           // Deliberately swallowed rather than reported: there is no surface
           // here, and masking the sync round's outcome is the worse of the
@@ -2044,24 +2142,92 @@ class AppState extends ChangeNotifier {
   /// Whether the most recent sync round adopted an assistant configuration
   /// from the account.
   ///
-  /// Written inside the round, while it holds the mutation queue, which is
-  /// what makes it safe to read straight after awaiting [_runSyncAndRefresh]
-  /// where `services.assistantSettingsChanged` is not: that flag is reset at
-  /// the *start* of the next round, which can already be running by then,
-  /// while this is only written at the *end* of one.
+  /// Sampled before the service operation tail releases, so a queued round
+  /// cannot reset the shared service flag before this round records it.
   ///
   /// That holds for a round that adopted nothing. One that *did* adopt awaits
   /// `reloadLlmProvider` in [_runSyncAndRefresh]'s outer `finally`, after
-  /// `_mutate` has released the queue — so a queued round can run to
+  /// [runSync] has released the operation tail, so a queued round can run to
   /// completion inside that await and overwrite this before the caller
   /// resumes. Read it beside the stamp (`assistantUpdatedAt != 0`), which is
   /// what [assistantSyncSwitchedOn] does: adoption always leaves a nonzero
   /// stamp, so the pair answers correctly whichever round wrote the flag.
   bool _lastRoundAdoptedAssistant = false;
 
+  /// Commit assistant fields only if the settings the editor loaded are still
+  /// current. The comparison, assignments, persistence, and sync stamp share
+  /// one mutation phase so a pulled configuration cannot land between them.
+  Future<({bool stale, String? publishError})> commitAssistantSettings({
+    required int expectedVersion,
+    required int expectedUpdatedAt,
+    required String expectedFingerprint,
+    required bool keyEntered,
+    required Future<AsyncCallback> Function() prepare,
+    required void Function(AppSettings settings) update,
+  }) => _mutate(() async {
+    final settings = services.settings;
+    bool isStale() =>
+        llmConfigVersion != expectedVersion ||
+        settings.assistantUpdatedAt != expectedUpdatedAt ||
+        assistantSyncFingerprint(settings) != expectedFingerprint;
+    if (isStale()) {
+      return (stale: true, publishError: null);
+    }
+
+    final rollbackKeys = await prepare();
+    // AppState's production writers share this queue. The second check also
+    // protects direct service embeddings and makes a delayed keychain write
+    // harmless if some external writer changed the settings meanwhile.
+    if (isStale()) {
+      await rollbackKeys();
+      return (stale: true, publishError: null);
+    }
+
+    final previous = (
+      kind: settings.llmKind,
+      baseUrl: settings.llmBaseUrl,
+      model: settings.llmModel,
+      apiKeyRef: settings.llmApiKeyRef,
+      redactionEnabled: settings.redactionEnabled,
+      searxngUrl: settings.searxngUrl,
+      zaiApiKeyRef: settings.zaiApiKeyRef,
+    );
+    final before = assistantSyncFingerprint(settings);
+    update(settings);
+    try {
+      await services.saveSettings();
+    } catch (_) {
+      settings
+        ..llmKind = previous.kind
+        ..llmBaseUrl = previous.baseUrl
+        ..llmModel = previous.model
+        ..llmApiKeyRef = previous.apiKeyRef
+        ..redactionEnabled = previous.redactionEnabled
+        ..searxngUrl = previous.searxngUrl
+        ..zaiApiKeyRef = previous.zaiApiKeyRef;
+      await rollbackKeys();
+      rethrow;
+    }
+
+    String? publishError;
+    if (keyEntered || assistantSyncFingerprint(settings) != before) {
+      try {
+        await _assistantSettingsEditedNow();
+      } catch (error) {
+        // The fields are already durable. Keep the save successful while
+        // reporting that its new sync stamp could not be persisted.
+        publishError = '$error';
+      }
+    }
+    return (stale: false, publishError: publishError);
+  });
+
   /// The assistant's configuration was just edited here: stamp it so the
   /// synced record has a timestamp that moved for a real reason, and push it.
-  Future<void> assistantSettingsEdited() async {
+  Future<void> assistantSettingsEdited() =>
+      _mutate(_assistantSettingsEditedNow);
+
+  Future<void> _assistantSettingsEditedNow() async {
     final now = DateTime.now().millisecondsSinceEpoch;
     // Never below a record this device already holds. The stamp is the whole
     // of the last-write-wins comparison, so a clock that runs behind the
@@ -2198,10 +2364,15 @@ class AppState extends ChangeNotifier {
     // today; not depending on that costs one `||`, and the flag can only be
     // true here if a round adopted inside the keystore read above, which is
     // exactly when this device must not stamp.
-    if (_mustNotStampOnSwitchOn()) {
-      return;
-    }
-    await assistantSettingsEdited();
+    final stamped = await _mutate(() async {
+      // The queue may have held a sync commit after the guard above. Ask the
+      // full question again beside the stamp rather than publishing a pulled
+      // configuration as a fresh local edit.
+      if (_mustNotStampOnSwitchOn()) return false;
+      await _assistantSettingsEditedNow();
+      return true;
+    });
+    if (!stamped) return;
     // That hands the publish to the auto-sync debounce, which does not run
     // with auto-sync off — and this switch is an explicit ask to sync, made
     // by a user who just watched one round run. Published now in that case;
@@ -2247,6 +2418,7 @@ class AppState extends ChangeNotifier {
     }
     syncing = true;
     notifyListeners();
+    var retryQueued = false;
     try {
       do {
         _syncQueued = false;
@@ -2256,10 +2428,24 @@ class AppState extends ChangeNotifier {
       } while (_syncQueued);
     } catch (e) {
       lastSyncError = _shortError(e);
+      // A second optimistic invalidation ends this bounded run, but an edit
+      // whose debounce already fired still deserves the one follow-up round
+      // promised above. Debounce it again instead of extending this loop
+      // without a bound while the user keeps editing.
+      retryQueued = _syncQueued;
     } finally {
-      syncing = false;
-      notifyListeners();
+      _finishSync(retryQueued: retryQueued);
     }
+  }
+
+  /// Release the shared sync indicator and preserve a debounce that fired
+  /// while either a manual or background round owned it.
+  void _finishSync({bool retryQueued = false}) {
+    final followUp = retryQueued || _syncQueued;
+    _syncQueued = false;
+    syncing = false;
+    if (followUp) _scheduleAutoSync();
+    notifyListeners();
   }
 
   static String _shortError(Object e) {
@@ -2813,6 +2999,13 @@ class AppState extends ChangeNotifier {
 
   // --- Command inbox ---
 
+  InboxService _localInbox() => InboxService(
+    api: const _OfflineInboxApi(),
+    apps: services.inboxApps,
+    statuses: services.inboxStatuses,
+    cache: services.inboxCache,
+  );
+
   /// Local state only: which apps exist and what is already fetched. Never
   /// throws; a locked vault reads as no apps until it unlocks.
   Future<void> _loadInbox() async {
@@ -2821,12 +3014,7 @@ class AppState extends ChangeNotifier {
         for (final app in await services.inboxApps.listApps())
           if (!app.removed) app,
       ];
-      final inbox = InboxService(
-        api: const _OfflineInboxApi(),
-        apps: services.inboxApps,
-        statuses: services.inboxStatuses,
-        cache: services.inboxCache,
-      );
+      final inbox = _localInbox();
       inboxPending = await inbox.pending();
       inboxFailures = await inbox.failures();
     } on AppLockException catch (error) {
@@ -2865,19 +3053,21 @@ class AppState extends ChangeNotifier {
     if (!services.isSyncConfigured) return;
     _inboxFetching = true;
     try {
-      await _mutate(() async {
+      await _syncPhase(() async {
         await services.appLock.requireUnlocked();
         await _loadInbox();
-        if (inboxApps.isEmpty) return;
-        inboxPending = await services.withInbox((inbox) async {
-          final pending = await inbox.refresh();
-          await inbox.pruneStatuses();
-          return pending;
-        });
-        inboxFailures = await services.inboxCache.load().then(
-          (cache) => cache.failures,
-        );
       });
+      if (inboxApps.isNotEmpty) {
+        await services.withInbox(
+          (inbox, _) async {
+            await inbox.refresh();
+            await inbox.pruneStatuses();
+          },
+          phaseGate: _syncPhase,
+          localPhaseGate: _mutate,
+        );
+        await _syncPhase(_loadInbox);
+      }
       inboxError = null;
     } catch (error) {
       inboxError = _shortError(error);
@@ -2900,7 +3090,7 @@ class AppState extends ChangeNotifier {
   /// Keeps [code] as this device's recovery code, once the user confirmed
   /// writing it down.
   Future<void> saveRecoveryCode(String code) =>
-      _mutate(() => services.saveRecoveryCode(code));
+      services.saveRecoveryCode(code, phaseGate: _mutate);
 
   /// Remembers "Not now" to the offer of a recovery code, so it is not made
   /// again; Settings still offers it.
@@ -2975,9 +3165,10 @@ class AppState extends ChangeNotifier {
     }
   });
 
-  /// The vault as an encrypted export the recovery code opens. In the
-  /// mutation queue, so a save cannot land halfway through the snapshot.
-  Future<Uint8List> exportSecrets() => _mutate(services.exportSecrets);
+  /// The vault as an encrypted export the recovery code opens. Its short
+  /// snapshot phase shares the mutation queue without invalidating sync.
+  Future<Uint8List> exportSecrets() =>
+      services.exportSecrets(phaseGate: _syncPhase);
 
   /// Merges an export into this device's vault. In the mutation queue, so a
   /// save or a sync round cannot write a credential between the restore's
@@ -2986,30 +3177,24 @@ class AppState extends ChangeNotifier {
     Uint8List export,
     String code, {
     required RestoreConflictPolicy policy,
-  }) => _mutate(
-    () => services.restoreSecrets(export, code, policy: policy),
-  );
+  }) =>
+      services.restoreSecrets(export, code, policy: policy, phaseGate: _mutate);
 
   /// Connect a producer. Returns the pairing string, which is shown once.
   Future<String> addInboxApp({
     required String name,
     List<String> allowedServerIds = const [],
   }) async {
-    final baseUrl = services.settings.syncBaseUrl;
-    if (baseUrl == null || baseUrl.isEmpty) {
-      throw StateError('Set up sync first: the inbox uses the sync server.');
-    }
-    final pairing = await _mutate(() async {
-      final pairing = await services.withInbox(
-        (inbox) => inbox.addApp(
-          name: name,
-          serverUrl: baseUrl,
-          allowedServerIds: allowedServerIds,
-        ),
-      );
-      await _loadInbox();
-      return pairing;
-    });
+    final pairing = await services.withInbox(
+      (inbox, baseUrl) => inbox.addApp(
+        name: name,
+        serverUrl: baseUrl,
+        allowedServerIds: allowedServerIds,
+      ),
+      phaseGate: _syncPhase,
+      localPhaseGate: _mutate,
+    );
+    await _syncPhase(_loadInbox);
     _ensureInboxTimer();
     notifyListeners();
     // The app record carries the key, and the user's other devices need it
@@ -3024,12 +3209,10 @@ class AppState extends ChangeNotifier {
     required List<String> allowedServerIds,
   }) async {
     await _mutate(() async {
-      await services.withInbox(
-        (inbox) => inbox.updateApp(
-          appId,
-          name: name,
-          allowedServerIds: allowedServerIds,
-        ),
+      await _localInbox().updateApp(
+        appId,
+        name: name,
+        allowedServerIds: allowedServerIds,
       );
       await _loadInbox();
     });
@@ -3038,10 +3221,12 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> removeInboxApp(String appId) async {
-    await _mutate(() async {
-      await services.withInbox((inbox) => inbox.removeApp(appId));
-      await _loadInbox();
-    });
+    await services.withInbox(
+      (inbox, _) => inbox.removeApp(appId),
+      phaseGate: _syncPhase,
+      localPhaseGate: _mutate,
+    );
+    await _syncPhase(_loadInbox);
     _ensureInboxTimer();
     notifyListeners();
     _scheduleAutoSync();
@@ -3050,13 +3235,12 @@ class AppState extends ChangeNotifier {
   /// Returns [InboxClaim.handledElsewhere] when another device ran or
   /// dismissed it first, in which case nothing is recorded here.
   Future<InboxClaim> dismissProposal(PendingProposal proposal) async {
-    final result = await _mutate(() async {
-      final result = await services.withInbox(
-        (inbox) => inbox.dismiss(proposal),
-      );
-      await _loadInbox();
-      return result;
-    });
+    final result = await services.withInbox(
+      (inbox, _) => inbox.dismiss(proposal),
+      phaseGate: _syncPhase,
+      localPhaseGate: _mutate,
+    );
+    await _syncPhase(_loadInbox);
     notifyListeners();
     _scheduleAutoSync();
     return result;
@@ -3123,13 +3307,12 @@ class AppState extends ChangeNotifier {
     }
     final InboxClaim claim;
     try {
-      claim = await _mutate(() async {
-        final claim = await services.withInbox(
-          (inbox) => inbox.claim(proposal),
-        );
-        await _loadInbox();
-        return claim;
-      });
+      claim = await services.withInbox(
+        (inbox, _) => inbox.claim(proposal),
+        phaseGate: _syncPhase,
+        localPhaseGate: _mutate,
+      );
+      await _syncPhase(_loadInbox);
     } catch (error) {
       await _unstage(fs, staged);
       return ProposalRunResult.failed('Could not claim the proposal: $error');

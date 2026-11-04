@@ -499,6 +499,73 @@ void main() {
     timeout: const Timeout(Duration(minutes: 2)),
   );
 
+  test(
+    'inbox creation pairs with the endpoint pinned by enrollment ordering',
+    () async {
+      final keystore = _SelectiveKeystore();
+      final own = await AppServices.initialize(
+        masterKeyManager: MasterKeyManager(keystore),
+      );
+      addTearDown(() => own.probe.dispose());
+      own.settings.syncBaseUrl = 'https://old-sync.test';
+      own.settings.syncUsername = 'old-user';
+      await own.masterKeys.putApiKey('sync.token', 'old-token');
+      await own.saveSettings();
+
+      final tokenWritten = Completer<void>();
+      final releaseTokenWrite = Completer<void>();
+      keystore.afterSyncTokenWrite = () async {
+        if (!tokenWritten.isCompleted) tokenWritten.complete();
+        await releaseTokenWrite.future;
+      };
+      final appHosts = <String>[];
+      final transport = _TrackedClient((request) async {
+        if (request.url.path == '/v1/register') {
+          return http.Response(
+            jsonEncode({'token': 'new-token'}),
+            HttpStatus.ok,
+          );
+        }
+        if (request.url.path == '/v1/apps') {
+          appHosts.add(request.url.host);
+          expect(request.headers['authorization'], 'Bearer new-token');
+          return http.Response('', HttpStatus.ok);
+        }
+        throw StateError('Unexpected request: ${request.url}');
+      });
+
+      final enrollment = http.runWithClient(
+        () => own.registerSync(
+          baseUrl: _baseUrl,
+          username: 'new-user',
+          password: 'password',
+          encryptionPassphrase: 'password',
+        ),
+        () => transport,
+      );
+      await tokenWritten.future;
+      final adding = http.runWithClient(
+        () => own.withInbox(
+          (inbox, serverUrl) => inbox.addApp(
+            name: 'bots',
+            serverUrl: serverUrl,
+          ),
+        ),
+        () => transport,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(appHosts, isEmpty);
+
+      releaseTokenWrite.complete();
+      await enrollment;
+      final pairing = await adding;
+
+      expect(appHosts, ['sync.test']);
+      expect(pairing.url, _baseUrl);
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
   test('successful sync closes its client after consuming the response', () async {
     final transport = _TrackedClient((request) async {
       expect(request.headers['authorization'], 'Bearer session-token');

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,6 +9,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/services/app_services.dart';
+import 'package:seance_app/services/local_settings_backend.dart';
+import 'package:seance_app/services/settings_backend.dart';
 import 'package:seance_core/seance_core.dart';
 
 const _baseUrl = 'https://sync.test';
@@ -63,6 +66,14 @@ void main() {
       updatedAt: 100,
     );
     await services.configStore.putServer(excluded);
+    const added = ServerConfig(
+      id: 'added-server',
+      label: 'added elsewhere',
+      host: 'remote.example.com',
+      username: 'deploy',
+      createdAt: 500,
+      updatedAt: 500,
+    );
 
     final records = [
       await codec.encrypt(DecryptedRecord(
@@ -87,6 +98,13 @@ void main() {
         deviceId: 'other-device',
         data: excluded.copyWith(label: 'from the account').toJson(),
       )),
+      await codec.encrypt(DecryptedRecord(
+        id: added.id,
+        kind: RecordKind.serverConfig,
+        updatedAt: added.updatedAt,
+        deviceId: 'other-device',
+        data: added.toJson(),
+      )),
     ];
 
     // The engine drains the pull before the coordinator applies anything: the
@@ -103,6 +121,8 @@ void main() {
     // the expectation reshapes it, which is not a property this file should
     // depend on.
     final sentAuth = <String?>[];
+    final thirdPullStarted = Completer<void>();
+    final releaseThirdPull = Completer<void>();
     final transport = MockClient((request) async {
       // These records carry the assistant's API keys, and every mock in this
       // file answers whatever it is asked — so without this, a round that
@@ -111,6 +131,8 @@ void main() {
       if (request.method == 'GET') {
         gets++;
         if (gets >= 3) {
+          if (!thirdPullStarted.isCompleted) thirdPullStarted.complete();
+          await releaseThirdPull.future;
           return http.Response('down', HttpStatus.internalServerError);
         }
         return http.Response(
@@ -136,9 +158,26 @@ void main() {
 
     final state = AppState(services);
     addTearDown(state.dispose);
+    final backend = LocalSettingsBackend(state);
     final versionBefore = state.llmConfigVersion;
+    final staleDraft = AssistantDraft(
+      fields: AssistantFields.of(services.settings),
+      llmApiKey: '',
+      zaiApiKey: '',
+      versionSeen: versionBefore,
+    );
     await http.runWithClient(
-      () => expectLater(state.syncNow(), throwsA(isA<ApiError>())),
+      () async {
+        final syncing = state.syncNow();
+        await thirdPullStarted.future;
+
+        final save = await backend.saveAssistant(staleDraft);
+        expect(save.status, AssistantSaveStatus.adoptedBeforeSave);
+        expect(services.settings.llmModel, 'gpt-5');
+
+        releaseThirdPull.complete();
+        await expectLater(syncing, throwsA(isA<ApiError>()));
+      },
       () => transport,
     );
 
@@ -150,6 +189,7 @@ void main() {
     expect(sentAuth, everyElement('Bearer session-token'));
     // Adopted, as the round's first half managed.
     expect(services.settings.llmModel, 'gpt-5');
+    expect(state.servers.map((server) => server.label), contains(added.label));
     // The whole configuration, not just the model: the failure this guards
     // is "answers with the old provider, model and key", and a key that
     // never reached the keystore would leave the rebuilt provider mute.
@@ -159,6 +199,192 @@ void main() {
     // And consumed, which is the whole point: an already-built chat provider
     // notices none of a new provider, model or key on its own.
     expect(state.llmConfigVersion, versionBefore + 1);
+  });
+
+  test('a successful redating pass preserves an earlier adoption', () async {
+    final codec = RecordCodec(services.vaultKey!);
+    const excluded = ServerConfig(
+      id: 'excluded-server',
+      label: 'local only',
+      host: 'local.example.com',
+      username: 'me',
+      excludeFromSync: true,
+      createdAt: 100,
+      updatedAt: 100,
+    );
+    await services.configStore.putServer(excluded);
+    final records = [
+      await codec.encrypt(DecryptedRecord(
+        id: AssistantSettings.recordId,
+        kind: RecordKind.assistantSettings,
+        updatedAt: 500,
+        deviceId: 'other-device',
+        data: const AssistantSettings(
+          providerKind: 'openaiCompatible',
+          baseUrl: 'https://api.openai.com/v1',
+          model: 'gpt-5',
+          llmApiKeyRef: 'openai',
+          redactSecrets: true,
+          apiKeys: {'openai': 'sk-remote'},
+          updatedAt: 500,
+        ).toJson(),
+      )),
+      await codec.encrypt(DecryptedRecord(
+        id: excluded.id,
+        kind: RecordKind.serverConfig,
+        updatedAt: 500,
+        deviceId: 'other-device',
+        data: excluded.copyWith(label: 'from the account').toJson(),
+      )),
+    ];
+
+    var gets = 0;
+    final transport = MockClient((request) async {
+      if (request.method == 'GET') {
+        gets++;
+        return http.Response(
+          jsonEncode(PullResponse(
+            records: gets == 1
+                ? [
+                    for (var i = 0; i < records.length; i++)
+                      records[i].withSeq(i + 1),
+                  ]
+                : const [],
+            latestSeq: records.length,
+          ).toJson()),
+          HttpStatus.ok,
+        );
+      }
+      // Leaving the retraction dirty makes the engine stop after its
+      // no-progress guard, while still exercising the coordinator's second
+      // pass. The second apply sees the assistant record unchanged.
+      return http.Response(
+        jsonEncode(
+          PushResponse(results: const [], latestSeq: records.length).toJson(),
+        ),
+        HttpStatus.ok,
+      );
+    });
+
+    final state = AppState(services);
+    addTearDown(state.dispose);
+    final versionBefore = state.llmConfigVersion;
+    await http.runWithClient(state.syncNow, () => transport);
+
+    expect(gets, greaterThanOrEqualTo(3), reason: 'redating ran a second pass');
+    expect(services.settings.llmModel, 'gpt-5');
+    expect(services.assistantSettingsChanged, isTrue);
+    expect(state.llmConfigVersion, versionBefore + 1);
+  });
+
+  test('every assistant application advances the editor version', () async {
+    final codec = RecordCodec(services.vaultKey!);
+    const excluded = ServerConfig(
+      id: 'excluded-server',
+      label: 'local only',
+      host: 'local.example.com',
+      username: 'me',
+      excludeFromSync: true,
+      createdAt: 100,
+      updatedAt: 100,
+    );
+    await services.configStore.putServer(excluded);
+    final first = await codec.encrypt(DecryptedRecord(
+      id: AssistantSettings.recordId,
+      kind: RecordKind.assistantSettings,
+      updatedAt: 500,
+      deviceId: 'first-device',
+      data: const AssistantSettings(
+        providerKind: 'openaiCompatible',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'model-a',
+        llmApiKeyRef: 'openai',
+        redactSecrets: true,
+        apiKeys: {'openai': 'sk-a'},
+        updatedAt: 500,
+      ).toJson(),
+    ));
+    final second = await codec.encrypt(DecryptedRecord(
+      id: AssistantSettings.recordId,
+      kind: RecordKind.assistantSettings,
+      updatedAt: 600,
+      deviceId: 'second-device',
+      data: const AssistantSettings(
+        providerKind: 'openaiCompatible',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'model-b',
+        llmApiKeyRef: 'openai',
+        redactSecrets: true,
+        apiKeys: {'openai': 'sk-b'},
+        updatedAt: 600,
+      ).toJson(),
+    ));
+    final outrankingExcluded = await codec.encrypt(DecryptedRecord(
+      id: excluded.id,
+      kind: RecordKind.serverConfig,
+      updatedAt: 500,
+      deviceId: 'other-device',
+      data: excluded.copyWith(label: 'from the account').toJson(),
+    ));
+
+    var gets = 0;
+    final thirdPullStarted = Completer<void>();
+    final releaseThirdPull = Completer<void>();
+    final transport = MockClient((request) async {
+      if (request.method == 'GET') {
+        gets++;
+        if (gets == 3) {
+          thirdPullStarted.complete();
+          await releaseThirdPull.future;
+        }
+        final records = switch (gets) {
+          1 => [first.withSeq(1), outrankingExcluded.withSeq(2)],
+          3 => [second.withSeq(3)],
+          _ => const <EncryptedRecord>[],
+        };
+        return http.Response(
+          jsonEncode(PullResponse(
+            records: records,
+            latestSeq: gets >= 3 ? 3 : 2,
+          ).toJson()),
+          HttpStatus.ok,
+        );
+      }
+      return http.Response(
+        jsonEncode(PushResponse(
+          results: const [],
+          latestSeq: gets >= 3 ? 3 : 2,
+        ).toJson()),
+        HttpStatus.ok,
+      );
+    });
+
+    final state = AppState(services);
+    addTearDown(state.dispose);
+    final backend = LocalSettingsBackend(state);
+    final versionBefore = state.llmConfigVersion;
+    await http.runWithClient(() async {
+      final syncing = state.syncNow();
+      await thirdPullStarted.future;
+
+      expect(services.settings.llmModel, 'model-a');
+      expect(state.llmConfigVersion, versionBefore + 1);
+      final staleDraft = AssistantDraft(
+        fields: AssistantFields.of(services.settings),
+        llmApiKey: 'sk-a',
+        zaiApiKey: '',
+        versionSeen: state.llmConfigVersion,
+      );
+
+      releaseThirdPull.complete();
+      await syncing;
+      expect(services.settings.llmModel, 'model-b');
+      expect(state.llmConfigVersion, versionBefore + 2);
+
+      final save = await backend.saveAssistant(staleDraft);
+      expect(save.status, AssistantSaveStatus.adoptedBeforeSave);
+      expect(services.settings.llmModel, 'model-b');
+    }, () => transport);
   });
 
   test('an edit never stamps below the record this device holds', () async {
@@ -484,9 +710,10 @@ void main() {
       var pushSeq = 1;
       final transport = MockClient((request) async {
         if (request.method == 'GET') {
+          final since = int.parse(request.url.queryParameters['since'] ?? '0');
           return http.Response(
             jsonEncode(PullResponse(
-              records: [remote.withSeq(1)],
+              records: [if (since < 1) remote.withSeq(1)],
               // The head the acknowledgements below have reached, not a
               // literal: identical today, since this device pushes nothing
               // here, but a mock whose head goes backwards after a push is a

@@ -19,6 +19,23 @@ const String _secretIdPrefix = 'secret$_recordKindDelimiter';
 const String _snippetIdPrefix = 'snippet$_recordKindDelimiter';
 const String _syncLoggerName = 'seance.sync';
 
+/// Runs one local-state phase under an embedding's serialization boundary.
+/// Network and mirror-only work stay outside this callback.
+typedef SyncPhaseGate = Future<T> Function<T>(Future<T> Function() phase);
+
+/// A prepared sync snapshot became stale before its local-state commit.
+/// Embeddings may retry once with a fresh coordinator and mirror.
+final class SyncSnapshotChanged implements Exception {
+  const SyncSnapshotChanged();
+
+  @override
+  String toString() =>
+      'Local data changed while syncing. Run sync again to apply the latest '
+      'snapshot.';
+}
+
+Future<T> _runSyncPhaseDirectly<T>(Future<T> Function() phase) => phase();
+
 RecordKind _pendingTombstoneKind(EncryptedRecord tombstone) {
   if (!tombstone.deleted) {
     throw const FormatException('Pending tombstone is not marked deleted');
@@ -1235,6 +1252,19 @@ class SyncCoordinator {
   /// per round, so nothing pulled would survive to the next one.
   Future<SyncOutcome> run(SyncApi api) async {
     await collectLocal();
+    return runPrepared(api, commit: _runSyncPhaseDirectly);
+  }
+
+  /// Runs a snapshot already prepared by [collectLocal].
+  ///
+  /// All network and mirror-only engine work runs outside [commit]. Only the
+  /// phases that apply records to domain stores, re-date local retractions, or
+  /// prune durable tombstones enter it. An embedding can therefore release its
+  /// mutation queue while requests are in flight and reject a stale commit.
+  Future<SyncOutcome> runPrepared(
+    SyncApi api, {
+    required SyncPhaseGate commit,
+  }) async {
     final engine = SyncEngine(local);
     // The latest pass's answer, not the union of both: a second pass pushes
     // every refused record that is still dirty again, so it knows which are
@@ -1260,18 +1290,24 @@ class SyncCoordinator {
     // this is the *re-dating* count and not, say, the number of records
     // applied — which would double every round's traffic on the hot path,
     // hidden inside the summed outcome.
-    final redated = await applyToStores();
+    final redated = await commit(() async {
+      final count = await applyToStores();
+      if (count == 0) await _pruneConfirmedTombstones();
+      return count;
+    });
     var outcome = first;
     if (redated != 0) {
       final second = await pass();
-      await applyToStores();
+      await commit(() async {
+        await applyToStores();
+        await _pruneConfirmedTombstones();
+      });
       outcome = SyncOutcome(
         pulled: first.pulled + second.pulled,
         pushed: first.pushed + second.pushed,
         rounds: first.rounds + second.rounds,
       );
     }
-    await _pruneConfirmedTombstones();
     if (refused.isEmpty) return outcome;
     throw SyncRecordsRefused(
       [for (final record in refused) await _describeRefused(record.id)],

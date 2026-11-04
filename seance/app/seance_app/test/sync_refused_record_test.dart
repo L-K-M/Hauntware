@@ -74,10 +74,11 @@ void main() {
     var seq = 1;
     final transport = MockClient((request) async {
       if (request.method == 'GET') {
+        final since = int.parse(request.url.queryParameters['since'] ?? '0');
         return http.Response(
           jsonEncode(PullResponse(
-            records: [pulled.withSeq(1)],
-            latestSeq: 1,
+            records: [if (since < 1) pulled.withSeq(1)],
+            latestSeq: seq,
             limits: const PushLimits(maxBlobBytes: _maxBlobBytes),
           ).toJson()),
           HttpStatus.ok,

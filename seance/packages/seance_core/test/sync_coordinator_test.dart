@@ -102,6 +102,105 @@ ServerConfig server(String id, String label, int updatedAt) => ServerConfig(
     );
 
 void main() {
+  test('a prepared run keeps network work outside commit phases', () async {
+    var inCommit = false;
+    final events = <String>[];
+    final remote = _PhaseCheckingServer(
+      inCommit: () => inCommit,
+      events: events,
+    );
+    final configs = InMemoryConfigStore();
+    await configs.putServer(server('s1', 'alpha', 10));
+    final coordinator = SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: RecordCodec(secureRandomBytes(32)),
+      local: InMemoryLocalRecordStore(),
+      deviceId: 'A',
+    );
+    await coordinator.collectLocal();
+
+    Future<T> commit<T>(Future<T> Function() phase) async {
+      events.add('commit:start');
+      inCommit = true;
+      try {
+        return await phase();
+      } finally {
+        inCommit = false;
+        events.add('commit:end');
+      }
+    }
+
+    await coordinator.runPrepared(remote, commit: commit);
+
+    expect(events, containsAllInOrder(['pull', 'push', 'commit:start']));
+    expect(events.where((event) => event == 'commit:start'), hasLength(1));
+  });
+
+  test('a prepared run gates both applies when re-dating needs a push',
+      () async {
+    var inCommit = false;
+    final events = <String>[];
+    final remote = _PhaseCheckingServer(
+      inCommit: () => inCommit,
+      events: events,
+    );
+    final codec = RecordCodec(secureRandomBytes(32));
+    await remote.push([
+      await codec.encrypt(DecryptedRecord(
+        id: 's1',
+        kind: RecordKind.serverConfig,
+        updatedAt: 20,
+        deviceId: 'A',
+        deleted: true,
+      )),
+    ]);
+    events.clear();
+    final configs = InMemoryConfigStore();
+    await configs.putServer(server('s1', 'alpha', 10));
+    final coordinator = SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: codec,
+      local: InMemoryLocalRecordStore(),
+      deviceId: 'A',
+    );
+    await coordinator.collectLocal();
+    var commits = 0;
+
+    Future<T> commit<T>(Future<T> Function() phase) async {
+      commits++;
+      events.add('commit:start');
+      inCommit = true;
+      try {
+        return await phase();
+      } finally {
+        inCommit = false;
+        events.add('commit:end');
+      }
+    }
+
+    final outcome = await coordinator.runPrepared(remote, commit: commit);
+
+    expect(commits, 2);
+    expect(outcome.pushed, greaterThan(0));
+    final firstCommitEnd = events.indexOf('commit:end');
+    final secondCommitStart = events.lastIndexOf('commit:start');
+    expect(
+      events.sublist(firstCommitEnd + 1, secondCommitStart),
+      containsAll(['pull', 'push']),
+    );
+    expect(
+      remote.stored('s1'),
+      isA<EncryptedRecord>().having(
+        (record) => record.deleted,
+        'deleted',
+        isFalse,
+      ),
+    );
+    expect(remote.stored('s1')!.updatedAt, 21);
+  });
+
   test('legacy server records migrate without changing their LWW tuple',
       () async {
     final remote = FakeServer();
@@ -3180,6 +3279,32 @@ void main() {
               'of the engine\'s rounds');
     });
 
+    test('a prepared run commits before reporting a refusal', () async {
+      final remote = _BlobCapServer(cap);
+      final snippets = InMemorySnippetStore();
+      await snippets.putSnippet(script(100 * 1024, 20));
+      final coordinator = coord(
+        'B',
+        InMemoryConfigStore(),
+        snippets: snippets,
+      );
+      await coordinator.collectLocal();
+      var committed = false;
+
+      Future<T> commit<T>(Future<T> Function() phase) async {
+        final result = await phase();
+        committed = true;
+        return result;
+      }
+
+      final failure = await _refusal(
+        coordinator.runPrepared(remote, commit: commit),
+      );
+
+      expect(committed, isTrue);
+      expect(failure.recordIds, ['snippet:big']);
+    });
+
     test('is retried on later rounds, and lands once it fits', () async {
       final remote = _BlobCapServer(cap);
       final snippetsB = InMemorySnippetStore();
@@ -3576,6 +3701,27 @@ class _ThrowingOnWriteAssistantStore implements AssistantSettingsStore {
   @override
   Future<void> putAssistantSettings(AssistantSettings value) async =>
       throw StateError('KeyringLocked');
+}
+
+class _PhaseCheckingServer extends FakeServer {
+  _PhaseCheckingServer({required this.inCommit, required this.events});
+
+  final bool Function() inCommit;
+  final List<String> events;
+
+  @override
+  Future<PullResponse> pull({required int since, int? through}) async {
+    expect(inCommit(), isFalse);
+    events.add('pull');
+    return super.pull(since: since, through: through);
+  }
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) async {
+    expect(inCommit(), isFalse);
+    events.add('push');
+    return super.push(records);
+  }
 }
 
 /// A store whose keyring will not answer: the configuration is there and its
