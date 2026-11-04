@@ -106,8 +106,19 @@ Omit `--db` for an ephemeral in-memory store.
 | `SEANCE_PORT` | `--port` | `8787` | Listen port |
 | `SEANCE_DB_PATH` | `--db` | *(in-memory)* | SQLite file path |
 | `SEANCE_OPEN_REGISTRATION` | `--open-registration` | `false` | Allow `/v1/register` |
-| `SEANCE_LOGIN_MAX_ATTEMPTS` | — | `10` | Login attempts per window |
-| `SEANCE_LOGIN_WINDOW_SECONDS` | — | `60` | Rate-limit window |
+| `SEANCE_LOGIN_MAX_ATTEMPTS` | — | `10` | Login attempts per username and window |
+| `SEANCE_LOGIN_WINDOW_SECONDS` | — | `60` | Authentication rate-limit window |
+| `SEANCE_AUTH_GLOBAL_MAX_ATTEMPTS` | — | `2000` | Register, prelogin, and login requests per window across the server |
+| `SEANCE_AUTH_CLIENT_MAX_ATTEMPTS` | — | `120` | Register, prelogin, and login requests per client address and window |
+| `SEANCE_RATE_LIMIT_MAX_BUCKETS` | — | `4096` | Maximum retained client, username, or inbox limiter buckets |
+| `SEANCE_TRUSTED_PROXIES` | — | *(none)* | Comma-separated numeric IPs allowed to supply `X-Forwarded-For` |
+
+Client addresses come from the socket peer. `X-Forwarded-For` is ignored
+unless that immediate peer is listed exactly in `SEANCE_TRUSTED_PROXIES`; a
+trusted chain is walked from right to left to find the first untrusted address.
+Malformed or excessive chains fall back to the peer address. Configure only
+reverse proxies you operate, and have them append or replace the header rather
+than passing an untrusted client header through unchanged.
 
 ## API (protocol v1)
 
@@ -195,7 +206,9 @@ DTOs and the database schema are unchanged; this is not an account migration.
   login (the raw verifier is needed and cannot be recovered from the hash).
 - Record payloads are sealed client-side with XChaCha20-Poly1305. The server
   stores `nonce ‖ ciphertext ‖ mac` and never holds a key.
-- Login is rate-limited to blunt online guessing.
+- Register, prelogin, and login share global and per-client limits; login also
+  has a per-username limit. Every keyed limiter has a fixed bucket cap, so
+  random names or addresses cannot grow server memory without bound.
 - Conflict resolution is deterministic last-write-wins keyed by
   `(updatedAt, deviceId)`, identical to the client, so both sides agree.
 

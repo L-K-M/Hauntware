@@ -18,6 +18,7 @@ class TestClient {
     Object? body,
     bool auth = false,
     Map<String, String> query = const {},
+    Map<String, String> headers = const {},
   }) async {
     final uri = Uri.parse(
       'http://localhost$path',
@@ -27,6 +28,7 @@ class TestClient {
       uri,
       headers: {
         'content-type': 'application/json',
+        ...headers,
         if (auth && token != null) 'authorization': 'Bearer $token',
       },
       body: body == null ? null : jsonEncode(body),
@@ -88,6 +90,11 @@ void main() {
   group('settings from the environment', () {
     test('a non-positive push limit refuses to start', () {
       for (final key in const [
+        'SEANCE_LOGIN_MAX_ATTEMPTS',
+        'SEANCE_LOGIN_WINDOW_SECONDS',
+        'SEANCE_AUTH_GLOBAL_MAX_ATTEMPTS',
+        'SEANCE_AUTH_CLIENT_MAX_ATTEMPTS',
+        'SEANCE_RATE_LIMIT_MAX_BUCKETS',
         'SEANCE_MAX_BODY_BYTES',
         'SEANCE_MAX_RECORDS_PER_PUSH',
         'SEANCE_MAX_BLOB_BYTES',
@@ -109,6 +116,11 @@ void main() {
       // A typo is not an intent: silently defaulting would run a cap other
       // than the one the operator asked for.
       for (final key in const [
+        'SEANCE_LOGIN_MAX_ATTEMPTS',
+        'SEANCE_LOGIN_WINDOW_SECONDS',
+        'SEANCE_AUTH_GLOBAL_MAX_ATTEMPTS',
+        'SEANCE_AUTH_CLIENT_MAX_ATTEMPTS',
+        'SEANCE_RATE_LIMIT_MAX_BUCKETS',
         'SEANCE_MAX_BODY_BYTES',
         'SEANCE_MAX_RECORDS_PER_PUSH',
         'SEANCE_MAX_BLOB_BYTES',
@@ -171,6 +183,45 @@ void main() {
       // deployment's blob cap batches a record past it beside records that
       // would have been accepted, and the 413 takes all of them.
       expect(settings.pushLimits, const PushLimits(maxBlobBytes: 2048));
+    });
+
+    test('authentication limits and trusted proxies are parsed', () {
+      final settings = ServerSettings.fromEnvironment(const {
+        'SEANCE_LOGIN_MAX_ATTEMPTS': '4',
+        'SEANCE_LOGIN_WINDOW_SECONDS': '30',
+        'SEANCE_AUTH_GLOBAL_MAX_ATTEMPTS': '90',
+        'SEANCE_AUTH_CLIENT_MAX_ATTEMPTS': '12',
+        'SEANCE_RATE_LIMIT_MAX_BUCKETS': '128',
+        'SEANCE_TRUSTED_PROXIES': '192.0.2.1, 2001:0db8::1',
+      });
+
+      expect(settings.loginMaxAttempts, 4);
+      expect(settings.loginWindow, const Duration(seconds: 30));
+      expect(settings.authGlobalMaxAttempts, 90);
+      expect(settings.authClientMaxAttempts, 12);
+      expect(settings.rateLimitMaxBuckets, 128);
+      expect(settings.trustedProxies, {'192.0.2.1', '2001:db8::1'});
+    });
+
+    test('a malformed trusted proxy list refuses to start', () {
+      for (final value in const [
+        'proxy.example.com',
+        '192.0.2.1,',
+        '192.0.2.1:443',
+      ]) {
+        expect(
+          () =>
+              ServerSettings.fromEnvironment({'SEANCE_TRUSTED_PROXIES': value}),
+          throwsA(
+            isA<ArgumentError>().having(
+              (error) => error.name,
+              'name',
+              'SEANCE_TRUSTED_PROXIES',
+            ),
+          ),
+          reason: value,
+        );
+      }
     });
   });
 
@@ -352,6 +403,194 @@ void main() {
       expect((await c.send('POST', '/v1/login', body: wrong)).$1, 401);
       expect((await c.send('POST', '/v1/login', body: wrong)).$1, 401);
       expect((await c.send('POST', '/v1/login', body: wrong)).$1, 429);
+    });
+
+    test(
+      'global authentication limit covers register, prelogin, and login',
+      () async {
+        final server = SyncServer(
+          storage: InMemoryStorage(),
+          settings: const ServerSettings(openRegistration: true),
+          authGlobalLimiter: RateLimiter(maxAttempts: 3, maxBuckets: 1),
+          authClientLimiter: RateLimiter(maxAttempts: 100),
+          clientAddress: (request) =>
+              request.headers['x-test-client'] ?? 'test',
+        );
+        final c = TestClient(server.handler);
+
+        expect(
+          (await c.send(
+            'POST',
+            '/v1/register',
+            body: registerReq('global').toJson(),
+            headers: {'x-test-client': 'one'},
+          )).$1,
+          200,
+        );
+        expect(
+          (await c.send(
+            'POST',
+            '/v1/prelogin',
+            body: {'username': 'missing'},
+            headers: {'x-test-client': 'two'},
+          )).$1,
+          404,
+        );
+        expect(
+          (await c.send(
+            'POST',
+            '/v1/login',
+            body: LoginRequest(
+              username: 'missing',
+              authVerifier: base64.encode(secureRandomBytes(32)),
+            ).toJson(),
+            headers: {'x-test-client': 'three'},
+          )).$1,
+          401,
+        );
+        expect(
+          (await c.send(
+            'POST',
+            '/v1/prelogin',
+            body: {'username': 'global'},
+            headers: {'x-test-client': 'four'},
+          )).$1,
+          429,
+        );
+      },
+    );
+
+    test('client limit cannot be bypassed by rotating usernames', () async {
+      final server = SyncServer(
+        storage: InMemoryStorage(),
+        settings: const ServerSettings(),
+        authGlobalLimiter: RateLimiter(maxAttempts: 100, maxBuckets: 1),
+        authClientLimiter: RateLimiter(maxAttempts: 3),
+        loginLimiter: RateLimiter(maxAttempts: 10),
+        clientAddress: (request) => request.headers['x-test-client'] ?? 'test',
+      );
+      final c = TestClient(server.handler);
+
+      for (var i = 0; i < 3; i++) {
+        final (status, _) = await c.send(
+          'POST',
+          '/v1/login',
+          body: LoginRequest(
+            username: 'random-$i',
+            authVerifier: base64.encode(secureRandomBytes(32)),
+          ).toJson(),
+          headers: {'x-test-client': 'same-client'},
+        );
+        expect(status, 401);
+      }
+      final (status, body) = await c.send(
+        'POST',
+        '/v1/login',
+        body: LoginRequest(
+          username: 'random-4',
+          authVerifier: base64.encode(secureRandomBytes(32)),
+        ).toJson(),
+        headers: {'x-test-client': 'same-client'},
+      );
+      expect(status, 429);
+      expect(body['error'], 'rate_limited');
+    });
+
+    test('client addresses have independent budgets', () async {
+      final server = SyncServer(
+        storage: InMemoryStorage(),
+        settings: const ServerSettings(),
+        authGlobalLimiter: RateLimiter(maxAttempts: 100, maxBuckets: 1),
+        authClientLimiter: RateLimiter(maxAttempts: 2),
+        clientAddress: (request) => request.headers['x-test-client'] ?? 'test',
+      );
+      final c = TestClient(server.handler);
+
+      Future<int> prelogin(String client) async => (await c.send(
+        'POST',
+        '/v1/prelogin',
+        body: {'username': 'missing'},
+        headers: {'x-test-client': client},
+      )).$1;
+
+      expect(await prelogin('one'), 404);
+      expect(await prelogin('one'), 404);
+      expect(await prelogin('one'), 429);
+      expect(await prelogin('two'), 404);
+    });
+
+    test('successful login resets only the username budget', () async {
+      final storage = InMemoryStorage();
+      final verifier = secureRandomBytes(32);
+      final verifierSalt = secureRandomBytes(16);
+      await storage.createAccount(
+        Account(
+          username: 'reset-scope',
+          authVerifierHash: VaultCrypto.hashAuthVerifier(
+            verifier,
+            verifierSalt,
+          ),
+          verifierSalt: base64.encode(verifierSalt),
+          argonSalt: base64.encode(secureRandomBytes(16)),
+          argonParams: const Argon2Params(),
+        ),
+      );
+      final server = SyncServer(
+        storage: storage,
+        settings: const ServerSettings(),
+        authGlobalLimiter: RateLimiter(maxAttempts: 100, maxBuckets: 1),
+        authClientLimiter: RateLimiter(maxAttempts: 2),
+        loginLimiter: RateLimiter(maxAttempts: 1),
+        clientAddress: (request) => request.headers['x-test-client'] ?? 'test',
+      );
+      final c = TestClient(server.handler);
+      final valid = LoginRequest(
+        username: 'reset-scope',
+        authVerifier: base64.encode(verifier),
+      ).toJson();
+      final wrong = LoginRequest(
+        username: 'reset-scope',
+        authVerifier: base64.encode(secureRandomBytes(32)),
+      ).toJson();
+
+      expect(
+        (await c.send(
+          'POST',
+          '/v1/login',
+          body: valid,
+          headers: {'x-test-client': 'one'},
+        )).$1,
+        200,
+      );
+      expect(
+        (await c.send(
+          'POST',
+          '/v1/login',
+          body: wrong,
+          headers: {'x-test-client': 'two'},
+        )).$1,
+        401,
+        reason: 'the successful login reset the username limiter',
+      );
+      expect(
+        (await c.send(
+          'POST',
+          '/v1/prelogin',
+          body: {'username': 'reset-scope'},
+          headers: {'x-test-client': 'one'},
+        )).$1,
+        200,
+      );
+      expect(
+        (await c.send(
+          'POST',
+          '/v1/prelogin',
+          body: {'username': 'reset-scope'},
+          headers: {'x-test-client': 'one'},
+        )).$1,
+        429,
+        reason: 'the successful login did not reset the client limiter',
+      );
     });
 
     test('rejects malformed login verifier as a bad request', () async {

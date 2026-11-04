@@ -27,6 +27,12 @@ services:
       SEANCE_OPEN_REGISTRATION: "false"
       SEANCE_LOGIN_MAX_ATTEMPTS: "10"
       SEANCE_LOGIN_WINDOW_SECONDS: "60"
+      SEANCE_AUTH_GLOBAL_MAX_ATTEMPTS: "2000"
+      SEANCE_AUTH_CLIENT_MAX_ATTEMPTS: "120"
+      SEANCE_RATE_LIMIT_MAX_BUCKETS: "4096"
+      # Empty means forwarded headers are ignored. Set exact proxy IPs in the
+      # adjacent .env only when that proxy overwrites/appends X-Forwarded-For.
+      SEANCE_TRUSTED_PROXIES: "${SEANCE_TRUSTED_PROXIES:-}"
     volumes:
       - seance-data:/data
     healthcheck:

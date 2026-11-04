@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show HttpStatus;
+import 'dart:io' show HttpConnectionInfo, HttpStatus;
 import 'dart:math' show min;
 import 'dart:typed_data' show BytesBuilder, Uint8List;
 
@@ -9,6 +9,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
 
+import 'client_address.dart';
 import 'config.dart';
 import 'favicon.dart';
 import 'inbox_docs.dart';
@@ -52,10 +53,13 @@ class SyncServer {
 
   final Storage storage;
   final ServerSettings settings;
+  final RateLimiter authGlobalLimiter;
+  final RateLimiter authClientLimiter;
   final RateLimiter loginLimiter;
 
   /// Deposits per inbox app, keyed by app id (docs/INBOX.md: 30 a minute).
   final RateLimiter inboxLimiter;
+  final String Function(Request request) _clientAddress;
 
   /// The clock inbox retention is measured with; injectable for tests.
   final DateTime Function() _now;
@@ -63,23 +67,47 @@ class SyncServer {
   SyncServer({
     required this.storage,
     required this.settings,
+    RateLimiter? authGlobalLimiter,
+    RateLimiter? authClientLimiter,
     RateLimiter? loginLimiter,
     RateLimiter? inboxLimiter,
+    String Function(Request request)? clientAddress,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now,
+       authGlobalLimiter =
+           authGlobalLimiter ??
+           RateLimiter(
+             maxAttempts: settings.authGlobalMaxAttempts,
+             window: settings.loginWindow,
+             maxBuckets: 1,
+             now: now,
+           ),
+       authClientLimiter =
+           authClientLimiter ??
+           RateLimiter(
+             maxAttempts: settings.authClientMaxAttempts,
+             window: settings.loginWindow,
+             maxBuckets: settings.rateLimitMaxBuckets,
+             now: now,
+           ),
        loginLimiter =
            loginLimiter ??
            RateLimiter(
              maxAttempts: settings.loginMaxAttempts,
              window: settings.loginWindow,
+             maxBuckets: settings.rateLimitMaxBuckets,
+             now: now,
            ),
        inboxLimiter =
            inboxLimiter ??
            RateLimiter(
              maxAttempts: _inboxDepositsPerWindow,
              window: _inboxDepositWindow,
+             maxBuckets: settings.rateLimitMaxBuckets,
              now: now,
-           );
+           ),
+       _clientAddress =
+           clientAddress ?? _clientAddressFromRequest(settings.trustedProxies);
 
   Handler get handler {
     final router = Router()
@@ -148,6 +176,8 @@ class SyncServer {
   // --- Handlers ---
 
   Future<Response> _register(Request req) async {
+    final limited = _limitAuthentication(req);
+    if (limited != null) return limited;
     final body = await _readJson(req, _authBodyCap);
     if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
     final RegisterRequest r;
@@ -205,6 +235,8 @@ class SyncServer {
   }
 
   Future<Response> _prelogin(Request req) async {
+    final limited = _limitAuthentication(req);
+    if (limited != null) return limited;
     final body = await _readJson(req, _authBodyCap);
     final username = body?['username'];
     if (username == null) return _error(400, 'bad_request', 'Missing username');
@@ -225,6 +257,8 @@ class SyncServer {
   }
 
   Future<Response> _login(Request req) async {
+    final limited = _limitAuthentication(req);
+    if (limited != null) return limited;
     final body = await _readJson(req, _authBodyCap);
     if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
     final LoginRequest r;
@@ -314,6 +348,33 @@ class SyncServer {
       });
 
   // --- Helpers ---
+
+  Response? _limitAuthentication(Request req) {
+    if (!authGlobalLimiter.allow('authentication')) {
+      return _error(429, 'rate_limited', 'Too many authentication requests');
+    }
+    final client = _clientAddress(req);
+    if (!authClientLimiter.allow('authentication:$client')) {
+      return _error(429, 'rate_limited', 'Too many authentication requests');
+    }
+    return null;
+  }
+
+  static String Function(Request request) _clientAddressFromRequest(
+    Set<String> trustedProxies,
+  ) {
+    final resolver = ClientAddressResolver(trustedProxies);
+    return (request) {
+      final connection = request.context['shelf.io.connection_info'];
+      final peer = connection is HttpConnectionInfo
+          ? connection.remoteAddress.address
+          : 'unknown';
+      return resolver.resolve(
+        peerAddress: peer,
+        forwardedFor: request.headers['x-forwarded-for'],
+      );
+    };
+  }
 
   Future<Response> _withAuth(
     Request req,

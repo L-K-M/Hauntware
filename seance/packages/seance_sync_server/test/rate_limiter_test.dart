@@ -60,14 +60,54 @@ void main() {
       expect(limiter.allow('alice'), isTrue);
     });
 
-    test('never blocks new keys because other keys are active', () {
-      final limiter = RateLimiter(maxAttempts: 1, now: () => now);
+    test('keeps key churn within the bucket cap', () {
+      final limiter = RateLimiter(
+        maxAttempts: 1,
+        maxBuckets: 64,
+        now: () => now,
+      );
 
       expect(limiter.allow('known'), isTrue);
       expect(limiter.allow('known'), isFalse);
       for (var i = 0; i < 10001; i++) {
         expect(limiter.allow('new-$i'), isTrue);
+        expect(limiter.bucketCount, lessThanOrEqualTo(64));
       }
+      expect(limiter.bucketCount, 64);
+    });
+
+    test('evicts the least-recently-used live bucket', () {
+      final limiter = RateLimiter(
+        maxAttempts: 1,
+        maxBuckets: 2,
+        now: () => now,
+      );
+
+      expect(limiter.allow('oldest'), isTrue);
+      expect(limiter.allow('recent'), isTrue);
+      expect(limiter.allow('oldest'), isFalse, reason: 'moves it to MRU');
+      expect(limiter.allow('new'), isTrue);
+
+      expect(limiter.bucketCount, 2);
+      expect(limiter.allow('recent'), isTrue, reason: 'it was the LRU');
+    });
+
+    test('sweeps expired buckets before evicting live ones', () {
+      final limiter = RateLimiter(
+        maxAttempts: 1,
+        maxBuckets: 2,
+        window: const Duration(minutes: 1),
+        now: () => now,
+      );
+
+      expect(limiter.allow('stale'), isTrue);
+      now = now.add(const Duration(seconds: 30));
+      expect(limiter.allow('live'), isTrue);
+      now = now.add(const Duration(seconds: 31));
+      expect(limiter.allow('new'), isTrue);
+
+      expect(limiter.bucketCount, 2);
+      expect(limiter.allow('live'), isFalse);
     });
 
     test('uses a sliding window with an inclusive expiry cutoff', () {
@@ -108,6 +148,11 @@ void main() {
         () => RateLimiter(window: const Duration(seconds: -1)),
         throwsArgumentError,
       );
+    });
+
+    test('rejects invalid maxBuckets', () {
+      expect(() => RateLimiter(maxBuckets: 0), throwsArgumentError);
+      expect(() => RateLimiter(maxBuckets: -1), throwsArgumentError);
     });
   });
 }
