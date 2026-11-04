@@ -19,6 +19,25 @@ const String _secretIdPrefix = 'secret$_recordKindDelimiter';
 const String _snippetIdPrefix = 'snippet$_recordKindDelimiter';
 const String _syncLoggerName = 'seance.sync';
 
+/// The sealed kind of a durable local deletion intent. Older stores persist
+/// only the plaintext envelope, so the stable id namespace supplies the kind
+/// when an upgraded client turns that intent into an authenticated tombstone.
+RecordKind _tombstoneKind(String id) {
+  final delimiter = id.indexOf(_recordKindDelimiter);
+  if (delimiter < 0) return RecordKind.serverConfig;
+  return switch (id.substring(0, delimiter)) {
+    'hostkey' => RecordKind.hostKey,
+    'secret' => RecordKind.secret,
+    'snippet' => RecordKind.snippet,
+    'bookmark' => RecordKind.bookmark,
+    'assistant' => RecordKind.assistantSettings,
+    'inboxapp' => RecordKind.inboxApp,
+    'inboxstatus' => RecordKind.inboxStatus,
+    'klabautermann' => RecordKind.klabautermann,
+    _ => RecordKind.unknown,
+  };
+}
+
 /// Bridges the app's domain objects (server configs, pinned host keys, and —
 /// opt-in — secrets) to the encrypted record layer and back, then drives a
 /// [SyncEngine] round. Records are keyed by their domain id and disambiguated
@@ -96,9 +115,8 @@ class SyncCoordinator {
   /// An app record carries the app's key inside the seal whatever
   /// [syncSecrets] says: without the key a device cannot open the proposals
   /// the server keeps for it. Neither kind is ever deleted by a tombstone.
-  /// Tombstones are unsealed, so a sync server could forge one; an app is
-  /// removed by a sealed record marking it removed instead, and a status is
-  /// only ever added.
+  /// An app is removed by a sealed record marking it removed rather than a
+  /// tombstone, and a status is only ever added.
   final InboxAppStore? inboxAppStore;
   final InboxStatusStore? inboxStatusStore;
 
@@ -260,7 +278,9 @@ class SyncCoordinator {
     // full pull and being re-adopted by [applyToStores]. Pruned in [run] once
     // the server has the tombstone. A config tombstone is honoured on apply
     // regardless of the payload it replaces (routed by its bare id), so the
-    // deletion converges even for a kind a peer cannot yet decode.
+    // deletion converges even for a kind a peer cannot yet decode. The
+    // durable store holds a local deletion intent, not a wire-ready record:
+    // seal its routing and conflict tuple under the account key here.
     for (final tombstone
         in await tombstoneStore?.all() ?? const <EncryptedRecord>[]) {
       // Skip a tombstone whose id still names a live domain object this round:
@@ -270,7 +290,15 @@ class SyncCoordinator {
       // not the mirror, so it holds however the mirror is backed; the app also
       // clears a pending tombstone when its id is re-saved.
       if (presentIds.contains(tombstone.id)) continue;
-      await local.putLocal(tombstone);
+      final kind = _tombstoneKind(tombstone.id);
+      if (kind == RecordKind.unknown) continue;
+      await local.putLocal(await codec.encrypt(DecryptedRecord(
+        id: tombstone.id,
+        kind: kind,
+        updatedAt: tombstone.updatedAt,
+        deviceId: tombstone.deviceId,
+        deleted: true,
+      )));
     }
     for (final hk in await hostKeyStore.all()) {
       if (localOnlyLocators.contains(hk.locator)) {
@@ -280,14 +308,9 @@ class SyncCoordinator {
         // still holds the pin — the config tombstone deletes its server, not
         // its pins — also keeps re-publishing it.
         //
-        // Retracting would need a `hostkey:` tombstone the apply path honours,
-        // and that is the change not to make: a tombstone is the one record
-        // with no sealed payload (`RecordCodec.decrypt` short-circuits on the
-        // envelope's `deleted` flag), so honouring one for a pin would let
-        // anything able to write to the sync server strip every device's
-        // pinned host keys and drop each of them back to trust-on-first-use.
-        // A breach-tolerant blob store must not be able to do that. Sealing
-        // tombstones comes first; retraction can follow it.
+        // Retracting would need a `hostkey:` tombstone the apply path honours.
+        // Tombstones are now authenticated, but peer removal of a local TOFU
+        // decision remains a separate product policy.
         continue;
       }
       await local.putLocal(await codec.encrypt(DecryptedRecord(
@@ -380,9 +403,10 @@ class SyncCoordinator {
   /// Retract a server the user has excluded from sync: tombstone its record,
   /// and its credential's, so a copy pushed before the exclusion comes off the
   /// server — and the server row off the devices that pulled it, which honour
-  /// the config tombstone. They keep their vault entry, because a tombstone is
-  /// unsealed and so is not trusted with a delete; the routing comment in
-  /// [applyToStores] has the reasoning. Doing nothing instead would leave the
+  /// the config tombstone. They keep their vault entry because peer removal of
+  /// local credential material remains a separate product policy; the routing
+  /// comment in [applyToStores] has the reasoning. Doing nothing instead would
+  /// leave the
   /// blob on the server forever while this device silently stopped updating
   /// it, which is a worse answer than either syncing or not.
   ///
@@ -612,26 +636,24 @@ class SyncCoordinator {
       try {
         final dec = await codec.decrypt(enc);
 
-        // Tombstones have no encrypted kind, so the id prefix is what routes
-        // them. Bare ids are the legacy server-deletion form and still delete.
+        // Tombstones carry an authenticated kind and tuple. The id prefix is
+        // still what routes their application policy after codec validation.
         // A `snippet:` tombstone is applied like a config below (a snippet is
         // non-secret settings, the same risk class as a config). The other
-        // prefixed kinds — `secret:`, `hostkey:` — are deliberately a no-op:
-        // `RecordCodec.decrypt` returns a deleted record straight from the
-        // envelope's flag without opening anything, so a tombstone is the one
-        // signal a sync server can assert entirely on its own. Honouring those
-        // would hand it a primitive for emptying the vault (tombstone the
-        // configs first, then the credentials no config still names) and for
-        // stripping this device's TOFU pins. Configs already carried that
-        // exposure before any of this; a credential vault and a set of host
-        // key pins are not where to widen it. The fix is sealing tombstones —
-        // an authenticator over id, kind and date, keyed like the payload —
-        // not a per-apply special case, so the records stay staged for a
-        // build that can check them. Sealing must cover `snippet:` tombstones
-        // too: they are applied on arrival like configs, so an unsealed one
-        // lets a sync server delete a snippet on every device (a lost snippet,
-        // the same bounded cost configs already accept).
+        // prefixed kinds — `secret:`, `hostkey:` — remain deliberate policy
+        // no-ops: a peer deleting shared ciphertext is not yet permission to
+        // erase this device's vault material or local TOFU decision.
         if (dec.deleted) {
+          final routedKind = _tombstoneKind(dec.id);
+          if (routedKind == RecordKind.unknown || dec.kind != routedKind) {
+            skip(
+              dec.id,
+              StateError('tombstone kind ${dec.kind.name} does not match '
+                  'record id ${dec.id}'),
+              StackTrace.current,
+            );
+            continue;
+          }
           // Routed on the delimiter alone because a config id never carries
           // one: every config is minted with `uuidV4()` (the editor's draft
           // id and the ssh_config import), and the prefixed kinds are the
@@ -686,11 +708,9 @@ class SyncCoordinator {
             continue;
           }
           // A `snippet:` tombstone IS applied, unlike `secret:`/`hostkey:`: a
-          // snippet is non-secret settings, the same risk class as a config an
-          // unsealed tombstone can already delete on a sync server's say-so, so
-          // honouring it costs at most a lost snippet, never vault or trust
-          // material. The refused kinds stay staged for a sealed-tombstone
-          // build (they simply fall through this branch to the `continue`).
+          // snippet is non-secret settings, the same risk class as a config.
+          // The refused kinds stay staged for a future explicit removal policy
+          // (they simply fall through this branch to the `continue`).
           final snippets = snippetStore;
           if (snippets != null &&
               dec.id.length > _snippetIdPrefix.length &&
@@ -1228,7 +1248,7 @@ class SyncCoordinator {
   /// per round, so nothing pulled would survive to the next one.
   Future<SyncOutcome> run(SyncApi api) async {
     await collectLocal();
-    final engine = SyncEngine(local);
+    final engine = SyncEngine(local, remoteValidator: _validRemoteRecord);
     // The latest pass's answer, not the union of both: a second pass pushes
     // every refused record that is still dirty again, so it knows which are
     // still refused and which a pulled copy has since settled.
@@ -1290,6 +1310,20 @@ class SyncCoordinator {
       return RefusedRecord(id, kind: dec.kind, name: name);
     } catch (_) {
       return RefusedRecord(id);
+    }
+  }
+
+  /// Authenticate a pulled record before its plaintext conflict tuple can
+  /// enter the LWW mirror. A failure still advances the observed server
+  /// sequence in [SyncEngine], so one corrupt row cannot trap every later
+  /// pull, but it can never displace a pending local edit or reach a domain
+  /// store.
+  Future<bool> _validRemoteRecord(EncryptedRecord record) async {
+    try {
+      await codec.decrypt(record);
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 }

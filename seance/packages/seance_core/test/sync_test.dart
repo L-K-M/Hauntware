@@ -302,6 +302,30 @@ void main() {
       expect(await store.dirtyRecords(), isEmpty);
     });
 
+    test('an invalid future record cannot displace a dirty local edit',
+        () async {
+      final server = FakeServer();
+      await server.push([rec('shared', 1 << 50, 'forged', tag: 9)]);
+      final store = InMemoryLocalRecordStore();
+      await store.putLocal(rec('shared', 10, 'A', tag: 1));
+      var validated = 0;
+
+      await SyncEngine(
+        store,
+        remoteValidator: (record) async {
+          validated++;
+          return false;
+        },
+      ).sync(server);
+
+      final local = await store.getRecord('shared');
+      expect(validated, 1);
+      expect(local!.updatedAt, 10);
+      expect(local.blob, equals(Uint8List.fromList([1])));
+      expect(await store.dirtyRecords(), [same(local)]);
+      expect(await store.highWaterSeq(), 1);
+    });
+
     test(
       'pull latest sequence cannot skip an unseen snapshot record',
       () async {
