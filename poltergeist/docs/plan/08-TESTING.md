@@ -815,11 +815,16 @@ Mechanics:
   history or weakening tier-B enforcement. A
   missing/unfetchable state file (cache eviction, artifact expiry) means
   "count unknown — continue counting conservatively," never a reset — and
-  once the same drift notice has fired on ≥ 7 consecutive
+  once the same controlled-axis drift notice has fired on ≥ 7 consecutive
   main-branch runs (any intervening clean **main-branch** run resets the
   count) the job
-  reddens with "baseline stale — refresh required", so a pool CPU rotation
-  cannot leave tier-B enforcement dormant indefinitely. A mismatch of either class still never falls
+  reddens with "baseline stale — refresh required". The CPU-model notice
+  keeps no streak and never escalates (owner decision, 2026-11-04): with
+  `ubuntu-latest` serving several CPU models at once, a run of non-recorded
+  CPUs tracks runner assignment, which no refresh can change. The accepted
+  cost is that a pool that leaves the recorded CPU for good skips tier B
+  without reddening; the CPU notice on every such run is the signal to
+  refresh. A mismatch of either class still never falls
   through to a cross-hardware comparison, and the refresh-PR procedure is
   printed on every mismatch.
   The tier-B flip

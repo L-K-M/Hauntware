@@ -136,8 +136,8 @@ threshold. A tier-A-only invocation reports persisted stale tier-B
 history as a notice and leaves it unchanged. Tier-B staleness is graded
 only when tier B is declared, so its main-branch history cannot prevent
 the corrective baseline or performance PR from passing its tier-A gate.
-The same tier-B drift notice firing on ≥ 7 consecutive main
-runs reddens tier-B invocations with `baseline stale — refresh required` once
+The same tier-B controlled-axis drift notice firing on ≥ 7 consecutive
+main runs reddens tier-B invocations with `baseline stale — refresh required` once
 `BENCH_ENFORCE_B` is set. Only a genuinely clean main run — no graded
 failures, no fresh drift, and every expected tier-B comparison actually
 observed (at least one) — may reset prior counts; failed, missing, or
@@ -150,7 +150,9 @@ unknown: fired notices count conservatively at the escalation
 threshold, never as a fresh count (08 §6's "never a reset").
 Controlled-axis mismatch against the baseline is a hard non-zero exit
 once enforced but a loud exit-zero notice while soft; the CPU-model axis
-skips with a notice and never auto-reddens on its own. State
+skips with a notice, keeps no streak and never reddens (owner decision,
+2026-11-04: a mixed CPU fleet tracks runner assignment, which no refresh
+can change; a store's legacy `tier-b/cpu` streak is never graded). State
 publication is atomic through an owned, uniquely named temporary file
 (`<state>.checker-<pid>-<seq>.tmp`) on the target filesystem: a
 pre-existing `<state>.tmp` file or symlink is never overwritten or

@@ -94,6 +94,14 @@ const tierBMinimumRepetitions = 3;
 /// "baseline stale — refresh required" (08 §6, the drift time-box).
 const driftStaleThreshold = 7;
 
+/// The drift key earlier checkers recorded for a CPU-model mismatch. The
+/// CPU axis follows runner assignment, which no baseline refresh can
+/// change, so it no longer counts toward [driftStaleThreshold] (owner
+/// decision, 2026-11-04). Streaks a store still carries under this key
+/// are never graded, and the next main run that writes the store drops
+/// them.
+const legacyCpuDriftKey = 'tier-b/cpu';
+
 /// Allowed `--tiers` values, mapping to the declared tier set.
 const allowedTiersValues = ['a', 'b', 'ab'];
 
@@ -886,7 +894,7 @@ class BaselineEntry {
 }
 
 /// Drift-state store: consecutive-main-run counters per fired tier-B drift
-/// notice key (e.g. `tier-b/controlled/runnerImage`, `tier-b/cpu`).
+/// notice key (e.g. `tier-b/controlled/runnerImage`).
 class DriftState {
   final Map<String, DriftNoticeState> notices;
 
@@ -975,6 +983,7 @@ DriftState advanceDriftState(
     for (final entry
         in prior?.notices.entries ??
             const <MapEntry<String, DriftNoticeState>>[]) {
+      if (entry.key == legacyCpuDriftKey) continue;
       next.putIfAbsent(entry.key, () => entry.value);
     }
   }
@@ -1183,8 +1192,8 @@ CheckReport evaluate({
       );
       _printRefreshProcedure(notices);
     } else if (baseline.fingerprint.cpuModel != tierBFingerprint.cpuModel) {
+      // Skipped and reported, but no streak: see [legacyCpuDriftKey].
       tierBDrifted = true;
-      firedDriftKeys.add('tier-b/cpu');
       notices.add(
         'NOTICE: hardware drift — refresh the baseline: tier-B CPU model '
         'mismatch (${baseline.fingerprint.cpuModel} != '
@@ -1465,7 +1474,9 @@ CheckReport evaluate({
         : _readOnlyStreaks(priorState, stateUnknown, firedDriftKeys);
     final stale = graded.entries
         .where(
-          (entry) => entry.value.consecutiveMainRuns >= driftStaleThreshold,
+          (entry) =>
+              entry.key != legacyCpuDriftKey &&
+              entry.value.consecutiveMainRuns >= driftStaleThreshold,
         )
         .toList();
     for (final entry in stale) {
