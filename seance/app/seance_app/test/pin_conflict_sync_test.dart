@@ -57,6 +57,19 @@ void main() {
         pinnedAt: 20,
       );
       await services.hostKeyStore.put(local);
+      // Pins are deliberately account-visible only while a synced server
+      // names their address. Keep alpha eligible so this test exercises the
+      // conflict path rather than the orphan-pin privacy filter.
+      await services.configStore.putServer(
+        const ServerConfig(
+          id: 'eligible-server',
+          label: 'alpha',
+          host: 'alpha.example.com',
+          username: 'me',
+          createdAt: 10,
+          updatedAt: 10,
+        ),
+      );
       // A server this device keeps off the account: the copy arriving for it
       // is outranked and re-dated, which sends the coordinator back for a
       // pass that fails here, after the pin was held back.

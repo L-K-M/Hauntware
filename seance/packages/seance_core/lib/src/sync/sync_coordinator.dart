@@ -27,6 +27,8 @@ typedef _ApplySkip = void Function(
   bool? permanent,
 });
 
+Future<T> _runLocalDirectly<T>(Future<T> Function() action) => action();
+
 /// A domain source whose latest enumeration lost data to a read failure.
 ///
 /// An empty healthy source means absence and may cancel a pending publication.
@@ -1673,17 +1675,30 @@ class SyncCoordinator {
   /// record the server refuses on every round would keep this device from
   /// ever applying another device's edit or deletion even though the durable
   /// mirror retained it.
-  Future<SyncOutcome> run(SyncApi api) async {
-    final recoverable = local is RecoverableSyncCursorStore
-        ? local as RecoverableSyncCursorStore
-        : null;
-    final resumingRecovery =
-        recoverable != null && await recoverable.cursorRecoveryPending();
+  Future<SyncOutcome> run(SyncApi api) =>
+      runStaged(api, runLocal: _runLocalDirectly);
+
+  /// Runs one sync while holding [runLocal] only around mirror and domain-store
+  /// work. Pulls and pushes happen between those phases, so a slow endpoint
+  /// does not prevent unrelated local mutations from completing.
+  Future<SyncOutcome> runStaged(
+    SyncApi api, {
+    required SyncLocalRunner runLocal,
+  }) async {
+    final resumingRecovery = await runLocal(() async {
+      final recoverable = local is RecoverableSyncCursorStore
+          ? local as RecoverableSyncCursorStore
+          : null;
+      return recoverable != null &&
+          await recoverable.cursorRecoveryPending();
+    });
     // Refresh present values, tombstones, and policy before a resumed zero
     // pull, but never infer deletion from absence until the recovered mirror
     // has been applied. This preserves a quarantined source while ensuring an
     // edit or deletion made after the phase was persisted still wins.
-    await collectLocal(cancelMissing: !resumingRecovery);
+    await runLocal(
+      () => collectLocal(cancelMissing: !resumingRecovery),
+    );
     final engine = SyncEngine(local, remoteValidator: _validRemoteRecord);
     // The latest pass's answer, not the union of both: a second pass pushes
     // every refused record that is still dirty again, so it knows which are
@@ -1693,6 +1708,10 @@ class SyncCoordinator {
       try {
         final outcome = await engine.sync(
           api,
+          runLocal: runLocal,
+          refreshLocal: (mode) => collectLocal(
+            cancelMissing: mode != SyncLocalRefreshMode.cursorRecovery,
+          ),
           beforeCursorRecoveryPull: () => collectLocal(cancelMissing: false),
           afterCursorRecovery: () async {
             // A transient domain-store failure must keep the durable recovery
@@ -1730,28 +1749,44 @@ class SyncCoordinator {
     // this is the *re-dating* count and not, say, the number of records
     // applied — which would double every round's traffic on the hot path,
     // hidden inside the summed outcome.
-    final recoveringCollections = _failedCollectionSources.isNotEmpty;
-    final redated = await applyToStores(requireComplete: recoveringCollections);
-    if (recoveringCollections) {
-      await collectLocal(cancelMissing: false);
-      await _markCollectionSourcesRecovered();
-    }
+    final redated = await runLocal(() async {
+      // A domain edit may have landed while the last network request was in
+      // flight. Stage it before applying the pulled mirror so the edit's
+      // conflict tuple, rather than the stale pre-request snapshot, decides.
+      await collectLocal();
+      final recoveringCollections = _failedCollectionSources.isNotEmpty;
+      final changed =
+          await applyToStores(requireComplete: recoveringCollections);
+      if (recoveringCollections) {
+        await collectLocal(cancelMissing: false);
+        await _markCollectionSourcesRecovered();
+      }
+      return changed;
+    });
     var outcome = first;
+    var ranSecondPass = false;
     if (redated != 0) {
+      ranSecondPass = true;
       final second = await pass();
-      await applyToStores();
       outcome = SyncOutcome(
         pulled: first.pulled + second.pulled,
         pushed: first.pushed + second.pushed,
         rounds: first.rounds + second.rounds,
       );
     }
-    await _pruneConfirmedTombstones();
-    if (refused.isEmpty) return outcome;
-    throw SyncRecordsRefused(
-      [for (final record in refused) await _describeRefused(record.id)],
-      outcome: outcome,
-    );
+    final describedRefusals = await runLocal(() async {
+      // Re-stage anything edited during the optional second pass before the
+      // final apply. A re-dating produced here deliberately waits for the next
+      // scheduled sync rather than opening an unbounded network loop.
+      await collectLocal();
+      if (ranSecondPass) await applyToStores();
+      await _pruneConfirmedTombstones();
+      return [
+        for (final record in refused) await _describeRefused(record.id),
+      ];
+    });
+    if (describedRefusals.isEmpty) return outcome;
+    throw SyncRecordsRefused(describedRefusals, outcome: outcome);
   }
 
   /// A refused record as the user knows it: what it is and what it is called.
