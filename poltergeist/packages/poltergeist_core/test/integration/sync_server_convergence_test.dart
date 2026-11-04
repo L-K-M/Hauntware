@@ -438,6 +438,10 @@ void main() {
         authVerifier: base64.encode(keys.authVerifier),
         argonSalt: base64.encode(salt),
         argonParams: params,
+        vaultKeyCheck: await VaultKeyCheck.create(
+          keys.vaultKey,
+          username: username,
+        ),
       ));
       final vaultKey = keys.vaultKey;
 

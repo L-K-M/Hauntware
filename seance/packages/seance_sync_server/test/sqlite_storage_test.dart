@@ -11,10 +11,12 @@ import 'package:test/test.dart';
 void main() {
   Account account(String user) => Account(
         username: user,
+        generation: 'generation-$user',
         authVerifierHash: 'hash',
         verifierSalt: 'salt',
         argonSalt: 'asalt',
         argonParams: const Argon2Params(),
+        vaultKeyCheck: 'opaque-check',
       );
 
   EncryptedRecord rec(String id, int seq, int updatedAt) => EncryptedRecord(
@@ -30,6 +32,7 @@ void main() {
     final s = SqliteStorage.open(':memory:');
     await s.createAccount(account('alice'));
     expect((await s.getAccount('alice'))!.argonSalt, 'asalt');
+    expect((await s.getAccount('alice'))!.vaultKeyCheck, 'opaque-check');
 
     final token = await s.createToken('alice');
     expect(await s.usernameForToken(token), 'alice');

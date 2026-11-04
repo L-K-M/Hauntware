@@ -32,7 +32,7 @@ final String _unknownAppHash = VaultCrypto.hashAuthVerifier(
 /// no say in what Séance believes (the key).
 extension _InboxHandlers on SyncServer {
   Future<Response> _createInboxApp(Request req) =>
-      _withAuth(req, (username) async {
+      _withAuth(req, (principal) async {
         final body = await _readJson(req, _authBodyCap);
         if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
         final CreateInboxAppRequest r;
@@ -55,7 +55,7 @@ extension _InboxHandlers on SyncServer {
                 'control characters',
           );
         }
-        if ((await storage.listInboxApps(username)).length >=
+        if ((await storage.listInboxAppsFor(principal)).length >=
             _inboxMaxAppsPerAccount) {
           return _error(
             429,
@@ -67,9 +67,10 @@ extension _InboxHandlers on SyncServer {
         // Stored like the auth verifier: a copied database yields no token
         // that could fill the inbox.
         final salt = secureRandomBytes(16);
-        final created = await storage.createInboxApp(
+        final created = await storage.createInboxAppFor(
+          principal,
           StoredInboxApp(
-            username: username,
+            username: principal.username,
             appId: r.appId,
             name: name,
             tokenHash: _hashDepositToken(r.token, salt),
@@ -84,27 +85,27 @@ extension _InboxHandlers on SyncServer {
       });
 
   Future<Response> _listInboxApps(Request req) =>
-      _withAuth(req, (username) async {
+      _withAuth(req, (principal) async {
         // Purged first, so pending counts leave out what already expired.
         await _purgeExpiredInbox();
-        final apps = await storage.listInboxApps(username);
+        final apps = await storage.listInboxAppsFor(principal);
         return _json({
           'apps': [for (final app in apps) app.toJson()],
         });
       });
 
   Future<Response> _deleteInboxApp(Request req, String appId) =>
-      _withAuth(req, (username) async {
-        if (!await storage.deleteInboxApp(username, appId)) {
+      _withAuth(req, (principal) async {
+        if (!await storage.deleteInboxAppFor(principal, appId)) {
           return _error(404, 'not_found', 'No such app');
         }
         return Response(204);
       });
 
-  Future<Response> _listInbox(Request req) => _withAuth(req, (username) async {
+  Future<Response> _listInbox(Request req) => _withAuth(req, (principal) async {
     final since = int.tryParse(req.url.queryParameters['since'] ?? '0') ?? 0;
     await _purgeExpiredInbox();
-    final items = await storage.inboxItemsSince(username, since);
+    final items = await storage.inboxItemsSinceFor(principal, since);
     return _json({
       'items': [for (final item in items) item.toJson()],
     });
@@ -114,8 +115,8 @@ extension _InboxHandlers on SyncServer {
   /// already deleted, usually by another device that ran or dismissed it.
   /// It must stay a 404 with `not_found` for every absent item.
   Future<Response> _deleteInboxItem(Request req, String appId, String itemId) =>
-      _withAuth(req, (username) async {
-        if (!await storage.deleteInboxItem(username, appId, itemId)) {
+      _withAuth(req, (principal) async {
+        if (!await storage.deleteInboxItemFor(principal, appId, itemId)) {
           return _error(404, 'not_found', 'No such inbox item');
         }
         return Response(204);

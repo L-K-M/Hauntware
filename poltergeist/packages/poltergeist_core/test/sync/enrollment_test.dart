@@ -345,6 +345,56 @@ void main() {
       expect(await device.state.passphraseUnverified(), isTrue);
     });
 
+    test('an empty account key check verifies the encryption passphrase',
+        () async {
+      final device = await _Device.create(tempDir, 'a');
+      await server.addAccount(
+        username: 'ghost-1',
+        password: 'pw',
+        withVaultKeyCheck: true,
+      );
+
+      final result = await device.enrollment.login(
+        api: server,
+        baseUrl: 'https://sync.example.com',
+        username: 'ghost-1',
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+        mode: SyncAccountMode.separate,
+      );
+
+      expect(result.passphraseUnverified, isFalse);
+      expect(result.passphraseWarning, isNull);
+      expect(device.credentials.token, isNotNull);
+      expect(await device.state.passphraseUnverified(), isFalse);
+    });
+
+    test('a wrong key for an empty checked account persists nothing',
+        () async {
+      final device = await _Device.create(tempDir, 'a');
+      await server.addAccount(
+        username: 'ghost-1',
+        password: 'pw',
+        withVaultKeyCheck: true,
+      );
+
+      await expectLater(
+        () => device.enrollment.login(
+          api: server,
+          baseUrl: 'https://sync.example.com',
+          username: 'ghost-1',
+          password: 'pw',
+          encryptionPassphrase: 'wrong-vault-passphrase',
+          mode: SyncAccountMode.separate,
+        ),
+        throwsA(isA<VaultPassphraseMismatchException>()),
+      );
+
+      expect(device.credentials.token, isNull);
+      expect(device.credentials.vaultKey, isNull);
+      expect(await device.state.account(), isNull);
+    });
+
     test('a wrong account password fails at login — nothing persists',
         () async {
       final device = await _Device.create(tempDir, 'a');

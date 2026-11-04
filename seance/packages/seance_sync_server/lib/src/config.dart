@@ -17,6 +17,11 @@ class ServerSettings {
   final int loginMaxAttempts;
   final Duration loginWindow;
 
+  /// Bearer sessions expire and each account keeps only its newest sessions.
+  /// Defaults to 30 days and 20 devices/browser sessions.
+  final Duration sessionDuration;
+  final int maxSessionsPerAccount;
+
   /// Hard cap on a single request body, which in practice sizes pushes: the
   /// unauthenticated routes read at most 16 KiB, or this if it is lower.
   /// Default 8 MiB.
@@ -43,6 +48,8 @@ class ServerSettings {
     this.dbPath,
     this.loginMaxAttempts = 10,
     this.loginWindow = const Duration(minutes: 1),
+    this.sessionDuration = const Duration(days: 30),
+    this.maxSessionsPerAccount = 20,
     this.maxBodyBytes = kDefaultMaxPushBodyBytes,
     this.maxRecordsPerPush = kDefaultMaxRecordsPerPush,
     this.maxBlobBytes = kDefaultMaxBlobBytes,
@@ -86,6 +93,14 @@ class ServerSettings {
           int.tryParse(env['SEANCE_LOGIN_MAX_ATTEMPTS'] ?? '') ?? 10,
       loginWindow: Duration(
           seconds: int.tryParse(env['SEANCE_LOGIN_WINDOW_SECONDS'] ?? '') ?? 60),
+      sessionDuration: Duration(
+        seconds: positiveLimit(
+          'SEANCE_SESSION_TTL_SECONDS',
+          const Duration(days: 30).inSeconds,
+        ),
+      ),
+      maxSessionsPerAccount:
+          positiveLimit('SEANCE_MAX_SESSIONS_PER_ACCOUNT', 20),
       maxBodyBytes:
           positiveLimit('SEANCE_MAX_BODY_BYTES', kDefaultMaxPushBodyBytes),
       maxRecordsPerPush: positiveLimit(
@@ -108,6 +123,8 @@ class ServerSettings {
         dbPath: dbPath ?? this.dbPath,
         loginMaxAttempts: loginMaxAttempts,
         loginWindow: loginWindow,
+        sessionDuration: sessionDuration,
+        maxSessionsPerAccount: maxSessionsPerAccount,
         maxBodyBytes: maxBodyBytes,
         maxRecordsPerPush: maxRecordsPerPush,
         maxBlobBytes: maxBlobBytes,

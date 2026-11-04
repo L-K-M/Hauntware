@@ -12,6 +12,7 @@ class RegisterRequest {
   final String authVerifier; // base64 of the 32-byte HKDF auth verifier
   final String argonSalt; // base64
   final Argon2Params argonParams;
+  final String vaultKeyCheck; // opaque XChaCha20-Poly1305 payload, base64
 
   const RegisterRequest({
     this.protocolVersion = kProtocolVersion,
@@ -19,6 +20,7 @@ class RegisterRequest {
     required this.authVerifier,
     required this.argonSalt,
     required this.argonParams,
+    this.vaultKeyCheck = '',
   });
 
   Map<String, dynamic> toJson() => {
@@ -27,6 +29,7 @@ class RegisterRequest {
         'authVerifier': authVerifier,
         'argonSalt': argonSalt,
         'argonParams': argonParams.toJson(),
+        'vaultKeyCheck': vaultKeyCheck,
       };
 
   factory RegisterRequest.fromJson(Map<String, dynamic> json) =>
@@ -38,6 +41,7 @@ class RegisterRequest {
         argonSalt: json['argonSalt'] as String,
         argonParams:
             Argon2Params.fromJson((json['argonParams'] as Map).cast()),
+        vaultKeyCheck: json['vaultKeyCheck'] as String? ?? '',
       );
 }
 
@@ -89,11 +93,18 @@ class LoginRequest {
 
 class LoginResponse {
   final String token;
-  const LoginResponse({required this.token});
+  final String? vaultKeyCheck;
+  const LoginResponse({required this.token, this.vaultKeyCheck});
 
-  Map<String, dynamic> toJson() => {'token': token};
+  Map<String, dynamic> toJson() => {
+        'token': token,
+        if (vaultKeyCheck != null) 'vaultKeyCheck': vaultKeyCheck,
+      };
   factory LoginResponse.fromJson(Map<String, dynamic> json) =>
-      LoginResponse(token: json['token'] as String);
+      LoginResponse(
+        token: json['token'] as String,
+        vaultKeyCheck: json['vaultKeyCheck'] as String?,
+      );
 }
 
 /// The shipped server's cap on one push body. Doubles as the client's fallback

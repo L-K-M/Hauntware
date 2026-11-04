@@ -23,6 +23,7 @@ EncryptedRecord _record(
 
 Account _account(String username) => Account(
   username: username,
+  generation: 'generation-$username',
   authVerifierHash: 'unused',
   verifierSalt: 'unused',
   argonSalt: 'unused',
@@ -58,6 +59,9 @@ class _FaultingDatabase implements Database {
     }
     return _inner.autocommit;
   }
+
+  @override
+  int get updatedRows => _inner.updatedRows;
 
   @override
   void dispose() {
