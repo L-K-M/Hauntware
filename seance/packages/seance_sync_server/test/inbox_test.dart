@@ -82,6 +82,7 @@ class _Harness {
           authVerifier: base64.encode(secureRandomBytes(32)),
           argonSalt: base64.encode(secureRandomBytes(16)),
           argonParams: const Argon2Params(),
+          vaultKeyCheck: base64.encode(secureRandomBytes(64)),
         ).toJson(),
       ),
     );

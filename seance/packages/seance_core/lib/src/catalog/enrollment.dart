@@ -70,13 +70,13 @@ final class SyncAccount {
 /// one transport seam.
 abstract interface class SyncEnrollmentApi implements SyncApi {
   /// POST /v1/register — sets [token] on success.
-  Future<void> register(RegisterRequest request);
+  Future<LoginResponse> register(RegisterRequest request);
 
   /// POST /v1/prelogin — the account's KDF salt/params; unauthenticated.
   Future<PreloginResponse> prelogin(String username);
 
   /// POST /v1/login — sets [token] on success.
-  Future<void> login(LoginRequest request);
+  Future<LoginResponse> login(LoginRequest request);
 
   /// The session bearer token the last register/login produced.
   String? get token;
@@ -147,9 +147,9 @@ final class EnrollmentResult {
   /// [SyncCredentialStore.writeVaultKey], never a plain file.
   final List<int> vaultKey;
 
-  /// Non-null only when the trial-decrypt ran and failed — the §4.5
-  /// three-cause copy the UI shows. An empty account (no decryptable
-  /// candidate) sets [passphraseUnverified] with a null warning.
+  /// Non-null only when the legacy record trial ran and failed — the §4.5
+  /// three-cause copy the UI shows. Accounts with a registration-time key
+  /// check are verified without depending on a user record.
   final String? passphraseWarning;
 }
 
@@ -176,6 +176,14 @@ final class KdfDowngradeException extends SyncEnrollmentException {
 
   /// The below-minimum parameters the server offered.
   final Argon2Params offered;
+}
+
+/// The account's registration-time encrypted marker did not open with the
+/// candidate vault key. Unlike a legacy record failure, this marker has one
+/// purpose and schema, so the enrollment can reject the passphrase directly.
+final class VaultPassphraseMismatchException extends SyncEnrollmentException {
+  const VaultPassphraseMismatchException()
+      : super('The vault encryption passphrase is incorrect.');
 }
 
 /// 403 `registration_closed` (04 §4.3) — the message is the verbatim copy.
@@ -229,12 +237,21 @@ final class SyncEnrollment {
       params: params,
     );
     try {
-      await api.register(RegisterRequest(
+      final registered = await api.register(RegisterRequest(
         username: username,
         authVerifier: base64.encode(keys.authVerifier),
         argonSalt: base64.encode(salt),
         argonParams: params,
+        vaultKeyCheck: await VaultKeyCheck.create(
+          keys.vaultKey,
+          username: username,
+        ),
       ));
+      await VaultKeyCheck.verify(
+        keys.vaultKey,
+        registered.vaultKeyCheck ?? '',
+        username: username,
+      );
     } on ApiError catch (error) {
       if (error.code == 'registration_closed') {
         throw const RegistrationClosedException();
@@ -261,8 +278,10 @@ final class SyncEnrollment {
   /// login → a **full** pull (`since = 0`, always — a retained highWaterSeq
   /// must never produce an empty pull that skips the check) → trial-decrypt
   /// the first non-tombstone record on a decryptable id → persist with the
-  /// hold flag reflecting the outcome. An immediate trial failure warns
-  /// with the three-cause copy and proceeds held, never aborts.
+  /// hold flag reflecting the outcome. New accounts use the authenticated
+  /// registration-time key check; legacy accounts trial-decrypt a live record
+  /// or sealed tombstone. An immediate legacy trial failure warns with the
+  /// three-cause copy and proceeds held, never aborts.
   Future<EnrollmentResult> login({
     required SyncEnrollmentApi api,
     required String baseUrl,
@@ -281,21 +300,34 @@ final class SyncEnrollment {
       salt: base64.decode(pre.argonSalt),
       params: pre.argonParams,
     );
-    await api.login(LoginRequest(
+    final login = await api.login(LoginRequest(
       username: username,
       authVerifier: base64.encode(keys.authVerifier),
     ));
-
+    final keyCheck = login.vaultKeyCheck;
+    if (keyCheck != null) {
+      try {
+        await VaultKeyCheck.verify(
+          keys.vaultKey,
+          keyCheck,
+          username: username,
+        );
+      } catch (_) {
+        throw const VaultPassphraseMismatchException();
+      }
+    }
     final response = await api.pull(since: 0);
-    // The trial-decrypt: the FIRST non-tombstone record on a decryptable
+    // The legacy trial-decrypt: the FIRST authenticated record on a decryptable
     // id decides — kind-agnostic across every prefix the registration
     // opens (prefixless, hostkey:, and product prefixes such as bookmark:),
     // never secret:/snippet:/unregistered (§3.2's never-decrypt dispatch
     // binds enrollment too). Auth success cannot prove the E2E passphrase.
-    var unverified = true;
+    var unverified = keyCheck == null;
     String? warning;
     final crypto = RecordCrypto(RecordCodec(keys.vaultKey));
-    for (final record in response.records) {
+    for (final record in keyCheck == null
+        ? response.records
+        : const <EncryptedRecord>[]) {
       if (record.deleted || record.blob.isEmpty) continue;
       if (!isDecryptableSyncId(record.id, _handlers)) continue;
       try {

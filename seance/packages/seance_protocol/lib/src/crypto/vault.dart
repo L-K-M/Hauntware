@@ -202,3 +202,44 @@ class VaultCrypto {
     return base64.encode(digest.bytes);
   }
 }
+
+/// An opaque registration-time proof for the account's encryption key.
+///
+/// Authentication uses a separate verifier and therefore cannot prove that a
+/// device derived the same vault key. The server stores this sealed value
+/// without opening it and returns it after authentication. Even an empty
+/// account can therefore reject a mistyped encryption passphrase.
+class VaultKeyCheck {
+  static const int _version = 1;
+  static const String _purpose = 'seance.sync.vault-key-check';
+
+  const VaultKeyCheck._();
+
+  static Future<String> create(
+    List<int> vaultKey, {
+    required String username,
+  }) async {
+    final sealed = await VaultCrypto.sealJson(vaultKey, {
+      'version': _version,
+      'purpose': _purpose,
+      'username': username,
+    });
+    return base64.encode(sealed);
+  }
+
+  /// Completes only when [encoded] was created with [vaultKey] and has the
+  /// expected key-check domain and version.
+  static Future<void> verify(
+    List<int> vaultKey,
+    String encoded, {
+    required String username,
+  }) async {
+    final blob = Uint8List.fromList(base64.decode(encoded));
+    final payload = await VaultCrypto.openJson(vaultKey, blob);
+    if (payload['version'] != _version ||
+        payload['purpose'] != _purpose ||
+        payload['username'] != username) {
+      throw const FormatException('Invalid vault key check');
+    }
+  }
+}

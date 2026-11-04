@@ -8,18 +8,45 @@ import 'package:seance_protocol/seance_protocol.dart';
 /// sees the vault key or any plaintext.
 class Account {
   final String username;
+  final String generation;
   final String authVerifierHash; // base64 of sha256(verifierSalt || verifier)
   final String verifierSalt; // base64
   final String argonSalt; // base64, echoed back at prelogin
   final Argon2Params argonParams;
+  final String? vaultKeyCheck; // opaque, returned only after authentication
 
   const Account({
     required this.username,
+    required this.generation,
     required this.authVerifierHash,
     required this.verifierSalt,
     required this.argonSalt,
     required this.argonParams,
+    this.vaultKeyCheck,
   });
+}
+
+/// One authenticated session, bound to the exact account incarnation that
+/// minted it. Re-registering the same username creates a new generation, so a
+/// request already in flight cannot mutate the replacement account.
+class AuthPrincipal {
+  final String username;
+  final String accountGeneration;
+  final String tokenDigest;
+
+  const AuthPrincipal({
+    required this.username,
+    required this.accountGeneration,
+    required this.tokenDigest,
+  });
+}
+
+class StalePrincipalException implements Exception {
+  const StalePrincipalException();
+}
+
+class VaultKeyCheckInitializationException implements Exception {
+  const VaultKeyCheckInitializationException();
 }
 
 /// A backend disabled after an unrecoverable transaction failure.
@@ -89,9 +116,41 @@ abstract class Storage {
   Future<void> createAccount(Account account);
   Future<void> deleteAccount(String username);
 
-  /// Create and persist a bearer token for [username]; returns the token.
+  /// Atomically create a new account and its first session. Returns null when
+  /// the username already exists.
+  Future<String?> registerAccount(
+    Account account, {
+    required int issuedAt,
+    required int expiresAt,
+    required int maxSessions,
+  });
+
+  /// Compatibility helper for tests and maintenance code. Production login
+  /// uses [createTokenFor] so deletion/re-registration cannot race minting.
   Future<String> createToken(String username);
   Future<String?> usernameForToken(String token);
+
+  /// Mint a session only if [account] is still the current generation.
+  Future<String?> createTokenFor(
+    Account account, {
+    required int issuedAt,
+    required int expiresAt,
+    required int maxSessions,
+  });
+
+  /// Resolve a non-expired raw bearer token to its immutable principal.
+  Future<AuthPrincipal?> principalForToken(String token, {required int now});
+
+  Future<bool> revokeSession(AuthPrincipal principal);
+  Future<bool> revokeAllSessions(AuthPrincipal principal);
+  Future<bool> deleteAccountFor(AuthPrincipal principal);
+
+  /// Set an empty legacy account's key check exactly once. A concurrent
+  /// winner is returned so the caller can authenticate it with its vault key.
+  Future<String> initializeVaultKeyCheckFor(
+    AuthPrincipal principal,
+    String vaultKeyCheck,
+  );
 
   /// Resolve LWW, allocate sequences and commit a whole batch atomically.
   /// A rejected LWW write is a result; a storage failure commits nothing.
@@ -99,9 +158,12 @@ abstract class Storage {
   /// against earlier staged writes. Empty batches return the current watermark.
   Future<PushResponse> pushRecords(
       String username, List<EncryptedRecord> records);
+  Future<PushResponse> pushRecordsFor(
+      AuthPrincipal principal, List<EncryptedRecord> records);
 
   /// Return records and their watermark from one consistent snapshot.
   Future<PullResponse> pullSnapshot(String username, int since);
+  Future<PullResponse> pullSnapshotFor(AuthPrincipal principal, int since);
 
   // Compatibility primitives; sync handlers must use the atomic operations.
   Future<EncryptedRecord?> getRecord(String username, String id);
@@ -122,16 +184,20 @@ abstract class Storage {
   /// Register [app]. Returns false, changing nothing, when its id is taken
   /// by any account.
   Future<bool> createInboxApp(StoredInboxApp app);
+  Future<bool> createInboxAppFor(
+      AuthPrincipal principal, StoredInboxApp app);
 
   /// The app with [appId] in any account, for checking a deposit token.
   Future<StoredInboxApp?> getInboxApp(String appId);
 
   /// [username]'s apps with their pending item counts, oldest first.
   Future<List<InboxAppInfo>> listInboxApps(String username);
+  Future<List<InboxAppInfo>> listInboxAppsFor(AuthPrincipal principal);
 
   /// Remove [username]'s app and every item pending for it. Returns false
   /// when [username] has no such app.
   Future<bool> deleteInboxApp(String username, String appId);
+  Future<bool> deleteInboxAppFor(AuthPrincipal principal, String appId);
 
   /// Queue [blob] for [appId]'s account under the next per-account
   /// `received` number, unless the app already holds [maxPending] items.
@@ -146,10 +212,14 @@ abstract class Storage {
 
   /// [username]'s items with `received` greater than [since], ascending.
   Future<List<InboxItem>> inboxItemsSince(String username, int since);
+  Future<List<InboxItem>> inboxItemsSinceFor(
+      AuthPrincipal principal, int since);
 
   /// Remove one item. Returns false when it is not (or no longer) there,
   /// which is how a device learns another one claimed it first.
   Future<bool> deleteInboxItem(String username, String appId, String itemId);
+  Future<bool> deleteInboxItemFor(
+      AuthPrincipal principal, String appId, String itemId);
 
   /// Drop every item stored before [storedBefore] (ms since the epoch), in
   /// all accounts. Returns how many were dropped.
@@ -171,9 +241,39 @@ class _MemoryInboxItem {
       appId: appId, itemId: itemId, received: received, blob: blob);
 }
 
+class _MemorySession {
+  final String username;
+  final String accountGeneration;
+  final int issuedAt;
+  final int expiresAt;
+
+  const _MemorySession({
+    required this.username,
+    required this.accountGeneration,
+    required this.issuedAt,
+    required this.expiresAt,
+  });
+}
+
+String digestBearerToken(String token) =>
+    VaultCrypto.hashAuthVerifier(utf8.encode(token), const []);
+
+void validateSessionPolicy({
+  required int issuedAt,
+  required int expiresAt,
+  required int maxSessions,
+}) {
+  if (expiresAt <= issuedAt) {
+    throw ArgumentError.value(expiresAt, 'expiresAt', 'must follow issuedAt');
+  }
+  if (maxSessions <= 0) {
+    throw ArgumentError.value(maxSessions, 'maxSessions', 'must be positive');
+  }
+}
+
 class InMemoryStorage implements Storage {
   final Map<String, Account> _accounts = {};
-  final Map<String, String> _tokens = {}; // token -> username
+  final Map<String, _MemorySession> _tokens = {}; // digest -> session
   final Map<String, Map<String, EncryptedRecord>> _records = {};
   final Map<String, int> _seq = {};
   final Map<String, StoredInboxApp> _inboxApps = {}; // appId -> app
@@ -195,21 +295,182 @@ class InMemoryStorage implements Storage {
     _accounts.remove(username);
     _records.remove(username);
     _seq.remove(username);
-    _tokens.removeWhere((_, u) => u == username);
+    _tokens.removeWhere((_, session) => session.username == username);
     _inboxApps.removeWhere((_, app) => app.username == username);
     _inboxItems.removeWhere((item) => item.username == username);
     _inboxReceived.remove(username);
   }
 
   @override
+  Future<String?> registerAccount(
+    Account account, {
+    required int issuedAt,
+    required int expiresAt,
+    required int maxSessions,
+  }) async {
+    validateSessionPolicy(
+      issuedAt: issuedAt,
+      expiresAt: expiresAt,
+      maxSessions: maxSessions,
+    );
+    if (_accounts.containsKey(account.username)) return null;
+    _accounts[account.username] = account;
+    _records[account.username] = {};
+    _seq[account.username] = 0;
+    return _issueToken(
+      account,
+      issuedAt: issuedAt,
+      expiresAt: expiresAt,
+      maxSessions: maxSessions,
+    );
+  }
+
+  @override
   Future<String> createToken(String username) async {
+    final account = _accounts[username];
+    if (account == null) throw const StalePrincipalException();
+    return _issueToken(
+      account,
+      issuedAt: 0,
+      expiresAt: 0x7fffffffffffffff,
+      maxSessions: 0x7fffffff,
+    );
+  }
+
+  @override
+  Future<String?> usernameForToken(String token) async =>
+      (await principalForToken(token, now: DateTime.now().millisecondsSinceEpoch))
+          ?.username;
+
+  @override
+  Future<String?> createTokenFor(
+    Account account, {
+    required int issuedAt,
+    required int expiresAt,
+    required int maxSessions,
+  }) async {
+    if (_accounts[account.username]?.generation != account.generation) {
+      return null;
+    }
+    return _issueToken(
+      account,
+      issuedAt: issuedAt,
+      expiresAt: expiresAt,
+      maxSessions: maxSessions,
+    );
+  }
+
+  String _issueToken(
+    Account account, {
+    required int issuedAt,
+    required int expiresAt,
+    required int maxSessions,
+  }) {
+    validateSessionPolicy(
+      issuedAt: issuedAt,
+      expiresAt: expiresAt,
+      maxSessions: maxSessions,
+    );
+    _tokens.removeWhere((_, session) => session.expiresAt <= issuedAt);
+    final own = _tokens.entries
+        .where((entry) =>
+            entry.value.username == account.username &&
+            entry.value.accountGeneration == account.generation)
+        .toList()
+      ..sort((a, b) {
+        final byTime = a.value.issuedAt.compareTo(b.value.issuedAt);
+        return byTime != 0 ? byTime : a.key.compareTo(b.key);
+      });
+    while (own.length >= maxSessions) {
+      final oldest = own.removeAt(0);
+      _tokens.remove(oldest.key);
+    }
     final token = base64Url.encode(secureRandomBytes(32));
-    _tokens[token] = username;
+    _tokens[digestBearerToken(token)] = _MemorySession(
+      username: account.username,
+      accountGeneration: account.generation,
+      issuedAt: issuedAt,
+      expiresAt: expiresAt,
+    );
     return token;
   }
 
   @override
-  Future<String?> usernameForToken(String token) async => _tokens[token];
+  Future<AuthPrincipal?> principalForToken(String token, {required int now}) async {
+    final digest = digestBearerToken(token);
+    final session = _tokens[digest];
+    if (session == null) return null;
+    if (session.expiresAt <= now ||
+        _accounts[session.username]?.generation != session.accountGeneration) {
+      _tokens.remove(digest);
+      return null;
+    }
+    return AuthPrincipal(
+      username: session.username,
+      accountGeneration: session.accountGeneration,
+      tokenDigest: digest,
+    );
+  }
+
+  @override
+  Future<bool> revokeSession(AuthPrincipal principal) async {
+    if (!_isCurrent(principal)) return false;
+    return _tokens.remove(principal.tokenDigest) != null;
+  }
+
+  @override
+  Future<bool> revokeAllSessions(AuthPrincipal principal) async {
+    if (!_isCurrent(principal)) return false;
+    _tokens.removeWhere((_, session) =>
+        session.username == principal.username &&
+        session.accountGeneration == principal.accountGeneration);
+    return true;
+  }
+
+  @override
+  Future<bool> deleteAccountFor(AuthPrincipal principal) async {
+    if (!_isCurrent(principal)) return false;
+    await deleteAccount(principal.username);
+    return true;
+  }
+
+  @override
+  Future<String> initializeVaultKeyCheckFor(
+    AuthPrincipal principal,
+    String vaultKeyCheck,
+  ) async {
+    _requireCurrent(principal);
+    final account = _accounts[principal.username]!;
+    final existing = account.vaultKeyCheck;
+    if (existing != null) return existing;
+    if (_records[principal.username]?.isNotEmpty ?? false) {
+      throw const VaultKeyCheckInitializationException();
+    }
+    _accounts[principal.username] = Account(
+      username: account.username,
+      generation: account.generation,
+      authVerifierHash: account.authVerifierHash,
+      verifierSalt: account.verifierSalt,
+      argonSalt: account.argonSalt,
+      argonParams: account.argonParams,
+      vaultKeyCheck: vaultKeyCheck,
+    );
+    return vaultKeyCheck;
+  }
+
+  bool _isCurrent(AuthPrincipal principal) {
+    if (_accounts[principal.username]?.generation !=
+        principal.accountGeneration) {
+      return false;
+    }
+    final session = _tokens[principal.tokenDigest];
+    return session?.username == principal.username &&
+        session?.accountGeneration == principal.accountGeneration;
+  }
+
+  void _requireCurrent(AuthPrincipal principal) {
+    if (!_isCurrent(principal)) throw const StalePrincipalException();
+  }
 
   @override
   Future<PushResponse> pushRecords(
@@ -238,6 +499,13 @@ class InMemoryStorage implements Storage {
   }
 
   @override
+  Future<PushResponse> pushRecordsFor(
+      AuthPrincipal principal, List<EncryptedRecord> records) {
+    _requireCurrent(principal);
+    return pushRecords(principal.username, records);
+  }
+
+  @override
   Future<PullResponse> pullSnapshot(String username, int since) async {
     // Copy the rows and watermark in one synchronous turn.
     final watermark = _seq[username] ?? 0;
@@ -246,6 +514,13 @@ class InMemoryStorage implements Storage {
         .toList()
       ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
     return PullResponse(records: records, latestSeq: watermark);
+  }
+
+  @override
+  Future<PullResponse> pullSnapshotFor(
+      AuthPrincipal principal, int since) {
+    _requireCurrent(principal);
+    return pullSnapshot(principal.username, since);
   }
 
   @override
@@ -283,6 +558,16 @@ class InMemoryStorage implements Storage {
   }
 
   @override
+  Future<bool> createInboxAppFor(
+      AuthPrincipal principal, StoredInboxApp app) {
+    _requireCurrent(principal);
+    if (app.username != principal.username) {
+      throw ArgumentError.value(app.username, 'app.username');
+    }
+    return createInboxApp(app);
+  }
+
+  @override
   Future<StoredInboxApp?> getInboxApp(String appId) async => _inboxApps[appId];
 
   @override
@@ -301,11 +586,24 @@ class InMemoryStorage implements Storage {
   }
 
   @override
+  Future<List<InboxAppInfo>> listInboxAppsFor(AuthPrincipal principal) {
+    _requireCurrent(principal);
+    return listInboxApps(principal.username);
+  }
+
+  @override
   Future<bool> deleteInboxApp(String username, String appId) async {
     if (_inboxApps[appId]?.username != username) return false;
     _inboxApps.remove(appId);
     _inboxItems.removeWhere((i) => i.appId == appId);
     return true;
+  }
+
+  @override
+  Future<bool> deleteInboxAppFor(
+      AuthPrincipal principal, String appId) {
+    _requireCurrent(principal);
+    return deleteInboxApp(principal.username, appId);
   }
 
   @override
@@ -336,12 +634,26 @@ class InMemoryStorage implements Storage {
       ];
 
   @override
+  Future<List<InboxItem>> inboxItemsSinceFor(
+      AuthPrincipal principal, int since) {
+    _requireCurrent(principal);
+    return inboxItemsSince(principal.username, since);
+  }
+
+  @override
   Future<bool> deleteInboxItem(
       String username, String appId, String itemId) async {
     final before = _inboxItems.length;
     _inboxItems.removeWhere((i) =>
         i.username == username && i.appId == appId && i.itemId == itemId);
     return _inboxItems.length != before;
+  }
+
+  @override
+  Future<bool> deleteInboxItemFor(
+      AuthPrincipal principal, String appId, String itemId) {
+    _requireCurrent(principal);
+    return deleteInboxItem(principal.username, appId, itemId);
   }
 
   @override

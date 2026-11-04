@@ -108,11 +108,14 @@ Omit `--db` for an ephemeral in-memory store.
 | `SEANCE_OPEN_REGISTRATION` | `--open-registration` | `false` | Allow `/v1/register` |
 | `SEANCE_LOGIN_MAX_ATTEMPTS` | — | `10` | Login attempts per window |
 | `SEANCE_LOGIN_WINDOW_SECONDS` | — | `60` | Rate-limit window |
+| `SEANCE_SESSION_TTL_SECONDS` | — | `2592000` | Bearer-session lifetime (30 days) |
+| `SEANCE_MAX_SESSIONS_PER_ACCOUNT` | — | `20` | Newest sessions retained per account |
 
-## API (protocol v1)
+## API (protocol v2)
 
-All request/response bodies are JSON; every request carries a `protocolVersion`
-so an old client and new server detect a mismatch instead of corrupting data.
+Request and response bodies are JSON. Registration, login, and push carry a
+`protocolVersion`, so an old client and new server reject a breaking account or
+record write before changing storage.
 
 | Method & path | Auth | Purpose |
 |---|---|---|
@@ -122,7 +125,20 @@ so an old client and new server detect a mismatch instead of corrupting data.
 | `POST /v1/login` | — | Exchange the auth verifier for a token |
 | `GET /v1/sync?since=<seq>` | Bearer | Pull records newer than a sequence number |
 | `PUT /v1/records` | Bearer | Push a batch of encrypted records (LWW) |
+| `DELETE /v1/session` | Bearer | Revoke the current session |
+| `DELETE /v1/sessions` | Bearer | Revoke every session for the account |
+| `PUT /v1/account/vault-key-check` | Bearer | Initialize an empty legacy account's encrypted key check once |
 | `DELETE /v1/account` | Bearer | Delete the account and all its data |
+
+The server returns a raw bearer token only once and stores its SHA-256 digest.
+Sessions expire after the configured lifetime and issuing a session beyond the
+per-account cap revokes the oldest one. Upgrading from protocol v1 deliberately
+invalidates legacy plaintext token rows, so each device must sign in once. The
+protocol bump prevents an older client or server from partly creating an
+account without the registration-time encrypted vault-key check.
+An already enrolled device may initialize that check for an empty legacy
+account; the official client requires its locally persisted vault key to match
+before calling the set-once endpoint. New devices cannot silently choose one.
 
 Register, prelogin and login run before any authentication, so they read at
 most 16 KiB of request body (less if `SEANCE_MAX_BODY_BYTES` is lower) and

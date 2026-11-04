@@ -21,6 +21,7 @@ export 'src/catalog/enrollment.dart'
         EnrollmentResult,
         KdfDowngradeException,
         RegistrationClosedException,
+        VaultPassphraseMismatchException,
         SyncAccount,
         SyncAccountMode,
         SyncCredentialStore,

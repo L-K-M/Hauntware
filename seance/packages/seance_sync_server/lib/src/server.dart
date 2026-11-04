@@ -103,6 +103,9 @@ class SyncServer {
       ..post('/v1/login', _login)
       ..get('/v1/sync', _sync)
       ..put('/v1/records', _push)
+      ..delete('/v1/session', _revokeSession)
+      ..delete('/v1/sessions', _revokeAllSessions)
+      ..put('/v1/account/vault-key-check', _initializeVaultKeyCheck)
       ..delete('/v1/account', _deleteAccount)
       // The command inbox (docs/INBOX.md). The producer's only route is the
       // POST; every other inbox route needs a session, so a deposit token
@@ -178,30 +181,40 @@ class SyncServer {
     // Decoded with the same decoder a client uses at prelogin, so a salt
     // stored here is one every client can read back.
     final argonSalt = _tryBase64Decode(r.argonSalt);
+    final vaultKeyCheck = _tryBase64Decode(r.vaultKeyCheck);
     if (authVerifier == null ||
         authVerifier.length != _authVerifierBytes ||
         argonSalt == null ||
-        argonSalt.length < _minArgonSaltBytes) {
+        argonSalt.length < _minArgonSaltBytes ||
+        vaultKeyCheck == null ||
+        vaultKeyCheck.length < 40 ||
+        vaultKeyCheck.length > 1024) {
       return _error(400, 'bad_request', 'Invalid register payload');
-    }
-    // After every check that needs no storage, so a malformed request costs
-    // no lookup and learns nothing about which names are taken.
-    if (await storage.getAccount(r.username) != null) {
-      return _error(409, 'account_exists', 'Username already registered');
     }
     final verifierSalt = secureRandomBytes(16);
     final hash = VaultCrypto.hashAuthVerifier(authVerifier, verifierSalt);
-    await storage.createAccount(
+    final now = _nowMs;
+    final token = await storage.registerAccount(
       Account(
         username: r.username,
+        generation: base64Url.encode(secureRandomBytes(16)),
         authVerifierHash: hash,
         verifierSalt: base64.encode(verifierSalt),
         argonSalt: r.argonSalt,
         argonParams: r.argonParams,
+        vaultKeyCheck: r.vaultKeyCheck,
       ),
+      issuedAt: now,
+      expiresAt: now + settings.sessionDuration.inMilliseconds,
+      maxSessions: settings.maxSessionsPerAccount,
     );
-    final token = await storage.createToken(r.username);
-    return _json(LoginResponse(token: token).toJson());
+    if (token == null) {
+      return _error(409, 'account_exists', 'Username already registered');
+    }
+    return _json(LoginResponse(
+      token: token,
+      vaultKeyCheck: r.vaultKeyCheck,
+    ).toJson());
   }
 
   Future<Response> _prelogin(Request req) async {
@@ -262,14 +275,26 @@ class SyncServer {
     if (account == null || !_constantTimeEquals(provided, expected)) {
       return _error(401, 'invalid_credentials', 'Invalid credentials');
     }
-    final token = await storage.createToken(r.username);
+    final now = _nowMs;
+    final token = await storage.createTokenFor(
+      account,
+      issuedAt: now,
+      expiresAt: now + settings.sessionDuration.inMilliseconds,
+      maxSessions: settings.maxSessionsPerAccount,
+    );
+    if (token == null) {
+      return _error(401, 'invalid_credentials', 'Invalid credentials');
+    }
     loginLimiter.reset('login:${r.username}');
-    return _json(LoginResponse(token: token).toJson());
+    return _json(LoginResponse(
+      token: token,
+      vaultKeyCheck: account.vaultKeyCheck,
+    ).toJson());
   }
 
-  Future<Response> _sync(Request req) => _withAuth(req, (username) async {
+  Future<Response> _sync(Request req) => _withAuth(req, (principal) async {
     final since = int.tryParse(req.url.queryParameters['since'] ?? '0') ?? 0;
-    final snapshot = await storage.pullSnapshot(username, since);
+    final snapshot = await storage.pullSnapshotFor(principal, since);
     // Every round pulls before it pushes, so this is where a client learns how
     // to size the push it is about to make — see [PushLimits].
     return _json(
@@ -281,7 +306,7 @@ class SyncServer {
     );
   });
 
-  Future<Response> _push(Request req) => _withAuth(req, (username) async {
+  Future<Response> _push(Request req) => _withAuth(req, (principal) async {
     final body = await _readJson(req, settings.maxBodyBytes);
     if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
     final PushRequest r;
@@ -303,13 +328,47 @@ class SyncServer {
             'A record blob exceeds the ${settings.maxBlobBytes}-byte limit');
       }
     }
-    final pushed = await storage.pushRecords(username, r.records);
+    final pushed = await storage.pushRecordsFor(principal, r.records);
     return _json(pushed.toJson());
   });
 
+  Future<Response> _revokeSession(Request req) =>
+      _withAuth(req, (principal) async {
+        if (!await storage.revokeSession(principal)) {
+          throw const StalePrincipalException();
+        }
+        return Response(204);
+      });
+
+  Future<Response> _revokeAllSessions(Request req) =>
+      _withAuth(req, (principal) async {
+        if (!await storage.revokeAllSessions(principal)) {
+          throw const StalePrincipalException();
+        }
+        return Response(204);
+      });
+
+  Future<Response> _initializeVaultKeyCheck(Request req) =>
+      _withAuth(req, (principal) async {
+        final body = await _readJson(req, _authBodyCap);
+        final encoded = body?['vaultKeyCheck'];
+        if (encoded is! String) {
+          return _error(400, 'bad_request', 'Invalid vault key check');
+        }
+        final decoded = _tryBase64Decode(encoded);
+        if (decoded == null || decoded.length < 40 || decoded.length > 1024) {
+          return _error(400, 'bad_request', 'Invalid vault key check');
+        }
+        final stored =
+            await storage.initializeVaultKeyCheckFor(principal, encoded);
+        return _json({'vaultKeyCheck': stored});
+      });
+
   Future<Response> _deleteAccount(Request req) =>
-      _withAuth(req, (username) async {
-        await storage.deleteAccount(username);
+      _withAuth(req, (principal) async {
+        if (!await storage.deleteAccountFor(principal)) {
+          throw const StalePrincipalException();
+        }
         return _json({'ok': true});
       });
 
@@ -317,18 +376,23 @@ class SyncServer {
 
   Future<Response> _withAuth(
     Request req,
-    Future<Response> Function(String username) fn,
+    Future<Response> Function(AuthPrincipal principal) fn,
   ) async {
     final auth = req.headers['authorization'];
     if (auth == null || !auth.startsWith('Bearer ')) {
       return _error(401, 'unauthorized', 'Missing bearer token');
     }
-    final username = await storage.usernameForToken(auth.substring(7));
-    if (username == null) {
+    final principal = await storage.principalForToken(
+      auth.substring(7),
+      now: _nowMs,
+    );
+    if (principal == null) {
       return _error(401, 'unauthorized', 'Invalid token');
     }
-    return fn(username);
+    return fn(principal);
   }
+
+  int get _nowMs => _now().millisecondsSinceEpoch;
 
   int get _authBodyCap => min(settings.maxBodyBytes, _maxAuthBodyBytes);
 
@@ -405,6 +469,14 @@ class SyncServer {
       } on StorageBusyException {
         return _error(HttpStatus.serviceUnavailable, 'storage_busy',
             'Storage is busy; retry shortly.');
+      } on StalePrincipalException {
+        return _error(401, 'unauthorized', 'Invalid token');
+      } on VaultKeyCheckInitializationException {
+        return _error(
+          409,
+          'account_not_empty',
+          'A non-empty legacy account must verify its existing records first',
+        );
       } on _PayloadTooLarge {
         return _error(413, 'payload_too_large', 'Request body too large');
       } on FormatException {

@@ -51,7 +51,7 @@ void main() {
         PRIMARY KEY (username, id));
       CREATE TABLE seqs (username TEXT PRIMARY KEY, value INTEGER NOT NULL);
       INSERT INTO accounts VALUES ('alice', 'h', 's', 'a',
-        '{"memoryKiB":19456,"iterations":2,"parallelism":1}');
+        '{"memory":19456,"iterations":2,"parallelism":1,"hashLength":32}');
       INSERT INTO tokens VALUES ('t', 'alice');
       INSERT INTO records VALUES ('alice', 'r', 5, 'd', 0, 1, x'010203');
       INSERT INTO seqs VALUES ('alice', 1);
@@ -60,8 +60,12 @@ void main() {
 
     final s = SqliteStorage.open(path);
     addTearDown(s.close);
-    expect(await s.usernameForToken('t'), 'alice');
+    expect(await s.usernameForToken('t'), isNull,
+        reason: 'legacy plaintext bearer tokens are invalidated');
     expect((await s.recordsSince('alice', 0)).single.id, 'r');
+    expect((await s.getAccount('alice'))!.generation, isNotEmpty);
+    expect((await s.getAccount('alice'))!.vaultKeyCheck, isNull,
+        reason: 'legacy accounts migrate without inventing a key check');
 
     final appId = newInboxAppId();
     expect(await s.createInboxApp(app(appId)), isTrue);
