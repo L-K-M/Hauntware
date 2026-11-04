@@ -600,6 +600,7 @@ class _CredentialDialogState extends State<_CredentialDialog> {
           maxLines: 8,
           autocorrect: false,
           enableSuggestions: false,
+          enableIMEPersonalizedLearning: false,
           style: mono,
           decoration: InputDecoration(
             labelText: strings.keyPemField,
@@ -611,6 +612,9 @@ class _CredentialDialogState extends State<_CredentialDialog> {
           key: const ValueKey('credential.passphrase'),
           controller: _passphrase,
           obscureText: true,
+          autocorrect: false,
+          enableSuggestions: false,
+          enableIMEPersonalizedLearning: false,
           decoration: InputDecoration(labelText: strings.passphraseField),
         ),
       ] else
@@ -619,6 +623,9 @@ class _CredentialDialogState extends State<_CredentialDialog> {
           controller: _secret,
           obscureText: true,
           autofocus: true,
+          autocorrect: false,
+          enableSuggestions: false,
+          enableIMEPersonalizedLearning: false,
           decoration: InputDecoration(labelText: strings.passwordField),
           onChanged: (_) => setState(() {}),
           onSubmitted: (_) => _savePasted(),
