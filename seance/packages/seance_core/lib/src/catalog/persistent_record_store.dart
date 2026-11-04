@@ -143,22 +143,22 @@ final class PersistentLocalRecordStore implements SyncRecordStore {
 
   @override
   Future<List<EncryptedRecord>> allRecords() async {
-    await _ensureLoaded();
     await _writeTail;
+    await _ensureLoaded();
     return List.unmodifiable(_records.values);
   }
 
   @override
   Future<EncryptedRecord?> getRecord(String id) async {
-    await _ensureLoaded();
     await _writeTail;
+    await _ensureLoaded();
     return _records[id];
   }
 
   @override
   Future<List<EncryptedRecord>> displacedRecords() async {
-    await _ensureLoaded();
     await _writeTail;
+    await _ensureLoaded();
     return List.unmodifiable(_displaced.values);
   }
 
@@ -169,8 +169,8 @@ final class PersistentLocalRecordStore implements SyncRecordStore {
   /// true winner back rather than diverge with the edit stuck dirty.
   @override
   Future<void> putLocal(EncryptedRecord record) =>
-      _mutate(() {
-        final existing = _records[record.id];
+      _mutate((candidate) {
+        final existing = candidate.records[record.id];
         if (existing != null) {
           final winner = Lww.resolve(existing, record);
           assert(
@@ -178,12 +178,13 @@ final class PersistentLocalRecordStore implements SyncRecordStore {
             'Lww.resolve must return one of its arguments — '
             'displaced-winner tracking relies on reference identity',
           );
-          if (!_dirty.contains(record.id) && identical(winner, existing)) {
-            _displaced[record.id] = existing;
+          if (!candidate.dirty.contains(record.id) &&
+              identical(winner, existing)) {
+            candidate.displaced[record.id] = existing;
           }
         }
-        _records[record.id] = record;
-        _dirty.add(record.id);
+        candidate.records[record.id] = record;
+        candidate.dirty.add(record.id);
       });
 
   /// A pulled record: stored clean. Never overwrites a dirty local that
@@ -194,8 +195,8 @@ final class PersistentLocalRecordStore implements SyncRecordStore {
   /// server — the LWW semantics 04 §3.1 pins on the shared tuple.
   @override
   Future<void> putRemote(EncryptedRecord record) =>
-      _mutate(() {
-        final existing = _records[record.id];
+      _mutate((candidate) {
+        final existing = candidate.records[record.id];
         if (existing != null) {
           final winner = Lww.resolve(existing, record);
           assert(
@@ -204,34 +205,34 @@ final class PersistentLocalRecordStore implements SyncRecordStore {
             'displaced-winner tracking relies on reference identity',
           );
           if (!identical(winner, record)) {
-            if (_dirty.contains(record.id)) {
-              _displaced[record.id] = record;
+            if (candidate.dirty.contains(record.id)) {
+              candidate.displaced[record.id] = record;
             }
             return;
           }
         }
-        _records[record.id] = record;
-        _dirty.remove(record.id);
+        candidate.records[record.id] = record;
+        candidate.dirty.remove(record.id);
         // The just-pulled record is the server's current winner: any
         // stashed rival predates it and can never resurface.
-        _displaced.remove(record.id);
+        candidate.displaced.remove(record.id);
       });
 
   @override
   Future<List<EncryptedRecord>> dirtyRecords() async {
-    await _ensureLoaded();
     await _writeTail;
+    await _ensureLoaded();
     return List.unmodifiable(_dirty.map((id) => _records[id]!));
   }
 
   /// The server accepted the push: stamp the assigned seq, clear dirty,
   /// and drop any displaced rival — it can never win now.
   @override
-  Future<void> markSynced(String id, int seq) => _mutate(() {
-        final record = _records[id];
-        if (record != null) _records[id] = record.withSeq(seq);
-        _dirty.remove(id);
-        _displaced.remove(id);
+  Future<void> markSynced(String id, int seq) => _mutate((candidate) {
+        final record = candidate.records[id];
+        if (record != null) candidate.records[id] = record.withSeq(seq);
+        candidate.dirty.remove(id);
+        candidate.displaced.remove(id);
       });
 
   @override
@@ -242,69 +243,116 @@ final class PersistentLocalRecordStore implements SyncRecordStore {
     if (result.id != sent.id) {
       throw ArgumentError('push result must identify the sent record');
     }
-    EncryptedRecord? restored;
-    await _mutate(() {
-      if (!identical(_records[sent.id], sent) || !_dirty.contains(sent.id)) {
-        return;
+    return _mutate((candidate) {
+      if (!identical(candidate.records[sent.id], sent) ||
+          !candidate.dirty.contains(sent.id)) {
+        return null;
       }
       if (result.accepted) {
-        _records[sent.id] = sent.withSeq(result.seq);
-        _dirty.remove(sent.id);
-        _displaced.remove(sent.id);
-        return;
+        candidate.records[sent.id] = sent.withSeq(result.seq);
+        candidate.dirty.remove(sent.id);
+        candidate.displaced.remove(sent.id);
+        return null;
       }
-      restored = _displaced.remove(sent.id);
+      final restored = candidate.displaced.remove(sent.id);
       if (restored != null) {
-        _records[sent.id] = restored!;
-        _dirty.remove(sent.id);
+        candidate.records[sent.id] = restored;
+        candidate.dirty.remove(sent.id);
       }
+      return restored;
     });
-    return restored;
   }
 
   @override
   Future<int> highWaterSeq() async {
-    await _ensureLoaded();
     await _writeTail;
+    await _ensureLoaded();
     return _highWaterSeq;
   }
 
   @override
-  Future<void> setHighWaterSeq(int seq) => _mutate(() {
-        if (seq > _highWaterSeq) _highWaterSeq = seq;
+  Future<void> setHighWaterSeq(int seq) => _mutate((candidate) {
+        if (seq > candidate.highWaterSeq) candidate.highWaterSeq = seq;
       });
 
   @override
   Future<int> lastAppliedSeq() async {
-    await _ensureLoaded();
     await _writeTail;
+    await _ensureLoaded();
     return _lastAppliedSeq;
   }
 
   @override
-  Future<void> setLastAppliedSeq(int seq) => _mutate(() {
-        if (seq > _lastAppliedSeq) _lastAppliedSeq = seq;
+  Future<void> setLastAppliedSeq(int seq) => _mutate((candidate) {
+        if (seq > candidate.lastAppliedSeq) candidate.lastAppliedSeq = seq;
       });
 
   @override
-  Future<void> resetSyncCursors() => _mutate(() {
-        _highWaterSeq = 0;
-        _lastAppliedSeq = 0;
+  Future<void> resetSyncCursors() => _mutate((candidate) {
+        candidate.highWaterSeq = 0;
+        candidate.lastAppliedSeq = 0;
       });
 
   /// Every mutation is serialized and persisted atomically before the
   /// call returns — a crash mid-round can lose at most the in-flight
-  /// mutation, never a torn document. The queue heals on a failed write so
-  /// one transient error cannot wedge later writes; the caller sees the
-  /// failure.
-  Future<void> _mutate(void Function() edit) {
+  /// mutation, never a torn document. The edit closure runs against a
+  /// private candidate snapshot of all five state components;
+  /// [_write] serializes the candidate, and live state is committed
+  /// synchronously only once the writer succeeded. Because an atomic writer
+  /// can fail after its rename, an error is reconciled against the target:
+  /// the candidate is committed when its complete bytes reached disk, while
+  /// an unchanged target leaves live state untouched. If even that check
+  /// fails, the next read or mutation reloads from disk. The queue heals so
+  /// one transient error cannot wedge later writes, and the caller still
+  /// sees the failure.
+  Future<T> _mutate<T>(T Function(_CandidateState candidate) edit) {
     final operation = _writeTail.then((_) async {
       await _ensureLoaded();
-      edit();
-      await _write();
+      final candidate = _CandidateState(
+        records: Map.of(_records),
+        dirty: Set.of(_dirty),
+        displaced: Map.of(_displaced),
+        highWaterSeq: _highWaterSeq,
+        lastAppliedSeq: _lastAppliedSeq,
+      );
+      final result = edit(candidate);
+      final contents = _encode(candidate);
+      try {
+        await _atomicWriter(_file, contents);
+      } on Object {
+        try {
+          if (await _file.readAsString() == contents) _commit(candidate);
+        } on Object {
+          // The target may contain either complete document, but it cannot be
+          // inspected. Force the next operation to establish which one won.
+          _loadFuture = null;
+        }
+        rethrow;
+      }
+      _commit(candidate);
+      return result;
     });
     _writeTail = operation.then<void>((_) {}, onError: (_, _) {});
     return operation;
+  }
+
+  /// Swap a successfully persisted candidate into the live fields.
+  /// Clear-and-refill keeps the maps' and set's identity and insertion
+  /// order (readers hold these exact objects), and runs synchronously
+  /// right after the awaited writer, so no reader can observe a
+  /// half-committed mutation.
+  void _commit(_CandidateState candidate) {
+    _records
+      ..clear()
+      ..addAll(candidate.records);
+    _dirty
+      ..clear()
+      ..addAll(candidate.dirty);
+    _displaced
+      ..clear()
+      ..addAll(candidate.displaced);
+    _highWaterSeq = candidate.highWaterSeq;
+    _lastAppliedSeq = candidate.lastAppliedSeq;
   }
 
   Future<void> _ensureLoaded() {
@@ -423,22 +471,22 @@ final class PersistentLocalRecordStore implements SyncRecordStore {
     if (dirty == true) _dirty.add(record.id);
   }
 
-  Future<void> _write() => _atomicWriter(
-        _file,
-        jsonEncode({
+  String _encode(_CandidateState candidate) => jsonEncode({
           'version': _storeVersion,
-          'highWaterSeq': _highWaterSeq,
-          'lastAppliedSeq': _lastAppliedSeq,
+          'highWaterSeq': candidate.highWaterSeq,
+          'lastAppliedSeq': candidate.lastAppliedSeq,
           'records': [
-            for (final record in _records.values)
-              {...record.toJson(), 'dirty': _dirty.contains(record.id)},
+            for (final record in candidate.records.values)
+              {
+                ...record.toJson(),
+                'dirty': candidate.dirty.contains(record.id),
+              },
           ],
-          if (_displaced.isNotEmpty)
+          if (candidate.displaced.isNotEmpty)
             'displaced': [
-              for (final record in _displaced.values) record.toJson(),
+              for (final record in candidate.displaced.values) record.toJson(),
             ],
-        }),
-      );
+        });
 
   /// Moves a corrupt store aside under a unique `corrupt-<stamp>-<n>` name
   /// so a repeated corruption can never overwrite the first rescue copy.
@@ -461,4 +509,27 @@ final class PersistentLocalRecordStore implements SyncRecordStore {
       // Error reporting must never create a second unhandled async error.
     }
   }
+}
+
+/// The private working copy one mutation edits: a snapshot of all five
+/// live state components taken after load, mutated by the edit closure,
+/// serialized by the write, and committed into the live fields only
+/// once the writer succeeded or reconciliation proves its rename landed.
+/// A pre-commit failure discards it wholesale. The maps and set are plain
+/// copies, so they keep the live collections' insertion order without ever
+/// touching the objects themselves.
+final class _CandidateState {
+  _CandidateState({
+    required this.records,
+    required this.dirty,
+    required this.displaced,
+    required this.highWaterSeq,
+    required this.lastAppliedSeq,
+  });
+
+  final Map<String, EncryptedRecord> records;
+  final Set<String> dirty;
+  final Map<String, EncryptedRecord> displaced;
+  int highWaterSeq;
+  int lastAppliedSeq;
 }
