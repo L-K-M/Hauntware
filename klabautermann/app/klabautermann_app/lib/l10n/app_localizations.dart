@@ -5628,11 +5628,23 @@ abstract class AppLocalizations {
   /// **'HOST KEY CHANGED'**
   String get hostKeyChangedTitle;
 
-  /// Warning at the top of the changed-key review; host is the server's host name or address as configured.
+  /// Warning after the fingerprints in the changed-key review; host is the server's host name or address as configured.
   ///
   /// In en, this message translates to:
   /// **'The key for {host} does not match the one you previously trusted. This can mean a man-in-the-middle attack. Only continue if you know why the key changed.'**
   String hostKeyChangedWarning(String host);
+
+  /// Explains why trust starts disabled in the changed-key review.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the new and previously trusted fingerprints, then read the warning below.'**
+  String get hostKeyChangedReviewInstruction;
+
+  /// Warning in a changed-key review when the trusted and newly presented SSH key algorithms differ.
+  ///
+  /// In en, this message translates to:
+  /// **'Key algorithm changed from {previousType} to {presentedType}.'**
+  String hostKeyTypeChanged(String previousType, String presentedType);
 
   /// The machine a prompt comes from: the server or one of its jump hosts. An IPv6 host arrives in brackets.
   ///

@@ -5379,11 +5379,29 @@
   },
   "hostKeyChangedWarning": "The key for {host} does not match the one you previously trusted. This can mean a man-in-the-middle attack. Only continue if you know why the key changed.",
   "@hostKeyChangedWarning": {
-    "description": "Warning at the top of the changed-key review; host is the server's host name or address as configured.",
+    "description": "Warning after the fingerprints in the changed-key review; host is the server's host name or address as configured.",
     "placeholders": {
       "host": {
         "type": "String",
         "example": "web-1.example"
+      }
+    }
+  },
+  "hostKeyChangedReviewInstruction": "Review the new and previously trusted fingerprints, then read the warning below.",
+  "@hostKeyChangedReviewInstruction": {
+    "description": "Explains why trust starts disabled in the changed-key review."
+  },
+  "hostKeyTypeChanged": "Key algorithm changed from {previousType} to {presentedType}.",
+  "@hostKeyTypeChanged": {
+    "description": "Warning in a changed-key review when the trusted and newly presented SSH key algorithms differ.",
+    "placeholders": {
+      "previousType": {
+        "type": "String",
+        "example": "ssh-ed25519"
+      },
+      "presentedType": {
+        "type": "String",
+        "example": "ecdsa-sha2-nistp256"
       }
     }
   },

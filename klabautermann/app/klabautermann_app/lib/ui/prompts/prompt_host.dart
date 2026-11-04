@@ -315,6 +315,8 @@ GhostHostKeyStrings _hostKeyStrings(AppLocalizations l10n) =>
       unknownTitle: l10n.hostKeyUnknownTitle,
       changedTitle: l10n.hostKeyChangedTitle,
       changedWarning: l10n.hostKeyChangedWarning,
+      changedReviewInstruction: l10n.hostKeyChangedReviewInstruction,
+      keyTypeChanged: l10n.hostKeyTypeChanged,
       endpoint: (host, port) => l10n.promptEndpoint(_endpointHost(host), port),
       fingerprintLabel: l10n.hostKeyFingerprintLabel,
       newKeyLabel: l10n.hostKeyNewKeyLabel,

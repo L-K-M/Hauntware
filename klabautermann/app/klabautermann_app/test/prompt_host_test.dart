@@ -122,6 +122,20 @@ void main() {
         );
         expect(find.text('New key'), findsOneWidget);
         expect(find.text('Previously trusted'), findsOneWidget);
+        expect(
+          find.text(
+            'Review the new and previously trusted fingerprints, then read '
+            'the warning below.',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.text(
+            'Key algorithm changed from ssh-ed25519 to '
+            'ecdsa-sha2-nistp256.',
+          ),
+          findsOneWidget,
+        );
         // Each fingerprint under its own key's type.
         for (final text in [
           'ecdsa-sha2-nistp256\nSHA256:new',
