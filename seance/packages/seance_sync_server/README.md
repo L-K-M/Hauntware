@@ -117,6 +117,7 @@ so an old client and new server detect a mismatch instead of corrupting data.
 | Method & path | Auth | Purpose |
 |---|---|---|
 | `GET /healthz` | — | Liveness check |
+| `GET /readyz` | — | Storage readiness check |
 | `POST /v1/register` | — | Create an account, returns a bearer token |
 | `POST /v1/prelogin` | — | Return the KDF salt/params for a username |
 | `POST /v1/login` | — | Exchange the auth verifier for a token |
@@ -178,8 +179,10 @@ If transaction cleanup itself fails, SQLite storage fails closed and returns
 Diagnostics retain the original cause and log only exception types/SQLite numeric
 codes—not messages, SQL, parameters or blobs. Restart after investigating the
 database failure; automatic reopen could
-silently replace an injected or in-memory database. `/healthz` remains liveness,
-not storage readiness. Closing the disabled connection is safe to repeat.
+silently replace an injected or in-memory database. `/healthz` reports only
+process liveness; `/readyz` performs a real storage access and returns 503 when
+the backend is busy or unavailable. Deployment health checks use `/readyz`.
+Closing the disabled connection is safe to repeat.
 The memory backend stages batches without yielding, then swaps state together.
 
 Custom server `Storage` implementations must implement `pushRecords` and
