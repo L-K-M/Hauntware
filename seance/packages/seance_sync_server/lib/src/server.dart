@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show HttpStatus;
+import 'dart:io' show HttpStatus, stderr;
 import 'dart:math' show min;
 import 'dart:typed_data' show BytesBuilder, Uint8List;
 
@@ -21,6 +21,8 @@ part 'inbox_handlers.dart';
 /// devices, stores end-to-end encrypted records, and resolves conflicts with
 /// the same last-write-wins rule the client uses. It can decrypt nothing.
 class SyncServer {
+  static const _inboxPurgeInterval = Duration(hours: 1);
+
   /// Cap on a body read before any authentication (register, prelogin,
   /// login). The largest of them, a register body, is under 1 KiB; without
   /// this they inherited the push cap, so anyone could make the server buffer
@@ -131,18 +133,44 @@ class SyncServer {
         .addHandler(router.call);
   }
 
-  Future<HttpServerLike> start() async {
+  Future<HttpServerLike> start({
+    Timer Function(Duration, void Function())? timerFactory,
+  }) async {
+    // Purge before advertising a healthy listener. Request-time purges remain
+    // a correctness backstop, while this bounds storage for abandoned users.
+    await _purgeExpiredInbox();
     final server = await shelf_io.serve(
       handler,
       settings.bindAddress,
       settings.port,
       poweredByHeader: null,
     );
-    return HttpServerLike(
-      server.address.host,
-      server.port,
-      () => server.close(force: true),
+    final retention = _InboxRetentionPurge(
+      interval: _inboxPurgeInterval,
+      purge: _purgeExpiredInbox,
+      timerFactory: timerFactory ?? Timer.new,
+      onError: (error, _) {
+        stderr.writeln('Inbox retention purge failed: $error');
+      },
     );
+    try {
+      retention.start();
+    } catch (_) {
+      await server.close(force: true);
+      rethrow;
+    }
+
+    Future<void>? closeFuture;
+    Future<void> close() => closeFuture ??= () async {
+      retention.cancel();
+      try {
+        await server.close(force: true);
+      } finally {
+        await retention.done;
+      }
+    }();
+
+    return HttpServerLike(server.address.host, server.port, close);
   }
 
   // --- Handlers ---
@@ -462,6 +490,70 @@ Configure this server's URL in the app's sync settings.</p>
 /// the error middleware.
 class _PayloadTooLarge implements Exception {
   const _PayloadTooLarge();
+}
+
+/// A one-shot retention loop. Scheduling only after each purge settles keeps
+/// slow storage from accumulating overlapping global delete transactions.
+class _InboxRetentionPurge {
+  final Duration interval;
+  final Future<void> Function() purge;
+  final Timer Function(Duration, void Function()) timerFactory;
+  final void Function(Object, StackTrace) onError;
+
+  Timer? _timer;
+  Future<void>? _running;
+  bool _cancelled = false;
+
+  _InboxRetentionPurge({
+    required this.interval,
+    required this.purge,
+    required this.timerFactory,
+    required this.onError,
+  });
+
+  void start() => _schedule();
+
+  void _schedule() {
+    if (_cancelled) return;
+    _timer = timerFactory(interval, _run);
+  }
+
+  void _run() {
+    if (_cancelled) return;
+    _timer = null;
+    final running = _purgeOnce();
+    _running = running;
+    unawaited(
+      running.whenComplete(() {
+        if (identical(_running, running)) _running = null;
+        if (_cancelled) return;
+        try {
+          _schedule();
+        } catch (error, stackTrace) {
+          onError(error, stackTrace);
+        }
+      }),
+    );
+  }
+
+  Future<void> _purgeOnce() async {
+    try {
+      await purge();
+    } catch (error, stackTrace) {
+      onError(error, stackTrace);
+    }
+  }
+
+  void cancel() {
+    _cancelled = true;
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  Future<void> get done async {
+    final running = _running;
+    if (running != null) await running;
+  }
 }
 
 /// Minimal handle to a running server so callers can read the bound port and

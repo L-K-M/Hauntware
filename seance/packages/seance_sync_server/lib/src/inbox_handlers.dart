@@ -206,9 +206,9 @@ extension _InboxHandlers on SyncServer {
       VaultCrypto.hashAuthVerifier(utf8.encode(token), salt);
 
   /// Drops items older than [kInboxRetention]. The server cannot read a
-  /// proposal's own `expires`, so it keeps each item for the cap on it.
-  /// Run on the inbox requests themselves, which needs no timer and keeps a
-  /// list from ever returning an expired item.
+  /// proposal's own `expires`, so it keeps each item for the cap on it. The
+  /// server lifecycle runs this for abandoned accounts; inbox requests also
+  /// run it so a response never includes an item that has already expired.
   Future<void> _purgeExpiredInbox() => storage.purgeInboxItems(
     storedBefore: _now().subtract(kInboxRetention).millisecondsSinceEpoch + 1,
   );
