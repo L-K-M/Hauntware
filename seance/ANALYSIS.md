@@ -12,10 +12,18 @@ evidence and gates. Completed work is listed only in the compact
 [the July archive](docs/reviews/analysis-2026-07-25.md).
 
 Incremental macOS reviews on 2026-11-04, including Sol3, used `origin/main` at
-`ad1ebfbea`; this consolidation was prepared from `1b1fa9e60`. Findings
+`ad1ebfbea`; the Sol consolidation rebased on `eb8be7b49`. Findings
 implemented by open PRs were removed as required. Their unimplemented
 residuals and the remaining nice-to-haves are consolidated into the existing
 entries or the focused sections near the end of this file.
+
+The Sol audit covered all eight requested focus areas with 33 findings: 17
+important and 16 nice-to-have, with no blocking finding. Its implemented scope
+is in open draft PRs #594, #595, #596, #597, #604, #609, #610, #611, #619,
+#621, #623, #627, #631, #635, #636, #638 and #639. Remaining items below fold
+in its specific evidence without duplicating provider disposal/history bounds
+already covered by other in-review work. Local macOS builds passed; native
+keychain, real-device and external-server validation remain separate gates.
 
 ## Sources and identifiers
 
@@ -141,12 +149,12 @@ The backlog contains only work not already implemented in main or an open PR.
 A practical order for the remaining risk is:
 
 1. **Trust and durable sync:** TRUST-01 conflict reconciliation; SYNC-03's
-   persistent ledger, exact acknowledgements and typed deletes; SYNC-05 account
+   remaining acknowledgement validation and typed deletes; SYNC-05 account
    epochs; SYNC-06 recent re-authentication; CRED-02 through CRED-05 recovery.
 2. **Destructive-state boundaries:** APP-02's service close policy, STORE-01
    failure paths and SYNC-09 monotonic edits.
 3. **Server operations:** SRV-01's remaining pre-auth/body controls, then
-   SRV-02 migrations/backups and SRV-03 readiness/drain.
+   SRV-02 migration registry/backups and SRV-03 drain/diagnostics.
 4. **Measured terminal work:** TERM-02's remaining controls, TERM-03 reflow,
    TERM-04 input hints and SSH-01/SSH-02 liveness, using PERF-01 before larger
    architectural changes.
@@ -200,52 +208,6 @@ conflict tests with Poltergeist and authenticated records (SYNC-01), building
 both consumers before changing shared interfaces (this folds part of the
 former XAPP-03).
 
-### CRED-02: Make sync enrolment one recoverable transition
-
-bugs — blocking
-
-**IDs:** SOL-030 residual, SEA26-SEC-08, BOTH-REV-005, S3-02, STATUS 4 ·
-**Status:** Open (the re-key journal core is done: #95, #98, #99, #100)
-
-**Implemented foundation to preserve:** the complete vault, including orphaned
-secrets, has a staged two-generation journal and keystore-directed settlement
-(`FileVaultStore.stageRekey/settleRekey`, `vault_rekey_test.dart`).
-
-**Problem.** `app_services.dart:450-454` (register) and `:504-508` (login)
-(@9322f6e) save `syncBaseUrl`/username and the token before `_rekeyVault`. If
-the re-key throws (`KeystoreException`, `VaultLockedException`, a pending
-journal, a full disk), the UI shows "Failed" but sync is configured. The next
-auto-sync (`_scheduleAutoSync` gates only on `isSyncConfigured`) seals every
-record with the device-local key and pushes it; any device running `loginSync`
-then fails if the first live record is one of those, including this device on
-retry. The account stays poisoned until records are deleted server-side. A
-round that captured `SecretVault(oldKey)` can also write old-key blobs into the
-new generation after `settleRekey`, because enrolment does not run under
-`_mutate`. Separately, entries the current key cannot open are carried
-byte-for-byte forever with no UI (STATUS 4).
-
-**Next.**
-1. Reorder: derive keys, register/login (and verify), `_rekeyVault`, then the
-   token, then settings. A failed re-key persists nothing.
-2. Defence in depth: `AppSettings.syncKeyCheck` = base64
-   HMAC-SHA256(vaultKey, `seance/v1/sync-key-check`), written after enrolment;
-   `runSync` refuses before any request on mismatch. Migration: set it after a
-   round where a pulled sealed record decrypted; refuse to push if records were
-   pulled and none decrypted.
-3. Route enrolment through a new `AppState.enrollSync` under `_mutate`.
-4. Journal the whole account activation so a restart picks the old pair or the
-   new pair, never a mix. No recovery material is shown before the destructive
-   phase: coordinate with CRED-05.
-5. STATUS 4: a UI to list and discard unreadable or orphaned vault entries.
-
-**Gate.** Extend `sync_client_lifetime_test.dart` with
-`_SelectiveKeystore(refuseMasterKey: true)`: after a failed register/login,
-`isSyncConfigured` is false and the token null; `runSync` makes zero requests;
-after swapping the stored master key `runSync` throws a key-mismatch error
-before any push. Failure and restart at registration, settings, token, journal,
-key write and vault promotion; orphaned credentials preserved; no upload under
-the wrong key. Do not substitute "set up sync first" for recovery.
-
 ### CRED-04: A missing keystore key is not a first run
 
 bugs — blocking
@@ -298,6 +260,29 @@ sandbox, unless SSH-06 decides to drop it).
 
 ## Important
 
+### CRED-02: Recover interrupted enrollment and unreadable vault entries
+
+bugs — important
+
+**IDs:** SOL-030 residual, SEA26-SEC-08, BOTH-REV-005, S3-02, STATUS 4.
+
+Enrollment now verifies the account key, disconnects before re-keying, publishes
+credentials only after durable local writes, and serializes against sync in
+#594 and #638. The remaining recovery gap is a complete account-activation
+journal: after an interrupted local write, users must sign in again rather
+than resume a clearly identified pending activation. Unreadable or orphaned
+vault entries are retained byte-for-byte without a listing or recovery UI.
+
+Suggested fix: journal the pending account transition around the existing
+two-generation vault journal, reconcile it against the actual keystore after
+restart, and expose a previewable list of unreadable/orphaned entries with
+explicit discard or recovery actions. Add a local key-consistency check before
+sync if the keystore changes outside enrollment. Preserve ciphertext and
+recovery material until reconciliation is complete. Cover failure and restart
+at settings, token, journal, key-write and vault-promotion boundaries; never
+upload under the wrong key or present a disconnected recovery as success.
+
+
 ### SYNC-01: Opaque record IDs and key-epoch migration
 
 general issues — important
@@ -312,27 +297,27 @@ versioned key epoch in the authenticated envelope, and ship dual-read
 migration, interrupted-upgrade and rollback fixtures before changing writers.
 Include old/new-client interoperability and an external protocol review.
 
-### SYNC-03: Durable ledger, typed deletes and exact acknowledgements
+### SYNC-03: Typed deletion policy, complete acknowledgements and batched apply
 
 general issues — important
 
-Each app sync still starts from an in-memory mirror, losing account-scoped
-origin, cursor, dirty revision and acknowledgement state across runs. Records
-can be re-attributed to the collecting device, an acknowledgement is matched
-only by ID, host-key/secret/assistant deletions lack durable typed intents,
-domain stores are rewritten record by record, and a remotely deleted server
-can leave a live session with no explicit orphan state.
+**IDs:** SOL-001, SOL-005, SOL-006, SOL-010, SOL-037, SOL-059,
+SEA26-SEC-11, STATUS 14, S1-10, #54 residual.
 
-Suggested fix: persist one account-scoped ledger containing origin tuples,
-cursor, dirty revisions and pending operations; settle only the exact sent
-revision and reject missing, duplicate or foreign acknowledgements; report an
-honest incomplete outcome at the round limit. Add authenticated typed deletes,
-batched domain persistence, account-switch isolation and explicit live-session
-orphan reconciliation. Coordinate the shared settlement contract with
-Poltergeist: upstream the existing `PersistentLocalRecordStore` shape into
-the shared core and extend settlement once for exact sent revisions, so both
-clients implement one acknowledgement contract (this folds the former
-XAPP-03).
+Account-scoped persistence, stable origin tuples, exact sent-tuple settlement,
+cursor recovery and network-free mutation phases are implemented in #636 and
+#638. Remaining gaps are acknowledgement validation for missing, duplicate or
+foreign IDs; an honest pending/incomplete result when round limits are
+exhausted; typed deletion policy for host keys, credentials, assistant settings
+and bookmarks; batched domain persistence; and explicit orphan state for live
+sessions whose remote server configuration was deleted.
+
+Suggested fix: extend the shared settlement contract once for all consumers,
+validate the complete acknowledgement set, and retain unsettled operations
+durably. Define authenticated deletion semantics without turning absence into
+delete authority, persist each domain batch once, and reconcile affected live
+sessions explicitly. Test malformed acknowledgements, exhausted rounds,
+restart after deletion, and local edits racing blocked apply or push.
 
 ### SYNC-05: Account epochs and rollback tripwires
 
@@ -353,6 +338,10 @@ real HTTP and SQLite. Export the account-epoch and cursor-reset model to
 Poltergeist as the same shared contract (this folds part of the former
 XAPP-03).
 
+The account-scoped envelope floor in #639 rejects a return from observed floor
+2 to 1. It does not detect a complete, internally consistent rollback to an
+older floor-2 snapshot on a brand-new device without an external checkpoint.
+
 ### CRED-01: One-shot passphrases for referenced keys
 
 usability — important
@@ -366,33 +355,6 @@ Suggested fix: when a referenced key needs a passphrase, offer a cancellable
 one-shot prompt whose value belongs only to that connection attempt. Keep
 storage an explicit separate choice and preserve the editor's
 keep/replace/clear state on cancellation or authentication failure.
-
-### CRED-03: Detect a wrong encryption passphrase on an empty account
-
-bugs — important
-
-**IDs:** S1-05, SEA26-SEC-08 (explicit key confirmation for empty
-accounts) · **Status:** Open
-
-**Problem.** `loginSync` (`app_services.dart:488-503`) verifies the passphrase
-by decrypting only the first live record; with zero records the key is
-adopted. `registerSync` publishes nothing checkable. Two devices can then write
-under different keys; shared IDs flip-flop and the devices diverge for good; a
-third device with the correct passphrase can be refused when the first record
-is a wrong-key one.
-
-**Next.** A key-check canary without an enum change: `registerSync` pushes
-`keycheck:v1` sealed as `{kind:'keyCheck', data:{}}` (it decodes as
-`RecordKind.unknown` in every build, so all apply paths skip it and Poltergeist
-switches do not break). `loginSync` checks it first and fails closed;
-otherwise it checks every live record, reports a mixed-key account distinctly,
-and pushes the canary if the account has none. The `KeyCheck` helper belongs
-in `seance_core`.
-
-**Gate.** App-service tests with the fake server: an empty account plus a wrong
-passphrase on the second device is refused, so a wrong passphrase on an empty
-account cannot seed incompatible record populations; the correct passphrase with a
-canary is accepted; a mixed account reports "mixed", not "wrong passphrase".
 
 ### CRED-05: Missing credentials, recovery material and onboarding
 
@@ -661,88 +623,70 @@ oversized chunks; and enforce both idle and total body-read deadlines. Test
 known/unknown timing shape, proxy spoofing, slow bodies, restart and
 multi-replica limits.
 
-### SRV-02: Account lifecycle transactions, schema and backups
+### SRV-02: Versioned schema registry and crash/restore assurance
 
 missing features — important
 
-**IDs:** SOL-051, SOL-054, S1-07 · **Status:** Partial
+**IDs:** SOL-051, SOL-054, S1-07 residuals.
 
-**Done:** atomic SQLite account deletion with rollback (#133); #71 contention
-fails atomically with `503 storage_busy`; empty pushes stay read-only.
+Account-generation authorization and mutations are transactional in #594;
+legacy envelope changes are transactional in #639. These upgrades add
+generation constraints and foreign-key enforcement, but there is no explicit
+versioned migration registry. Contention has no bounded asynchronous retry
+contract, durability settings need documentation, and standalone operator
+backup/restore procedures need a WAL-safe contract. The updater's candidate
+backup and rollback are implemented in #619.
 
-**Problem.** `_migrate` is `CREATE IF NOT EXISTS` only: there is no
-`user_version`, foreign-key enforcement or schema checks. Contention handling
-has no bounded asynchronous retry contract, durability settings are not
-documented, and there is no WAL-aware backup and restore procedure.
+Suggested fix: use transactional PRAGMA user_version migrations, preserve
+reviewed constraints and cascades, define bounded asynchronous contention
+retry/backoff and Retry-After, and document synchronous/durability settings.
+Document online backup and restore without copying a live database separately
+from its WAL. Test migration interruption, cross-process kill/lock recovery,
+disk-full failures, corruption and restore during writes. Existing
+two-connection and trigger-rollback tests do not prove power-loss durability.
 
-**Next.** Add transactional `PRAGMA user_version` migrations with foreign keys,
-check constraints and cascades, bounded asynchronous contention retry (no long
-synchronous `busy_timeout` that blocks the shared isolate; define retries,
-backoff and `Retry-After`), documented synchronous/durability settings, and
-documented WAL-safe online backup and restore. Never copy only the main
-database file while ignoring active WAL state.
+### SRV-03: Graceful drain and sanitized server diagnostics
 
-**Gate.** Migration interruption, cross-process kill and lock recovery, disk
-full, corruption and restore during writes. Two-connection contention and
-trigger rollback tests do not prove power-loss or cross-process crash
-durability.
+general issues — important
 
-### SRV-03: Readiness, graceful drain and observability
+**IDs:** SOL-052, SOL-053, SOL-055, S1-09 residuals.
 
-missing features — important
+Storage-aware readiness and deployment health checks are implemented in #610.
+SIGTERM still closes the listener and exits without a documented bounded drain,
+database close or checkpoint policy. Unexpected handler failures return an
+anonymous 500 without the server-side exception, stack, route or request ID
+needed to diagnose the cause. The macOS audit found this at
+packages/seance_sync_server/lib/src/server.dart:398-414. Operators are affected
+even when the public error correctly hides sensitive details.
 
-**IDs:** SOL-052, SOL-053, SOL-055, S1-09 · **Status:** Open
+Suggested fix: stop accepting requests, drain to a deadline, finish or roll
+back writes, checkpoint and close SQLite, and handle repeated signals. Log a
+sanitized request ID, method/route, exception type and stack; preserve causal
+stacks when wrapping failures. Exclude authorization, bodies, verifiers,
+ciphertext and raw commands. Add request/status/duration/size and
+auth/throttle/push/database counters. Logging is roughly one to two hours;
+drain and real-container readiness/persistence/restart tests are a separate
+slice. Exercise SIGTERM during reads and writes and forced storage failure.
 
-**Problem.** `/healthz` (`server.dart:67` @9322f6e) never consults storage.
-After one uncertain rollback `_failure` is set for good
-(`sqlite_storage.dart:213`) and every request is 503 "restart required", yet
-Compose's healthcheck stays green and `restart: unless-stopped` never fires
-(S1-09). SIGTERM runs `close()` then `exit(0)` with no drain or DB close
-(`bin/seance_sync_server.dart:62-67`). No request logging or counters; #71
-added sanitized cleanup failure codes and fail-closed 503s, which is not
-general observability. #48 already replaced the old `--help` healthcheck with
-real HTTP health; do not redo it. `/healthz` is liveness only.
-
-**Next.** Smallest first: `Storage.isAvailable`, and `/healthz` returns 503
-when false (or schedule `exit(70)` so the restart policy reopens the DB). Then
-a bounded SQLite-aware `/readyz` and an actual-container CI smoke test for
-register/login/push/pull/persistence/restart; stop accepting on SIGTERM, drain with a
-deadline, finish or roll back, checkpoint and close SQLite, handle repeated
-signals. Request ID/route/status/duration/size logs, sanitized errors with
-causal stack traces preserved when wrapping errors, structured diagnostics for
-ordinary failures, auth/throttle/push/DB latency counters. Never log
-authorization, verifiers, blobs, request bodies or raw commands.
-
-**Gate.** A forced `_failure` makes `/healthz` 503; a live process with a broken
-DB is not ready; SIGTERM during reads and writes; restart recovery; safe
-structured errors; a container health failure is detected.
-
-### SSH-01: Connection ownership, deadlines and cancellation
+### SSH-01: Explicit connection-attempt cancellation and recovery UI
 
 bugs — important
 
-**IDs:** SOL-020, SOL-032, SOL-033, SEA26-SEC-12, S2-07 · **Status:** Open
+**IDs:** SOL-020, SOL-032, SOL-033, SEA26-SEC-12, S2-07 residuals.
 
-**Problem.** Pre-socket key parsing, stale-result checks, idempotent engine
-disposal, final-output drain, a 5-minute auth deadline and #131's per-hop
-cleanup exist. But `ssh_session.dart:1205-1207` awaits `client.shell` without
-a deadline; channel open and exec have no deadline, and dartssh2 never fails a
-pending channel request on transport close (S2-07, table row only: re-trace).
-The stale result is closed after the fact (`app_state.dart:1251-1255` at
-`dd7e105`); there is no cancel API; the connecting view is a bare spinner
-(`ui/terminal_pane.dart:1073-1075`); Test connection documents "no cancel
-seam" (`server_editor.dart:261-262`).
+Bounded shell, exec, forwarding and subsystem opens with owner-close races and
+late-result cleanup are implemented in #621. Users still lack a single
+ConnectAttempt handle that cancels every phase, including pre-socket work,
+jump parents, TOFU and keyboard-interactive dialogs. The connecting surface
+offers a spinner without precise phase, Cancel, Retry or Copy log actions;
+Test Connection has no complete cancellation surface.
 
-**Next.** A `ConnectAttempt` handle (a cancel token closing socket, jump
-parents, client, channels and engine per phase) in `openAuthenticatedClient`;
-a shell/PTY deadline separate from interactive auth; fail pending channel
-requests when the transport closes; dispose late-acquired channels; Cancel,
-Retry and Copy log on the connecting view with precise phase and reason.
-
-**Gate.** Stalled channel/PTY/shell/exec; cancel while TOFU or k-i dialogs are
-open; immediate remote close; retry; stream errors; disposal; deleted or
-replaced tabs retain no connection work; no leaked ownership, late session
-commit or unhandled completion error.
+Suggested fix: carry one attempt-scoped cancellation handle through
+openAuthenticatedClient and its owned resources, keeping interactive-auth and
+channel-open deadlines distinct. Expose accurate phase/reason and
+Cancel/Retry/Copy log. Verify cancellation with open trust/auth dialogs,
+immediate remote close, retry, stream errors, and deleted/replaced tabs; no
+late session commit, leaked ownership or unhandled completion error.
 
 ### SSH-06: Agent default, agent reachability and the macOS sandbox
 
@@ -862,6 +806,11 @@ receipt. Remember the include-terminal-context choice durably per session
 so a reopened or resumed session keeps the user's decision (SYNC-07 covers
 the cross-device question). Stop must use the existing abort path; retry must
 not duplicate a tool effect or silently change sessions.
+Keep tool-bearing turns buffered until their structure is complete while
+streaming text-only final turns. The Sol evidence is
+app/seance_app/lib/ui/chat_sidebar.dart:57-113 and
+packages/seance_core/lib/src/llm/chat_controller.dart:181-191,332-343;
+rough effort is one to two days.
 
 ### AI-02: Native tools, exact outbound receipts and redaction grammar
 
@@ -900,6 +849,12 @@ text that is not valid structured input; user-defined
 patterns; label the filter best-effort. Add Brave to Settings or remove it. Add
 provider connectivity and latency diagnostics. Native provider web search stays
 a separate path.
+
+Sol re-anchored the native-tool gap at llm/provider.dart:5-15,89-103,
+chat_controller.dart:228-262, anthropic_provider.dart:35-66 and
+openai_provider.dart:35-57. Keeping call IDs and native tool-role messages also
+prevents search snippets from being promoted to ordinary user-role authority;
+label returned material untrusted. This slice is roughly one to two days.
 
 **Gate.** Second-request wire fixtures for both providers; search-injection
 fixtures; payload-to-receipt equality; credential URL, cookie, kubeconfig,
@@ -957,6 +912,11 @@ One-off user@host[:port] connections still require a saved server, and the
 empty main surface offers no recent targets. Repeated unsaved sessions would
 also be hard to distinguish because they have no lightweight identity that can
 later become the saved server's mark.
+
+Reproduction: entering user@host:port in the server filter gives no result;
+the empty terminal surface at app/seance_app/lib/ui/terminal_pane.dart:1810-1827
+offers only saved servers. Ephemeral-host users must persist a full record for
+each one-off connection. Rough effort for the first slice: one to two days.
 
 Suggested fix: show an italic Connect to result in the server filter, open it
 through the same editor, authentication and TOFU path without persistence, and
@@ -1025,6 +985,15 @@ and every-request version claims (DOC-01).
 **Gate.** A dispatch with a mismatched tag fails; a prerelease does not move
 `latest`; a re-run refuses to overwrite; SHA256SUMS verify; packaged install
 and upgrade; failed rollout recovery.
+
+Sol's current build-input evidence is .github/workflows/ci.yml:209-217,2374-2380,
+.github/workflows/release.yml:451-456 and
+seance/packages/seance_sync_server/Dockerfile:7,19,25,39: floating Dart/image
+inputs and non-enforced locks can change artifacts from the same commit.
+Pin the bundled Dart version, image digest/codename and enforce-lockfile,
+with a lock-drift check. Rough effort: half a day plus pin maintenance.
+The updater backup/candidate/rollback slice is implemented in #619 and must
+not be repeated.
 
 ### REL-02: Verify downloaded Linux packaging tools
 
@@ -1096,6 +1065,24 @@ Record the API changes in CHANGELOG. Consider the downstream canary job (idea).
 ---
 
 ## Nice-to-have
+
+### CRED-03: Diagnose and recover mixed-key legacy accounts
+
+bugs — nice-to-have
+
+**IDs:** S1-05 and SEA26-SEC-08 residuals.
+
+The empty-account key-check and safe enrolled-device bridge are implemented in
+#594 and #639, including tombstone-only accounts. An account already containing
+ciphertext from incompatible vault keys can still be reported as a wrong
+passphrase rather than as mixed-key data, leaving users without a clear
+recovery path.
+
+Suggested fix: after key verification, classify unreadable records separately
+from an incorrect account passphrase and offer explicit, previewable recovery.
+Preserve incompatible ciphertext until the user chooses what to restore or
+discard. Test correct-key, wrong-key and mixed-key accounts distinctly.
+
 
 ### SYNC-04: Oversize save guards and durable refusal state
 
@@ -1445,6 +1432,20 @@ the listing boundary; and evict a closed subsystem so reopening returns a
 normal Future. Benchmark typing latency and throughput at 50 ms RTT and cover
 hostile names and reconnect.
 
+### Resume interrupted SFTP transfers from verified checkpoints
+
+missing features — nice-to-have
+
+Interrupting a Files upload or download restarts it from byte zero. The
+transfer API exposes progress and cancellation but no offset negotiation or
+retained partial-transfer state, wasting bandwidth and time on mobile or
+unreliable networks.
+
+Suggested fix: offer opt-in Resume/Restart using verified local/remote sizes
+and fingerprints, retain clearly named partial files, and reject a resume if
+the endpoint or source has changed. Test interruption and source changes in
+both directions. Rough effort: two to four days.
+
 ### SSH-12: Host-key algorithm preference ignores the pinned type
 
 bugs — nice-to-have
@@ -1673,39 +1674,27 @@ quoting before matching. The review-before-run gate stays the real safety.
 
 **Gate.** Table tests for each bypass and for safe look-alikes.
 
-### AI-05: Shell-aware command capture and CommandStats learning
+### AI-05: Bounded, recoverable command-history learning
 
 bugs — nice-to-have
 
-**IDs:** SOL-046, AST-007 residual, SEA-034, S3-10, STATUS 9 ·
-**Status:** Open
+**IDs:** SOL-046, AST-007 residual, SEA-034, S3-10, STATUS 9.
 
-**Problem.** `onCommand` fires on every Enter regardless of OSC 133 phase
-(`xterm_engine.dart:315`; `atPrompt` gates only `activeCommand`). No whisper
-mode or clear-history control; command length is unbounded (the count is
-capped at 400, `command_stats.dart:38`). S3-10 (reproduced): once 400 commands
-have count >= 2, a new command enters with count 1 and is evicted in the same
-call, so learning freezes; `List.sort` is unstable, so ties drop arbitrarily.
-Minor: the `Timer(..., services.saveCommandStats)` callback drops its Future
-(an unhandled error on failure), and up to 3 s of stats are lost on quit
-(`app_state.dart:1841-1847` at `dd7e105`). Done: recognizable secrets are
-filtered before capture, legacy loading and save, independently of assistant
-settings. Legacy cleanup is attempted on load; failed writes, unparseable files
-and historical backups cannot be promised scrubbed, and arbitrary no-echo
-passwords are not recognizable by regex.
+Capture is restricted to proven OSC 133 prompt transitions in #597. The
+remaining history issues are unbounded command length, no whisper/clear
+controls, and frozen learning once all 400 stored commands have count >= 2:
+a new count-1 command is evicted immediately, with unstable tie ordering.
+The delayed save callback drops its Future and can lose up to three seconds
+of statistics on quit.
 
-**Next.** Record commands only at proven OSC 133 boundaries (`atPrompt`); bound
-command lengths and counts, loaded data and dismissal storage without silently
-breaking "never suggest again"; a recency-ordered
-map evicting the lowest count, oldest first, never the command just recorded,
-with optional decay on trim; await and log the save; "Clear command history"
-and a visible whisper toggle excluding capture and outgoing context. Never
-infer no-echo from channel bytes.
-
-**Gate.** The S3-10 repro passes; password/OTP prompts, readline editing,
-nested shells, alternate screens; settings-independent protection; safe
-commands still rank. Explicitly warn that prior backups and plaintext history
-may persist.
+Suggested fix: bound command length and loaded/dismissal data, use stable
+recency-aware eviction that retains the just-recorded command, and await/log
+saves. Add Clear history and an explicit whisper choice for capture and
+outgoing context. Preserve the independently applied recognizable-secret
+filter, proven prompt boundary, nested-shell and alternate-screen rules.
+Historical backups, damaged files and arbitrary plaintext secrets cannot be
+promised scrubbed. Test the 400-command saturation case, save failures and
+quit-time flush.
 
 ### AI-06: Safe context enrichment and search error typing
 
@@ -1970,10 +1959,11 @@ installed-font picker (#89); keyboard dividers (#134).
 **Problem.** Tab close is 28 px (`terminal_pane.dart:670-679`); the key bar's
 `minWidth` is 40 (`terminal_keyboard_bar.dart:187`, about 34 dp tall); strip
 buttons are 40x38 on phones; compact mobile rows are 40 dp (#129): all under 44
-to 48 dp. S4-17: tab chips (`terminal_pane.dart:581-666`) expose no selected
-state, and the status dot (`:965-987`) has no label. No reduced-motion handling
-anywhere (`disableAnimations` unused). The settings-recovery notice is a 10 s
-toast (`main.dart:193-206`). The terminal screen-reader fallback is minimal.
+to 48 dp. Tab selected/connection semantics are implemented in #623, and
+persistent settings-recovery notices in #627. Pane transitions at
+app/seance_app/lib/ui/adaptive_shell.dart:101-131 and chat scrolling at
+ui/chat_sidebar.dart:104-113 still ignore reduced-motion preferences. The
+terminal screen-reader fallback is minimal.
 Pane divider keyboard resizing (#134) still needs native assistive-technology
 verification. Device themes, persisted terminal font/palette/zoom, mobile
 cursor modes, grapheme-safe middle labels and the composed status badge exist;
@@ -1982,50 +1972,42 @@ what remains is interaction and semantics validation plus missing preferences
 filter clear (`snippets_pane.dart:93-99`) and narrow Back action
 (`terminal_pane.dart:156-158`) lack explicit tooltips or semantic labels.
 
-**Next.** Touch-only 48 dp targets without bloating desktop. Chips in
-`Semantics(selected:, button:, label: '<label>, <status>[, unsaved]')` with the
-dot and close icon excluded and a "Close tab" custom action. One shared
+**Next.** Touch-only 48 dp targets without bloating desktop. One shared
 reduced-motion policy honouring `MediaQuery.disableAnimationsOf` for routes,
 drawers and notices: remove spatial slides and tweens while progress, focus,
-navigation and cancellation still complete. Bounded live safety notices and an
-accessible expiry/action policy (UI-05); a persistent banner for settings and
-vault recovery; a useful terminal screen-reader fallback. Localization is a
+navigation and cancellation still complete. Preserve #627's bounded notices,
+pause/expiry and recovery actions while adding modal/native validation
+(UI-05), plus a useful terminal screen-reader fallback. Localization is a
 separate app-wide task: introduce ARB localization incrementally, starting
 with dialogs, errors, actions and semantic labels (#134's current semantics
 are English, matching the untranslated UI). Add stable tooltips and labels to
 the named icon-only actions.
 
-**Gate.** Tap-target and semantics tests (`getSemantics` shows selected and
-"connected"); native assistive technology; colour-vision simulation; large
+**Gate.** Tap-target tests; preserve tab selected/connection semantics;
+native assistive technology; colour-vision simulation; large
 text; selection during output; with `disableAnimations`, progress, focus,
 navigation and cancellation still complete. Remote titles cannot impersonate
 trusted chrome. Widget semantics expose Send, Clear filter and Back without
 inferring their glyphs; localized dialog/action fixtures load from ARB. Do not
 replace the existing status palette or create another theme picker.
 
-### UI-05: Bounded, accessible top notices
+### UI-05: Scope notices to modal surfaces and verify native announcements
 
 usability — nice-to-have
 
-**IDs:** UI-04 (sibling review), S4-18, L-03 · **Status:** Open
+**IDs:** UI-04 (sibling review), S4-18, L-03 residuals.
 
-**Problem.** Both toast implementations append an unbounded non-scrolling
-stack, start fixed expiry timers that are not paused on hover or focus
-(`ui/top_toast.dart:173`), and have no live region (`:208-265`), so
-screen-reader users never hear "keyring locked... Retry" and mouse users lose
-the action while reading it. Text colour is forced white on custom light fills.
-In the live run an error notice sat over the Add server dialog's title (L-03).
+Visible limits, coalescing, overflow history, live semantics, timer pause,
+contrast and persistent recovery notices are implemented in #627. Modal
+placement remains: an error notice observed in the live run covered the Add
+server dialog title. Widget semantics also do not establish that each native
+screen reader announces the notice and keeps its action discoverable.
 
-**Next.** A shared visible limit, duplicate coalescing, overflow and history;
-`Semantics(liveRegion: true)` plus `SemanticsService.announce`; pause on
-`MouseRegion.onEnter` and focus; text colour from the resolved background;
-offset below an open dialog's title, or show dialog-scoped errors inline.
-Safety and recovery incidents stay discoverable after expiry.
-
-**Gate.** 20 notices at 320x568 and 2x text without overflow; the live-region
-flag is set and native announcements work; hovering past the duration keeps the
-notice; a focused action survives; one-shot actions; reduced motion; notices
-stay above and never cover the shell prompt.
+Suggested fix: place dialog-owned errors inline or below the active modal
+title, preserving the shell prompt and keyboard focus. Verify VoiceOver and
+TalkBack announcements, persistent recovery actions, focused/hovered expiry,
+one-shot actions and short/large-text viewports without duplicating the
+bounded shared queue.
 
 ### UI-06: Recoverable theme editing and complete palette integration
 
@@ -2073,6 +2055,11 @@ result sit at the end of the scroll view (no Save visible at 1024x700); the
 phone editor is a roughly 280 px inset dialog. The label is required even when
 host, user and password are filled (L-01, live). Test connection validates the
 whole form, so the label validator blocks a pre-save test (STATUS 20).
+
+Sol re-anchored the Test-only validation issue at
+app/seance_app/lib/ui/server_editor.dart:335-365,853-859. A valid host, port,
+username and credential should be testable before choosing a local display
+label. Rough effort: two to four hours.
 
 **Next.** Autofocus Label (new) or Host; pin the actions and result row outside
 the scroll view; `Dialog.fullscreen` below 600 px; default a blank label to the
@@ -2226,7 +2213,7 @@ Fix each; generate counts in CI or drop them.
 - `docs/STATUS.md`: items 3 (redaction toggle) and 5 (UTF-8 across packets) are
   implemented (`chat_sidebar.dart`; `xterm_engine.dart:146-148` chunked
   decoder): delete them. The #54 housekeeping text is half stale: servers and
-  snippets write tombstones since #84; "every pull is full" is still true. The
+  snippets write tombstones since #84; full per-round pulls are fixed in #636. The
   "Should do next" numbering starts at 2.
 - Code comments cite wrong STATUS numbers: `server_editor.dart:60, 109` say 17
   (actual 18/19), `app_services.dart:635` says 16 (actual 17). Renumber or fix.
@@ -2243,6 +2230,10 @@ Fix each; generate counts in CI or drop them.
 
 **Gate.** A reviewer reading only AGENTS, STATUS and POLTERGEIST reaches
 correct conclusions about X-02/X-03 and current counts.
+
+Sol confirmed the redaction/UTF-8 drift at docs/STATUS.md:2034-2036,2047-2049.
+Reconcile each advertised defect with current tests and link completed work;
+rough effort for that focused cleanup is one hour.
 
 ### XAPP-04: Shared files, packaging and platform parity
 
@@ -2290,32 +2281,64 @@ Resolve the platform account's home through a host service, or refuse startup
 with an actionable message when no safe home is available. Rough effort: two
 to four hours.
 
-### Do not lose Context items during burst output
+### Scan Context incrementally and only while useful
 
 performance problems, stuttering, and jank — nice-to-have
 
-`app/seance_app/lib/services/terminal_context.dart:729-754,805-866` samples only
-the last 300 rows every 300 ms. Faster output is omitted before inspection, so
-bursty builds can lose actionable paths and links even while the UI remains
-responsive.
+app/seance_app/lib/app_state.dart:246-255 starts Context detection for every
+open terminal. terminal_context.dart:729-754,805-866 rebuilds and regex-scans up
+to the last 300 rows every 300 ms on the UI isolate, even when Context is never
+opened. This spends frame time and battery during high-volume logs, while
+faster output can disappear before inspection and lose actionable paths/links.
 
-Consume completed logical lines incrementally into a bounded queue rather
-than periodically resampling only the tail. Rough effort: one to two days.
+Suggested fix: activate scanning while Context is visible or after first use,
+consume completed logical lines incrementally into a bounded queue, and track
+generations/ranges rather than rescanning the tail. Profile before moving work
+to an isolate. Keep detection passive. Rough effort: one to two days.
 
-### Pin detected Context items into a working set
+### Keep a local command trail and pinned Context working set
 
 novel, delightful, or quirky ideas worth trying — nice-to-have
 
-Context items from
-`app/seance_app/lib/services/terminal_context.dart:747-765` and
-`app/seance_app/lib/ui/context_pane.dart:110-168` are transient, so useful
-paths and links disappear as terminal output advances.
+Context items from app/seance_app/lib/services/terminal_context.dart:747-765
+and ui/context_pane.dart:110-168 disappear as output advances. Existing OSC 133
+events already expose command completion, cwd and exit status, but the panel
+does not connect those events to discovered paths and links.
 
-Let users pin detected items into a session-local working set grouped by the
-command that produced them. Do not persist raw terminal output. Rough effort:
-one to two days.
+Suggested fix: render bounded, collapsible local command cards containing
+command, cwd, exit status and detected evidence; let users pin useful items
+into a session working set or explicitly include a card in assistant context.
+Reuse the TERM-07 command-block model. Do not execute detected content or
+persist raw terminal output by default. Rough effort: two to four days.
 
----
+### Export a sanitized session postcard
+
+novel, delightful, or quirky ideas worth trying — nice-to-have
+
+Diagnostics, host-key details, command status and selected terminal output are
+available separately. Users helping a teammate must assemble them manually and
+can accidentally include secrets.
+
+Suggested fix: build a preview-first local Postcard that redacts host, user,
+path and token patterns, lets the user inspect and edit the exact material,
+and exports a compact Markdown or image summary only after confirmation.
+Explain that redaction is best-effort and export no credential material.
+Reuse the transcript and flight-recorder evidence models. Rough effort: two
+to three days.
+
+### Show an informative connection séance pulse
+
+novel, delightful, or quirky ideas worth trying — nice-to-have
+
+Connection status is centralized around
+app/seance_app/lib/ui/terminal_pane.dart:646-713, but a generic spinner does
+not explain which connection phase is waiting.
+
+Suggested fix: map real DNS, transport and authentication diagnostics to an
+optional restrained three-beat indicator, with accessible stage text and a
+static reduced-motion equivalent. Add no delay or invented progress. Keep
+the separate presence/RTT idea based on actual measurements. Rough effort:
+one day.
 
 ## Ideas
 
@@ -2329,12 +2352,12 @@ consolidate earlier ideas without removing their useful variants.
 | Safe Draft Dock / SOL-047 | See TERM-07. Local, editable, target-labelled staging with source and danger cues; only an explicit action sends to the PTY, never Enter. Test nonempty prompts and stale sessions. |
 | Planchette | See WF-01. One fast action palette with a restrained selection motif; no theatrical delay or focus ambiguity. |
 | Production wards and tint | A synced production/staging/lab tag with symbol and colour; a 3 to 4% server-hue wash on prod terminals; extra confirmation for reviewed destructive/sudo actions and multi-line pastes. No promise of intercepting every command. |
-| OSC 133 command cards / SEA-028 | See TERM-07: Copy, Explain, Snippet, reviewed Rerun, Compare, Include in chat, from real boundaries. |
+| OSC 133 command cards / SEA-028 | See TERM-07 and the local command trail/pinned Context working set: Copy, Explain, Snippet, reviewed Rerun, Compare, Include in chat, from real boundaries. |
 | Last words | See TERM-08. Preserve final output, duration, cwd and disconnect reason with copy/save/reconnect; never hide diagnostic scrollback behind a blank placeholder. |
 | Completion notices / SEA-031 | For background completed commands, an optional tab badge or OS notice with exit and duration; correct session attribution; command text hidden by default. |
 | Ghost tabs / SEA-032 | A short-lived Undo close restoring host and label with reviewed cwd staging; not remote process restoration; never bypasses managed-edit guards (after APP-02). |
 | Whisper mode / SEA-034 | See AI-05. Auto-arm only from a trustworthy signal. |
-| Séance transcript / SEA-035 | A previewable redacted Markdown export of command/output blocks, timestamps, host and duration to file, clipboard or snippet; warn that redaction is best-effort. |
+| Séance transcript / SEA-035 | See the sanitized session postcard finding: preserve command/output blocks, timestamps, host and duration in the preview, with file, clipboard or snippet destinations and best-effort redaction. |
 | Presence pulse / SEA-036 | A real keepalive RTT tooltip, sparkline or quiet pulse (expose RTT from core first); no invented measurement; never animate terminal text; reduced motion. |
 | Custom/two-hand mobile decks / SEA-037 | Per-host saved keys, modifiers left and navigation right, punctuation drawer, repeat/haptics, clipboard actions; keep application cursor modes and 48 dp targets. |
 | Context ledger / SOL-044 | See AI-02. An expandable exact outbound receipt for every assistant request, including history, search and redaction; no hidden resend. |
