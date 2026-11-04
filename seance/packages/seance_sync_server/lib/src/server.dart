@@ -184,14 +184,9 @@ class SyncServer {
         argonSalt.length < _minArgonSaltBytes) {
       return _error(400, 'bad_request', 'Invalid register payload');
     }
-    // After every check that needs no storage, so a malformed request costs
-    // no lookup and learns nothing about which names are taken.
-    if (await storage.getAccount(r.username) != null) {
-      return _error(409, 'account_exists', 'Username already registered');
-    }
     final verifierSalt = secureRandomBytes(16);
     final hash = VaultCrypto.hashAuthVerifier(authVerifier, verifierSalt);
-    await storage.createAccount(
+    final registration = await storage.registerAccount(
       Account(
         username: r.username,
         authVerifierHash: hash,
@@ -200,8 +195,16 @@ class SyncServer {
         argonParams: r.argonParams,
       ),
     );
-    final token = await storage.createToken(r.username);
-    return _json(LoginResponse(token: token).toJson());
+    return switch (registration) {
+      AccountRegistered(:final token) => _json(
+        LoginResponse(token: token).toJson(),
+      ),
+      AccountAlreadyExists() => _error(
+        409,
+        'account_exists',
+        'Username already registered',
+      ),
+    };
   }
 
   Future<Response> _prelogin(Request req) async {

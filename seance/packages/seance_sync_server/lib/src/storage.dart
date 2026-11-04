@@ -22,6 +22,21 @@ class Account {
   });
 }
 
+/// The result of atomically creating an account and its initial session.
+sealed class AccountRegistrationResult {
+  const AccountRegistrationResult();
+}
+
+final class AccountRegistered extends AccountRegistrationResult {
+  final String token;
+
+  const AccountRegistered(this.token);
+}
+
+final class AccountAlreadyExists extends AccountRegistrationResult {
+  const AccountAlreadyExists();
+}
+
 /// A backend disabled after an unrecoverable transaction failure.
 class StorageUnavailableException implements Exception {
   /// Retained for diagnostics, never included in the public error message.
@@ -86,6 +101,16 @@ class InboxAddResult {
 /// Implemented in memory (tests) and over SQLite (production).
 abstract class Storage {
   Future<Account?> getAccount(String username);
+
+  /// Create [account] and its initial bearer token as one operation.
+  ///
+  /// Returns [AccountAlreadyExists] without changing storage when the username
+  /// is taken. A storage failure leaves neither the account nor its token.
+  Future<AccountRegistrationResult> registerAccount(Account account);
+
+  // Compatibility primitives for storage tests and migrations. Registration
+  // handlers must use [registerAccount] so conflict detection and the initial
+  // token are atomic.
   Future<void> createAccount(Account account);
   Future<void> deleteAccount(String username);
 
@@ -184,6 +209,28 @@ class InMemoryStorage implements Storage {
   Future<Account?> getAccount(String username) async => _accounts[username];
 
   @override
+  Future<AccountRegistrationResult> registerAccount(Account account) async {
+    final username = account.username;
+    if (_accounts.containsKey(username)) {
+      return const AccountAlreadyExists();
+    }
+
+    // Clear rows an older non-atomic operation could have left behind before
+    // allowing a deleted name to be registered again.
+    _records.remove(username);
+    _seq.remove(username);
+    _tokens.removeWhere((_, storedUsername) => storedUsername == username);
+    _inboxApps.removeWhere((_, app) => app.username == username);
+    _inboxItems.removeWhere((item) => item.username == username);
+    _inboxReceived.remove(username);
+
+    _accounts[username] = account;
+    _records[username] = {};
+    _seq[username] = 0;
+    return AccountRegistered(_createToken(username));
+  }
+
+  @override
   Future<void> createAccount(Account account) async {
     _accounts[account.username] = account;
     _records[account.username] = {};
@@ -202,7 +249,9 @@ class InMemoryStorage implements Storage {
   }
 
   @override
-  Future<String> createToken(String username) async {
+  Future<String> createToken(String username) async => _createToken(username);
+
+  String _createToken(String username) {
     final token = base64Url.encode(secureRandomBytes(32));
     _tokens[token] = username;
     return token;

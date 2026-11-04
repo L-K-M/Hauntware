@@ -133,7 +133,34 @@ class SqliteStorage implements Storage {
   }
 
   @override
+  Future<AccountRegistrationResult> registerAccount(Account account) async =>
+      _transaction(_TransactionMode.write, () {
+        final username = account.username;
+        final existing = _db.select(
+          'SELECT 1 FROM accounts WHERE username = ? LIMIT 1',
+          [username],
+        );
+        if (existing.isNotEmpty) return const AccountAlreadyExists();
+
+        // A server version predating atomic account deletion could leave rows
+        // behind. A newly registered owner must never inherit that state.
+        _deleteAccountRows(username);
+        _insertAccount(account);
+        _db.execute(
+          'INSERT INTO seqs (username, value) VALUES (?, 0)',
+          [username],
+        );
+        return AccountRegistered(_createToken(username));
+      });
+
+  @override
   Future<void> createAccount(Account account) async {
+    _insertAccount(account);
+    _db.execute('INSERT OR IGNORE INTO seqs (username, value) VALUES (?, 0)',
+        [account.username]);
+  }
+
+  void _insertAccount(Account account) {
     _db.execute(
       'INSERT INTO accounts (username, auth_verifier_hash, verifier_salt, argon_salt, argon_params) VALUES (?, ?, ?, ?, ?)',
       [
@@ -144,8 +171,6 @@ class SqliteStorage implements Storage {
         jsonEncode(account.argonParams.toJson()),
       ],
     );
-    _db.execute('INSERT OR IGNORE INTO seqs (username, value) VALUES (?, 0)',
-        [account.username]);
   }
 
   @override
@@ -153,19 +178,23 @@ class SqliteStorage implements Storage {
     // A failed cleanup must not remove the account while leaving usable
     // tokens or encrypted records behind. Reuse the record-write rollback and
     // contention policy so deletion either commits in full or can be retried.
-    _transaction(_TransactionMode.write, () {
-      _db.execute('DELETE FROM accounts WHERE username = ?', [username]);
-      _db.execute('DELETE FROM tokens WHERE username = ?', [username]);
-      _db.execute('DELETE FROM records WHERE username = ?', [username]);
-      _db.execute('DELETE FROM seqs WHERE username = ?', [username]);
-      _db.execute('DELETE FROM inbox_items WHERE username = ?', [username]);
-      _db.execute('DELETE FROM inbox_apps WHERE username = ?', [username]);
-      _db.execute('DELETE FROM inbox_seqs WHERE username = ?', [username]);
-    });
+    _transaction(_TransactionMode.write, () => _deleteAccountRows(username));
+  }
+
+  void _deleteAccountRows(String username) {
+    _db.execute('DELETE FROM accounts WHERE username = ?', [username]);
+    _db.execute('DELETE FROM tokens WHERE username = ?', [username]);
+    _db.execute('DELETE FROM records WHERE username = ?', [username]);
+    _db.execute('DELETE FROM seqs WHERE username = ?', [username]);
+    _db.execute('DELETE FROM inbox_items WHERE username = ?', [username]);
+    _db.execute('DELETE FROM inbox_apps WHERE username = ?', [username]);
+    _db.execute('DELETE FROM inbox_seqs WHERE username = ?', [username]);
   }
 
   @override
-  Future<String> createToken(String username) async {
+  Future<String> createToken(String username) async => _createToken(username);
+
+  String _createToken(String username) {
     final token = base64Url.encode(secureRandomBytes(32));
     _db.execute('INSERT INTO tokens (token, username) VALUES (?, ?)',
         [token, username]);

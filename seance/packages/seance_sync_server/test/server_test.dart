@@ -46,7 +46,7 @@ class TestClient {
 
 class ThrowingStorage extends InMemoryStorage {
   @override
-  Future<Account?> getAccount(String username) async {
+  Future<AccountRegistrationResult> registerAccount(Account account) async {
     throw StateError('database password is hunter2');
   }
 }
