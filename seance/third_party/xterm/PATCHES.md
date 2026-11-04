@@ -643,6 +643,22 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     randomized round trip in `test/src/core/reflow_property_test.dart`
     now covers one column.
 
+### Bounded completed controls
+
+49. **REP cannot monopolize the UI isolate**
+    (`terminal.dart#repeatPreviousCharacter`; regressions:
+    `test/src/terminal_test.dart`,
+    `app/seance_app/test/terminal_rep_bound_test.dart`): a remote program could
+    send a short `CSI 999999999 b` sequence and make the terminal synchronously
+    write that many cells. Pending-sequence limits do not help once a control
+    is complete. REP now performs at most one active visible scrolling
+    region's worth of cell writes (`viewWidth * DECSTBM height`). A
+    scroll-aware sub-bound prevents a cursor at the bottom margin from making
+    each of those writes copy the entire region. Normal counts, zero's default
+    of one, reduced scrolling margins, and the no-previous-cell no-op keep
+    their existing behavior. The budget uses `BigInt`, so adversarial viewport
+    dimensions cannot wrap its product.
+
 ### App-layer notes (outside this package)
 
 - The app passes `shortcuts: {}` and instead routes ⌘C/⌘V/⌘A on

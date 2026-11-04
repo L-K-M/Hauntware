@@ -86,6 +86,90 @@ void main() {
     expect(output, ['\x1b[1;2R', '\x1b[10;9R']);
   });
 
+  group('REP resource bound', () {
+    int occurrences(Terminal terminal, int codePoint) => terminal.buffer
+        .getText()
+        .runes
+        .where((value) => value == codePoint)
+        .length;
+
+    test('preserves normal counts and zero defaults to one', () {
+      for (final (parameter, expected) in [
+        ('', 2),
+        ('0', 2),
+        ('1', 2),
+        ('3', 4),
+      ]) {
+        final terminal = Terminal()..resize(20, 4);
+
+        terminal.write('A\x1b[${parameter}b');
+
+        expect(occurrences(terminal, 0x41), expected,
+            reason: 'CSI $parameter b');
+      }
+    });
+
+    test('bounds a large count to the visible scrolling region', () {
+      final terminal = Terminal()..resize(5, 3);
+
+      terminal.write('x\x1b[1000b');
+
+      expect(occurrences(terminal, 0x78), 1 + 5 * 3);
+    });
+
+    test('uses DECSTBM height instead of the whole viewport', () {
+      final terminal = Terminal()..resize(5, 6);
+      terminal.write('\x1b[3;4r');
+
+      terminal.write('x\x1b[1000b');
+
+      expect(occurrences(terminal, 0x78), 1 + 5 * 2);
+    });
+
+    test('does not repeatedly copy a tall reduced scrolling region', () {
+      final terminal = Terminal(maxLines: 1000);
+
+      terminal.write(
+        '\x1b[8;1000;1t'
+        '\x1b[2;1000r'
+        '\x1b[3;1HB'
+        '\x1b[1000;1H'
+        'x\x1b[999999999b',
+      );
+
+      expect(occurrences(terminal, 0x78), 1);
+      expect(occurrences(terminal, 0x42), 1);
+    });
+
+    test('bounds both cells written for a wide character', () {
+      final terminal = Terminal()..resize(5, 3);
+
+      terminal.write('\u754c\x1b[1000b');
+
+      expect(
+        occurrences(terminal, 0x754c),
+        lessThanOrEqualTo(1 + (5 * 3) ~/ 2),
+      );
+    });
+
+    test('does nothing without a preceding code point', () {
+      final terminal = Terminal()..resize(5, 3);
+      final textBefore = terminal.buffer.getText();
+      final cursorBefore = (
+        terminal.buffer.cursorX,
+        terminal.buffer.cursorY,
+      );
+
+      terminal.write('\x1b[1000b');
+
+      expect(terminal.buffer.getText(), textBefore);
+      expect(
+        (terminal.buffer.cursorX, terminal.buffer.cursorY),
+        cursorBefore,
+      );
+    });
+  });
+
   test('an omitted top margin leaves the requested bottom in place', () {
     final terminal = Terminal()..resize(10, 10);
     terminal.write('\x1b[3;8r\x1b[5;5H');
