@@ -114,7 +114,9 @@ class InboxService {
 
   /// Register a new app and return the pairing string's contents. The app is
   /// stored only once the server has accepted it, so a failed registration
-  /// leaves nothing behind.
+  /// leaves nothing behind. If local storage fails after server registration,
+  /// the server app is removed on a best-effort basis before the local error
+  /// is rethrown.
   Future<InboxPairing> addApp({
     required String name,
     required String serverUrl,
@@ -135,14 +137,33 @@ class InboxService {
       CreateInboxAppRequest(appId: id, name: trimmed, token: token),
     );
     final stamp = _nowMs;
-    await apps.putApp(InboxApp(
+    final app = InboxApp(
       id: id,
       name: trimmed,
       key: key,
       allowedServerIds: allowedServerIds,
       createdAt: stamp,
       updatedAt: stamp,
-    ));
+    );
+    try {
+      await apps.putApp(app);
+    } catch (error, stackTrace) {
+      try {
+        await api.deleteApp(id);
+      } catch (cleanupError) {
+        try {
+          developer.log(
+            'Could not roll back inbox app registration: '
+            '${cleanupError.runtimeType}',
+            name: _inboxLoggerName,
+            level: _warningLogLevel,
+          );
+        } catch (_) {
+          // Diagnostics must not replace the local persistence failure.
+        }
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
     return InboxPairing(url: serverUrl, appId: id, token: token, key: key);
   }
 
