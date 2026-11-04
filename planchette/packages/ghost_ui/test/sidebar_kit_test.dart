@@ -32,9 +32,16 @@ final _strings = SidebarKitStrings(
 /// a host's adapter supplies), the hosts' desktop type ramp on desktop
 /// platforms, and the Ghost menu skin — the parts of a host theme the
 /// kit and these tests actually read.
-ThemeData _theme(Brightness brightness, TargetPlatform platform) {
+ThemeData _theme(
+  Brightness brightness,
+  TargetPlatform platform, {
+  Color? indicator,
+}) {
   final dark = brightness == Brightness.dark;
-  final tokens = SidebarThemeTokens.fallback(brightness, platform);
+  final tokens = SidebarThemeTokens.fallback(
+    brightness,
+    platform,
+  ).copyWith(indicator: indicator);
   final desktop = switch (platform) {
     TargetPlatform.macOS ||
     TargetPlatform.linux ||
@@ -96,13 +103,14 @@ Future<void> _pump(
   SidebarKitLayout layout = SidebarKitLayout.rail,
   SidebarKitDensity? density,
   double width = 240,
+  Color? indicator,
 }) async {
   tester.view.physicalSize = const Size(600, 600);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     MaterialApp(
-      theme: _theme(brightness, platform),
+      theme: _theme(brightness, platform, indicator: indicator),
       home: Scaffold(
         body: SidebarKitScope(
           strings: _strings,
@@ -994,7 +1002,8 @@ void main() {
 
     testWidgets('a section header is a Material subheader: 48 dp, as '
         'authored, in the accent colour, chevron drawn', (tester) async {
-      await pumpList(
+      const indicator = Color(0xFF123456);
+      await _pump(
         tester,
         SidebarSectionHeader(
           headerKey: const ValueKey('h'),
@@ -1003,6 +1012,9 @@ void main() {
           collapsed: false,
           onToggle: () {},
         ),
+        platform: TargetPlatform.android,
+        layout: SidebarKitLayout.list,
+        indicator: indicator,
       );
       expect(tester.getSize(find.byKey(const ValueKey('h'))).height, 48);
       expect(find.text('SERVERS'), findsNothing);
@@ -1013,6 +1025,79 @@ void main() {
         Theme.of(tester.element(find.text('Servers'))).colorScheme.primary,
       );
       expect(find.byIcon(Icons.expand_more), findsOneWidget);
+    });
+
+    testWidgets('focus and drop marks use the installed rail indicator', (
+      tester,
+    ) async {
+      const indicator = Color(0xFF123456);
+      await _pump(
+        tester,
+        const Column(
+          children: [
+            SidebarRow(
+              key: ValueKey('into'),
+              mark: Icon(Icons.folder),
+              title: 'Into',
+              dropIndicator: SidebarDropIndicator.into,
+            ),
+            SidebarRow(
+              key: ValueKey('before'),
+              mark: Icon(Icons.folder),
+              title: 'Before',
+              dropIndicator: SidebarDropIndicator.before,
+            ),
+          ],
+        ),
+        indicator: indicator,
+      );
+
+      final decorations = tester
+          .widgetList<Container>(find.byType(Container))
+          .map((container) => container.foregroundDecoration)
+          .whereType<BoxDecoration>();
+      expect(
+        decorations.any(
+          (decoration) =>
+              decoration.border is Border &&
+              (decoration.border! as Border).top.color == indicator,
+        ),
+        isTrue,
+      );
+      expect(
+        tester
+            .widgetList<Container>(find.byType(Container))
+            .any((container) => container.color == indicator),
+        isTrue,
+      );
+    });
+
+    testWidgets('list drop marks use the pane indicator', (tester) async {
+      const railIndicator = Color(0xFF123456);
+      await _pump(
+        tester,
+        const SidebarRow(
+          mark: Icon(Icons.folder),
+          title: 'Before',
+          dropIndicator: SidebarDropIndicator.before,
+        ),
+        platform: TargetPlatform.android,
+        layout: SidebarKitLayout.list,
+        indicator: railIndicator,
+      );
+      final paneIndicator = Theme.of(
+        tester.element(find.text('Before')),
+      ).colorScheme.primary;
+      final containers = tester.widgetList<Container>(find.byType(Container));
+
+      expect(
+        containers.any((container) => container.color == paneIndicator),
+        isTrue,
+      );
+      expect(
+        containers.any((container) => container.color == railIndicator),
+        isFalse,
+      );
     });
 
     testWidgets('the rail layout is unchanged beside it', (tester) async {

@@ -120,6 +120,33 @@ void main() {
     expect(written.name, ThemePalette.customName);
   });
 
+  testWidgets('a low-contrast accent explains its adjusted interface tone', (
+    tester,
+  ) async {
+    final palette = seancePresets.brand.copyWith(
+      accent: const Color(0xFFFFD600),
+    );
+    final model = await _pump(tester, palette: palette);
+
+    expect(find.textContaining('Low contrast'), findsOneWidget);
+    expect(find.bySemanticsLabel('Chosen accent'), findsOneWidget);
+    expect(find.bySemanticsLabel('Adjusted interface colour'), findsOneWidget);
+    expect(find.text('Use adjusted colour'), findsOneWidget);
+
+    await tester.tap(find.text('Use adjusted colour'));
+    await tester.pump();
+    expect(model.writes.single.palette.accent, isNot(palette.accent));
+    expect(find.textContaining('Low contrast'), findsNothing);
+  });
+
+  testWidgets('the tuned brand accent needs no adjustment notice', (
+    tester,
+  ) async {
+    await _pump(tester, palette: seancePresets.brand);
+    expect(find.textContaining('Low contrast'), findsNothing);
+    expect(find.text('Use adjusted colour'), findsNothing);
+  });
+
   testWidgets('the terminal colours section follows the style seam, with '
       "the host's sections where Séance keeps them", (tester) async {
     await _pump(

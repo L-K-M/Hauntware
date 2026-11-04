@@ -67,6 +67,11 @@ class GhostAppearanceStrings {
       'they are mixed from that surface and the text instead. Lines and the '
       'selection may be translucent.';
   String get accent => 'Accent';
+  String get accentAdjusted =>
+      'Low contrast: links and indicators use an adjusted colour.';
+  String get chosenAccentPreview => 'Chosen accent';
+  String get adjustedAccentPreview => 'Adjusted interface colour';
+  String get useAdjustedAccent => 'Use adjusted colour';
 
   String slotLabel(ThemeSlot slot) => switch (slot) {
     ThemeSlot.surface => 'Surface',
@@ -408,6 +413,10 @@ class _GhostAppearanceSectionState extends State<GhostAppearanceSection> {
     _edit(_palette.copyWith(accent: picked));
   }
 
+  void _useAdjustedAccent(Color accent) {
+    _edit(_palette.copyWith(accent: accent));
+  }
+
   void _setOwnTerminal(bool own) {
     // Only offered when the host has terminals.
     final defaults = widget.defaultTerminalColors;
@@ -501,6 +510,7 @@ class _GhostAppearanceSectionState extends State<GhostAppearanceSection> {
       _palette,
       _automatic,
     );
+    final accent = GhostTheme.resolveAccent(widget.style, _palette, _automatic);
     final current = _presets.matching(_palette);
     final terminalSection = widget.terminalSection;
     return widget.page([
@@ -529,6 +539,16 @@ class _GhostAppearanceSectionState extends State<GhostAppearanceSection> {
         color: _palette.accent,
         onPick: _pickAccent,
       ),
+      if (accent.adjusted)
+        _AccentAdjustment(
+          strings: _s,
+          chosen: accent.fill,
+          pane: accent.paneIndicator,
+          sidebar: accent.sidebarIndicator,
+          header: accent.headerIndicator,
+          suggested: accent.suggestedAccent,
+          onUseSuggested: _useAdjustedAccent,
+        ),
       for (final slot in _colourSlots) _slotRow(slot, resolved),
       const Divider(height: 40),
       header(_s.statusTitle),
@@ -785,6 +805,104 @@ class _Footnote extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AccentAdjustment extends StatelessWidget {
+  const _AccentAdjustment({
+    required this.strings,
+    required this.chosen,
+    required this.pane,
+    required this.sidebar,
+    required this.header,
+    required this.suggested,
+    required this.onUseSuggested,
+  });
+
+  final GhostAppearanceStrings strings;
+  final Color chosen;
+  final Color pane;
+  final Color sidebar;
+  final Color header;
+  final Color? suggested;
+  final ValueChanged<Color> onUseSuggested;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final adjusted = <Color>{pane, sidebar, header}.toList(growable: false);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(strings.accentAdjusted),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _AccentPreview(
+                    label: strings.chosenAccentPreview,
+                    colors: [chosen],
+                  ),
+                  const ExcludeSemantics(
+                    child: Icon(Icons.arrow_forward, size: 16),
+                  ),
+                  _AccentPreview(
+                    label: strings.adjustedAccentPreview,
+                    colors: adjusted,
+                  ),
+                  if (suggested case final color?)
+                    TextButton(
+                      onPressed: () => onUseSuggested(color),
+                      child: Text(strings.useAdjustedAccent),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccentPreview extends StatelessWidget {
+  const _AccentPreview({required this.label, required this.colors});
+
+  final String label;
+  final List<Color> colors;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: label,
+    image: true,
+    child: ExcludeSemantics(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final color in colors)
+            Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                color: color,
+                border: Border.all(color: Theme.of(context).dividerColor),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// One colour: its name, an Automatic box where it may be Automatic, and a
