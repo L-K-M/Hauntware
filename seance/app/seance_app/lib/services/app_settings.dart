@@ -156,9 +156,9 @@ class AppSettings {
   /// On by default once sync is set up; the manual "Sync now" button always works.
   bool autoSync;
 
-  /// Track submitted commands locally to suggest frequently-run ones as
-  /// snippets. Off by default: capture is keystroke-based and can't tell a
-  /// shell command from text typed at a no-echo prompt, so the user opts in.
+  /// Track commands submitted at validated OSC 133 prompts locally to suggest
+  /// frequently-run ones as snippets. Off by default because real command
+  /// lines can still contain secrets even though other input is never captured.
   bool commandSuggestions;
 
   /// The user answered "Not now" to the offer of a recovery code made after
