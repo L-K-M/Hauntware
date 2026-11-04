@@ -1,3 +1,5 @@
+import 'dart:io' show InternetAddress;
+
 import 'package:seance_protocol/seance_protocol.dart';
 
 /// Server settings, sourced from environment variables (with CLI overrides
@@ -16,6 +18,12 @@ class ServerSettings {
 
   final int loginMaxAttempts;
   final Duration loginWindow;
+  final int authGlobalMaxAttempts;
+  final Duration authGlobalWindow;
+  final int authSourceMaxAttempts;
+  final Duration authSourceWindow;
+  final int rateLimitMaxBuckets;
+  final Set<String> trustedProxies;
 
   /// Hard cap on a single request body, which in practice sizes pushes: the
   /// unauthenticated routes read at most 16 KiB, or this if it is lower.
@@ -43,6 +51,12 @@ class ServerSettings {
     this.dbPath,
     this.loginMaxAttempts = 10,
     this.loginWindow = const Duration(minutes: 1),
+    this.authGlobalMaxAttempts = 1000,
+    this.authGlobalWindow = const Duration(minutes: 1),
+    this.authSourceMaxAttempts = 60,
+    this.authSourceWindow = const Duration(minutes: 1),
+    this.rateLimitMaxBuckets = 4096,
+    this.trustedProxies = const {},
     this.maxBodyBytes = kDefaultMaxPushBodyBytes,
     this.maxRecordsPerPush = kDefaultMaxRecordsPerPush,
     this.maxBlobBytes = kDefaultMaxBlobBytes,
@@ -77,15 +91,51 @@ class ServerSettings {
       return value;
     }
 
+    Set<String> trustedProxyAddresses() {
+      final raw = env['SEANCE_TRUSTED_PROXIES'];
+      if (raw == null || raw.trim().isEmpty) return const {};
+      final result = <String>{};
+      for (final entry in raw.split(',')) {
+        final value = entry.trim();
+        final address = InternetAddress.tryParse(value);
+        if (address == null) {
+          throw ArgumentError.value(
+            value,
+            'SEANCE_TRUSTED_PROXIES',
+            'must contain comma-separated IP addresses',
+          );
+        }
+        result.add(address.address);
+      }
+      return Set.unmodifiable(result);
+    }
+
     return ServerSettings(
       bindAddress: env['SEANCE_BIND'] ?? '0.0.0.0',
       port: int.tryParse(env['SEANCE_PORT'] ?? '') ?? 8787,
       openRegistration: flag('SEANCE_OPEN_REGISTRATION', false),
       dbPath: env['SEANCE_DB_PATH'],
       loginMaxAttempts:
-          int.tryParse(env['SEANCE_LOGIN_MAX_ATTEMPTS'] ?? '') ?? 10,
-      loginWindow: Duration(
-          seconds: int.tryParse(env['SEANCE_LOGIN_WINDOW_SECONDS'] ?? '') ?? 60),
+          positiveLimit('SEANCE_LOGIN_MAX_ATTEMPTS', 10),
+      loginWindow: Duration(seconds: positiveLimit(
+        'SEANCE_LOGIN_WINDOW_SECONDS',
+        60,
+      )),
+      authGlobalMaxAttempts:
+          positiveLimit('SEANCE_AUTH_GLOBAL_MAX_ATTEMPTS', 1000),
+      authGlobalWindow: Duration(seconds: positiveLimit(
+        'SEANCE_AUTH_GLOBAL_WINDOW_SECONDS',
+        60,
+      )),
+      authSourceMaxAttempts:
+          positiveLimit('SEANCE_AUTH_SOURCE_MAX_ATTEMPTS', 60),
+      authSourceWindow: Duration(seconds: positiveLimit(
+        'SEANCE_AUTH_SOURCE_WINDOW_SECONDS',
+        60,
+      )),
+      rateLimitMaxBuckets:
+          positiveLimit('SEANCE_RATE_LIMIT_MAX_BUCKETS', 4096),
+      trustedProxies: trustedProxyAddresses(),
       maxBodyBytes:
           positiveLimit('SEANCE_MAX_BODY_BYTES', kDefaultMaxPushBodyBytes),
       maxRecordsPerPush: positiveLimit(
@@ -108,6 +158,12 @@ class ServerSettings {
         dbPath: dbPath ?? this.dbPath,
         loginMaxAttempts: loginMaxAttempts,
         loginWindow: loginWindow,
+        authGlobalMaxAttempts: authGlobalMaxAttempts,
+        authGlobalWindow: authGlobalWindow,
+        authSourceMaxAttempts: authSourceMaxAttempts,
+        authSourceWindow: authSourceWindow,
+        rateLimitMaxBuckets: rateLimitMaxBuckets,
+        trustedProxies: trustedProxies,
         maxBodyBytes: maxBodyBytes,
         maxRecordsPerPush: maxRecordsPerPush,
         maxBlobBytes: maxBlobBytes,

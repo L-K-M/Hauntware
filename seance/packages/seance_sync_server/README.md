@@ -108,6 +108,12 @@ Omit `--db` for an ephemeral in-memory store.
 | `SEANCE_OPEN_REGISTRATION` | `--open-registration` | `false` | Allow `/v1/register` |
 | `SEANCE_LOGIN_MAX_ATTEMPTS` | — | `10` | Login attempts per window |
 | `SEANCE_LOGIN_WINDOW_SECONDS` | — | `60` | Rate-limit window |
+| `SEANCE_AUTH_GLOBAL_MAX_ATTEMPTS` | — | `1000` | Auth requests across all sources per global window |
+| `SEANCE_AUTH_GLOBAL_WINDOW_SECONDS` | — | `60` | Global auth window |
+| `SEANCE_AUTH_SOURCE_MAX_ATTEMPTS` | — | `60` | Auth requests per network source per source window |
+| `SEANCE_AUTH_SOURCE_WINDOW_SECONDS` | — | `60` | Source auth window |
+| `SEANCE_RATE_LIMIT_MAX_BUCKETS` | — | `4096` | Maximum keyed buckets per limiter before overflow sharing |
+| `SEANCE_TRUSTED_PROXIES` | — | *(empty)* | Exact comma-separated proxy IPs allowed to supply `X-Forwarded-For` |
 
 ## API (protocol v1)
 
@@ -195,7 +201,10 @@ DTOs and the database schema are unchanged; this is not an account migration.
   login (the raw verifier is needed and cannot be recovered from the hash).
 - Record payloads are sealed client-side with XChaCha20-Poly1305. The server
   stores `nonce ‖ ciphertext ‖ mac` and never holds a key.
-- Login is rate-limited to blunt online guessing.
+- Registration, prelogin and login have bounded global and source-address
+  limits. Failed logins also have a per-account limit without locking a correct
+  verifier out. `X-Forwarded-For` is ignored unless the immediate peer is an
+  explicitly trusted exact-IP proxy; configure the rightmost proxy hops only.
 - Conflict resolution is deterministic last-write-wins keyed by
   `(updatedAt, deviceId)`, identical to the client, so both sides agree.
 

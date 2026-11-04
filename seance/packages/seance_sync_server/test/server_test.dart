@@ -10,6 +10,7 @@ import 'package:test/test.dart';
 class TestClient {
   final Handler handler;
   String? token;
+  Map<String, String> lastHeaders = const {};
   TestClient(this.handler);
 
   Future<(int, Map<String, dynamic>)> send(
@@ -18,6 +19,7 @@ class TestClient {
     Object? body,
     bool auth = false,
     Map<String, String> query = const {},
+    Map<String, String> headers = const {},
   }) async {
     final uri = Uri.parse(
       'http://localhost$path',
@@ -27,11 +29,13 @@ class TestClient {
       uri,
       headers: {
         'content-type': 'application/json',
+        ...headers,
         if (auth && token != null) 'authorization': 'Bearer $token',
       },
       body: body == null ? null : jsonEncode(body),
     );
     final res = await handler(req);
+    lastHeaders = res.headers;
     final text = await res.readAsString();
     Map<String, dynamic> json;
     try {
@@ -57,9 +61,9 @@ class RecordingRateLimiter extends RateLimiter {
   final keys = <String>[];
 
   @override
-  bool allow(String key) {
+  RateLimitDecision check(String key) {
     keys.add(key);
-    return super.allow(key);
+    return super.check(key);
   }
 }
 
@@ -86,6 +90,37 @@ void main() {
   );
 
   group('settings from the environment', () {
+    test('authentication limiter settings are strict positive integers', () {
+      for (final key in const [
+        'SEANCE_LOGIN_MAX_ATTEMPTS',
+        'SEANCE_LOGIN_WINDOW_SECONDS',
+        'SEANCE_AUTH_GLOBAL_MAX_ATTEMPTS',
+        'SEANCE_AUTH_GLOBAL_WINDOW_SECONDS',
+        'SEANCE_AUTH_SOURCE_MAX_ATTEMPTS',
+        'SEANCE_AUTH_SOURCE_WINDOW_SECONDS',
+        'SEANCE_RATE_LIMIT_MAX_BUCKETS',
+      ]) {
+        expect(
+          () => ServerSettings.fromEnvironment({key: '0'}),
+          throwsArgumentError,
+          reason: key,
+        );
+      }
+    });
+
+    test('trusted proxies accept exact IP addresses and reject other forms', () {
+      final settings = ServerSettings.fromEnvironment(const {
+        'SEANCE_TRUSTED_PROXIES': '192.0.2.1, 2001:db8::1',
+      });
+      expect(settings.trustedProxies, {'192.0.2.1', '2001:db8::1'});
+      expect(
+        () => ServerSettings.fromEnvironment(
+          const {'SEANCE_TRUSTED_PROXIES': 'proxy.example.com'},
+        ),
+        throwsArgumentError,
+      );
+    });
+
     test('a non-positive push limit refuses to start', () {
       for (final key in const [
         'SEANCE_MAX_BODY_BYTES',
@@ -333,12 +368,14 @@ void main() {
     });
 
     test('login rate limiting kicks in', () async {
+      var now = DateTime.utc(2026, 1, 1);
       final server = SyncServer(
         storage: InMemoryStorage(),
         settings: const ServerSettings(openRegistration: true),
         loginLimiter: RateLimiter(
           maxAttempts: 3,
           window: const Duration(minutes: 1),
+          now: () => now,
         ),
       );
       final c = TestClient(server.handler);
@@ -352,6 +389,118 @@ void main() {
       expect((await c.send('POST', '/v1/login', body: wrong)).$1, 401);
       expect((await c.send('POST', '/v1/login', body: wrong)).$1, 401);
       expect((await c.send('POST', '/v1/login', body: wrong)).$1, 429);
+      expect(c.lastHeaders['retry-after'], '60');
+      now = now.add(const Duration(minutes: 1));
+      expect((await c.send('POST', '/v1/login', body: wrong)).$1, 401);
+    });
+
+    test('a correct verifier is not locked out by account failures', () async {
+      final server = SyncServer(
+        storage: InMemoryStorage(),
+        settings: const ServerSettings(openRegistration: true),
+        loginLimiter: RateLimiter(maxAttempts: 1),
+      );
+      final c = TestClient(server.handler);
+      final registration = registerReq('recoverable');
+      await c.send('POST', '/v1/register', body: registration.toJson());
+      final wrong = LoginRequest(
+        username: 'recoverable',
+        authVerifier: base64.encode(secureRandomBytes(32)),
+      ).toJson();
+      expect((await c.send('POST', '/v1/login', body: wrong)).$1, 401);
+      expect((await c.send('POST', '/v1/login', body: wrong)).$1, 429);
+
+      final correct = LoginRequest(
+        username: 'recoverable',
+        authVerifier: registration.authVerifier,
+      ).toJson();
+      expect((await c.send('POST', '/v1/login', body: correct)).$1, 200);
+    });
+
+    test('global limiter spans routes, usernames, and sources', () async {
+      final server = SyncServer(
+        storage: InMemoryStorage(),
+        settings: const ServerSettings(openRegistration: true),
+        authGlobalLimiter: RateLimiter(maxAttempts: 2),
+        authSourceLimiter: RateLimiter(maxAttempts: 100),
+        sourceFor: (request) => request.headers['x-test-source'] ?? 'unknown',
+      );
+      final c = TestClient(server.handler);
+      expect((await c.send(
+        'POST',
+        '/v1/prelogin',
+        body: {'username': 'one'},
+        headers: {'x-test-source': 'source-a'},
+      )).$1, 404);
+      expect((await c.send(
+        'POST',
+        '/v1/prelogin',
+        body: {'username': 'two'},
+        headers: {'x-test-source': 'source-b'},
+      )).$1, 404);
+      expect((await c.send(
+        'POST',
+        '/v1/register',
+        body: registerReq('three').toJson(),
+        headers: {'x-test-source': 'source-c'},
+      )).$1, 429);
+    });
+
+    test('source limiter spans auth routes and usernames', () async {
+      final server = SyncServer(
+        storage: InMemoryStorage(),
+        settings: const ServerSettings(openRegistration: true),
+        authGlobalLimiter: RateLimiter(maxAttempts: 100),
+        authSourceLimiter: RateLimiter(maxAttempts: 2),
+        sourceFor: (request) => request.headers['x-test-source'] ?? 'unknown',
+      );
+      final c = TestClient(server.handler);
+      for (final username in ['one', 'two']) {
+        expect((await c.send(
+          'POST',
+          '/v1/prelogin',
+          body: {'username': username},
+          headers: {'x-test-source': 'same'},
+        )).$1, 404);
+      }
+      expect((await c.send(
+        'POST',
+        '/v1/register',
+        body: registerReq('three').toJson(),
+        headers: {'x-test-source': 'same'},
+      )).$1, 429);
+      expect((await c.send(
+        'POST',
+        '/v1/register',
+        body: registerReq('other-source').toJson(),
+        headers: {'x-test-source': 'other'},
+      )).$1, 200);
+    });
+
+    test('a blocked source cannot exhaust the global allowance', () async {
+      final server = SyncServer(
+        storage: InMemoryStorage(),
+        settings: const ServerSettings(openRegistration: true),
+        authGlobalLimiter: RateLimiter(maxAttempts: 2),
+        authSourceLimiter: RateLimiter(maxAttempts: 1),
+        sourceFor: (request) => request.headers['x-test-source'] ?? 'unknown',
+      );
+      final c = TestClient(server.handler);
+      Future<int> prelogin(String source, int n) async => (await c.send(
+            'POST',
+            '/v1/prelogin',
+            body: {'username': 'missing-$n'},
+            headers: {'x-test-source': source},
+          ))
+              .$1;
+
+      expect(await prelogin('abusive', 0), 404);
+      for (var i = 1; i < 20; i++) {
+        expect(await prelogin('abusive', i), 429);
+      }
+      expect(await prelogin('fresh', 20), 404);
+      expect(await prelogin('another', 21), 429,
+          reason: 'the two admitted sources consumed the global allowance');
     });
 
     test('rejects malformed login verifier as a bad request', () async {

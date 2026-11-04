@@ -4,6 +4,7 @@ library;
 
 export 'src/config.dart';
 export 'src/rate_limiter.dart';
+export 'src/request_source.dart';
 export 'src/server.dart';
 export 'src/sqlite_storage.dart';
 export 'src/storage.dart';

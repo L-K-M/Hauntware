@@ -13,6 +13,7 @@ import 'config.dart';
 import 'favicon.dart';
 import 'inbox_docs.dart';
 import 'rate_limiter.dart';
+import 'request_source.dart';
 import 'storage.dart';
 
 part 'inbox_handlers.dart';
@@ -53,6 +54,9 @@ class SyncServer {
   final Storage storage;
   final ServerSettings settings;
   final RateLimiter loginLimiter;
+  final RateLimiter authGlobalLimiter;
+  final RateLimiter authSourceLimiter;
+  final String Function(Request) _sourceFor;
 
   /// Deposits per inbox app, keyed by app id (docs/INBOX.md: 30 a minute).
   final RateLimiter inboxLimiter;
@@ -64,14 +68,37 @@ class SyncServer {
     required this.storage,
     required this.settings,
     RateLimiter? loginLimiter,
+    RateLimiter? authGlobalLimiter,
+    RateLimiter? authSourceLimiter,
+    String Function(Request)? sourceFor,
     RateLimiter? inboxLimiter,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now,
+       _sourceFor = sourceFor ??
+           RequestSourceResolver(trustedProxies: settings.trustedProxies).call,
        loginLimiter =
            loginLimiter ??
            RateLimiter(
              maxAttempts: settings.loginMaxAttempts,
              window: settings.loginWindow,
+             maxBuckets: settings.rateLimitMaxBuckets,
+             now: now,
+           ),
+       authGlobalLimiter =
+           authGlobalLimiter ??
+           RateLimiter(
+             maxAttempts: settings.authGlobalMaxAttempts,
+             window: settings.authGlobalWindow,
+             maxBuckets: 1,
+             now: now,
+           ),
+       authSourceLimiter =
+           authSourceLimiter ??
+           RateLimiter(
+             maxAttempts: settings.authSourceMaxAttempts,
+             window: settings.authSourceWindow,
+             maxBuckets: settings.rateLimitMaxBuckets,
+             now: now,
            ),
        inboxLimiter =
            inboxLimiter ??
@@ -148,6 +175,8 @@ class SyncServer {
   // --- Handlers ---
 
   Future<Response> _register(Request req) async {
+    final limited = _limitAuthentication(req);
+    if (limited != null) return limited;
     final body = await _readJson(req, _authBodyCap);
     if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
     final RegisterRequest r;
@@ -205,6 +234,8 @@ class SyncServer {
   }
 
   Future<Response> _prelogin(Request req) async {
+    final limited = _limitAuthentication(req);
+    if (limited != null) return limited;
     final body = await _readJson(req, _authBodyCap);
     final username = body?['username'];
     if (username == null) return _error(400, 'bad_request', 'Missing username');
@@ -225,6 +256,8 @@ class SyncServer {
   }
 
   Future<Response> _login(Request req) async {
+    final limited = _limitAuthentication(req);
+    if (limited != null) return limited;
     final body = await _readJson(req, _authBodyCap);
     if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
     final LoginRequest r;
@@ -238,9 +271,6 @@ class SyncServer {
     }
     // Before the limiter, whose keys outlive this request by a whole window.
     if (!_usernameInBounds(r.username)) return _usernameOutOfBounds();
-    if (!loginLimiter.allow('login:${r.username}')) {
-      return _error(429, 'rate_limited', 'Too many login attempts');
-    }
     final account = await storage.getAccount(r.username);
     // Always compute against *some* stored hash to keep timing uniform.
     final expected = account?.authVerifierHash ?? '';
@@ -260,6 +290,8 @@ class SyncServer {
         ? ''
         : VaultCrypto.hashAuthVerifier(authVerifier, verifierSalt!);
     if (account == null || !_constantTimeEquals(provided, expected)) {
+      final decision = loginLimiter.check('login:${r.username}');
+      if (!decision.allowed) return _rateLimited(decision);
       return _error(401, 'invalid_credentials', 'Invalid credentials');
     }
     final token = await storage.createToken(r.username);
@@ -314,6 +346,29 @@ class SyncServer {
       });
 
   // --- Helpers ---
+
+  Response? _limitAuthentication(Request request) {
+    final source = authSourceLimiter.check('source:${_sourceFor(request)}');
+    if (!source.allowed) return _rateLimited(source);
+    // A source already denied by its tighter limit must not consume global
+    // capacity and turn one abusive address into an outage for everyone.
+    final global = authGlobalLimiter.check('authentication');
+    if (!global.allowed) return _rateLimited(global);
+    return null;
+  }
+
+  Response _rateLimited(RateLimitDecision decision) {
+    final duration = decision.retryAfter ?? const Duration(seconds: 1);
+    final seconds = (duration.inMilliseconds / 1000).ceil().clamp(1, 0x7fffffff);
+    return _json(
+      const ApiError(
+        code: 'rate_limited',
+        message: 'Too many authentication attempts',
+      ).toJson(),
+      status: HttpStatus.tooManyRequests,
+      headers: {'retry-after': '$seconds'},
+    );
+  }
 
   Future<Response> _withAuth(
     Request req,
@@ -415,10 +470,14 @@ class SyncServer {
     };
   };
 
-  Response _json(Object body, {int status = 200}) => Response(
+  Response _json(
+    Object body, {
+    int status = 200,
+    Map<String, String> headers = const {},
+  }) => Response(
     status,
     body: jsonEncode(body),
-    headers: {'content-type': 'application/json'},
+    headers: {'content-type': 'application/json', ...headers},
   );
 
   Response _error(int status, String code, String message) => _json(
