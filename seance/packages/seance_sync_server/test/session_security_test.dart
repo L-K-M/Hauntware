@@ -98,6 +98,7 @@ Future<Response> _request(
       Uri.parse('http://localhost$path'),
       headers: {
         'content-type': 'application/json',
+        'x-seance-protocol-version': '$kProtocolVersion',
         if (token != null) 'authorization': 'Bearer $token',
       },
       body: body == null ? null : jsonEncode(body),
