@@ -251,7 +251,8 @@ D61 host-key pins and re-pin ·
 D62 sync state files and the keystore port · D63 pull-only sync in the
 engine · D64 a server's confirmation covers its route · D65 spike S3
 and admin validation · D66 spike S4 and Docker-scoped sudo rules · D67
-spike S6 and the privileged write · D68 spike S8 and update checks.
+spike S6 and the privileged write · D68 spike S8 and update checks · D69
+admin-mode memory.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -1346,6 +1347,49 @@ Proposals awaiting the owner close the section; they are not decisions.
     pushed from a containerd store that holds only some platforms;
   - `docker manifest inspect -v` as the CLI fallback: it cannot name an
     index's digest, so a multi-platform tag would never compare.
+- **D69. Admin-mode memory is a per-server, device-local opt-in (FL-16).**
+  Owner decision 2026-11-04: a per-server "Remember admin mode" switch,
+  off by default, turns admin mode back on after a launch, so the user
+  need not turn it on again each time. The owner accepted that this
+  relaxes SAF-01's observe-only default for the servers where the user
+  turns it on; every other server keeps it, and the switch acts only
+  where management is on and nothing is read-only. It stores no
+  password: the engine asks for one as when the user turns admin mode on
+  (8.2), and D41's remembered password stays a separate v1.x opt-in.
+  Admin mode still ends on inactivity, in the background, on the app
+  lock, on link loss and when the server leaves.
+
+  When it re-arms:
+  - Once per server per launch, at its first user-visible connect: a view
+    of the server is open, the app is in the foreground and unlocked, and
+    the server's link is up and has answered a probe in this run, which
+    admin mode reads how to elevate from. A link the monitor set dialed
+    unattended decides nothing until the user opens the server, so
+    nothing prompts unseen or in the background.
+  - At that moment, with the switch on, actions allowed, nothing
+    read-only and admin mode not yet asked for there, the app sends the
+    chip's `SetAdminMode(enabled: true)`.
+  - Whatever follows is final until the next launch: a cancelled prompt
+    leaves the server observe-only without asking again, and an end
+    through inactivity, the background, the lock or link loss does not
+    re-arm it. A switch turned on after the decision applies from the
+    next launch.
+
+  Storage: `settings.json` (`klabautermann.admin.remembered`, 4.10), read
+  and written in the app's isolate only. It never reaches the engine and
+  no `pref` record carries it (4.9), so no other device and no holder of
+  the account key can turn admin mode on for this device.
+
+  *Rejected:*
+  - re-arming at launch or on every connect, monitor-set links included:
+    it would prompt for a server the user is not looking at, and on a
+    phone over a link the user did not open;
+  - asking again after a cancel or an expiry within the launch: it would
+    nag, and turn the expiry into a reminder;
+  - syncing the switch in the `pref` record: another device could then
+    turn admin mode on here;
+  - a new engine request: the chip's `SetAdminMode` suffices, and the
+    engine's safety policy stays the one enforcement.
 
 ### Persistence, alerts and tiers
 
@@ -2433,8 +2477,9 @@ excluded from sync, or deleting one, seals its `pref` removal.
 
 Metrics, history, logs, inspect output, `docker compose config` output,
 snapshots, the audit log, endpoint pins, the monitor set, Docker endpoint
-and binary path overrides, capability caches, admin-mode state, the sudo
-password unless both opt-ins of D41 are on, T1 manifests (the host copy is
+and binary path overrides, capability caches, admin-mode state and
+admin-mode memory (FL-16, D69), the sudo password unless both opt-ins of
+D41 are on, T1 manifests (the host copy is
 the truth) and templates (SYN-03, SYN-08), alert payloads and the device
 alert history (only `sender` keys and bounded `alertstatus` records sync,
 D42), and deposit tokens.
@@ -2452,7 +2497,7 @@ platform identities in 04, section 12.3):
 | `sync_enrollment.json` [E] | Enrollment state (M2, K49a, D62): the push hold, the raised notices and the enrolled account (server URL, user name, mode); never the token or vault key, which stay in the keystore (4.5), and not the device id, which stays in `settings.json`. Kept like the verdict files; a damaged file reads as not enrolled | `klabautermann_core` [E] | MVP |
 | `endpoint_pins.json` | Confirmed endpoints. As built in M2 (K41), written by the engine through the catalog library's `FileEndpointPinStore` only with exclusive access; otherwise pins last for the engine's run (4.7) | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
-| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), whether the Docker tab's root-equivalence notice was dismissed (`klabautermann.docker.rootEquivalenceNoticeDismissed`, M3, 8.4; anything but `true` shows it again), the servers pinned to the top of the fleet list (`klabautermann.fleet.pinnedServerIds`, M2, 10.3; a sorted list of server ids, anything else reading as none), FL-21's monitor set as the user chose it (`klabautermann.monitorSet`, M2, K30, 4.3 step 4; a sorted list of server ids, anything else reading as never chosen, so the platform's default applies), the engine socket chosen per server (`klabautermann.docker.endpointOverrides`, M3, CN-09, D54: by server id, the choice, `detected` or `custom`, its absolute socket path, the absolute `docker` program path (`program`, M6, CN-16) when one is set, and the endpoint they were set for, at least one of the choice and the program; an entry that does not read as one is skipped and kept as written; a server the fleet drops or lists under another endpoint loses its entry, as does one whose entry names no endpoint, SYN-08), the safety preferences the engine enforces (`klabautermann.safety`, M4, E19a: global read-only, admin expiry in minutes, and per server management, read-only and the user's marks; anything unreadable reads as management off, so a damaged file only takes actions away), per-server device preferences | app | MVP |
+| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), whether the Docker tab's root-equivalence notice was dismissed (`klabautermann.docker.rootEquivalenceNoticeDismissed`, M3, 8.4; anything but `true` shows it again), the servers pinned to the top of the fleet list (`klabautermann.fleet.pinnedServerIds`, M2, 10.3; a sorted list of server ids, anything else reading as none), FL-21's monitor set as the user chose it (`klabautermann.monitorSet`, M2, K30, 4.3 step 4; a sorted list of server ids, anything else reading as never chosen, so the platform's default applies), the engine socket chosen per server (`klabautermann.docker.endpointOverrides`, M3, CN-09, D54: by server id, the choice, `detected` or `custom`, its absolute socket path, the absolute `docker` program path (`program`, M6, CN-16) when one is set, and the endpoint they were set for, at least one of the choice and the program; an entry that does not read as one is skipped and kept as written; a server the fleet drops or lists under another endpoint loses its entry, as does one whose entry names no endpoint, SYN-08), the safety preferences the engine enforces (`klabautermann.safety`, M4, E19a: global read-only, admin expiry in minutes, and per server management, read-only and the user's marks; anything unreadable reads as management off, so a damaged file only takes actions away), the servers whose admin mode is remembered (`klabautermann.admin.remembered`, v1, FL-16, D69; a sorted list of server ids, anything else reading as none, so a damaged file only leaves admin mode off), per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
@@ -5360,6 +5405,15 @@ SAF-17 generates narrow, validated rules (v1.x): a blanket rule equals root
   the prompt: admin mode still starts explicitly, shows its chip and
   expires as above. A remembered password that sudo rejects is not
   retried; the prompt returns and offers to replace it.
+- **Admin-mode memory (v1, FL-16, D69).** A per-server switch in
+  Settings > Servers, off by default and kept on the device only, turns
+  admin mode back on at the server's first user-visible connect of each
+  launch. It is not a remembered password: admin mode starts through the
+  chip's `SetAdminMode`, asks for the password when the rung needs one,
+  shows its chip and ends as above. A cancel, or any end within the
+  launch, holds until the next launch. As built, `AdminMemoryController`
+  and `AdminRearm` (`klabautermann_app/lib/controllers/admin_memory.dart`)
+  over `MonitoringController.visibleServers`.
 - **As built (M4 E11).** `KC/lib/src/admin/` holds admin mode and the
   safety policy.
   - `AdminModeController` runs the M5 state machine per server: off,

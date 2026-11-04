@@ -7,6 +7,7 @@ import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 
 import '../../controllers/account_size.dart';
+import '../../controllers/admin_memory.dart';
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/cadence_controller.dart';
 import '../../controllers/log_display.dart';
@@ -114,6 +115,18 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
         invoke(SettingsLinkMethod.setCadenceCap.name, [serverId, cap?.name]),
   );
 
+  /// The Servers tab's admin memory (FL-16), from the latest snapshot;
+  /// null while the app offers none.
+  RemoteAdminMemory? get adminMemory =>
+      _adminMemory.offered ? _adminMemory : null;
+
+  late final RemoteAdminMemory _adminMemory = RemoteAdminMemory._(
+    (serverId, remembered) => invoke(
+      SettingsLinkMethod.setAdminRemembered.name,
+      [serverId, remembered],
+    ),
+  );
+
   /// The General tab's device name, from the latest snapshot.
   late final RemoteDeviceName deviceName = RemoteDeviceName._(
     (name) => invoke(SettingsLinkMethod.setDeviceName.name, name),
@@ -169,6 +182,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     );
     _cadence._apply(snapshot[SettingsLinkKey.cadence.name] as String?);
     _cadenceCaps._apply(snapshot[SettingsLinkKey.cadenceCaps.name] as Map?);
+    _adminMemory._apply(snapshot[SettingsLinkKey.adminMemory.name] as List?);
     _logDisplay._apply(snapshot[SettingsLinkKey.logDisplay.name]);
     _timeDisplay._apply(snapshot[SettingsLinkKey.timeDisplay.name]);
     deviceName._apply(snapshot[SettingsLinkKey.deviceName.name]! as String);
@@ -406,6 +420,39 @@ final class RemoteCadenceCaps extends ChangeNotifier
   @override
   Future<void> setCap(String serverId, CadenceCap? cap) async {
     await _call(serverId, cap);
+  }
+}
+
+/// [AdminMemorySettings] over the link: the app's switches as the latest
+/// snapshot carries them, and changes that run in the app's isolate.
+final class RemoteAdminMemory extends ChangeNotifier
+    implements AdminMemorySettings {
+  RemoteAdminMemory._(this._call);
+
+  final Future<Object?> Function(String serverId, bool remembered) _call;
+
+  /// Whether the app offers admin memory; the first snapshot says.
+  bool offered = false;
+
+  Set<String> _value = const {};
+
+  void _apply(List<Object?>? ids) {
+    final remembered = {...?ids?.whereType<String>()};
+    if (offered == (ids != null) && setEquals(remembered, _value)) return;
+    offered = ids != null;
+    _value = Set.unmodifiable(remembered);
+    notifyListeners();
+  }
+
+  @override
+  Set<String> get value => _value;
+
+  @override
+  Future<void> setRemembered(
+    String serverId, {
+    required bool remembered,
+  }) async {
+    await _call(serverId, remembered);
   }
 }
 

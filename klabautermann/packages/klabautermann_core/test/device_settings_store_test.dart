@@ -19,6 +19,7 @@ const _cadenceKey = 'klabautermann.sampling.cadence';
 const _cadenceCapsKey = 'klabautermann.sampling.caps';
 const _overridesKey = 'klabautermann.docker.endpointOverrides';
 const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
+const _adminMemoryKey = 'klabautermann.admin.remembered';
 const _monitorSetKey = 'klabautermann.monitorSet';
 const _containerColumnsKey = 'klabautermann.docker.containerColumns';
 const _safetyKey = 'klabautermann.safety';
@@ -850,6 +851,47 @@ void main() {
 
         expect(store.issue, isNull);
         expect(store.pinnedServerIds, value is List ? {'srv-a'} : isEmpty);
+      });
+    }
+
+    test('keeps remembered admin mode across reloads, sorted on disk, and '
+        'off by default (FL-16)', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.adminMemory, isEmpty);
+      await store.setAdminMemory({'srv-b', 'srv-a'});
+      final reopened = await DeviceSettingsStore.open(file);
+
+      expect(reopened.adminMemory, {'srv-a', 'srv-b'});
+      expect(document(), {
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _adminMemoryKey: ['srv-a', 'srv-b'],
+      });
+
+      await reopened.setAdminMemory({});
+      expect((await DeviceSettingsStore.open(file)).adminMemory, isEmpty);
+    });
+
+    for (final (name, value) in [
+      ('true', true),
+      ('a string', 'srv-a'),
+      ('a map', {'srv-a': true}),
+      ('items that are not strings', ['srv-a', 7, null, true]),
+    ]) {
+      test('remembered admin mode holding $name reads what it can, never '
+          'more', () async {
+        writeDocument({
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          _adminMemoryKey: value,
+        });
+
+        final store = await DeviceSettingsStore.open(file);
+
+        expect(store.issue, isNull);
+        expect(store.adminMemory, value is List ? {'srv-a'} : isEmpty);
       });
     }
 

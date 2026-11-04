@@ -11,6 +11,7 @@ import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/app_identity.dart';
+import 'package:klabautermann_app/controllers/admin_memory.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/app_lock_controller.dart';
 import 'package:klabautermann_app/controllers/account_size.dart';
@@ -185,6 +186,7 @@ void main() {
     LogDisplaySettings? logDisplay,
     ValueListenable<AccountSize?>? accountSize,
     TimeDisplaySettings? timeDisplay,
+    AdminMemorySettings? adminMemory,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
@@ -198,6 +200,7 @@ void main() {
       thresholds: thresholds,
       cadence: cadence,
       cadenceCaps: cadenceCaps,
+      adminMemory: adminMemory,
       logDisplay: logDisplay,
       timeDisplay: timeDisplay,
       accountSize: accountSize,
@@ -359,6 +362,7 @@ void main() {
     late ThresholdController thresholds;
     late CadenceController cadence;
     late CadenceCapsController cadenceCaps;
+    late AdminMemoryController adminMemory;
     late LogDisplayController logDisplay;
     late TimeDisplayController timeDisplay;
     late ValueNotifier<AccountSize?> accountSize;
@@ -411,6 +415,8 @@ void main() {
       addTearDown(cadence.dispose);
       cadenceCaps = CadenceCapsController();
       addTearDown(cadenceCaps.dispose);
+      adminMemory = AdminMemoryController();
+      addTearDown(adminMemory.dispose);
       logDisplay = LogDisplayController();
       addTearDown(logDisplay.dispose);
       timeDisplay = TimeDisplayController();
@@ -431,6 +437,7 @@ void main() {
         logDisplay,
         accountSize,
         timeDisplay,
+        adminMemory,
       );
     });
 
@@ -1026,6 +1033,43 @@ void main() {
       );
     });
 
+    testWidgets('the Servers tab\'s admin memory switches change the app\'s '
+        'through the link (FL-16)', (tester) async {
+      final remote = await pumpWindow(tester, SettingsTab.servers);
+      expect(remote.adminMemory?.value, isEmpty);
+      // The admin memory section follows the monitor set's and the caps.
+      await tester.scrollUntilVisible(
+        find.text('Remember admin mode'),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ServersTab),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+      final alpha = find.widgetWithText(SwitchListTile, 'alpha').last;
+      await tester.ensureVisible(alpha);
+      await tester.pumpAndSettle();
+      await tester.tap(alpha);
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      expect(adminMemory.value, {'srv-1'});
+      expect(remote.adminMemory?.value, {'srv-1'});
+      expect(tester.widget<SwitchListTile>(alpha).value, isTrue);
+
+      // A change in the app reaches the showing window too.
+      await tester.runAsync(() async {
+        await adminMemory.setRemembered('srv-1', remembered: false);
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(remote.adminMemory?.value, isEmpty);
+      expect(tester.widget<SwitchListTile>(alpha).value, isFalse);
+    });
+
     testWidgets('the Safety tab changes the app\'s policy through the link, '
         'which applies it to the engine (M4 plan M4)', (tester) async {
       final remote = await pumpWindow(tester, SettingsTab.safety);
@@ -1321,6 +1365,14 @@ void main() {
       expect(
         roundTrip(const CadenceNotSavedException('disk full')),
         isA<CadenceNotSavedException>().having(
+          (error) => error.message,
+          'message',
+          'disk full',
+        ),
+      );
+      expect(
+        roundTrip(const AdminMemoryNotSavedException('disk full')),
+        isA<AdminMemoryNotSavedException>().having(
           (error) => error.message,
           'message',
           'disk full',

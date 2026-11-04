@@ -307,6 +307,12 @@ final class MonitoringController extends ChangeNotifier {
   final ValueNotifier<Map<String, ConnectRejectedReason>> _connectRejections =
       ValueNotifier(const {});
 
+  final ValueNotifier<Set<String>> _visibleServers = ValueNotifier(const {});
+
+  /// Set by [dispose]: views that let go as the tree unmounts after it
+  /// change nothing.
+  bool _disposed = false;
+
   /// The latest sample of [serverId]'s [stream]. A surface listens to this
   /// one box instead of the whole controller.
   ValueListenable<Sample?> sampleFor(String serverId, SampleStream stream) =>
@@ -377,6 +383,21 @@ final class MonitoringController extends ChangeNotifier {
   /// lists, since that fleet may give it a config.
   ValueListenable<Map<String, ConnectRejectedReason>> get connectRejections =>
       _connectRejections;
+
+  /// The servers a view holds open while the user can see the app: every
+  /// [openServer] count in the foreground, none in the background. Admin
+  /// memory (FL-16) re-arms admin mode only on a server the user is
+  /// looking at, never over a link dialed unattended.
+  ValueListenable<Set<String>> get visibleServers => _visibleServers;
+
+  void _noteVisible() {
+    if (_disposed) return;
+    final visible = _activity == AppActivity.foreground
+        ? _openViews.keys.toSet()
+        : const <String>{};
+    if (setEquals(visible, _visibleServers.value)) return;
+    _visibleServers.value = Set.unmodifiable(visible);
+  }
 
   /// The freshness clock: this device's time, notifying every
   /// [kFreshnessTick] while anything listens, so an age keeps counting
@@ -578,6 +599,7 @@ final class MonitoringController extends ChangeNotifier {
     final views = _openViews[serverId] ?? 0;
     _openViews[serverId] = views + 1;
     if (views > 0) return;
+    _noteVisible();
 
     final leaving = _leaving.remove(serverId);
     if (leaving != null) {
@@ -599,6 +621,7 @@ final class MonitoringController extends ChangeNotifier {
     }
 
     _openViews.remove(serverId);
+    _noteVisible();
     _forgetPause(serverId);
     _forgetRejection(serverId);
     // A stopped engine (or a disposed controller) holds no link, nor does
@@ -640,6 +663,7 @@ final class MonitoringController extends ChangeNotifier {
     if (activity == _activity) return;
     _activity = activity;
     _notePause(activity);
+    _noteVisible();
     _send(SetAppActivity(activity));
   }
 
@@ -880,6 +904,8 @@ final class MonitoringController extends ChangeNotifier {
     _clock.dispose();
     _backgroundPause.dispose();
     _connectRejections.dispose();
+    _disposed = true;
+    _visibleServers.dispose();
     super.dispose();
   }
 }

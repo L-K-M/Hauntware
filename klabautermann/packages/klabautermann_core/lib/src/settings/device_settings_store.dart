@@ -54,6 +54,7 @@ const String _cadenceCapsKey = 'klabautermann.sampling.caps';
 const String _attentionKey = 'klabautermann.attention.acknowledged';
 const String _shellSidebarKey = 'klabautermann.shell.sidebar';
 const String _shellInspectorKey = 'klabautermann.shell.inspector';
+const String _adminMemoryKey = 'klabautermann.admin.remembered';
 
 // The fields of one server's entry under [_endpointOverridesKey].
 const String _overrideChoiceField = 'choice';
@@ -602,6 +603,24 @@ final class DeviceSettingsStore {
   /// is read-only; the value stays in memory either way.
   Future<void> setPinnedServerIds(Set<String> ids) async {
     _values[_pinnedServersKey] = ids.toList()..sort();
+    await _save();
+  }
+
+  /// The servers whose admin mode this device turns back on after a
+  /// launch (FL-16, 03 §8.2), `klabautermann.admin.remembered`; none by
+  /// default. Device-local and never synced: no `pref` record carries
+  /// it, so another device cannot turn admin mode on here. A value that
+  /// is not a list reads as none and items that are not strings are
+  /// skipped, so a damaged file can only leave admin mode off.
+  Set<String> get adminMemory => switch (_values[_adminMemoryKey]) {
+    final List<Object?> ids => Set.unmodifiable(ids.whereType<String>()),
+    _ => const {},
+  };
+
+  /// Stores [serverIds], sorted as [setPinnedServerIds] stores its ids,
+  /// and writes the document; throws as [setPinnedServerIds] does.
+  Future<void> setAdminMemory(Set<String> serverIds) async {
+    _values[_adminMemoryKey] = serverIds.toList()..sort();
     await _save();
   }
 
