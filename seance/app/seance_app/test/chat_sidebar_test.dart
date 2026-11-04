@@ -12,9 +12,13 @@ import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/ui/chat_sidebar.dart';
 import 'package:seance_core/seance_core.dart';
 
-class _Provider implements LlmProvider {
+class _Provider implements LlmProvider, ClosableLlmProvider {
   int requests = 0;
+  int closeCalls = 0;
   Completer<ChatTurn>? pending;
+
+  @override
+  void close() => closeCalls++;
 
   @override
   Future<ChatTurn> chat({
@@ -42,6 +46,7 @@ class _Provider implements LlmProvider {
 
 class _Services implements AppServices {
   final _Provider provider = _Provider();
+  Completer<SearchProvider?>? pendingSearch;
   int builds = 0;
   @override
   final AppSettings settings = AppSettings();
@@ -52,9 +57,21 @@ class _Services implements AppServices {
   }
 
   @override
-  Future<SearchProvider?> buildSearchProvider() async => null;
+  Future<SearchProvider?> buildSearchProvider() async =>
+      pendingSearch?.future;
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _Search implements SearchProvider, ClosableSearchProvider {
+  int closeCalls = 0;
+
+  @override
+  void close() => closeCalls++;
+
+  @override
+  Future<List<SearchResult>> search(String query, {int limit = 5}) async =>
+      const [];
 }
 
 class _Session implements TerminalSession {
@@ -199,5 +216,25 @@ void main() {
       'new turn',
       'New answer.',
     ]);
+  });
+
+  testWidgets('stale controller construction closes both providers', (
+    tester,
+  ) async {
+    final searchBuild = Completer<SearchProvider?>();
+    final search = _Search();
+    state.services.pendingSearch = searchBuild;
+    await mount(tester);
+    await send(tester, 'old turn');
+
+    await tester.tap(find.byTooltip('New chat'));
+    await tester.pump();
+    searchBuild.complete(search);
+    await tester.pump();
+    await tester.pump();
+
+    expect(state.services.provider.requests, 0);
+    expect(state.services.provider.closeCalls, 1);
+    expect(search.closeCalls, 1);
   });
 }

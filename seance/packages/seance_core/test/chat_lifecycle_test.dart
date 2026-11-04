@@ -3,10 +3,14 @@ import 'dart:async';
 import 'package:seance_core/seance_core.dart';
 import 'package:test/test.dart';
 
-class _Provider implements LlmProvider {
+class _Provider implements LlmProvider, ClosableLlmProvider {
   final List<List<LlmMessage>> requests = [];
   Future<ChatTurn> Function() answer;
+  int closeCalls = 0;
   _Provider(this.answer);
+
+  @override
+  void close() => closeCalls++;
 
   @override
   Future<ChatTurn> chat({
@@ -21,9 +25,12 @@ class _Provider implements LlmProvider {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _Search implements SearchProvider {
+class _Search implements SearchProvider, ClosableSearchProvider {
   final started = Completer<void>();
   final result = Completer<List<SearchResult>>();
+  int closeCalls = 0;
+  @override
+  void close() => closeCalls++;
   @override
   Future<List<SearchResult>> search(String query, {int limit = 5}) {
     started.complete();
@@ -32,6 +39,24 @@ class _Search implements SearchProvider {
 }
 
 void main() {
+  test('close releases providers once and refuses later sends', () async {
+    final provider = _Provider(() async => const ChatTurn(text: 'answer'));
+    final search = _Search();
+    final controller = ChatController(
+      provider: provider,
+      searchProvider: search,
+      onPaste: (_) {},
+    );
+
+    controller.close();
+    controller.close();
+
+    expect(provider.closeCalls, 1);
+    expect(search.closeCalls, 1);
+    await expectLater(controller.send('too late'), throwsStateError);
+    expect(provider.requests, isEmpty);
+  });
+
   test(
     'terminal context stays within the turn that opted into sharing it',
     () async {

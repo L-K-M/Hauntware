@@ -70,8 +70,24 @@ class ChatSession extends ChangeNotifier {
   /// provider-side history: replaying earlier turns would ship a conversation
   /// held with one provider to whichever one the user just switched to.
   void adoptController(ChatController controller, int configVersion) {
+    if (_disposed) {
+      controller.close();
+      throw StateError('The chat session is closed.');
+    }
+    if (!identical(_controller, controller)) _controller?.close();
     _controller = controller;
     _controllerVersion = configVersion;
+  }
+
+  /// Drop provider resources after an assistant settings change.
+  ///
+  /// The visible transcript stays in memory, but the next turn starts a new
+  /// provider-side conversation with the new endpoint, key and model.
+  void invalidateController() {
+    final controller = _controller;
+    _controller = null;
+    _controllerVersion = null;
+    controller?.close();
   }
 
   /// Start a turn. The returned token identifies it; pass it back to the
@@ -127,7 +143,7 @@ class ChatSession extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _controller?.reset();
+    invalidateController();
     super.dispose();
   }
 }

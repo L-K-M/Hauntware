@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart';
@@ -19,6 +21,7 @@ const _marker = 'customer-ledger-4711';
 class _Provider implements LlmProvider {
   final List<List<LlmMessage>> chats = [];
   final List<String> prompts = [];
+  Completer<CommandSuggestion>? pendingCommand;
 
   @override
   Future<ChatTurn> chat({
@@ -35,6 +38,7 @@ class _Provider implements LlmProvider {
     HostContext context = HostContext.unknown,
   }) async {
     prompts.add(prompt);
+    if (pendingCommand case final pending?) return pending.future;
     return const CommandSuggestion(command: 'true', explanation: 'Noop.');
   }
 
@@ -42,8 +46,17 @@ class _Provider implements LlmProvider {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class _ClosableProvider extends _Provider implements ClosableLlmProvider {
+  int closeCalls = 0;
+
+  @override
+  void close() => closeCalls++;
+}
+
 class _Services implements AppServices {
   final _Provider provider = _Provider();
+  LlmProvider? nextProvider;
+  Completer<LlmProvider>? pendingProvider;
   int saves = 0;
 
   @override
@@ -53,7 +66,10 @@ class _Services implements AppServices {
   @override
   Future<void> saveSettings() async => saves++;
   @override
-  Future<LlmProvider> buildLlmProvider() async => provider;
+  Future<LlmProvider> buildLlmProvider() async {
+    if (pendingProvider case final pending?) return pending.future;
+    return nextProvider ?? provider;
+  }
   @override
   Future<SearchProvider?> buildSearchProvider() async => null;
   @override
@@ -64,10 +80,14 @@ class _OpenShell implements SshSession {
   _OpenShell(this.engine);
   @override
   final TerminalEngine engine;
+  bool closed = false;
   @override
-  bool get isClosed => false;
+  bool get isClosed => closed;
   @override
-  Future<void> close() => engine.dispose();
+  Future<void> close() async {
+    closed = true;
+    await engine.dispose();
+  }
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -242,6 +262,148 @@ void main() {
       expect(tester.widget<CheckboxListTile>(checkbox).value, isFalse);
       await generate(tester);
       expect(services.provider.prompts.single, isNot(contains(_marker)));
+    });
+
+    testWidgets('a barrier dismissal ignores a late command response', (
+      tester,
+    ) async {
+      final pending = Completer<CommandSuggestion>();
+      services.provider.pendingCommand = pending;
+      final host = await pumpHost(tester);
+      await open(tester, host);
+
+      await tester.enterText(find.byType(TextField), 'list files');
+      await tester.tap(find.text('Generate & insert'));
+      await tester.pump();
+      await tester.tapAt(const Offset(4, 4));
+      await tester.pumpAndSettle();
+      expect(find.text('Generate a command'), findsNothing);
+
+      pending.complete(
+        const CommandSuggestion(command: 'echo late', explanation: 'Late.'),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(state.activeSession!.engine.pendingInput, isEmpty);
+    });
+
+    testWidgets('Escape dismissal ignores a late command response', (
+      tester,
+    ) async {
+      final pending = Completer<CommandSuggestion>();
+      services.provider.pendingCommand = pending;
+      final host = await pumpHost(tester);
+      await open(tester, host);
+
+      await tester.enterText(find.byType(TextField), 'list files');
+      await tester.tap(find.text('Generate & insert'));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.text('Generate a command'), findsNothing);
+
+      pending.complete(
+        const CommandSuggestion(command: 'echo late', explanation: 'Late.'),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(state.activeSession!.engine.pendingInput, isEmpty);
+    });
+
+    testWidgets('a provider built after cancellation closes without a request', (
+      tester,
+    ) async {
+      final providerBuild = Completer<LlmProvider>();
+      final owned = _ClosableProvider();
+      services.pendingProvider = providerBuild;
+      final host = await pumpHost(tester);
+      await open(tester, host);
+
+      await tester.enterText(find.byType(TextField), 'list files');
+      await tester.tap(find.text('Generate & insert'));
+      await tester.pump();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      providerBuild.complete(owned);
+      await tester.pump();
+      await tester.pump();
+
+      expect(owned.prompts, isEmpty);
+      expect(owned.closeCalls, 1);
+    });
+
+    testWidgets('cancellation closes an active provider exactly once', (
+      tester,
+    ) async {
+      final pending = Completer<CommandSuggestion>();
+      final owned = _ClosableProvider()..pendingCommand = pending;
+      services.nextProvider = owned;
+      final host = await pumpHost(tester);
+      await open(tester, host);
+
+      await tester.enterText(find.byType(TextField), 'list files');
+      await tester.tap(find.text('Generate & insert'));
+      await tester.pump();
+      await tester.tapAt(const Offset(4, 4));
+      await tester.pumpAndSettle();
+      expect(owned.closeCalls, 1);
+
+      pending.complete(
+        const CommandSuggestion(command: 'echo late', explanation: 'Late.'),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(owned.closeCalls, 1);
+    });
+
+    testWidgets('success and failure each close their provider exactly once', (
+      tester,
+    ) async {
+      final host = await pumpHost(tester);
+      final successful = _ClosableProvider();
+      services.nextProvider = successful;
+      await open(tester, host);
+      await generate(tester);
+      expect(successful.closeCalls, 1);
+
+      final failed = _ClosableProvider();
+      final failure = Completer<CommandSuggestion>();
+      failed.pendingCommand = failure;
+      services.nextProvider = failed;
+      await open(tester, host);
+      await tester.enterText(find.byType(TextField), 'list files');
+      await tester.tap(find.text('Generate & insert'));
+      await tester.pump();
+      failure.completeError(StateError('offline'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.textContaining('offline'), findsOneWidget);
+      expect(failed.closeCalls, 1);
+    });
+
+    testWidgets('a disconnected target cannot receive a late command', (
+      tester,
+    ) async {
+      final pending = Completer<CommandSuggestion>();
+      services.provider.pendingCommand = pending;
+      final host = await pumpHost(tester);
+      await open(tester, host);
+
+      await tester.enterText(find.byType(TextField), 'list files');
+      await tester.tap(find.text('Generate & insert'));
+      await tester.pump();
+      (state.activeSession!.session! as _OpenShell).closed = true;
+      pending.complete(
+        const CommandSuggestion(command: 'echo late', explanation: 'Late.'),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(state.activeSession!.engine.pendingInput, isEmpty);
+      expect(find.textContaining('no longer connected'), findsOneWidget);
     });
   });
 }

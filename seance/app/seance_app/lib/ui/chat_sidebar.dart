@@ -36,22 +36,36 @@ class _ChatSidebarState extends State<ChatSidebar> {
     final existing = state.chat.controllerFor(version);
     if (existing != null) return existing;
     final provider = await state.services.buildLlmProvider();
-    final search = await state.services.buildSearchProvider();
-    if (!state.chat.isCurrentTurn(turn) || version != state.llmConfigVersion) {
-      throw StateError('The assistant settings or conversation changed. Retry.');
+    SearchProvider? search;
+    ChatController? controller;
+    try {
+      search = await state.services.buildSearchProvider();
+      if (!state.chat.isCurrentTurn(turn) || version != state.llmConfigVersion) {
+        throw StateError(
+          'The assistant settings or conversation changed. Retry.',
+        );
+      }
+      controller = ChatController(
+        provider: provider,
+        searchProvider: search,
+        // Honor the "Redact secrets before sending" toggle (default on).
+        redactor: SecretRedactor(
+          enabled: state.services.settings.redactionEnabled,
+        ),
+        // The target is supplied per turn; this controller outlives the sidebar.
+        onPaste: (_) {},
+      );
+      state.chat.adoptController(controller, version);
+      return controller;
+    } catch (_) {
+      if (controller != null) {
+        controller.close();
+      } else {
+        closeLlmProvider(provider);
+        if (search != null) closeSearchProvider(search);
+      }
+      rethrow;
     }
-    final controller = ChatController(
-      provider: provider,
-      searchProvider: search,
-      // Honor the "Redact secrets before sending" toggle (default on).
-      redactor: SecretRedactor(
-        enabled: state.services.settings.redactionEnabled,
-      ),
-      // The target is supplied per turn; this controller outlives the sidebar.
-      onPaste: (_) {},
-    );
-    state.chat.adoptController(controller, version);
-    return controller;
   }
 
   Future<void> _send(AppState state) async {

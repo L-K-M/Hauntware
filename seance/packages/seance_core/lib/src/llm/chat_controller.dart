@@ -108,6 +108,7 @@ class ChatController {
 
   final List<LlmMessage> _history = [];
   int _generation = 0;
+  bool _closed = false;
 
   ChatController({
     required this.provider,
@@ -141,6 +142,7 @@ class ChatController {
     String? sessionTarget,
     PasteStager? onPaste,
   }) async {
+    if (_closed) throw StateError('The chat controller is closed.');
     final generation = _generation;
     final stage = onPaste ?? this.onPaste;
     final sent = <SentContext>[];
@@ -340,6 +342,17 @@ class ChatController {
   void reset() {
     _generation++;
     _history.clear();
+  }
+
+  /// Stop pending work and release this conversation's provider resources.
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    _generation++;
+    _history.clear();
+    closeLlmProvider(provider);
+    final search = searchProvider;
+    if (search != null) closeSearchProvider(search);
   }
 
   /// Exposes the running history length (for tests/telemetry).

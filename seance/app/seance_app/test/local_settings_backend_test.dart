@@ -239,6 +239,37 @@ void main() {
     );
   });
 
+  group('fetchModels', () {
+    const query = ModelQuery(
+      kind: LlmProviderKind.openaiCompatible,
+      baseUrl: 'https://llm.example/v1',
+      model: 'model',
+      typedApiKey: 'key',
+    );
+
+    test('closes its temporary provider after success', () async {
+      final provider = _ModelProvider(models: ['z', 'a']);
+      final modelBackend = LocalSettingsBackend(
+        state,
+        modelProviderBuilder: (_, __) => provider,
+      );
+
+      expect(await modelBackend.fetchModels(query), ['a', 'z']);
+      expect(provider.closeCalls, 1);
+    });
+
+    test('closes its temporary provider after failure', () async {
+      final provider = _ModelProvider(error: StateError('offline'));
+      final modelBackend = LocalSettingsBackend(
+        state,
+        modelProviderBuilder: (_, __) => provider,
+      );
+
+      await expectLater(modelBackend.fetchModels(query), throwsStateError);
+      expect(provider.closeCalls, 1);
+    });
+  });
+
   group('setSyncPrefs', () {
     test('persists all three switches', () async {
       final result = await backend.setSyncPrefs(
@@ -385,4 +416,40 @@ void main() {
       );
     },
   );
+}
+
+class _ModelProvider implements LlmProvider, ClosableLlmProvider {
+  _ModelProvider({this.models = const [], this.error});
+
+  final List<String> models;
+  final Object? error;
+  int closeCalls = 0;
+
+  @override
+  String get model => 'test';
+
+  @override
+  void close() => closeCalls++;
+
+  @override
+  Future<List<String>> listModels() async {
+    if (error != null) throw error!;
+    return models;
+  }
+
+  @override
+  Future<ChatTurn> chat({
+    required List<LlmMessage> messages,
+    List<ToolSpec> tools = const [],
+  }) => throw UnimplementedError();
+
+  @override
+  Future<CommandSuggestion> generateCommand({
+    required String prompt,
+    HostContext context = HostContext.unknown,
+  }) => throw UnimplementedError();
+
+  @override
+  Stream<String> streamChat({required List<LlmMessage> messages}) =>
+      throw UnimplementedError();
 }

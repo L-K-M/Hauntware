@@ -2653,7 +2653,7 @@ void main() {
     });
 
     test('no backends at all is simply nothing to search', () async {
-      expect(await const CompositeSearch([]).search('q'), isEmpty);
+      expect(await CompositeSearch([]).search('q'), isEmpty);
     });
   });
 }

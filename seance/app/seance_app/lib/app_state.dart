@@ -871,6 +871,7 @@ class AppState extends ChangeNotifier {
   /// Called after the LLM provider settings change: invalidate any cached chat
   /// provider (so a new API key takes effect) and refresh sidebar visibility.
   Future<void> reloadLlmProvider() async {
+    chat.invalidateController();
     llmConfigVersion++;
     await refreshLlmConfigured();
     notifyListeners();

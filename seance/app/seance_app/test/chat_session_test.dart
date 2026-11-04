@@ -2,7 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/services/chat_session.dart';
 import 'package:seance_core/seance_core.dart';
 
-class _EchoProvider implements LlmProvider {
+class _EchoProvider implements LlmProvider, ClosableLlmProvider {
+  int closeCalls = 0;
+
+  @override
+  void close() => closeCalls++;
+
   @override
   String get model => 'test';
 
@@ -25,6 +30,17 @@ class _EchoProvider implements LlmProvider {
   Stream<String> streamChat({required List<LlmMessage> messages}) async* {
     yield 'ok';
   }
+}
+
+class _Search implements SearchProvider, ClosableSearchProvider {
+  int closeCalls = 0;
+
+  @override
+  void close() => closeCalls++;
+
+  @override
+  Future<List<SearchResult>> search(String query, {int limit = 5}) async =>
+      const [];
 }
 
 void main() {
@@ -116,6 +132,76 @@ void main() {
       final second = controller();
       chat.adoptController(second, 1);
       expect(chat.controllerFor(1), same(second));
+    });
+
+    test('replacing a controller closes its provider and search backend', () {
+      final chat = ChatSession();
+      addTearDown(chat.dispose);
+      final firstProvider = _EchoProvider();
+      final firstSearch = _Search();
+      chat.adoptController(
+        ChatController(
+          provider: firstProvider,
+          searchProvider: firstSearch,
+          onPaste: (_) {},
+        ),
+        0,
+      );
+
+      chat.adoptController(
+        ChatController(provider: _EchoProvider(), onPaste: (_) {}),
+        1,
+      );
+
+      expect(firstProvider.closeCalls, 1);
+      expect(firstSearch.closeCalls, 1);
+    });
+
+    test('disposing a session closes its controller exactly once', () {
+      final chat = ChatSession();
+      final provider = _EchoProvider();
+      final search = _Search();
+      chat.adoptController(
+        ChatController(
+          provider: provider,
+          searchProvider: search,
+          onPaste: (_) {},
+        ),
+        0,
+      );
+
+      chat.dispose();
+
+      expect(provider.closeCalls, 1);
+      expect(search.closeCalls, 1);
+    });
+
+    test('invalidation closes the controller but preserves the transcript', () {
+      final chat = ChatSession();
+      addTearDown(chat.dispose);
+      final provider = _EchoProvider();
+      chat.adoptController(
+        ChatController(provider: provider, onPaste: (_) {}),
+        0,
+      );
+      final turn = chat.addUserMessage('keep this');
+      chat.addReply(turn, const ChatResult(reply: 'and this'));
+      chat.finishSending(turn);
+
+      chat.invalidateController();
+
+      expect(provider.closeCalls, 1);
+      expect(chat.controllerFor(0), isNull);
+      expect(chat.entries.map((entry) => entry.text), ['keep this', 'and this']);
+    });
+
+    test('a disposed session rejects and closes a late controller', () {
+      final chat = ChatSession()..dispose();
+      final provider = _EchoProvider();
+      final controller = ChatController(provider: provider, onPaste: (_) {});
+
+      expect(() => chat.adoptController(controller, 0), throwsStateError);
+      expect(provider.closeCalls, 1);
     });
 
     test('reset clears the transcript and the error', () {
