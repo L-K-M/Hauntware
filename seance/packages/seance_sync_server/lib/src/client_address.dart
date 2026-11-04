@@ -12,13 +12,35 @@ String? canonicalIpAddress(String value) {
   try {
     final address = InternetAddress(value);
     if (address.type == InternetAddressType.unix) return null;
+
+    final rawAddress = address.rawAddress;
+    if (_isIpv4MappedIpv6(rawAddress)) {
+      return InternetAddress.fromRawAddress(
+        rawAddress.sublist(12),
+        type: InternetAddressType.IPv4,
+      ).address;
+    }
+
     return InternetAddress.fromRawAddress(
-      address.rawAddress,
+      rawAddress,
       type: address.type,
     ).address;
   } on ArgumentError {
     return null;
   }
+}
+
+bool _isIpv4MappedIpv6(List<int> rawAddress) {
+  if (rawAddress.length != 16 ||
+      rawAddress[10] != 0xff ||
+      rawAddress[11] != 0xff) {
+    return false;
+  }
+
+  for (var index = 0; index < 10; index++) {
+    if (rawAddress[index] != 0) return false;
+  }
+  return true;
 }
 
 /// Resolves the client address seen by a rate limiter.

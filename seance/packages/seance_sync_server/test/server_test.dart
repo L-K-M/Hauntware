@@ -208,7 +208,8 @@ void main() {
         'SEANCE_AUTH_GLOBAL_MAX_ATTEMPTS': '90',
         'SEANCE_AUTH_CLIENT_MAX_ATTEMPTS': '12',
         'SEANCE_RATE_LIMIT_MAX_BUCKETS': '128',
-        'SEANCE_TRUSTED_PROXIES': '192.0.2.1, 2001:0db8::1',
+        'SEANCE_TRUSTED_PROXIES':
+            '192.0.2.1, 2001:0db8::1, ::ffff:198.51.100.2',
       });
 
       expect(settings.loginMaxAttempts, 4);
@@ -216,7 +217,11 @@ void main() {
       expect(settings.authGlobalMaxAttempts, 90);
       expect(settings.authClientMaxAttempts, 12);
       expect(settings.rateLimitMaxBuckets, 128);
-      expect(settings.trustedProxies, {'192.0.2.1', '2001:db8::1'});
+      expect(settings.trustedProxies, {
+        '192.0.2.1',
+        '2001:db8::1',
+        '198.51.100.2',
+      });
     });
 
     test('session lifetime and account cap are positive and configurable', () {
