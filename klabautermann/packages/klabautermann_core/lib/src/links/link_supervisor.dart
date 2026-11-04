@@ -499,16 +499,15 @@ final class LinkSupervisor {
   };
 
   /// A failure of an unattended attempt that an interactive one may not
-  /// meet: a declined first-seen host key, or a sign-in that may have
-  /// needed answers, rejected or not classified. A key that needs a
-  /// passphrase is not one until the passphrase prompt lands (K45b): no
-  /// prompt asks for it yet, so the interactive attempt would fail the
-  /// same way. Exhaustive, so a new kind takes a decision here.
+  /// meet: a declined first-seen host key, a sign-in that may have needed
+  /// answers, rejected or not classified, or an encrypted key, whose
+  /// passphrase only the interactive attempt asks for (D70). Exhaustive,
+  /// so a new kind takes a decision here.
   static bool _promptMayResolve(LinkFailureKind? failure) => switch (failure) {
     null ||
     LinkFailureKind.hostKeyDeclined ||
-    LinkFailureKind.authenticationRejected => true,
-    LinkFailureKind.keyPassphraseRequired => false,
+    LinkFailureKind.authenticationRejected ||
+    LinkFailureKind.keyPassphraseRequired => true,
     // The user's own answer to the questions; asking again would repeat it.
     LinkFailureKind.keyboardInteractiveCancelled => false,
     LinkFailureKind.unreachable ||

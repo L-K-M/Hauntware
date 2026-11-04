@@ -872,11 +872,18 @@ void main() {
       expect(statuses().last, _failed(LinkFailureKind.unsupportedAlgorithm));
     });
 
-    // No prompt asks for a passphrase until K45b, so the user's attempt
-    // would fail the same way.
-    test('does not take over a key that needs a passphrase, and nothing '
-        'redials it', () async {
+    // Only the user's attempt asks for a key's passphrase (D70).
+    test('takes over a key that needs its passphrase', () async {
       await askDuringDial();
+      calls.single.fail(LinkFailureKind.keyPassphraseRequired);
+      await clock.elapse(Duration.zero);
+
+      expect(calls.map((c) => c.purpose), [_background, _interactive]);
+    });
+
+    test('a passphrase the user dismissed is not asked for again until '
+        'their next request, and nothing redials it', () async {
+      supervisor.connect('s1', purpose: _interactive);
       calls.single.fail(LinkFailureKind.keyPassphraseRequired);
       await clock.elapse(const Duration(minutes: 5));
       supervisor.connect('s1', purpose: _background);
@@ -884,6 +891,9 @@ void main() {
 
       expect(calls, hasLength(1));
       expect(statuses().last, _failed(LinkFailureKind.keyPassphraseRequired));
+
+      supervisor.connect('s1', purpose: _interactive);
+      expect(calls.map((c) => c.purpose), [_interactive, _interactive]);
     });
 
     test('ends when that dial is given up', () async {

@@ -251,8 +251,9 @@ D61 host-key pins and re-pin ·
 D62 sync state files and the keystore port · D63 pull-only sync in the
 engine · D64 a server's confirmation covers its route · D65 spike S3
 and admin validation · D66 spike S4 and Docker-scoped sudo rules · D67
-spike S6 and the privileged write · D68 spike S8 and update checks.
-Proposals awaiting the owner close the section; they are not decisions.
+spike S6 and the privileged write · D68 spike S8 and update checks ·
+D70 key passphrases asked per connect. The proposals the owner answered
+on 2026-11-04 close the section.
 
 ### Shape and scope
 
@@ -980,7 +981,8 @@ Proposals awaiting the owner close the section; they are not decisions.
   shows on the server's view instead of ignoring it. A lane decision
   within the M2 plan's approved scope (its section 2), which owner
   question O8 reopens only if the owner treats host-key policy as
-  theirs. Why: `TofuVerifier` "requires the user to explicitly re-pin"
+  theirs; on 2026-11-04 the owner kept it as built (O8). Why:
+  `TofuVerifier` "requires the user to explicitly re-pin"
   (`SC/src/hostkey/tofu.dart:36-38, :61-62` [V]) and never auto-repins
   (4.6, 8.12); once pins persist, a rekeyed server would otherwise stay
   blocked for good, where an engine restart used to clear the in-memory
@@ -1346,6 +1348,45 @@ Proposals awaiting the owner close the section; they are not decisions.
     pushed from a containerd store that holds only some platforms;
   - `docker manifest inspect -v` as the CLI fallback: it cannot name an
     index's digest, so a multi-platform tag would never compare.
+- **D70. An encrypted key asks for its passphrase on the user's connect,
+  for that attempt only (owner decision 2026-11-04, O5; K45b).** A
+  connect the user started asks, with `KeyPassphrasePromptRequest(user,
+  keyPath, retry)` (10.1), for the passphrase of each encrypted key on
+  the route, the server's or a jump host's, that no passphrase it has
+  opens; a passphrase the vault holds for the key is tried first. The
+  answer opens the key for that attempt and is never kept: no vault
+  entry, no keystore, nothing in the engine once the attempt ends, so
+  the next connect asks again. A passphrase that does not open the key
+  asks again with `retry`; Cancel, an expired prompt or the attempt's
+  end fails it as `keyPassphraseRequired`. An unattended connect never
+  asks, fails with `keyPassphraseRequired` and waits for the user's
+  connect, to which the supervisor hands such a failure (5.1); its copy
+  says to open the server.
+
+  As built: seance_core opens every key of the route before its first
+  socket, in route order, and stops at the first that does not open,
+  saying only whether that key had a passphrase (`keyPassphraseWrong`)
+  or none (`keyPassphraseRequired`), not whose key it was. The
+  connector therefore gives each dial at most one passphrase that has
+  not opened its key yet, on the first key that needs one, and none to
+  the keys after it: a wrong one is that key's, and a missing one means
+  it opened, so the next dial asks for the next key. A retried dial
+  reaches no host. Keys are told apart by their PEM text, so a key the
+  server and a hop share is asked for once. The attempt's passphrases
+  are dropped when it ends, and seance_core's client no longer captures
+  the credentials it signed in with, which its callbacks kept alive for
+  the life of the link.
+
+  Deferred, as the owner left them: trying an ssh-agent's copy of the
+  key before the key file, as OpenSSH does (a `seance_core` change:
+  `CredentialResolver` resolves one method per server), and trying
+  OpenSSH's default key files (`~/.ssh/id_*`) when an import names no
+  `IdentityFile`. *Rejected:* keeping the passphrase in engine memory for
+  the session (the proposal; the owner chose never to keep it); a vault
+  save offer beside the prompt; a failure kind of its own for a
+  dismissed prompt (one remedy, opening the server, so one kind);
+  testing a passphrase in the connector before the dial (a second key
+  derivation, and a dartssh2 dependency the engine does not take).
 
 ### Persistence, alerts and tiers
 
@@ -1596,31 +1637,23 @@ Proposals awaiting the owner close the section; they are not decisions.
   screen reader would switch another's); a clear level below each level
   as the debounce (a threshold OV-11 has not set).
 
-### Proposals awaiting the owner
+### Proposals the owner answered
 
-These are not decisions: neither binds anything until the owner answers.
-An accepted proposal becomes a D row; a rejected one is recorded as
-rejected.
+Two proposals waited for the owner until 2026-11-04, when both were
+answered; neither is open any more.
 
-- **Imports as confirmed endpoints (proposed, awaiting the owner).** An
-  ssh_config import (FL-02) counts as a confirmed endpoint on the device
-  that imported it, and `EndpointPinStore` pins (D16, 4.7) apply only to
-  synced servers. Why: an import is device-local and never synced (10.1),
-  so the LWW rewrite that 4.7 guards against cannot reach it, and
-  re-importing is the user's own act on that device. Until the owner
-  answers, an import has no confirmed endpoint: it is not probed (FL-04,
-  5.12) and cannot join the monitor set (FL-21) before batch confirmation
-  (4.3) is built.
-- **Encrypted keys and agent order (proposed, awaiting the owner).** An
-  encrypted `IdentityFile` asks for its passphrase through a credential
-  prompt; the passphrase stays in engine memory for the session, and the
-  server stays out of background sampling until it is answered (FL-21).
-  Open: when the agent holds the same key, whether its copy is tried
-  first, as OpenSSH does (a `seance_core` change: `CredentialResolver`
-  resolves one method per server,
-  `SC/src/ssh/credential_resolver.dart:115-117,155-170` [V]); and when an
-  import names no `IdentityFile` and no agent runs, whether OpenSSH's
-  default key files (`~/.ssh/id_*`) are tried.
+- **Imports as confirmed endpoints (owner decision 2026-11-04, O6:
+  kept as built).** An ssh_config import (FL-02) counts as a confirmed
+  endpoint on the device that imported it, and `EndpointPinStore` pins
+  (D16, 4.7) apply only to synced servers. Why: an import is
+  device-local and never synced (10.1), so the LWW rewrite that 4.7
+  guards against cannot reach it, and re-importing is the user's own act
+  on that device.
+- **Encrypted keys and agent order (owner decision 2026-11-04, O5).** An
+  encrypted `IdentityFile` asks for its passphrase on the user's connect
+  and never keeps it, not even in engine memory for the session as
+  proposed: D70. The agent order and OpenSSH's default key files stay
+  deferred (D70).
 
 ---
 
@@ -2087,12 +2120,10 @@ all shown" confirms every row the search leaves, and "Confirm selected"
 the toggled ones; either sends `ConfirmEndpoints(ids)`. The list closes
 with a toast once the engine's fleet shows them confirmed, and says so
 in place when a pin could not be saved or a server still waits for a
-changed hop. Imports never appear. Whether they should is an owner
-question still open (O6 of the M2 remaining-work plan); until it is
-answered, the plan's recommended default applies: ssh_config imports
-are device-local and count as confirmed on the device that imported
-them, so endpoint pins apply to synced servers only, and an answer the
-other way would list imports here too. Unconfirmed servers stay
+changed hop. Imports never appear: the owner decided on 2026-11-04
+(O6, 2) that ssh_config imports, which are device-local, count as
+confirmed on the device that imported them, so endpoint pins apply to
+synced servers only. Unconfirmed servers stay
 listed in the fleet; opening one shows why it does not connect.
 
 As built in M2 (K30), step 4 is a choice the user can change at any
@@ -2117,7 +2148,9 @@ the limit again (10.1). The desktop settings window reaches the set
 through the `setMonitored` link method. Jump hosts' credentials are not
 checked: an unattended connect never prompts, so a hop that needs the
 user fails and waits for the user. An encrypted key file counts as
-eligible and fails the same way until K45's passphrase flow.
+eligible and fails the same way, since only the user's connect asks for
+its passphrase and nothing keeps it (D70); a link the user opened serves
+the set until it drops.
 
 ### 4.4 The catalog library
 
@@ -2215,10 +2248,14 @@ re-push (c1 §2.4).
   prompt offers to import a key into the vault. Inside the Flatpak,
   which shows only the paths it grants, a missing key file counts as
   hidden by the sandbox, since a path it does not grant reads as
-  missing; the remedy is a wider grant (04 §12.1), not a new path. A
+  missing; the remedy is the agent, not a new path, since the grant
+  stays `~/.ssh/config` (owner decision 2026-11-04, O1; 04 §12.1). A
   refused file stays access denied: the sandbox hides paths rather than
   refusing them. Only a regular file, after symlinks, is read as a key:
   a FIFO waits for a writer and a device such as a tty for input.
+- **Key passphrases (D70).** The user's connect asks for an encrypted
+  key's passphrase, for that attempt only; it is never written to the
+  vault or the keystore, and an unattended connect never asks.
 - **Background rule (FL-21).** Background sampling uses only servers whose
   credentials resolve without a prompt and whose endpoint is confirmed;
   keyboard-interactive servers connect on explicit open only and get exactly
@@ -6481,7 +6518,7 @@ shows there.
 | `AuditQuery(serverId, before, limit)` (8.10, M4) | `AuditRecords(serverId, records, more)` |
 | `ReadHistory(serverId, tier, requestId)` (7.20, M6 N52a) | `HistoryRead(requestId, serverId, tier, range)`: the tier's buckets and gaps within its span, the filling bucket included |
 | `SetSafetyPolicy(policy)`, `SetAdminMode(serverId, enabled)` (8.2, M4) | `AdminModeState(serverId, phase, expiresAt, retry, failure, ended)`; a refused plan's `ActionRefused` names `observeOnly` or `readOnly` |
-| `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
+| `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, key passphrase, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
 | none: the engine's probe sweeps (5.12) | `Reachability(serverId, status)` (FL-04) |
 | `HandleAlert(alertRef, acknowledge or dismiss)` (v1.x; inbox fetch runs inside `RunSyncRound`) | `AlertsArrived(serverId, alerts)`, `AlertStatusChanged` (D42) |
@@ -6771,8 +6808,8 @@ the engine in `engine_isolate.dart` beside it):
   since pins outlive the engine (M2 pins, below) and the app shows
   prompts (M2 prompts, below). A server signs in with the import's
   first `IdentityFile` alone, or else through the agent (above), and an
-  encrypted key fails the attempt until a passphrase prompt exists (the
-  encrypted-key proposal awaiting the owner, 2).
+  encrypted key asks for its passphrase on the user's connect (D70,
+  "Version 3 (key passphrase)" below).
 - **Version 3 (M2 sampling).** Sampling joined version 3 without a bump,
   as the import store's fields joined version 2, before any version 3
   build shipped. `Subscribe` names the surface's `SampleStream`s: the 6.4
@@ -6925,12 +6962,13 @@ the engine in `engine_isolate.dart` beside it):
   hop's key file keeps its kind. 5.3's three client limitations arrive
   typed from `seance_core` (X5b), which reads the server's cleartext
   KEXINIT, and keep their names: `unsupportedAlgorithm`,
-  `insecureAlgorithmsOnly` and `keyExchangeTimedOut`. No prompt asks
-  for a passphrase until the owner decides (2, "Encrypted keys and agent
-  order"), so the supervisor does not hand such a failure to the
-  user's request, and the app's copy for both kinds says to load the key
-  into ssh-agent and drop the `IdentityFile` line that names it, since
-  an import that names a key file offers only that file.
+  `insecureAlgorithmsOnly` and `keyExchangeTimedOut`. Since D70 the
+  user's connect asks for a passphrase, so the supervisor hands an
+  unattended `keyPassphraseRequired` to the user's request and its copy
+  says to open the server. `keyFileHiddenBySandbox`'s copy still says to
+  load the key into ssh-agent and drop the `IdentityFile` line that
+  names it, since the Flatpak grants only `~/.ssh/config` (O1) and an
+  import that names a key file offers only that file.
 - **Version 3 (M2 prompts).** The app's prompts joined version 3 the same
   way. `KeyboardInteractivePromptRequest` gained `user`, the account the
   asking machine signs in as (the challenge's `server.username`), so the
@@ -7250,6 +7288,23 @@ the engine in `engine_isolate.dart` beside it):
   volume to compute it, within the client's 30 s request timeout like
   every buffered read, so on a relay it holds the one pooled
   connection no longer than any other query.
+- **Version 3 (key passphrase).** The passphrase prompt joined version
+  3 the same way (D70). `KeyPassphrasePromptRequest(user, keyPath,
+  retry)` names the account the key signs in as on the asking machine,
+  the key file as the server's config names it (not expanded; null for
+  a key the vault holds) and whether the previous answer did not open
+  the key. `PromptSecretAnswer` answers it, its `save` never honoured;
+  `PromptSecretAnswer(null)` dismisses it and no `PromptCancelAnswer`
+  fits. `PromptKind.keyPassphrase` names it in `LinkNeedsUser`, so the
+  attempt's deadline stops while it waits, as for every prompt, and it
+  is withdrawn on expiry or when the attempt ends. The app shows it
+  through `ghost_servers`' credential dialog in its secret-only form
+  (`GhostKeyField.passphraseOnly`): the key file under the account and
+  host, one masked field with autocorrect, suggestions and IME learning
+  off, no vault offer, and a line that says the passphrase is used for
+  this connection only, or that the last one did not open the key. A
+  key the vault holds has no file to show, so the same form asks
+  without one.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period

@@ -164,11 +164,12 @@ String linkStatusWord(AppLocalizations l10n, LinkStatus status) {
 /// server header shows it under its facts and the fleet row in its
 /// tooltip and label. The client limitations keep 03 §5.3's words.
 ///
-/// The two key-file kinds say to load the key into ssh-agent and drop
-/// the `IdentityFile` line that names it: no prompt asks for a passphrase,
-/// the Flatpak grants no key files (04 §12.1), and a server whose import
-/// names a key file offers only that file (03 §2, proposals awaiting the
-/// owner).
+/// A key that needs its passphrase says to open the server, since only
+/// the user's connect asks for it and nothing keeps it (D70). A key file
+/// the Flatpak hides says to load the key into ssh-agent and drop the
+/// `IdentityFile` line that names it: the sandbox grants no key files
+/// (04 §12.1), and a server whose import names a key file offers only
+/// that file (D70).
 String? linkFailureText(AppLocalizations l10n, LinkStatus status) {
   if (status case LinkClosed(:final failure?)) {
     return switch (failure) {

@@ -29,6 +29,9 @@ const noSocketServer = 'ssh-config:docker-nosock';
 /// The fleet alias [FixtureEngine.startDockerVariant] imports.
 const variantServer = 'ssh-config:variant';
 
+/// The fleet alias [FixtureEngine.startEncryptedKey] imports.
+const encryptedKeyServer = 'ssh-config:encrypted';
+
 /// The Compose services of klabautermann/test/integration.
 enum FixtureService {
   /// The sampled host, published on loopback and reached by the jump host
@@ -129,6 +132,29 @@ final class Fixture {
 
   /// The key file the `IdentityFile` hosts sign in with.
   String get identityFile => _variable('IDENTITY_FILE');
+
+  /// A copy of [identityFile] in this run's directory, encrypted with
+  /// [passphrase] by OpenSSH's ssh-keygen: the same key, so the fixture's
+  /// hosts accept it once it is opened.
+  Future<String> encryptedIdentityFile(String passphrase) async {
+    final copy = File('$_runtimeDirectory/identity-encrypted');
+    await copy.writeAsBytes(await File(identityFile).readAsBytes());
+    // ssh-keygen refuses a private key others may read.
+    final mode = await Process.run('chmod', ['600', copy.path]);
+    expect(mode.exitCode, 0, reason: '${mode.stderr}');
+    final result = await Process.run('ssh-keygen', [
+      '-q',
+      '-p',
+      '-P',
+      '',
+      '-N',
+      passphrase,
+      '-f',
+      copy.path,
+    ]);
+    expect(result.exitCode, 0, reason: '${result.stderr}');
+    return copy.path;
+  }
 
   /// The SHA256 fingerprints of the key file's key and of the key only the
   /// agent holds, as sshd logs an accepted key.
@@ -428,6 +454,28 @@ Host variant
     );
     return (engine, hostKeys);
   }
+
+  /// Starts an engine as [start] does that imports one host,
+  /// [encryptedKeyServer]: the sampled host, signing in with [identityFile]
+  /// ([Fixture.encryptedIdentityFile]).
+  static Future<FixtureEngine> startEncryptedKey(
+    Fixture fixture,
+    String name, {
+    required String identityFile,
+  }) => launch(
+    name: name,
+    runtimeDirectory: fixture._runtimeDirectory,
+    sshConfig:
+        '''
+Host encrypted
+  HostName ${fixture._host}
+  Port ${fixture._port}
+  User ${fixture.user}
+  IdentityFile $identityFile
+''',
+    hosts: 1,
+    evidenceDirectory: fixture._evidenceDirectory,
+  );
 
   /// Starts an engine through [entryPoint], which wraps the engine's own
   /// (`link_meter.dart`), and imports [count] aliases of the sampled host

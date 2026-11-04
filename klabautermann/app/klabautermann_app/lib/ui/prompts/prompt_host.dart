@@ -9,6 +9,7 @@ import 'package:ghost_servers/ghost_servers.dart'
         GhostHostKeyStrings,
         GhostKeyboardInteractiveStrings,
         GhostKeyField,
+        GhostKeyPassphraseReply,
         GhostKeyboardPrompt,
         GhostPasswordReply,
         showGhostCredentialDialog,
@@ -20,6 +21,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
         CredentialPromptRequest,
         ElevationPromptRequest,
         HostKeyPromptRequest,
+        KeyPassphrasePromptRequest,
         KeyboardInteractivePromptRequest,
         Prompt,
         PromptAnswer,
@@ -49,6 +51,9 @@ import 'elevation_dialog.dart';
 /// - A login password the vault lacks (03 §4.5) is answered with
 ///   [PromptSecretAnswer], null on Cancel, whose `save` keeps it in the
 ///   vault when the prompt offered that and the user ticked it.
+/// - An encrypted key's passphrase (03 §4.5, D70) is answered with
+///   [PromptSecretAnswer], null on Cancel, and never with `save`: the
+///   dialog offers no vault, and the engine keeps it for the attempt only.
 ///
 /// A prompt the engine withdraws closes its dialog without an answer. Each
 /// dialog is keyed, so only its own route goes, even under another route.
@@ -238,6 +243,43 @@ class _PromptHostState extends State<PromptHost> {
           }),
         );
         return true;
+      case final KeyPassphrasePromptRequest request:
+        unawaited(
+          _ask(prompt, const PromptSecretAnswer(null), (dialogKey) async {
+            // A key the vault holds has no file to show, so the dialog's
+            // secret-only form asks without one, in a passphrase's words.
+            final keyPath = request.keyPath;
+            final hasKeyFile = keyPath != null && keyPath.isNotEmpty;
+            final reply = await showGhostCredentialDialog(
+              context,
+              GhostCredentialRequest(
+                authMethod: hasKeyFile
+                    ? AuthMethod.privateKey
+                    : AuthMethod.password,
+                endpointLabel:
+                    widget.labelOf?.call(prompt.serverId) ??
+                    _endpointHost(prompt.host),
+                keyField: GhostKeyField.passphraseOnly,
+                username: request.user,
+                host: prompt.host,
+                port: prompt.port,
+                initialKeyPath: hasKeyFile ? keyPath : null,
+              ),
+              strings: _keyPassphraseStrings(l10n, retry: request.retry),
+              monoStyle: _monoStyle,
+              dialogKey: dialogKey,
+            );
+            return switch (reply) {
+              GhostKeyPassphraseReply(:final keyPassphrase) =>
+                PromptSecretAnswer(keyPassphrase),
+              GhostPasswordReply(:final password) => PromptSecretAnswer(
+                password,
+              ),
+              _ => const PromptSecretAnswer(null),
+            };
+          }),
+        );
+        return true;
     }
   }
 
@@ -356,6 +398,30 @@ GhostCredentialStrings _credentialStrings(
   saveInVault: l10n.credentialSaveInVault,
   cancel: l10n.credentialCancel,
   connect: l10n.credentialConnect,
+);
+
+/// The key passphrase dialog's words in ARB (D70). The secret-only form
+/// titles a key with a file by `keyPassphraseTitle` and one the vault
+/// holds by `passwordTitle`, so both carry the same title; the line under
+/// it says the passphrase is never kept, and why the dialog asks again
+/// after a passphrase that did not open the key.
+GhostCredentialStrings _keyPassphraseStrings(
+  AppLocalizations l10n, {
+  required bool retry,
+}) => GhostCredentialStrings(
+  passwordTitle: l10n.keyPassphraseTitle,
+  keyPassphraseTitle: l10n.keyPassphraseTitle,
+  explanation: retry
+      ? l10n.keyPassphraseRetryExplanation
+      : l10n.keyPassphraseExplanation,
+  endpoint: (user, host, port) => user == null
+      ? l10n.promptEndpoint(_endpointHost(host), port)
+      : l10n.promptEndpointWithUser(user, _endpointHost(host), port),
+  keyFileField: l10n.keyPassphraseKeyFile,
+  passwordField: l10n.keyPassphraseField,
+  keyPassphraseField: l10n.keyPassphraseField,
+  cancel: l10n.keyPassphraseCancel,
+  connect: l10n.keyPassphraseConnect,
 );
 
 /// The host as the host-key review's endpoint line shows it: a bare IPv6
