@@ -844,7 +844,13 @@ void main() {
     final vaultKey = secureRandomBytes(32);
     final codec = RecordCodec(vaultKey);
     final blob = await VaultCrypto.sealJson(vaultKey, const {
+      'envelopeVersion': 2,
+      'purpose': 'seance.sync.record',
+      'id': 'bookmark:bookmark-1',
       'kind': 'bookmark',
+      'updatedAt': 2,
+      'deviceId': 'poltergeist',
+      'deleted': false,
       'data': {
         'id': 'bookmark-1',
         'label': 'A bookmark, not a server',
@@ -884,7 +890,13 @@ void main() {
     final vaultKey = secureRandomBytes(32);
     final codec = RecordCodec(vaultKey);
     final blob = await VaultCrypto.sealJson(vaultKey, const {
+      'envelopeVersion': 2,
+      'purpose': 'seance.sync.record',
+      'id': 'flurb:future-1',
       'kind': 'flurb',
+      'updatedAt': 100,
+      'deviceId': 'future-device',
+      'deleted': false,
       'data': {'future': true},
     });
     await server0.push([

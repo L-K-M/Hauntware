@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:logging/logging.dart';
@@ -657,7 +658,14 @@ void main() {
       expect(wire['id'], 'bookmark:b1');
       expect(
         wire.keys,
-        unorderedEquals(['id', 'updatedAt', 'deviceId', 'deleted', 'blob']),
+        unorderedEquals([
+          'envelopeVersion',
+          'id',
+          'updatedAt',
+          'deviceId',
+          'deleted',
+          'blob',
+        ]),
       );
     });
 
@@ -685,7 +693,13 @@ void main() {
       final codec = RecordCodec(vaultKey);
       // Unknown kinds cannot pass encrypt, so mirror its plaintext shape.
       final blob = await VaultCrypto.sealJson(vaultKey, const {
+        'envelopeVersion': 2,
+        'purpose': 'seance.sync.record',
+        'id': 'flurb:r1',
         'kind': 'flurb',
+        'updatedAt': 42,
+        'deviceId': 'device-a',
+        'deleted': false,
         'data': {'value': 1},
       });
       final decoded = await codec.decrypt(
@@ -714,7 +728,7 @@ void main() {
       );
     });
 
-    test('legacy live payloads remain readable during migration', () async {
+    test('legacy live payloads require the migration-only decoder', () async {
       final vaultKey = secureRandomBytes(32);
       final codec = RecordCodec(vaultKey);
       final blob = await VaultCrypto.sealJson(vaultKey, const {
@@ -722,19 +736,50 @@ void main() {
         'data': {'id': 'b1'},
       });
 
-      final decoded = await codec.decrypt(
-        EncryptedRecord(
-          id: 'bookmark:b1',
-          updatedAt: 42,
-          deviceId: 'legacy-device',
-          deleted: false,
-          seq: 1,
-          blob: blob,
-        ),
+      final legacy = EncryptedRecord.fromJson({
+        'id': 'bookmark:b1',
+        'updatedAt': 42,
+        'deviceId': 'legacy-device',
+        'deleted': false,
+        'seq': 1,
+        'blob': base64.encode(blob),
+      });
+
+      await expectLater(
+        codec.decrypt(legacy),
+        throwsA(isA<RecordIntegrityException>()),
       );
+      final decoded = await codec.decryptLegacyForMigration(legacy);
 
       expect(decoded.kind, RecordKind.bookmark);
       expect(decoded.data, {'id': 'b1'});
+    });
+
+    test('outer envelope version cannot relabel a sealed record', () async {
+      final codec = RecordCodec(secureRandomBytes(32));
+      final sealed = await codec.encrypt(
+        const DecryptedRecord(
+          id: 'bookmark:b1',
+          updatedAt: 42,
+          deviceId: 'device-a',
+          kind: RecordKind.bookmark,
+          data: {'id': 'b1'},
+        ),
+      );
+      final relabelled = EncryptedRecord(
+        envelopeVersion: 1,
+        id: sealed.id,
+        updatedAt: sealed.updatedAt,
+        deviceId: sealed.deviceId,
+        deleted: sealed.deleted,
+        seq: sealed.seq,
+        blob: sealed.blob,
+      );
+
+      await expectLater(
+        codec.decrypt(relabelled),
+        throwsA(isA<RecordIntegrityException>()),
+      );
     });
 
     test('rejects unknown authenticated-envelope versions', () async {
@@ -853,6 +898,7 @@ void main() {
       );
       final back = EncryptedRecord.fromJson(original.toJson());
       expect(back.id, 'secret:s1');
+      expect(back.envelopeVersion, 2);
       expect(back.updatedAt, 20);
       expect(back.deviceId, 'A');
       expect(back.deleted, isTrue);
