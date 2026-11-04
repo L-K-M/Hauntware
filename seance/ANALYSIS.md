@@ -11,6 +11,11 @@ evidence and gates. Completed work is listed only in the compact
 [the 2026-09-05 archive](docs/reviews/analysis-2026-09-05.md) and
 [the July archive](docs/reviews/analysis-2026-07-25.md).
 
+An incremental macOS review on 2026-11-04 used `origin/main` at `ad1ebfbea`.
+Findings implemented by open PRs were removed as required; the remaining new
+nice-to-haves are consolidated into the existing entries or the focused
+sections near the end of this file.
+
 ## Sources and identifiers
 
 | Source | What it is |
@@ -687,7 +692,13 @@ Reproduced: a forged `seq: 1<<40` tie push wins (S1-13; not part of #136). The
 engine does not check one ack per id (`sync_engine.dart:119-129`);
 `SyncOutcome` has no pending state. The only new strictness is
 `PushLimits.tryFromJson`. Unknown-kind preservation (#58) is done; do not
-reintroduce kind guessing.
+reintroduce kind guessing. HTTP boundary parsing is also inconsistent:
+session authorization requires the exact spelling `Bearer`
+(`server.dart:318-330`) even though auth schemes are case-insensitive;
+non-numeric or negative sync and inbox cursors silently behave like zero
+(`server.dart:270-272`, `inbox_handlers.dart:104-107`); and the served producer
+client accepts string-typed but malformed URLs, app IDs and tokens until a
+later opaque failure (`inbox_docs.dart:301-318`).
 
 **Next.** Quick win: `_push` rebuilds each incoming record with `seq: null`
 before storage (one-line test). Then strict `EncryptedRecord.fromJson` (typed
@@ -697,12 +708,16 @@ preserved or quarantined unknown future data with visible skipped outcomes, and
 an authenticated operation ID/counter/HLC for total order (with SYNC-01);
 `seq` is only a server delta cursor. One acknowledgement per submitted ID,
 rejecting duplicates and unknown IDs, is SYNC-03 slice 3. Opaque wire IDs
-(SOL-012) ride the SYNC-01 migration.
+(SOL-012) ride the SYNC-01 migration. Share one case-insensitive authorization
+parser across session and producer routes, reject invalid cursors with a typed
+400, and validate HTTP(S) URL structure plus exact base64url app/token lengths
+while decoding producer pairing data.
 
 **Gate.** Parser fuzz/property tests; LWW commutative, associative and
 idempotent; exact ties, same-millisecond edits, clock rollback; missing
 acknowledgements; unknown kinds across old and new clients; migration
-interoperability.
+interoperability. Cover lowercase authorization schemes, negative and
+non-numeric cursors, malformed pairing URLs and wrong-length pairing fields.
 
 ### PROTO-02: Remaining KDF, identity and crypto assurance
 **IDs:** SOL-014, SOL-016, SOL-017, SOL-018, S1-11 (client half), S2-20, #136
@@ -722,7 +737,9 @@ are no Argon2id, HKDF-domain, verifier-hash or XChaCha20-Poly1305 vectors. No
 NFC/NFD policy for passphrases; case-variant usernames (`Alice`/`alice`) remain
 distinct accounts and need a versioned normalization policy.
 `SecretVault.getSecret(id)` does not check the decrypted secret's id (S2-20,
-table row only: re-trace).
+table row only: re-trace). Identity-form `seance://connect` links also accept
+an empty username that the normal server editor cannot save or match
+(`suite_links.dart:242-245,364-389,439-456`).
 
 **Next.** The client refuses a prelogin salt that is not exactly 16 bytes. Add
 independent vectors including production factors. Define Unicode and case
@@ -731,12 +748,14 @@ case fold; existing accounts are not renamed). Verify decrypted secret
 identity, defensively copy key/blob storage, minimize root-key retention.
 Profile the KDF on a midrange phone (the 64 MiB/10-iteration/4-lane ceilings
 are safety limits, not a latency promise). Unsupported old factors are
-rejected, never clamped or hand-edited into a different key.
+rejected, never clamped or hand-edited into a different key. Apply the same
+nonempty username and trim policy to connect-link parsing and builders.
 
 **Gate.** A malicious prelogin fails before allocation; vectors match; NFC/NFD
 is documented and tested without breaking existing accounts; external crypto
 and protocol review before sync GA. Unsupported factors alone cannot prove
-whether the endpoint is malicious or an account is legacy.
+whether the endpoint is malicious or an account is legacy. Connect links reject
+empty usernames, and valid trimmed identities round-trip through parse/build.
 
 ### STORE-01: Persistence failure paths and transactional client storage
 **IDs:** SOL-034, SEA26-SEC-09, SEA26-SEC-10, BOTH-REV-003, S3-08, S3-13 ·
@@ -848,35 +867,22 @@ clear, actionable status codes.
 **Done:** atomic SQLite account deletion with rollback (#133); #71 contention
 fails atomically with `503 storage_busy`; empty pushes stay read-only.
 
-**Problem.** `pushRecords` never checks that the account exists; `_nextSeq`'s
-upsert re-creates the `seqs` row; `createAccount` uses
-`INSERT OR IGNORE INTO seqs` (`sqlite_storage.dart:100` @9322f6e), keeping a
-stale value, and is not one transaction with its token; `usernameForToken`
-(`:126`) does not join `accounts`. Reproduced (S1-07): a push racing deletion
-(the token is resolved, then `_push` awaits the body) writes an orphan that a
-same-name re-registration inherits with the old seq, which can make CRED-03's
-check reject the correct passphrase. `_migrate` is `CREATE IF NOT EXISTS` only:
-no `user_version`, foreign keys or checks. No documented WAL-aware backup and
-restore.
+**Problem.** `_migrate` is `CREATE IF NOT EXISTS` only: there is no
+`user_version`, foreign-key enforcement or schema checks. Contention handling
+has no bounded asynchronous retry contract, durability settings are not
+documented, and there is no WAL-aware backup and restore procedure.
 
-**Next.** Inside the push write transaction run `SELECT 1 FROM accounts`; if
-absent throw `AccountGoneException`, mapped to 401. Join accounts in
-`usernameForToken`. Run `createAccount` in one transaction that clears leftover
-`records/seqs/tokens` rows and creates the token. Mirror all of it in
-`InMemoryStorage`. Then transactional `PRAGMA user_version` migrations with
-foreign keys and cascades, bounded asynchronous contention retry (no long
+**Next.** Add transactional `PRAGMA user_version` migrations with foreign keys,
+check constraints and cascades, bounded asynchronous contention retry (no long
 synchronous `busy_timeout` that blocks the shared isolate; define retries,
 backoff and `Retry-After`), documented synchronous/durability settings, and
-documented WAL-safe online backup and restore (never copy only the main DB
-file while ignoring active WAL state). Atomic create-or-conflict covers the
-initial sequence and token; also cover delayed-login/delete races.
+documented WAL-safe online backup and restore. Never copy only the main
+database file while ignoring active WAL state.
 
-**Gate.** `storage_batch_test.dart` on both backends: token resolved, account
-deleted, push throws 401; re-registration starts empty at seq 0; a deleted
-account's token is 401. Concurrent registration/delete/login, orphans,
-migration interruption, cross-process kill and lock recovery, disk full,
-corruption, restore during writes. Two-connection contention and trigger
-rollback tests do not prove power-loss or cross-process crash durability.
+**Gate.** Migration interruption, cross-process kill and lock recovery, disk
+full, corruption and restore during writes. Two-connection contention and
+trigger rollback tests do not prove power-loss or cross-process crash
+durability.
 
 ### SRV-03: Readiness, graceful drain and observability
 **IDs:** SOL-052, SOL-053, SOL-055, S1-09 · **Priority:** P1 · **Status:** Open
@@ -905,18 +911,25 @@ authorization, verifiers, blobs, request bodies or raw commands.
 DB is not ready; SIGTERM during reads and writes; restart recovery; safe
 structured errors; a container health failure is detected.
 
-### SRV-04: Compose settings overridable without editing tracked files
+### SRV-04: Validated, overridable server configuration
 **IDs:** S1-14 · **Priority:** P3 · **Status:** Open
 
 **Problem.** `packages/seance_sync_server/docker-compose.yml:27` hard-codes
 `SEANCE_OPEN_REGISTRATION: "false"` (and the limiter and cap variables); `.env`
 only feeds `${}` interpolation, so enrolling requires a local diff that
-collides with `./update.sh`'s `git pull --ff-only`.
+collides with `./update.sh`'s `git pull --ff-only`. Invalid port and login-rate
+integers (`config.dart:80-95`, `bin/seance_sync_server.dart:40-47`) also
+silently fall back to defaults, so an operator can deploy on an unintended
+port or with an unintended guessing policy without a diagnostic.
 
 **Next.** `"${SEANCE_OPEN_REGISTRATION:-false}"` and the same pattern for the
-other variables; document them in `.env.example`.
+other variables; document them in `.env.example`. Parse every named integer
+strictly, enforce its documented range at startup and print concise CLI usage
+errors instead of silently substituting a default.
 
 **Gate.** `docker compose config` with an `.env` override shows the value.
+Invalid, negative, zero and out-of-range port/rate values fail startup with the
+offending setting named.
 
 ---
 
@@ -1068,8 +1081,17 @@ agent connects with the chosen key.
 saved-host jump chains with per-hop TOFU, auth, keepalive and cleanup.
 
 **Problem.** No editor UI for `jumpHostId` (`server_editor.dart:919-920` "not
-exposed yet"; the route is preserved on save). No port forwarding. No
-known_hosts import/export (`HostKey.fromPublicKey` is unused), no key
+exposed yet"; the route is preserved on save). Automatic server-local URL
+forwarding is transient; there is no configurable, durable local, remote or
+dynamic forwarding. When the requested local port is occupied, automatic
+forwarding silently chooses another port even though absolute redirects and
+cookies can retain the original port. Active automatic tunnels have no
+discoverable status or revoke surface. Malformed IPv4 such as
+`127.999.999.999` is classified as local because octets are parsed without
+range checks (`server_links.dart:19-23`). If listener cancellation or close
+throws during loopback-forward shutdown (`loopback_forward.dart:65-81`), later
+relay sockets are not destroyed even though `done` completes.
+No known_hosts import/export (`HostKey.fromPublicKey` is unused), no key
 generation or public-key deployment. The Windows agent was never exercised at
 runtime, and real agents including password-manager integrations were not
 validated. Poltergeist's older pin still needs an audited adoption (XAPP-02).
@@ -1090,12 +1112,22 @@ as a separate slice. Validate real agents, including password-manager
 integrations and Windows named pipes. Restrict default
 algorithms to modern sets with an explicit per-host legacy opt-in (an owner
 decision; the global fallback stays until then). Dependabot: add `pub` for the
-workspace and the app; point gradle at `/app/seance_app/android`.
+workspace and the app; point gradle at `/app/seance_app/android`. Forwarding
+needs persisted bind/target configuration, safe loopback defaults, explicit
+exposure warnings and lifecycle/status UI. Surface automatic tunnels with the
+server target, local URL, Copy/Open, health and Revoke; any traffic indication
+must honour reduced motion. Warn, retry, offer Copy, or refuse when a fallback
+port would break exact-port semantics. Range-check every IPv4 octet. Teardown
+must attempt listener and every relay cleanup independently, complete `done`
+only after those attempts, and retain an actionable aggregate failure.
 
 **Gate.** A real sshd matrix (agent cancellation and unavailability, every-hop
 TOFU, jump failure cleanup, explicit forwarding bind addresses and lifecycle,
-legacy-algorithm refusal). Verify strict-KEX/Terrapin behaviour and dependency
-advisories against primary evidence. Preserve SFTP cancellation conformance (dartssh2 3.0.2, #59) on upgrades.
+malformed local-target hosts, occupied same-port behavior, and teardown where
+listener cleanup throws while relays remain active; legacy-algorithm refusal).
+Verify strict-KEX/Terrapin behaviour and dependency advisories against primary
+evidence. Preserve SFTP cancellation conformance (dartssh2 3.0.2, #59) on
+upgrades.
 
 ### SSH-08: Honest reachability probes
 **IDs:** SOL-024, S2-18, "polite probing" idea · **Priority:** P2 ·
@@ -1137,15 +1169,20 @@ staged `cd` (fish-safe); control-character guard on OSC 7 directories.
 - S2-04 (table row only, VERIFIED with git 2.43): porcelain v2 `-z` headers
   are NUL-terminated, so branch, upstream, ahead/behind and stash are dropped
   on every git >= 2.17; the test fixtures use LF-terminated headers.
+- OSC 7 handling decodes `Uri.path` a second time
+  (`xterm_engine.dart:188-197`), so a literal `%20` path component becomes a
+  space and Files/Git can follow the wrong directory.
 
 **Next.** `client.execute('sh -s')` with the script written to stdin; pass
 `-c core.fsmonitor= -c core.untrackedCache=false` and `GIT_OPTIONAL_LOCKS=0`;
 split `-z` header records on NUL; replace fixtures with captured real output.
+Use `uri.path` directly for OSC 7 paths; Dart has already decoded it once.
 
 **Gate.** A fixture from real `git status --porcelain=v2 -z --branch
 --show-stash` yields branch, upstream, ahead/behind and stash; a repo with a
 hostile `core.fsmonitor` does not run it (side-effect file absent); the probe
-works with fish 3 and csh as the login shell (skip when absent).
+works with fish 3 and csh as the login shell (skip when absent). An OSC 7 URI
+containing `%2520` resolves to a path with a literal `%20` component.
 
 ### SSH-10: Upload replace residuals
 **IDs:** S2-09, #138 follow-ups · **Priority:** P2 · **Status:** Partial
@@ -1379,8 +1416,10 @@ Persisted edit placeholders are not session restoration.
 and cwd banner plus Copy, Save, Reconnect and Edit server. Then opt-in
 reconnect with bounded backoff and cancel after network changes, and opt-in
 tab restoration with a target preview. tmux/Mosh persistence is a separate
-feature, not a promise of TCP reconnect. Local-shell and process-restoration
-policies remain separate.
+feature, not a promise of TCP reconnect. Simultaneous terminal splits are also
+a separate post-v1 design for multi-host work; preserve the existing
+session/engine seams for both splits and Mosh rather than coupling them to
+reconnect. Local-shell and process-restoration policies remain separate.
 
 **Gate.** Network flaps, background/resume, auth expiry, normal and error exit,
 manual cancel, stale attempts; never replay a command or login script silently.
@@ -1494,19 +1533,6 @@ safety.
 **Gate.** A `@visibleForTesting` counter: 20 keystrokes in a no-wrap 150 KB file
 do 0 precise layouts; wrapped documents keep correct tops; the existing gutter
 tests pass.
-
-### PERF-04: Throttle transfer progress notifications
-**IDs:** S3-17 · **Priority:** P3 · **Status:** Open
-
-**Problem.** `remote_files_controller.dart:1084-1092` notifies per SFTP chunk
-(`remote_file_system.dart:424-426, 549`); a 1 GB transfer rebuilds the Files
-pane tens of thousands of times.
-
-**Next.** Throttle to about 10 Hz with a `Stopwatch`; always notify on
-completion or failure.
-
-**Gate.** 1000 progress callbacks inside 10 ms produce at most 2
-notifications.
 
 ### PERF-05: Network cancellation and response bounds
 **IDs:** SOL-058, AST-006 residual, SEA26-SEC-15, STATUS 22 · **Priority:** P2 ·
@@ -1871,6 +1897,10 @@ or swipe-close.
   (`docs/SFTP.md:196`).
 - Copy/move, drop onto folder rows, persisted sort/filter per server (the
   smallest slice) (`docs/SFTP.md:185-194`).
+- Make case-insensitive sorting deterministic: after the folded-name compare,
+  compare the exact name and then path
+  (`remote_files_controller.dart:1402-1420`) so repeated refreshes cannot
+  reorder case-only peers according to arbitrary server listing order.
 - Resumable/queued background transfers, an optional dedicated transfer
   connection (feasible via `openAuthenticatedClient`), server-side hash where
   available, promised-file drag-out: separate proposals
@@ -1891,7 +1921,8 @@ or swipe-close.
 **Gate.** Never erase unsaved edits implicitly. Preserve cancellation ownership
 from dartssh2 3.0.2/#59 and the VFS metadata and hash controls (#61, #62).
 Concurrent save/upload, reconnect/restart, chroots, symlinks, providers without
-stable paths.
+stable paths. Repeatedly shuffle a listing containing case-only name pairs and
+verify that every refresh produces the same order.
 Hash-before-rename still has a remote-write race; do not call it a lock.
 
 ---
@@ -1989,7 +2020,9 @@ Pane divider keyboard resizing (#134) still needs native assistive-technology
 verification. Device themes, persisted terminal font/palette/zoom, mobile
 cursor modes, grapheme-safe middle labels and the composed status badge exist;
 what remains is interaction and semantics validation plus missing preferences
-(TERM-09).
+(TERM-09). The Assistant send action (`chat_sidebar.dart:234-243`), snippet
+filter clear (`snippets_pane.dart:93-99`) and narrow Back action
+(`terminal_pane.dart:156-158`) lack explicit tooltips or semantic labels.
 
 **Next.** Touch-only 48 dp targets without bloating desktop. Chips in
 `Semantics(selected:, button:, label: '<label>, <status>[, unsaved]')` with the
@@ -1999,15 +2032,18 @@ drawers and notices: remove spatial slides and tweens while progress, focus,
 navigation and cancellation still complete. Bounded live safety notices and an
 accessible expiry/action policy (UI-05); a persistent banner for settings and
 vault recovery; a useful terminal screen-reader fallback. Localization is a
-separate app-wide task (#134's semantics are English, matching the
-untranslated UI).
+separate app-wide task: introduce ARB localization incrementally, starting
+with dialogs, errors, actions and semantic labels (#134's current semantics
+are English, matching the untranslated UI). Add stable tooltips and labels to
+the named icon-only actions.
 
 **Gate.** Tap-target and semantics tests (`getSemantics` shows selected and
 "connected"); native assistive technology; colour-vision simulation; large
 text; selection during output; with `disableAnimations`, progress, focus,
 navigation and cancellation still complete. Remote titles cannot impersonate
-trusted chrome. Do not replace the existing status palette or create another
-theme picker.
+trusted chrome. Widget semantics expose Send, Clear filter and Back without
+inferring their glyphs; localized dialog/action fixtures load from ARB. Do not
+replace the existing status palette or create another theme picker.
 
 ### UI-05: Bounded, accessible top notices
 **IDs:** UI-04 (sibling review), S4-18, L-03 · **Priority:** P2 · **Status:** Open
@@ -2041,7 +2077,9 @@ dark surface and `#FFD600` 1.41:1 on white, while `primary` colours TextButton
 labels, the selected Settings tab, focus borders and links. No contrast
 feedback in `appearance_settings.dart:243-245`. S4-25: git change letters use
 `scheme.primary`/`tertiary` (`git_pane.dart:699-706`) instead of the FamilyHue
-vocabulary (AGENTS.md §7). Known limits: editor syntax colours and badge fills
+vocabulary (AGENTS.md §7). Known limits: editor syntax and search colours are
+fixed by brightness rather than derived from the customizable palette, which
+can make the editor low-contrast or visually disconnected; badge fills also
 follow brightness, not the palette; the bootstrap spinner uses the default
 theme; the kit corner change is Séance-only; the tab was never driven in a
 built app (`docs/STATUS.md:220-233`). Since #135 new devices and Reset start
@@ -2059,13 +2097,16 @@ automatic correction, and warn only for actual contrast conflicts. Preserve
 share compatibility and device-local scope. Verify theme JSON interchange with
 Poltergeist (BOTH-REV-011: copy/paste both ways, unknown terminal fields,
 corrupt individual values, custom surface contrast, large fonts, status
-shapes); do not request another generic theming system.
+shapes). Define a small editor syntax/search palette derived from, or validated
+against, the active light/dark family. Do not request another generic theming
+system.
 
 **Gate.** `theme_build_test.dart`: `#FFD600`, `#3949AB` and `#6B5BD3` reach 4.5:1
 at both brightnesses; the default preset stays byte-identical; the existing
 preset tests pass. Black-on-black, white-on-white, translucent selections,
 all presets, a customized font, both settings engines and rollback after failed
-persistence.
+persistence. Syntax and search roles meet their contrast targets across every
+built-in preset.
 
 ### UI-07: Host-key dialog: fingerprints before Trust, legible monospace
 **IDs:** S4-12, S4-11 · **Priority:** P2 · **Status:** Open
@@ -2140,21 +2181,25 @@ clearance note · **Priority:** P3 · **Status:** Partial
 **Done:** sidebar redesign (#123-#125), glyph colour vocabulary (#127), themes
 (#128), marks, colours and colour line; Linux/Windows titles "Séance".
 
-**Problem.** `screenshot.png` predates the sidebar and themes. No full-app
-golden matrix (320/700/960/1440, 1x/2x). The small-size icon is photographic.
+**Problem.** `screenshot.png` and `docs/captures/d34-colour/` predate the
+five-tab inspector, current Files/Context/Git surfaces, themes and unified Mac
+chrome. No full-app golden matrix (320/700/960/1440, 1x/2x). The small-size
+icon is photographic.
 The unused `ServerAvatar` awaits a keep/remove decision
 (`docs/STATUS.md:523-525`). The phone FAB overlaps the lowest visible group;
 bottom clearance allows scrolling it clear, so verify with long lists and
 scaled text before calling it an inaccessible-control bug.
 
-**Next.** Starting from the baseline sidebar fixtures, recapture complete
-native light/dark desktop and phone screens with the Terminal default and other
-presets, preserving each chosen palette's identity; reduce duplicated utility
-headings, unlabelled icon clusters and inert space; short context-sensitive
-empty-state actions; consistent spacing, radii and density and a quiet
-host-identity edge. Terminal palettes stay user-controlled and explicit server
-colours are preserved. Normalize visible platform names within signing and
-bundle constraints (REL-04) and check desktop/AppStream integration (REL-03).
+**Next.** Starting from deterministic capture fixtures, recapture complete
+native light/dark desktop and narrow screens with a live terminal and the
+current inspector, including Files, Context and Git, using the Terminal
+default and other presets while preserving each chosen palette's identity;
+reduce duplicated utility headings, unlabelled icon clusters and inert space;
+short context-sensitive empty-state actions; consistent spacing, radii and
+density and a quiet host-identity edge. Terminal palettes stay user-controlled
+and explicit server colours are preserved. Normalize visible platform names
+within signing and bundle constraints (REL-04) and check desktop/AppStream
+integration (REL-03).
 A terminal/sigil small icon (keep the photographic artwork for onboarding and
 marketing). Decide on `ServerAvatar`. No ornamental terminal animation.
 
@@ -2380,8 +2425,8 @@ Fix each; generate counts in CI or drop them.
 - `PROPOSAL.md:86, 190` describe a scratch image; the Dockerfile uses
   `debian:stable-slim`.
 - `astra.md`: "Window sizing belongs to PR #47" and "#49 ... rebase/review it"
-  are outdated (both merged); "Local shell is already PR #44" is unverifiable
-  (no code in main).
+  are outdated (both merged); the PR #44 local-shell note no longer describes
+  the implementation now in main.
 - The archive's relative links were written for the repository root; current
   targets: [astra.md](astra.md), [July archive](docs/reviews/analysis-2026-07-25.md),
   [PROPOSAL.md](PROPOSAL.md), [status](docs/STATUS.md), [SFTP](docs/SFTP.md).
@@ -2443,7 +2488,7 @@ Record the API changes in CHANGELOG. Consider the downstream canary job (idea).
 - Exact-record settlement (Poltergeist PG-REV-001) and SYNC-03 slice 3 should
   share one extension of the sync contract, with consumers and tests.
 - TRUST-01 (#56) is the pin-trust gate for shared accounts.
-- Upstreaming Poltergeist's persistent record store into `seance_core` would
+- Adopting the existing shared `PersistentLocalRecordStore` in Séance would
   serve SYNC-03 slice 1.
 
 ### XAPP-04: Shared files, packaging and platform parity
@@ -2464,6 +2509,74 @@ serialization and fallback behaviour); test cross-repo security contracts
 rather than keeping only a historical copy timestamp. BOTH-REV-011 (theme
 interchange) is in UI-06. Poltergeist-only items from the X slice (X-01, X-02, X-05 on its side,
 X-15, X-17) live in its ANALYSIS.md.
+
+---
+
+## Incremental nice-to-haves (2026-11-04)
+
+### Parse complete SSE events, not individual data lines
+
+bugs — nice-to-have
+
+`packages/seance_core/lib/src/llm/sse.dart:6-17` decodes each `data:` line as a
+separate message, although one legal SSE event can contain several data lines.
+Pretty-printed or split JSON deltas and tool calls are consequently discarded
+for compatible providers.
+
+Accumulate data fields until the blank event boundary, join them with newlines
+and flush the final event at EOF; `zai_search.dart` already walks complete
+events this way. Cover multiline JSON and tool-call fixtures. Rough effort: two
+to four hours.
+
+### Bound served Python producer input reads
+
+general issues — nice-to-have
+
+The generated producer client in
+`packages/seance_sync_server/lib/src/inbox_docs.dart:337-347,419-432` reads
+reason files, scripts and stdin completely before enforcing the 64/96 KiB
+limits. A large file can exhaust memory and an endless pipe can hang
+automation.
+
+Stream at most the applicable limit plus one byte and reject an oversized
+source immediately. Rough effort: two to four hours.
+
+### Resolve or refuse a missing local-shell home
+
+general issues — nice-to-have
+
+`packages/seance_core/lib/src/terminal/local_shell.dart:143-153` leaves the
+working directory unspecified when `HOME` or `USERPROFILE` is absent, so the
+shell can start in a launcher or app-bundle directory on managed desktops.
+
+Resolve the platform account's home through a host service, or refuse startup
+with an actionable message when no safe home is available. Rough effort: two
+to four hours.
+
+### Do not lose Context items during burst output
+
+performance problems, stuttering, and jank — nice-to-have
+
+`app/seance_app/lib/services/terminal_context.dart:729-754,805-866` samples only
+the last 300 rows every 300 ms. Faster output is omitted before inspection, so
+bursty builds can lose actionable paths and links even while the UI remains
+responsive.
+
+Consume completed logical lines incrementally into a bounded queue rather
+than periodically resampling only the tail. Rough effort: one to two days.
+
+### Pin detected Context items into a working set
+
+novel, delightful, or quirky ideas worth trying — nice-to-have
+
+Context items from
+`app/seance_app/lib/services/terminal_context.dart:747-765` and
+`app/seance_app/lib/ui/context_pane.dart:110-168` are transient, so useful
+paths and links disappear as terminal output advances.
+
+Let users pin detected items into a session-local working set grouped by the
+command that produced them. Do not persist raw terminal output. Rough effort:
+one to two days.
 
 ---
 
@@ -2519,10 +2632,10 @@ consolidate earlier ideas without removing their useful variants.
 | Session tray (both apps) | A local socket announcing `{serverConfigId, state}`: Séance shows Poltergeist's transfer count, Poltergeist shows an open-shell dot. No secrets shared. |
 | Poltergeist-side ideas using Séance code | Port Séance's Android `KeepAliveService` to Poltergeist transfers; server-side operations over `runCommand` (reflink copy, `sha256sum`, git chip). Tracked in Poltergeist's ANALYSIS.md. |
 
-Later, separate proposals: terminal splits, tmux/Mosh persistence, a local
-shell (PR #44 never landed), provider-native web search (STATUS 7), sync OIDC,
-libghostty (proposal M10). Historical proposals and their ownership links
-remain in the archive; verify current code before planning them.
+Later, separate proposals: terminal splits, tmux/Mosh persistence,
+provider-native web search (STATUS 7), sync OIDC and libghostty (proposal M10).
+Historical proposals and their ownership links remain in the archive; verify
+current code before planning them.
 
 ---
 
@@ -2534,7 +2647,7 @@ Residuals live in the entries named.
 | PR | Item(s) | Residuals now tracked in |
 |---|---|---|
 | [#132](https://github.com/L-K-M/Seance/pull/132) (sibling reviewer, head `8bfd0eb`) | SEA26-SEC-01: redaction masks complete quoted JSON/YAML values and static shell assignment words, including escaped and truncated inputs, adjacent fields, common `secret_key` spellings and AWS secret-access-key fields; actual provider-body coverage. General redaction remains best-effort. | AI-02 (YAML tags/block scalars, dynamic shell, `==`/`:=`, colon-prefixed scalars, S2-11 forms) |
-| [#133](https://github.com/L-K-M/Seance/pull/133) (sibling reviewer, head `659e034`) | SEA26-SEC-06 / SOL-051 slice: atomic SQLite account deletion with rollback under injected failures | SRV-02 (login/deletion and push/delete races, token join, createAccount leftovers), SYNC-06 (token lifecycle) |
+| [#133](https://github.com/L-K-M/Seance/pull/133) (sibling reviewer, head `659e034`) | SEA26-SEC-06 / SOL-051 slice: atomic SQLite account deletion with rollback under injected failures | SRV-02 (schema migrations, contention, durability and WAL-safe backup/restore), SYNC-06 (token lifecycle) |
 | [#134](https://github.com/L-K-M/Seance/pull/134) (sibling reviewer, head `1322090`) | UI-02 (sibling review) / SOL-061 slice: focusable, labelled pane dividers with arrow and assistive adjustment, visible focus, clamped values, RTL geometry; modified arrows pass through | UI-01, UI-04 (native AT QA, localization) |
 | [#135](https://github.com/L-K-M/Seance/pull/135) | New devices and Reset start in the Terminal theme (`10b49f8`, `06204c8`); partial and extension-less host themes keep the Séance fallback | UI-06, UI-10 (captures predate the change) |
 | [#136](https://github.com/L-K-M/Seance/pull/136) | S1-01 auth-route body cap and `BytesBuilder`; S1-06 username validation including invisible characters, before the limiter; S1-15 typed 400; S1-11 server-side salt/verifier shape | SRV-01 (limiter key count, per-IP buckets, chunked 413), PROTO-02 (client salt check, case/Unicode policy), PROTO-01 (S1-13 seq) |
