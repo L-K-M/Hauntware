@@ -33,8 +33,13 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
   var pullCalls = 0;
   var pushCalls = 0;
 
+  /// When set, serve stable-fence pull pages of at most this many records.
+  int? pullPageSize;
+
   /// When set, the next [pull] throws it — the 401 dead-account fixture.
   Object? nextPullError;
+  int? failPullCall;
+  Object? scheduledPullError;
 
   /// When set, the next [push] throws it — e.g. a 401 session-expiry
   /// fixture for the mid-push auth-failure path.
@@ -43,6 +48,7 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
   /// Every `since` cursor a [pull] was called with — enrollment must always
   /// pull full (`since = 0`), never a delta.
   final pullCursors = <int>[];
+  final pullFences = <int?>[];
 
   bool seed(EncryptedRecord record) {
     final existing = records[record.id];
@@ -124,19 +130,41 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
   }
 
   @override
-  Future<PullResponse> pull({required int since}) async {
+  Future<PullResponse> pull({required int since, int? through}) async {
     pullCalls++;
     pullCursors.add(since);
+    pullFences.add(through);
+    if (failPullCall == pullCalls) {
+      final error = scheduledPullError ?? StateError('scheduled pull failure');
+      failPullCall = null;
+      scheduledPullError = null;
+      throw error;
+    }
     final error = nextPullError;
     if (error != null) {
       nextPullError = null;
       throw error;
     }
+    final fence = through ?? _seq;
     final list = records.values
-        .where((r) => (r.seq ?? 0) > since)
+        .where((r) => (r.seq ?? 0) > since && (r.seq ?? 0) <= fence)
         .toList()
       ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
-    return PullResponse(records: list, latestSeq: _seq);
+    final pageSize = pullPageSize;
+    if (pageSize == null) {
+      return PullResponse(records: list, latestSeq: _seq);
+    }
+    if (list.length > pageSize) {
+      final page = list.take(pageSize).toList();
+      final next = page.last.seq!;
+      return PullResponse(
+        records: page,
+        latestSeq: next,
+        through: fence,
+        nextSince: next,
+      );
+    }
+    return PullResponse(records: list, latestSeq: fence, through: fence);
   }
 
   @override

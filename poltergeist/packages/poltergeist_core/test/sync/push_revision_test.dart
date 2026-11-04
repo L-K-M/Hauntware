@@ -16,7 +16,8 @@ final class _BlockedPush implements SyncApi {
   List<PushResult> extraResults = const [];
 
   @override
-  Future<PullResponse> pull({required int since}) => server.pull(since: since);
+  Future<PullResponse> pull({required int since, int? through}) =>
+      server.pull(since: since, through: through);
 
   @override
   Future<PushResponse> push(List<EncryptedRecord> records) async {

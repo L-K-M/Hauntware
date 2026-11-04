@@ -163,4 +163,107 @@ void main() {
       expect(idsOf(batches)..sort(), ['a', 'b']);
     });
   });
+
+  test('quota reclaimers are prioritized before growth without instability',
+      () {
+    final growth = rec('growth', blobBytes: 100);
+    final equallySmallFirst = rec('small-a');
+    final equallySmallSecond = rec('small-b');
+    final tombstone = EncryptedRecord(
+      id: 'deleted',
+      updatedAt: 10,
+      deviceId: 'device-A',
+      deleted: true,
+      seq: null,
+      blob: Uint8List(0),
+    );
+
+    expect(
+      prioritizeLikelyQuotaReclaimers([
+        growth,
+        equallySmallFirst,
+        tombstone,
+        equallySmallSecond,
+      ]).map((record) => record.id),
+      ['deleted', 'small-a', 'small-b', 'growth'],
+    );
+  });
+
+  test('quota isolation has a strict request budget', () async {
+    final records = [for (var i = 0; i < 1000; i++) rec('growth-$i')];
+    var attempts = 0;
+
+    await expectLater(
+      pushBatchesWithRecovery(
+        [records],
+        push: (batch) async {
+          attempts++;
+          throw const ApiError(
+            code: 'account_quota_exceeded',
+            message: 'account full',
+          );
+        },
+        onRefused: (record) async => fail('quota is not a size refusal'),
+      ),
+      throwsA(isA<ApiError>().having(
+        (error) => error.code,
+        'code',
+        'account_quota_exceeded',
+      )),
+    );
+
+    expect(attempts, lessThanOrEqualTo(32));
+    expect(attempts, greaterThan(1));
+  });
+
+  test('quota budget also bounds many singleton batches', () async {
+    final batches = [
+      for (var i = 0; i < 1000; i++) [rec('growth-$i')],
+    ];
+    var attempts = 0;
+
+    await expectLater(
+      pushBatchesWithRecovery(
+        batches,
+        push: (batch) async {
+          attempts++;
+          throw const ApiError(
+            code: 'account_quota_exceeded',
+            message: 'account full',
+          );
+        },
+        onRefused: (record) async => fail('quota is not a size refusal'),
+      ),
+      throwsA(isA<ApiError>()),
+    );
+
+    expect(attempts, lessThanOrEqualTo(32));
+  });
+
+  test('payload isolation also has a strict request budget', () async {
+    final records = [for (var i = 0; i < 1000; i++) rec('large-$i')];
+    var attempts = 0;
+
+    await expectLater(
+      pushBatchesWithRecovery(
+        [records],
+        push: (batch) async {
+          attempts++;
+          throw const ApiError(
+            code: 'payload_too_large',
+            message: 'records cannot fit pull pages',
+          );
+        },
+        onRefused: (record) async {},
+      ),
+      throwsA(isA<ApiError>().having(
+        (error) => error.code,
+        'code',
+        'payload_too_large',
+      )),
+    );
+
+    expect(attempts, lessThanOrEqualTo(32));
+    expect(attempts, greaterThan(1));
+  });
 }

@@ -597,6 +597,38 @@ void main() {
   });
 
   group('delta bookkeeping', () {
+    test('a round drains every stable-fence page', () async {
+      final device = await _Device.create(tempDir, 'a');
+      server.seed(await _sealBookmark(_bookmark('page-1'), updatedAt: 1));
+      server.seed(await _sealBookmark(_bookmark('page-2'), updatedAt: 2));
+      server.pullPageSize = 1;
+
+      await device.coordinator.runRound(server);
+
+      expect(await device.bookmarks.byId('page-1'), isNotNull);
+      expect(await device.bookmarks.byId('page-2'), isNotNull);
+      expect(server.pullCursors.take(2), [0, 1]);
+      expect(server.pullFences.take(2), [null, 2]);
+      expect(await device.records.highWaterSeq(), 2);
+    });
+
+    test('a rejected continuation restarts from zero without the old fence',
+        () async {
+      final device = await _Device.create(tempDir, 'a');
+      server.seed(await _sealBookmark(_bookmark('page-1'), updatedAt: 1));
+      server.seed(await _sealBookmark(_bookmark('page-2'), updatedAt: 2));
+      server.pullPageSize = 1;
+      server.failPullCall = 2;
+
+      await device.coordinator.runRound(server);
+
+      expect(server.pullCursors.take(4), [0, 1, 0, 1]);
+      expect(server.pullFences.take(4), [null, 2, null, 2]);
+      expect(await device.bookmarks.byId('page-1'), isNotNull);
+      expect(await device.bookmarks.byId('page-2'), isNotNull);
+      expect(await device.records.highWaterSeq(), 2);
+    });
+
     test(
       'pulls are deltas off highWaterSeq and the apply cursor persists',
       () async {
@@ -664,6 +696,26 @@ void main() {
       expect(result.rounds, 1);
       expect(server.pushCalls, 1);
       expect((await device.records.dirtyRecords()).single.id, 'bookmark:stuck');
+    });
+
+    test('an account quota error is not converted to a refused record',
+        () async {
+      final device = await _Device.create(tempDir, 'a');
+      await _save(device, _bookmark('quota'));
+      server.nextPushError = const ApiError(
+        code: 'account_quota_exceeded',
+        message: 'account full',
+      );
+
+      await expectLater(
+        device.coordinator.runRound(server),
+        throwsA(isA<ApiError>().having(
+          (error) => error.code,
+          'code',
+          'account_quota_exceeded',
+        )),
+      );
+      expect((await device.records.dirtyRecords()).single.id, 'bookmark:quota');
     });
   });
 

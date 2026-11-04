@@ -312,7 +312,7 @@ void main() {
 
       expect(result.passphraseUnverified, isFalse);
       expect(server.preloginCalls, 1);
-      expect(server.pullCursors, [0]);
+      expect(server.pullCursors, [0, 0]);
       expect(device.credentials.token, 'token-1');
       expect(device.credentials.vaultKey, vaultKey);
       // The pulled record is in the record store, merged clean.
@@ -343,6 +343,98 @@ void main() {
       expect(result.passphraseWarning, isNull);
       expect(device.credentials.token, isNotNull);
       expect(await device.state.passphraseUnverified(), isTrue);
+    });
+
+    test('finds a decryptable candidate on a later pull page', () async {
+      final device = await _Device.create(tempDir, 'a');
+      final account =
+          await server.addAccount(username: 'ghost-1', password: 'pw');
+      server.seed(EncryptedRecord(
+        id: 'secret:ignored',
+        updatedAt: 1,
+        deviceId: 'foreign-device',
+        deleted: false,
+        seq: null,
+        blob: Uint8List.fromList([1]),
+      ));
+      server.seed(await _sealBookmark(
+        _bookmark('later'),
+        account.keys.vaultKey,
+      ));
+      server.pullPageSize = 1;
+
+      final result = await device.enrollment.login(
+        api: server,
+        baseUrl: 'https://sync.example.com',
+        username: 'ghost-1',
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+        mode: SyncAccountMode.separate,
+      );
+
+      expect(result.passphraseUnverified, isFalse);
+      expect(server.pullCursors, [0, 1, 0, 1]);
+      expect(server.pullFences, [null, 2, null, 2]);
+      expect(await device.records.getRecord('secret:ignored'), isNotNull);
+      expect(await device.records.getRecord('bookmark:later'), isNotNull);
+      expect(await device.records.highWaterSeq(), 2);
+    });
+
+    test('a later trial page failure leaves the prior mirror untouched',
+        () async {
+      final device = await _Device.create(tempDir, 'a');
+      await server.addAccount(username: 'ghost-1', password: 'pw');
+      final prior = EncryptedRecord(
+        id: 'bookmark:prior-account',
+        updatedAt: 1,
+        deviceId: 'prior-device',
+        deleted: false,
+        seq: 7,
+        blob: Uint8List.fromList([7]),
+      );
+      await device.records.putRemote(prior);
+      await device.records.setHighWaterSeq(7);
+      server.seed(EncryptedRecord(
+        id: 'secret:first-page',
+        updatedAt: 1,
+        deviceId: 'foreign-device',
+        deleted: false,
+        seq: null,
+        blob: Uint8List.fromList([1]),
+      ));
+      server.seed(EncryptedRecord(
+        id: 'secret:second-page',
+        updatedAt: 2,
+        deviceId: 'foreign-device',
+        deleted: false,
+        seq: null,
+        blob: Uint8List.fromList([2]),
+      ));
+      server.pullPageSize = 1;
+      server.failPullCall = 2;
+      server.scheduledPullError =
+          const ApiError(code: 'server_error', message: 'boom');
+
+      await expectLater(
+        device.enrollment.login(
+          api: server,
+          baseUrl: 'https://sync.example.com',
+          username: 'ghost-1',
+          password: 'pw',
+          encryptionPassphrase: 'pw',
+          mode: SyncAccountMode.separate,
+        ),
+        throwsA(isA<ApiError>()),
+      );
+
+      expect(await device.records.getRecord(prior.id), same(prior));
+      expect(
+        await device.records.getRecord('secret:first-page'),
+        isNull,
+      );
+      expect(await device.records.highWaterSeq(), 7);
+      expect(device.credentials.token, isNull);
+      expect(await device.state.account(), isNull);
     });
 
     test('a wrong account password fails at login — nothing persists',

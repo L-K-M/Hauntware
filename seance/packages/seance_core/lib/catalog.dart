@@ -19,6 +19,7 @@ export 'src/catalog/endpoint_pin_store.dart' show EndpointPin, EndpointPinStore;
 export 'src/catalog/enrollment.dart'
     show
         EnrollmentResult,
+        EnrollmentHydrationException,
         KdfDowngradeException,
         RegistrationClosedException,
         SyncAccount,
@@ -41,9 +42,9 @@ export 'src/catalog/host_key_mutations.dart'
 export 'src/catalog/persistent_record_store.dart'
     show
         PersistentLocalRecordStore,
-        SyncCursorRejectedException,
         SyncRecordStore,
         recordStoreQuarantinePath;
+export 'src/sync/sync_engine.dart' show SyncCursorRejectedException;
 export 'src/catalog/pin_verdicts.dart'
     show
         InMemoryPinVerdictStore,

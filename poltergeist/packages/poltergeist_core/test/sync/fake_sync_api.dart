@@ -15,6 +15,11 @@ final class FakeSyncApi implements SyncApi {
   /// triggers the full-resync fallback).
   Object? nextPullError;
 
+  /// Optional stable-fence page size and one scheduled pull failure.
+  int? pullPageSize;
+  int? failPullCall;
+  Object? scheduledPullError;
+
   /// When set, the next [push] throws it (transport failure — no results).
   Object? nextPushError;
 
@@ -28,6 +33,7 @@ final class FakeSyncApi implements SyncApi {
   /// Every `since` cursor a [pull] was called with, in order — lets a test
   /// prove the resync retry pulled from zero.
   final pullCursors = <int>[];
+  final pullFences = <int?>[];
 
   /// Seed a record the way the server would store an incoming push: LWW
   /// against what is already held, seq assigned on a win, ignored on a loss.
@@ -55,19 +61,42 @@ final class FakeSyncApi implements SyncApi {
   }
 
   @override
-  Future<PullResponse> pull({required int since}) async {
+  Future<PullResponse> pull({required int since, int? through}) async {
     pullCalls++;
     pullCursors.add(since);
+    pullFences.add(through);
+    if (failPullCall == pullCalls) {
+      final error = scheduledPullError ?? const SyncCursorRejectedException();
+      failPullCall = null;
+      scheduledPullError = null;
+      throw error;
+    }
     final error = nextPullError;
     if (error != null) {
       nextPullError = null;
       throw error;
     }
+    final fence = through ?? _seq;
     final list = records.values
-        .where((r) => (r.seq ?? 0) > since)
+        .where((r) => (r.seq ?? 0) > since && (r.seq ?? 0) <= fence)
         .toList()
       ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
-    return PullResponse(records: list, latestSeq: _seq);
+    final pageSize = pullPageSize;
+    if (pageSize != null && list.length > pageSize) {
+      final page = list.take(pageSize).toList();
+      final next = page.last.seq!;
+      return PullResponse(
+        records: page,
+        latestSeq: next,
+        through: fence,
+        nextSince: next,
+      );
+    }
+    return PullResponse(
+      records: list,
+      latestSeq: pageSize == null ? _seq : fence,
+      through: pageSize == null ? null : fence,
+    );
   }
 
   @override

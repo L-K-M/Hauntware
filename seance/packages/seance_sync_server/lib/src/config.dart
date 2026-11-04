@@ -1,5 +1,7 @@
 import 'package:seance_protocol/seance_protocol.dart';
 
+import 'storage.dart';
+
 /// Server settings, sourced from environment variables (with CLI overrides
 /// applied in `bin/`). TLS is intentionally not handled here — run behind a
 /// reverse proxy, the same shape as Atuin's deployment guidance.
@@ -27,6 +29,14 @@ class ServerSettings {
   final int maxRecordsPerPush;
   final int maxBlobBytes;
 
+  /// Bounds one pull response independently of the account's total size.
+  final int maxRecordsPerPull;
+  final int maxPullBodyBytes;
+
+  /// Bounds the current winning record set held for one account.
+  final int maxAccountRecords;
+  final int maxAccountBytes;
+
   /// The push caps as the client sees them. Advertised in every pull response
   /// so a client can split a large dirty set into pushes this deployment
   /// accepts instead of guessing at env-tuned values.
@@ -34,6 +44,18 @@ class ServerSettings {
         maxBodyBytes: maxBodyBytes,
         maxRecordsPerPush: maxRecordsPerPush,
         maxBlobBytes: maxBlobBytes,
+      );
+
+  AccountQuota get accountQuota => AccountQuota(
+        maxRecords: maxAccountRecords,
+        maxBytes: maxAccountBytes,
+      );
+
+  PullPageOptions get pullPageOptions => PullPageOptions(
+        maxRecords: maxRecordsPerPull,
+        maxBodyBytes: maxPullBodyBytes,
+        pushLimits: pushLimits,
+        recordEnvelopeVersion: kRecordEnvelopeVersion,
       );
 
   const ServerSettings({
@@ -46,6 +68,10 @@ class ServerSettings {
     this.maxBodyBytes = kDefaultMaxPushBodyBytes,
     this.maxRecordsPerPush = kDefaultMaxRecordsPerPush,
     this.maxBlobBytes = kDefaultMaxBlobBytes,
+    this.maxRecordsPerPull = 1000,
+    this.maxPullBodyBytes = 8 * 1024 * 1024,
+    this.maxAccountRecords = 100000,
+    this.maxAccountBytes = 1024 * 1024 * 1024,
   });
 
   factory ServerSettings.fromEnvironment(Map<String, String> env) {
@@ -77,7 +103,7 @@ class ServerSettings {
       return value;
     }
 
-    return ServerSettings(
+    final settings = ServerSettings(
       bindAddress: env['SEANCE_BIND'] ?? '0.0.0.0',
       port: int.tryParse(env['SEANCE_PORT'] ?? '') ?? 8787,
       openRegistration: flag('SEANCE_OPEN_REGISTRATION', false),
@@ -92,7 +118,20 @@ class ServerSettings {
           'SEANCE_MAX_RECORDS_PER_PUSH', kDefaultMaxRecordsPerPush),
       maxBlobBytes:
           positiveLimit('SEANCE_MAX_BLOB_BYTES', kDefaultMaxBlobBytes),
+      maxRecordsPerPull:
+          positiveLimit('SEANCE_MAX_RECORDS_PER_PULL', 1000),
+      maxPullBodyBytes:
+          positiveLimit('SEANCE_MAX_PULL_BODY_BYTES', 8 * 1024 * 1024),
+      maxAccountRecords:
+          positiveLimit('SEANCE_MAX_ACCOUNT_RECORDS', 100000),
+      maxAccountBytes:
+          positiveLimit('SEANCE_MAX_ACCOUNT_BYTES', 1024 * 1024 * 1024),
     );
+    validatePullPageOptions(
+      settings.pullPageOptions,
+      bodyLimitName: 'SEANCE_MAX_PULL_BODY_BYTES',
+    );
+    return settings;
   }
 
   ServerSettings copyWith({
@@ -111,5 +150,9 @@ class ServerSettings {
         maxBodyBytes: maxBodyBytes,
         maxRecordsPerPush: maxRecordsPerPush,
         maxBlobBytes: maxBlobBytes,
+        maxRecordsPerPull: maxRecordsPerPull,
+        maxPullBodyBytes: maxPullBodyBytes,
+        maxAccountRecords: maxAccountRecords,
+        maxAccountBytes: maxAccountBytes,
       );
 }

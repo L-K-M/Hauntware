@@ -9,6 +9,8 @@ import 'storage.dart';
 
 enum _TransactionMode { read, write }
 
+typedef _RecordUsage = ({int count, int bytes});
+
 /// SQLite-backed [Storage] for production. Single file, no server process — the
 /// whole deployment is this binary plus a `.sqlite` file. All record blobs are
 /// already end-to-end encrypted; this layer only shuffles opaque bytes.
@@ -69,7 +71,54 @@ class SqliteStorage implements Storage {
     ''');
     _db.execute(
         'CREATE INDEX IF NOT EXISTS records_seq ON records(username, seq);');
+    _migrateRecordUsage();
     _migrateInbox();
+  }
+
+  /// Add exact logical record counters and backfill legacy databases.
+  void _migrateRecordUsage() {
+    final exists = _db.select(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+      "AND name = 'record_usage'",
+    ).isNotEmpty;
+    if (exists) return;
+
+    _transaction(_TransactionMode.write, () {
+      _db.execute('''
+      CREATE TABLE record_usage (
+        username TEXT PRIMARY KEY,
+        record_count INTEGER NOT NULL,
+        record_bytes INTEGER NOT NULL
+      );
+    ''');
+      final totals = <String, _RecordUsage>{};
+      final statement = _db.prepare('SELECT * FROM records ORDER BY username');
+      try {
+        final cursor = statement.selectCursor();
+        while (cursor.moveNext()) {
+          final row = cursor.current;
+          final username = row['username'] as String;
+          final prior = totals[username] ?? (count: 0, bytes: 0);
+          totals[username] = (
+            count: prior.count + 1,
+            bytes: prior.bytes + _rowToRecord(row).encodedJsonBytes(),
+          );
+        }
+      } finally {
+        statement.dispose();
+      }
+
+      _db.execute('DELETE FROM record_usage');
+      for (final row in _db.select('SELECT username FROM accounts')) {
+        final username = row['username'] as String;
+        final usage = totals[username] ?? (count: 0, bytes: 0);
+        _db.execute(
+          'INSERT INTO record_usage '
+          '(username, record_count, record_bytes) VALUES (?, ?, ?)',
+          [username, usage.count, usage.bytes],
+        );
+      }
+    });
   }
 
   /// Old databases predate the additive outer format marker. Null means the
@@ -160,6 +209,11 @@ class SqliteStorage implements Storage {
     );
     _db.execute('INSERT OR IGNORE INTO seqs (username, value) VALUES (?, 0)',
         [account.username]);
+    _db.execute(
+      'INSERT OR IGNORE INTO record_usage '
+      '(username, record_count, record_bytes) VALUES (?, 0, 0)',
+      [account.username],
+    );
   }
 
   @override
@@ -171,6 +225,7 @@ class SqliteStorage implements Storage {
       _db.execute('DELETE FROM accounts WHERE username = ?', [username]);
       _db.execute('DELETE FROM tokens WHERE username = ?', [username]);
       _db.execute('DELETE FROM records WHERE username = ?', [username]);
+      _db.execute('DELETE FROM record_usage WHERE username = ?', [username]);
       _db.execute('DELETE FROM seqs WHERE username = ?', [username]);
       _db.execute('DELETE FROM inbox_items WHERE username = ?', [username]);
       _db.execute('DELETE FROM inbox_apps WHERE username = ?', [username]);
@@ -195,12 +250,22 @@ class SqliteStorage implements Storage {
 
   @override
   Future<PushResponse> pushRecords(
-      String username, List<EncryptedRecord> records) async {
+    String username,
+    List<EncryptedRecord> records, {
+    AccountQuota quota = const AccountQuota(),
+    PullPageOptions? pullOptions,
+  }) async {
     // A no-op push must not contend with writers.
     final mode = records.isEmpty
         ? _TransactionMode.read
         : _TransactionMode.write;
     return _transaction(mode, () {
+      if (records.isEmpty) {
+        return PushResponse(results: const [], latestSeq: _latestSeq(username));
+      }
+      final initial = _recordUsage(username);
+      var count = initial.count;
+      var bytes = initial.bytes;
       final results = <PushResult>[];
       for (final incoming in records) {
         final existing = _getRecord(username, incoming.id);
@@ -212,21 +277,70 @@ class SqliteStorage implements Storage {
         }
 
         final seq = _nextSeq(username);
-        _putRecord(username, incoming.withSeq(seq));
+        final stored = incoming.withSeq(seq);
+        if (pullOptions != null && !recordFitsPullPage(stored, pullOptions)) {
+          throw PushRecordTooLargeException(incoming.id);
+        }
+        if (existing == null) count++;
+        bytes += stored.encodedJsonBytes() -
+            (existing?.encodedJsonBytes() ?? 0);
+        _putRecordRaw(username, stored);
         results.add(PushResult(id: incoming.id, seq: seq, accepted: true));
       }
+      final growsPastRecordCap =
+          count > quota.maxRecords && count > initial.count;
+      final growsPastByteCap =
+          bytes > quota.maxBytes && bytes > initial.bytes;
+      if (growsPastRecordCap || growsPastByteCap) {
+        throw const AccountQuotaExceededException();
+      }
+      _setRecordUsage(username, count: count, bytes: bytes);
       return PushResponse(results: results, latestSeq: _latestSeq(username));
     });
   }
 
   @override
-  Future<PullResponse> pullSnapshot(String username, int since) async =>
+  Future<PullResponse> pullPage(
+    String username,
+    int since, {
+    int? through,
+    required PullPageOptions options,
+  }) async =>
       _transaction(_TransactionMode.read, () {
         final watermark = _latestSeq(username);
-        return PullResponse(
-          records: _recordsSince(username, since, through: watermark),
-          latestSeq: watermark,
+        if (since < 0 || (through != null && through < since)) {
+          throw ArgumentError('Invalid pull cursor');
+        }
+        if (since > watermark || (through != null && through > watermark)) {
+          throw const PullCursorRejectedException();
+        }
+        final fence = through ?? watermark;
+        final statement = _db.prepare(
+          'SELECT * FROM records WHERE username = ? AND seq > ? '
+          'AND seq <= ? ORDER BY seq ASC LIMIT ?',
         );
+        try {
+          final cursor = statement.selectCursor([
+            username,
+            since,
+            fence,
+            options.maxRecords + 1,
+          ]);
+          Iterable<EncryptedRecord> records() sync* {
+            while (cursor.moveNext()) {
+              yield _rowToRecord(cursor.current);
+            }
+          }
+
+          return buildPullPage(
+            records(),
+            since: since,
+            through: fence,
+            options: options,
+          );
+        } finally {
+          statement.dispose();
+        }
       });
 
   T _transaction<T>(_TransactionMode mode, T Function() action) {
@@ -302,9 +416,20 @@ class SqliteStorage implements Storage {
 
   @override
   Future<void> putRecord(String username, EncryptedRecord record) async =>
-      _putRecord(username, record);
+      _transaction(_TransactionMode.write, () {
+        final prior = _getRecord(username, record.id);
+        final usage = _recordUsage(username);
+        _putRecordRaw(username, record);
+        _setRecordUsage(
+          username,
+          count: usage.count + (prior == null ? 1 : 0),
+          bytes: usage.bytes +
+              record.encodedJsonBytes() -
+              (prior?.encodedJsonBytes() ?? 0),
+        );
+      });
 
-  void _putRecord(String username, EncryptedRecord record) {
+  void _putRecordRaw(String username, EncryptedRecord record) {
     _db.execute(
       '''INSERT INTO records (username, id, updated_at, device_id, deleted, seq, envelope_version, blob)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -322,6 +447,34 @@ class SqliteStorage implements Storage {
         record.envelopeVersion,
         record.blob,
       ],
+    );
+  }
+
+  _RecordUsage _recordUsage(String username) {
+    final rows = _db.select(
+      'SELECT record_count, record_bytes FROM record_usage '
+      'WHERE username = ?',
+      [username],
+    );
+    if (rows.isEmpty) return (count: 0, bytes: 0);
+    return (
+      count: rows.first['record_count'] as int,
+      bytes: rows.first['record_bytes'] as int,
+    );
+  }
+
+  void _setRecordUsage(
+    String username, {
+    required int count,
+    required int bytes,
+  }) {
+    _db.execute(
+      '''INSERT INTO record_usage (username, record_count, record_bytes)
+         VALUES (?, ?, ?)
+         ON CONFLICT(username) DO UPDATE SET
+           record_count=excluded.record_count,
+           record_bytes=excluded.record_bytes''',
+      [username, count, bytes],
     );
   }
 

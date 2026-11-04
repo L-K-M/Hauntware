@@ -562,6 +562,78 @@ void main() {
     expect(transport.closes, 1);
   });
 
+  test('login checks an encryption candidate on a later pull page', () async {
+    final tombstone = EncryptedRecord.tombstone(
+      id: 'gone',
+      updatedAt: 1,
+      deviceId: 'foreign',
+    ).withSeq(1);
+    final encryptedWithAnotherKey = (await RecordCodec(
+      secureRandomBytes(32),
+    ).encrypt(const DecryptedRecord(
+      id: 'server:later',
+      kind: RecordKind.serverConfig,
+      updatedAt: 2,
+      deviceId: 'foreign',
+      data: <String, Object?>{},
+    ))).withSeq(2);
+    final pulls = <Uri>[];
+    final transport = _TrackedClient((request) async {
+      if (request.url.path == '/v1/prelogin') {
+        return http.Response(jsonEncode({
+          'argonSalt': base64Encode(List<int>.filled(16, 0)),
+          'argonParams': const Argon2Params().toJson(),
+        }), HttpStatus.ok);
+      }
+      if (request.url.path == '/v1/login') {
+        return http.Response(
+          jsonEncode({'token': 'new-token'}),
+          HttpStatus.ok,
+        );
+      }
+      if (request.url.path == '/v1/sync') {
+        pulls.add(request.url);
+        final since = request.url.queryParameters['since'];
+        final response = since == '0'
+            ? PullResponse(
+                records: [tombstone],
+                latestSeq: 1,
+                through: 2,
+                nextSince: 1,
+              )
+            : PullResponse(
+                records: [encryptedWithAnotherKey],
+                latestSeq: 2,
+                through: 2,
+              );
+        return http.Response(jsonEncode(response.toJson()), HttpStatus.ok);
+      }
+      throw StateError('Unexpected request ${request.url}');
+    });
+
+    await expectLater(
+      http.runWithClient(
+        () => services.loginSync(
+          baseUrl: _baseUrl,
+          username: 'user',
+          password: 'password',
+          encryptionPassphrase: 'password',
+        ),
+        () => transport,
+      ),
+      throwsA(isA<StateError>().having(
+        (error) => error.message,
+        'message',
+        contains('could not decrypt'),
+      )),
+    );
+    expect(pulls.map((uri) => uri.queryParameters), [
+      {'since': '0'},
+      {'since': '1', 'through': '2'},
+    ]);
+    expect(transport.closes, 1);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
   for (final committedBeforeFailure in [false, true]) {
   test('a refused re-key preserves credentials (committed=$committedBeforeFailure)',
       () async {

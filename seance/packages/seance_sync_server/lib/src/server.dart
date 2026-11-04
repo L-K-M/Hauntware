@@ -79,7 +79,9 @@ class SyncServer {
              maxAttempts: _inboxDepositsPerWindow,
              window: _inboxDepositWindow,
              now: now,
-           );
+           ) {
+    validatePullPageOptions(settings.pullPageOptions);
+  }
 
   Handler get handler {
     final router = Router()
@@ -268,18 +270,26 @@ class SyncServer {
   }
 
   Future<Response> _sync(Request req) => _withAuth(req, (username) async {
-    final since = int.tryParse(req.url.queryParameters['since'] ?? '0') ?? 0;
-    final snapshot = await storage.pullSnapshot(username, since);
-    // Every round pulls before it pushes, so this is where a client learns how
-    // to size the push it is about to make — see [PushLimits].
-    return _json(
-      PullResponse(
-        records: snapshot.records,
-        latestSeq: snapshot.latestSeq,
-        limits: settings.pushLimits,
-        recordEnvelopeVersion: kRecordEnvelopeVersion,
-      ).toJson(),
+    final since = _parseCursor(req.url.queryParameters['since'] ?? '0');
+    final throughRaw = req.url.queryParameters['through'];
+    final through = throughRaw == null ? null : _parseCursor(throughRaw);
+    if (since == null || (throughRaw != null && through == null)) {
+      return _error(
+        400,
+        'bad_request',
+        'Sync cursors must be non-negative integers',
+      );
+    }
+    if (through != null && through < since) {
+      return _error(400, 'bad_request', 'through must not precede since');
+    }
+    final page = await storage.pullPage(
+      username,
+      since,
+      through: through,
+      options: settings.pullPageOptions,
     );
+    return _json(page.toJson());
   });
 
   Future<Response> _push(Request req) => _withAuth(req, (username) async {
@@ -304,7 +314,12 @@ class SyncServer {
             'A record blob exceeds the ${settings.maxBlobBytes}-byte limit');
       }
     }
-    final pushed = await storage.pushRecords(username, r.records);
+    final pushed = await storage.pushRecords(
+      username,
+      r.records,
+      quota: settings.accountQuota,
+      pullOptions: settings.pullPageOptions,
+    );
     return _json(pushed.toJson());
   });
 
@@ -332,6 +347,11 @@ class SyncServer {
   }
 
   int get _authBodyCap => min(settings.maxBodyBytes, _maxAuthBodyBytes);
+
+  static int? _parseCursor(String value) {
+    if (!RegExp(r'^[0-9]+$').hasMatch(value)) return null;
+    return int.tryParse(value);
+  }
 
   /// Whether a new account may take [username]. Registration only: names were
   /// never checked before, so a stored one may break this rule, and login and
@@ -406,6 +426,33 @@ class SyncServer {
       } on StorageBusyException {
         return _error(HttpStatus.serviceUnavailable, 'storage_busy',
             'Storage is busy; retry shortly.');
+      } on AccountQuotaExceededException {
+        return _error(
+          413,
+          'account_quota_exceeded',
+          'This account has reached its sync storage quota. Remove or shrink '
+              'synced records before adding more.',
+        );
+      } on PushRecordTooLargeException {
+        return _error(
+          413,
+          'payload_too_large',
+          'An accepted record cannot fit in one pull response under this '
+              'deployment\'s ${settings.maxPullBodyBytes}-byte pull limit.',
+        );
+      } on PullCursorRejectedException {
+        return _error(
+          HttpStatus.conflict,
+          'sync_cursor_rejected',
+          'The server sequence is behind this client; retry from zero.',
+        );
+      } on StoredPullRecordTooLargeException {
+        return _error(
+          HttpStatus.internalServerError,
+          'stored_record_too_large',
+          'A legacy stored record cannot fit in this deployment\'s pull '
+              'limit. Raise SEANCE_MAX_PULL_BODY_BYTES.',
+        );
       } on _PayloadTooLarge {
         return _error(413, 'payload_too_large', 'Request body too large');
       } on FormatException {

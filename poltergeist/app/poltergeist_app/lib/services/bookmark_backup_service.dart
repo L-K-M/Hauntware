@@ -546,8 +546,8 @@ final class BookmarkBackupService extends ChangeNotifier
   }
 
   /// §4.5's login path for both modes: prelogin → KDF-downgrade refusal →
-  /// derive → login → full pull → trial-decrypt → persist with the hold
-  /// flag reflecting the outcome.
+  /// derive → login → trial pull → persist → hydrate the mirror with the
+  /// hold flag reflecting the outcome.
   @override
   Future<EnrollmentResult> loginAccount({
     required String baseUrl,
@@ -569,6 +569,12 @@ final class BookmarkBackupService extends ChangeNotifier
       );
       await _afterEnrollment();
       return result;
+    } on EnrollmentHydrationException catch (error, stackTrace) {
+      // The account/token/key committed before hydration began. Reconcile the
+      // live controller and UI with that durable truth, then preserve the
+      // post-commit failure for the caller instead of presenting success.
+      await _afterEnrollment();
+      Error.throwWithStackTrace(error, stackTrace);
     } finally {
       api.close();
     }

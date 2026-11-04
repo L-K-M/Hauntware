@@ -172,6 +172,58 @@ void main() {
       // would have been accepted, and the 413 takes all of them.
       expect(settings.pushLimits, const PushLimits(maxBlobBytes: 2048));
     });
+
+    test('pull and account caps are parsed and must be positive', () {
+      const keys = [
+        'SEANCE_MAX_RECORDS_PER_PULL',
+        'SEANCE_MAX_PULL_BODY_BYTES',
+        'SEANCE_MAX_ACCOUNT_RECORDS',
+        'SEANCE_MAX_ACCOUNT_BYTES',
+      ];
+      for (final key in keys) {
+        expect(
+          () => ServerSettings.fromEnvironment({key: 'nope'}),
+          throwsA(isA<ArgumentError>().having((e) => e.name, 'name', key)),
+        );
+        expect(
+          () => ServerSettings.fromEnvironment({key: '0'}),
+          throwsA(isA<ArgumentError>().having((e) => e.name, 'name', key)),
+        );
+      }
+
+      final settings = ServerSettings.fromEnvironment(const {
+        'SEANCE_MAX_RECORDS_PER_PULL': '17',
+        'SEANCE_MAX_PULL_BODY_BYTES': '4096',
+        'SEANCE_MAX_ACCOUNT_RECORDS': '23',
+        'SEANCE_MAX_ACCOUNT_BYTES': '8192',
+      });
+      expect(settings.maxRecordsPerPull, 17);
+      expect(settings.maxPullBodyBytes, 4096);
+      expect(settings.accountQuota,
+          isA<AccountQuota>()
+              .having((quota) => quota.maxRecords, 'records', 23)
+              .having((quota) => quota.maxBytes, 'bytes', 8192));
+    });
+
+    test('a pull cap too small for metadata refuses to start', () {
+      expect(
+        () => ServerSettings.fromEnvironment(
+          const {'SEANCE_MAX_PULL_BODY_BYTES': '1'},
+        ),
+        throwsA(isA<ArgumentError>().having(
+          (error) => error.name,
+          'name',
+          'SEANCE_MAX_PULL_BODY_BYTES',
+        )),
+      );
+      expect(
+        () => SyncServer(
+          storage: InMemoryStorage(),
+          settings: const ServerSettings(maxPullBodyBytes: 1),
+        ),
+        throwsArgumentError,
+      );
+    });
   });
 
   group('health + registration', () {

@@ -223,6 +223,7 @@ export 'package:seance_core/catalog.dart'
 export 'package:seance_core/catalog.dart'
     show
         EnrollmentResult,
+        EnrollmentHydrationException,
         KdfDowngradeException,
         RegistrationClosedException,
         SyncAccount,

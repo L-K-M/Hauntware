@@ -139,6 +139,15 @@ class PushLimits {
         'maxBlobBytes': maxBlobBytes,
       };
 
+  /// Exact UTF-8 byte length of [toJson] after JSON encoding.
+  int encodedJsonBytes() => jsonObjectFramingBytes(3) +
+      jsonKeyBytes('maxBodyBytes') +
+      jsonIntBytes(maxBodyBytes) +
+      jsonKeyBytes('maxRecordsPerPush') +
+      jsonIntBytes(maxRecordsPerPush) +
+      jsonKeyBytes('maxBlobBytes') +
+      jsonIntBytes(maxBlobBytes);
+
   /// Strict decoder, for data this process produced — a present field that is
   /// not a number throws. Decode a *server's* advertisement with [tryFromJson],
   /// which answers null instead of taking the response down with it.
@@ -209,9 +218,13 @@ class PushLimits {
       'maxBlobBytes: $maxBlobBytes)';
 }
 
-/// `GET /v1/sync?since=<seq>` — pull records newer than the client's
-/// high-water mark. [latestSeq] is the account's current maximum sequence
-/// number.
+/// `GET /v1/sync?since=<seq>[&through=<seq>]` — one page newer than the
+/// client's high-water mark.
+///
+/// A paginating server repeats one stable [through] fence. An intermediate
+/// page sets [nextSince] and [latestSeq] to its last record sequence; the final
+/// page omits [nextSince] and sets [latestSeq] to [through]. Both fields are
+/// absent on the legacy, single-page response.
 class PullResponse {
   final List<EncryptedRecord> records;
   final int latestSeq;
@@ -228,11 +241,19 @@ class PullResponse {
   /// same-tuple format migration can converge; ciphertext remains authoritative.
   final int? recordEnvelopeVersion;
 
+  /// Stable account watermark for this page walk, or null from an old server.
+  final int? through;
+
+  /// Cursor for the next page, or null on the final or a legacy response.
+  final int? nextSince;
+
   const PullResponse({
     required this.records,
     required this.latestSeq,
     this.limits,
     this.recordEnvelopeVersion,
+    this.through,
+    this.nextSince,
   });
 
   Map<String, dynamic> toJson() => {
@@ -241,13 +262,66 @@ class PullResponse {
         if (limits != null) 'limits': limits!.toJson(),
         if (recordEnvelopeVersion != null)
           'recordEnvelopeVersion': recordEnvelopeVersion,
+        if (through != null) 'through': through,
+        if (nextSince != null) 'nextSince': nextSince,
       };
+
+  /// Exact UTF-8 byte length of [toJson] after JSON encoding.
+  int encodedSizeBytes() => bodyBytesFor(
+        recordCount: records.length,
+        recordBytes: records.fold<int>(
+          0,
+          (sum, record) => sum + record.encodedJsonBytes(),
+        ),
+        latestSeq: latestSeq,
+        limits: limits,
+        recordEnvelopeVersion: recordEnvelopeVersion,
+        through: through,
+        nextSince: nextSince,
+      );
+
+  /// Exact encoded size when the record count and aggregate size are already
+  /// known. Pull pagination uses this to fill a page in linear time.
+  static int bodyBytesFor({
+    required int recordCount,
+    required int recordBytes,
+    required int latestSeq,
+    PushLimits? limits,
+    int? recordEnvelopeVersion,
+    int? through,
+    int? nextSince,
+  }) {
+    final entryCount = 2 +
+        (limits == null ? 0 : 1) +
+        (recordEnvelopeVersion == null ? 0 : 1) +
+        (through == null ? 0 : 1) +
+        (nextSince == null ? 0 : 1);
+    return jsonObjectFramingBytes(entryCount) +
+        jsonKeyBytes('records') +
+        jsonArrayFramingBytes(recordCount) +
+        recordBytes +
+        jsonKeyBytes('latestSeq') +
+        jsonIntBytes(latestSeq) +
+        (limits == null
+            ? 0
+            : jsonKeyBytes('limits') + limits.encodedJsonBytes()) +
+        (recordEnvelopeVersion == null
+            ? 0
+            : jsonKeyBytes('recordEnvelopeVersion') +
+                jsonIntBytes(recordEnvelopeVersion)) +
+        (through == null
+            ? 0
+            : jsonKeyBytes('through') + jsonIntBytes(through)) +
+        (nextSince == null
+            ? 0
+            : jsonKeyBytes('nextSince') + jsonIntBytes(nextSince));
+  }
 
   factory PullResponse.fromJson(Map<String, dynamic> json) => PullResponse(
         records: (json['records'] as List)
             .map((e) => EncryptedRecord.fromJson((e as Map).cast()))
             .toList(),
-        latestSeq: (json['latestSeq'] as num).toInt(),
+        latestSeq: _requiredCursor(json, 'latestSeq'),
         // Anything that is not a well-formed advertisement counts as "not
         // advertised": the field is advisory and has a documented fallback, so
         // a mangled value must not take the records and watermark down with
@@ -257,7 +331,24 @@ class PullResponse {
           final int version when version > 0 => version,
           _ => null,
         },
+        through: _optionalCursor(json, 'through'),
+        nextSince: _optionalCursor(json, 'nextSince'),
       );
+
+  static int? _optionalCursor(Map<String, dynamic> json, String key) {
+    if (!json.containsKey(key)) return null;
+    final value = json[key];
+    if (value is! int || value < 0) {
+      throw FormatException('$key must be a non-negative integer');
+    }
+    return value;
+  }
+
+  static int _requiredCursor(Map<String, dynamic> json, String key) {
+    final value = _optionalCursor(json, key);
+    if (value == null) throw FormatException('$key is required');
+    return value;
+  }
 }
 
 /// PUT /v1/records — push a batch of locally-changed records.

@@ -209,7 +209,7 @@ final class _FakeTransport implements SyncTransport {
   }
 
   @override
-  Future<PullResponse> pull({required int since}) async {
+  Future<PullResponse> pull({required int since, int? through}) async {
     _reach();
     if (_server.nextPullError case final error?) {
       _server.nextPullError = null;

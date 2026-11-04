@@ -85,7 +85,8 @@ class _FakeRecords implements SyncApi {
   int _seq = 0;
 
   @override
-  Future<PullResponse> pull({required int since}) async => PullResponse(
+  Future<PullResponse> pull({required int since, int? through}) async =>
+      PullResponse(
         records: _store.values.where((r) => (r.seq ?? 0) > since).toList()
           ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0)),
         latestSeq: _seq,

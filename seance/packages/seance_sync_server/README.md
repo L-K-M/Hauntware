@@ -108,6 +108,13 @@ Omit `--db` for an ephemeral in-memory store.
 | `SEANCE_OPEN_REGISTRATION` | `--open-registration` | `false` | Allow `/v1/register` |
 | `SEANCE_LOGIN_MAX_ATTEMPTS` | — | `10` | Login attempts per window |
 | `SEANCE_LOGIN_WINDOW_SECONDS` | — | `60` | Rate-limit window |
+| `SEANCE_MAX_BODY_BYTES` | — | `8388608` | Maximum push request body |
+| `SEANCE_MAX_RECORDS_PER_PUSH` | — | `1000` | Maximum records in one push |
+| `SEANCE_MAX_BLOB_BYTES` | — | `1048576` | Maximum encrypted blob in one record |
+| `SEANCE_MAX_RECORDS_PER_PULL` | — | `1000` | Maximum records in one pull page |
+| `SEANCE_MAX_PULL_BODY_BYTES` | — | `8388608` | Maximum encoded pull response body |
+| `SEANCE_MAX_ACCOUNT_RECORDS` | — | `100000` | Maximum current records in one account |
+| `SEANCE_MAX_ACCOUNT_BYTES` | — | `1073741824` | Maximum encoded current-record bytes in one account |
 
 ## API (protocol v1)
 
@@ -120,7 +127,7 @@ so an old client and new server detect a mismatch instead of corrupting data.
 | `POST /v1/register` | — | Create an account, returns a bearer token |
 | `POST /v1/prelogin` | — | Return the KDF salt/params for a username |
 | `POST /v1/login` | — | Exchange the auth verifier for a token |
-| `GET /v1/sync?since=<seq>` | Bearer | Pull records newer than a sequence number |
+| `GET /v1/sync?since=<seq>[&through=<seq>]` | Bearer | Pull one stable-fence page newer than a sequence number |
 | `PUT /v1/records` | Bearer | Push a batch of encrypted records (LWW) |
 | `DELETE /v1/account` | Bearer | Delete the account and all its data |
 
@@ -160,15 +167,38 @@ way the defaults match that server only if it also ran with them. So a
 deployment with `SEANCE_MAX_BLOB_BYTES` tuned below 1 MiB keeps losing whole
 pushes until the *server* is upgraded too: a new client cannot learn a cap the
 old one never sends, and upgrading only the clients does not unstick it.
-Invalid values for these three caps — unlike this server's other settings —
-abort startup with an error naming the variable, rather than silently falling
-back to the default; an unset or empty variable still means "use the default".
+Invalid values for any sync resource cap abort startup with an error naming the
+variable, rather than silently falling back to the default; an unset or empty
+variable still means "use the default". A pull body cap too small to carry even
+the response metadata is also rejected at startup.
+
+The current winning record set for one account is capped separately at 100,000
+records and 1 GiB by default. Accepted records, including tombstones, count
+toward both exact logical totals after their server sequence is assigned. A
+batch that would grow farther past either cap rolls back atomically with 413
+`account_quota_exceeded`; replacements that shrink an account already over a
+newly lowered cap remain possible. This is distinct from 413
+`payload_too_large`, which identifies a request or record that cannot fit the
+per-request limits.
 A database failure rolls back the batch and its sequence changes. A lost HTTP
 reply can still follow a successful commit; clients must reconcile by pulling.
 
-Pull records and `latestSeq` come from one snapshot: every returned sequence is
-`since < seq <= latestSeq`. Later writes belong to the next pull. This does not
-yet provide pagination, client-side durable revisions or authenticated metadata.
+The first pull captures a stable account watermark in `through`. An
+intermediate page contains at most 1,000 records and 8 MiB by default, sets
+`nextSince` and `latestSeq` to its last record sequence, and the next request
+repeats `through`. The final page omits `nextSince` and sets `latestSeq` to
+`through`; it may be empty when a record was overwritten beyond the fence.
+Every body cap is measured against the exact emitted JSON, including limits and
+pagination metadata. A cursor or fence ahead of the account watermark returns
+409 `sync_cursor_rejected`, allowing a client restored from a newer server
+snapshot to restart from zero. Servers predating pagination omit both new
+fields and remain a one-page response.
+
+An accepted record must be able to travel alone under the configured pull cap.
+The server rejects a winning push that cannot with 413 `payload_too_large`;
+stale LWW losers remain ordinary per-record rejections. A legacy row already in
+the database that cannot fit fails its pull explicitly with 500
+`stored_record_too_large` and asks the operator to raise the pull cap.
 
 SQLite uses `BEGIN IMMEDIATE` for writes and a read transaction for snapshots.
 Transaction lock contention returns `503 storage_busy` without committing the
@@ -183,9 +213,10 @@ not storage readiness. Closing the disabled connection is safe to repeat.
 The memory backend stages batches without yielding, then swaps state together.
 
 Custom server `Storage` implementations must implement `pushRecords` and
-`pullSnapshot` with these guarantees. The older primitives remain for source
-compatibility with callers, but must not be composed into sync operations. Wire
-DTOs and the database schema are unchanged; this is not an account migration.
+`pullPage` with these guarantees. The older primitives remain for source
+compatibility with callers, but must not be composed into sync operations.
+SQLite adds exact per-account usage counters and backfills them once, in one
+transaction, when an older database is first opened by this version.
 
 ## Security model
 

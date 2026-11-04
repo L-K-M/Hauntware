@@ -6,8 +6,163 @@ import 'push_batcher.dart';
 /// The authenticated record endpoints the engine needs. Implemented over HTTP
 /// by [HttpSyncClient]; faked in tests.
 abstract class SyncApi {
-  Future<PullResponse> pull({required int since});
+  Future<PullResponse> pull({required int since, int? through});
   Future<PushResponse> push(List<EncryptedRecord> records);
+}
+
+/// The server rejected a cursor because its sequence stream moved backwards.
+final class SyncCursorRejectedException implements Exception {
+  const SyncCursorRejectedException([this.message = 'sync cursor rejected']);
+
+  final String message;
+
+  @override
+  String toString() => 'SyncCursorRejectedException: $message';
+}
+
+/// Aggregate metadata from one stable-fence page walk.
+final class PullPagesResult {
+  const PullPagesResult({
+    required this.records,
+    required this.limits,
+    required this.recordEnvelopeVersion,
+  });
+
+  final int records;
+  final PushLimits? limits;
+  final int? recordEnvelopeVersion;
+}
+
+/// Drain one pull snapshot, validating every cursor before [applyPage].
+///
+/// The callback receives the cursor that becomes durable only after it stores
+/// the page. A legacy response remains one page and advances only through
+/// record sequences actually observed. [stopAfterPage] may end a read-only
+/// probe after a fully validated page; callers that persist a cursor must omit
+/// it and drain the fence.
+Future<PullPagesResult> pullAllPages(
+  SyncApi api, {
+  required int since,
+  required Future<void> Function(PullResponse page, int advanceTo) applyPage,
+  bool Function(PullResponse page)? stopAfterPage,
+  int maxPages = 1000000,
+}) async {
+  if (since < 0) throw ArgumentError.value(since, 'since');
+  if (maxPages <= 0) throw ArgumentError.value(maxPages, 'maxPages');
+
+  var cursor = since;
+  int? fence;
+  var total = 0;
+  PushLimits? limits;
+  int? envelopeVersion;
+  var sawEnvelopeMetadata = false;
+
+  for (var pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
+    final response = await api.pull(since: cursor, through: fence);
+    final responseFence = response.through;
+    final next = response.nextSince;
+    final paginated = responseFence != null;
+
+    if (!paginated) {
+      if (fence != null || next != null) {
+        throw const FormatException('Pull pagination metadata disappeared');
+      }
+    } else {
+      if (responseFence < since || responseFence < cursor) {
+        throw const SyncCursorRejectedException(
+          'The server pull watermark is behind the client cursor',
+        );
+      }
+      if (fence != null && responseFence != fence) {
+        throw const FormatException(
+            'Pull snapshot fence changed between pages');
+      }
+      fence ??= responseFence;
+    }
+
+    var observed = cursor;
+    for (final record in response.records) {
+      final seq = record.seq;
+      if (seq == null || seq <= observed) {
+        throw const FormatException(
+          'Pulled record sequences must be present and strictly increasing',
+        );
+      }
+      if (responseFence != null && seq > responseFence) {
+        throw const FormatException('Pulled record lies beyond its snapshot');
+      }
+      observed = seq;
+    }
+
+    final int advanceTo;
+    var finalPage = true;
+    if (!paginated) {
+      advanceTo = observed;
+    } else if (next != null) {
+      if (response.records.isEmpty || next != observed) {
+        throw const FormatException(
+          'Intermediate pull cursor must equal the last record sequence',
+        );
+      }
+      if (next <= cursor || next >= responseFence) {
+        throw const FormatException('Intermediate pull cursor cannot progress');
+      }
+      if (response.latestSeq != next) {
+        throw const FormatException(
+          'Intermediate pull latestSeq must equal nextSince',
+        );
+      }
+      advanceTo = next;
+      finalPage = false;
+    } else {
+      if (response.latestSeq != responseFence) {
+        throw const FormatException(
+          'Final pull latestSeq must equal the snapshot fence',
+        );
+      }
+      advanceTo = responseFence;
+    }
+
+    limits = _conservativeLimits(
+      limits,
+      response.limits ?? const PushLimits(),
+    );
+    final marker = response.recordEnvelopeVersion;
+    if (!sawEnvelopeMetadata) {
+      envelopeVersion = marker;
+      sawEnvelopeMetadata = true;
+    } else if (envelopeVersion == null || marker == null) {
+      envelopeVersion = null;
+    } else if (marker < envelopeVersion) {
+      envelopeVersion = marker;
+    }
+
+    await applyPage(response, advanceTo);
+    total += response.records.length;
+    cursor = advanceTo;
+    if (finalPage || (stopAfterPage?.call(response) ?? false)) {
+      return PullPagesResult(
+        records: total,
+        limits: limits,
+        recordEnvelopeVersion: envelopeVersion,
+      );
+    }
+  }
+
+  throw FormatException('Pull exceeded the $maxPages-page safety limit');
+}
+
+PushLimits _conservativeLimits(PushLimits? a, PushLimits b) {
+  if (a == null) return b;
+  return PushLimits(
+    maxBodyBytes:
+        a.maxBodyBytes < b.maxBodyBytes ? a.maxBodyBytes : b.maxBodyBytes,
+    maxRecordsPerPush: a.maxRecordsPerPush < b.maxRecordsPerPush
+        ? a.maxRecordsPerPush
+        : b.maxRecordsPerPush,
+    maxBlobBytes:
+        a.maxBlobBytes < b.maxBlobBytes ? a.maxBlobBytes : b.maxBlobBytes,
+  );
 }
 
 /// Outcome of a sync run, for the UI/telemetry.
@@ -56,12 +211,10 @@ class RefusedRecord {
 
 /// A sync run finished, except for records the server refused as too large.
 ///
-/// Such a record is pushed alone (see [batchForPush]), so the refusal is its
-/// own and nothing else in the run has to pay for it: the run carries on and
-/// this is thrown at the end, with [outcome] describing what did happen. Only
-/// a refused push of that one record is put down to it: a refused batch of
-/// several records names no culprit, and it ends the run where it happens, as
-/// every other failure does.
+/// Such a record is isolated (initially by [batchForPush], or by recursively
+/// splitting a refused batch), so nothing else in the run has to pay for it:
+/// the run carries on and this is thrown at the end, with [outcome] describing
+/// what did happen.
 ///
 /// An [ApiError] with the server's own code, so a caller that handled the
 /// refusal before it was isolated still recognises it.
@@ -163,44 +316,39 @@ class SyncEngine {
   Future<({int applied, PushLimits limits, int? recordEnvelopeVersion})>
       _pullOnce(SyncApi api) async {
     final since = await store.highWaterSeq();
-    final resp = await api.pull(since: since);
-    final limits = resp.limits ?? const PushLimits();
     var applied = 0;
-    var snapshotHighWater = since;
-    // Pulled records should carry server-assigned seqs; trust only observed seqs.
-    for (final remote in resp.records) {
-      final remoteSeq = remote.seq;
-      if (remoteSeq != null && remoteSeq > snapshotHighWater) {
-        snapshotHighWater = remoteSeq;
-      }
-      final local = await store.getRecord(remote.id);
-      if (local == null) {
-        await store.putRemote(remote);
-        applied++;
-        continue;
-      }
-      // Lww.resolve returns one of the two objects passed in, so identity tells
-      // us which side won.
-      final remoteWon = identical(Lww.resolve(local, remote), remote);
-      if (remoteWon) {
-        // Adopt the remote version and drop any losing local change.
-        await store.putRemote(remote);
-        applied++;
-      } else if ((resp.recordEnvelopeVersion ?? 0) <
-              kRecordEnvelopeVersion &&
-          isEnvelopeFormatMigration(remote, local)) {
-        // The local winner differs only by the v2 envelope. An old server
-        // still resolves this tie by its assigned sequence number, so retain
-        // its clean v1 copy and settle the format-only change before push.
-        await store.putRemote(remote);
-      }
-      // Else the local copy is newer and stays dirty for the push phase.
-    }
-    await store.setHighWaterSeq(snapshotHighWater);
+    final pulled = await pullAllPages(
+      api,
+      since: since,
+      applyPage: (resp, advanceTo) async {
+        for (final remote in resp.records) {
+          final local = await store.getRecord(remote.id);
+          if (local == null) {
+            await store.putRemote(remote);
+            applied++;
+            continue;
+          }
+          // Lww.resolve returns one of the two objects passed in, so identity
+          // tells us which side won.
+          final remoteWon = identical(Lww.resolve(local, remote), remote);
+          if (remoteWon) {
+            await store.putRemote(remote);
+            applied++;
+          } else if ((resp.recordEnvelopeVersion ?? 0) <
+                  kRecordEnvelopeVersion &&
+              isEnvelopeFormatMigration(remote, local)) {
+            // An old server resolves this same-tuple migration by its assigned
+            // sequence, so restore its clean v1 copy before push.
+            await store.putRemote(remote);
+          }
+        }
+        await store.setHighWaterSeq(advanceTo);
+      },
+    );
     return (
       applied: applied,
-      limits: limits,
-      recordEnvelopeVersion: resp.recordEnvelopeVersion,
+      limits: pulled.limits ?? const PushLimits(),
+      recordEnvelopeVersion: pulled.recordEnvelopeVersion,
     );
   }
 
@@ -229,37 +377,26 @@ class SyncEngine {
     if (dirty.isEmpty) return (accepted: 0, rejected: 0);
     var accepted = 0;
     var rejected = 0;
-    for (final batch in batchForPush(dirty, limits)) {
-      // A batch the server refuses whole (413, oversized body or blob) is not
-      // the benign per-record rejection below, which the next pull resolves:
-      // nothing local can fix it, so it must not pass for a sync that
-      // succeeded while a record never leaves the device. The batches already
-      // accepted stay marked synced.
-      //
-      // A refused batch of one record is that record's own failure, though:
-      // the batcher sends a record past a cap alone and last for exactly this.
-      // So it is set aside and reported at the end of the run, and the pull
-      // this run made still reaches its caller. Any other failure, including
-      // a refused batch of several, ends the run here as it always has.
-      final PushResponse resp;
-      try {
-        resp = await api.push(batch);
-      } on ApiError catch (error) {
-        if (error.code != _payloadTooLarge || batch.length != 1) rethrow;
-        refused.add(batch.single.id);
-        continue;
-      }
-      for (final result in resp.results) {
-        if (result.accepted) {
-          await store.markSynced(result.id, result.seq);
-          accepted++;
-        } else {
-          // Keep the losing local version dirty until a pull adopts the server
-          // winner; assigning the winner's seq here would mislabel our payload.
-          rejected++;
+    await pushBatchesWithRecovery(
+      batchForPush(prioritizeLikelyQuotaReclaimers(dirty), limits),
+      push: (batch) async {
+        final resp = await api.push(batch);
+        var serverProgress = false;
+        for (final result in resp.results) {
+          if (result.accepted) {
+            await store.markSynced(result.id, result.seq);
+            accepted++;
+            serverProgress = true;
+          } else {
+            // Keep the losing local version dirty until a pull adopts the
+            // server winner; assigning its seq would mislabel our payload.
+            rejected++;
+          }
         }
-      }
-    }
+        return serverProgress;
+      },
+      onRefused: (record) async => refused.add(record.id),
+    );
     return (accepted: accepted, rejected: rejected);
   }
 }

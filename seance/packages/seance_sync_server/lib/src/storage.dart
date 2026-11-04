@@ -38,6 +38,187 @@ class StorageBusyException implements Exception {
   const StorageBusyException();
 }
 
+/// Per-account bounds for the current winning record set.
+final class AccountQuota {
+  const AccountQuota({
+    this.maxRecords = 100000,
+    this.maxBytes = 1024 * 1024 * 1024,
+  });
+
+  final int maxRecords;
+  final int maxBytes;
+}
+
+/// A push would grow an account farther beyond one of its storage caps.
+class AccountQuotaExceededException implements Exception {
+  const AccountQuotaExceededException();
+}
+
+/// An accepted push record could not be returned under the pull body cap.
+class PushRecordTooLargeException implements Exception {
+  const PushRecordTooLargeException(this.id);
+
+  final String id;
+}
+
+/// A legacy stored row cannot fit in even an otherwise empty pull page.
+class StoredPullRecordTooLargeException implements Exception {
+  const StoredPullRecordTooLargeException(this.id);
+
+  final String id;
+}
+
+/// The requested cursor is ahead of this account's current sequence stream.
+class PullCursorRejectedException implements Exception {
+  const PullCursorRejectedException();
+}
+
+/// Server-specific bounds and metadata included in every pull page.
+final class PullPageOptions {
+  const PullPageOptions({
+    required this.maxRecords,
+    required this.maxBodyBytes,
+    required this.pushLimits,
+    required this.recordEnvelopeVersion,
+  });
+
+  final int maxRecords;
+  final int maxBodyBytes;
+  final PushLimits pushLimits;
+  final int recordEnvelopeVersion;
+}
+
+const int _maxStoredSequence = 9223372036854775807;
+
+/// Reject a deployment that cannot emit even an empty, fenced response.
+void validatePullPageOptions(
+  PullPageOptions options, {
+  String bodyLimitName = 'maxBodyBytes',
+}) {
+  if (options.maxRecords <= 0) {
+    throw ArgumentError.value(
+      options.maxRecords,
+      'maxRecords',
+      'must be a positive integer',
+    );
+  }
+  final minimumBodyBytes = _finalPullPage(
+    const [],
+    _maxStoredSequence,
+    options,
+  ).encodedSizeBytes();
+  if (options.maxBodyBytes < minimumBodyBytes) {
+    throw ArgumentError.value(
+      options.maxBodyBytes,
+      bodyLimitName,
+      'must be at least $minimumBodyBytes bytes for pull metadata',
+    );
+  }
+}
+
+/// Whether [record] can always travel alone under [options].
+bool recordFitsPullPage(EncryptedRecord record, PullPageOptions options) {
+  final sequenced = record.withSeq(_maxStoredSequence - 1);
+  return PullResponse(
+        records: [sequenced],
+        latestSeq: _maxStoredSequence - 1,
+        limits: options.pushLimits,
+        recordEnvelopeVersion: options.recordEnvelopeVersion,
+        through: _maxStoredSequence,
+        nextSince: _maxStoredSequence - 1,
+      ).encodedSizeBytes() <=
+      options.maxBodyBytes;
+}
+
+/// Fill one pull page from an ascending, fence-bounded record iterable.
+PullResponse buildPullPage(
+  Iterable<EncryptedRecord> candidates, {
+  required int since,
+  required int through,
+  required PullPageOptions options,
+}) {
+  validatePullPageOptions(options);
+  final selected = <EncryptedRecord>[];
+  final iterator = candidates.iterator;
+  var hasCurrent = iterator.moveNext();
+  var previousSeq = since;
+  var selectedBytes = 0;
+
+  while (hasCurrent) {
+    final current = iterator.current;
+    final seq = current.seq;
+    if (seq == null || seq <= previousSeq || seq > through) {
+      throw StateError('Storage returned an invalid pull sequence');
+    }
+    final hasFollowing = iterator.moveNext();
+
+    if (selected.length >= options.maxRecords) {
+      return _intermediatePullPage(selected, through, options);
+    }
+
+    final currentBytes = current.encodedJsonBytes();
+    final candidateBytes = PullResponse.bodyBytesFor(
+      recordCount: selected.length + 1,
+      recordBytes: selectedBytes + currentBytes,
+      latestSeq: hasFollowing ? seq : through,
+      limits: options.pushLimits,
+      recordEnvelopeVersion: options.recordEnvelopeVersion,
+      through: through,
+      nextSince: hasFollowing ? seq : null,
+    );
+    if (candidateBytes > options.maxBodyBytes) {
+      if (selected.isEmpty) {
+        throw StoredPullRecordTooLargeException(current.id);
+      }
+      return _intermediatePullPage(selected, through, options);
+    }
+
+    selected.add(current);
+    selectedBytes += currentBytes;
+    previousSeq = seq;
+    if (!hasFollowing) return _finalPullPage(selected, through, options);
+    if (selected.length == options.maxRecords) {
+      return _intermediatePullPage(selected, through, options);
+    }
+    hasCurrent = true;
+  }
+
+  final response = _finalPullPage(selected, through, options);
+  if (response.encodedSizeBytes() > options.maxBodyBytes) {
+    throw const StoredPullRecordTooLargeException('<response metadata>');
+  }
+  return response;
+}
+
+PullResponse _intermediatePullPage(
+  List<EncryptedRecord> records,
+  int through,
+  PullPageOptions options,
+) {
+  final next = records.last.seq!;
+  return PullResponse(
+    records: List.unmodifiable(records),
+    latestSeq: next,
+    limits: options.pushLimits,
+    recordEnvelopeVersion: options.recordEnvelopeVersion,
+    through: through,
+    nextSince: next,
+  );
+}
+
+PullResponse _finalPullPage(
+  List<EncryptedRecord> records,
+  int through,
+  PullPageOptions options,
+) =>
+    PullResponse(
+      records: List.unmodifiable(records),
+      latestSeq: through,
+      limits: options.pushLimits,
+      recordEnvelopeVersion: options.recordEnvelopeVersion,
+      through: through,
+    );
+
 /// A registered inbox app as the server stores it. Like [Account], only a
 /// salted hash of the deposit token is kept: a leaked database must not hand
 /// out tokens that let anyone fill the user's inbox. The app key is never
@@ -98,10 +279,19 @@ abstract class Storage {
   /// Process entries in list order, including repeated ids. Later entries resolve
   /// against earlier staged writes. Empty batches return the current watermark.
   Future<PushResponse> pushRecords(
-      String username, List<EncryptedRecord> records);
+    String username,
+    List<EncryptedRecord> records, {
+    AccountQuota quota = const AccountQuota(),
+    PullPageOptions? pullOptions,
+  });
 
-  /// Return records and their watermark from one consistent snapshot.
-  Future<PullResponse> pullSnapshot(String username, int since);
+  /// Return one bounded page under a stable account watermark.
+  Future<PullResponse> pullPage(
+    String username,
+    int since, {
+    int? through,
+    required PullPageOptions options,
+  });
 
   // Compatibility primitives; sync handlers must use the atomic operations.
   Future<EncryptedRecord?> getRecord(String username, String id);
@@ -156,6 +346,21 @@ abstract class Storage {
   Future<int> purgeInboxItems({required int storedBefore});
 }
 
+/// Compatibility helper for storage-focused tests and tools that need an
+/// unbounded logical snapshot without going through HTTP.
+extension StorageSnapshotCompatibility on Storage {
+  Future<PullResponse> pullSnapshot(String username, int since) => pullPage(
+        username,
+        since,
+        options: const PullPageOptions(
+          maxRecords: 1000000,
+          maxBodyBytes: 1024 * 1024 * 1024,
+          pushLimits: PushLimits(),
+          recordEnvelopeVersion: kRecordEnvelopeVersion,
+        ),
+      );
+}
+
 class _MemoryInboxItem {
   final String username;
   final String appId;
@@ -176,6 +381,8 @@ class InMemoryStorage implements Storage {
   final Map<String, String> _tokens = {}; // token -> username
   final Map<String, Map<String, EncryptedRecord>> _records = {};
   final Map<String, int> _seq = {};
+  final Map<String, int> _recordCounts = {};
+  final Map<String, int> _recordBytes = {};
   final Map<String, StoredInboxApp> _inboxApps = {}; // appId -> app
   final List<_MemoryInboxItem> _inboxItems = []; // in received order
   final Map<String, int> _inboxReceived = {}; // username -> last received
@@ -188,6 +395,8 @@ class InMemoryStorage implements Storage {
     _accounts[account.username] = account;
     _records[account.username] = {};
     _seq[account.username] = 0;
+    _recordCounts[account.username] = 0;
+    _recordBytes[account.username] = 0;
   }
 
   @override
@@ -195,6 +404,8 @@ class InMemoryStorage implements Storage {
     _accounts.remove(username);
     _records.remove(username);
     _seq.remove(username);
+    _recordCounts.remove(username);
+    _recordBytes.remove(username);
     _tokens.removeWhere((_, u) => u == username);
     _inboxApps.removeWhere((_, app) => app.username == username);
     _inboxItems.removeWhere((item) => item.username == username);
@@ -213,9 +424,19 @@ class InMemoryStorage implements Storage {
 
   @override
   Future<PushResponse> pushRecords(
-      String username, List<EncryptedRecord> records) async {
+    String username,
+    List<EncryptedRecord> records, {
+    AccountQuota quota = const AccountQuota(),
+    PullPageOptions? pullOptions,
+  }) async {
     // Stage without awaits so failures and concurrent requests see no partial batch.
     final staged = Map<String, EncryptedRecord>.of(_records[username] ?? {});
+    final int initialCount = _recordCounts[username] ?? staged.length;
+    final int initialBytes = _recordBytes[username] ??
+        staged.values.fold<int>(
+            0, (sum, record) => sum + record.encodedJsonBytes());
+    var count = initialCount;
+    var bytes = initialBytes;
     var seq = _seq[username] ?? 0;
     final results = <PushResult>[];
     for (final incoming in records) {
@@ -228,24 +449,57 @@ class InMemoryStorage implements Storage {
       }
 
       seq++;
-      staged[incoming.id] = incoming.withSeq(seq);
+      final stored = incoming.withSeq(seq);
+      if (pullOptions != null && !recordFitsPullPage(stored, pullOptions)) {
+        throw PushRecordTooLargeException(incoming.id);
+      }
+      if (existing == null) count++;
+      bytes += stored.encodedJsonBytes() -
+          (existing?.encodedJsonBytes() ?? 0);
+      staged[incoming.id] = stored;
       results.add(PushResult(id: incoming.id, seq: seq, accepted: true));
+    }
+
+    final growsPastRecordCap =
+        count > quota.maxRecords && count > initialCount;
+    final growsPastByteCap = bytes > quota.maxBytes && bytes > initialBytes;
+    if (growsPastRecordCap || growsPastByteCap) {
+      throw const AccountQuotaExceededException();
     }
 
     _records[username] = staged;
     _seq[username] = seq;
+    _recordCounts[username] = count;
+    _recordBytes[username] = bytes;
     return PushResponse(results: results, latestSeq: seq);
   }
 
   @override
-  Future<PullResponse> pullSnapshot(String username, int since) async {
+  Future<PullResponse> pullPage(
+    String username,
+    int since, {
+    int? through,
+    required PullPageOptions options,
+  }) async {
     // Copy the rows and watermark in one synchronous turn.
     final watermark = _seq[username] ?? 0;
+    if (since < 0 || (through != null && through < since)) {
+      throw ArgumentError('Invalid pull cursor');
+    }
+    if (since > watermark || (through != null && through > watermark)) {
+      throw const PullCursorRejectedException();
+    }
+    final fence = through ?? watermark;
     final records = (_records[username]?.values ?? const <EncryptedRecord>[])
-        .where((r) => (r.seq ?? 0) > since && (r.seq ?? 0) <= watermark)
+        .where((r) => (r.seq ?? 0) > since && (r.seq ?? 0) <= fence)
         .toList()
       ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
-    return PullResponse(records: records, latestSeq: watermark);
+    return buildPullPage(
+      records,
+      since: since,
+      through: fence,
+      options: options,
+    );
   }
 
   @override
@@ -254,7 +508,13 @@ class InMemoryStorage implements Storage {
 
   @override
   Future<void> putRecord(String username, EncryptedRecord record) async {
-    (_records[username] ??= {})[record.id] = record;
+    final records = _records[username] ??= {};
+    final prior = records[record.id];
+    records[record.id] = record;
+    _recordCounts[username] = records.length;
+    _recordBytes[username] = (_recordBytes[username] ?? 0) +
+        record.encodedJsonBytes() -
+        (prior?.encodedJsonBytes() ?? 0);
   }
 
   @override

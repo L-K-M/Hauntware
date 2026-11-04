@@ -33,11 +33,17 @@ final class FakeSyncApi implements SyncApi {
   /// 413 `payload_too_large` for the whole push, as the real server does.
   final tooLarge = <String>{};
 
+  /// Quota fixture: [quotaBlockedId] is refused until [quotaShrinkId] lands.
+  String? quotaBlockedId;
+  String? quotaShrinkId;
+  bool _quotaShrunk = false;
+
   var pullCalls = 0;
   var pushCalls = 0;
 
   /// The size of every [push], in order.
   final pushSizes = <int>[];
+  final pushIds = <List<String>>[];
 
   /// Every `since` cursor a [pull] was called with, in order — lets a test
   /// prove the resync retry pulled from zero.
@@ -69,7 +75,7 @@ final class FakeSyncApi implements SyncApi {
   }
 
   @override
-  Future<PullResponse> pull({required int since}) async {
+  Future<PullResponse> pull({required int since, int? through}) async {
     pullCalls++;
     pullCursors.add(since);
     final error = nextPullError;
@@ -91,10 +97,21 @@ final class FakeSyncApi implements SyncApi {
   Future<PushResponse> push(List<EncryptedRecord> pushed) async {
     pushCalls++;
     pushSizes.add(pushed.length);
+    pushIds.add([for (final record in pushed) record.id]);
     final error = nextPushError;
     if (error != null) {
       nextPushError = null;
       throw error;
+    }
+    if (!_quotaShrunk &&
+        pushed.any((record) => record.id == quotaBlockedId)) {
+      throw const ApiError(
+        code: 'account_quota_exceeded',
+        message: 'account full',
+      );
+    }
+    if (pushed.any((record) => record.id == quotaShrinkId)) {
+      _quotaShrunk = true;
     }
     if (pushed.any((record) => tooLarge.contains(record.id))) {
       throw const ApiError(code: 'payload_too_large', message: 'too large');

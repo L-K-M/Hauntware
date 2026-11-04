@@ -72,6 +72,11 @@ class HttpSyncClient implements SyncApi, InboxApi {
       decoded = null;
     }
     if (decoded is Map<String, dynamic> && decoded['error'] is String) {
+      if (decoded['error'] == 'sync_cursor_rejected') {
+        throw SyncCursorRejectedException(
+          decoded['message'] as String? ?? 'sync cursor rejected',
+        );
+      }
       throw ApiError.fromJson(decoded);
     }
     throw ApiError(
@@ -155,9 +160,12 @@ class HttpSyncClient implements SyncApi, InboxApi {
   }
 
   @override
-  Future<PullResponse> pull({required int since}) async {
+  Future<PullResponse> pull({required int since, int? through}) async {
     final res = await _client
-        .get(_uri('/v1/sync', {'since': '$since'}), headers: _authHeaders)
+        .get(_uri('/v1/sync', {
+          'since': '$since',
+          if (through != null) 'through': '$through',
+        }), headers: _authHeaders)
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
     return PullResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>);

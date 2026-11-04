@@ -189,12 +189,16 @@ class EncryptedRecord {
     if (version != null && (version is! int || version < 1)) {
       throw const FormatException('Invalid record envelope version');
     }
+    final seq = json['seq'];
+    if (seq != null && (seq is! int || seq < 0)) {
+      throw const FormatException('Invalid record sequence');
+    }
     return EncryptedRecord(
         id: json['id'] as String,
         updatedAt: (json['updatedAt'] as num).toInt(),
         deviceId: json['deviceId'] as String,
         deleted: json['deleted'] as bool? ?? false,
-        seq: (json['seq'] as num?)?.toInt(),
+        seq: seq as int?,
         envelopeVersion: version as int?,
         blob: base64.decode(json['blob'] as String? ?? ''),
       );

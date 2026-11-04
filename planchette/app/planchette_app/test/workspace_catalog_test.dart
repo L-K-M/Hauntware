@@ -667,7 +667,7 @@ final class _Transport implements WorkspaceCatalogTransport {
   }
 
   @override
-  Future<PullResponse> pull({required int since}) async {
+  Future<PullResponse> pull({required int since, int? through}) async {
     await server.beforePull?.call();
     server.cursors.add(since);
     final error = server.pullError;

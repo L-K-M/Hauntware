@@ -54,6 +54,20 @@ class _FaultingDatabase implements Database {
       _inner.select(sql, parameters);
 
   @override
+  PreparedStatement prepare(
+    String sql, {
+    bool persistent = false,
+    bool vtab = true,
+    bool checkNoTail = false,
+  }) =>
+      _inner.prepare(
+        sql,
+        persistent: persistent,
+        vtab: vtab,
+        checkNoTail: checkNoTail,
+      );
+
+  @override
   bool get autocommit {
     if (_fault == _CleanupFault.stateRead) {
       throw StateError('injected state-read failure');

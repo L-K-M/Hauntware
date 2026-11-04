@@ -28,7 +28,7 @@ class FakeServer implements SyncApi {
   PushLimits get _enforced => advertisedLimits ?? const PushLimits();
 
   @override
-  Future<PullResponse> pull({required int since}) async {
+  Future<PullResponse> pull({required int since, int? through}) async {
     final records = _store.values
         .where((r) => (r.seq ?? 0) > since)
         .toList()
@@ -97,7 +97,8 @@ class PushRaceApi implements SyncApi {
   });
 
   @override
-  Future<PullResponse> pull({required int since}) => server.pull(since: since);
+  Future<PullResponse> pull({required int since, int? through}) =>
+      server.pull(since: since, through: through);
 
   @override
   Future<PushResponse> push(List<EncryptedRecord> records) async {
@@ -126,7 +127,7 @@ class PullRaceApi implements SyncApi {
   PullRaceApi(this.initiallyUnseen);
 
   @override
-  Future<PullResponse> pull({required int since}) async {
+  Future<PullResponse> pull({required int since, int? through}) async {
     requestedSince.add(since);
     if (!_returnedRacedSnapshot) {
       _returnedRacedSnapshot = true;
@@ -154,7 +155,8 @@ class FailingBatchApi implements SyncApi {
   FailingBatchApi(this.server, {required this.failFromPush});
 
   @override
-  Future<PullResponse> pull({required int since}) => server.pull(since: since);
+  Future<PullResponse> pull({required int since, int? through}) =>
+      server.pull(since: since, through: through);
 
   @override
   Future<PushResponse> push(List<EncryptedRecord> records) async {
@@ -171,13 +173,78 @@ class FailingBatchApi implements SyncApi {
 /// is refused whole, and no one record in it is to blame.
 class RefuseAsTooLargeApi implements SyncApi {
   @override
-  Future<PullResponse> pull({required int since}) async =>
+  Future<PullResponse> pull({required int since, int? through}) async =>
       const PullResponse(records: [], latestSeq: 0);
 
   @override
   Future<PushResponse> push(List<EncryptedRecord> records) async =>
       throw const ApiError(
           code: 'payload_too_large', message: 'Request body too large');
+}
+
+class SelectiveTooLargeApi implements SyncApi {
+  SelectiveTooLargeApi(this.server, this.refusedId);
+
+  final FakeServer server;
+  final String refusedId;
+  final List<List<String>> attempts = [];
+
+  @override
+  Future<PullResponse> pull({required int since, int? through}) =>
+      server.pull(since: since, through: through);
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) async {
+    attempts.add([for (final record in records) record.id]);
+    if (records.any((record) => record.id == refusedId)) {
+      throw const ApiError(
+        code: 'payload_too_large',
+        message: 'Record cannot fit a pull page',
+      );
+    }
+    return server.push(records);
+  }
+}
+
+class QuotaThenShrinkApi implements SyncApi {
+  QuotaThenShrinkApi({this.maxRecordsPerPush = 1});
+
+  final int maxRecordsPerPush;
+  var _shrunk = false;
+  var _seq = 0;
+  final attempts = <List<String>>[];
+
+  @override
+  Future<PullResponse> pull({required int since, int? through}) async =>
+      PullResponse(
+        records: [],
+        latestSeq: 0,
+        limits: PushLimits(maxRecordsPerPush: maxRecordsPerPush),
+      );
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) async {
+    attempts.add([for (final record in records) record.id]);
+    if (!_shrunk && records.any((record) => record.id == 'growth')) {
+      throw const ApiError(
+        code: 'account_quota_exceeded',
+        message: 'account full',
+      );
+    }
+    if (records.any((record) => record.id == 'shrink')) _shrunk = true;
+    final results = <PushResult>[];
+    for (final record in records) {
+      results.add(PushResult(
+        id: record.id,
+        seq: ++_seq,
+        accepted: true,
+      ));
+    }
+    return PushResponse(
+      results: results,
+      latestSeq: _seq,
+    );
+  }
 }
 
 /// Lands another device's copy of [newer]'s record on [server] the first time
@@ -190,7 +257,8 @@ class SupersedeOnPushApi implements SyncApi {
   SupersedeOnPushApi(this.server, this.newer);
 
   @override
-  Future<PullResponse> pull({required int since}) => server.pull(since: since);
+  Future<PullResponse> pull({required int since, int? through}) =>
+      server.pull(since: since, through: through);
 
   @override
   Future<PushResponse> push(List<EncryptedRecord> records) async {
@@ -205,7 +273,7 @@ class SupersedeOnPushApi implements SyncApi {
 /// Accepts nothing, ever: the standing-rejection case the round cap exists for.
 class RejectEverythingApi implements SyncApi {
   @override
-  Future<PullResponse> pull({required int since}) async =>
+  Future<PullResponse> pull({required int since, int? through}) async =>
       const PullResponse(records: [], latestSeq: 0);
 
   @override
@@ -612,20 +680,80 @@ void main() {
             startsWith('Klabautermann setting (klabautermann:pref:p) is too'));
       });
 
-      test('a batch refused whole still ends the run', () async {
+      test('a refused batch is bisected to each offending record', () async {
         final store = InMemoryLocalRecordStore();
         await store.putLocal(rec('a', 10, 'A'));
         await store.putLocal(rec('b', 10, 'A'));
 
         await expectLater(
           SyncEngine(store).sync(RefuseAsTooLargeApi()),
-          throwsA(isA<ApiError>()
-              .having((e) => e.code, 'code', 'payload_too_large')
-              .having((e) => e, 'error', isNot(isA<SyncRecordsRefused>()))),
-          reason: 'a refused batch of several names no culprit, so it is not '
-              'set aside as one record\'s failure',
+          throwsA(isA<SyncRecordsRefused>().having(
+            (error) => error.recordIds,
+            'record ids',
+            ['a', 'b'],
+          )),
         );
         expect(await store.dirtyRecords(), hasLength(2));
+      });
+
+      test('one pullability refusal does not stall good records beside it',
+          () async {
+        final store = InMemoryLocalRecordStore();
+        await store.putLocal(rec('good', 10, 'A'));
+        await store.putLocal(rec('too-big', 10, 'A'));
+        final api = SelectiveTooLargeApi(FakeServer(), 'too-big');
+
+        await expectLater(
+          SyncEngine(store).sync(api),
+          throwsA(isA<SyncRecordsRefused>().having(
+            (error) => error.recordIds,
+            'record ids',
+            ['too-big'],
+          )),
+        );
+
+        expect(api.attempts.take(3), [
+          ['good', 'too-big'],
+          ['good'],
+          ['too-big'],
+        ]);
+        expect((await store.dirtyRecords()).single.id, 'too-big');
+      });
+
+      test('a later shrink releases an earlier quota-blocked batch', () async {
+        final store = InMemoryLocalRecordStore();
+        await store.putLocal(rec('growth', 10, 'A'));
+        await store.putLocal(rec('shrink', 10, 'A'));
+        final api = QuotaThenShrinkApi();
+
+        final outcome = await SyncEngine(store).sync(api);
+
+        expect(outcome.pushed, 2);
+        expect(api.attempts, [
+          ['growth'],
+          ['shrink'],
+          ['growth'],
+        ]);
+        expect(await store.dirtyRecords(), isEmpty);
+      });
+
+      test('a same-batch quota failure still reaches its shrinking record',
+          () async {
+        final store = InMemoryLocalRecordStore();
+        await store.putLocal(rec('growth', 10, 'A'));
+        await store.putLocal(rec('shrink', 10, 'A'));
+        final api = QuotaThenShrinkApi(maxRecordsPerPush: 2);
+
+        final outcome = await SyncEngine(store).sync(api);
+
+        expect(outcome.pushed, 2);
+        expect(api.attempts, [
+          ['growth', 'shrink'],
+          ['growth'],
+          ['shrink'],
+          ['growth'],
+        ]);
+        expect(await store.dirtyRecords(), isEmpty);
       });
 
       test('any other failure of a one-record push still ends the run',

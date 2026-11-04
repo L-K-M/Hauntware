@@ -220,6 +220,58 @@ void main() {
           isNot(contains('bookmark:held')));
     });
 
+    test('a post-commit hydration failure rebinds and remains resumable',
+        () async {
+      h.server.records.addAll([
+        await h.fleetSealed(DecryptedRecord(
+          id: 'bookmark:first',
+          kind: RecordKind.bookmark,
+          updatedAt: _fixedNow.millisecondsSinceEpoch,
+          deviceId: 'fleet',
+          data: _bookmark('first').toJson(),
+        ), seq: 1),
+        await h.fleetSealed(DecryptedRecord(
+          id: 'bookmark:second',
+          kind: RecordKind.bookmark,
+          updatedAt: _fixedNow.millisecondsSinceEpoch,
+          deviceId: 'fleet',
+          data: _bookmark('second').toJson(),
+        ), seq: 2),
+      ]);
+      h.server
+        ..seq = 2
+        ..pullPageSize = 1
+        // Trial stops after page 1. Hydration stores page 1, then fails.
+        ..failPullCall = 3
+        ..scheduledPullError =
+            const ApiError(code: 'server_error', message: 'boom');
+
+      await expectLater(
+        h.service.loginAccount(
+          baseUrl: 'https://sync.example',
+          username: 'shared-user',
+          password: 'pw',
+          encryptionPassphrase: 'pw',
+          mode: SyncAccountMode.shared,
+        ),
+        throwsA(isA<EnrollmentHydrationException>()),
+      );
+
+      expect(h.credentials.token, 'token-shared-user');
+      expect(h.service.account?.username, 'shared-user');
+      expect(h.service.catalog, isNotNull);
+      expect(await h.records.highWaterSeq(), 1);
+      expect(await h.bookmarks.byId('first'), isNotNull);
+      expect(await h.bookmarks.byId('second'), isNull);
+      expect(h.server.pullSinces, [0, 0, 1]);
+
+      final resumed = await h.service.backUpNow();
+
+      expect(resumed, isNotNull);
+      expect(await h.records.highWaterSeq(), 2);
+      expect(await h.bookmarks.byId('second'), isNotNull);
+    });
+
     test('a below-minimum prelogin refuses to derive (KDF downgrade)',
         () async {
       h.server.argonParams = const Argon2Params.fast();

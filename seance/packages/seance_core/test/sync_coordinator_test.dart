@@ -27,7 +27,7 @@ class FakeServer implements SyncApi {
   int get latestSeq => _seq;
 
   @override
-  Future<PullResponse> pull({required int since}) async {
+  Future<PullResponse> pull({required int since, int? through}) async {
     pulls++;
     final records = _store.values.where((r) => (r.seq ?? 0) > since).toList()
       ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
@@ -3613,7 +3613,7 @@ class _BlobCapServer extends FakeServer {
   _BlobCapServer(this.maxBlobBytes);
 
   @override
-  Future<PullResponse> pull({required int since}) async {
+  Future<PullResponse> pull({required int since, int? through}) async {
     final response = await super.pull(since: since);
     return PullResponse(
       records: response.records,

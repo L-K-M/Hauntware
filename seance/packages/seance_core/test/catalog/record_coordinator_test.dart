@@ -820,13 +820,16 @@ void main() {
         for (final id in ['web', 'db']) {
           await _saveServer(device, _server(id, label: id));
         }
-        server
-          ..limits = const PushLimits(maxRecordsPerPush: 1)
-          ..tooLarge.add('web');
+        server.tooLarge.add('web');
 
         final result = await device.coordinator.runRound(server);
 
         expect(result.refusedIds, ['web']);
+        expect(server.pushIds.take(3), [
+          ['db', 'web'],
+          ['db'],
+          ['web'],
+        ]);
         expect(server.records.keys, ['db']);
         expect(
           [for (final r in await device.records.dirtyRecords()) r.id],
@@ -834,6 +837,48 @@ void main() {
         );
       },
     );
+
+    test('a same-batch shrink releases an earlier quota-blocked record',
+        () async {
+      final device = await _Device.create(tempDir, 'a', shared: true);
+      await _saveServer(device, _server('growth', label: 'growth'));
+      await _saveServer(device, _server('shrink', label: 'shrink'));
+      server
+        ..quotaBlockedId = 'growth'
+        ..quotaShrinkId = 'shrink';
+
+      final result = await device.coordinator.runRound(server);
+
+      expect(server.pushIds, [
+        ['growth', 'shrink'],
+        ['growth'],
+        ['shrink'],
+        ['growth'],
+      ]);
+      expect(result.pushed, 2);
+      expect(await device.records.dirtyRecords(), isEmpty);
+    });
+
+    test('a later quota batch can shrink before an earlier batch retries',
+        () async {
+      final device = await _Device.create(tempDir, 'a', shared: true);
+      await _saveServer(device, _server('growth', label: 'growth'));
+      await _saveServer(device, _server('shrink', label: 'shrink'));
+      server
+        ..limits = const PushLimits(maxRecordsPerPush: 1)
+        ..quotaBlockedId = 'growth'
+        ..quotaShrinkId = 'shrink';
+
+      final result = await device.coordinator.runRound(server);
+
+      expect(server.pushIds, [
+        ['growth'],
+        ['shrink'],
+        ['growth'],
+      ]);
+      expect(result.pushed, 2);
+      expect(await device.records.dirtyRecords(), isEmpty);
+    });
 
     test('create, edit, and delete converge across shared devices', () async {
       final a = await _Device.create(tempDir, 'a', shared: true);

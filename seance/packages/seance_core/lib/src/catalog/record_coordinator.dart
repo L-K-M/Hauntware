@@ -183,10 +183,6 @@ const _genericHandlerTraits = [
   ),
 ];
 
-/// The sync server's error code for a push it refuses as too large to
-/// store (`SyncEngine` answers the same code).
-const String _payloadTooLarge = 'payload_too_large';
-
 /// See the library doc. The coordinator never owns transport: [runRound]
 /// takes the [SyncApi] seam per call and tests fake it.
 final class RecordCoordinator {
@@ -667,52 +663,48 @@ final class RecordCoordinator {
           for (final record in await _records.dirtyRecords())
             if (!refused.contains(record.id)) record,
         ];
-        // Batched to the limits the pull advertised: one body past them
-        // would be refused whole, identically every round.
-        for (final batch in batchForPush(dirty, limits)) {
-          final PushResponse response;
-          try {
-            response = await api.push(batch);
-          } on ApiError catch (error) {
-            if (error.code == 'unauthorized') {
-              authFailed = true;
-              break rounds;
-            }
-            // The batcher sends a record past a cap alone and last, so a
-            // refused batch of one is that record's own failure: it stays
-            // dirty, and the batches the server took stay pushed.
-            if (error.code != _payloadTooLarge || batch.length != 1) rethrow;
-            refused.add(batch.single.id);
-            continue;
-          }
-          final sentById = {for (final record in batch) record.id: record};
-          for (final result in response.results) {
-            // Unrequested and repeated results cannot settle another edit.
-            final sent = sentById.remove(result.id);
-            if (sent == null) continue;
-            final restored = await _records.settlePush(sent, result);
-            if (result.accepted) {
-              pushed++;
-              progressed = true;
-            } else {
-              // The push lost server-side LWW: the copy the server actually
-              // holds is the displaced pulled winner, so put it back —
-              // leaving the losing edit in place would diverge the fleet
-              // (04 §3.2's push-ties-or-loses re-check). A rejection with no
-              // displaced winner stays dirty for the next pull to reconcile.
-              if (restored != null) {
-                progressed = true;
-                final context = _contextFor(holdActive: false);
-                switch (await _dispatch(restored, context)) {
-                  case ApplyOutcome.applied:
-                    report.appliedIds.add(restored.id);
-                  case ApplyOutcome.deferred:
-                    report.deferredIds.add(restored.id);
-                  case ApplyOutcome.skipped:
+        // Batched to the advertised limits. A size refusal is bisected to the
+        // offending record; a quota-blocked batch waits behind later batches
+        // so a shrinking replacement can make room for it.
+        try {
+          await pushBatchesWithRecovery(
+            batchForPush(prioritizeLikelyQuotaReclaimers(dirty), limits),
+            push: (batch) async {
+              final response = await api.push(batch);
+              var serverProgress = false;
+              final sentById = {for (final record in batch) record.id: record};
+              for (final result in response.results) {
+                // Unrequested and repeated results cannot settle another edit.
+                final sent = sentById.remove(result.id);
+                if (sent == null) continue;
+                final restored = await _records.settlePush(sent, result);
+                if (result.accepted) {
+                  pushed++;
+                  progressed = true;
+                  serverProgress = true;
+                } else {
+                  // Restore the server's displaced winner after an LWW loss.
+                  if (restored != null) {
+                    progressed = true;
+                    final context = _contextFor(holdActive: false);
+                    switch (await _dispatch(restored, context)) {
+                      case ApplyOutcome.applied:
+                        report.appliedIds.add(restored.id);
+                      case ApplyOutcome.deferred:
+                        report.deferredIds.add(restored.id);
+                      case ApplyOutcome.skipped:
+                    }
+                  }
                 }
               }
-            }
-          }
+              return serverProgress;
+            },
+            onRefused: (record) async => refused.add(record.id),
+          );
+        } on ApiError catch (error) {
+          if (error.code != 'unauthorized') rethrow;
+          authFailed = true;
+          break rounds;
         }
       }
       // No durable state changed this round (nothing pulled, nothing
@@ -852,26 +844,30 @@ final class RecordCoordinator {
   /// so `applyPulled` re-scans the lifetime set.
   Future<({int pulled, PushLimits? limits, int? recordEnvelopeVersion})>
   _pullOnce(SyncApi api) async {
-    PullResponse response;
+    Future<PullPagesResult> walk(int since) => pullAllPages(
+      api,
+      since: since,
+      applyPage: (response, advanceTo) async {
+        for (final remote in response.records) {
+          // The store merges under the same Lww the server ran — a loser is
+          // dropped or parked behind the dirty rival it lost to.
+          await _records.putRemote(remote);
+        }
+        await _records.setHighWaterSeq(advanceTo);
+      },
+    );
+
+    PullPagesResult result;
     try {
-      response = await api.pull(since: await _records.highWaterSeq());
+      result = await walk(await _records.highWaterSeq());
     } on SyncCursorRejectedException {
       await _records.resetSyncCursors();
-      response = await api.pull(since: 0);
+      result = await walk(0);
     }
-    var snapshot = await _records.highWaterSeq();
-    for (final remote in response.records) {
-      final seq = remote.seq;
-      if (seq != null && seq > snapshot) snapshot = seq;
-      // The store merges under the same Lww the server ran — a loser is
-      // dropped or parked behind the dirty rival it lost to.
-      await _records.putRemote(remote);
-    }
-    await _records.setHighWaterSeq(snapshot);
     return (
-      pulled: response.records.length,
-      limits: response.limits,
-      recordEnvelopeVersion: response.recordEnvelopeVersion,
+      pulled: result.records,
+      limits: result.limits,
+      recordEnvelopeVersion: result.recordEnvelopeVersion,
     );
   }
 

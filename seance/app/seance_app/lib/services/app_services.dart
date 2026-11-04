@@ -886,19 +886,27 @@ class AppServices {
       // Authentication cannot prove that the separate encryption passphrase is
       // correct. Verify it against one remote payload before changing the local
       // vault or persisting enrollment, so a typo cannot overwrite synced data.
-      final remote = await client.pull(since: 0);
-      for (final record in remote.records) {
-        if (record.deleted || record.blob.isEmpty) continue;
-        try {
-          await RecordCodec(keys.vaultKey).decrypt(record);
-        } catch (_) {
-          throw StateError(
-            'The vault encryption passphrase could not decrypt this account. '
-            'Check it and try again.',
-          );
-        }
-        break;
-      }
+      var checkedPayload = false;
+      await pullAllPages(
+        client,
+        since: 0,
+        applyPage: (remote, _) async {
+          if (checkedPayload) return;
+          for (final record in remote.records) {
+            if (record.deleted || record.blob.isEmpty) continue;
+            try {
+              await RecordCodec(keys.vaultKey).decrypt(record);
+            } catch (_) {
+              throw StateError(
+                'The vault encryption passphrase could not decrypt this '
+                'account. Check it and try again.',
+              );
+            }
+            checkedPayload = true;
+            break;
+          }
+        },
+      );
       await _completeSyncEnrollment(
         baseUrl: baseUrl,
         username: username,

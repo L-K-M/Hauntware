@@ -119,6 +119,9 @@ final class InMemorySyncRecordStore implements SyncRecordStore {
   @override
   Future<List<EncryptedRecord>> displacedRecords() async =>
       List.unmodifiable(_displaced.values);
+
+  @override
+  Future<int> restoreLegacyEnvelopeMigrations() async => 0;
 }
 
 /// The keystore seam, in memory.
@@ -216,11 +219,20 @@ final class FakeSyncServer {
 
   /// What each transport observed.
   final pullSinces = <int>[];
+  final pullThroughs = <int?>[];
   final pushed = <EncryptedRecord>[];
   var deleteAccountCalls = 0;
   var loginCalls = 0;
+  var pullCalls = 0;
   var registerCalls = 0;
   var seq = 0;
+
+  /// When set, pull serves stable-fence pages of at most this many records.
+  int? pullPageSize;
+
+  /// Fail exactly this numbered pull, for post-commit hydration coverage.
+  int? failPullCall;
+  Object? scheduledPullError;
 }
 
 /// Builds transports bound to one [FakeSyncServer]; the [seen] transports
@@ -281,22 +293,49 @@ final class FakeSyncTransport implements SyncTransport {
   }
 
   @override
-  Future<PullResponse> pull({required int since}) async {
+  Future<PullResponse> pull({required int since, int? through}) async {
     _requireAuth();
+    server.pullCalls++;
     server.pullSinces.add(since);
+    server.pullThroughs.add(through);
+    if (server.failPullCall == server.pullCalls) {
+      final error = server.scheduledPullError ??
+          StateError('scheduled pull failure');
+      server.failPullCall = null;
+      server.scheduledPullError = null;
+      throw error;
+    }
     // The server's own delta semantics: only records newer than the
     // cursor — an unfiltered repeat would keep every round "progressing".
     // A seq-less seed would silently compare as 0 and vanish from every
     // delta pull — fail loudly so tests must stamp an explicit seq.
-    final fresh = [
+    final pageSize = server.pullPageSize;
+    final legacyFresh = [
       for (final record in server.records)
         if ((record.seq ?? (throw StateError(
-                'seeded record ${record.id} has no seq')))
-            >
+                'seeded record ${record.id} has no seq'))) >
             since)
           record,
+    ]..sort((a, b) => a.seq!.compareTo(b.seq!));
+    if (pageSize == null) {
+      return PullResponse(records: legacyFresh, latestSeq: server.seq);
+    }
+    final fence = through ?? server.seq;
+    final fresh = [
+      for (final record in legacyFresh)
+        if (record.seq! <= fence) record,
     ];
-    return PullResponse(records: fresh, latestSeq: server.seq);
+    if (fresh.length > pageSize) {
+      final page = fresh.take(pageSize).toList();
+      final next = page.last.seq!;
+      return PullResponse(
+        records: page,
+        latestSeq: next,
+        through: fence,
+        nextSince: next,
+      );
+    }
+    return PullResponse(records: fresh, latestSeq: fence, through: fence);
   }
 
   @override

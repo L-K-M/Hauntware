@@ -15,6 +15,9 @@ int actualBodyBytes(PushRequest request) =>
 int actualRecordBytes(EncryptedRecord record) =>
     utf8.encode(jsonEncode(record.toJson())).length;
 
+int actualPullBytes(PullResponse response) =>
+    utf8.encode(jsonEncode(response.toJson())).length;
+
 EncryptedRecord record({
   String id = 'record-id',
   int updatedAt = 1,
@@ -227,6 +230,106 @@ void main() {
         });
         expect(decoded.limits, isNull, reason: 'limits: $malformed');
         expect(decoded.latestSeq, 3);
+      }
+    });
+  });
+
+  group('PullResponse pagination', () {
+    test('legacy, intermediate, and final sizes match jsonEncode', () {
+      final records = [
+        record(id: 'escaped:"\\\u0001', seq: 7, blobBytes: 13),
+        record(id: 'ghost:👻', seq: 12, blobBytes: 1024),
+      ];
+      final responses = [
+        PullResponse(records: records, latestSeq: 12),
+        PullResponse(
+          records: [records.first],
+          latestSeq: 7,
+          limits: const PushLimits(
+            maxBodyBytes: 4096,
+            maxRecordsPerPush: 4,
+            maxBlobBytes: 512,
+          ),
+          recordEnvelopeVersion: kRecordEnvelopeVersion,
+          through: 12,
+          nextSince: 7,
+        ),
+        PullResponse(
+          records: [records.last],
+          latestSeq: 12,
+          limits: const PushLimits(),
+          recordEnvelopeVersion: kRecordEnvelopeVersion,
+          through: 12,
+        ),
+      ];
+
+      for (final response in responses) {
+        expect(response.encodedSizeBytes(), actualPullBytes(response));
+        expect(
+          PullResponse.bodyBytesFor(
+            recordCount: response.records.length,
+            recordBytes: response.records.fold<int>(
+              0,
+              (sum, value) => sum + value.encodedJsonBytes(),
+            ),
+            latestSeq: response.latestSeq,
+            limits: response.limits,
+            recordEnvelopeVersion: response.recordEnvelopeVersion,
+            through: response.through,
+            nextSince: response.nextSince,
+          ),
+          actualPullBytes(response),
+        );
+      }
+    });
+
+    test('pagination metadata round-trips', () {
+      const response = PullResponse(
+        records: [],
+        latestSeq: 41,
+        through: 99,
+        nextSince: 41,
+      );
+      final decoded = PullResponse.fromJson(response.toJson());
+      expect(decoded.through, 99);
+      expect(decoded.nextSince, 41);
+    });
+
+    test('optional cursors must be non-negative JSON integers', () {
+      for (final key in const ['through', 'nextSince']) {
+        for (final value in <Object?>[-1, 1.5, '1', null]) {
+          expect(
+            () => PullResponse.fromJson({
+              'records': <Object>[],
+              'latestSeq': 0,
+              key: value,
+            }),
+            throwsFormatException,
+            reason: '$key=$value',
+          );
+        }
+      }
+    });
+
+    test('required and record cursors reject lossy numeric values', () {
+      for (final value in <Object?>[-1, 1.5, '1', null]) {
+        expect(
+          () => PullResponse.fromJson({
+            'records': <Object>[],
+            'latestSeq': value,
+          }),
+          throwsFormatException,
+          reason: 'latestSeq=$value',
+        );
+        if (value != null) {
+          expect(
+            () => EncryptedRecord.fromJson(
+              record(seq: 1).toJson()..['seq'] = value,
+            ),
+            throwsFormatException,
+            reason: 'record seq=$value',
+          );
+        }
       }
     });
   });

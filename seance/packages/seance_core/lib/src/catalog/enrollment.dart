@@ -183,6 +183,20 @@ final class RegistrationClosedException extends SyncEnrollmentException {
   const RegistrationClosedException() : super(syncRegistrationClosedMessage);
 }
 
+/// Enrollment credentials and account state committed, but the initial mirror
+/// hydration failed. Callers must reconcile their live controller state before
+/// surfacing this failure.
+final class EnrollmentHydrationException implements Exception {
+  const EnrollmentHydrationException(this.cause, this.causeStackTrace);
+
+  final Object cause;
+  final StackTrace causeStackTrace;
+
+  @override
+  String toString() =>
+      'Enrollment was saved, but initial record hydration failed: $cause';
+}
+
 /// The Design B enrollment driver (04 §4.1/§4.5). Owns no transport: the
 /// [SyncEnrollmentApi] seam comes per call like `RecordCoordinator`'s.
 final class SyncEnrollment {
@@ -258,11 +272,12 @@ final class SyncEnrollment {
 
   /// Enrol against an existing account (04 §4.5, mirroring Séance's
   /// `loginSync`): prelogin → refuse any KDF downgrade → derive both keys →
-  /// login → a **full** pull (`since = 0`, always — a retained highWaterSeq
-  /// must never produce an empty pull that skips the check) → trial-decrypt
-  /// the first non-tombstone record on a decryptable id → persist with the
-  /// hold flag reflecting the outcome. An immediate trial failure warns
-  /// with the three-cause copy and proceeds held, never aborts.
+  /// login → a **full** trial pull (`since = 0`, always — a retained
+  /// highWaterSeq must never produce an empty pull that skips the check) →
+  /// trial-decrypt the first non-tombstone record on a decryptable id →
+  /// persist with the hold flag reflecting the outcome → a second full pull
+  /// into the now-associated mirror. An immediate trial failure warns with
+  /// the three-cause copy and proceeds held, never aborts.
   Future<EnrollmentResult> login({
     required SyncEnrollmentApi api,
     required String baseUrl,
@@ -286,7 +301,6 @@ final class SyncEnrollment {
       authVerifier: base64.encode(keys.authVerifier),
     ));
 
-    final response = await api.pull(since: 0);
     // The trial-decrypt: the FIRST non-tombstone record on a decryptable
     // id decides — kind-agnostic across every prefix the registration
     // opens (prefixless, hostkey:, and product prefixes such as bookmark:),
@@ -294,29 +308,33 @@ final class SyncEnrollment {
     // binds enrollment too). Auth success cannot prove the E2E passphrase.
     var unverified = true;
     String? warning;
+    var trialFinished = false;
     final crypto = RecordCrypto(RecordCodec(keys.vaultKey));
-    for (final record in response.records) {
-      if (record.deleted || record.blob.isEmpty) continue;
-      if (!isDecryptableSyncId(record.id, _handlers)) continue;
-      try {
-        await crypto.open(record);
-        unverified = false;
-      } catch (_) {
-        warning = syncPassphraseCheckFailedMessage;
-      }
-      break;
-    }
+    await pullAllPages(
+      api,
+      since: 0,
+      applyPage: (response, advanceTo) async {
+        if (!trialFinished) {
+          for (final record in response.records) {
+            if (record.deleted || record.blob.isEmpty) continue;
+            if (!isDecryptableSyncId(record.id, _handlers)) continue;
+            try {
+              await crypto.open(record);
+              unverified = false;
+            } catch (_) {
+              warning = syncPassphraseCheckFailedMessage;
+            }
+            trialFinished = true;
+            break;
+          }
+        }
+      },
+      stopAfterPage: (_) => trialFinished,
+    );
 
-    // Only now persist: the pulled ciphertext merges into the §3.1 store
-    // (skip-preserved records re-apply once the passphrase is corrected),
-    // then the token, vault key, device id, account, and flag.
-    var snapshot = await _records.highWaterSeq();
-    for (final record in response.records) {
-      final seq = record.seq;
-      if (seq != null && seq > snapshot) snapshot = seq;
-      await _records.putRemote(record);
-    }
-    await _records.setHighWaterSeq(snapshot);
+    // Only now persist the token, vault key, device id, account, and flag. The
+    // trial walk never writes the live mirror: a later-page failure must not
+    // mix a foreign account's records into the previously enrolled account.
     await _persist(
       api: api,
       baseUrl: baseUrl,
@@ -330,6 +348,25 @@ final class SyncEnrollment {
     // exists to judge — the deferred foreign-record check raises it when
     // a real failure later arrives).
     await _state.setNotice(syncNoticePassphraseCheckFailed, warning != null);
+
+    // Populate in a second stable snapshot after the account association is
+    // durable. A failure here can leave a resumable partial mirror, but every
+    // page is now tied to the account whose token and key were persisted.
+    try {
+      await pullAllPages(
+        api,
+        since: 0,
+        applyPage: (response, advanceTo) async {
+          // Preserve every ciphertext, including prefixes this app never opens.
+          for (final record in response.records) {
+            await _records.putRemote(record);
+          }
+          await _records.setHighWaterSeq(advanceTo);
+        },
+      );
+    } catch (error, stackTrace) {
+      throw EnrollmentHydrationException(error, stackTrace);
+    }
     return EnrollmentResult(
       passphraseUnverified: unverified,
       vaultKey: keys.vaultKey,
