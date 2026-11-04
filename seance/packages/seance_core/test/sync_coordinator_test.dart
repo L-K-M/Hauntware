@@ -1181,7 +1181,8 @@ void main() {
       // would pull it again. Stamping it at the edit that excluded the server
       // makes repeat rounds a no-op.
       expect(tombstone!.updatedAt, 4243);
-      expect(tombstone.blob, isEmpty, reason: 'a tombstone leaks no payload');
+      expect(tombstone.blob, isNotEmpty);
+      expect((await codec.decrypt(tombstone)).kind, RecordKind.serverConfig);
     });
 
     test('the credential is retracted under the id it was pushed under',
@@ -1357,9 +1358,8 @@ void main() {
       final local = InMemoryLocalRecordStore();
       // This device's own retraction, and one from a device whose server the
       // matching config tombstone has already removed. Neither is honoured:
-      // a tombstone is unsealed, so a sync server can assert one on its own,
-      // and the second case is exactly the shape that attack takes — an id no
-      // local config references any more.
+      // peer removal of shared ciphertext is not permission to erase local
+      // vault material, and the second id is no longer referenced locally.
       for (final (id, from) in [
         ('secret:sec-kept', 'A'),
         ('secret:sec-orphan', 'B'),
@@ -1370,8 +1370,7 @@ void main() {
           // Newer than the exclusion at 21, deliberately. Dated older, a
           // shield that merely refused tombstones *losing* last-write-wins
           // would pass this — and the point is that the refusal is
-          // unconditional, because the date on an unsealed tombstone is the
-          // sync server's to choose.
+          // unconditional policy rather than a timestamp accident.
           updatedAt: 99,
           deviceId: from,
           deleted: true,
@@ -1387,9 +1386,9 @@ void main() {
       expect((await vault.getSecret('sec-kept'))?.value, 'local-only');
       // Referenced by nothing, and it stays too. This is the deliberate cost:
       // an orphan the vault carries rather than a delete taken on a sync
-      // server's unauthenticated say-so. Sealing tombstones is what would let
-      // this one be honoured; until then, garbage beats a vault-wipe
-      // primitive.
+      // server's say-so. A separate, explicit cross-device credential-removal
+      // policy would be needed to honour it; until then, garbage beats a
+      // vault-wipe primitive.
       expect((await vault.getSecret('sec-orphan'))?.value, 'withdrawn');
       // And both stay staged, so a build that can verify them still has them:
       // pulls are incremental, and a dropped record is never redelivered.
@@ -1944,16 +1943,17 @@ void main() {
       final secretRecord =
           onServer.records.where((r) => r.id == 'secret:sec-1').last;
       expect(secretRecord.deleted, isTrue);
-      // Payload-free, observed after a real push/pull round trip rather than
-      // straight off the local store: the config and secret retraction paths
-      // are written apart, and only the config one was pinned.
-      expect(secretRecord.blob, isEmpty);
+      // Authenticated and typed, observed after a real push/pull round trip
+      // rather than straight off the local store: the config and secret
+      // retraction paths are written apart, and only the config one was pinned.
+      expect(secretRecord.blob, isNotEmpty);
+      expect((await codec.decrypt(secretRecord)).kind, RecordKind.secret);
 
       // A keeps working, which is the point of excluding rather than deleting.
       expect((await vaultA.getSecret('sec-1'))?.value, 'hunter2');
       // B keeps an orphan: nothing names it, and nothing deletes it either,
-      // because the tombstone that says so is unsealed. Stated as an
-      // assertion so the residual is visible rather than folklore.
+      // because peer removal of local credential material remains a deliberate
+      // policy no-op. Stated as an assertion so the residual stays visible.
       expect((await vaultB.getSecret('sec-1'))?.value, 'hunter2');
     });
 
@@ -2217,9 +2217,8 @@ void main() {
         completion(0),
       );
       expect(vault.deletesAttempted, 0,
-          reason: 'an unsealed tombstone must not reach the vault at all');
-      // And it is still staged, so a build that seals tombstones inherits it
-      // — pulls are incremental, so a dropped one is never delivered again.
+          reason: 'a credential tombstone must not reach the vault at all');
+      // And it remains staged for a future explicit removal policy.
       expect(await local.getRecord('secret:sec-1'), isNotNull);
       // The rest of the batch still applied.
       expect((await hostKeys.all()).single.host, 'beta.example.com');
@@ -2321,8 +2320,8 @@ void main() {
           reason: 'the still-live server record must not be re-adopted');
       expect(api.stored('s1')!.deleted, isTrue,
           reason: 'the delete reached the server as a tombstone');
-      expect(api.stored('s1')!.blob, isEmpty,
-          reason: 'a tombstone leaks no payload');
+      expect(api.stored('s1')!.blob, isNotEmpty,
+          reason: 'the tombstone authenticates its routing metadata');
       expect(await tombstones.all(), isEmpty,
           reason: 'a tombstone the server has taken is pruned');
     });
@@ -2348,6 +2347,33 @@ void main() {
 
       expect(await cfgB.getServer('s1'), isNull,
           reason: 'B honours the tombstone A pushed');
+    });
+
+    test('flipping a live record deletion flag cannot delete a server',
+        () async {
+      final api = FakeServer();
+      final codec = RecordCodec(secureRandomBytes(32));
+      final cfgA = InMemoryConfigStore();
+      final cfgB = InMemoryConfigStore();
+
+      await cfgA.putServer(server('s1', 'alpha', 10));
+      await coord('A', cfgA, InMemoryTombstoneStore(), codec).run(api);
+      await coord('B', cfgB, InMemoryTombstoneStore(), codec).run(api);
+      final live = api.stored('s1')!;
+
+      await api.push([
+        EncryptedRecord(
+          id: live.id,
+          updatedAt: 20,
+          deviceId: live.deviceId,
+          deleted: true,
+          seq: null,
+          blob: live.blob,
+        ),
+      ]);
+      await coord('B', cfgB, InMemoryTombstoneStore(), codec).run(api);
+
+      expect((await cfgB.getServer('s1'))!.label, 'alpha');
     });
 
     test('a settled deletion pushes nothing on later rounds', () async {
