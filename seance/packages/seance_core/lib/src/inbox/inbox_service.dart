@@ -291,7 +291,9 @@ class InboxService {
   /// Take a proposal before running it. Records `ran` only once the server
   /// has confirmed this device removed the item, so two devices cannot both
   /// run it. A breached server answering "already gone" can stop a proposal
-  /// from running, but cannot make one run.
+  /// from running, but cannot make one run. Once deletion succeeds the claim
+  /// is authoritative: a local settlement failure is logged but cannot turn
+  /// it back into a failure and tempt the caller to discard the staged command.
   Future<InboxClaim> claim(PendingProposal pending) async {
     final cached = pending.cached;
     final app = await apps.getApp(cached.appId);
@@ -307,7 +309,21 @@ class InboxService {
       await _forget(cached);
       return InboxClaim.handledElsewhere;
     }
-    await _settle(cached, InboxStatusState.ran);
+    try {
+      // Status first, then cache: if either write fails, at least the cached
+      // proposal or its durable `ran` status remains to explain the claim.
+      await _settle(cached, InboxStatusState.ran);
+    } catch (error) {
+      try {
+        developer.log(
+          'Could not persist claimed inbox settlement: ${error.runtimeType}',
+          name: _inboxLoggerName,
+          level: _warningLogLevel,
+        );
+      } catch (_) {
+        // Diagnostics must not turn an authoritative claim into a failure.
+      }
+    }
     return InboxClaim.claimed;
   }
 

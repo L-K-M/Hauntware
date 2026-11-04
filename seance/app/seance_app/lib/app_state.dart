@@ -487,6 +487,11 @@ typedef SshSessionOpener =
       SshConnectionLog? log,
     });
 
+/// Claims one inbox proposal. The app normally uses its authenticated inbox;
+/// tests can hold this boundary to reproduce a session changing mid-claim.
+typedef InboxProposalClaimer =
+    Future<InboxClaim> Function(PendingProposal proposal);
+
 Future<SshSession> _connectThrough(
   SshSessionManager manager, {
   required ServerConfig config,
@@ -535,6 +540,7 @@ class _HostKeyAttempt {
 class AppState extends ChangeNotifier {
   final AppServices services;
   final SshSessionOpener _openSshSession;
+  final InboxProposalClaimer? _claimInboxProposal;
 
   List<ServerConfig> servers = [];
   List<Snippet> snippets = [];
@@ -652,6 +658,7 @@ class AppState extends ChangeNotifier {
     ApkUpdater? apkUpdater,
     BackgroundKeepAlive? keepAlive,
     this._openSshSession = _connectThrough,
+    this._claimInboxProposal,
   }) : _updateChecker = updateChecker ?? UpdateChecker(),
        apkUpdater = apkUpdater ?? (Platform.isAndroid ? ApkUpdater() : null),
        _keepAlive = keepAlive ?? BackgroundKeepAlive();
@@ -3102,11 +3109,14 @@ class AppState extends ChangeNotifier {
     if (session == null || ssh is! SshSession) {
       return const ProposalRunResult.failed('Could not connect to the server.');
     }
+    // Every await below can outlive a disconnect, reconnect, or closed tab.
+    // Keep the exact prompt and transport the user reviewed so a replacement
+    // session cannot receive a command claimed for the old one.
+    final engine = session.engine;
     final String line;
-    final RemoteFileSystem fs;
     final StagedScript staged;
     try {
-      fs = await ssh.openRemoteFileSystem();
+      final fs = await ssh.openRemoteFileSystem();
       staged = await stageProposalScript(fs, proposal.proposal);
     } catch (error) {
       return ProposalRunResult.failed('Could not upload the script: $error');
@@ -3114,60 +3124,68 @@ class AppState extends ChangeNotifier {
     try {
       // Built from a quoted path, so it never holds a line break; it goes
       // through the same gate as every paste regardless, and before the
-      // claim, so a refusal leaves the proposal pending. The script is on
-      // the server by now, so a refusal removes it again.
+      // claim, so a refusal leaves the proposal pending. Staged scripts are
+      // content-addressed and can be shared with an earlier claimed command,
+      // so every failure leaves the inert file in place.
       line = PasteSanitizer.sanitize(staged.commandLine);
     } on UnsafePasteException catch (error) {
-      await _unstage(fs, staged);
       return ProposalRunResult.failed(error.reason);
     }
     final InboxClaim claim;
     try {
       claim = await _mutate(() async {
-        final claim = await services.withInbox(
-          (inbox) => inbox.claim(proposal),
-        );
-        await _loadInbox();
+        final injected = _claimInboxProposal;
+        final claim = injected == null
+            ? await services.withInbox((inbox) => inbox.claim(proposal))
+            : await injected(proposal);
+        if (claim == InboxClaim.claimed) {
+          // Best effort by _loadInbox's contract: the server delete is
+          // authoritative, so local presentation cannot reverse it.
+          await _loadInbox();
+          // A failed status write deliberately leaves the cached proposal as
+          // recovery evidence. Do not show that known-claimed item again in
+          // this process and invite a retry against the same staged path.
+          inboxPending = [
+            for (final pending in inboxPending)
+              if (pending.cached.appId != proposal.cached.appId ||
+                  pending.cached.itemId != proposal.cached.itemId)
+                pending,
+          ];
+        } else {
+          await _loadInbox();
+        }
         return claim;
       });
     } catch (error) {
-      await _unstage(fs, staged);
       return ProposalRunResult.failed('Could not claim the proposal: $error');
     }
     notifyListeners();
     _scheduleAutoSync();
     switch (claim) {
       case InboxClaim.handledElsewhere:
-        await _unstage(fs, staged);
         return const ProposalRunResult.failed(
           'Another device already ran or dismissed this proposal.',
         );
       case InboxClaim.unavailable:
-        await _unstage(fs, staged);
         return const ProposalRunResult.failed(
           'This proposal expired or its app was removed.',
         );
       case InboxClaim.claimed:
         break;
     }
-    session.engine.injectInput(line);
-    focusTab(session.id);
-    return ProposalRunResult.staged(line);
-  }
-
-  /// Remove a script staged for a proposal that will not run here, so
-  /// `~/.seance/inbox/` does not collect files nothing will run. Best effort:
-  /// a leftover is inert (nothing runs it without the user typing its path).
-  Future<void> _unstage(RemoteFileSystem fs, StagedScript staged) async {
-    try {
-      await fs.delete(await fs.stat(staged.path, followLinks: false));
-    } catch (error) {
-      developer.log(
-        'Could not remove staged inbox script: ${error.runtimeType}',
-        name: 'seance.app',
-        level: 900,
-      );
+    // There is deliberately no await between this check and injection: all
+    // four identities and the live transport describe one reviewed prompt.
+    // The staged command stays available as the user's recovery path if that
+    // prompt moved.
+    if (!identical(tabById(session.id), session) ||
+        !identical(session.session, ssh) ||
+        !identical(session.engine, engine) ||
+        ssh.isClosed) {
+      return ProposalRunResult.needsRecovery(line);
     }
+    engine.injectInput(line);
+    focusTab(session.id);
+    return ProposalRunResult.placed(line);
   }
 
   /// A connected terminal on [server]: the last one used there if it is up,
@@ -3189,16 +3207,33 @@ class AppState extends ChangeNotifier {
   }
 }
 
-/// What [AppState.runProposal] did.
-class ProposalRunResult {
-  /// The line placed in the prompt, when [ok].
-  final String? commandLine;
-  final String? error;
+/// What [AppState.runProposal] did. Sealed so the UI must distinguish a line
+/// placed in a live prompt from one the user needs to recover manually.
+sealed class ProposalRunResult {
+  const ProposalRunResult();
 
-  const ProposalRunResult.staged(String this.commandLine) : error = null;
-  const ProposalRunResult.failed(String this.error) : commandLine = null;
+  const factory ProposalRunResult.placed(String commandLine) = ProposalPlaced;
+  const factory ProposalRunResult.needsRecovery(String commandLine) =
+      ProposalNeedsRecovery;
+  const factory ProposalRunResult.failed(String error) = ProposalRunFailed;
+}
 
-  bool get ok => error == null;
+final class ProposalPlaced extends ProposalRunResult {
+  final String commandLine;
+
+  const ProposalPlaced(this.commandLine);
+}
+
+final class ProposalNeedsRecovery extends ProposalRunResult {
+  final String commandLine;
+
+  const ProposalNeedsRecovery(this.commandLine);
+}
+
+final class ProposalRunFailed extends ProposalRunResult {
+  final String error;
+
+  const ProposalRunFailed(this.error);
 }
 
 /// The inbox read from local state only, for [AppState._loadInbox]: pending
