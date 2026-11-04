@@ -208,7 +208,9 @@ class SecretVault {
     if (existing != null &&
         existing.kind == secret.kind &&
         existing.value == secret.value &&
-        existing.keyPassphrase == secret.keyPassphrase) {
+        existing.keyPassphrase == secret.keyPassphrase &&
+        existing.identityFilePath == secret.identityFilePath &&
+        existing.identityFilePassphrase == secret.identityFilePassphrase) {
       return;
     }
     final stamp = existing != null && existing.updatedAt >= updatedAt

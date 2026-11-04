@@ -18,14 +18,24 @@ class Secret {
   /// Zero identifies a legacy entry whose edit time is not known locally.
   final int updatedAt;
 
-  /// Passphrase for an encrypted private key, if the user chose to store it.
+  /// Passphrase for the encrypted private-key PEM in [value], if the user
+  /// chose to store it. A referenced key file has its own source-bound slot
+  /// below so editing either key cannot replace the other's passphrase.
   final String? keyPassphrase;
+
+  /// The referenced identity-file source [identityFilePassphrase] belongs to.
+  final String? identityFilePath;
+
+  /// Passphrase for [identityFilePath], separate from [keyPassphrase].
+  final String? identityFilePassphrase;
 
   const Secret({
     required this.id,
     required this.kind,
     required this.value,
     this.keyPassphrase,
+    this.identityFilePath,
+    this.identityFilePassphrase,
     this.updatedAt = 0,
   });
 
@@ -40,20 +50,33 @@ class Secret {
   /// actually catches a missed one is a JSON comparison — one in this
   /// package's `records_test.dart`, so it cannot go missing with a client,
   /// and one in the app's `server_duplication_test.dart` covering the call
-  /// site. And since a null argument means "keep",
-  /// [keyPassphrase] cannot be cleared through this.
+  /// site. Nullable fields have explicit clear switches so null never has to
+  /// mean both "keep" and "remove".
   Secret copyWith({
     String? id,
     SecretKind? kind,
     String? value,
     String? keyPassphrase,
+    bool clearKeyPassphrase = false,
+    String? identityFilePath,
+    bool clearIdentityFilePath = false,
+    String? identityFilePassphrase,
+    bool clearIdentityFilePassphrase = false,
     int? updatedAt,
   }) =>
       Secret(
         id: id ?? this.id,
         kind: kind ?? this.kind,
         value: value ?? this.value,
-        keyPassphrase: keyPassphrase ?? this.keyPassphrase,
+        keyPassphrase: clearKeyPassphrase
+            ? null
+            : keyPassphrase ?? this.keyPassphrase,
+        identityFilePath: clearIdentityFilePath
+            ? null
+            : identityFilePath ?? this.identityFilePath,
+        identityFilePassphrase: clearIdentityFilePassphrase
+            ? null
+            : identityFilePassphrase ?? this.identityFilePassphrase,
         updatedAt: updatedAt ?? this.updatedAt,
       );
 
@@ -63,6 +86,9 @@ class Secret {
         'value': value,
         if (updatedAt != 0) 'updatedAt': updatedAt,
         if (keyPassphrase != null) 'keyPassphrase': keyPassphrase,
+        if (identityFilePath != null) 'identityFilePath': identityFilePath,
+        if (identityFilePassphrase != null)
+          'identityFilePassphrase': identityFilePassphrase,
       };
 
   factory Secret.fromJson(Map<String, dynamic> json) => Secret(
@@ -70,6 +96,8 @@ class Secret {
         kind: _secretKindFromName(json['kind'] as String? ?? 'password'),
         value: json['value'] as String,
         keyPassphrase: json['keyPassphrase'] as String?,
+        identityFilePath: json['identityFilePath'] as String?,
+        identityFilePassphrase: json['identityFilePassphrase'] as String?,
         updatedAt: json['updatedAt'] as int? ?? 0,
       );
 

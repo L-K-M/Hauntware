@@ -181,15 +181,16 @@ final class _PoltergeistEditorSession extends GhostServerEditorDelegate {
       secretRef: existingRef,
       now: now,
     );
-    // Only when a referenced key's passphrase is about to be written over an
-    // entry that may hold a PEM: every other branch replaces the entry whole.
-    // A locked keyring throws, and the editor reports it like a failed save
-    // rather than writing the passphrase over the key it was stored beside.
+    // A private-key write preserves the inactive key source's passphrase, so
+    // read the existing entry on either source's write branch. A locked
+    // keyring throws, and the editor reports it like a failed save rather
+    // than dropping the source-bound material.
     Secret? stored;
     if (existingRef != null &&
         plannedCredentialReadsStored(
           auth: auth,
           referenceKeyFile: entry.referenceKeyFile,
+          keyPem: entry.keyPem,
           keyPassphrase: entry.keyPassphrase,
         )) {
       stored = await _delegate.readSecret(existingRef);
@@ -201,6 +202,7 @@ final class _PoltergeistEditorSession extends GhostServerEditorDelegate {
       password: entry.password,
       keyPem: entry.keyPem,
       keyPassphrase: entry.keyPassphrase,
+      identityFilePath: formConfig.identityFilePath,
       secretId: secretId,
       stored: stored,
     );

@@ -15,6 +15,7 @@ void main() {
       String password = '',
       String keyPem = '',
       String keyPassphrase = '',
+      String? identityFilePath = '/keys/id_ed25519',
       Secret? stored,
     }) =>
         plannedCredential(
@@ -23,6 +24,7 @@ void main() {
           password: password,
           keyPem: keyPem,
           keyPassphrase: keyPassphrase,
+          identityFilePath: identityFilePath,
           secretId: 'sec-1',
           stored: stored,
         );
@@ -33,7 +35,9 @@ void main() {
       // for a key the saved server could not decrypt.
       final secret = plan(keyPassphrase: 'hunter2');
       expect(secret, isNotNull);
-      expect(secret!.keyPassphrase, 'hunter2');
+      expect(secret!.keyPassphrase, isNull);
+      expect(secret.identityFilePath, '/keys/id_ed25519');
+      expect(secret.identityFilePassphrase, 'hunter2');
       expect(secret.id, 'sec-1');
       // The key itself stays on disk.
       expect(secret.value, isEmpty);
@@ -49,15 +53,13 @@ void main() {
           id: 'sec-1',
           kind: SecretKind.privateKey,
           value: 'PEM',
+          keyPassphrase: 'pem phrase',
         ),
       );
       expect(secret!.value, 'PEM');
-      expect(secret.keyPassphrase, 'hunter2');
-      // And the pair that leaves behind: the carried PEM was stored with its
-      // own passphrase, and this write replaces it with the referenced key's.
-      // Pinned as the documented behaviour rather than as a desirable one —
-      // one entry holds one passphrase, and the referenced key is the one the
-      // server is set to use. STATUS follow-up 17.
+      expect(secret.keyPassphrase, 'pem phrase');
+      expect(secret.identityFilePath, '/keys/id_ed25519');
+      expect(secret.identityFilePassphrase, 'hunter2');
     });
 
     test('a typed PEM does not inherit the stored passphrase', () {
@@ -79,6 +81,38 @@ void main() {
       );
       expect(secret!.value, 'NEW PEM');
       expect(secret.keyPassphrase, isNull);
+    });
+
+    test('editing either key source preserves the inactive source slot', () {
+      const stored = Secret(
+        id: 'sec-1',
+        kind: SecretKind.privateKey,
+        value: 'OLD PEM',
+        keyPassphrase: 'old pem phrase',
+        identityFilePath: '/keys/old-file',
+        identityFilePassphrase: 'file phrase',
+      );
+
+      final pasted = plan(
+        referenceKeyFile: false,
+        identityFilePath: null,
+        keyPem: 'NEW PEM',
+        keyPassphrase: 'new pem phrase',
+        stored: stored,
+      )!;
+      expect(pasted.keyPassphrase, 'new pem phrase');
+      expect(pasted.identityFilePath, '/keys/old-file');
+      expect(pasted.identityFilePassphrase, 'file phrase');
+
+      final referenced = plan(
+        identityFilePath: '/keys/new-file',
+        keyPassphrase: 'new file phrase',
+        stored: stored,
+      )!;
+      expect(referenced.value, 'OLD PEM');
+      expect(referenced.keyPassphrase, 'old pem phrase');
+      expect(referenced.identityFilePath, '/keys/new-file');
+      expect(referenced.identityFilePassphrase, 'new file phrase');
     });
 
     test('a blank box keeps whatever is stored, in every mode', () {
@@ -123,7 +157,8 @@ void main() {
       // would take the passphrase for a password.
       expect(secret!.kind, SecretKind.privateKey);
       expect(secret.value, isEmpty);
-      expect(secret.keyPassphrase, 'hunter2');
+      expect(secret.keyPassphrase, isNull);
+      expect(secret.identityFilePassphrase, 'hunter2');
     });
 
     test('a password is stored as one', () {
@@ -145,6 +180,9 @@ void main() {
         id: 'sec-1',
         kind: SecretKind.privateKey,
         value: 'STORED PEM',
+        keyPassphrase: 'stored pem phrase',
+        identityFilePath: '/keys/stored',
+        identityFilePassphrase: 'stored file phrase',
       );
       for (final auth in AuthMethod.values) {
         for (final referenceKeyFile in [true, false]) {
@@ -154,6 +192,7 @@ void main() {
                 final reads = plannedCredentialReadsStored(
                   auth: auth,
                   referenceKeyFile: referenceKeyFile,
+                  keyPem: keyPem,
                   keyPassphrase: keyPassphrase,
                 );
                 Secret? call({Secret? with_}) => plan(
@@ -180,7 +219,11 @@ void main() {
                   // carry-over that stopped carrying leaves both equal.
                   expect(
                     withStored?.value != without?.value ||
-                        withStored?.keyPassphrase != without?.keyPassphrase,
+                        withStored?.keyPassphrase != without?.keyPassphrase ||
+                        withStored?.identityFilePath !=
+                            without?.identityFilePath ||
+                        withStored?.identityFilePassphrase !=
+                            without?.identityFilePassphrase,
                     isTrue,
                     reason: 'reads stored, yet ignores it: $combination',
                   );
@@ -218,6 +261,7 @@ void main() {
           password: '',
           keyPem: '',
           keyPassphrase: '',
+          identityFilePath: null,
           secretId: 's',
         ),
         isNull,
@@ -228,6 +272,7 @@ void main() {
         password: 'hunter2',
         keyPem: '',
         keyPassphrase: '',
+        identityFilePath: null,
         secretId: 's',
       )!;
       expect(secret.kind, SecretKind.password);
@@ -242,6 +287,7 @@ void main() {
           password: 'stray',
           keyPem: 'stray',
           keyPassphrase: 'stray',
+          identityFilePath: null,
           secretId: 's',
         ),
         isNull,
@@ -256,6 +302,7 @@ void main() {
         password: '',
         keyPem: 'PEM-BYTES',
         keyPassphrase: '',
+        identityFilePath: null,
         secretId: 's',
         stored: storedPem,
       )!;
@@ -276,6 +323,7 @@ void main() {
           password: '',
           keyPem: '',
           keyPassphrase: '',
+          identityFilePath: '/keys/id_ed25519',
           secretId: 's',
           stored: storedPem,
         ),
@@ -287,12 +335,15 @@ void main() {
         password: '',
         keyPem: '',
         keyPassphrase: 'file-phrase',
+        identityFilePath: '/keys/id_ed25519',
         secretId: 's',
         stored: storedPem,
       )!;
       // The file's passphrase, not the stored PEM's, and the stored key
       // material carried so the entry stays a key.
-      expect(secret.keyPassphrase, 'file-phrase');
+      expect(secret.keyPassphrase, 'old-phrase');
+      expect(secret.identityFilePath, '/keys/id_ed25519');
+      expect(secret.identityFilePassphrase, 'file-phrase');
       expect(secret.value, 'STORED-PEM');
     });
 
@@ -304,6 +355,7 @@ void main() {
         password: '',
         keyPem: '',
         keyPassphrase: 'file-phrase',
+        identityFilePath: '/keys/id_ed25519',
         secretId: 's',
         stored: const Secret(
           id: 'sec-1',
@@ -321,17 +373,208 @@ void main() {
       // The guard is where "fetch the vault entry first" is decided: wherever
       // it says no read happens, the plan must be identical with and without
       // one in hand.
-      bool reads(AuthMethod auth, bool ref, String pass) =>
+      bool reads(AuthMethod auth, bool ref, String pass, {String pem = ''}) =>
           plannedCredentialReadsStored(
             auth: auth,
             referenceKeyFile: ref,
+            keyPem: pem,
             keyPassphrase: pass,
           );
       expect(reads(AuthMethod.privateKey, true, 'x'), isTrue);
       expect(reads(AuthMethod.privateKey, true, ''), isFalse);
       expect(reads(AuthMethod.privateKey, false, 'x'), isFalse);
+      expect(
+        reads(AuthMethod.privateKey, false, '', pem: 'PEM'),
+        isTrue,
+      );
       expect(reads(AuthMethod.password, true, 'x'), isFalse);
       expect(reads(AuthMethod.agent, true, 'x'), isFalse);
+    });
+  });
+
+  group('explicit credential edit plans', () {
+    const stored = Secret(
+      id: 'sec-1',
+      kind: SecretKind.privateKey,
+      value: 'PASTED PEM',
+      keyPassphrase: 'pasted phrase',
+    );
+
+    CredentialEditPlan plan({
+      CredentialEditAction action = CredentialEditAction.replace,
+      bool referenceKeyFile = false,
+      String keyPem = 'PASTED PEM',
+      String keyPassphrase = '',
+      String? identityFilePath,
+      KeyPassphraseAction passphraseAction = KeyPassphraseAction.clear,
+      Secret? storedSecret = stored,
+    }) => planCredentialEdit(
+      action: action,
+      passphraseAction: passphraseAction,
+      auth: AuthMethod.privateKey,
+      referenceKeyFile: referenceKeyFile,
+      password: '',
+      keyPem: keyPem,
+      keyPassphrase: keyPassphrase,
+      identityFilePath: identityFilePath,
+      secretId: 'sec-1',
+      stored: storedSecret,
+    );
+
+    test('a referenced-key passphrase has its own source-bound slot', () {
+      final edit = plan(
+        referenceKeyFile: true,
+        identityFilePath: '/keys/deploy',
+        keyPassphrase: 'file phrase',
+        passphraseAction: KeyPassphraseAction.replace,
+      );
+
+      expect(edit.action, CredentialEditAction.replace);
+      expect(edit.replacement!.value, 'PASTED PEM');
+      expect(edit.replacement!.keyPassphrase, 'pasted phrase');
+      expect(edit.replacement!.identityFilePath, '/keys/deploy');
+      expect(edit.replacement!.identityFilePassphrase, 'file phrase');
+    });
+
+    test('switching back keeps the passphrase owned by the same pasted PEM',
+        () {
+      final referenced = plan(
+        referenceKeyFile: true,
+        identityFilePath: '/keys/deploy',
+        keyPassphrase: 'file phrase',
+        passphraseAction: KeyPassphraseAction.replace,
+      ).replacement!;
+
+      final pasted = plan(
+        passphraseAction: KeyPassphraseAction.keep,
+        storedSecret: referenced,
+      ).replacement!;
+
+      expect(pasted.keyPassphrase, 'pasted phrase');
+      expect(pasted.identityFilePassphrase, 'file phrase');
+    });
+
+    test('keep is rejected for a different pasted key or identity path', () {
+      expect(
+        () => plan(
+          keyPem: 'DIFFERENT PEM',
+          passphraseAction: KeyPassphraseAction.keep,
+        ),
+        throwsArgumentError,
+      );
+
+      const fileSecret = Secret(
+        id: 'sec-1',
+        kind: SecretKind.privateKey,
+        value: '',
+        identityFilePath: '/keys/old',
+        identityFilePassphrase: 'old phrase',
+      );
+      expect(
+        () => plan(
+          referenceKeyFile: true,
+          identityFilePath: '/keys/new',
+          passphraseAction: KeyPassphraseAction.keep,
+          storedSecret: fileSecret,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('keeping a credential validates the active private-key source', () {
+      const fileSecret = Secret(
+        id: 'sec-1',
+        kind: SecretKind.privateKey,
+        value: '',
+        identityFilePath: '/keys/old',
+        identityFilePassphrase: 'old phrase',
+      );
+      expect(
+        () => plan(
+          action: CredentialEditAction.keep,
+          referenceKeyFile: true,
+          identityFilePath: '/keys/new',
+          storedSecret: fileSecret,
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => plan(
+          action: CredentialEditAction.keep,
+          storedSecret: fileSecret,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('clear is distinct from keep and replace', () {
+      final keep = plan(action: CredentialEditAction.keep);
+      final clear = plan(action: CredentialEditAction.clear);
+
+      expect(keep.action, CredentialEditAction.keep);
+      expect(keep.replacement, isNull);
+      expect(clear.action, CredentialEditAction.clear);
+      expect(clear.replacement, isNull);
+    });
+
+    test('clearing a legacy file-only passphrase removes the empty entry', () {
+      final edit = plan(
+        referenceKeyFile: true,
+        identityFilePath: '/keys/deploy',
+        passphraseAction: KeyPassphraseAction.clear,
+        storedSecret: const Secret(
+          id: 'sec-1',
+          kind: SecretKind.privateKey,
+          value: '',
+          keyPassphrase: 'legacy file phrase',
+        ),
+      );
+
+      expect(edit.action, CredentialEditAction.clear);
+      expect(edit.replacement, isNull);
+    });
+
+    test('keeping a credential of the wrong kind is rejected', () {
+      expect(
+        () => planCredentialEdit(
+          action: CredentialEditAction.keep,
+          passphraseAction: KeyPassphraseAction.keep,
+          auth: AuthMethod.privateKey,
+          referenceKeyFile: false,
+          password: '',
+          keyPem: '',
+          keyPassphrase: '',
+          identityFilePath: null,
+          secretId: 'sec-1',
+          stored: const Secret(
+            id: 'sec-1',
+            kind: SecretKind.password,
+            value: 'password',
+          ),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('keep requires a saved credential and a credential-using method', () {
+      expect(
+        () => plan(storedSecret: null, action: CredentialEditAction.keep),
+        throwsArgumentError,
+      );
+      expect(
+        () => planCredentialEdit(
+          action: CredentialEditAction.keep,
+          passphraseAction: KeyPassphraseAction.keep,
+          auth: AuthMethod.agent,
+          referenceKeyFile: false,
+          password: '',
+          keyPem: '',
+          keyPassphrase: '',
+          identityFilePath: null,
+          secretId: 'sec-1',
+        ),
+        throwsArgumentError,
+      );
     });
   });
 
