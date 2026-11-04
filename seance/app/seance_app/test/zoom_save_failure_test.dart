@@ -64,6 +64,12 @@ const _server = ServerConfig(
 const _diskFull = FileSystemException('disk full');
 const _menuChannel = MethodChannel('seance/menu');
 
+TargetPlatform get _hostPlatform {
+  if (Platform.isMacOS) return TargetPlatform.macOS;
+  if (Platform.isWindows) return TargetPlatform.windows;
+  return TargetPlatform.linux;
+}
+
 /// The zoom chords resize at once and save afterwards. A failed save says
 /// so, unless a newer zoom's save already carries the change.
 void main() {
@@ -121,7 +127,7 @@ void main() {
     LogicalKeyboardKey key, {
     required bool terminal,
   }) async {
-    final apple = Platform.isMacOS || Platform.isIOS;
+    final apple = _hostPlatform == TargetPlatform.macOS;
     final modifiers = [
       apple ? LogicalKeyboardKey.metaLeft : LogicalKeyboardKey.controlLeft,
       if (terminal && !apple) LogicalKeyboardKey.shiftLeft,
@@ -149,6 +155,7 @@ void main() {
     state.activeTabId = tab.id;
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(platform: _hostPlatform),
         builder: (context, child) => AppScope(state: state, child: child!),
         home: TerminalPane(showAssistantAffordance: false, onBack: () {}),
       ),
@@ -185,6 +192,7 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(platform: _hostPlatform),
         home: Scaffold(
           body: EditorTabView(tab: tab, state: state, isActive: true),
         ),
