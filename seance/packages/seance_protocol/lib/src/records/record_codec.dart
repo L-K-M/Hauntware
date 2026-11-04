@@ -15,6 +15,18 @@ final class RecordIntegrityException implements Exception {
   String toString() => 'RecordIntegrityException: $message';
 }
 
+/// The only data a legacy v1 payload authenticated.
+///
+/// It deliberately omits id, timestamps, device id and deletion state. Those
+/// fields lived outside the v1 ciphertext and must come from trusted local
+/// canonical state when an application explicitly migrates an old record.
+final class LegacyRecordPayload {
+  const LegacyRecordPayload({required this.kind, required this.data});
+
+  final RecordKind kind;
+  final Map<String, dynamic> data;
+}
+
 /// Encrypts [DecryptedRecord]s into [EncryptedRecord]s and back, using the
 /// device's vault key. This is the only bridge between plaintext application
 /// data and what the sync server ever sees.
@@ -56,6 +68,7 @@ class RecordCodec {
       'data': record.deleted ? const <String, dynamic>{} : record.data,
     });
     return EncryptedRecord(
+      envelopeVersion: _envelopeVersion,
       id: record.id,
       updatedAt: record.updatedAt,
       deviceId: record.deviceId,
@@ -66,6 +79,12 @@ class RecordCodec {
   }
 
   Future<DecryptedRecord> decrypt(EncryptedRecord record) async {
+    if (record.envelopeVersion != _envelopeVersion) {
+      throw RecordIntegrityException(
+        'Record ${record.id} uses unsupported envelope version '
+        '${record.envelopeVersion}',
+      );
+    }
     if (record.blob.isEmpty) {
       throw RecordIntegrityException(
         'Record ${record.id} has no authenticated payload',
@@ -74,21 +93,9 @@ class RecordCodec {
     final payload = await VaultCrypto.openJson(vaultKey, record.blob);
     final version = payload['envelopeVersion'];
 
-    // v1 live records sealed only `{kind, data}`. Continue to read them so an
-    // upgraded device can materialize and re-seal existing accounts. A v1
-    // tombstone never had a payload at all; accepting either an empty one or a
-    // live v1 blob with its outer flag flipped would preserve the forgery.
-    if (version == null) {
-      if (record.deleted) {
-        throw RecordIntegrityException(
-          'Legacy tombstone ${record.id} is not authenticated',
-        );
-      }
-      return _decodePayload(record, payload, deleted: false);
-    }
-    if (version != _envelopeVersion) {
+    if (version != record.envelopeVersion) {
       throw RecordIntegrityException(
-        'Record ${record.id} uses unsupported envelope version $version',
+        'Record ${record.id} has mismatched sealed envelope version $version',
       );
     }
 
@@ -98,6 +105,39 @@ class RecordCodec {
     _matches(payload, 'deviceId', record.deviceId, record.id);
     _matches(payload, 'deleted', record.deleted, record.id);
     return _decodePayload(record, payload, deleted: record.deleted);
+  }
+
+  /// Open a legacy live payload for an explicit, application-owned migration.
+  ///
+  /// Normal sync must never call this. The returned value excludes every
+  /// unauthenticated outer field, so a caller can only re-seal it after finding
+  /// matching trusted local state. Legacy tombstones cannot be migrated because
+  /// they had no authenticated payload or kind.
+  Future<LegacyRecordPayload> decryptLegacyForMigration(
+    EncryptedRecord record,
+  ) async {
+    if (record.envelopeVersion != 1 || record.deleted || record.blob.isEmpty) {
+      throw RecordIntegrityException(
+        'Record ${record.id} is not an authenticated legacy live payload',
+      );
+    }
+    final payload = await VaultCrypto.openJson(vaultKey, record.blob);
+    if (payload.containsKey('envelopeVersion')) {
+      throw RecordIntegrityException(
+        'Record ${record.id} is not a legacy envelope',
+      );
+    }
+    final kind = payload['kind'];
+    final data = payload['data'];
+    if (kind is! String || data is! Map) {
+      throw RecordIntegrityException(
+        'Record ${record.id} has an invalid legacy payload',
+      );
+    }
+    return LegacyRecordPayload(
+      kind: recordKindFromName(kind),
+      data: data.cast<String, dynamic>(),
+    );
   }
 
   static DecryptedRecord _decodePayload(

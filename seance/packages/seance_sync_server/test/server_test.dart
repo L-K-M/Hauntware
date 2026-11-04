@@ -256,9 +256,10 @@ void main() {
       expect(body['error'], 'registration_closed');
     });
 
-    test('rejects legacy protocol v1 after authenticated envelopes', () async {
+    test('rejects protocol v2 clients that still accept legacy envelopes',
+        () async {
       final c = TestClient(makeServer().handler);
-      final payload = registerReq('carol').toJson()..['protocolVersion'] = 1;
+      final payload = registerReq('carol').toJson()..['protocolVersion'] = 2;
       final (status, body) = await c.send(
         'POST',
         '/v1/register',
@@ -471,6 +472,26 @@ void main() {
       final pull = PullResponse.fromJson(sBody);
       expect(pull.records.map((r) => r.id).toSet(), {'a', 'b'});
       expect(pull.latestSeq, 2);
+    });
+
+    test('push refuses a legacy unauthenticated envelope', () async {
+      final server = makeServer();
+      final c = await authed(server, 'legacy-envelope');
+      final legacy = rec('legacy', 10, 'd1').toJson()
+        ..remove('envelopeVersion');
+
+      final (status, body) = await c.send(
+        'PUT',
+        '/v1/records',
+        auth: true,
+        body: {
+          'protocolVersion': kProtocolVersion,
+          'records': [legacy],
+        },
+      );
+
+      expect(status, 400);
+      expect(body['error'], 'record_envelope_version');
     });
 
     test('a pull advertises this deployment\'s push limits', () async {
