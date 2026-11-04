@@ -140,6 +140,20 @@ void main() {
       );
     });
 
+    test('pasted-key keep refuses a referenced-file placeholder', () {
+      expect(
+        () => plan(
+          referenceKeyFile: false,
+          stored: const Secret(
+            id: 'sec-1',
+            kind: SecretKind.privateKey,
+            value: '',
+          ),
+        ),
+        throwsArgumentError,
+      );
+    });
+
     test('replace and clear resolve the mismatch instead of throwing', () {
       final replaced = plan(
         auth: AuthMethod.password,

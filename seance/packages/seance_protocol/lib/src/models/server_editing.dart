@@ -318,15 +318,16 @@ ServerCredentialEdit planServerCredentialEdit({
   }
   final privateKey = stored?.kind == SecretKind.privateKey ? stored : null;
   if (credential == CredentialIntent.keep &&
+      (privateKey == null || privateKey.value.isEmpty)) {
+    throw ArgumentError(
+      'The retained credential does not contain private-key material.',
+    );
+  }
+  if (credential == CredentialIntent.keep &&
       passphrase == PassphraseIntent.keep) {
     return const ServerCredentialEdit();
   }
 
-  if (credential == CredentialIntent.keep && privateKey == null) {
-    throw ArgumentError(
-      'A passphrase-only edit needs retained private-key material.',
-    );
-  }
   final value = credential == CredentialIntent.replace
       ? nonEmpty(keyPem)
       : privateKey?.value;

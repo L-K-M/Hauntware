@@ -559,6 +559,93 @@ void main() {
       );
     });
 
+    testWidgets('Remove disables the private-key passphrase field', (
+      tester,
+    ) async {
+      await boot(tester);
+      final existing = ServerConfig(
+        id: 'box',
+        label: 'box',
+        host: 'box.example.com',
+        username: 'deploy',
+        authMethod: AuthMethod.privateKey,
+        secretRef: 'sec-1',
+        createdAt: 1,
+        updatedAt: 1,
+      );
+      await tester.runAsync(() async {
+        await state!.saveServer(
+          existing,
+          secret: const Secret(
+            id: 'sec-1',
+            kind: SecretKind.privateKey,
+            value: 'PEM',
+          ),
+        );
+      });
+      await openEditor(tester, existing: existing);
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 200)),
+      );
+      await tester.pumpAndSettle();
+
+      await scrollTo(tester, find.text('Remove'));
+      await tester.tap(find.text('Remove'));
+      await tester.pump();
+
+      final passphrase = field('Key passphrase (optional)');
+      await scrollTo(tester, passphrase);
+      expect(tester.widget<TextFormField>(passphrase).enabled, isFalse);
+    });
+
+    testWidgets('switching a referenced placeholder to pasted key is blocked', (
+      tester,
+    ) async {
+      await boot(tester);
+      final existing = ServerConfig(
+        id: 'box',
+        label: 'box',
+        host: 'box.example.com',
+        username: 'deploy',
+        authMethod: AuthMethod.privateKey,
+        secretRef: 'sec-1',
+        identityFilePath: '~/.ssh/id_ed25519',
+        createdAt: 1,
+        updatedAt: 1,
+      );
+      await tester.runAsync(() async {
+        await state!.saveServer(
+          existing,
+          secret: const Secret(
+            id: 'sec-1',
+            kind: SecretKind.privateKey,
+            value: '',
+          ),
+        );
+      });
+      await openEditor(tester, existing: existing);
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 200)),
+      );
+      await tester.pumpAndSettle();
+
+      final reference = find.widgetWithText(
+        SwitchListTile,
+        'Reference a key file on disk',
+      );
+      await scrollTo(tester, reference);
+      await tester.tap(reference);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('does not match this sign-in method'),
+        findsOneWidget,
+      );
+      final save = find.widgetWithText(FilledButton, 'Save');
+      await scrollTo(tester, save);
+      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+    });
+
     testWidgets('Keep ignores and clears typed replacement material', (
       tester,
     ) async {

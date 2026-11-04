@@ -246,6 +246,7 @@ class _ServerEditorState extends State<_ServerEditor> {
   }
 
   void _passphraseTextChanged() {
+    if (_credentialIntent == CredentialIntent.clear) return;
     if (_keyPassphrase.text.isNotEmpty &&
         _passphraseIntent != PassphraseIntent.replace) {
       setState(() => _passphraseIntent = PassphraseIntent.replace);
@@ -290,6 +291,14 @@ class _ServerEditorState extends State<_ServerEditor> {
         _referenceKeyFile &&
         _passphraseIntent != PassphraseIntent.keep) {
       return false;
+    }
+    final stored = _storedSecret;
+    if (_auth == AuthMethod.privateKey &&
+        !_referenceKeyFile &&
+        stored != null &&
+        stored.kind == SecretKind.privateKey &&
+        stored.value.isEmpty) {
+      return true;
     }
     final kind = _retainedKind;
     if (kind == null) return false;
@@ -672,6 +681,7 @@ class _ServerEditorState extends State<_ServerEditor> {
           ..._passphraseControls(),
           TextFormField(
             controller: _keyPassphrase,
+            enabled: _credentialIntent != CredentialIntent.clear,
             obscureText: true,
             decoration: const InputDecoration(
               labelText: 'Key passphrase (optional)',
@@ -698,7 +708,8 @@ class _ServerEditorState extends State<_ServerEditor> {
       ],
       if (_credentialMismatch) ...[
         Text(
-          'The saved credential does not match this sign-in method. '
+          'The saved credential does not match this sign-in method or '
+          'contains no private key. '
           'Choose Replace or Remove before saving.',
           style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),

@@ -618,7 +618,7 @@ void main() {
     expect(api.latestSeq, settled, reason: 'a restore only advances once');
   });
 
-  test('a peer\'s credential retraction is not revived by this device',
+  test('a peer credential retraction yields to a live synced reference',
       () async {
     final api = FakeServer();
     final key = secureRandomBytes(32);
@@ -632,10 +632,9 @@ void main() {
       kind: SecretKind.password,
       value: 'password',
     ), updatedAt: 10);
-    // Device B excluded its own server sharing this credential. That is not a
-    // decision this device can read as reversed, so the revival pass leaves
-    // it alone — the documented residual is an orphan credential, never a
-    // credential this device loses.
+    // Device B retired the credential while this device concurrently kept a
+    // newer config that still names it. The config can win LWW only if the
+    // surviving material is allowed to outbid B's tombstone too.
     await api.push([
       await codec.encrypt(DecryptedRecord(
         id: 'secret:secret',
@@ -656,12 +655,10 @@ void main() {
       secretVault: vault,
     ).run(api);
 
-    expect(api.stored('secret:secret')!.deleted, isTrue);
-    // The tombstone is never honoured against the vault, so the credential is
-    // still here: withdrawn from the account, not lost on this device.
+    expect(api.stored('secret:secret')!.deleted, isFalse);
     expect((await vault.getSecret('secret'))!.value, 'password');
-    expect((await vault.getSecret('secret'))!.updatedAt, 10,
-        reason: 'a retraction this device did not make moves no stamp');
+    expect((await vault.getSecret('secret'))!.updatedAt, 21,
+        reason: 'the referenced material must outrank the peer tombstone');
   });
 
   for (final scenario in [
