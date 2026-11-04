@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
@@ -281,7 +282,7 @@ class TerminalPane extends StatelessWidget {
 /// side — including actions to open another session and generate a command
 /// for the current one. It remains visible for a single session so those
 /// actions are always reachable.
-class TerminalTabStrip extends StatelessWidget {
+class TerminalTabStrip extends StatefulWidget {
   final List<PaneTab> tabs;
   final String? activeTabId;
   final ValueChanged<String> onFocus;
@@ -318,12 +319,155 @@ class TerminalTabStrip extends StatelessWidget {
   });
 
   @override
+  State<TerminalTabStrip> createState() => _TerminalTabStripState();
+}
+
+class _TerminalTabStripState extends State<TerminalTabStrip> {
+  static const double _overflowButtonWidth = 40;
+  static const double _layoutTolerance = 0.5;
+  static const Duration _revealDuration = Duration(milliseconds: 150);
+
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _scrollViewportKey = GlobalKey();
+  final Map<String, GlobalKey> _tabKeys = {};
+  bool _hasOverflow = false;
+  bool _layoutUpdateScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTabKeys();
+    _scheduleLayoutUpdate();
+  }
+
+  @override
+  void didUpdateWidget(TerminalTabStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncTabKeys();
+    _scheduleLayoutUpdate();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _syncTabKeys() {
+    final ids = {for (final tab in widget.tabs) tab.id};
+    _tabKeys.removeWhere((id, _) => !ids.contains(id));
+    for (final id in ids) {
+      _tabKeys.putIfAbsent(id, GlobalKey.new);
+    }
+  }
+
+  void _scheduleLayoutUpdate() {
+    if (_layoutUpdateScheduled) return;
+    _layoutUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _layoutUpdateScheduled = false;
+      if (!mounted || !_scrollController.hasClients) return;
+
+      final position = _scrollController.position;
+      // While the button is visible it consumes 40 px of the viewport. Remove
+      // that allowance before deciding the tabs would still overflow without
+      // it, so a borderline layout cannot keep a needless menu forever.
+      final overflowThreshold = _hasOverflow ? _overflowButtonWidth : 0.0;
+      final hasOverflow =
+          position.maxScrollExtent > overflowThreshold + _layoutTolerance;
+      if (hasOverflow != _hasOverflow) {
+        setState(() => _hasOverflow = hasOverflow);
+      }
+
+      _revealActiveTab();
+    });
+  }
+
+  void _revealActiveTab() {
+    final id = widget.activeTabId;
+    final targetContext = id == null ? null : _tabKeys[id]?.currentContext;
+    final viewportContext = _scrollViewportKey.currentContext;
+    if (targetContext == null || viewportContext == null) return;
+
+    final target = targetContext.findRenderObject();
+    final viewport = viewportContext.findRenderObject();
+    if (target is! RenderBox ||
+        viewport is! RenderBox ||
+        !target.hasSize ||
+        !viewport.hasSize) {
+      return;
+    }
+
+    final topLeft = viewport.globalToLocal(target.localToGlobal(Offset.zero));
+    final targetRect = topLeft & target.size;
+    final viewportWidth = viewport.size.width;
+    double delta = 0;
+    if (targetRect.width > viewportWidth) {
+      // An oversized tab can never fit. Keep it where the user left it while
+      // any part is visible, and align its leading edge only when fully away.
+      if (targetRect.right <= 0 || targetRect.left >= viewportWidth) {
+        delta = targetRect.left;
+      }
+    } else if (targetRect.left < 0) {
+      delta = targetRect.left;
+    } else if (targetRect.right > viewportWidth) {
+      delta = targetRect.right - viewportWidth;
+    }
+    if (delta.abs() <= _layoutTolerance) return;
+
+    final position = _scrollController.position;
+    final offsetDelta = axisDirectionIsReversed(position.axisDirection)
+        ? -delta
+        : delta;
+    final destination = (position.pixels + offsetDelta).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _scrollController.jumpTo(destination);
+    } else {
+      _scrollController.animateTo(
+        destination,
+        duration: _revealDuration,
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent || !_scrollController.hasClients) return;
+    final delta = event.scrollDelta;
+    // Horizontal trackpad gestures already match the scrollable's axis. Map
+    // only a predominantly vertical wheel gesture into that axis.
+    if (delta.dy == 0 || delta.dx.abs() >= delta.dy.abs()) return;
+
+    final position = _scrollController.position;
+    // A wheel's vertical delta advances the logical scroll offset directly.
+    // Unlike a physical horizontal delta it must not be reversed in RTL.
+    final destination = (position.pixels + delta.dy).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    // At an edge, leave the signal available to an ancestor scrollable.
+    if ((destination - position.pixels).abs() <= _layoutTolerance) return;
+
+    GestureBinding.instance.pointerSignalResolver.register(event, (signal) {
+      if (signal is! PointerScrollEvent || !_scrollController.hasClients) {
+        return;
+      }
+      final position = _scrollController.position;
+      position.pointerScroll(signal.scrollDelta.dy);
+      signal.respond(allowPlatformDefault: false);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final chrome = SeanceChrome.of(context, seanceThemeStyle);
-    final accent = this.accent;
+    final accent = widget.accent;
     return Container(
-      height: height,
+      height: TerminalTabStrip.height,
       // Over the tabs' top edge, where Poltergeist paints its active-pane
       // line. In front rather than a border, so it takes no height: the tabs
       // sit the same with or without a colour. Below the tabs it sat against
@@ -350,130 +494,161 @@ class TerminalTabStrip extends StatelessWidget {
           color: chrome.headerBackground,
           border: Border(bottom: BorderSide(color: chrome.separator)),
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                // One listenable over every tab's name sources, not one per
-                // chip: a name change on one tab can add or remove another
-                // tab's disambiguating suffix, so labels are computed across
-                // the strip. Still scoped to this server's tabs — nothing here
-                // repaints the rest of the app.
-                child: ListenableBuilder(
-                  listenable: Listenable.merge([
-                    for (final tab in tabs)
-                      if (tab is TerminalSession) ...[
-                        tab.metadata,
-                        tab.customName,
-                      ] else if (tab is EditorTab)
-                        tab.dirty,
-                  ]),
-                  builder: (context, _) {
-                    // Editor tabs do not count for a terminal's "Session N"
-                    // fallback: the ordinal numbers the shell sessions. One
-                    // map keyed on the tab feeds both the label pass and the
-                    // chip, so the two can never disagree.
-                    final ordinals = <TerminalSession, int>{};
-                    for (final tab in tabs) {
-                      if (tab is TerminalSession) {
-                        ordinals[tab] = ordinals.length + 1;
-                      }
-                    }
-                    final labels = disambiguateTabLabels([
-                      for (final tab in tabs)
-                        switch (tab) {
-                          TerminalSession() => sessionTabLabel(
-                            // 1-based ordinal within the server, used only as
-                            // the fallback name when the shell reports nothing.
-                            ordinal: ordinals[tab]!,
-                            customName: tab.customName.value,
-                            workingDirectory:
-                                tab.metadata.value.workingDirectory,
-                            terminalTitle: tab.metadata.value.terminalTitle,
-                            runningCommand: tab.metadata.value.runningCommand,
+        // One listenable over every tab's name sources, not one per chip: a
+        // name change can alter a sibling's disambiguating suffix and the
+        // overflow menu must always mirror the strip.
+        child: ListenableBuilder(
+          listenable: Listenable.merge([
+            for (final tab in widget.tabs)
+              if (tab is TerminalSession) ...[
+                tab.metadata,
+                tab.customName,
+              ] else if (tab is EditorTab)
+                tab.dirty,
+          ]),
+          builder: (context, _) {
+            final ordinals = <TerminalSession, int>{};
+            for (final tab in widget.tabs) {
+              if (tab is TerminalSession) {
+                ordinals[tab] = ordinals.length + 1;
+              }
+            }
+            final labels = disambiguateTabLabels([
+              for (final tab in widget.tabs)
+                switch (tab) {
+                  TerminalSession() => sessionTabLabel(
+                    ordinal: ordinals[tab]!,
+                    customName: tab.customName.value,
+                    workingDirectory: tab.metadata.value.workingDirectory,
+                    terminalTitle: tab.metadata.value.terminalTitle,
+                    runningCommand: tab.metadata.value.runningCommand,
+                  ),
+                  EditorTab() => editorTabLabel(tab.remotePath),
+                },
+            ]);
+            _scheduleLayoutUpdate();
+            return Row(
+              children: [
+                Expanded(
+                  child: Listener(
+                    key: _scrollViewportKey,
+                    onPointerSignal: _handlePointerSignal,
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (var i = 0; i < widget.tabs.length; i++)
+                            KeyedSubtree(
+                              key: _tabKeys[widget.tabs[i].id],
+                              child: _chip(
+                                context,
+                                widget.tabs[i],
+                                labels[i],
+                                ordinals,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (_hasOverflow)
+                  PopupMenuButton<String>(
+                    tooltip: 'All tabs',
+                    icon: const Icon(Icons.arrow_drop_down),
+                    iconSize: 18,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: _overflowButtonWidth,
+                      minHeight: TerminalTabStrip.height,
+                    ),
+                    initialValue: widget.activeTabId,
+                    onSelected: widget.onFocus,
+                    itemBuilder: (context) => [
+                      for (var i = 0; i < widget.tabs.length; i++)
+                        CheckedPopupMenuItem<String>(
+                          value: widget.tabs[i].id,
+                          checked: widget.tabs[i].id == widget.activeTabId,
+                          child: Text(
+                            '${labels[i]}, ${_tabSemanticState(widget.tabs[i])}',
                           ),
-                          EditorTab() => editorTabLabel(tab.remotePath),
-                        },
-                    ]);
-                    Widget chip(PaneTab tab, String label) => switch (tab) {
-                      TerminalSession() => _TabChip(
-                        ordinal: ordinals[tab]!,
-                        label: label,
-                        session: tab,
-                        selected: tab.id == activeTabId,
-                        onTap: () => onFocus(tab.id),
-                        onClose: () => onClose(tab.id),
-                        onRename: onRename == null
-                            ? null
-                            : () => _rename(context, tab),
-                      ),
-                      EditorTab() => _EditorTabChip(
-                        tab: tab,
-                        label: label,
-                        selected: tab.id == activeTabId,
-                        onTap: () => onFocus(tab.id),
-                        onClose: () => onClose(tab.id),
-                      ),
-                    };
-                    return Row(
-                      children: [
-                        for (var i = 0; i < tabs.length; i++)
-                          chip(tabs[i], labels[i]),
-                      ],
-                    );
-                  },
+                        ),
+                    ],
+                  ),
+                IconButton(
+                  tooltip: 'New tab',
+                  iconSize: 18,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: TerminalTabStrip.height,
+                  ),
+                  icon: const Icon(Icons.add),
+                  onPressed: widget.onNewTab,
                 ),
-              ),
-            ),
-            IconButton(
-              tooltip: 'New tab',
-              iconSize: 18,
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(
-                minWidth: 40,
-                minHeight: height,
-              ),
-              icon: const Icon(Icons.add),
-              onPressed: onNewTab,
-            ),
-            if (onGenerateCommand case final generate?) ...[
-              VerticalDivider(
-                width: 1,
-                indent: 7,
-                endIndent: 7,
-                color: scheme.outlineVariant,
-              ),
-              IconButton(
-                tooltip: 'Generate command',
-                iconSize: 18,
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: height,
-                ),
-                // The assistant's purple (Poltergeist's D34).
-                icon: Icon(
-                  Icons.auto_fix_high,
-                  color: FamilyPalette.of(context).glyph(FamilyHue.purple),
-                ),
-                onPressed: generate,
-              ),
-            ],
-          ],
+                if (widget.onGenerateCommand case final generate?) ...[
+                  VerticalDivider(
+                    width: 1,
+                    indent: 7,
+                    endIndent: 7,
+                    color: scheme.outlineVariant,
+                  ),
+                  IconButton(
+                    tooltip: 'Generate command',
+                    iconSize: 18,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: TerminalTabStrip.height,
+                    ),
+                    icon: Icon(
+                      Icons.auto_fix_high,
+                      color: FamilyPalette.of(context).glyph(FamilyHue.purple),
+                    ),
+                    onPressed: generate,
+                  ),
+                ],
+              ],
+            );
+          },
         ),
       ),
     );
   }
+
+  Widget _chip(
+    BuildContext context,
+    PaneTab tab,
+    String label,
+    Map<TerminalSession, int> ordinals,
+  ) => switch (tab) {
+    TerminalSession() => _TabChip(
+      ordinal: ordinals[tab]!,
+      label: label,
+      session: tab,
+      selected: tab.id == widget.activeTabId,
+      onTap: () => widget.onFocus(tab.id),
+      onClose: () => widget.onClose(tab.id),
+      onRename: widget.onRename == null ? null : () => _rename(context, tab),
+    ),
+    EditorTab() => _EditorTabChip(
+      tab: tab,
+      label: label,
+      selected: tab.id == widget.activeTabId,
+      onTap: () => widget.onFocus(tab.id),
+      onClose: () => widget.onClose(tab.id),
+    ),
+  };
 
   Future<void> _rename(BuildContext context, TerminalSession session) async {
     final name = await showTabRenameDialog(context, session);
     // `null` is "cancelled"; the dialog reports a clear as an empty string,
     // which renameSession turns back into automatic naming.
     if (name == null) return;
-    onRename?.call(session.id, name.isEmpty ? null : name);
+    widget.onRename?.call(session.id, name.isEmpty ? null : name);
   }
 }
 
@@ -579,6 +754,7 @@ class _RenameTabDialogState extends State<_RenameTabDialog> {
 /// tab.
 class _ChipShell extends StatefulWidget {
   final String label;
+  final String semanticState;
   final bool selected;
   final String tooltip;
   final Widget leading;
@@ -595,6 +771,7 @@ class _ChipShell extends StatefulWidget {
 
   const _ChipShell({
     required this.label,
+    required this.semanticState,
     required this.selected,
     required this.tooltip,
     required this.leading,
@@ -643,70 +820,74 @@ class _ChipShellState extends State<_ChipShell> {
         onClose: widget.onClose,
       ),
     );
-    return GestureDetector(
-      onTertiaryTapUp: (_) => widget.onClose(),
-      onSecondaryTapUp: onMenu == null
-          ? null
-          : (details) => onMenu(context, details.globalPosition),
-      onLongPress: onMenu == null
-          ? null
-          : () => onMenu(context, _chipCenter(context)),
-      child: Tooltip(
-        // Manual mode yields the arena to the menu gestures above — but
-        // only when there is a menu to yield to. Without one, long-press
-        // must keep the default trigger or touch users get no tooltip.
-        triggerMode: onMenu == null
-            ? TooltipTriggerMode.longPress
-            : TooltipTriggerMode.manual,
-        message: widget.tooltip,
-        child: InkWell(
-          onTap: widget.onTap,
-          onHover: (hovered) => setState(() => _hovered = hovered),
-          // Reported for the close button too, a descendant, so moving
-          // focus onto it keeps it shown.
-          onFocusChange: (focused) => setState(() => _focused = focused),
-          // A hidden close button is out of the semantics tree, so the
-          // tab's own node, the one a screen reader focuses, carries the
-          // action; that cursor never hovers.
-          child: Semantics(
-            customSemanticsActions: offerClose
-                ? null
-                : {
-                    const CustomSemanticsAction(label: _closeTabLabel):
-                        widget.onClose,
-                  },
-            child: Container(
-              height: TerminalTabStrip.height,
-              padding: const EdgeInsetsDirectional.only(start: 12, end: 4),
-              decoration: BoxDecoration(
-                color: widget.selected
-                    ? chrome.paneBackground
-                    : _hovered
-                    ? chrome.hoverFill
-                    : null,
-                border: BorderDirectional(
-                  end: BorderSide(color: chrome.separator),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  widget.leading,
-                  const SizedBox(width: 6),
-                  Text(
-                    widget.label,
-                    style: TextStyle(
-                      color: widget.selected
-                          ? scheme.onSurface
-                          : chrome.secondaryText,
-                      fontWeight: widget.selected
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                    ),
+    // The tab is one deliberate node. Its visible close control, icon, status
+    // dot and tooltip stay available to pointer/keyboard users but do not
+    // create competing screen-reader stops.
+    return Semantics(
+      container: true,
+      button: true,
+      selected: widget.selected,
+      label: '${widget.label}, ${widget.semanticState}',
+      onTap: widget.onTap,
+      customSemanticsActions: {
+        const CustomSemanticsAction(label: _closeTabLabel): widget.onClose,
+      },
+      child: ExcludeSemantics(
+        child: GestureDetector(
+          onTertiaryTapUp: (_) => widget.onClose(),
+          onSecondaryTapUp: onMenu == null
+              ? null
+              : (details) => onMenu(context, details.globalPosition),
+          onLongPress: onMenu == null
+              ? null
+              : () => onMenu(context, _chipCenter(context)),
+          child: Tooltip(
+            // Manual mode yields the arena to the menu gestures above — but
+            // only when there is a menu to yield to. Without one, long-press
+            // must keep the default trigger or touch users get no tooltip.
+            triggerMode: onMenu == null
+                ? TooltipTriggerMode.longPress
+                : TooltipTriggerMode.manual,
+            message: widget.tooltip,
+            child: InkWell(
+              onTap: widget.onTap,
+              onHover: (hovered) => setState(() => _hovered = hovered),
+              // Reported for the close button too, a descendant, so moving
+              // focus onto it keeps it shown.
+              onFocusChange: (focused) => setState(() => _focused = focused),
+              child: Container(
+                height: TerminalTabStrip.height,
+                padding: const EdgeInsetsDirectional.only(start: 12, end: 4),
+                decoration: BoxDecoration(
+                  color: widget.selected
+                      ? chrome.paneBackground
+                      : _hovered
+                      ? chrome.hoverFill
+                      : null,
+                  border: BorderDirectional(
+                    end: BorderSide(color: chrome.separator),
                   ),
-                  const SizedBox(width: 2),
-                  close,
-                ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    widget.leading,
+                    const SizedBox(width: 6),
+                    Text(
+                      widget.label,
+                      style: TextStyle(
+                        color: widget.selected
+                            ? scheme.onSurface
+                            : chrome.secondaryText,
+                        fontWeight: widget.selected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    close,
+                  ],
+                ),
               ),
             ),
           ),
@@ -719,6 +900,16 @@ class _ChipShellState extends State<_ChipShell> {
 /// The close button's name, which a tab also gives its screen-reader
 /// action while the button is hidden, so both announce the same.
 const _closeTabLabel = 'Close tab';
+
+String _tabSemanticState(PaneTab tab) => switch (tab) {
+  TerminalSession() => switch (tab.status) {
+    TerminalStatus.connecting => 'Connecting',
+    TerminalStatus.connected => 'Connected',
+    TerminalStatus.disconnected => 'Disconnected',
+    TerminalStatus.error => 'Connection failed',
+  },
+  EditorTab() => tab.dirty.value ? 'Unsaved changes' : 'Saved',
+};
 
 /// The strip's close affordance, shared so terminal and editor tabs can only
 /// differ in the icon it shows (the editor swaps in a dirty dot). The 28 px
@@ -825,6 +1016,7 @@ class _TabChip extends StatelessWidget {
     final metadata = session.metadata.value;
     return _ChipShell(
       label: label,
+      semanticState: _tabSemanticState(session),
       selected: selected,
       tooltip: sessionTabTooltip(
         ordinal: ordinal,
@@ -914,6 +1106,7 @@ class _EditorTabChip extends StatelessWidget {
     final dirty = tab.dirty.value;
     return _ChipShell(
       label: label,
+      semanticState: _tabSemanticState(tab),
       selected: selected,
       tooltip: editorTabTooltip(
         remotePath: tab.remotePath,
