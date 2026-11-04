@@ -178,7 +178,7 @@ final class _FakeTransport implements SyncTransport {
   }
 
   @override
-  Future<void> register(RegisterRequest request) =>
+  Future<LoginResponse> register(RegisterRequest request) =>
       throw UnsupportedError('Klabautermann never registers');
 
   @override
@@ -191,7 +191,7 @@ final class _FakeTransport implements SyncTransport {
   }
 
   @override
-  Future<void> login(LoginRequest request) async {
+  Future<LoginResponse> login(LoginRequest request) async {
     _reach();
     if (request.username != fakeSyncUser ||
         request.authVerifier != base64.encode(_server.keys.authVerifier)) {
@@ -201,6 +201,7 @@ final class _FakeTransport implements SyncTransport {
       );
     }
     token = 'token-1';
+    return LoginResponse(token: token!);
   }
 
   @override

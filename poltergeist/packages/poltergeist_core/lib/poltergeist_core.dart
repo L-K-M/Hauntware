@@ -140,6 +140,7 @@ export 'package:seance_core/seance_core.dart'
         HttpSyncClient,
         LocalRecordStore,
         LoginRequest,
+        LoginResponse,
         PreloginResponse,
         PullResponse,
         PushResponse,
@@ -157,6 +158,7 @@ export 'package:seance_core/seance_core.dart'
         SshCredentials,
         TofuVerifier,
         VaultCrypto,
+        VaultKeyCheck,
         VaultKeys,
         VaultStore,
         // The remote launch guard (06 §5.3), shared with Séance.
@@ -232,6 +234,7 @@ export 'package:seance_core/catalog.dart'
         SyncEnrollmentApi,
         SyncEnrollmentException,
         SyncEnrollmentState,
+        VaultPassphraseMismatchException,
         syncNoticeAccountAuthFailed,
         syncNoticePassphraseCheckFailed,
         syncPassphraseCheckFailedMessage,

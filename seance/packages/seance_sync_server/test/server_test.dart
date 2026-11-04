@@ -46,7 +46,12 @@ class TestClient {
 
 class ThrowingStorage extends InMemoryStorage {
   @override
-  Future<Account?> getAccount(String username) async {
+  Future<String?> registerAccount(
+    Account account, {
+    required int issuedAt,
+    required int expiresAt,
+    required int maxSessions,
+  }) async {
     throw StateError('database password is hunter2');
   }
 }
@@ -68,6 +73,7 @@ RegisterRequest registerReq(String user) => RegisterRequest(
   authVerifier: base64.encode(secureRandomBytes(32)),
   argonSalt: base64.encode(secureRandomBytes(16)),
   argonParams: const Argon2Params(),
+  vaultKeyCheck: base64.encode(secureRandomBytes(64)),
 );
 
 EncryptedRecord rec(String id, int updatedAt, String device) => EncryptedRecord(
@@ -172,6 +178,24 @@ void main() {
       // would have been accepted, and the 413 takes all of them.
       expect(settings.pushLimits, const PushLimits(maxBlobBytes: 2048));
     });
+
+    test('session lifetime and account cap are strict positive settings', () {
+      final settings = ServerSettings.fromEnvironment(const {
+        'SEANCE_SESSION_TTL_SECONDS': '3600',
+        'SEANCE_MAX_SESSIONS_PER_ACCOUNT': '4',
+      });
+      expect(settings.sessionDuration, const Duration(hours: 1));
+      expect(settings.maxSessionsPerAccount, 4);
+      for (final key in const [
+        'SEANCE_SESSION_TTL_SECONDS',
+        'SEANCE_MAX_SESSIONS_PER_ACCOUNT',
+      ]) {
+        expect(
+          () => ServerSettings.fromEnvironment({key: '0'}),
+          throwsA(isA<ArgumentError>().having((e) => e.name, 'name', key)),
+        );
+      }
+    });
   });
 
   group('health + registration', () {
@@ -210,6 +234,7 @@ void main() {
       );
       expect(s1, 200);
       expect(b1['token'], isNotEmpty);
+      expect(b1['vaultKeyCheck'], isNotEmpty);
 
       final (s2, b2) = await c.send(
         'POST',
@@ -243,6 +268,23 @@ void main() {
       expect(body['error'], 'protocol_version');
     });
 
+    test('rejects a v1 registration before checking its missing key check',
+        () async {
+      final storage = InMemoryStorage();
+      final c = TestClient(SyncServer(
+        storage: storage,
+        settings: const ServerSettings(openRegistration: true),
+      ).handler);
+      final payload = registerReq('old-client').toJson()
+        ..['protocolVersion'] = 1
+        ..remove('vaultKeyCheck');
+      final (status, body) =
+          await c.send('POST', '/v1/register', body: payload);
+      expect(status, 400);
+      expect(body['error'], 'protocol_version');
+      expect(await storage.getAccount('old-client'), isNull);
+    });
+
     test('rejects malformed register verifier as a bad request', () async {
       final c = TestClient(makeServer().handler);
       final payload = registerReq('bad-register').toJson()
@@ -254,6 +296,26 @@ void main() {
       );
       expect(status, 400);
       expect(body['error'], 'bad_request');
+    });
+
+    test('registration requires a bounded encrypted vault key check',
+        () async {
+      final c = TestClient(makeServer().handler);
+      for (final value in <Object?>[null, 'not base64!', base64.encode([1])]) {
+        final payload = registerReq('key-check').toJson();
+        if (value == null) {
+          payload.remove('vaultKeyCheck');
+        } else {
+          payload['vaultKeyCheck'] = value;
+        }
+        final (status, body) = await c.send(
+          'POST',
+          '/v1/register',
+          body: payload,
+        );
+        expect(status, 400, reason: '$value');
+        expect(body['error'], 'bad_request', reason: '$value');
+      }
     });
 
     test('internal errors do not leak exception details', () async {
@@ -293,6 +355,7 @@ void main() {
         );
         expect(okStatus, 200);
         expect(okBody['token'], isNotEmpty);
+        expect(okBody['vaultKeyCheck'], req.vaultKeyCheck);
 
         final (badStatus, badBody) = await c.send(
           'POST',
@@ -319,6 +382,8 @@ void main() {
       expect(status, 200);
       expect(body['argonSalt'], req.argonSalt);
       expect(body['argonParams']['memory'], 19456);
+      expect(body.containsKey('vaultKeyCheck'), isFalse,
+          reason: 'the key check is returned only after authentication');
     });
 
     test('protected routes require a valid bearer token', () async {
@@ -786,6 +851,7 @@ void main() {
         await storage.createAccount(
           Account(
             username: legacy,
+            generation: 'legacy-generation',
             authVerifierHash: VaultCrypto.hashAuthVerifier(
               verifier,
               verifierSalt,

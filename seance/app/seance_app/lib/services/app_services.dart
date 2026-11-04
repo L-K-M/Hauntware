@@ -835,13 +835,22 @@ class AppServices {
       params: const Argon2Params(),
     );
     await _withSyncClient(baseUrl, (client) async {
-      await client.register(
+      final registered = await client.register(
         RegisterRequest(
           username: username,
           authVerifier: base64.encode(keys.authVerifier),
           argonSalt: base64.encode(salt),
           argonParams: const Argon2Params(),
+          vaultKeyCheck: await VaultKeyCheck.create(
+            keys.vaultKey,
+            username: username,
+          ),
         ),
+      );
+      await VaultKeyCheck.verify(
+        keys.vaultKey,
+        registered.vaultKeyCheck ?? '',
+        username: username,
       );
       await _completeSyncEnrollment(
         baseUrl: baseUrl,
@@ -858,8 +867,15 @@ class AppServices {
     required String username,
     required String password,
     required String encryptionPassphrase,
-  }) => _serializeSyncOperation(
-    () => _withSyncClient(baseUrl, (client) async {
+  }) => _serializeSyncOperation(() async {
+    final sameEnrollment = settings.syncUsername == username &&
+        settings.syncBaseUrl != null &&
+        HttpSyncClient.normalizeBaseUrl(settings.syncBaseUrl!) ==
+            HttpSyncClient.normalizeBaseUrl(baseUrl);
+    final trustedExistingKey = sameEnrollment && vaultKey != null
+        ? List<int>.of(vaultKey!)
+        : null;
+    return _withSyncClient(baseUrl, (client) async {
       final pre = await client.prelogin(username);
       // Refuse a KDF downgrade: the Argon2 parameters come from the server, so a
       // malicious/compromised one could return weak factors to make the vault key
@@ -877,27 +893,72 @@ class AppServices {
         salt: base64.decode(pre.argonSalt),
         params: pre.argonParams,
       );
-      await client.login(
+      final login = await client.login(
         LoginRequest(
           username: username,
           authVerifier: base64.encode(keys.authVerifier),
         ),
       );
-      // Authentication cannot prove that the separate encryption passphrase is
-      // correct. Verify it against one remote payload before changing the local
-      // vault or persisting enrollment, so a typo cannot overwrite synced data.
-      final remote = await client.pull(since: 0);
-      for (final record in remote.records) {
-        if (record.deleted || record.blob.isEmpty) continue;
+      final keyCheck = login.vaultKeyCheck;
+      if (keyCheck != null) {
         try {
-          await RecordCodec(keys.vaultKey).decrypt(record);
+          await VaultKeyCheck.verify(
+            keys.vaultKey,
+            keyCheck,
+            username: username,
+          );
         } catch (_) {
           throw StateError(
             'The vault encryption passphrase could not decrypt this account. '
             'Check it and try again.',
           );
         }
-        break;
+      }
+      // Authentication cannot prove that the separate encryption passphrase is
+      // correct. Verify it against one remote payload before changing the local
+      // vault or persisting enrollment, so a typo cannot overwrite synced data.
+      if (keyCheck == null) {
+        final remote = await client.pull(since: 0);
+        var verified = false;
+        for (final record in remote.records) {
+          if (record.deleted || record.blob.isEmpty) continue;
+          try {
+            await RecordCodec(keys.vaultKey).decrypt(record);
+          } catch (_) {
+            throw StateError(
+              'The vault encryption passphrase could not decrypt this account. '
+              'Check it and try again.',
+            );
+          }
+          verified = true;
+          break;
+        }
+        if (!verified) {
+          if (remote.records.isEmpty && trustedExistingKey != null) {
+            if (!_sameBytes(trustedExistingKey, keys.vaultKey)) {
+              throw StateError(
+                'The vault encryption passphrase does not match this '
+                'device’s existing enrollment.',
+              );
+            }
+            final proposed = await VaultKeyCheck.create(
+              trustedExistingKey,
+              username: username,
+            );
+            final stored = await client.initializeVaultKeyCheck(proposed);
+            await VaultKeyCheck.verify(
+              trustedExistingKey,
+              stored,
+              username: username,
+            );
+          } else {
+            throw StateError(
+              'This empty legacy account has no vault key check. Sign in '
+              'from an already enrolled device to initialize it, or '
+              'recreate the empty account.',
+            );
+          }
+        }
       }
       await _completeSyncEnrollment(
         baseUrl: baseUrl,
@@ -905,8 +966,17 @@ class AppServices {
         token: client.token!,
         key: keys.vaultKey,
       );
-    }),
-  );
+    });
+  });
+
+  static bool _sameBytes(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    var difference = 0;
+    for (var i = 0; i < a.length; i++) {
+      difference |= a[i] ^ b[i];
+    }
+    return difference == 0;
+  }
 
   /// Run one synchronization round against the configured server.
   Future<SyncOutcome> runSync() => _serializeSyncOperation(_runSync);

@@ -28,7 +28,7 @@ class HttpSyncClient implements SyncApi, InboxApi {
     required String baseUrl,
     http.Client? client,
     this.timeout = const Duration(seconds: 30),
-  })  : baseUrl = _normalizeBaseUrl(baseUrl),
+  })  : baseUrl = normalizeBaseUrl(baseUrl),
         _client = client ?? http.Client(),
         _ownsClient = client == null;
 
@@ -42,7 +42,7 @@ class HttpSyncClient implements SyncApi, InboxApi {
 
   /// Paths are appended verbatim, so a pasted "https://host/" would produce
   /// "https://host//v1/..." and 404.
-  static String _normalizeBaseUrl(String url) {
+  static String normalizeBaseUrl(String url) {
     var normalized = url.trim();
     while (normalized.endsWith('/')) {
       normalized = normalized.substring(0, normalized.length - 1);
@@ -111,15 +111,17 @@ class HttpSyncClient implements SyncApi, InboxApi {
   }
 
   /// Create an account and receive a session token.
-  Future<void> register(RegisterRequest request) async {
+  Future<LoginResponse> register(RegisterRequest request) async {
     final res = await _client
         .post(_uri('/v1/register'),
             headers: {'content-type': 'application/json'},
             body: jsonEncode(request.toJson()))
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
-    token = LoginResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>)
-        .token;
+    final response =
+        LoginResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    token = response.token;
+    return response;
   }
 
   /// Fetch the KDF salt/params for a username so a new device can derive keys.
@@ -135,15 +137,17 @@ class HttpSyncClient implements SyncApi, InboxApi {
   }
 
   /// Exchange the auth verifier for a session token.
-  Future<void> login(LoginRequest request) async {
+  Future<LoginResponse> login(LoginRequest request) async {
     final res = await _client
         .post(_uri('/v1/login'),
             headers: {'content-type': 'application/json'},
             body: jsonEncode(request.toJson()))
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
-    token = LoginResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>)
-        .token;
+    final response =
+        LoginResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    token = response.token;
+    return response;
   }
 
   Future<void> deleteAccount() async {
@@ -152,6 +156,39 @@ class HttpSyncClient implements SyncApi, InboxApi {
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
     token = null;
+  }
+
+  /// Revoke this device's bearer session without affecting other devices.
+  Future<void> revokeSession() async {
+    final res = await _client
+        .delete(_uri('/v1/session'), headers: _authHeaders)
+        .timeout(timeout);
+    if (res.statusCode >= 400) _fail(res);
+    token = null;
+  }
+
+  /// Revoke every bearer session for the account, including this one.
+  Future<void> revokeAllSessions() async {
+    final res = await _client
+        .delete(_uri('/v1/sessions'), headers: _authHeaders)
+        .timeout(timeout);
+    if (res.statusCode >= 400) _fail(res);
+    token = null;
+  }
+
+  /// Initialize the authenticated marker for an empty legacy account.
+  /// The server sets it once and returns a concurrent winner unchanged.
+  Future<String> initializeVaultKeyCheck(String vaultKeyCheck) async {
+    final res = await _client
+        .put(
+          _uri('/v1/account/vault-key-check'),
+          headers: _authHeaders,
+          body: jsonEncode({'vaultKeyCheck': vaultKeyCheck}),
+        )
+        .timeout(timeout);
+    if (res.statusCode >= 400) _fail(res);
+    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    return json['vaultKeyCheck'] as String;
   }
 
   @override

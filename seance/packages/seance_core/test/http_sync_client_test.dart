@@ -132,6 +132,40 @@ void main() {
     });
   });
 
+  test('session revocation uses the scoped routes and clears the token',
+      () async {
+    final paths = <String>[];
+    final client = MockClient((req) async {
+      paths.add(req.url.path);
+      expect(req.method, 'DELETE');
+      expect(req.headers['authorization'], 'Bearer secret');
+      return http.Response('', 204);
+    });
+    final sync = HttpSyncClient(baseUrl: 'https://host', client: client);
+
+    sync.token = 'secret';
+    await sync.revokeSession();
+    expect(sync.token, isNull);
+    sync.token = 'secret';
+    await sync.revokeAllSessions();
+    expect(sync.token, isNull);
+    expect(paths, ['/v1/session', '/v1/sessions']);
+  });
+
+  test('legacy key-check initialization authenticates and returns the winner',
+      () async {
+    final client = MockClient((req) async {
+      expect(req.method, 'PUT');
+      expect(req.url.path, '/v1/account/vault-key-check');
+      expect(req.headers['authorization'], 'Bearer secret');
+      expect(jsonDecode(req.body)['vaultKeyCheck'], 'proposed');
+      return http.Response(jsonEncode({'vaultKeyCheck': 'winner'}), 200);
+    });
+    final sync = HttpSyncClient(baseUrl: 'https://host', client: client)
+      ..token = 'secret';
+    expect(await sync.initializeVaultKeyCheck('proposed'), 'winner');
+  });
+
   test('listItems skips a malformed item instead of failing the list', () async {
     final good = {
       'app': 'AAAAAAAAAAAAAAAAAAAAAA',
