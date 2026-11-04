@@ -317,35 +317,61 @@ final class SyncEnrollment {
       }
     }
     final response = await api.pull(since: 0);
-    // The legacy trial-decrypt: the FIRST authenticated record on a decryptable
+    final crypto = RecordCrypto(RecordCodec(keys.vaultKey));
+    final handlersByPrefix = <String?, RecordHandler>{
+      for (final handler in _handlers) handler.prefix: handler,
+    };
+
+    // Authenticate the complete pull before any record enters the local LWW
+    // mirror. Otherwise a valid first record can approve the passphrase while
+    // a later record with forged public tuple metadata silently settles an
+    // unsynced local edit. Invalid records remain on the server for a later
+    // corrected full pull; the cursor still advances past their sequence so a
+    // malicious or corrupt record cannot make every login replay forever.
+    final authenticated = <EncryptedRecord, DecryptedRecord>{};
+    for (final record in response.records) {
+      try {
+        final decrypted = await crypto.open(record);
+        final handler = handlersByPrefix[syncIdPrefix(record.id)];
+        if (handler != null && decrypted.kind != handler.kind) continue;
+        authenticated[record] = decrypted;
+      } catch (_) {
+        // Authentication failures are quarantined by omission. A full login
+        // always pulls from zero, so a corrected passphrase or server repair
+        // can recover the record later.
+      }
+    }
+
+    // The legacy trial-decrypt: the FIRST authenticated record on a
+    // decryptable
     // id decides — kind-agnostic across every prefix the registration
     // opens (prefixless, hostkey:, and product prefixes such as bookmark:),
     // never secret:/snippet:/unregistered (§3.2's never-decrypt dispatch
     // binds enrollment too). Auth success cannot prove the E2E passphrase.
     var unverified = keyCheck == null;
     String? warning;
-    final crypto = RecordCrypto(RecordCodec(keys.vaultKey));
     for (final record in keyCheck == null
         ? response.records
         : const <EncryptedRecord>[]) {
       if (record.deleted || record.blob.isEmpty) continue;
       if (!isDecryptableSyncId(record.id, _handlers)) continue;
-      try {
-        await crypto.open(record);
+      if (authenticated.containsKey(record)) {
         unverified = false;
-      } catch (_) {
+      } else {
         warning = syncPassphraseCheckFailedMessage;
       }
       break;
     }
 
-    // Only now persist: the pulled ciphertext merges into the §3.1 store
-    // (skip-preserved records re-apply once the passphrase is corrected),
-    // then the token, vault key, device id, account, and flag.
+    // Only now persist: authenticated pulled ciphertext merges into the §3.1
+    // store. A corrected login pulls from zero and can recover anything this
+    // key quarantined. Then persist the token, vault key, device id, account,
+    // and flag.
     var snapshot = await _records.highWaterSeq();
     for (final record in response.records) {
       final seq = record.seq;
       if (seq != null && seq > snapshot) snapshot = seq;
+      if (!authenticated.containsKey(record)) continue;
       await _records.putRemote(record);
     }
     await _records.setHighWaterSeq(snapshot);

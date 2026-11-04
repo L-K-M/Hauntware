@@ -90,7 +90,8 @@ class EncryptedRecord {
   final bool deleted;
   final int? seq;
 
-  /// `nonce || ciphertext || mac`. Empty for a tombstone.
+  /// `nonce || ciphertext || mac`. Current writers seal typed tombstones too;
+  /// an empty blob is a legacy unverified tombstone and must not be applied.
   final Uint8List blob;
 
   const EncryptedRecord({
@@ -102,10 +103,10 @@ class EncryptedRecord {
     required this.blob,
   });
 
-  /// A tombstone: the deletion of [id], carrying no payload. Identity and date
-  /// are all a delete needs — [RecordCodec] leaves the empty [blob] unsealed, so
-  /// no vault key is required to mint one — and [seq] stays null until the
-  /// server assigns one on push.
+  /// The legacy wire shape of a tombstone, retained for decoding stored/server
+  /// data and size accounting. It is deliberately unsealed and current
+  /// [RecordCodec] readers reject it; create new tombstones by encrypting a
+  /// deleted [DecryptedRecord]. [seq] stays null until the server assigns one.
   EncryptedRecord.tombstone({
     required this.id,
     required this.updatedAt,

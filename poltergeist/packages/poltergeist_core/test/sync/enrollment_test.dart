@@ -325,6 +325,54 @@ void main() {
       expect(await device.bookmarks.byId('remote'), isNotNull);
     });
 
+    test('authenticates every pulled envelope before it can settle a local '
+        'edit', () async {
+      final device = await _Device.create(tempDir, 'a');
+      final account =
+          await server.addAccount(username: 'ghost-1', password: 'pw');
+      final vaultKey = account.keys.vaultKey;
+
+      // The first record proves the passphrase. A malicious service then
+      // changes only the public tuple on a later, otherwise-valid record so
+      // it appears newer than an unsynced local edit.
+      server.seed(await _sealBookmark(_bookmark('proof'), vaultKey));
+      final sealed = await _sealBookmark(_bookmark('collision'), vaultKey);
+      server.seed(EncryptedRecord(
+        id: sealed.id,
+        updatedAt: sealed.updatedAt + 60000,
+        deviceId: 'forged-device',
+        deleted: sealed.deleted,
+        seq: null,
+        blob: sealed.blob,
+      ));
+
+      final coordinator = device.coordinatorFor(vaultKey);
+      final local = await device.bookmarks.save(
+        _bookmark('collision', label: 'unsynced local'),
+      );
+      await coordinator.onBookmarkSaved(local);
+      expect(await device.records.dirtyRecords(), hasLength(1));
+
+      final result = await device.enrollment.login(
+        api: server,
+        baseUrl: 'https://sync.example.com',
+        username: 'ghost-1',
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+        mode: SyncAccountMode.separate,
+      );
+
+      expect(result.passphraseUnverified, isFalse);
+      final pending = await device.records.dirtyRecords();
+      expect(pending, hasLength(1));
+      expect(pending.single.id, 'bookmark:collision');
+      expect(
+        (await RecordCodec(vaultKey).decrypt(pending.single)).data['label'],
+        'unsynced local',
+      );
+      expect(await device.records.highWaterSeq(), 2);
+    });
+
     test('a genuinely empty account proceeds with the flag set — the hold '
         'is the protection', () async {
       final device = await _Device.create(tempDir, 'a');
@@ -491,14 +539,16 @@ void main() {
       expect(await device.state.notices(),
           contains(syncNoticePassphraseCheckFailed));
       // Enrollment completed — the token is enrolled — but the failing
-      // record is preserved, not materialized, and pushes are held.
+      // record is quarantined before the local LWW mirror and pushes are
+      // held. The server retains it for a corrected full pull.
       expect(device.credentials.token, isNotNull);
       final coordinator = device.coordinatorFor(result.vaultKey);
       final round = await coordinator.runRound(server);
       expect(round.pushesHeld, isTrue);
       expect(server.pushCalls, 0);
       expect(await device.bookmarks.byId('foreign'), isNull);
-      expect(await device.records.getRecord('bookmark:foreign'), isNotNull);
+      expect(await device.records.getRecord('bookmark:foreign'), isNull);
+      expect(server.records['bookmark:foreign'], isNotNull);
     });
 
     test('the trial never touches secret:/snippet:/unknown-prefix ids',
@@ -664,7 +714,7 @@ void main() {
       server.seed(await _sealBookmark(
           _bookmark('fleet', label: 'v1'), vaultKey));
 
-      // First enrollment: wrong passphrase → flag, record skip-preserved.
+      // First enrollment: wrong passphrase → flag, record quarantined.
       final wrong = await device.enrollment.login(
         api: server,
         baseUrl: 'https://sync.example.com',
@@ -700,8 +750,8 @@ void main() {
       await coordinator.reSealPendingWrites();
       final round = await coordinator.runRound(server);
 
-      // The skip-preserved record applied; the re-sealed edit pushed and
-      // decrypts under the real account key.
+      // The corrected full pull recovered and applied the record; the
+      // re-sealed edit pushed and decrypts under the real account key.
       expect((await device.bookmarks.byId('fleet'))!.label, 'v1');
       expect(round.pushed, greaterThan(0));
       final pushed = server.records['bookmark:local']!;

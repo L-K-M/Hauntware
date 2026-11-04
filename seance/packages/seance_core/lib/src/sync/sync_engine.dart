@@ -10,6 +10,13 @@ abstract class SyncApi {
   Future<PushResponse> push(List<EncryptedRecord> records);
 }
 
+/// Whether a pulled opaque record is safe to enter the local LWW mirror.
+///
+/// The record's server-owned sequence has already been observed when this is
+/// called. Returning false skips the record without letting unauthenticated
+/// conflict metadata displace a pending local edit.
+typedef RemoteRecordValidator = Future<bool> Function(EncryptedRecord record);
+
 /// Outcome of a sync run, for the UI/telemetry.
 class SyncOutcome {
   final int pulled;
@@ -104,8 +111,9 @@ class SyncRecordsRefused extends ApiError {
 class SyncEngine {
   final LocalRecordStore store;
   final int maxRounds;
+  final RemoteRecordValidator? remoteValidator;
 
-  SyncEngine(this.store, {this.maxRounds = 5});
+  SyncEngine(this.store, {this.maxRounds = 5, this.remoteValidator});
 
   /// Throws [SyncRecordsRefused] once the run is otherwise complete if the
   /// server refused any record as too large; any other failure is thrown where
@@ -169,6 +177,8 @@ class SyncEngine {
       if (remoteSeq != null && remoteSeq > snapshotHighWater) {
         snapshotHighWater = remoteSeq;
       }
+      final validator = remoteValidator;
+      if (validator != null && !await validator(remote)) continue;
       final local = await store.getRecord(remote.id);
       if (local == null) {
         await store.putRemote(remote);

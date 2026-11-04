@@ -256,9 +256,9 @@ void main() {
       expect(body['error'], 'registration_closed');
     });
 
-    test('rejects a protocol-version mismatch', () async {
+    test('rejects legacy protocol v1 after authenticated envelopes', () async {
       final c = TestClient(makeServer().handler);
-      final payload = registerReq('carol').toJson()..['protocolVersion'] = 999;
+      final payload = registerReq('carol').toJson()..['protocolVersion'] = 1;
       final (status, body) = await c.send(
         'POST',
         '/v1/register',
