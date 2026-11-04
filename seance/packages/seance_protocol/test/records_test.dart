@@ -856,7 +856,13 @@ void main() {
       expect(back.seq, isNull);
       expect(back.blob, isEmpty);
 
-      for (final invalid in ['2', 0, -1, 2.5]) {
+      for (final invalid in [
+        '2',
+        0,
+        -1,
+        2.5,
+        kRecordEnvelopeVersion + 1,
+      ]) {
         final json = original.toJson()..['envelopeVersion'] = invalid;
         expect(
           () => EncryptedRecord.fromJson(json),

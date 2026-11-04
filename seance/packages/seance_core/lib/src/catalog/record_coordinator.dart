@@ -658,6 +658,13 @@ final class RecordCoordinator {
       if (!_pullOnly && !await _pushesHeld()) {
         if ((recordEnvelopeVersion ?? 0) >= kRecordEnvelopeVersion) {
           await _stageEnvelopeMigrations();
+        } else {
+          // A v2 migration may still be dirty after an earlier push failed.
+          // Do not offer that same-tuple replacement to a server that no
+          // longer promises to preserve the additive version marker: restore
+          // the clean legacy winner staging displaced before collecting the
+          // batch, just as SyncEngine does for its in-memory loop.
+          await _records.restoreLegacyEnvelopeMigrations();
         }
         final dirty = [
           for (final record in await _records.dirtyRecords())

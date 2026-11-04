@@ -799,6 +799,36 @@ void main() {
       expect(device.catalog!.byId('web')!.label, 'Legacy');
     });
 
+    test('a server downgrade restores a staged envelope migration', () async {
+      final device = await _Device.create(tempDir, 'a', shared: true);
+      server.seed(await _sealLegacyServer(_server('web', label: 'Legacy')));
+
+      // The first round materializes the legacy row. The next can stage its
+      // authenticated replacement, but this simulated outage prevents that
+      // replacement from reaching the v2-capable server.
+      await device.coordinator.runRound(server);
+      server.nextPushError = StateError('offline');
+      await expectLater(
+        device.coordinator.runRound(server),
+        throwsA(isA<StateError>()),
+      );
+      expect(
+        (await device.records.dirtyRecords()).single.envelopeVersion,
+        kRecordEnvelopeVersion,
+      );
+      expect(server.pushCalls, 1);
+
+      // A server that no longer advertises preservation of the additive
+      // marker must receive no same-tuple v2 replacement. Restore the clean
+      // legacy winner that staging displaced instead.
+      server.recordEnvelopeVersion = null;
+      await device.coordinator.runRound(server);
+
+      expect(server.pushCalls, 1);
+      expect(await device.records.dirtyRecords(), isEmpty);
+      expect(server.records['web']!.envelopeVersion, isNull);
+    });
+
     test('a round pushes in batches the pulled limits allow', () async {
       final device = await _Device.create(tempDir, 'a', shared: true);
       for (final id in ['web', 'db', 'cache']) {

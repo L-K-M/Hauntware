@@ -186,7 +186,10 @@ class EncryptedRecord {
 
   factory EncryptedRecord.fromJson(Map<String, dynamic> json) {
     final version = json['envelopeVersion'];
-    if (version != null && (version is! int || version < 1)) {
+    if (version != null &&
+        (version is! int ||
+            version < 1 ||
+            version > kRecordEnvelopeVersion)) {
       throw const FormatException('Invalid record envelope version');
     }
     final seq = json['seq'];
