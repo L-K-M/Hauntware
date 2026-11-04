@@ -5,6 +5,7 @@ import 'package:meta/meta.dart';
 import 'package:seance_protocol/seance_protocol.dart';
 
 import '../hostkey/tofu.dart';
+import 'bounded_open.dart';
 import 'byte_duplex.dart';
 import 'channel_budget.dart';
 import 'remote_command.dart';
@@ -255,6 +256,7 @@ final class _SshLink implements SshLink {
   final SshConnectionLog? log;
   final ChannelBudget _budget;
   final _cleanup = SingleFlightCleanup();
+  final _closing = Completer<void>();
 
   late final ExecCore _execCore = ExecCore(
     isDisconnected: () => _closed || _clientOrNull?.isClosed == true,
@@ -746,6 +748,7 @@ final class _SshLink implements SshLink {
   /// SFTP lease, and finally the transport.
   Future<void> _closeOnce(SshLinkClosedReason reason) async {
     if (_closed) return;
+    if (!_closing.isCompleted) _closing.complete();
     _closed = true;
     _pingTimer?.cancel();
     _pingTimer = null;
@@ -919,7 +922,7 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
   }
 
   Future<_FsLease> _openFs() async {
-    final grant = await _link._budget.acquire(ChannelWaitPriority.sftp, 'SFTP');
+    final grant = await _acquireGrant();
     _link._pendingOpens++;
     try {
       final pending = _link._client.sftp();
@@ -956,6 +959,34 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
       );
     } finally {
       _link._pendingOpens--;
+    }
+  }
+
+  Future<ChannelGrant> _acquireGrant() async {
+    final acquire = _link._budget.acquire(ChannelWaitPriority.sftp, 'SFTP');
+    try {
+      return await boundedOpen(
+        pending: acquire,
+        timeout: _link.openTimeout,
+        ownerClosed: _link._closing.future,
+        isOwnerClosed: () => _link._closed || _link._client.isClosed,
+        ownerClosedError: () => const RemoteFileException(
+          kind: RemoteFileErrorKind.disconnected,
+          operation: 'open SFTP',
+          message: 'The SSH link is closed.',
+        ),
+        discard: (late) => late.release(),
+        timeoutMessage: 'SFTP channel budget wait timed out.',
+      );
+    } on RemoteFileException {
+      rethrow;
+    } catch (e) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.other,
+        operation: 'open SFTP',
+        message: 'Could not reserve an SFTP channel: $e',
+        cause: e,
+      );
     }
   }
 

@@ -9,6 +9,33 @@ import 'package:test/test.dart';
 import 'support/ssh_channel_peer.dart';
 
 void main() {
+  test('a timed-out SFTP waiter releases a grant that arrives late', () async {
+    final link = await openTestLink(
+      timeout: const Duration(milliseconds: 30),
+      sessionBudget: 1,
+    );
+    addTearDown(link.link.close);
+    link.peer.onExec = SshChannelPeer.execQuietFollower;
+    final held = await link.link.start('hold');
+    final fileSystem = await link.link.openFileSystem();
+
+    await expectLater(
+      fileSystem.canonicalize('/srv'),
+      throwsA(
+        isA<RemoteFileException>().having(
+          (error) => error.kind,
+          'kind',
+          RemoteFileErrorKind.other,
+        ),
+      ),
+    );
+
+    await held.close();
+    await pumpEventQueue();
+    link.peer.onExec = SshChannelPeer.execEchoAndExit;
+    expect((await link.link.run('after timeout')).stdout, 'ran:after timeout\n');
+  });
+
   test('the ninth open queues and slots go out in priority order', () async {
     // The fixture never answers EOF on the SFTP channel, so teardown waits
     // out the close bound; keep it short.
