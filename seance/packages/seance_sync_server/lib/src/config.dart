@@ -26,6 +26,10 @@ class ServerSettings {
   final int authClientMaxAttempts;
   final int rateLimitMaxBuckets;
 
+  /// Fixed bearer lifetime and maximum current devices per account.
+  final Duration sessionTtl;
+  final int maxSessionsPerAccount;
+
   /// Immediate reverse proxies whose `X-Forwarded-For` chain may be trusted.
   /// Entries are canonical numeric IP addresses, never hostnames or CIDRs.
   final Set<String> trustedProxies;
@@ -59,6 +63,8 @@ class ServerSettings {
     this.authGlobalMaxAttempts = 2000,
     this.authClientMaxAttempts = 120,
     this.rateLimitMaxBuckets = 4096,
+    this.sessionTtl = const Duration(days: 90),
+    this.maxSessionsPerAccount = 32,
     this.trustedProxies = const {},
     this.maxBodyBytes = kDefaultMaxPushBodyBytes,
     this.maxRecordsPerPush = kDefaultMaxRecordsPerPush,
@@ -127,6 +133,11 @@ class ServerSettings {
         120,
       ),
       rateLimitMaxBuckets: positiveLimit('SEANCE_RATE_LIMIT_MAX_BUCKETS', 4096),
+      sessionTtl: Duration(
+        days: positiveLimit('SEANCE_SESSION_TTL_DAYS', 90),
+      ),
+      maxSessionsPerAccount:
+          positiveLimit('SEANCE_MAX_SESSIONS_PER_ACCOUNT', 32),
       trustedProxies: trustedProxySet(),
       maxBodyBytes: positiveLimit(
         'SEANCE_MAX_BODY_BYTES',
@@ -159,6 +170,8 @@ class ServerSettings {
         authGlobalMaxAttempts: authGlobalMaxAttempts,
         authClientMaxAttempts: authClientMaxAttempts,
         rateLimitMaxBuckets: rateLimitMaxBuckets,
+        sessionTtl: sessionTtl,
+        maxSessionsPerAccount: maxSessionsPerAccount,
         trustedProxies: trustedProxies,
         maxBodyBytes: maxBodyBytes,
         maxRecordsPerPush: maxRecordsPerPush,

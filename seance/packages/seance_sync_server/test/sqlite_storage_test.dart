@@ -31,8 +31,22 @@ void main() {
     await s.createAccount(account('alice'));
     expect((await s.getAccount('alice'))!.argonSalt, 'asalt');
 
-    final token = await s.createToken('alice');
-    expect(await s.usernameForToken(token), 'alice');
+    final issued = await s.createSession(
+      'alice',
+      const SessionDevice(id: 'device', name: 'Test device'),
+      now: 1000,
+      expiresAt: 2000,
+      maxSessions: 32,
+    );
+    expect(
+      (await s.authenticateSession(
+        issued!.token,
+        now: 1000,
+        touchBefore: 0,
+      ))
+          ?.username,
+      'alice',
+    );
 
     expect(await s.nextSeq('alice'), 1);
     expect(await s.nextSeq('alice'), 2);

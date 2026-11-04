@@ -85,6 +85,8 @@ Future<HttpSyncClient> _connect(Storage storage) async {
   addTearDown(running.close);
   final client = HttpSyncClient(
     baseUrl: 'http://${running.host}:${running.port}',
+    deviceId: 'atomic-device',
+    deviceName: 'Atomic test',
   );
   addTearDown(client.close);
   await client.register(

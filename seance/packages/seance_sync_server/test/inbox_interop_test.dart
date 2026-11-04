@@ -43,6 +43,11 @@ void main() {
 
     final register = await http.post(
       Uri.parse('$url/v1/register'),
+      headers: const {
+        'content-type': 'application/json',
+        'x-seance-device-id': 'interop-device',
+        'x-seance-device-name': 'Interop test',
+      },
       body: jsonEncode(
         RegisterRequest(
           username: 'alice',

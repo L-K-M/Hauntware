@@ -27,6 +27,25 @@ import 'sandbox_migration.dart';
 import 'secrets_recovery.dart';
 import 'secure_master_key.dart';
 
+String _syncDeviceName() {
+  String hostname;
+  try {
+    hostname = Platform.localHostname;
+  } catch (_) {
+    hostname = '';
+  }
+  // Keep the HTTP header portable through proxies. Hostnames are normally
+  // ASCII; replace controls, non-ASCII units, and repeated whitespace rather
+  // than letting one unusual machine name block sign-in.
+  var clean = hostname
+      .replaceAll(RegExp(r'[^\x20-\x7e]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (clean.isEmpty) clean = 'Seance on ${Platform.operatingSystem}';
+  if (utf8.encode(clean).length <= 128) return clean;
+  return clean.substring(0, 128).trimRight();
+}
+
 /// A "reference, don't store" identity file couldn't be read at connect time.
 /// [toString] is the user-facing connection-failure message, so it names the
 /// resolved path (after `~` expansion) and, when the macOS sandbox denied the
@@ -1047,7 +1066,11 @@ class AppServices {
     String baseUrl,
     Future<T> Function(HttpSyncClient client) action,
   ) async {
-    final client = HttpSyncClient(baseUrl: baseUrl);
+    final client = HttpSyncClient(
+      baseUrl: baseUrl,
+      deviceId: settings.deviceId,
+      deviceName: _syncDeviceName(),
+    );
     try {
       return await action(client);
     } finally {

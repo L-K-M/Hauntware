@@ -37,7 +37,11 @@ void main() {
 
   /// Register a fresh account and return the authenticated client.
   Future<HttpSyncClient> registerDevice(String baseUrl, String username) async {
-    final client = HttpSyncClient(baseUrl: baseUrl);
+    final client = HttpSyncClient(
+      baseUrl: baseUrl,
+      deviceId: 'device-$username',
+      deviceName: 'Test $username',
+    );
     addTearDown(client.close);
     await client.register(RegisterRequest(
       username: username,
@@ -66,7 +70,11 @@ void main() {
     final codec = RecordCodec(vaultKey);
 
     // Device A registers.
-    final clientA = HttpSyncClient(baseUrl: baseUrl);
+    final clientA = HttpSyncClient(
+      baseUrl: baseUrl,
+      deviceId: 'device-a',
+      deviceName: 'Device A',
+    );
     await clientA.register(RegisterRequest(
       username: 'user',
       authVerifier: base64.encode(secureRandomBytes(32)),
@@ -234,7 +242,11 @@ void main() {
     // Answered before the body is read, so the client must still receive the
     // error rather than a reset connection.
     final baseUrl = await startServer();
-    final client = HttpSyncClient(baseUrl: baseUrl);
+    final client = HttpSyncClient(
+      baseUrl: baseUrl,
+      deviceId: 'oversized-login',
+      deviceName: 'Oversized login test',
+    );
     addTearDown(client.close);
 
     await expectLater(
@@ -249,7 +261,11 @@ void main() {
 
   test('server rejects a bad login verifier over HTTP', () async {
     final baseUrl = await startServer();
-    final client = HttpSyncClient(baseUrl: baseUrl);
+    final client = HttpSyncClient(
+      baseUrl: baseUrl,
+      deviceId: 'valid-device',
+      deviceName: 'Valid device',
+    );
     final verifier = base64.encode(secureRandomBytes(32));
     await client.register(RegisterRequest(
       username: 'someone',
@@ -258,7 +274,11 @@ void main() {
       argonParams: const Argon2Params.fast(),
     ));
 
-    final other = HttpSyncClient(baseUrl: baseUrl);
+    final other = HttpSyncClient(
+      baseUrl: baseUrl,
+      deviceId: 'other-device',
+      deviceName: 'Other device',
+    );
     await expectLater(
       other.login(LoginRequest(
           username: 'someone',

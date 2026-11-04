@@ -48,7 +48,10 @@ Future<void> main(List<String> argv) async {
 
   final Storage storage = (settings.dbPath == null || settings.dbPath!.isEmpty)
       ? InMemoryStorage()
-      : SqliteStorage.open(settings.dbPath!);
+      : SqliteStorage.open(
+          settings.dbPath!,
+          legacySessionTtl: settings.sessionTtl,
+        );
 
   final server = SyncServer(storage: storage, settings: settings);
   final running = await server.start();

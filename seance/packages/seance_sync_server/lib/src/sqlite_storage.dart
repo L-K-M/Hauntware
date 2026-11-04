@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:seance_protocol/seance_protocol.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import 'session_tokens.dart';
 import 'storage.dart';
 
 enum _TransactionMode { read, write }
@@ -14,9 +15,27 @@ enum _TransactionMode { read, write }
 /// already end-to-end encrypted; this layer only shuffles opaque bytes.
 class SqliteStorage implements Storage {
   final Database _connection;
+  final Duration _legacySessionTtl;
+  final DateTime Function() _now;
   StorageUnavailableException? _failure;
 
-  SqliteStorage(this._connection) {
+  // The public parameter name is intentional; a private initializing formal
+  // cannot be supplied by the named factory below.
+  SqliteStorage(
+    this._connection, {
+    Duration legacySessionTtl = const Duration(days: 90),
+    DateTime Function()? now,
+  }) : // The public parameter name must remain usable by the factory.
+       // ignore: prefer_initializing_formals
+       _legacySessionTtl = legacySessionTtl,
+       _now = now ?? DateTime.now {
+    if (_legacySessionTtl <= Duration.zero) {
+      throw ArgumentError.value(
+        _legacySessionTtl,
+        'legacySessionTtl',
+        'must be positive',
+      );
+    }
     _migrate();
   }
 
@@ -27,11 +46,35 @@ class SqliteStorage implements Storage {
   }
 
   /// Open (or create) the database at [path]. Use `:memory:` for ephemeral.
-  factory SqliteStorage.open(String path) =>
-      SqliteStorage(sqlite3.open(path));
+  factory SqliteStorage.open(
+    String path, {
+    Duration legacySessionTtl = const Duration(days: 90),
+    DateTime Function()? now,
+  }) {
+    final connection = sqlite3.open(path);
+    try {
+      return SqliteStorage(
+        connection,
+        legacySessionTtl: legacySessionTtl,
+        now: now,
+      );
+    } catch (_) {
+      connection.dispose();
+      rethrow;
+    }
+  }
 
   void _migrate() {
-    _db.execute('PRAGMA journal_mode=WAL;');
+    // Scrub deleted cells, including the legacy table's plaintext bearer
+    // tokens. WAL and free-page cleanup is completed below before startup.
+    _db.execute('PRAGMA secure_delete=ON;');
+    _db.execute('PRAGMA foreign_keys=ON;');
+    final journalMode = _enableWal();
+    final persistent = _hasPersistentMainDatabase();
+    final hasPlaintextTokens = _tableExists('tokens');
+    if (hasPlaintextTokens) {
+      _requireWalForTokenCleanup(journalMode, persistent: persistent);
+    }
     _db.execute('''
       CREATE TABLE IF NOT EXISTS accounts (
         username TEXT PRIMARY KEY,
@@ -42,9 +85,30 @@ class SqliteStorage implements Storage {
       );
     ''');
     _db.execute('''
-      CREATE TABLE IF NOT EXISTS tokens (
-        token TEXT PRIMARY KEY,
-        username TEXT NOT NULL
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        token_hash TEXT NOT NULL UNIQUE,
+        username TEXT NOT NULL,
+        device_id TEXT,
+        device_name TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        last_used_at INTEGER NOT NULL,
+        legacy INTEGER NOT NULL
+      );
+    ''');
+    _db.execute(
+      'CREATE INDEX IF NOT EXISTS sessions_user_used '
+      'ON sessions(username, last_used_at);',
+    );
+    _db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS sessions_user_device '
+      'ON sessions(username, device_id) WHERE legacy = 0;',
+    );
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS schema_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
       );
     ''');
     _db.execute('''
@@ -66,8 +130,121 @@ class SqliteStorage implements Storage {
       );
     ''');
     _db.execute(
-        'CREATE INDEX IF NOT EXISTS records_seq ON records(username, seq);');
+      'CREATE INDEX IF NOT EXISTS records_seq ON records(username, seq);',
+    );
+    if (hasPlaintextTokens) _migratePlaintextTokens();
     _migrateInbox();
+    if (_metadata('session_token_cleanup') == 'pending') {
+      _requireWalForTokenCleanup(journalMode, persistent: persistent);
+      _finishTokenCleanup(persistent: persistent);
+    }
+  }
+
+  String _enableWal() {
+    final rows = _db.select('PRAGMA journal_mode=WAL');
+    if (rows.length != 1 || rows.single.values.length != 1) {
+      throw StateError('Could not determine the SQLite journal mode');
+    }
+    final mode = rows.single.values.single;
+    if (mode is! String) {
+      throw StateError('Could not determine the SQLite journal mode');
+    }
+    return mode.toLowerCase();
+  }
+
+  bool _hasPersistentMainDatabase() {
+    final rows = _db.select('PRAGMA database_list');
+    for (final row in rows) {
+      if (row['name'] == 'main') {
+        return (row['file'] as String).isNotEmpty;
+      }
+    }
+    throw StateError('SQLite has no main database');
+  }
+
+  void _requireWalForTokenCleanup(
+    String journalMode, {
+    required bool persistent,
+  }) {
+    if (persistent && journalMode != 'wal') {
+      throw StateError(
+        'Secure legacy token migration requires SQLite WAL mode',
+      );
+    }
+  }
+
+  bool _tableExists(String name) => _db.select(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+    [name],
+  ).isNotEmpty;
+
+  String? _metadata(String key) {
+    final rows = _db.select('SELECT value FROM schema_metadata WHERE key = ?', [
+      key,
+    ]);
+    return rows.isEmpty ? null : rows.first['value'] as String;
+  }
+
+  void _migratePlaintextTokens() {
+    final now = _now().millisecondsSinceEpoch;
+    final expiresAt = now + _legacySessionTtl.inMilliseconds;
+    _transaction(_TransactionMode.write, () {
+      final rows = _db.select('SELECT token, username FROM tokens');
+      for (final row in rows) {
+        final token = row['token'] as String;
+        _db.execute(
+          '''INSERT INTO sessions
+             (id, token_hash, username, device_id, device_name, created_at,
+              expires_at, last_used_at, legacy)
+             VALUES (?, ?, ?, NULL, ?, ?, ?, ?, 1)''',
+          [
+            newSessionId(),
+            hashSessionToken(token),
+            row['username'] as String,
+            'Older Séance device',
+            now,
+            expiresAt,
+            now,
+          ],
+        );
+      }
+      _db.execute(
+        '''INSERT INTO schema_metadata (key, value) VALUES (?, ?)
+           ON CONFLICT(key) DO UPDATE SET value=excluded.value''',
+        ['session_token_cleanup', 'pending'],
+      );
+      _db.execute('DROP TABLE tokens');
+    });
+  }
+
+  void _finishTokenCleanup({required bool persistent}) {
+    if (!persistent) {
+      _db.execute('UPDATE schema_metadata SET value = ? WHERE key = ?', [
+        'complete',
+        'session_token_cleanup',
+      ]);
+      return;
+    }
+
+    // A legacy WAL can retain pages from before secure_delete was enabled.
+    // Truncate it, compact the database, then truncate VACUUM's new WAL too.
+    _checkpointAndRequireNoReaders();
+    _db.execute('VACUUM');
+    _checkpointAndRequireNoReaders();
+    _db.execute('UPDATE schema_metadata SET value = ? WHERE key = ?', [
+      'complete',
+      'session_token_cleanup',
+    ]);
+  }
+
+  void _checkpointAndRequireNoReaders() {
+    final rows = _db.select('PRAGMA wal_checkpoint(TRUNCATE)');
+    final values = rows.length == 1 ? rows.single.values.toList() : null;
+    if (values == null ||
+        values.length != 3 ||
+        values.any((value) => value is! int || value != 0)) {
+      throw StateError('Could not securely truncate the SQLite WAL');
+    }
   }
 
   /// The command inbox tables (docs/INBOX.md). Created if missing, so a
@@ -134,6 +311,13 @@ class SqliteStorage implements Storage {
 
   @override
   Future<void> createAccount(Account account) async {
+    _insertAccount(account);
+    _db.execute('INSERT OR IGNORE INTO seqs (username, value) VALUES (?, 0)', [
+      account.username,
+    ]);
+  }
+
+  void _insertAccount(Account account) {
     _db.execute(
       'INSERT INTO accounts (username, auth_verifier_hash, verifier_salt, argon_salt, argon_params) VALUES (?, ?, ?, ?, ?)',
       [
@@ -144,8 +328,6 @@ class SqliteStorage implements Storage {
         jsonEncode(account.argonParams.toJson()),
       ],
     );
-    _db.execute('INSERT OR IGNORE INTO seqs (username, value) VALUES (?, 0)',
-        [account.username]);
   }
 
   @override
@@ -155,7 +337,7 @@ class SqliteStorage implements Storage {
     // contention policy so deletion either commits in full or can be retried.
     _transaction(_TransactionMode.write, () {
       _db.execute('DELETE FROM accounts WHERE username = ?', [username]);
-      _db.execute('DELETE FROM tokens WHERE username = ?', [username]);
+      _db.execute('DELETE FROM sessions WHERE username = ?', [username]);
       _db.execute('DELETE FROM records WHERE username = ?', [username]);
       _db.execute('DELETE FROM seqs WHERE username = ?', [username]);
       _db.execute('DELETE FROM inbox_items WHERE username = ?', [username]);
@@ -165,19 +347,221 @@ class SqliteStorage implements Storage {
   }
 
   @override
-  Future<String> createToken(String username) async {
-    final token = base64Url.encode(secureRandomBytes(32));
-    _db.execute('INSERT INTO tokens (token, username) VALUES (?, ?)',
-        [token, username]);
-    return token;
+  Future<IssuedSession?> createAccountAndSession(
+    Account account,
+    SessionDevice device, {
+    required int now,
+    required int expiresAt,
+    required int maxSessions,
+  }) async {
+    validateSessionPolicy(now, expiresAt, maxSessions);
+    return _transaction(_TransactionMode.write, () {
+      if (_db.select('SELECT 1 FROM accounts WHERE username = ?', [
+        account.username,
+      ]).isNotEmpty) {
+        return null;
+      }
+
+      final issued = _newIssuedSession(
+        account.username,
+        device,
+        now: now,
+        expiresAt: expiresAt,
+      );
+      _insertAccount(account);
+      _db.execute('INSERT INTO seqs (username, value) VALUES (?, 0)', [
+        account.username,
+      ]);
+      _insertSession(issued);
+      return issued;
+    });
   }
 
   @override
-  Future<String?> usernameForToken(String token) async {
-    final rows =
-        _db.select('SELECT username FROM tokens WHERE token = ?', [token]);
-    return rows.isEmpty ? null : rows.first['username'] as String;
+  Future<IssuedSession?> createSession(
+    String username,
+    SessionDevice device, {
+    required int now,
+    required int expiresAt,
+    required int maxSessions,
+  }) async {
+    validateSessionPolicy(now, expiresAt, maxSessions);
+    return _transaction(_TransactionMode.write, () {
+      if (_db.select('SELECT 1 FROM accounts WHERE username = ?', [
+        username,
+      ]).isEmpty) {
+        return null;
+      }
+
+      _db.execute(
+        'DELETE FROM sessions WHERE username = ? AND expires_at <= ?',
+        [username, now],
+      );
+      _db.execute(
+        '''DELETE FROM sessions
+           WHERE username = ? AND device_id = ? AND legacy = 0''',
+        [username, device.id],
+      );
+      final oldest = _db.select(
+        '''SELECT id FROM sessions
+           WHERE username = ? AND legacy = 0
+           ORDER BY last_used_at ASC, created_at ASC, id ASC''',
+        [username],
+      );
+      final toEvict = oldest.length - maxSessions + 1;
+      for (var i = 0; i < toEvict; i++) {
+        _db.execute('DELETE FROM sessions WHERE id = ?', [oldest[i]['id']]);
+      }
+
+      // Re-checking and inserting under the same write transaction prevents
+      // an account deletion in another process from racing token issuance.
+      if (_db.select('SELECT 1 FROM accounts WHERE username = ?', [
+        username,
+      ]).isEmpty) {
+        return null;
+      }
+      final issued = _newIssuedSession(
+        username,
+        device,
+        now: now,
+        expiresAt: expiresAt,
+      );
+      _insertSession(issued);
+      return issued;
+    });
   }
+
+  IssuedSession _newIssuedSession(
+    String username,
+    SessionDevice device, {
+    required int now,
+    required int expiresAt,
+  }) {
+    final token = base64Url.encode(secureRandomBytes(32));
+    return IssuedSession(
+      token: token,
+      session: StoredSession(
+        id: newSessionId(),
+        username: username,
+        deviceId: device.id,
+        deviceName: device.name,
+        createdAt: now,
+        expiresAt: expiresAt,
+        lastUsedAt: now,
+        legacy: false,
+      ),
+    );
+  }
+
+  void _insertSession(IssuedSession issued) {
+    final session = issued.session;
+    _db.execute(
+      '''INSERT INTO sessions
+         (id, token_hash, username, device_id, device_name, created_at,
+          expires_at, last_used_at, legacy)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)''',
+      [
+        session.id,
+        hashSessionToken(issued.token),
+        session.username,
+        session.deviceId,
+        session.deviceName,
+        session.createdAt,
+        session.expiresAt,
+        session.lastUsedAt,
+      ],
+    );
+  }
+
+  @override
+  Future<StoredSession?> authenticateSession(
+    String token, {
+    required int now,
+    required int touchBefore,
+  }) async {
+    final hash = hashSessionToken(token);
+    final rows = _transaction(
+      _TransactionMode.read,
+      () => _db.select('SELECT * FROM sessions WHERE token_hash = ?', [hash]),
+    );
+    if (rows.isEmpty) return null;
+    final session = _rowToSession(rows.first);
+    if (session.expiresAt > now && session.lastUsedAt > touchBefore) {
+      return session;
+    }
+
+    return _transaction(_TransactionMode.write, () {
+      final currentRows = _db.select(
+        'SELECT * FROM sessions WHERE token_hash = ?',
+        [hash],
+      );
+      if (currentRows.isEmpty) return null;
+      var current = _rowToSession(currentRows.first);
+      if (current.expiresAt <= now) {
+        _db.execute('DELETE FROM sessions WHERE token_hash = ?', [hash]);
+        return null;
+      }
+      if (current.lastUsedAt <= touchBefore) {
+        _db.execute(
+          'UPDATE sessions SET last_used_at = ? WHERE token_hash = ?',
+          [now, hash],
+        );
+        current = current.copyWith(lastUsedAt: now);
+      }
+      return current;
+    });
+  }
+
+  @override
+  Future<List<StoredSession>> listSessions(
+    String username, {
+    required int now,
+  }) async {
+    return _transaction(_TransactionMode.write, () {
+      _db.execute(
+        'DELETE FROM sessions WHERE username = ? AND expires_at <= ?',
+        [username, now],
+      );
+      return _db
+          .select(
+            '''SELECT * FROM sessions WHERE username = ?
+               ORDER BY last_used_at DESC, created_at DESC, id ASC''',
+            [username],
+          )
+          .map(_rowToSession)
+          .toList();
+    });
+  }
+
+  @override
+  Future<bool> revokeSession(String username, String sessionId) async {
+    return _transaction(_TransactionMode.write, () {
+      _db.execute('DELETE FROM sessions WHERE username = ? AND id = ?', [
+        username,
+        sessionId,
+      ]);
+      return _db.updatedRows > 0;
+    });
+  }
+
+  @override
+  Future<int> revokeAllSessions(String username) async {
+    return _transaction(_TransactionMode.write, () {
+      _db.execute('DELETE FROM sessions WHERE username = ?', [username]);
+      return _db.updatedRows;
+    });
+  }
+
+  StoredSession _rowToSession(Row row) => StoredSession(
+    id: row['id'] as String,
+    username: row['username'] as String,
+    deviceId: row['device_id'] as String?,
+    deviceName: row['device_name'] as String,
+    createdAt: row['created_at'] as int,
+    expiresAt: row['expires_at'] as int,
+    lastUsedAt: row['last_used_at'] as int,
+    legacy: (row['legacy'] as int) != 0,
+  );
 
   @override
   Future<PushResponse> pushRecords(

@@ -50,6 +50,11 @@ class SyncServer {
   /// anyone could sign in to with an empty one.
   static const _authVerifierBytes = 32;
   static const _minArgonSaltBytes = 16;
+  static const _sessionTokenBytes = 32;
+  static const _maxDeviceIdBytes = 128;
+  static const _maxDeviceNameBytes = 128;
+  static const _sessionTouchInterval = Duration(hours: 1);
+  static final _deviceIdPattern = RegExp(r'^[A-Za-z0-9._:-]+$');
 
   final Storage storage;
   final ServerSettings settings;
@@ -132,6 +137,12 @@ class SyncServer {
       ..get('/v1/sync', _sync)
       ..put('/v1/records', _push)
       ..delete('/v1/account', _deleteAccount)
+      ..get('/v1/sessions', _listSessions)
+      ..delete('/v1/sessions/current', _revokeCurrentSession)
+      ..delete('/v1/sessions', _revokeAllSessions)
+      // Static routes must be registered before this parameter route, so the
+      // words `current` and the collection itself cannot be mistaken for ids.
+      ..delete('/v1/sessions/<sessionId>', _revokeSession)
       // The command inbox (docs/INBOX.md). The producer's only route is the
       // POST; every other inbox route needs a session, so a deposit token
       // can add items and do nothing else.
@@ -193,6 +204,8 @@ class SyncServer {
         'Client protocol v${r.protocolVersion} != server v$kProtocolVersion',
       );
     }
+    final device = _deviceFromRequest(req);
+    if (device == null) return _badDevice();
     if (!settings.openRegistration) {
       return _error(403, 'registration_closed', 'Registration is disabled');
     }
@@ -214,14 +227,10 @@ class SyncServer {
         argonSalt.length < _minArgonSaltBytes) {
       return _error(400, 'bad_request', 'Invalid register payload');
     }
-    // After every check that needs no storage, so a malformed request costs
-    // no lookup and learns nothing about which names are taken.
-    if (await storage.getAccount(r.username) != null) {
-      return _error(409, 'account_exists', 'Username already registered');
-    }
     final verifierSalt = secureRandomBytes(16);
     final hash = VaultCrypto.hashAuthVerifier(authVerifier, verifierSalt);
-    await storage.createAccount(
+    final now = _now().millisecondsSinceEpoch;
+    final issued = await storage.createAccountAndSession(
       Account(
         username: r.username,
         authVerifierHash: hash,
@@ -229,9 +238,15 @@ class SyncServer {
         argonSalt: r.argonSalt,
         argonParams: r.argonParams,
       ),
+      device,
+      now: now,
+      expiresAt: now + settings.sessionTtl.inMilliseconds,
+      maxSessions: settings.maxSessionsPerAccount,
     );
-    final token = await storage.createToken(r.username);
-    return _json(LoginResponse(token: token).toJson());
+    if (issued == null) {
+      return _error(409, 'account_exists', 'Username already registered');
+    }
+    return _json(LoginResponse(token: issued.token).toJson());
   }
 
   Future<Response> _prelogin(Request req) async {
@@ -270,6 +285,8 @@ class SyncServer {
     if (r.protocolVersion != kProtocolVersion) {
       return _error(400, 'protocol_version', 'Protocol version mismatch');
     }
+    final device = _deviceFromRequest(req);
+    if (device == null) return _badDevice();
     // Before the limiter, whose keys outlive this request by a whole window.
     if (!_usernameInBounds(r.username)) return _usernameOutOfBounds();
     if (!loginLimiter.allow('login:${r.username}')) {
@@ -296,9 +313,19 @@ class SyncServer {
     if (account == null || !_constantTimeEquals(provided, expected)) {
       return _error(401, 'invalid_credentials', 'Invalid credentials');
     }
-    final token = await storage.createToken(r.username);
+    final now = _now().millisecondsSinceEpoch;
+    final issued = await storage.createSession(
+      r.username,
+      device,
+      now: now,
+      expiresAt: now + settings.sessionTtl.inMilliseconds,
+      maxSessions: settings.maxSessionsPerAccount,
+    );
+    if (issued == null) {
+      return _error(401, 'invalid_credentials', 'Invalid credentials');
+    }
     loginLimiter.reset('login:${r.username}');
-    return _json(LoginResponse(token: token).toJson());
+    return _json(LoginResponse(token: issued.token).toJson());
   }
 
   Future<Response> _sync(Request req) => _withAuth(req, (username) async {
@@ -328,13 +355,19 @@ class SyncServer {
       return _error(400, 'protocol_version', 'Protocol version mismatch');
     }
     if (r.records.length > settings.maxRecordsPerPush) {
-      return _error(413, 'payload_too_large',
-          'Too many records in one push (max ${settings.maxRecordsPerPush})');
+      return _error(
+        413,
+        'payload_too_large',
+        'Too many records in one push (max ${settings.maxRecordsPerPush})',
+      );
     }
     for (final incoming in r.records) {
       if (incoming.blob.length > settings.maxBlobBytes) {
-        return _error(413, 'payload_too_large',
-            'A record blob exceeds the ${settings.maxBlobBytes}-byte limit');
+        return _error(
+          413,
+          'payload_too_large',
+          'A record blob exceeds the ${settings.maxBlobBytes}-byte limit',
+        );
       }
     }
     final pushed = await storage.pushRecords(username, r.records);
@@ -345,6 +378,66 @@ class SyncServer {
       _withAuth(req, (username) async {
         await storage.deleteAccount(username);
         return _json({'ok': true});
+      });
+
+  Future<Response> _listSessions(Request req) =>
+      _withSession(req, (current) async {
+        final sessions = await storage.listSessions(
+          current.username,
+          now: _now().millisecondsSinceEpoch,
+        );
+        return _json(
+          SyncSessionsResponse(
+            sessions: [
+              for (final session in sessions)
+                SyncSessionInfo(
+                  id: session.id,
+                  deviceId: session.deviceId,
+                  deviceName: session.deviceName,
+                  createdAt: session.createdAt,
+                  expiresAt: session.expiresAt,
+                  lastUsedAt: session.lastUsedAt,
+                  legacy: session.legacy,
+                  current: session.id == current.id,
+                ),
+            ],
+          ).toJson(),
+        );
+      });
+
+  Future<Response> _revokeCurrentSession(Request req) =>
+      _withSession(req, (current) async {
+        // Authentication proved it existed. Treat a concurrent same-account
+        // revocation as success too: the requested end state already holds.
+        await storage.revokeSession(current.username, current.id);
+        return _json(
+          const RevokeSessionResponse(revoked: true, current: true).toJson(),
+        );
+      });
+
+  Future<Response> _revokeAllSessions(Request req) =>
+      _withSession(req, (current) async {
+        await storage.revokeAllSessions(current.username);
+        return _json(
+          const RevokeSessionResponse(revoked: true, current: true).toJson(),
+        );
+      });
+
+  Future<Response> _revokeSession(Request req, String sessionId) =>
+      _withSession(req, (current) async {
+        final revoked = await storage.revokeSession(
+          current.username,
+          sessionId,
+        );
+        if (!revoked) {
+          return _error(404, 'not_found', 'No such session');
+        }
+        return _json(
+          RevokeSessionResponse(
+            revoked: true,
+            current: sessionId == current.id,
+          ).toJson(),
+        );
       });
 
   // --- Helpers ---
@@ -379,17 +472,69 @@ class SyncServer {
   Future<Response> _withAuth(
     Request req,
     Future<Response> Function(String username) fn,
+  ) => _withSession(req, (session) => fn(session.username));
+
+  Future<Response> _withSession(
+    Request req,
+    Future<Response> Function(StoredSession session) fn,
   ) async {
     final auth = req.headers['authorization'];
     if (auth == null || !auth.startsWith('Bearer ')) {
       return _error(401, 'unauthorized', 'Missing bearer token');
     }
-    final username = await storage.usernameForToken(auth.substring(7));
-    if (username == null) {
+    final token = auth.substring(7);
+    if (!_isCanonicalSessionToken(token)) {
       return _error(401, 'unauthorized', 'Invalid token');
     }
-    return fn(username);
+    final now = _now().millisecondsSinceEpoch;
+    final session = await storage.authenticateSession(
+      token,
+      now: now,
+      touchBefore: now - _sessionTouchInterval.inMilliseconds,
+    );
+    if (session == null) {
+      return _error(401, 'unauthorized', 'Invalid token');
+    }
+    return fn(session);
   }
+
+  static bool _isCanonicalSessionToken(String token) {
+    // A padded base64url encoding of 32 bytes is exactly 44 ASCII characters.
+    // Bound before decoding so an attacker cannot make validation allocate in
+    // proportion to an arbitrary Authorization header.
+    if (token.length != 44) return false;
+    try {
+      final bytes = base64Url.decode(token);
+      return bytes.length == _sessionTokenBytes &&
+          base64Url.encode(bytes) == token;
+    } on FormatException {
+      return false;
+    }
+  }
+
+  SessionDevice? _deviceFromRequest(Request req) {
+    final id = req.headers['x-seance-device-id'];
+    final name = req.headers['x-seance-device-name'];
+    if (id == null ||
+        name == null ||
+        id.isEmpty ||
+        name.isEmpty ||
+        id.trim() != id ||
+        name.trim() != name ||
+        utf8.encode(id).length > _maxDeviceIdBytes ||
+        utf8.encode(name).length > _maxDeviceNameBytes ||
+        !_deviceIdPattern.hasMatch(id) ||
+        _controlCharacter.hasMatch(name)) {
+      return null;
+    }
+    return SessionDevice(id: id, name: name);
+  }
+
+  Response _badDevice() => _error(
+    400,
+    'bad_device',
+    'Valid X-Seance-Device-Id and X-Seance-Device-Name headers are required',
+  );
 
   int get _authBodyCap => min(settings.maxBodyBytes, _maxAuthBodyBytes);
 
@@ -462,10 +607,16 @@ class SyncServer {
         return await inner(req);
       } on StorageUnavailableException catch (e) {
         return _error(
-            HttpStatus.serviceUnavailable, 'storage_unavailable', e.toString());
+          HttpStatus.serviceUnavailable,
+          'storage_unavailable',
+          e.toString(),
+        );
       } on StorageBusyException {
-        return _error(HttpStatus.serviceUnavailable, 'storage_busy',
-            'Storage is busy; retry shortly.');
+        return _error(
+          HttpStatus.serviceUnavailable,
+          'storage_busy',
+          'Storage is busy; retry shortly.',
+        );
       } on _PayloadTooLarge {
         return _error(413, 'payload_too_large', 'Request body too large');
       } on FormatException {

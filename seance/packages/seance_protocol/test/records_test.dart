@@ -736,6 +736,33 @@ void main() {
       expect(back.argonParams.memory, 19456);
     });
 
+    test('sync session metadata', () {
+      final response = SyncSessionsResponse(
+        sessions: const [
+          SyncSessionInfo(
+            id: 'session',
+            deviceId: 'device',
+            deviceName: 'Studio',
+            createdAt: 1,
+            expiresAt: 2,
+            lastUsedAt: 1,
+            legacy: false,
+            current: true,
+          ),
+        ],
+      );
+      final decoded = SyncSessionsResponse.fromJson(response.toJson());
+      expect(decoded.sessions.single.id, 'session');
+      expect(decoded.sessions.single.deviceName, 'Studio');
+      expect(decoded.sessions.single.current, isTrue);
+
+      final revoked = RevokeSessionResponse.fromJson(
+        const RevokeSessionResponse(revoked: true, current: false).toJson(),
+      );
+      expect(revoked.revoked, isTrue);
+      expect(revoked.current, isFalse);
+    });
+
     test('PushResponse', () {
       final r = PushResponse(
         results: const [

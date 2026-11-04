@@ -155,4 +155,141 @@ void main() {
     final items = await sync.listItems(since: 0);
     expect(items.map((i) => i.itemId), ['i1']);
   });
+
+  group('sync sessions', () {
+    test('register and login send stable device metadata', () async {
+      final requests = <http.Request>[];
+      final sync = HttpSyncClient(
+        baseUrl: 'https://host',
+        deviceId: 'stable-device-id',
+        deviceName: 'Studio',
+        client: MockClient((request) async {
+          requests.add(request);
+          return http.Response(jsonEncode({'token': 'token'}), 200);
+        }),
+      );
+      await sync.register(RegisterRequest(
+        username: 'alice',
+        authVerifier: 'verifier',
+        argonSalt: 'salt',
+        argonParams: const Argon2Params(),
+      ));
+      await sync.login(
+        const LoginRequest(username: 'alice', authVerifier: 'verifier'),
+      );
+
+      expect(requests.map((request) => request.url.path),
+          ['/v1/register', '/v1/login']);
+      for (final request in requests) {
+        expect(request.headers['x-seance-device-id'], 'stable-device-id');
+        expect(request.headers['x-seance-device-name'], 'Studio');
+      }
+    });
+
+    test('lists session metadata with the bearer', () async {
+      late http.Request request;
+      final sync = HttpSyncClient(
+        baseUrl: 'https://host',
+        client: MockClient((seen) async {
+          request = seen;
+          return http.Response(
+            jsonEncode({
+              'sessions': [
+                {
+                  'id': 'session',
+                  'deviceId': 'device',
+                  'deviceName': 'Studio',
+                  'createdAt': 1,
+                  'expiresAt': 2,
+                  'lastUsedAt': 1,
+                  'legacy': false,
+                  'current': true,
+                },
+              ],
+            }),
+            200,
+          );
+        }),
+      )..token = 'bearer';
+
+      final sessions = await sync.listSessions();
+      expect(request.url.path, '/v1/sessions');
+      expect(request.headers['authorization'], 'Bearer bearer');
+      expect(sessions.single.deviceName, 'Studio');
+      expect(sessions.single.current, isTrue);
+    });
+
+    test('revoking another session keeps this bearer', () async {
+      final sync = HttpSyncClient(
+        baseUrl: 'https://host',
+        client: MockClient((request) async => http.Response(
+              jsonEncode({'revoked': true, 'current': false}),
+              200,
+            )),
+      )..token = 'bearer';
+
+      expect(await sync.revokeSession('other'), isTrue);
+      expect(sync.token, 'bearer');
+    });
+
+    test('current and all revocation clear only after success', () async {
+      var fail = true;
+      final paths = <String>[];
+      final sync = HttpSyncClient(
+        baseUrl: 'https://host',
+        client: MockClient((request) async {
+          paths.add(request.url.path);
+          if (fail) {
+            return http.Response(
+              jsonEncode({'error': 'busy', 'message': 'retry'}),
+              503,
+            );
+          }
+          return http.Response(
+            jsonEncode({'revoked': true, 'current': true}),
+            200,
+          );
+        }),
+      )..token = 'bearer';
+
+      await expectLater(sync.revokeCurrentSession(), throwsA(isA<ApiError>()));
+      expect(sync.token, 'bearer');
+      fail = false;
+      await sync.revokeCurrentSession();
+      expect(sync.token, isNull);
+
+      sync.token = 'second';
+      await sync.revokeAllSessions();
+      expect(sync.token, isNull);
+      expect(paths, [
+        '/v1/sessions/current',
+        '/v1/sessions/current',
+        '/v1/sessions',
+      ]);
+    });
+
+    test('revoking the current id clears and missing ids return false',
+        () async {
+      var missing = false;
+      final sync = HttpSyncClient(
+        baseUrl: 'https://host',
+        client: MockClient((request) async => missing
+            ? http.Response(
+                jsonEncode({'error': 'not_found', 'message': 'gone'}),
+                404,
+              )
+            : http.Response(
+                jsonEncode({'revoked': true, 'current': true}),
+                200,
+              )),
+      )..token = 'bearer';
+
+      expect(await sync.revokeSession('current'), isTrue);
+      expect(sync.token, isNull);
+      sync.token = 'new';
+      missing = true;
+      expect(await sync.revokeSession('gone'), isFalse);
+      expect(sync.token, 'new');
+    });
+  });
 }

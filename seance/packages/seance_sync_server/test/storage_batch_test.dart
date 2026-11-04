@@ -113,7 +113,10 @@ void main() {
             Request(
               method,
               Uri.parse('http://localhost$path'),
-              headers: {'authorization': 'Bearer unused'},
+              headers: {
+                'authorization':
+                    'Bearer ${base64Url.encode(List<int>.filled(32, 0))}',
+              },
             ),
           );
           expect(response.statusCode, HttpStatus.serviceUnavailable);
@@ -134,10 +137,19 @@ void main() {
     );
     addTearDown(storage.close);
     await storage.createAccount(_account('user'));
-    final token = await storage.createToken('user');
+    final now = DateTime.utc(2026, 1, 1);
+    final token = (await storage.createSession(
+      'user',
+      const SessionDevice(id: 'device', name: 'Test device'),
+      now: now.millisecondsSinceEpoch,
+      expiresAt: now.add(const Duration(days: 1)).millisecondsSinceEpoch,
+      maxSessions: 32,
+    ))!
+        .token;
     final handler = SyncServer(
       storage: storage,
       settings: const ServerSettings(),
+      now: () => now,
     ).handler;
     database.execute('''
       CREATE TRIGGER fail_record BEFORE INSERT ON records

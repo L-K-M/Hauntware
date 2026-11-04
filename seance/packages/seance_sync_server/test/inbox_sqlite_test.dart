@@ -58,9 +58,18 @@ void main() {
     ''');
     old.dispose();
 
-    final s = SqliteStorage.open(path);
+    final migratedAt = DateTime.utc(2026, 1, 1);
+    final s = SqliteStorage.open(path, now: () => migratedAt);
     addTearDown(s.close);
-    expect(await s.usernameForToken('t'), 'alice');
+    expect(
+      (await s.authenticateSession(
+        't',
+        now: migratedAt.millisecondsSinceEpoch,
+        touchBefore: 0,
+      ))
+          ?.username,
+      'alice',
+    );
     expect((await s.recordsSince('alice', 0)).single.id, 'r');
 
     final appId = newInboxAppId();

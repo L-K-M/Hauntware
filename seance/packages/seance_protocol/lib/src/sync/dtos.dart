@@ -96,6 +96,86 @@ class LoginResponse {
       LoginResponse(token: json['token'] as String);
 }
 
+/// Public metadata for one sync bearer session. The token hash is intentionally
+/// never part of the protocol.
+class SyncSessionInfo {
+  final String id;
+  final String? deviceId;
+  final String deviceName;
+  final int createdAt;
+  final int expiresAt;
+  final int lastUsedAt;
+  final bool legacy;
+  final bool current;
+
+  const SyncSessionInfo({
+    required this.id,
+    required this.deviceId,
+    required this.deviceName,
+    required this.createdAt,
+    required this.expiresAt,
+    required this.lastUsedAt,
+    required this.legacy,
+    required this.current,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        if (deviceId != null) 'deviceId': deviceId,
+        'deviceName': deviceName,
+        'createdAt': createdAt,
+        'expiresAt': expiresAt,
+        'lastUsedAt': lastUsedAt,
+        'legacy': legacy,
+        'current': current,
+      };
+
+  factory SyncSessionInfo.fromJson(Map<String, dynamic> json) =>
+      SyncSessionInfo(
+        id: json['id'] as String,
+        deviceId: json['deviceId'] as String?,
+        deviceName: json['deviceName'] as String,
+        createdAt: (json['createdAt'] as num).toInt(),
+        expiresAt: (json['expiresAt'] as num).toInt(),
+        lastUsedAt: (json['lastUsedAt'] as num).toInt(),
+        legacy: json['legacy'] as bool? ?? false,
+        current: json['current'] as bool? ?? false,
+      );
+}
+
+class SyncSessionsResponse {
+  final List<SyncSessionInfo> sessions;
+
+  const SyncSessionsResponse({required this.sessions});
+
+  Map<String, dynamic> toJson() => {
+        'sessions': [for (final session in sessions) session.toJson()],
+      };
+
+  factory SyncSessionsResponse.fromJson(Map<String, dynamic> json) =>
+      SyncSessionsResponse(
+        sessions: [
+          for (final session in json['sessions'] as List)
+            SyncSessionInfo.fromJson((session as Map).cast()),
+        ],
+      );
+}
+
+class RevokeSessionResponse {
+  final bool revoked;
+  final bool current;
+
+  const RevokeSessionResponse({required this.revoked, required this.current});
+
+  Map<String, dynamic> toJson() => {'revoked': revoked, 'current': current};
+
+  factory RevokeSessionResponse.fromJson(Map<String, dynamic> json) =>
+      RevokeSessionResponse(
+        revoked: json['revoked'] as bool,
+        current: json['current'] as bool,
+      );
+}
+
 /// The shipped server's cap on one push body. Doubles as the client's fallback
 /// when a server does not advertise its limits, so an unadvertised batch still
 /// fits a default deployment.

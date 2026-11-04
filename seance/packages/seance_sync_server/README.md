@@ -112,6 +112,8 @@ Omit `--db` for an ephemeral in-memory store.
 | `SEANCE_AUTH_CLIENT_MAX_ATTEMPTS` | — | `120` | Register, prelogin, and login requests per client address and window |
 | `SEANCE_RATE_LIMIT_MAX_BUCKETS` | — | `4096` | Maximum retained client, username, or inbox limiter buckets |
 | `SEANCE_TRUSTED_PROXIES` | — | *(none)* | Comma-separated numeric IPs allowed to supply `X-Forwarded-For` |
+| `SEANCE_SESSION_TTL_DAYS` | — | `90` | Fixed lifetime of a bearer session |
+| `SEANCE_MAX_SESSIONS_PER_ACCOUNT` | — | `32` | Maximum current non-legacy device sessions per account |
 
 Client addresses come from the socket peer. `X-Forwarded-For` is ignored
 unless that immediate peer is listed exactly in `SEANCE_TRUSTED_PROXIES`; a
@@ -134,6 +136,10 @@ so an old client and new server detect a mismatch instead of corrupting data.
 | `GET /v1/sync?since=<seq>` | Bearer | Pull records newer than a sequence number |
 | `PUT /v1/records` | Bearer | Push a batch of encrypted records (LWW) |
 | `DELETE /v1/account` | Bearer | Delete the account and all its data |
+| `GET /v1/sessions` | Bearer | List this account's active device sessions |
+| `DELETE /v1/sessions/current` | Bearer | Revoke the current session |
+| `DELETE /v1/sessions/<id>` | Bearer | Revoke one session owned by this account |
+| `DELETE /v1/sessions` | Bearer | Revoke every session on this account |
 
 Register, prelogin and login run before any authentication, so they read at
 most 16 KiB of request body (less if `SEANCE_MAX_BODY_BYTES` is lower) and
@@ -145,6 +151,17 @@ marks, soft hyphen, byte-order mark); either failure is a 400 `bad_username`.
 Login and prelogin skip the character check, so an account registered before
 it existed keeps working as long as its name is 1 to 256 bytes. Registration also requires a 32-byte auth verifier and
 an Argon2 salt of at least 16 bytes.
+
+Registration and login also require `X-Seance-Device-Id` (a stable ASCII
+installation id) and `X-Seance-Device-Name` (a display name), each at most 128
+bytes. The server returns a random 256-bit bearer once and stores only its
+SHA-256 hash. Sessions expire at a fixed deadline, signing in from the same
+device rotates its prior bearer, and the least-recently-used device is revoked
+when the account reaches its configured cap. Databases from an older release
+are upgraded without logging devices out: every plaintext token is hashed into
+a temporary legacy session, then the old table, free pages, and WAL are
+securely scrubbed before startup completes. Legacy sessions expire normally
+but do not consume a device slot.
 
 ### Sync transaction semantics
 

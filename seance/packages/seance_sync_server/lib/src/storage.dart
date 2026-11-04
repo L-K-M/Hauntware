@@ -3,6 +3,16 @@ import 'dart:typed_data';
 
 import 'package:seance_protocol/seance_protocol.dart';
 
+import 'session_tokens.dart';
+
+int _compareSessionsNewestFirst(StoredSession a, StoredSession b) {
+  final used = b.lastUsedAt.compareTo(a.lastUsedAt);
+  if (used != 0) return used;
+  final created = b.createdAt.compareTo(a.createdAt);
+  if (created != 0) return created;
+  return a.id.compareTo(b.id);
+}
+
 /// A registered account. The server holds only a salted *hash* of the auth
 /// verifier plus the non-secret KDF salt/params a new device needs. It never
 /// sees the vault key or any plaintext.
@@ -20,6 +30,67 @@ class Account {
     required this.argonSalt,
     required this.argonParams,
   });
+}
+
+/// The device metadata attached to a newly issued sync session.
+///
+/// It is descriptive, not an authentication factor: the account verifier is
+/// what authorizes creating or rotating the session.
+class SessionDevice {
+  final String id;
+  final String name;
+
+  const SessionDevice({required this.id, required this.name});
+}
+
+/// One server-side sync session. The raw bearer is deliberately absent: only
+/// its one-way hash is retained by storage.
+class StoredSession {
+  final String id;
+  final String username;
+  final String? deviceId;
+  final String deviceName;
+
+  /// Milliseconds since the Unix epoch.
+  final int createdAt;
+  final int expiresAt;
+  final int lastUsedAt;
+
+  /// Sessions migrated from the former plaintext-token table have no device
+  /// metadata. They remain usable until expiry and never count against the
+  /// new per-account device cap.
+  final bool legacy;
+
+  const StoredSession({
+    required this.id,
+    required this.username,
+    required this.deviceId,
+    required this.deviceName,
+    required this.createdAt,
+    required this.expiresAt,
+    required this.lastUsedAt,
+    required this.legacy,
+  });
+
+  StoredSession copyWith({int? lastUsedAt}) => StoredSession(
+    id: id,
+    username: username,
+    deviceId: deviceId,
+    deviceName: deviceName,
+    createdAt: createdAt,
+    expiresAt: expiresAt,
+    lastUsedAt: lastUsedAt ?? this.lastUsedAt,
+    legacy: legacy,
+  );
+}
+
+/// A newly issued session. [token] is returned once and must never be stored
+/// by the server in recoverable form.
+class IssuedSession {
+  final String token;
+  final StoredSession session;
+
+  const IssuedSession({required this.token, required this.session});
 }
 
 /// A backend disabled after an unrecoverable transaction failure.
@@ -89,16 +160,52 @@ abstract class Storage {
   Future<void> createAccount(Account account);
   Future<void> deleteAccount(String username);
 
-  /// Create and persist a bearer token for [username]; returns the token.
-  Future<String> createToken(String username);
-  Future<String?> usernameForToken(String token);
+  /// Atomically create an account and its first session. Returns null when the
+  /// username already exists, without changing either table.
+  Future<IssuedSession?> createAccountAndSession(
+    Account account,
+    SessionDevice device, {
+    required int now,
+    required int expiresAt,
+    required int maxSessions,
+  });
+
+  /// Issue a session, rotating an earlier session for the same device and
+  /// evicting the least-recently-used non-legacy session at the account cap.
+  Future<IssuedSession?> createSession(
+    String username,
+    SessionDevice device, {
+    required int now,
+    required int expiresAt,
+    required int maxSessions,
+  });
+
+  /// Resolve a raw bearer. Expired sessions are removed. A successful lookup
+  /// updates last-used only when it is no newer than [touchBefore], avoiding a
+  /// database write on every authenticated request.
+  Future<StoredSession?> authenticateSession(
+    String token, {
+    required int now,
+    required int touchBefore,
+  });
+
+  /// Active sessions for [username], most recently used first.
+  Future<List<StoredSession>> listSessions(String username, {required int now});
+
+  /// Revoke only a session owned by [username].
+  Future<bool> revokeSession(String username, String sessionId);
+
+  /// Revoke all sessions for [username], returning how many were removed.
+  Future<int> revokeAllSessions(String username);
 
   /// Resolve LWW, allocate sequences and commit a whole batch atomically.
   /// A rejected LWW write is a result; a storage failure commits nothing.
   /// Process entries in list order, including repeated ids. Later entries resolve
   /// against earlier staged writes. Empty batches return the current watermark.
   Future<PushResponse> pushRecords(
-      String username, List<EncryptedRecord> records);
+    String username,
+    List<EncryptedRecord> records,
+  );
 
   /// Return records and their watermark from one consistent snapshot.
   Future<PullResponse> pullSnapshot(String username, int since);
@@ -173,7 +280,7 @@ class _MemoryInboxItem {
 
 class InMemoryStorage implements Storage {
   final Map<String, Account> _accounts = {};
-  final Map<String, String> _tokens = {}; // token -> username
+  final Map<String, StoredSession> _sessions = {}; // token hash -> session
   final Map<String, Map<String, EncryptedRecord>> _records = {};
   final Map<String, int> _seq = {};
   final Map<String, StoredInboxApp> _inboxApps = {}; // appId -> app
@@ -195,21 +302,169 @@ class InMemoryStorage implements Storage {
     _accounts.remove(username);
     _records.remove(username);
     _seq.remove(username);
-    _tokens.removeWhere((_, u) => u == username);
+    _sessions.removeWhere((_, session) => session.username == username);
     _inboxApps.removeWhere((_, app) => app.username == username);
     _inboxItems.removeWhere((item) => item.username == username);
     _inboxReceived.remove(username);
   }
 
   @override
-  Future<String> createToken(String username) async {
-    final token = base64Url.encode(secureRandomBytes(32));
-    _tokens[token] = username;
-    return token;
+  Future<IssuedSession?> createAccountAndSession(
+    Account account,
+    SessionDevice device, {
+    required int now,
+    required int expiresAt,
+    required int maxSessions,
+  }) async {
+    validateSessionPolicy(now, expiresAt, maxSessions);
+    if (_accounts.containsKey(account.username)) return null;
+    final staged = _stageSession(
+      account.username,
+      device,
+      now: now,
+      expiresAt: expiresAt,
+      maxSessions: maxSessions,
+    );
+    _accounts[account.username] = account;
+    _records[account.username] = {};
+    _seq[account.username] = 0;
+    _sessions
+      ..clear()
+      ..addAll(staged.sessions);
+    return staged.issued;
   }
 
   @override
-  Future<String?> usernameForToken(String token) async => _tokens[token];
+  Future<IssuedSession?> createSession(
+    String username,
+    SessionDevice device, {
+    required int now,
+    required int expiresAt,
+    required int maxSessions,
+  }) async {
+    validateSessionPolicy(now, expiresAt, maxSessions);
+    if (!_accounts.containsKey(username)) {
+      return null;
+    }
+    final staged = _stageSession(
+      username,
+      device,
+      now: now,
+      expiresAt: expiresAt,
+      maxSessions: maxSessions,
+    );
+    _sessions
+      ..clear()
+      ..addAll(staged.sessions);
+    return staged.issued;
+  }
+
+  ({IssuedSession issued, Map<String, StoredSession> sessions}) _stageSession(
+    String username,
+    SessionDevice device, {
+    required int now,
+    required int expiresAt,
+    required int maxSessions,
+  }) {
+    final sessions = Map<String, StoredSession>.of(_sessions);
+    sessions.removeWhere(
+      (_, session) =>
+          session.username == username &&
+          (session.expiresAt <= now ||
+              (!session.legacy && session.deviceId == device.id)),
+    );
+
+    final active =
+        sessions.entries
+            .where(
+              (entry) =>
+                  entry.value.username == username && !entry.value.legacy,
+            )
+            .toList()
+          ..sort((a, b) {
+            final used = a.value.lastUsedAt.compareTo(b.value.lastUsedAt);
+            if (used != 0) return used;
+            final created = a.value.createdAt.compareTo(b.value.createdAt);
+            if (created != 0) return created;
+            return a.value.id.compareTo(b.value.id);
+          });
+    while (active.length >= maxSessions) {
+      final oldest = active.removeAt(0);
+      sessions.remove(oldest.key);
+    }
+
+    final token = base64Url.encode(secureRandomBytes(32));
+    final session = StoredSession(
+      id: newSessionId(),
+      username: username,
+      deviceId: device.id,
+      deviceName: device.name,
+      createdAt: now,
+      expiresAt: expiresAt,
+      lastUsedAt: now,
+      legacy: false,
+    );
+    final issued = IssuedSession(token: token, session: session);
+    sessions[hashSessionToken(token)] = session;
+    return (issued: issued, sessions: sessions);
+  }
+
+  @override
+  Future<StoredSession?> authenticateSession(
+    String token, {
+    required int now,
+    required int touchBefore,
+  }) async {
+    final hash = hashSessionToken(token);
+    var session = _sessions[hash];
+    if (session == null) return null;
+    if (session.expiresAt <= now) {
+      _sessions.remove(hash);
+      return null;
+    }
+    if (session.lastUsedAt <= touchBefore) {
+      session = session.copyWith(lastUsedAt: now);
+      _sessions[hash] = session;
+    }
+    return session;
+  }
+
+  @override
+  Future<List<StoredSession>> listSessions(
+    String username, {
+    required int now,
+  }) async {
+    _sessions.removeWhere(
+      (_, session) => session.username == username && session.expiresAt <= now,
+    );
+    final sessions =
+        _sessions.values
+            .where((session) => session.username == username)
+            .toList()
+      ..sort(_compareSessionsNewestFirst);
+    return sessions;
+  }
+
+  @override
+  Future<bool> revokeSession(String username, String sessionId) async {
+    String? match;
+    for (final entry in _sessions.entries) {
+      if (entry.value.username == username && entry.value.id == sessionId) {
+        match = entry.key;
+        break;
+      }
+    }
+    if (match == null) return false;
+    _sessions.remove(match);
+    return true;
+  }
+
+  @override
+  Future<int> revokeAllSessions(String username) async {
+    final before = _sessions.length;
+    _sessions.removeWhere((_, session) => session.username == username);
+    return before - _sessions.length;
+  }
 
   @override
   Future<PushResponse> pushRecords(

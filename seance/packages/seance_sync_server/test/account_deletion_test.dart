@@ -9,6 +9,9 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
 const _username = 'alice';
+const _device = SessionDevice(id: 'device', name: 'Test device');
+const _now = 1800000000000;
+const _expires = 1900000000000;
 
 Future<String> _seed(
   SqliteStorage storage, {
@@ -33,7 +36,14 @@ Future<String> _seed(
       blob: Uint8List.fromList([1, 2, 3]),
     ),
   ]);
-  return storage.createToken(username);
+  return (await storage.createSession(
+    username,
+    _device,
+    now: _now,
+    expiresAt: _expires,
+    maxSessions: 32,
+  ))!
+      .token;
 }
 
 Future<void> _expectAccountIntact(
@@ -42,7 +52,15 @@ Future<void> _expectAccountIntact(
   String username = _username,
 }) async {
   expect(await storage.getAccount(username), isNotNull);
-  expect(await storage.usernameForToken(token), username);
+  expect(
+    (await storage.authenticateSession(
+      token,
+      now: _now,
+      touchBefore: 0,
+    ))
+        ?.username,
+    username,
+  );
   expect(await storage.latestSeq(username), 1);
   final records = await storage.recordsSince(username, 0);
   expect(records.single.id, 'record');
@@ -51,13 +69,16 @@ Future<void> _expectAccountIntact(
 
 Future<void> _expectAccountDeleted(SqliteStorage storage, String token) async {
   expect(await storage.getAccount(_username), isNull);
-  expect(await storage.usernameForToken(token), isNull);
+  expect(
+    await storage.authenticateSession(token, now: _now, touchBefore: 0),
+    isNull,
+  );
   expect(await storage.latestSeq(_username), 0);
   expect(await storage.recordsSince(_username, 0), isEmpty);
 }
 
 void main() {
-  for (final table in ['accounts', 'tokens', 'records', 'seqs']) {
+  for (final table in ['accounts', 'sessions', 'records', 'seqs']) {
     test('failed $table deletion rolls back every account row', () async {
       final database = sqlite3.openInMemory();
       final storage = SqliteStorage(database);

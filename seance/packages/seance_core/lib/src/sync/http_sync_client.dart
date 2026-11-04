@@ -15,6 +15,12 @@ class HttpSyncClient implements SyncApi, InboxApi {
   final bool _ownsClient;
   bool _closed = false;
 
+  /// Stable installation identity and human-readable machine name. Current
+  /// servers require both when issuing a session. Existing bearer-only clients
+  /// may omit them until they register or log in again.
+  final String? deviceId;
+  final String? deviceName;
+
   /// Per-request timeout. Without one, a hung connection would leave
   /// `AppState.syncing` stuck true forever (spinner frozen, auto-sync wedged
   /// because it early-returns while a round is "in progress").
@@ -28,6 +34,8 @@ class HttpSyncClient implements SyncApi, InboxApi {
     required String baseUrl,
     http.Client? client,
     this.timeout = const Duration(seconds: 30),
+    this.deviceId,
+    this.deviceName,
   })  : baseUrl = _normalizeBaseUrl(baseUrl),
         _client = client ?? http.Client(),
         _ownsClient = client == null;
@@ -53,6 +61,12 @@ class HttpSyncClient implements SyncApi, InboxApi {
   Map<String, String> get _authHeaders => {
         'content-type': 'application/json',
         if (token != null) 'authorization': 'Bearer $token',
+      };
+
+  Map<String, String> get _enrollmentHeaders => {
+        'content-type': 'application/json',
+        if (deviceId != null) 'x-seance-device-id': deviceId!,
+        if (deviceName != null) 'x-seance-device-name': deviceName!,
       };
 
   Uri _uri(String path, [Map<String, String>? query]) {
@@ -114,7 +128,7 @@ class HttpSyncClient implements SyncApi, InboxApi {
   Future<void> register(RegisterRequest request) async {
     final res = await _client
         .post(_uri('/v1/register'),
-            headers: {'content-type': 'application/json'},
+            headers: _enrollmentHeaders,
             body: jsonEncode(request.toJson()))
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
@@ -138,7 +152,7 @@ class HttpSyncClient implements SyncApi, InboxApi {
   Future<void> login(LoginRequest request) async {
     final res = await _client
         .post(_uri('/v1/login'),
-            headers: {'content-type': 'application/json'},
+            headers: _enrollmentHeaders,
             body: jsonEncode(request.toJson()))
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
@@ -152,6 +166,55 @@ class HttpSyncClient implements SyncApi, InboxApi {
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
     token = null;
+  }
+
+  Future<List<SyncSessionInfo>> listSessions() async {
+    final res = await _client
+        .get(_uri('/v1/sessions'), headers: _authHeaders)
+        .timeout(timeout);
+    if (res.statusCode >= 400) _fail(res);
+    return SyncSessionsResponse.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    ).sessions;
+  }
+
+  Future<void> revokeCurrentSession() async {
+    final res = await _client
+        .delete(_uri('/v1/sessions/current'), headers: _authHeaders)
+        .timeout(timeout);
+    if (res.statusCode >= 400) _fail(res);
+    token = null;
+  }
+
+  Future<void> revokeAllSessions() async {
+    final res = await _client
+        .delete(_uri('/v1/sessions'), headers: _authHeaders)
+        .timeout(timeout);
+    if (res.statusCode >= 400) _fail(res);
+    token = null;
+  }
+
+  /// Revoke [sessionId]. Returns false when it was already absent. If it was
+  /// this client's own session, clear the bearer only after server success.
+  Future<bool> revokeSession(String sessionId) async {
+    final res = await _client
+        .delete(_uri('/v1/sessions/${Uri.encodeComponent(sessionId)}'),
+            headers: _authHeaders)
+        .timeout(timeout);
+    if (res.statusCode == 404) {
+      try {
+        _fail(res);
+      } on ApiError catch (error) {
+        if (error.code == _notFound) return false;
+        rethrow;
+      }
+    }
+    if (res.statusCode >= 400) _fail(res);
+    final result = RevokeSessionResponse.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
+    if (result.current) token = null;
+    return result.revoked;
   }
 
   @override

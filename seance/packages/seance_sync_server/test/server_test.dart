@@ -17,6 +17,7 @@ class TestClient {
     String path, {
     Object? body,
     bool auth = false,
+    bool device = true,
     Map<String, String> query = const {},
     Map<String, String> headers = const {},
   }) async {
@@ -28,6 +29,10 @@ class TestClient {
       uri,
       headers: {
         'content-type': 'application/json',
+        if (device && (path == '/v1/register' || path == '/v1/login'))
+          'x-seance-device-id': 'test-device',
+        if (device && (path == '/v1/register' || path == '/v1/login'))
+          'x-seance-device-name': 'Test device',
         ...headers,
         if (auth && token != null) 'authorization': 'Bearer $token',
       },
@@ -49,6 +54,17 @@ class TestClient {
 class ThrowingStorage extends InMemoryStorage {
   @override
   Future<Account?> getAccount(String username) async {
+    throw StateError('database password is hunter2');
+  }
+
+  @override
+  Future<IssuedSession?> createAccountAndSession(
+    Account account,
+    SessionDevice device, {
+    required int now,
+    required int expiresAt,
+    required int maxSessions,
+  }) async {
     throw StateError('database password is hunter2');
   }
 }
@@ -201,6 +217,31 @@ void main() {
       expect(settings.authClientMaxAttempts, 12);
       expect(settings.rateLimitMaxBuckets, 128);
       expect(settings.trustedProxies, {'192.0.2.1', '2001:db8::1'});
+    });
+
+    test('session lifetime and account cap are positive and configurable', () {
+      final defaults = ServerSettings.fromEnvironment(const {});
+      expect(defaults.sessionTtl, const Duration(days: 90));
+      expect(defaults.maxSessionsPerAccount, 32);
+
+      final configured = ServerSettings.fromEnvironment(const {
+        'SEANCE_SESSION_TTL_DAYS': '30',
+        'SEANCE_MAX_SESSIONS_PER_ACCOUNT': '5',
+      });
+      expect(configured.sessionTtl, const Duration(days: 30));
+      expect(configured.maxSessionsPerAccount, 5);
+
+      for (final key in const [
+        'SEANCE_SESSION_TTL_DAYS',
+        'SEANCE_MAX_SESSIONS_PER_ACCOUNT',
+      ]) {
+        for (final value in const ['0', '-1', 'many']) {
+          expect(
+            () => ServerSettings.fromEnvironment({key: value}),
+            throwsA(isA<ArgumentError>().having((e) => e.name, 'name', key)),
+          );
+        }
+      }
     });
 
     test('a malformed trusted proxy list refuses to start', () {

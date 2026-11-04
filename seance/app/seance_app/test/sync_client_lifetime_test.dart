@@ -510,6 +510,34 @@ void main() {
     expect(transport.closes, 1);
   });
 
+  test('enrollment sends the stable installation id and a safe device name',
+      () async {
+    http.Request? registration;
+    final transport = _TrackedClient((request) async {
+      registration = request;
+      return http.Response(jsonEncode({'token': 'new-token'}), HttpStatus.ok);
+    });
+    final stableId = services.settings.deviceId;
+
+    await http.runWithClient(
+      () => services.registerSync(
+        baseUrl: _baseUrl,
+        username: 'new-user',
+        password: 'password',
+        encryptionPassphrase: 'password',
+      ),
+      () => transport,
+    );
+
+    expect(registration, isNotNull);
+    expect(registration!.headers['x-seance-device-id'], stableId);
+    final name = registration!.headers['x-seance-device-name'];
+    expect(name, isNotNull);
+    expect(name, isNotEmpty);
+    expect(utf8.encode(name!).length, lessThanOrEqualTo(128));
+    expect(name.codeUnits, everyElement(inInclusiveRange(0x20, 0x7e)));
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
   test('failed sync closes its client', () async {
     final transport = _TrackedClient((_) async =>
         http.Response('unavailable', HttpStatus.serviceUnavailable));

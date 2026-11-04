@@ -76,6 +76,10 @@ class _Harness {
     final r = await send(
       'POST',
       '/v1/register',
+      headers: const {
+        'x-seance-device-id': 'test-device',
+        'x-seance-device-name': 'Test device',
+      },
       body: jsonEncode(
         RegisterRequest(
           username: user,
