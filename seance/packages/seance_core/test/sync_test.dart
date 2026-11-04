@@ -394,6 +394,112 @@ class NonProgressingPagedApi implements SyncApi, PagedSyncApi {
       const PushResponse(results: [], latestSeq: 0);
 }
 
+class GuardedLocalStore
+    implements PushSettlingRecordStore, RecoverableSyncCursorStore {
+  GuardedLocalStore(this.inner, this.localHeld);
+
+  final InMemoryLocalRecordStore inner;
+  final bool Function() localHeld;
+
+  void _check() => expect(localHeld(), isTrue,
+      reason: 'local record access must run inside the local phase');
+
+  @override
+  Future<List<EncryptedRecord>> allRecords() {
+    _check();
+    return inner.allRecords();
+  }
+
+  @override
+  Future<void> completeCursorRecovery() {
+    _check();
+    return inner.completeCursorRecovery();
+  }
+
+  @override
+  Future<bool> cursorRecoveryPending() {
+    _check();
+    return inner.cursorRecoveryPending();
+  }
+
+  @override
+  Future<List<EncryptedRecord>> dirtyRecords() {
+    _check();
+    return inner.dirtyRecords();
+  }
+
+  @override
+  Future<EncryptedRecord?> getRecord(String id) {
+    _check();
+    return inner.getRecord(id);
+  }
+
+  @override
+  Future<int> highWaterSeq() {
+    _check();
+    return inner.highWaterSeq();
+  }
+
+  @override
+  Future<void> markSynced(String id, int seq) {
+    _check();
+    return inner.markSynced(id, seq);
+  }
+
+  @override
+  Future<void> putLocal(EncryptedRecord record) {
+    _check();
+    return inner.putLocal(record);
+  }
+
+  @override
+  Future<void> putRemote(EncryptedRecord record) {
+    _check();
+    return inner.putRemote(record);
+  }
+
+  @override
+  Future<void> recoverFromRejectedCursor() {
+    _check();
+    return inner.recoverFromRejectedCursor();
+  }
+
+  @override
+  Future<void> setHighWaterSeq(int seq) {
+    _check();
+    return inner.setHighWaterSeq(seq);
+  }
+
+  @override
+  Future<EncryptedRecord?> settlePush(
+    EncryptedRecord sent,
+    PushResult result,
+  ) {
+    _check();
+    return inner.settlePush(sent, result);
+  }
+}
+
+class GuardedSyncApi extends FakeServer {
+  GuardedSyncApi(this.localHeld);
+
+  final bool Function() localHeld;
+
+  @override
+  Future<PullResponse> pull({required int since}) {
+    expect(localHeld(), isFalse,
+        reason: 'pull must not hold the local phase');
+    return super.pull(since: since);
+  }
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) {
+    expect(localHeld(), isFalse,
+        reason: 'push must not hold the local phase');
+    return super.push(records);
+  }
+}
+
 EncryptedRecord rec(String id, int updatedAt, String device,
         {bool deleted = false, int tag = 0}) =>
     EncryptedRecord(
@@ -407,6 +513,66 @@ EncryptedRecord rec(String id, int updatedAt, String device,
 
 void main() {
   group('SyncEngine', () {
+    test('keeps all mirror access local and all network access outside',
+        () async {
+      var localHeld = false;
+      final inner = InMemoryLocalRecordStore();
+      await inner.putLocal(rec('local', 20, 'A'));
+      final store = GuardedLocalStore(inner, () => localHeld);
+      final api = GuardedSyncApi(() => localHeld);
+      await api.push([rec('remote', 10, 'B')]);
+
+      Future<T> runLocal<T>(Future<T> Function() action) async {
+        expect(localHeld, isFalse);
+        localHeld = true;
+        try {
+          return await action();
+        } finally {
+          localHeld = false;
+        }
+      }
+
+      await SyncEngine(store).sync(
+        api,
+        runLocal: runLocal,
+        refreshLocal: (_) async => expect(localHeld, isTrue),
+      );
+
+      expect((await inner.allRecords()).map((record) => record.id).toSet(),
+          {'local', 'remote'});
+      expect(await inner.dirtyRecords(), isEmpty);
+    });
+
+    test('keeps cursor recovery and its callbacks in one local phase',
+        () async {
+      var localHeld = false;
+      final inner = InMemoryLocalRecordStore();
+      await inner.putRemote(rec('lost-history', 10, 'B').withSeq(42));
+      await inner.setHighWaterSeq(42);
+      final store = GuardedLocalStore(inner, () => localHeld);
+      final api = RejectCursorOnceApi();
+
+      Future<T> runLocal<T>(Future<T> Function() action) async {
+        expect(localHeld, isFalse);
+        localHeld = true;
+        try {
+          return await action();
+        } finally {
+          localHeld = false;
+        }
+      }
+
+      await SyncEngine(store).sync(
+        api,
+        runLocal: runLocal,
+        beforeCursorRecoveryPull: () async => expect(localHeld, isTrue),
+        afterCursorRecovery: () async => expect(localHeld, isTrue),
+      );
+
+      expect(api.requestedSince.take(2), [42, 0]);
+      expect(await inner.cursorRecoveryPending(), isFalse);
+    });
+
     test('pushes local records to an empty server', () async {
       final server = FakeServer();
       final store = InMemoryLocalRecordStore();

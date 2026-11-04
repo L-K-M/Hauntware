@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -67,6 +68,62 @@ class FakeServer implements SyncApi {
       }
     }
     return PushResponse(results: results, latestSeq: _seq);
+  }
+}
+
+class _DelayedPullServer extends FakeServer {
+  _DelayedPullServer(this.localHeld);
+
+  final bool Function() localHeld;
+  final pullStarted = Completer<void>();
+  final releasePull = Completer<void>();
+  var _delayNextPull = true;
+
+  @override
+  Future<PullResponse> pull({required int since}) async {
+    expect(localHeld(), isFalse,
+        reason: 'network pulls must not hold the local mutation phase');
+    if (_delayNextPull) {
+      _delayNextPull = false;
+      pullStarted.complete();
+      await releasePull.future;
+    }
+    return super.pull(since: since);
+  }
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) {
+    expect(localHeld(), isFalse,
+        reason: 'network pushes must not hold the local mutation phase');
+    return super.push(records);
+  }
+}
+
+class _DelayedPushServer extends FakeServer {
+  _DelayedPushServer(this.localHeld);
+
+  final bool Function() localHeld;
+  final pushStarted = Completer<void>();
+  final releasePush = Completer<void>();
+  var _delayNextPush = true;
+
+  @override
+  Future<PullResponse> pull({required int since}) {
+    expect(localHeld(), isFalse,
+        reason: 'network pulls must not hold the local mutation phase');
+    return super.pull(since: since);
+  }
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) async {
+    expect(localHeld(), isFalse,
+        reason: 'network pushes must not hold the local mutation phase');
+    if (_delayNextPush) {
+      _delayNextPush = false;
+      pushStarted.complete();
+      await releasePush.future;
+    }
+    return super.push(records);
   }
 }
 
@@ -199,6 +256,94 @@ ServerConfig server(String id, String label, int updatedAt) => ServerConfig(
     );
 
 void main() {
+  test('an edit made during a pull is staged before the response is merged',
+      () async {
+    var localHeld = false;
+    Future<T> runLocal<T>(Future<T> Function() action) async {
+      expect(localHeld, isFalse);
+      localHeld = true;
+      try {
+        return await action();
+      } finally {
+        localHeld = false;
+      }
+    }
+
+    final codec = RecordCodec(secureRandomBytes(32));
+    final configs = InMemoryConfigStore();
+    await configs.putServer(server('s1', 'local-old', 10));
+    final api = _DelayedPullServer(() => localHeld);
+    final remote = server('s1', 'remote', 20);
+    await api.push([
+      await codec.encrypt(DecryptedRecord(
+        id: remote.id,
+        kind: RecordKind.serverConfig,
+        updatedAt: remote.updatedAt,
+        deviceId: 'B',
+        data: remote.toJson(),
+      )),
+    ]);
+    final coordinator = SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: codec,
+      local: InMemoryLocalRecordStore(),
+      deviceId: 'A',
+    );
+
+    final syncing = coordinator.runStaged(api, runLocal: runLocal);
+    await api.pullStarted.future;
+    await runLocal(
+      () => configs.putServer(server('s1', 'local-new', 30)),
+    );
+    api.releasePull.complete();
+    await syncing;
+
+    expect((await configs.getServer('s1'))!.label, 'local-new');
+    final stored = await codec.decrypt(api.stored('s1')!);
+    expect(ServerConfig.fromJson(stored.data).label, 'local-new');
+    expect(stored.updatedAt, 30);
+  });
+
+  test('an edit made during a push remains dirty and reaches a later pass',
+      () async {
+    var localHeld = false;
+    Future<T> runLocal<T>(Future<T> Function() action) async {
+      expect(localHeld, isFalse);
+      localHeld = true;
+      try {
+        return await action();
+      } finally {
+        localHeld = false;
+      }
+    }
+
+    final codec = RecordCodec(secureRandomBytes(32));
+    final configs = InMemoryConfigStore();
+    await configs.putServer(server('s1', 'local-old', 10));
+    final api = _DelayedPushServer(() => localHeld);
+    final coordinator = SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: codec,
+      local: InMemoryLocalRecordStore(),
+      deviceId: 'A',
+    );
+
+    final syncing = coordinator.runStaged(api, runLocal: runLocal);
+    await api.pushStarted.future;
+    await runLocal(
+      () => configs.putServer(server('s1', 'local-new', 20)),
+    );
+    api.releasePush.complete();
+    await syncing;
+
+    expect((await configs.getServer('s1'))!.label, 'local-new');
+    final stored = await codec.decrypt(api.stored('s1')!);
+    expect(ServerConfig.fromJson(stored.data).label, 'local-new');
+    expect(stored.updatedAt, 20);
+  });
+
   test('server configs and host keys sync between two devices', () async {
     final server0 = FakeServer();
     final vaultKey = secureRandomBytes(32); // shared across the two devices
@@ -4499,6 +4644,7 @@ void main() {
       // read it back must not replace the refusal with its own error, or
       // the caller never learns the round applied what it pulled.
       final remote = _BlobCapServer(cap);
+      final local = _UnreadableRecordStore('snippet:big');
       final snippets = InMemorySnippetStore();
       await snippets.putSnippet(script(100 * 1024, 20));
 
@@ -4507,7 +4653,7 @@ void main() {
         hostKeyStore: InMemoryHostKeyStore(),
         snippetStore: snippets,
         codec: _sharedCodec,
-        local: _UnreadableRecordStore('snippet:big'),
+        local: local,
         deviceId: 'B',
       ).run(remote));
 
@@ -4918,13 +5064,16 @@ class _BlobCapServer extends FakeServer {
 /// decode error would.
 class _UnreadableRecordStore extends InMemoryLocalRecordStore {
   final String unreadableId;
-  var _readsRemaining = 1;
 
   _UnreadableRecordStore(this.unreadableId);
 
   @override
   Future<EncryptedRecord?> getRecord(String id) async {
-    if (id == unreadableId && _readsRemaining-- == 0) {
+    // Fail the read this fake exists to exercise, independent of how many
+    // staging reads a sync implementation needs before it names the refusal.
+    final describingRefusal =
+        StackTrace.current.toString().contains('_describeRefused');
+    if (id == unreadableId && describingRefusal) {
       throw StateError('cannot read $id');
     }
     return super.getRecord(id);
