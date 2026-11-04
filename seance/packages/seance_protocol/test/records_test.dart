@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:logging/logging.dart';
 import 'package:seance_protocol/seance_protocol.dart';
 import 'package:test/test.dart';
@@ -550,7 +552,7 @@ void main() {
       expect(dec.deleted, isFalse);
     });
 
-    test('tombstone carries no payload', () async {
+    test('tombstone carries an authenticated typed payload', () async {
       final codec = RecordCodec(secureRandomBytes(32));
       final rec = DecryptedRecord(
         id: 'r1',
@@ -560,11 +562,82 @@ void main() {
         deleted: true,
       );
       final enc = await codec.encrypt(rec);
-      expect(enc.blob, isEmpty);
+      expect(enc.blob, isNotEmpty);
       expect(enc.deleted, isTrue);
       final dec = await codec.decrypt(enc);
       expect(dec.deleted, isTrue);
-      expect(dec.kind, RecordKind.unknown);
+      expect(dec.kind, RecordKind.secret);
+      expect(dec.data, isEmpty);
+    });
+
+    test('rejects every forged conflict-metadata field', () async {
+      final codec = RecordCodec(secureRandomBytes(32));
+      final sealed = await codec.encrypt(
+        const DecryptedRecord(
+          id: 'bookmark:b1',
+          kind: RecordKind.bookmark,
+          updatedAt: 42,
+          deviceId: 'device-a',
+          data: {'id': 'b1'},
+        ),
+      );
+
+      EncryptedRecord changed({
+        String? id,
+        int? updatedAt,
+        String? deviceId,
+        bool? deleted,
+      }) => EncryptedRecord(
+        id: id ?? sealed.id,
+        updatedAt: updatedAt ?? sealed.updatedAt,
+        deviceId: deviceId ?? sealed.deviceId,
+        deleted: deleted ?? sealed.deleted,
+        seq: sealed.seq,
+        blob: sealed.blob,
+      );
+
+      for (final forged in [
+        changed(id: 'bookmark:b2'),
+        changed(updatedAt: 1 << 50),
+        changed(deviceId: 'device-z'),
+        changed(deleted: true),
+      ]) {
+        await expectLater(
+          codec.decrypt(forged),
+          throwsA(isA<RecordIntegrityException>()),
+        );
+      }
+    });
+
+    test('rejects an unsealed legacy tombstone', () async {
+      final codec = RecordCodec(secureRandomBytes(32));
+      await expectLater(
+        codec.decrypt(
+          EncryptedRecord.tombstone(
+            id: 'bookmark:b1',
+            updatedAt: 42,
+            deviceId: 'device-a',
+          ),
+        ),
+        throwsA(isA<RecordIntegrityException>()),
+      );
+    });
+
+    test('server-assigned sequence numbers are not authenticated', () async {
+      final codec = RecordCodec(secureRandomBytes(32));
+      final sealed = await codec.encrypt(
+        const DecryptedRecord(
+          id: 'bookmark:b1',
+          kind: RecordKind.bookmark,
+          updatedAt: 42,
+          deviceId: 'device-a',
+          data: {'id': 'b1'},
+        ),
+      );
+
+      final decoded = await codec.decrypt(sealed.withSeq(99));
+      expect(decoded.id, 'bookmark:b1');
+      expect(decoded.kind, RecordKind.bookmark);
     });
 
     test('serialized envelope has no separate kind field', () async {
@@ -641,6 +714,118 @@ void main() {
       );
     });
 
+    test('legacy live payloads remain readable during migration', () async {
+      final vaultKey = secureRandomBytes(32);
+      final codec = RecordCodec(vaultKey);
+      final blob = await VaultCrypto.sealJson(vaultKey, const {
+        'kind': 'bookmark',
+        'data': {'id': 'b1'},
+      });
+
+      final decoded = await codec.decrypt(
+        EncryptedRecord(
+          id: 'bookmark:b1',
+          updatedAt: 42,
+          deviceId: 'legacy-device',
+          deleted: false,
+          seq: 1,
+          blob: blob,
+        ),
+      );
+
+      expect(decoded.kind, RecordKind.bookmark);
+      expect(decoded.data, {'id': 'b1'});
+    });
+
+    test('rejects unknown authenticated-envelope versions', () async {
+      final vaultKey = secureRandomBytes(32);
+      final codec = RecordCodec(vaultKey);
+      final blob = await VaultCrypto.sealJson(vaultKey, const {
+        'envelopeVersion': 99,
+        'purpose': 'seance.sync.record',
+        'id': 'bookmark:b1',
+        'kind': 'bookmark',
+        'updatedAt': 42,
+        'deviceId': 'device-a',
+        'deleted': false,
+        'data': {'id': 'b1'},
+      });
+
+      await expectLater(
+        codec.decrypt(
+          EncryptedRecord(
+            id: 'bookmark:b1',
+            updatedAt: 42,
+            deviceId: 'device-a',
+            deleted: false,
+            seq: 1,
+            blob: blob,
+          ),
+        ),
+        throwsA(isA<RecordIntegrityException>()),
+      );
+    });
+
+    test('rejects transplanted and corrupted ciphertext', () async {
+      final codec = RecordCodec(secureRandomBytes(32));
+      final first = await codec.encrypt(
+        const DecryptedRecord(
+          id: 'bookmark:b1',
+          kind: RecordKind.bookmark,
+          updatedAt: 42,
+          deviceId: 'device-a',
+          data: {'id': 'b1'},
+        ),
+      );
+      final second = await codec.encrypt(
+        const DecryptedRecord(
+          id: 'bookmark:b2',
+          kind: RecordKind.bookmark,
+          updatedAt: 43,
+          deviceId: 'device-a',
+          data: {'id': 'b2'},
+        ),
+      );
+      final transplanted = EncryptedRecord(
+        id: second.id,
+        updatedAt: second.updatedAt,
+        deviceId: second.deviceId,
+        deleted: second.deleted,
+        seq: second.seq,
+        blob: first.blob,
+      );
+      final damagedBlob = first.blob.toList();
+      damagedBlob[damagedBlob.length ~/ 2] ^= 1;
+      final damaged = EncryptedRecord(
+        id: first.id,
+        updatedAt: first.updatedAt,
+        deviceId: first.deviceId,
+        deleted: first.deleted,
+        seq: first.seq,
+        blob: Uint8List.fromList(damagedBlob),
+      );
+
+      await expectLater(codec.decrypt(transplanted), throwsA(anything));
+      await expectLater(codec.decrypt(damaged), throwsA(anything));
+    });
+
+    test('legacy decoders can read new live payloads', () async {
+      final vaultKey = secureRandomBytes(32);
+      final sealed = await RecordCodec(vaultKey).encrypt(
+        const DecryptedRecord(
+          id: 'bookmark:b1',
+          kind: RecordKind.bookmark,
+          updatedAt: 42,
+          deviceId: 'device-a',
+          data: {'id': 'b1'},
+        ),
+      );
+
+      final payload = await VaultCrypto.openJson(vaultKey, sealed.blob);
+      expect(payload['kind'], 'bookmark');
+      expect(payload['data'], {'id': 'b1'});
+    });
+
     test('a server holding the blob cannot read it without the vault key',
         () async {
       final codec = RecordCodec(secureRandomBytes(32));
@@ -655,23 +840,28 @@ void main() {
       expect(enc.toJson()['blob'], isNot(contains('top-secret')));
     });
 
-    test('a tombstone round-trips through the wire form', () async {
-      // Delete propagation relies on this shape surviving JSON: a decoder that
-      // dropped `deleted` or rejected an empty blob would resurrect every
-      // deletion.
-      final original =
-          EncryptedRecord.tombstone(id: 's1', updatedAt: 20, deviceId: 'A');
+    test('a sealed tombstone round-trips through the wire form', () async {
+      final codec = RecordCodec(secureRandomBytes(32));
+      final original = await codec.encrypt(
+        const DecryptedRecord(
+          id: 'secret:s1',
+          kind: RecordKind.secret,
+          updatedAt: 20,
+          deviceId: 'A',
+          deleted: true,
+        ),
+      );
       final back = EncryptedRecord.fromJson(original.toJson());
-      expect(back.id, 's1');
+      expect(back.id, 'secret:s1');
       expect(back.updatedAt, 20);
       expect(back.deviceId, 'A');
       expect(back.deleted, isTrue);
       expect(back.seq, isNull);
-      expect(back.blob, isEmpty);
+      expect(back.blob, isNotEmpty);
 
-      // decrypt reads it as a deleted record, no vault key required.
-      final dec = await RecordCodec(secureRandomBytes(32)).decrypt(back);
+      final dec = await codec.decrypt(back);
       expect(dec.deleted, isTrue);
+      expect(dec.kind, RecordKind.secret);
     });
   });
 
