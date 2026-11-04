@@ -5,6 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:seance_core/seance_core.dart';
 import 'package:xterm/xterm.dart';
 
+const _escape = 0x1b;
+const _controlSequenceIntroducer = 0x5b;
+const _singleShiftThree = 0x4f;
+
 enum TerminalCursorKey {
   arrowUp(0x41),
   arrowDown(0x42),
@@ -366,11 +370,77 @@ class XtermTerminalEngine implements TerminalEngine {
   /// Send an arrow, Home, or End [key] using the active DECCKM mode.
   void sendCursorKey(TerminalCursorKey key) {
     if (_disposed) return;
-    final prefix = terminal.cursorKeysMode ? 0x4f : 0x5b; // SS3 or CSI
     // Cursor sequences are intentionally terminal controls, not command text.
     // Bypass pending-input tracking and leave one-shot Ctrl armed for typing.
     _markInputActivity();
-    _input.add(Uint8List.fromList([0x1b, prefix, key.finalByte]));
+    _input.add(Uint8List.fromList(_cursorSequence(key)));
+  }
+
+  /// Moves the shell line editor's caret to [target] with cursor-key input.
+  ///
+  /// A terminal cannot set shell-owned editing state directly. Restrict the
+  /// approximation to the cursor's current soft-wrapped line, where one arrow
+  /// per visible character preserves the shell's own prompt and input rules.
+  void moveCaretTo(CellOffset target) {
+    if (_disposed || terminal.isUsingAltBuffer) return;
+    // A mouse-aware remote already owns the press; arrows would duplicate it.
+    if (terminal.mouseMode != MouseMode.none) return;
+    if (_hasAcceptedPrompt &&
+        shellIntegration.value.phase != TerminalPromptPhase.acceptingInput) {
+      return;
+    }
+
+    final buffer = terminal.buffer;
+    if (target.x < 0 ||
+        target.x >= terminal.viewWidth ||
+        target.y < 0 ||
+        target.y >= buffer.lines.length) {
+      return;
+    }
+
+    final cursor = CellOffset(buffer.cursorX, buffer.absoluteCursorY);
+    final distance = _visibleCharacterDistance(cursor, target);
+    if (distance == null || distance == 0) return;
+
+    final key = distance < 0
+        ? TerminalCursorKey.arrowLeft
+        : TerminalCursorKey.arrowRight;
+    final sequence = _cursorSequence(key);
+    final bytes = Uint8List(sequence.length * distance.abs());
+    for (var offset = 0; offset < bytes.length; offset += sequence.length) {
+      bytes.setRange(offset, offset + sequence.length, sequence);
+    }
+
+    _markInputActivity();
+    _input.add(bytes);
+  }
+
+  List<int> _cursorSequence(TerminalCursorKey key) => [
+    _escape,
+    terminal.cursorKeysMode ? _singleShiftThree : _controlSequenceIntroducer,
+    key.finalByte,
+  ];
+
+  int? _visibleCharacterDistance(CellOffset cursor, CellOffset target) {
+    final forward = cursor.isBefore(target);
+    final start = forward ? cursor : target;
+    final end = forward ? target : cursor;
+    final buffer = terminal.buffer;
+    var distance = 0;
+
+    for (var row = start.y; row <= end.y; row++) {
+      if (row > start.y && !buffer.lines[row].isWrapped) return null;
+
+      final line = buffer.lines[row];
+      final firstColumn = row == start.y ? start.x : 0;
+      final lastColumn = row == end.y ? end.x : terminal.viewWidth;
+      for (var column = firstColumn; column < lastColumn; column++) {
+        // Width zero is either a wide character's continuation or empty space.
+        if (line.getWidth(column) > 0) distance++;
+      }
+    }
+
+    return forward ? distance : -distance;
   }
 
   /// Stages a quoted `cd` at a verified empty prompt, without submitting it.

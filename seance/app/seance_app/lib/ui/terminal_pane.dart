@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/gestures.dart'
+    show PointerDeviceKind, PointerDownEvent, kPrimaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
@@ -1113,6 +1115,7 @@ class _SessionViewState extends State<_SessionView> {
   TerminalSearchSession? _search;
   String _lastFindQuery = '';
   bool _lastFindCaseSensitive = false;
+  bool _caretPressStartedPlain = false;
   @override
   void initState() {
     super.initState();
@@ -1239,28 +1242,62 @@ class _SessionViewState extends State<_SessionView> {
   }
 
   Widget _terminalView(TerminalSession tab, TerminalAppearance appearance) =>
-      TerminalView(
-        tab.engine.terminal,
-        key: _viewKey,
-        scrollController: _scroll,
-        controller: _terminalController,
-        focusNode: _focus,
-        autofocus: widget.isActive,
-        onKeyEvent: _handleKeyEvent,
-        onLinkTap: _openLink,
-        textStyle: appearance.style,
-        theme: appearance.theme,
-        keyboardAppearance: appearance.brightness,
-        // No default shortcut layer: _handleKeyEvent and the menus already
-        // cover copy/paste/select-all, and xterm's defaults hijacked plain
-        // Ctrl+A (readline line-home) into a select-all and ate Ctrl+V before
-        // the shell ever saw it.
-        shortcuts: const <ShortcutActivator, Intent>{},
-        onSecondaryTapDown: (details, _) =>
-            _showContextMenu(context, details.globalPosition),
-        onTouchSelectionEnd: _showSelectionToolbar,
-        padding: const EdgeInsets.all(6),
+      Listener(
+        onPointerDown: _captureCaretPress,
+        child: TerminalView(
+          tab.engine.terminal,
+          key: _viewKey,
+          scrollController: _scroll,
+          controller: _terminalController,
+          focusNode: _focus,
+          autofocus: widget.isActive,
+          onKeyEvent: _handleKeyEvent,
+          onTapUp: _moveCaret,
+          onLinkTap: _openLink,
+          textStyle: appearance.style,
+          theme: appearance.theme,
+          keyboardAppearance: appearance.brightness,
+          // No default shortcut layer: _handleKeyEvent and the menus already
+          // cover copy/paste/select-all, and xterm's defaults hijacked plain
+          // Ctrl+A (readline line-home) into a select-all and ate Ctrl+V before
+          // the shell ever saw it.
+          shortcuts: const <ShortcutActivator, Intent>{},
+          onSecondaryTapDown: (details, _) =>
+              _showContextMenu(context, details.globalPosition),
+          onTouchSelectionEnd: _showSelectionToolbar,
+          padding: const EdgeInsets.all(6),
+        ),
       );
+
+  /// Remembers press-time modifiers so releasing a link modifier before
+  /// mouse-up cannot turn the same click into a caret move.
+  void _captureCaretPress(PointerDownEvent event) {
+    final keyboard = HardwareKeyboard.instance;
+    _caretPressStartedPlain =
+        event.kind == PointerDeviceKind.mouse &&
+        event.buttons == kPrimaryButton &&
+        !keyboard.isShiftPressed &&
+        !keyboard.isControlPressed &&
+        !keyboard.isAltPressed &&
+        !keyboard.isMetaPressed;
+  }
+
+  void _moveCaret(TapUpDetails details, CellOffset offset) {
+    final startedPlain = _caretPressStartedPlain;
+    _caretPressStartedPlain = false;
+    if (!startedPlain || details.kind != PointerDeviceKind.mouse) return;
+    if (_terminalController.selection != null) return;
+
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isShiftPressed ||
+        keyboard.isControlPressed ||
+        keyboard.isAltPressed ||
+        keyboard.isMetaPressed) {
+      return;
+    }
+
+    widget.tab.engine.moveCaretTo(offset);
+  }
 
   /// Shows the platform's selection toolbar over a touch selection, as
   /// Android and iOS text does. Copy ends the selection, as it does there.
