@@ -9,6 +9,7 @@ import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart';
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/app_settings.dart';
+import 'package:seance_app/services/chat_session.dart';
 import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/ui/command_generator.dart';
 import 'package:seance_app/ui/terminal_pane.dart';
@@ -70,6 +71,7 @@ class _Services implements AppServices {
     if (pendingProvider case final pending?) return pending.future;
     return nextProvider ?? provider;
   }
+
   @override
   Future<SearchProvider?> buildSearchProvider() async => null;
   @override
@@ -88,6 +90,7 @@ class _OpenShell implements SshSession {
     closed = true;
     await engine.dispose();
   }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -119,7 +122,7 @@ void main() {
       ..connecting = false;
     tab.engine.feed(Uint8List.fromList(utf8.encode('$_marker\r\n')));
     state.tabs.add(tab);
-    state.activeTabId = tab.id;
+    state.focusTab(tab.id);
     state.llmConfigured = true;
   });
 
@@ -127,6 +130,13 @@ void main() {
 
   bool mentionsMarker(List<LlmMessage> request) =>
       request.any((message) => message.content.contains(_marker));
+
+  test('assistant target labels follow an explicit terminal name', () {
+    state.renameSession(state.activeSession!.id, 'deploy logs');
+
+    final target = state.chats.targets.whereType<TerminalChatTarget>().single;
+    expect(target.label, contains('deploy logs'));
+  });
 
   group('Include terminal output', () {
     final chip = find.widgetWithText(FilterChip, 'Include terminal output');
@@ -194,6 +204,31 @@ void main() {
       expect(mentionsMarker(services.provider.chats.last), isFalse);
       expect(services.settings.includeTerminalContext, isFalse);
       expect(services.saves, 1, reason: 'the opt-out outlives a relaunch');
+    });
+
+    testWidgets('captures terminal output before a delayed provider build', (
+      tester,
+    ) async {
+      const laterOutput = 'arrived-after-send-9821';
+      final providerBuild = Completer<LlmProvider>();
+      final delayedProvider = _Provider();
+      services.pendingProvider = providerBuild;
+      await pumpPhone(tester);
+      await openDrawer(tester);
+
+      await send(tester, 'what was on screen?');
+      state.activeSession!.engine.feed(
+        Uint8List.fromList(utf8.encode('$laterOutput\r\n')),
+      );
+      providerBuild.complete(delayedProvider);
+      await tester.pumpAndSettle();
+
+      final request = delayedProvider.chats.single;
+      expect(mentionsMarker(request), isTrue);
+      expect(
+        request.any((message) => message.content.contains(laterOutput)),
+        isFalse,
+      );
     });
   });
 
@@ -312,27 +347,28 @@ void main() {
       expect(state.activeSession!.engine.pendingInput, isEmpty);
     });
 
-    testWidgets('a provider built after cancellation closes without a request', (
-      tester,
-    ) async {
-      final providerBuild = Completer<LlmProvider>();
-      final owned = _ClosableProvider();
-      services.pendingProvider = providerBuild;
-      final host = await pumpHost(tester);
-      await open(tester, host);
+    testWidgets(
+      'a provider built after cancellation closes without a request',
+      (tester) async {
+        final providerBuild = Completer<LlmProvider>();
+        final owned = _ClosableProvider();
+        services.pendingProvider = providerBuild;
+        final host = await pumpHost(tester);
+        await open(tester, host);
 
-      await tester.enterText(find.byType(TextField), 'list files');
-      await tester.tap(find.text('Generate & insert'));
-      await tester.pump();
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-      providerBuild.complete(owned);
-      await tester.pump();
-      await tester.pump();
+        await tester.enterText(find.byType(TextField), 'list files');
+        await tester.tap(find.text('Generate & insert'));
+        await tester.pump();
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        providerBuild.complete(owned);
+        await tester.pump();
+        await tester.pump();
 
-      expect(owned.prompts, isEmpty);
-      expect(owned.closeCalls, 1);
-    });
+        expect(owned.prompts, isEmpty);
+        expect(owned.closeCalls, 1);
+      },
+    );
 
     testWidgets('cancellation closes an active provider exactly once', (
       tester,

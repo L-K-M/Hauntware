@@ -57,8 +57,7 @@ class _Services implements AppServices {
   }
 
   @override
-  Future<SearchProvider?> buildSearchProvider() async =>
-      pendingSearch?.future;
+  Future<SearchProvider?> buildSearchProvider() async => pendingSearch?.future;
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -78,14 +77,23 @@ class _Session implements TerminalSession {
   @override
   final String id;
   @override
-  final XtermTerminalEngine engine = XtermTerminalEngine();
-  _Session(this.id);
+  final String editSessionId;
   @override
-  bool get isConnected => true;
+  final String serverId;
+  final String endpoint;
+  bool connected = true;
+  @override
+  final XtermTerminalEngine engine = XtermTerminalEngine();
+  _Session(this.id, {String? editSessionId, String? serverId, String? endpoint})
+    : editSessionId = editSessionId ?? id,
+      serverId = serverId ?? id,
+      endpoint = endpoint ?? id;
+  @override
+  bool get isConnected => connected;
   @override
   bool get isLocal => false;
   @override
-  String get displayTarget => id;
+  String get displayTarget => endpoint;
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -94,7 +102,9 @@ class _State extends ChangeNotifier implements AppState {
   @override
   final _Services services = _Services();
   @override
-  final ChatSession chat = ChatSession();
+  final ChatConversationStore chats = ChatConversationStore();
+  @override
+  ChatSession get chat => chats.selectedSession;
   @override
   int get llmConfigVersion => 0;
   @override
@@ -102,6 +112,23 @@ class _State extends ChangeNotifier implements AppState {
   @override
   _Session? activeSession;
   final List<_Session> terminals = [];
+  TerminalChatTarget targetFor(_Session session) => TerminalChatTarget(
+    editSessionId: session.editSessionId,
+    serverId: session.serverId,
+    username: 'user',
+    host: '${session.endpoint}.example',
+    port: 22,
+    isLocal: false,
+    label: session.endpoint,
+    description: session.endpoint,
+  );
+  @override
+  TerminalChatTarget chatTargetFor(TerminalSession session) =>
+      targetFor(session as _Session);
+  @override
+  TerminalSession? sessionForChatTarget(TerminalChatTarget target) => terminals
+      .where((session) => targetFor(session).key == target.key)
+      .firstOrNull;
   @override
   TerminalSession? tabById(String? id) =>
       terminals.where((session) => session.id == id).firstOrNull;
@@ -122,6 +149,10 @@ void main() {
     second = _Session('second');
     state.terminals.addAll([first, second]);
     state.activeSession = first;
+    state.chats.reconcile([
+      state.targetFor(first),
+      state.targetFor(second),
+    ], initiallyActive: state.targetFor(first));
     firstInput = [];
     secondInput = [];
     first.engine.userInput.listen(
@@ -133,7 +164,7 @@ void main() {
   });
 
   tearDown(() async {
-    state.chat.dispose();
+    state.chats.dispose();
     state.dispose();
     await first.engine.dispose();
     await second.engine.dispose();
@@ -157,6 +188,15 @@ void main() {
     await tester.pump();
   }
 
+  Future<void> select(WidgetTester tester, String label) async {
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.textContaining(label).last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+  }
+
   testWidgets('a remounted sidebar stages into the current turn target', (
     tester,
   ) async {
@@ -168,13 +208,17 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     state.activeSession = second;
     await mount(tester);
+    expect(state.chats.selectedTarget.key, state.targetFor(first).key);
+    await select(tester, 'second');
     await send(tester, 'second turn');
     await tester.pumpAndSettle();
 
-    expect(state.services.builds, 1, reason: 'the conversation is retained');
+    expect(state.services.builds, 2, reason: 'each target owns a controller');
     expect(firstInput, ['pwd']);
     expect(secondInput, ['pwd']);
-    expect(state.chat.entries, hasLength(4));
+    expect(state.chat.entries, hasLength(2));
+    state.chats.select(state.targetFor(first).key);
+    expect(state.chat.entries, hasLength(2));
   });
 
   testWidgets('reset prevents a late tool from targeting the next turn', (
@@ -191,6 +235,7 @@ void main() {
     final newReply = Completer<ChatTurn>();
     state.services.provider.pending = newReply;
     state.activeSession = second;
+    await select(tester, 'second');
     await send(tester, 'new turn');
     expect(state.services.provider.requests, 2);
 
@@ -216,6 +261,175 @@ void main() {
       'new turn',
       'New answer.',
     ]);
+  });
+
+  testWidgets('drafts survive target switches and sidebar remounts', (
+    tester,
+  ) async {
+    await mount(tester);
+    await tester.enterText(find.byType(TextField), 'first draft');
+    await select(tester, 'second');
+    await tester.enterText(find.byType(TextField), 'second draft');
+    await select(tester, 'first');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'first draft',
+    );
+
+    await tester.pumpWidget(const SizedBox());
+    await mount(tester);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'first draft',
+    );
+    await select(tester, 'second');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'second draft',
+    );
+    await select(tester, 'first');
+    await tester.tap(find.byTooltip('New chat'));
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      isEmpty,
+    );
+  });
+
+  testWidgets('General disables terminal context and cannot paste', (
+    tester,
+  ) async {
+    await mount(tester);
+    await select(tester, 'General');
+    final chip = tester.widget<FilterChip>(
+      find.widgetWithText(FilterChip, 'Include terminal output'),
+    );
+    expect(chip.onSelected, isNull);
+    expect(find.textContaining('no terminal is selected'), findsOneWidget);
+
+    await send(tester, 'general question');
+    await tester.pumpAndSettle();
+
+    expect(firstInput, isEmpty);
+    expect(secondInput, isEmpty);
+    expect(state.chat.entries.last.text, 'Ready.');
+  });
+
+  testWidgets('a reply remains in the conversation that sent it', (
+    tester,
+  ) async {
+    final reply = Completer<ChatTurn>();
+    state.services.provider.pending = reply;
+    await mount(tester);
+    await send(tester, 'question for first');
+    await select(tester, 'second');
+
+    reply.complete(const ChatTurn(text: 'answer for first'));
+    await tester.pumpAndSettle();
+    expect(state.chat.entries, isEmpty);
+
+    await select(tester, 'first');
+    expect(state.chat.entries.map((entry) => entry.text), [
+      'question for first',
+      'answer for first',
+    ]);
+  });
+
+  testWidgets('switching away and back revokes a late paste', (tester) async {
+    final reply = Completer<ChatTurn>();
+    state.services.provider.pending = reply;
+    await mount(tester);
+    await send(tester, 'late command');
+    await select(tester, 'second');
+    await select(tester, 'first');
+
+    reply.complete(
+      const ChatTurn(
+        text: '',
+        toolCalls: [
+          ToolCall(
+            id: 'late',
+            name: 'paste_to_prompt',
+            arguments: {'command': 'echo late'},
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(firstInput, isEmpty);
+    expect(find.textContaining('Nothing was pasted'), findsOneWidget);
+  });
+
+  testWidgets('disconnecting the captured terminal revokes a late paste', (
+    tester,
+  ) async {
+    final reply = Completer<ChatTurn>();
+    state.services.provider.pending = reply;
+    await mount(tester);
+    await send(tester, 'late command');
+    first.connected = false;
+
+    reply.complete(
+      const ChatTurn(
+        text: '',
+        toolCalls: [
+          ToolCall(
+            id: 'late',
+            name: 'paste_to_prompt',
+            arguments: {'command': 'echo late'},
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(firstInput, isEmpty);
+    expect(find.textContaining('disconnected'), findsOneWidget);
+  });
+
+  testWidgets('reconnecting the same logical target revokes a late paste', (
+    tester,
+  ) async {
+    final reply = Completer<ChatTurn>();
+    state.services.provider.pending = reply;
+    await mount(tester);
+    await send(tester, 'late command');
+    final replacement = _Session(
+      'replacement',
+      editSessionId: first.editSessionId,
+      serverId: first.serverId,
+      endpoint: first.endpoint,
+    );
+    addTearDown(replacement.engine.dispose);
+    final replacementInput = <String>[];
+    replacement.engine.userInput.listen(
+      (bytes) => replacementInput.add(utf8.decode(bytes)),
+    );
+    state.terminals[0] = replacement;
+    state.activeSession = replacement;
+    state.chats.reconcile([
+      state.targetFor(replacement),
+      state.targetFor(second),
+    ], initiallyActive: state.targetFor(replacement));
+
+    reply.complete(
+      const ChatTurn(
+        text: '',
+        toolCalls: [
+          ToolCall(
+            id: 'late',
+            name: 'paste_to_prompt',
+            arguments: {'command': 'echo late'},
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(firstInput, isEmpty);
+    expect(replacementInput, isEmpty);
+    expect(find.textContaining('Nothing was pasted'), findsOneWidget);
   });
 
   testWidgets('stale controller construction closes both providers', (

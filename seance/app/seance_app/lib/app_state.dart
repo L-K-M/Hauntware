@@ -615,10 +615,11 @@ class AppState extends ChangeNotifier {
   final SecretRedactor _redactor = SecretRedactor();
   Timer? _statsSaveDebounce;
 
-  /// The assistant conversation. Lives here rather than in the sidebar widget
-  /// so it survives the drawer closing on narrow layouts, and the pane being
-  /// rebuilt when the layout crosses the wide/narrow breakpoint.
-  final ChatSession chat = ChatSession();
+  /// General plus one isolated assistant conversation per logical terminal.
+  final ChatConversationStore chats = ChatConversationStore();
+
+  /// The currently selected conversation.
+  ChatSession get chat => chats.selectedSession;
 
   /// UI-supplied interaction hooks (wired by the root widget so dialogs can be
   /// shown). Default to a safe "deny" if the UI hasn't set them yet.
@@ -739,6 +740,68 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  /// Refresh assistant destinations without following later focus changes.
+  void _syncChatTargets() {
+    final terminals = tabs.whereType<TerminalSession>().toList();
+    final active = activeSession;
+    chats.reconcile([
+      for (final session in terminals) chatTargetFor(session),
+    ], initiallyActive: active == null ? null : chatTargetFor(active));
+  }
+
+  TerminalChatTarget chatTargetFor(TerminalSession session) {
+    if (session.isLocal) {
+      final siblings = tabs
+          .whereType<TerminalSession>()
+          .where((tab) => tab.isLocal)
+          .toList();
+      final ordinal = siblings.indexOf(session) + 1;
+      return TerminalChatTarget(
+        editSessionId: session.editSessionId,
+        serverId: kLocalShellServerId,
+        username: '',
+        host: 'this-machine',
+        port: 0,
+        isLocal: true,
+        label:
+            'Local shell · ${sessionTabLabel(ordinal: ordinal, customName: session.customName.value)}',
+        description: session.displayTarget,
+      );
+    }
+    // This is the endpoint the live terminal actually opened. A saved edit
+    // changes the assistant identity only when reconnect installs a terminal
+    // for that new fingerprint.
+    final config = session.config!;
+    final displayConfig = configFor(session.serverId) ?? config;
+    final siblings = tabs
+        .whereType<TerminalSession>()
+        .where((tab) => tab.serverId == session.serverId)
+        .toList();
+    final ordinal = siblings.indexOf(session) + 1;
+    return TerminalChatTarget(
+      editSessionId: session.editSessionId,
+      serverId: session.serverId,
+      username: config.username,
+      host: config.host,
+      port: config.port,
+      isLocal: false,
+      label:
+          '${displayConfig.label} · ${sessionTabLabel(ordinal: ordinal, customName: session.customName.value)}',
+      description: '${config.username}@${config.host}:${config.port}',
+    );
+  }
+
+  /// Resolve only while the same logical target and fingerprint remain open.
+  TerminalSession? sessionForChatTarget(TerminalChatTarget target) {
+    for (final session in tabs.whereType<TerminalSession>()) {
+      if (session.editSessionId == target.editSessionId &&
+          chatTargetFor(session).key == target.key) {
+        return session;
+      }
+    }
+    return null;
+  }
+
   PaneTab? tabById(String? id) {
     if (id == null) return null;
     for (final s in tabs) {
@@ -810,6 +873,7 @@ class AppState extends ChangeNotifier {
         stackTrace: stackTrace,
       );
     }
+    _syncChatTargets();
     await _seedDefaultSnippets();
     snippets = await services.snippetStore.listSnippets();
     try {
@@ -871,7 +935,7 @@ class AppState extends ChangeNotifier {
   /// Called after the LLM provider settings change: invalidate any cached chat
   /// provider (so a new API key takes effect) and refresh sidebar visibility.
   Future<void> reloadLlmProvider() async {
-    chat.invalidateController();
+    chats.invalidateControllers();
     llmConfigVersion++;
     await refreshLlmConfigured();
     notifyListeners();
@@ -930,6 +994,7 @@ class AppState extends ChangeNotifier {
     }
     servers = await services.configStore.listServers();
     services.probe.updateServers(servers);
+    _syncChatTargets();
     notifyListeners();
     _scheduleAutoSync();
   }
@@ -1754,6 +1819,9 @@ class AppState extends ChangeNotifier {
     );
     tabs[index] = replacement;
     if (activeTabId == old.id) _setActive(replacement.id);
+    // Reconcile before teardown awaits: a changed endpoint must revoke the old
+    // conversation and paste capability immediately.
+    _syncChatTargets();
     await _disposeSession(old);
     replacement.retainedLocalCopies.addAll(old.retainedLocalCopies);
     old.retainedLocalCopies.clear();
@@ -2368,6 +2436,7 @@ class AppState extends ChangeNotifier {
     // so renaming a tab does not rebuild the app the way notifyListeners
     // would.
     session.customName.value = cleaned.isEmpty ? null : cleaned;
+    _syncChatTargets();
   }
 
   /// Set the active tab and remember it as its server's most-recent tab.
@@ -2378,6 +2447,7 @@ class AppState extends ChangeNotifier {
     if (tab != null) {
       _lastTabForServer[tab.serverId] = tab.id;
     }
+    _syncChatTargets();
   }
 
   /// Apply a change of the "keep sessions alive in the background" setting:
@@ -2675,6 +2745,7 @@ class AppState extends ChangeNotifier {
     final siblingsBefore = tabsForServer(tab.serverId);
     tabs.remove(tab);
     _dropLastTabFor(tab);
+    _syncChatTargets();
     if (tab is TerminalSession) {
       await _disposeSession(tab, deleteLocalCopies: true);
     } else {
@@ -2783,7 +2854,7 @@ class AppState extends ChangeNotifier {
     // Nothing anchors a dying app: drop the OS keep-alive before the sessions
     // it was holding open go.
     _keepAlive.stop();
-    chat.dispose();
+    chats.dispose();
     undoHistory.dispose();
     apkUpdater?.dispose();
     // Drop the callback before the service goes: it closes over `sessions`,
