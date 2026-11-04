@@ -15,9 +15,53 @@ import 'sync_engine.dart';
 
 const int _warningLogLevel = 900;
 const String _recordKindDelimiter = ':';
+const String _hostKeyIdPrefix = 'hostkey$_recordKindDelimiter';
 const String _secretIdPrefix = 'secret$_recordKindDelimiter';
 const String _snippetIdPrefix = 'snippet$_recordKindDelimiter';
 const String _syncLoggerName = 'seance.sync';
+
+typedef _ApplySkip = void Function(
+  String id,
+  Object error,
+  StackTrace stackTrace, {
+  bool? permanent,
+});
+
+/// A domain source whose latest enumeration lost data to a read failure.
+///
+/// An empty healthy source means absence and may cancel a pending publication.
+/// An incomplete source means absence is unknown: the sync mirror must retain
+/// authenticated, policy-eligible dirty records until the source is repaired.
+abstract interface class SyncCollectionHealth {
+  bool get syncCollectionFailed;
+
+  /// Persist that the mirror has been applied and recollected successfully.
+  Future<void> markSyncCollectionRecovered();
+}
+
+bool _collectionFailed(Object? source) =>
+    source is SyncCollectionHealth && source.syncCollectionFailed;
+
+bool _sameJson(Object? a, Object? b) {
+  if (identical(a, b)) return true;
+  if (a is List && b is List) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!_sameJson(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  if (a is Map && b is Map) {
+    if (a.length != b.length) return false;
+    for (final entry in a.entries) {
+      if (!b.containsKey(entry.key) || !_sameJson(entry.value, b[entry.key])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return a == b;
+}
 
 /// The sealed kind of a durable local deletion intent. Older stores persist
 /// only the plaintext envelope, so the stable id namespace supplies the kind
@@ -38,15 +82,30 @@ RecordKind _tombstoneKind(String id) {
   };
 }
 
+bool _isSeancePublication(String id) => switch (_tombstoneKind(id)) {
+      RecordKind.serverConfig ||
+      RecordKind.hostKey ||
+      RecordKind.secret ||
+      RecordKind.snippet ||
+      RecordKind.assistantSettings ||
+      RecordKind.inboxApp ||
+      RecordKind.inboxStatus =>
+        true,
+      RecordKind.bookmark ||
+      RecordKind.klabautermann ||
+      RecordKind.unknown =>
+        false,
+    };
+
 /// Bridges the app's domain objects (server configs, pinned host keys, and —
 /// opt-in — secrets) to the encrypted record layer and back, then drives a
 /// [SyncEngine] round. Records are keyed by their domain id and disambiguated
 /// by [RecordKind], so applying pulled records routes each to the right store.
 ///
-/// Strategy is deliberately simple for a few dozen rarely-edited records:
-/// re-collect everything from local stores, let the engine push/pull, and
-/// re-apply. Server-side LWW makes unchanged pushes no-ops, so this converges
-/// without precise dirty-tracking.
+/// Each round re-collects the domain stores, but semantic matches retain the
+/// mirror's existing ciphertext, sequence and dirty state. This lets durable
+/// cursors skip old downloads without turning every unchanged object into a
+/// newly encrypted upload.
 class SyncCoordinator {
   final ConfigStore configStore;
 
@@ -163,6 +222,21 @@ class SyncCoordinator {
     );
   }
 
+  /// Whether [pin] is the key the user already rejected and no current local
+  /// trust decision has since installed that same key deliberately.
+  ///
+  /// The second half matters after `known_hosts.json` damage: absence is not
+  /// permission to adopt the rejected key merely because there is no longer a
+  /// local pin for [putIfNoConflict] to conflict with. A matching current pin,
+  /// on the other hand, is an explicit later trust decision and may sync.
+  Future<bool> _rejectedWithoutTrustedMatch(HostKey pin) async {
+    final rejected =
+        await pinVerdicts?.rejectedFingerprintFor(pin.locator);
+    if (rejected != pin.fingerprintSha256) return false;
+    final trusted = await hostKeyStore.get(pin.host, pin.port);
+    return trusted?.fingerprintSha256 != pin.fingerprintSha256;
+  }
+
   /// The credentials [servers] opt into publishing to the account.
   ///
   /// One rule in one place: [collectLocal] decides what to publish with it and
@@ -183,37 +257,197 @@ class SyncCoordinator {
               server.secretRef!,
       };
 
-  /// Host-key locators that only excluded servers name.
+  /// Host-key locators an actively synced server names.
   ///
-  /// Host keys are keyed by `host:port`, not by server, so a pin is only
-  /// local-only when *every* server naming that address is excluded. One
-  /// included server on the same box is enough to keep pinning it: the
-  /// address is already published by that server's own record. [collectLocal]
-  /// withholds these pins and [applyToStores] shields them, and the two are
-  /// only correct while they agree.
-  static Set<String> _localOnlyLocators(List<ServerConfig> servers) =>
-      <String>{
+  /// Orphan pins are withheld too. A peer cannot use one without its server
+  /// config, and after an excluded config is lost to file corruption its
+  /// payload-less tombstone no longer reveals which locator must stay local.
+  /// Publishing only affirmative live references therefore fails closed for
+  /// that privacy choice. A later synced config naming the address makes the
+  /// existing local pin eligible again.
+  static Set<String> _publishableHostKeyLocators(
+    List<ServerConfig> servers,
+  ) =>
+      {
         for (final server in servers)
-          if (server.excludeFromSync) hostKeyLocator(server.host, server.port),
-      }..removeAll(<String>{
-          for (final server in servers)
-            if (!server.excludeFromSync)
-              hostKeyLocator(server.host, server.port),
-        });
+          if (!server.excludeFromSync)
+            hostKeyLocator(server.host, server.port),
+      };
+
+  /// Stage a trusted domain value only when its semantic contents changed.
+  ///
+  /// Encryption uses a random nonce, so encrypting first would make equal
+  /// values look different and mark every record dirty on every round. A
+  /// pulled semantic match may also carry another device's id and a server
+  /// sequence; both belong to the existing winner and must survive local
+  /// collection. An unchanged dirty value stays dirty with the same bytes so
+  /// an interrupted push retries exactly what it previously attempted. A
+  /// valid mirror tuple that outranks a stale domain snapshot is also kept;
+  /// the apply pass will materialize that winner instead of uploading a loss.
+  Future<bool> _stageLocal(DecryptedRecord desired) async {
+    final existing = await local.getRecord(desired.id);
+    if (existing != null) {
+      try {
+        final current = await codec.decrypt(existing);
+        if (current.id == desired.id &&
+            current.kind == desired.kind &&
+            current.updatedAt == desired.updatedAt &&
+            current.deleted == desired.deleted &&
+            (!desired.deleted || current.deviceId == desired.deviceId) &&
+            _sameJson(current.data, desired.data)) {
+          return false;
+        }
+        final sameStamp = existing.updatedAt == desired.updatedAt;
+        // Live domain rows do not retain the record device id. Rebuilding an
+        // unapplied peer winner with this device's larger id would therefore
+        // turn stale equal-stamp content into a winning upload. Durable
+        // deletion intents do retain their deleting device id, so tombstones
+        // can still use the complete LWW tuple on a tie.
+        final existingWins = existing.updatedAt > desired.updatedAt ||
+            (sameStamp && !desired.deleted) ||
+            (sameStamp &&
+                desired.deleted &&
+                existing.deviceId.compareTo(desired.deviceId) >= 0);
+        if (existingWins) return false;
+      } catch (_) {
+        // A legacy, damaged or wrong-key mirror entry is replaced from the
+        // trusted domain store below and retried as a current envelope.
+      }
+    }
+    await local.putLocal(await codec.encrypt(desired));
+    return true;
+  }
+
+  Future<void> _cancelUncollectedDirty(Set<String> collectedIds) async {
+    final publications = local;
+    if (publications is! LocalPublicationStore) return;
+    for (final record in await publications.dirtyRecords()) {
+      // A tombstone is an explicit deletion or retraction, not an opt-in live
+      // publication. Only a newer live domain value may supersede it. This is
+      // also what keeps confirmed deletions queued across a failed rollback
+      // recovery after their original TombstoneStore intent was pruned.
+      if (record.deleted) continue;
+      if (!collectedIds.contains(record.id) &&
+          _isSeancePublication(record.id)) {
+        await publications.cancelLocal(record.id);
+      }
+    }
+  }
+
+  /// Remove re-queued pins local trust policy withholds before a surviving
+  /// local pin can stage the shared id. Otherwise [_stageLocal] correctly
+  /// keeps the newer mirror tuple, but `stage()` has already marked that id
+  /// collected and rollback recovery would republish the withheld key.
+  Future<void> _cancelWithheldDirtyHostKeys(Set<String> negativePins) async {
+    final publications = local;
+    if (publications is! LocalPublicationStore) return;
+    for (final record in await publications.dirtyRecords()) {
+      if (record.deleted || !record.id.startsWith(_hostKeyIdPrefix)) continue;
+      final HostKey pin;
+      try {
+        final decoded = await codec.decrypt(record);
+        if (decoded.kind != RecordKind.hostKey) continue;
+        pin = HostKey.fromJson(decoded.data);
+        if (decoded.id != pin.recordId) continue;
+      } catch (_) {
+        // Malformed records are classified and canceled by the strict apply
+        // pass during recovery; ordinary collection must not guess at them.
+        continue;
+      }
+      // Verdict and domain-store failures are not malformed mirror bytes. Let
+      // them fail the collection rather than silently republishing a key whose
+      // trust decision could not be checked.
+      final trusted = await hostKeyStore.get(pin.host, pin.port);
+      if (negativePins.contains(pin.locator) ||
+          (trusted != null && trusted.conflictsWith(pin)) ||
+          await _rejectedWithoutTrustedMatch(pin)) {
+        await publications.cancelLocal(record.id);
+      }
+    }
+  }
+
+  Future<List<DecryptedRecord>> _readableMirrorRecords({
+    required bool dirtyOnly,
+  }) async {
+    final records = dirtyOnly
+        ? await local.dirtyRecords()
+        : await local.allRecords();
+    final readable = <DecryptedRecord>[];
+    for (final record in records) {
+      try {
+        readable.add(await codec.decrypt(record));
+      } catch (_) {
+        // Invalid mirror bytes are not evidence that a failed source owned a
+        // valid domain value. Normal cancellation removes dirty copies.
+      }
+    }
+    return readable;
+  }
+
+  Iterable<SyncCollectionHealth> get _failedCollectionSources sync* {
+    for (final source in [
+      configStore,
+      snippetStore,
+      hostKeyStore,
+      inboxStatusStore,
+    ]) {
+      if (source is SyncCollectionHealth && source.syncCollectionFailed) {
+        yield source;
+      }
+    }
+  }
+
+  Future<void> _markCollectionSourcesRecovered() async {
+    for (final source in _failedCollectionSources.toList()) {
+      await source.markSyncCollectionRecovered();
+    }
+  }
 
   /// Encode current local state into the record store (as local edits).
   ///
   /// Local credential edits must use [SecretVault.putLocalSecret] so their
   /// versions advance independently of unrelated server configuration edits.
-  Future<void> collectLocal() async {
-    final servers = await configStore.listServers();
+  Future<int> collectLocal({bool cancelMissing = true}) async {
+    var changed = 0;
+    final collectedIds = <String>{};
+    Future<void> stage(DecryptedRecord desired) async {
+      collectedIds.add(desired.id);
+      if (await _stageLocal(desired)) changed++;
+    }
 
-    final localOnlyLocators = _localOnlyLocators(servers);
+    final servers = await configStore.listServers();
+    final policyServers = <String, ServerConfig>{
+      for (final server in servers) server.id: server,
+    };
+    if (_collectionFailed(configStore)) {
+      for (final record in await _readableMirrorRecords(dirtyOnly: false)) {
+        if (record.deleted || record.kind != RecordKind.serverConfig) continue;
+        try {
+          final server = ServerConfig.fromJson(record.data);
+          if (server.id != record.id ||
+              (server.secretRef != null &&
+                  isReservedVaultId(server.secretRef!))) {
+            continue;
+          }
+          policyServers.putIfAbsent(server.id, () => server);
+          // A live excluded config should already be a retraction, never a
+          // publication. Preserve only the live values a complete collection
+          // would have staged.
+          if (!server.excludeFromSync) collectedIds.add(record.id);
+        } catch (_) {
+          continue;
+        }
+      }
+    }
+    final serversForPolicy = policyServers.values.toList();
+
+    final publishableHostKeyLocators =
+        _publishableHostKeyLocators(serversForPolicy);
     // The same rule, for credentials: nothing prevents two configs pointing at
     // one vault entry, and a credential a still-synced server holds must keep
     // reaching the devices that want it.
     final syncedSecretRefs = <String>{};
-    for (final s in servers) {
+    for (final s in serversForPolicy) {
       final ref = s.secretRef;
       if (ref != null && !s.excludeFromSync) syncedSecretRefs.add(ref);
     }
@@ -221,29 +455,42 @@ class SyncCoordinator {
     // Record ids of domain objects that still exist this round. A pending
     // tombstone whose id is still present was re-created (import/migration) or
     // never actually removed, so it is not republished — see the tombstone
-    // loop. Read from the stores, not the sync mirror: the mirror is rebuilt
-    // per round, and a persistent one (the documented future store) would hold
-    // a live copy of a just-deleted record that must not suppress its
-    // tombstone. Fetched once and reused for the snippet publishing loop.
+    // loop. Read from the stores, not the sync mirror: the mirror persists
+    // across rounds and can hold a live copy of a just-deleted record that
+    // must not suppress its tombstone. Fetched once and reused for the snippet
+    // publishing loop.
     final snippetList = await snippetStore?.listSnippets() ?? const <Snippet>[];
+    if (_collectionFailed(snippetStore)) {
+      for (final record in await _readableMirrorRecords(dirtyOnly: true)) {
+        if (record.deleted || record.kind != RecordKind.snippet) continue;
+        try {
+          final snippet = Snippet.fromJson(record.data);
+          if (record.id == '$_snippetIdPrefix${snippet.id}') {
+            collectedIds.add(record.id);
+          }
+        } catch (_) {
+          continue;
+        }
+      }
+    }
     final presentIds = <String>{
       for (final s in servers) s.id,
       for (final s in snippetList) '$_snippetIdPrefix${s.id}',
     };
 
-    final publishedSecretRefs = _publishableSecretRefs(servers);
+    final publishedSecretRefs = _publishableSecretRefs(serversForPolicy);
     for (final server in servers) {
       if (server.excludeFromSync) {
-        await _retract(server, syncedSecretRefs);
+        changed += await _retract(server, syncedSecretRefs, collectedIds.add);
         continue;
       }
-      await local.putLocal(await codec.encrypt(DecryptedRecord(
+      await stage(DecryptedRecord(
         id: server.id,
         kind: RecordKind.serverConfig,
         updatedAt: server.updatedAt,
         deviceId: deviceId,
         data: server.toJson(),
-      )));
+      ));
     }
     // Publish each opted-in credential at its own edit time. Legacy local
     // entries use zero until an actual edit or a remote version supplies a
@@ -251,6 +498,11 @@ class SyncCoordinator {
     // Older clients still borrow server timestamps and need upgrading for
     // this protection to hold on every device.
     for (final ref in publishedSecretRefs) {
+      // The durable mirror may be the only readable copy after the vault blob
+      // is damaged. Keep an already-staged publication eligible before trying
+      // the vault read; null below means "cannot mint a replacement", not that
+      // the user opted out and the recoverable mirror copy should be cancelled.
+      collectedIds.add('$_secretIdPrefix$ref');
       // [SecretVault.readableSecret] again, and here it is what makes the
       // repair in [_applySecretRecords] reachable at all: this runs before the
       // round's pull, so an entry that will not open would throw out of
@@ -263,13 +515,13 @@ class SyncCoordinator {
       // which is not the same as having nothing to say.
       final secret = await secretVault?.readableSecret(ref);
       if (secret == null) continue;
-      await local.putLocal(await codec.encrypt(DecryptedRecord(
+      await stage(DecryptedRecord(
         id: '$_secretIdPrefix${secret.id}',
         kind: RecordKind.secret,
         updatedAt: secret.updatedAt,
         deviceId: deviceId,
         data: secret.toJson(),
-      )));
+      ));
     }
     // Deletions the user made are remembered in [tombstoneStore], not in
     // configStore — the row is gone. Republish each as a dirty tombstone so the
@@ -292,34 +544,50 @@ class SyncCoordinator {
       if (presentIds.contains(tombstone.id)) continue;
       final kind = _tombstoneKind(tombstone.id);
       if (kind == RecordKind.unknown) continue;
-      await local.putLocal(await codec.encrypt(DecryptedRecord(
+      await stage(DecryptedRecord(
         id: tombstone.id,
         kind: kind,
         updatedAt: tombstone.updatedAt,
         deviceId: tombstone.deviceId,
         deleted: true,
-      )));
+      ));
     }
-    for (final hk in await hostKeyStore.all()) {
-      if (localOnlyLocators.contains(hk.locator)) {
-        // Withheld, not retracted, and the difference is a real residual: a
-        // pin pushed before the exclusion stays on the sync server, carrying
-        // the host and port the user asked to keep local. Another device that
-        // still holds the pin — the config tombstone deletes its server, not
-        // its pins — also keeps re-publishing it.
-        //
-        // Retracting would need a `hostkey:` tombstone the apply path honours.
-        // Tombstones are now authenticated, but peer removal of a local TOFU
-        // decision remains a separate product policy.
+    final hostKeys = await hostKeyStore.all();
+    final negativePins = await pinVerdicts?.negativePins() ?? const {};
+    await _cancelWithheldDirtyHostKeys(negativePins);
+    if (_collectionFailed(hostKeyStore)) {
+      for (final record in await _readableMirrorRecords(dirtyOnly: true)) {
+        if (record.deleted || record.kind != RecordKind.hostKey) continue;
+        final HostKey pin;
+        try {
+          pin = HostKey.fromJson(record.data);
+        } catch (_) {
+          continue;
+        }
+        if (record.id == pin.recordId &&
+            publishableHostKeyLocators.contains(pin.locator) &&
+            !negativePins.contains(pin.locator) &&
+            !await _rejectedWithoutTrustedMatch(pin)) {
+          collectedIds.add(record.id);
+        }
+      }
+    }
+    for (final hk in hostKeys) {
+      if (!publishableHostKeyLocators.contains(hk.locator) ||
+          negativePins.contains(hk.locator)) {
+        // Withheld, not retracted: peer removal of a local TOFU decision
+        // remains a separate product policy. Orphan pins are withheld as well
+        // as excluded-only pins so a lost excluded config cannot make its
+        // address publishable merely by disappearing from local policy.
         continue;
       }
-      await local.putLocal(await codec.encrypt(DecryptedRecord(
+      await stage(DecryptedRecord(
         id: hk.recordId,
         kind: RecordKind.hostKey,
         updatedAt: hk.pinnedAt,
         deviceId: deviceId,
         data: hk.toJson(),
-      )));
+      ));
     }
     // The contract reserves null for "the keys could not be vouched for this
     // round", but the real store backs onto an OS keyring, and a locked or
@@ -328,6 +596,12 @@ class SyncCoordinator {
     // snippets below it would never be collected, and a round's worth of
     // unrelated records would pay for the assistant's keyring. Degrading to
     // null costs the assistant the round it was going to sit out anyway.
+    if (assistantStore != null) {
+      // As for credentials above, a prior offline edit in the durable mirror
+      // remains valid when today's keyring read fails. A null store is the
+      // actual opt-out signal and deliberately leaves this id uncollected.
+      collectedIds.add(AssistantSettings.recordId);
+    }
     AssistantSettings? assistant;
     try {
       assistant = await assistantStore?.getAssistantSettings();
@@ -351,7 +625,7 @@ class SyncCoordinator {
     // the exact harm the switch-on guard exists to prevent; guarding the
     // stamp bump alone left this path open.
     if (assistant != null && _isViableAssistantRecord(assistant)) {
-      await local.putLocal(await codec.encrypt(DecryptedRecord(
+      await stage(DecryptedRecord(
         id: AssistantSettings.recordId,
         kind: RecordKind.assistantSettings,
         // The settings' own timestamp, not the round's: collectLocal runs
@@ -360,41 +634,70 @@ class SyncCoordinator {
         updatedAt: assistant.updatedAt,
         deviceId: deviceId,
         data: assistant.toJson(),
-      )));
+      ));
     }
     for (final s in snippetList) {
-      await local.putLocal(await codec.encrypt(DecryptedRecord(
+      await stage(DecryptedRecord(
         id: '$_snippetIdPrefix${s.id}',
         kind: RecordKind.snippet,
         updatedAt: s.updatedAt,
         deviceId: deviceId,
         data: s.toJson(),
-      )));
+      ));
+    }
+    if (inboxAppStore != null) {
+      // FileInboxAppStore withholds a live app when its vault key is damaged.
+      // An already-staged sealed record may be the only remaining key copy and
+      // can heal that store during apply, so an enabled store protects dirty
+      // inbox-app publications it cannot hydrate today. A null store remains
+      // the explicit opt-out signal.
+      for (final record in await local.dirtyRecords()) {
+        if (record.id.startsWith(kInboxAppIdPrefix)) {
+          collectedIds.add(record.id);
+        }
+      }
     }
     for (final app
         in await inboxAppStore?.listApps() ?? const <InboxApp>[]) {
-      await local.putLocal(await codec.encrypt(DecryptedRecord(
+      await stage(DecryptedRecord(
         id: app.recordId,
         kind: RecordKind.inboxApp,
         updatedAt: app.updatedAt,
         deviceId: deviceId,
         data: app.toJson(),
-      )));
+      ));
     }
     final statusCutoff = _statusCutoff();
-    for (final status
-        in await inboxStatusStore?.listStatuses() ?? const <InboxStatus>[]) {
+    final statuses =
+        await inboxStatusStore?.listStatuses() ?? const <InboxStatus>[];
+    if (_collectionFailed(inboxStatusStore)) {
+      for (final record in await _readableMirrorRecords(dirtyOnly: true)) {
+        if (record.deleted || record.kind != RecordKind.inboxStatus) continue;
+        try {
+          final status = InboxStatus.fromJson(record.data);
+          if (record.id == status.recordId &&
+              status.updatedAt >= statusCutoff) {
+            collectedIds.add(record.id);
+          }
+        } catch (_) {
+          continue;
+        }
+      }
+    }
+    for (final status in statuses) {
       // Past retention a status names nothing any server still holds, and
       // publishing it every round would only grow every device's mirror.
       if (status.updatedAt < statusCutoff) continue;
-      await local.putLocal(await codec.encrypt(DecryptedRecord(
+      await stage(DecryptedRecord(
         id: status.recordId,
         kind: RecordKind.inboxStatus,
         updatedAt: status.updatedAt,
         deviceId: deviceId,
         data: status.toJson(),
-      )));
+      ));
     }
+    if (cancelMissing) await _cancelUncollectedDirty(collectedIds);
+    return changed;
   }
 
   int _statusCutoff() =>
@@ -453,29 +756,42 @@ class SyncCoordinator {
   /// conservative side of the same trade: a credential such a sharer once
   /// published stays on the server rather than being withdrawn from under a
   /// server that still holds it.
-  Future<void> _retract(
+  Future<int> _retract(
     ServerConfig server,
     Set<String> syncedSecretRefs,
+    void Function(String) collected,
   ) async {
-    await _tombstone(server.id, RecordKind.serverConfig, server.updatedAt);
+    var changed = 0;
+    collected(server.id);
+    if (await _tombstone(
+      server.id,
+      RecordKind.serverConfig,
+      server.updatedAt,
+    )) {
+      changed++;
+    }
     final secretRef = server.secretRef;
     if (secretRef != null && !syncedSecretRefs.contains(secretRef)) {
-      await _tombstone(
+      collected('$_secretIdPrefix$secretRef');
+      if (await _tombstone(
         '$_secretIdPrefix$secretRef',
         RecordKind.secret,
         server.updatedAt,
-      );
+      )) {
+        changed++;
+      }
     }
+    return changed;
   }
 
-  Future<void> _tombstone(String id, RecordKind kind, int updatedAt) async {
-    await local.putLocal(await codec.encrypt(DecryptedRecord(
+  Future<bool> _tombstone(String id, RecordKind kind, int updatedAt) {
+    return _stageLocal(DecryptedRecord(
       id: id,
       kind: kind,
       updatedAt: updatedAt,
       deviceId: deviceId,
       deleted: true,
-    )));
+    ));
   }
 
   /// Re-date a credential this device retracted and then opted back in to,
@@ -512,7 +828,7 @@ class SyncCoordinator {
   Future<int> _reviveSecrets(
     List<(String, int)> refs,
     List<ServerConfig> servers,
-    void Function(String, Object, StackTrace) skip,
+    _ApplySkip skip,
   ) async {
     final vault = secretVault;
     if (refs.isEmpty || !syncSecrets || vault == null) return 0;
@@ -535,13 +851,13 @@ class SyncCoordinator {
         // [_revive]: a failed store write is retried identically next round,
         // while a failed stage after a successful store write would leave the
         // guard above dropping this credential forever.
-        await local.putLocal(await codec.encrypt(DecryptedRecord(
+        await _stageLocal(DecryptedRecord(
           id: '$_secretIdPrefix$ref',
           kind: RecordKind.secret,
           updatedAt: bumped.updatedAt,
           deviceId: deviceId,
           data: bumped.toJson(),
-        )));
+        ));
         await vault.putSecret(bumped);
         bumpedCount++;
       } catch (error, stackTrace) {
@@ -584,8 +900,14 @@ class SyncCoordinator {
   /// honouring tombstones. Returns the number of records that had to be
   /// re-dated — retractions the server outranked (see [rescheduleOutranked])
   /// plus servers re-included behind their own retraction (see [_revive]) — so
-  /// the caller knows a further push is worth making.
-  Future<int> applyToStores() async {
+  /// the caller knows a further push is worth making. When [requireComplete]
+  /// is true, a transient domain-store failure is thrown after the remaining
+  /// records are inspected. Schema and integrity failures remain fail-soft;
+  /// retrying cannot make those records safe to apply.
+  Future<int> applyToStores({
+    bool requireComplete = false,
+    void Function(String id)? onPermanentReject,
+  }) async {
     // A server excluded from sync is local-only, so nothing pulled may touch
     // it: not the tombstone this device pushed to retract it (which comes back
     // on the next pull sequenced by the server), and not a copy another device
@@ -596,19 +918,16 @@ class SyncCoordinator {
       for (final server in servers)
         if (server.excludeFromSync) server.id,
     };
-    // The address rule [collectLocal] applies on the way out, on the way in:
-    // a pin for an address only excluded servers use is withheld from the
-    // account, and the mirror therefore never holds it — so a copy another
-    // device pushes would win last-write-wins by default and overwrite a pin
-    // this device made locally. Nothing pulled may touch a local-only server,
-    // and that includes what this device chose to trust for its address.
-    final localOnlyLocators = _localOnlyLocators(servers);
     // Credentials are decided after the loop rather than inside it: whether one
     // may be applied or withdrawn depends on which servers still reference it,
     // and a config record in the same batch may be about to add or remove the
     // last reference. Record order is not defined, so deciding inline would
     // make the outcome depend on it.
     final secretRecords = <DecryptedRecord>[];
+    // Host keys are likewise decided after configs and tombstones have landed.
+    // A pin is publishable only while a live synced config names its address,
+    // so applying it inline would make the answer depend on record order.
+    final hostKeyRecords = <DecryptedRecord>[];
     // Live configs for servers this device excluded: see [rescheduleOutranked].
     final outranked = <DecryptedRecord>[];
     // Servers this device re-included whose own retraction still outranks
@@ -626,16 +945,43 @@ class SyncCoordinator {
     var redatedRemovals = 0;
     Object? firstError;
     StackTrace? firstStackTrace;
-    void skip(String id, Object error, StackTrace stackTrace) {
+    Object? firstTransientError;
+    StackTrace? firstTransientStackTrace;
+    void skip(
+      String id,
+      Object error,
+      StackTrace stackTrace, {
+      bool? permanent,
+    }) {
       skippedIds.add(id);
       firstError ??= error;
       firstStackTrace ??= stackTrace;
+      if (permanent == true) {
+        onPermanentReject?.call(id);
+      } else {
+        firstTransientError ??= error;
+        firstTransientStackTrace ??= stackTrace;
+      }
+    }
+
+    T? decode<T>(String id, T Function() read) {
+      try {
+        return read();
+      } catch (error, stackTrace) {
+        skip(id, error, stackTrace, permanent: true);
+        return null;
+      }
     }
 
     for (final enc in await local.allRecords()) {
+      final DecryptedRecord dec;
       try {
-        final dec = await codec.decrypt(enc);
-
+        dec = await codec.decrypt(enc);
+      } catch (error, stackTrace) {
+        skip(enc.id, error, stackTrace, permanent: true);
+        continue;
+      }
+      try {
         // Tombstones carry an authenticated kind and tuple. The id prefix is
         // still what routes their application policy after codec validation.
         // A `snippet:` tombstone is applied like a config below (a snippet is
@@ -651,6 +997,7 @@ class SyncCoordinator {
               StateError('tombstone kind ${dec.kind.name} does not match '
                   'record id ${dec.id}'),
               StackTrace.current,
+              permanent: true,
             );
             continue;
           }
@@ -728,7 +1075,11 @@ class SyncCoordinator {
               continue;
             }
 
-            final pulled = ServerConfig.fromJson(dec.data);
+            final pulled = decode<ServerConfig>(
+              dec.id,
+              () => ServerConfig.fromJson(dec.data),
+            );
+            if (pulled == null) continue;
             // The exclusion shield above keys on the *record* id, and this
             // write would key on the payload's. A record whose two ids
             // disagree — schema drift, a buggy peer, anything hand-made by a
@@ -741,6 +1092,7 @@ class SyncCoordinator {
                   'config id ${pulled.id} does not match record id ${dec.id}',
                 ),
                 StackTrace.current,
+                permanent: true,
               );
               continue;
             }
@@ -752,45 +1104,24 @@ class SyncCoordinator {
                 dec.id,
                 StateError('config credential $secretRef is reserved'),
                 StackTrace.current,
+                permanent: true,
               );
               continue;
             }
             await configStore.putServer(pulled);
           case RecordKind.hostKey:
-            final pin = HostKey.fromJson(dec.data);
-            // The same id invariant the config and secret paths enforce: a
-            // pin is stored under its payload's locator, and a record whose
-            // id names another would plant trust for an address no record
-            // ever named, with nothing in the log to say so.
-            if (dec.id != pin.recordId) {
-              skip(
-                dec.id,
-                StateError(
-                  'host key locator ${pin.locator} does not match record id '
-                  '${dec.id}',
-                ),
-                StackTrace.current,
-              );
-              continue;
-            }
-            if (localOnlyLocators.contains(pin.locator)) continue;
-            // The user untrusted this address: a peer still pushing the old
-            // pin is not a reason to trust it again.
-            if (negativePins.contains(pin.locator)) continue;
-            // A pulled pin that disagrees with this device's is held back,
-            // never written (Séance #56): on a hostile network a forged
-            // record would otherwise win trust on every device.
-            final installed = await hostKeyStore.putIfNoConflict(pin);
-            if (installed == HostKeyInstallResult.installed) continue;
-            final conflict = await _pinConflict(pin);
-            if (conflict != null) pinConflicts.add(conflict);
+            hostKeyRecords.add(dec);
           case RecordKind.secret:
             secretRecords.add(dec);
           case RecordKind.snippet:
             final store = snippetStore;
             if (store == null) continue;
 
-            final snippet = Snippet.fromJson(dec.data);
+            final snippet = decode<Snippet>(
+              dec.id,
+              () => Snippet.fromJson(dec.data),
+            );
+            if (snippet == null) continue;
             // LWW and tombstones name the envelope id; the store writes the
             // payload id. They must identify the same snippet or this record
             // can overwrite one whose newer edit or deletion already won.
@@ -801,6 +1132,7 @@ class SyncCoordinator {
                   'snippet id ${snippet.id} does not match record id ${dec.id}',
                 ),
                 StackTrace.current,
+                permanent: true,
               );
               continue;
             }
@@ -809,7 +1141,11 @@ class SyncCoordinator {
             final store = assistantStore;
             if (store == null) continue;
 
-            final assistant = AssistantSettings.fromJson(dec.data);
+            final assistant = decode<AssistantSettings>(
+              dec.id,
+              () => AssistantSettings.fromJson(dec.data),
+            );
+            if (assistant == null) continue;
             // `fromJson` degrades a missing field to '' rather than throwing,
             // so that a record from a newer build stays readable. A provider
             // name is the one field that can never legitimately be empty — it
@@ -825,6 +1161,12 @@ class SyncCoordinator {
             // that does not follow this rule, from being adopted over a
             // working configuration by every device still reading zero.
             if (!_isViableAssistantRecord(assistant)) {
+              skip(
+                dec.id,
+                const FormatException('assistant settings are not viable'),
+                StackTrace.current,
+                permanent: true,
+              );
               continue;
             }
 
@@ -855,13 +1197,18 @@ class SyncCoordinator {
             final store = inboxAppStore;
             if (store == null) continue;
 
-            final app = InboxApp.fromJson(dec.data);
+            final app = decode<InboxApp>(
+              dec.id,
+              () => InboxApp.fromJson(dec.data),
+            );
+            if (app == null) continue;
             if (dec.id != app.recordId) {
               skip(
                 dec.id,
                 StateError('inbox app ${app.id} does not match record id '
                     '${dec.id}'),
                 StackTrace.current,
+                permanent: true,
               );
               continue;
             }
@@ -885,13 +1232,13 @@ class SyncCoordinator {
                           .reduce(max) +
                       1,
                 );
-                await local.putLocal(await codec.encrypt(DecryptedRecord(
+                await _stageLocal(DecryptedRecord(
                   id: redated.recordId,
                   kind: RecordKind.inboxApp,
                   updatedAt: redated.updatedAt,
                   deviceId: deviceId,
                   data: redated.toJson(),
-                )));
+                ));
                 await store.putApp(redated);
                 redatedRemovals++;
               }
@@ -907,13 +1254,18 @@ class SyncCoordinator {
             final store = inboxStatusStore;
             if (store == null) continue;
 
-            final status = InboxStatus.fromJson(dec.data);
+            final status = decode<InboxStatus>(
+              dec.id,
+              () => InboxStatus.fromJson(dec.data),
+            );
+            if (status == null) continue;
             if (dec.id != status.recordId) {
               skip(
                 dec.id,
                 StateError('inbox status ${status.recordId} does not match '
                     'record id ${dec.id}'),
                 StackTrace.current,
+                permanent: true,
               );
               continue;
             }
@@ -930,6 +1282,12 @@ class SyncCoordinator {
         skip(enc.id, error, stackTrace);
       }
     }
+    await _applyHostKeyRecords(
+      hostKeyRecords,
+      negativePins,
+      pinConflicts,
+      skip,
+    );
     _pinConflicts = pinConflicts;
 
     await _applySecretRecords(secretRecords, skip);
@@ -951,7 +1309,66 @@ class SyncCoordinator {
         stackTrace: firstStackTrace,
       );
     }
+    if (requireComplete && firstTransientError != null) {
+      Error.throwWithStackTrace(
+        firstTransientError!,
+        firstTransientStackTrace!,
+      );
+    }
     return redated;
+  }
+
+  /// Apply pulled pins after the batch's configs, failing closed when no live
+  /// synced config names the address or the user already rejected this key.
+  Future<void> _applyHostKeyRecords(
+    List<DecryptedRecord> records,
+    Set<String> negativePins,
+    List<HostKeyConflict> pinConflicts,
+    _ApplySkip skip,
+  ) async {
+    final publishableLocators = _publishableHostKeyLocators(
+      await configStore.listServers(),
+    );
+    for (final dec in records) {
+      final HostKey pin;
+      try {
+        pin = HostKey.fromJson(dec.data);
+      } catch (error, stackTrace) {
+        skip(dec.id, error, stackTrace, permanent: true);
+        continue;
+      }
+      // The same id invariant the config and secret paths enforce: a pin is
+      // stored under its payload's locator, and a record whose id names
+      // another would plant trust for an address no record ever named.
+      if (dec.id != pin.recordId) {
+        skip(
+          dec.id,
+          StateError(
+            'host key locator ${pin.locator} does not match record id '
+            '${dec.id}',
+          ),
+          StackTrace.current,
+          permanent: true,
+        );
+        continue;
+      }
+      if (!publishableLocators.contains(pin.locator) ||
+          negativePins.contains(pin.locator)) {
+        continue;
+      }
+      try {
+        if (await _rejectedWithoutTrustedMatch(pin)) continue;
+        // A pulled pin that disagrees with this device's is held back, never
+        // written (Séance #56): on a hostile network a forged record would
+        // otherwise win trust on every device.
+        final installed = await hostKeyStore.putIfNoConflict(pin);
+        if (installed == HostKeyInstallResult.installed) continue;
+        final conflict = await _pinConflict(pin);
+        if (conflict != null) pinConflicts.add(conflict);
+      } catch (error, stackTrace) {
+        skip(dec.id, error, stackTrace);
+      }
+    }
   }
 
   /// Re-date a re-included server past the retraction it is still losing to.
@@ -966,7 +1383,7 @@ class SyncCoordinator {
   /// [_retract]'s stable date exists to avoid.
   Future<int> _revive(
     List<(ServerConfig, int)> servers,
-    void Function(String, Object, StackTrace) skip,
+    _ApplySkip skip,
   ) async {
     var bumpedCount = 0;
     for (final (config, retractedAt) in servers) {
@@ -987,13 +1404,13 @@ class SyncCoordinator {
         // would never reach a peer, while the losing pre-bump record still
         // would, and the next pull's tombstone would delete the config the
         // user had just brought back.
-        await local.putLocal(await codec.encrypt(DecryptedRecord(
+        await _stageLocal(DecryptedRecord(
           id: bumped.id,
           kind: RecordKind.serverConfig,
           updatedAt: bumped.updatedAt,
           deviceId: deviceId,
           data: bumped.toJson(),
-        )));
+        ));
         await configStore.putServer(bumped);
         bumpedCount++;
       } catch (error, stackTrace) {
@@ -1020,7 +1437,7 @@ class SyncCoordinator {
   /// inline would have shielded it on a snapshot taken before that.
   Future<void> _applySecretRecords(
     List<DecryptedRecord> records,
-    void Function(String, Object, StackTrace) skip,
+    _ApplySkip skip,
   ) async {
     // The id invariant enforced here rather than left to the call site, like
     // the kind check in [rescheduleOutranked]: every id this method reasons
@@ -1038,6 +1455,7 @@ class SyncCoordinator {
         dec.id,
         StateError('secret record id is not `$_secretIdPrefix`-prefixed'),
         StackTrace.current,
+        permanent: true,
       );
     }
     // After the id check, so a peer minting ids differently shows up on a
@@ -1065,8 +1483,14 @@ class SyncCoordinator {
     }
     for (final dec in prefixed) {
       if (shielded.contains(dec.id)) continue;
+      final Secret secret;
       try {
-        final secret = Secret.fromJson(dec.data);
+        secret = Secret.fromJson(dec.data);
+      } catch (error, stackTrace) {
+        skip(dec.id, error, stackTrace, permanent: true);
+        continue;
+      }
+      try {
         // The shield keys on the record id and the vault write keys on the
         // payload's: a record whose two disagree would slip a credential past
         // the shield and land it under a ref the shield never named — the
@@ -1078,6 +1502,7 @@ class SyncCoordinator {
               'secret id ${secret.id} does not match record id ${dec.id}',
             ),
             StackTrace.current,
+            permanent: true,
           );
           continue;
         }
@@ -1089,6 +1514,7 @@ class SyncCoordinator {
             dec.id,
             StateError('secret id ${secret.id} is reserved'),
             StackTrace.current,
+            permanent: true,
           );
           continue;
         }
@@ -1098,6 +1524,7 @@ class SyncCoordinator {
             dec.id,
             StateError('secret timestamp does not match its record'),
             StackTrace.current,
+            permanent: true,
           );
           continue;
         }
@@ -1244,10 +1671,19 @@ class SyncCoordinator {
   /// but only once everything else is done: what was pulled is applied and
   /// confirmed tombstones are pruned first. Thrown straight from the engine, a
   /// record the server refuses on every round would keep this device from
-  /// ever applying another device's edit or deletion. The mirror is rebuilt
-  /// per round, so nothing pulled would survive to the next one.
+  /// ever applying another device's edit or deletion even though the durable
+  /// mirror retained it.
   Future<SyncOutcome> run(SyncApi api) async {
-    await collectLocal();
+    final recoverable = local is RecoverableSyncCursorStore
+        ? local as RecoverableSyncCursorStore
+        : null;
+    final resumingRecovery =
+        recoverable != null && await recoverable.cursorRecoveryPending();
+    // Refresh present values, tombstones, and policy before a resumed zero
+    // pull, but never infer deletion from absence until the recovered mirror
+    // has been applied. This preserves a quarantined source while ensuring an
+    // edit or deletion made after the phase was persisted still wins.
+    await collectLocal(cancelMissing: !resumingRecovery);
     final engine = SyncEngine(local, remoteValidator: _validRemoteRecord);
     // The latest pass's answer, not the union of both: a second pass pushes
     // every refused record that is still dirty again, so it knows which are
@@ -1255,7 +1691,28 @@ class SyncCoordinator {
     var refused = const <RefusedRecord>[];
     Future<SyncOutcome> pass() async {
       try {
-        final outcome = await engine.sync(api);
+        final outcome = await engine.sync(
+          api,
+          beforeCursorRecoveryPull: () => collectLocal(cancelMissing: false),
+          afterCursorRecovery: () async {
+            // A transient domain-store failure must keep the durable recovery
+            // phase pending. Recollecting after a failed write could treat the
+            // absent row as an opt-out and discard the mirror's only copy.
+            final rejected = <String>{};
+            await applyToStores(
+              requireComplete: true,
+              onPermanentReject: rejected.add,
+            );
+            final publications = local;
+            if (publications is LocalPublicationStore) {
+              for (final id in rejected) {
+                await publications.cancelLocal(id);
+              }
+            }
+            await collectLocal();
+            await _markCollectionSourcesRecovered();
+          },
+        );
         refused = const [];
         return outcome;
       } on SyncRecordsRefused catch (error) {
@@ -1273,7 +1730,12 @@ class SyncCoordinator {
     // this is the *re-dating* count and not, say, the number of records
     // applied — which would double every round's traffic on the hot path,
     // hidden inside the summed outcome.
-    final redated = await applyToStores();
+    final recoveringCollections = _failedCollectionSources.isNotEmpty;
+    final redated = await applyToStores(requireComplete: recoveringCollections);
+    if (recoveringCollections) {
+      await collectLocal(cancelMissing: false);
+      await _markCollectionSourcesRecovered();
+    }
     var outcome = first;
     if (redated != 0) {
       final second = await pass();

@@ -6,7 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:ghost_keystore/app_lock.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:seance_core/catalog.dart'
-    show ConflictAwareHostKeyStore, HostKeyConflict;
+    show
+        ConflictAwareHostKeyStore,
+        HostKeyConflict,
+        PersistentLocalRecordStore,
+        SyncAccountScope;
 import 'package:seance_core/seance_core.dart';
 
 import 'atomic_file.dart';
@@ -109,8 +113,8 @@ class AppServices {
   final SnippetStore snippetStore;
 
   /// Durable record of deletions awaiting sync (see [TombstoneStore]). Without
-  /// it a deleted server returns on the next full pull, since the sync mirror
-  /// is rebuilt each round.
+  /// it a deletion made before the durable mirror was staged could be lost
+  /// before reaching the server.
   final TombstoneStore tombstoneStore;
   // Mutable so sync enrolment can re-key the vault to the shared encryption key.
   SecretVault vault;
@@ -135,9 +139,15 @@ class AppServices {
   /// and this device's copy of the server queue. See docs/INBOX.md.
   final InboxAppStore inboxApps;
   final InboxStatusStore inboxStatuses;
-  final InboxCacheStore inboxCache;
+  InboxCacheStore get inboxCache => _inboxCache;
+  InboxCacheStore _inboxCache;
   final IdentityAuditLog identityAudit;
   final LocalShellService localShell;
+
+  final String _syncRecordsPath;
+  final File _inboxCacheFile;
+  PersistentLocalRecordStore? _syncRecords;
+  SyncAccountScope? _syncScope;
 
   /// Null while the vault is locked (keystore unavailable at bootstrap — see
   /// [LockedSecretVault] and [unlockVaultFromKeystore]).
@@ -217,13 +227,22 @@ class AppServices {
     required this.identityBookmarks,
     required this.inboxApps,
     required this.inboxStatuses,
-    required this.inboxCache,
+    required InboxCacheStore inboxCache,
+    required String syncRecordsPath,
+    required File inboxCacheFile,
     required this.identityAudit,
     required this.localShell,
     required this.vaultKey,
     required this.settings,
     required this._rekeyJournal,
-  });
+  })  : // Keep the constructor's internal parameter names readable at its
+        // single bootstrap call site.
+        // ignore: prefer_initializing_formals
+        _inboxCache = inboxCache,
+        // ignore: prefer_initializing_formals
+        _syncRecordsPath = syncRecordsPath,
+        // ignore: prefer_initializing_formals
+        _inboxCacheFile = inboxCacheFile;
 
   /// [masterKeyManager] is for tests that need the OS keystore to misbehave
   /// (a locked keyring refusing the re-key's install, say); production passes
@@ -354,7 +373,9 @@ class AppServices {
         () => services.vault,
       ),
       inboxStatuses: FileInboxStatusStore(File(p('inbox_statuses.json'))),
-      inboxCache: FileInboxCacheStore(File(p('inbox_cache.json'))),
+      inboxCache: InMemoryInboxCacheStore(),
+      syncRecordsPath: p('sync_records.json'),
+      inboxCacheFile: File(p('inbox_cache.json')),
       identityAudit: IdentityAuditLog(
         File(p('identity_reads.jsonl')),
         rewriteOwnerOnly: writeOwnerOnlyAtomically,
@@ -368,6 +389,10 @@ class AppServices {
       AppLockVaultStore(vaultStore, appLock),
       vaultKey,
     );
+    final syncScope = services._configuredSyncScope();
+    if (syncScope != null) {
+      await services._activateSyncStores(syncScope, adoptLegacy: true);
+    }
     return services;
   }
 
@@ -527,11 +552,58 @@ class AppServices {
 
   Future<void> saveCommandStats() => commandStatsStore.save(commandStats);
 
-  /// Whether sync enrolment has happened on this device (a server URL is set).
+  /// Whether sync enrolment has happened on this device.
   /// The bearer token check in [runSync] is the authoritative gate; this is the
   /// cheap synchronous check the auto-sync scheduler uses.
-  bool get isSyncConfigured =>
-      settings.syncBaseUrl != null && settings.syncBaseUrl!.isNotEmpty;
+  bool get isSyncConfigured => _configuredSyncScope() != null;
+
+  SyncAccountScope? _configuredSyncScope() {
+    final baseUrl = settings.syncBaseUrl;
+    final username = settings.syncUsername;
+    if (baseUrl == null || baseUrl.trim().isEmpty ||
+        username == null || username.trim().isEmpty) {
+      return null;
+    }
+    return SyncAccountScope(
+      baseUrl: HttpSyncClient.normalizeBaseUrl(baseUrl),
+      username: username,
+    );
+  }
+
+  Future<void> _activateSyncStores(
+    SyncAccountScope scope, {
+    bool adoptLegacy = false,
+    bool resetExisting = false,
+  }) async {
+    final records = PersistentLocalRecordStore(
+      path: _syncRecordsPath,
+      scope: scope,
+      adoptLegacy: adoptLegacy,
+      resetExisting: resetExisting,
+    );
+    final inbox = FileInboxCacheStore(
+      _inboxCacheFile,
+      scope: scope,
+      resetExisting: resetExisting,
+    );
+    await records.initialize();
+    await inbox.initialize();
+    _syncRecords = records;
+    _inboxCache = inbox;
+    _syncScope = scope;
+  }
+
+  Future<SyncAccountScope> _requireSyncStores() async {
+    final scope = _configuredSyncScope();
+    if (scope == null) throw StateError('Sync is not set up');
+    if (_syncScope != scope || _syncRecords == null) {
+      // A setting changed outside enrollment (tests, recovery, or an older
+      // build). Never claim an unscoped legacy file for that newly observed
+      // account; only startup with a durable configured account may adopt it.
+      await _activateSyncStores(scope);
+    }
+    return scope;
+  }
 
   /// Re-key the vault to [newKey], the shared key sync enrolment derives from
   /// the encryption passphrase, so the OS keystore and the vault file agree on
@@ -807,6 +879,13 @@ class AppServices {
 
     await _rekeyVault(key);
     await masterKeys.putApiKey(syncTokenKeyName, token);
+    await _activateSyncStores(
+      SyncAccountScope(
+        baseUrl: HttpSyncClient.normalizeBaseUrl(baseUrl),
+        username: username,
+      ),
+      resetExisting: true,
+    );
     settings.syncBaseUrl = baseUrl;
     settings.syncUsername = username;
     try {
@@ -988,7 +1067,8 @@ class AppServices {
     // is one day changed to return a failure outcome would hand the caller
     // the previous round's "adopted" answer with nothing to show for it.
     _assistantSettingsChanged = false;
-    final baseUrl = settings.syncBaseUrl;
+    final configuredScope = _configuredSyncScope();
+    final baseUrl = configuredScope?.baseUrl;
     final token = await masterKeys.getApiKey(syncTokenKeyName);
     if (baseUrl == null || token == null) {
       // A configured account that suddenly reads as "not set up" means the
@@ -1003,6 +1083,7 @@ class AppServices {
       }
       throw StateError('Sync is not set up');
     }
+    await _requireSyncStores();
     // The keystore answered for the token; the vault key may still be missing
     // if the keystore was down at bootstrap — retry it now.
     if (vaultKey == null) await unlockVaultFromKeystore();
@@ -1030,7 +1111,7 @@ class AppServices {
       snippetStore: snippetStore,
       assistantStore: assistant,
       codec: RecordCodec(key),
-      local: InMemoryLocalRecordStore(),
+      local: _syncRecords!,
       deviceId: settings.deviceId,
       syncSecrets: settings.syncSecrets,
       secretVault: settings.syncSecrets ? vault : null,
@@ -1074,12 +1155,18 @@ class AppServices {
   /// [StateError] when sync is not set up or the vault is locked, the same
   /// conditions [runSync] refuses on: the inbox rides the sync account, and
   /// app keys live in the vault.
-  Future<T> withInbox<T>(Future<T> Function(InboxService inbox) action) async {
-    final baseUrl = settings.syncBaseUrl;
+  Future<T> withInbox<T>(Future<T> Function(InboxService inbox) action) =>
+      _serializeSyncOperation(() => _withInbox(action));
+
+  Future<T> _withInbox<T>(
+    Future<T> Function(InboxService inbox) action,
+  ) async {
+    final scope = _configuredSyncScope();
     final token = await masterKeys.getApiKey(syncTokenKeyName);
-    if (baseUrl == null || baseUrl.isEmpty || token == null) {
+    if (scope == null || token == null) {
       throw StateError('Sync is not set up');
     }
+    await _requireSyncStores();
     if (vaultKey == null) await unlockVaultFromKeystore();
     if (vaultKey == null) {
       throw StateError(
@@ -1088,7 +1175,7 @@ class AppServices {
       );
     }
     try {
-      return await _withSyncClient(baseUrl, (client) {
+      return await _withSyncClient(scope.baseUrl, (client) {
         client.token = token;
         return action(
           InboxService(

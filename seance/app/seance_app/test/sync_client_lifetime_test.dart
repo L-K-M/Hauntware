@@ -119,6 +119,7 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
     services = await AppServices.initialize();
     services.settings.syncBaseUrl = _baseUrl;
+    services.settings.syncUsername = 'user';
     await services.masterKeys.putApiKey('sync.token', 'session-token');
   });
 
@@ -548,6 +549,87 @@ void main() {
     expect(transport.closes, 1);
   });
 
+  test('restart resumes from the durable cursor without pushing unchanged data',
+      () async {
+    services.settings.syncBaseUrl = '$_baseUrl/';
+    services.settings.syncUsername = 'user';
+    await services.saveSettings();
+    final codec = RecordCodec(services.vaultKey!);
+    final config = ServerConfig(
+      id: 'remote-server',
+      label: 'Remote',
+      host: 'remote.test',
+      username: 'deploy',
+      createdAt: 1,
+      updatedAt: 20,
+    );
+    final remote = (await codec.encrypt(DecryptedRecord(
+      id: config.id,
+      kind: RecordKind.serverConfig,
+      updatedAt: config.updatedAt,
+      deviceId: 'peer',
+      data: config.toJson(),
+    )))
+        .withSeq(1);
+    final firstSince = <int>[];
+    var pushes = 0;
+    final firstTransport = _TrackedClient((request) async {
+      if (request.method == 'POST') {
+        pushes++;
+        return http.Response(
+          jsonEncode(const PushResponse(results: [], latestSeq: 1).toJson()),
+          HttpStatus.ok,
+        );
+      }
+      final since = int.parse(request.url.queryParameters['since']!);
+      firstSince.add(since);
+      return http.Response(
+        jsonEncode(PullResponse(
+          records: since == 0 ? [remote] : const [],
+          latestSeq: 1,
+        ).toJson()),
+        HttpStatus.ok,
+      );
+    });
+
+    await http.runWithClient(services.runSync, () => firstTransport);
+    expect((await services.configStore.getServer(config.id))?.label, 'Remote');
+    expect(firstSince, [0, 1]);
+    expect(pushes, 0);
+
+    final reopened = await AppServices.initialize();
+    addTearDown(() => reopened.probe.dispose());
+    final secondSince = <int>[];
+    final secondTransport = _TrackedClient((request) async {
+      if (request.method == 'POST') {
+        pushes++;
+        return http.Response(
+          jsonEncode(const PushResponse(results: [], latestSeq: 1).toJson()),
+          HttpStatus.ok,
+        );
+      }
+      final since = int.parse(request.url.queryParameters['since']!);
+      secondSince.add(since);
+      return http.Response(
+        jsonEncode(const PullResponse(records: [], latestSeq: 1).toJson()),
+        HttpStatus.ok,
+      );
+    });
+
+    await http.runWithClient(reopened.runSync, () => secondTransport);
+
+    expect(secondSince, [1]);
+    expect(pushes, 0);
+    final document = jsonDecode(
+      await File('${directory.path}/sync_records.json').readAsString(),
+    ) as Map;
+    expect(document['version'], 2);
+    expect(document['account'], {
+      'baseUrl': _baseUrl,
+      'username': 'user',
+    });
+  });
+
   test('failed sync closes its client', () async {
     final transport = _TrackedClient((_) async =>
         http.Response('unavailable', HttpStatus.serviceUnavailable));
@@ -689,6 +771,7 @@ void main() {
   });
 
   test('an empty legacy account is not silently initialized', () async {
+    services.settings.syncUsername = null;
     final transport = _TrackedClient((request) async {
       if (request.url.path == '/v1/prelogin') {
         return http.Response(jsonEncode({

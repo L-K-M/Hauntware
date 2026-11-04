@@ -281,6 +281,7 @@ void main() {
         // Enrolled with a server that cannot answer: the round that adopts or
         // publishes fails (a widget test answers every HTTP request with 400).
         services.settings.syncBaseUrl = 'https://sync.invalid';
+        services.settings.syncUsername = 'user';
         await services.masterKeys.putApiKey('sync.token', 'session-token');
         final result = await backend.setSyncPrefs(
           autoSync: backend.settings.autoSync,
