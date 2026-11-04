@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_keystore/app_lock.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart';
+import 'package:seance_app/services/app_quit_guard.dart';
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/local_settings_backend.dart';
 import 'package:seance_app/theme/app_appearance.dart';
@@ -27,6 +30,32 @@ const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 /// platform-channel futures never complete under fake-async), so the tests
 /// drive the phase transition through SeanceApp's initOverride seam.
 void main() {
+  testWidgets('desktop exit requests use the shared quit guard', (
+    tester,
+  ) async {
+    var allow = false;
+    final never = Completer<AppState>();
+    final guard = AppQuitGuard(
+      navigatorKey: navigatorKey,
+      snapshotOverride: () => QuitRiskSnapshot(
+        dirtyEditors: const [
+          QuitDirtyEditor(server: 'server', path: '/unsaved'),
+        ],
+      ),
+      presentDialog: (_, _) async => allow,
+    );
+    await tester.pumpWidget(
+      SeanceApp(initOverride: () => never.future, quitGuard: guard),
+    );
+    await tester.pump();
+
+    expect(await tester.binding.handleRequestAppExit(), AppExitResponse.cancel);
+    allow = true;
+    expect(await tester.binding.handleRequestAppExit(), AppExitResponse.exit);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('bootstrap lifecycle drives the saved-credential timeout', (tester) async {
     late Directory directory;
     late AppServices services;
@@ -55,6 +84,7 @@ void main() {
       expect(services.appLock.requiresAuthentication, isFalse);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
       elapsed += appLockBackgroundTimeout;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       expect(services.appLock.requiresAuthentication, isTrue);
     });

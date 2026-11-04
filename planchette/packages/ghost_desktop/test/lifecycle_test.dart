@@ -76,6 +76,37 @@ void main() {
       expect(window.listenerRegistered, isTrue);
     });
 
+    test('restore failure keeps intercepted close guarded', () async {
+      final window = FakeWindowAdapter();
+      final displays = FakeDisplayAdapter()..failDisplays = true;
+      final reports = <Object>[];
+      final closeFailures = <Object>[];
+      var confirmations = 0;
+      final lifecycle = _lifecycle(
+        window: window,
+        displays: displays,
+        confirmClose: () async {
+          confirmations++;
+          return false;
+        },
+        onError: (error, _) => reports.add(error),
+        onCloseFailed: (error, _) => closeFailures.add(error),
+      );
+
+      await expectLater(lifecycle.prepare(), throwsA(isA<StateError>()));
+
+      expect(window.preventClose, isTrue);
+      expect(window.listenerRegistered, isTrue);
+
+      window.emitClose();
+      await pumpEventQueue();
+
+      expect(confirmations, 1);
+      expect(window.destroyed, isFalse);
+      expect(reports, hasLength(1));
+      expect(closeFailures, isEmpty);
+    });
+
     test('close waits for in-flight prepare before destroying', () async {
       final window = FakeWindowAdapter()..blockEnsureInitialized = true;
       final lifecycle = _lifecycle(window: window);
@@ -782,18 +813,43 @@ void main() {
 
     test('close retries after window destruction fails', () async {
       final window = FakeWindowAdapter()..failDestroy = true;
-      final lifecycle = _lifecycle(window: window);
+      final closeFailures = <Object>[];
+      final lifecycle = _lifecycle(
+        window: window,
+        onCloseFailed: (error, _) => closeFailures.add(error),
+      );
 
       await lifecycle.prepare();
       await expectLater(lifecycle.close(), throwsA(isA<StateError>()));
 
       expect(window.listenerRegistered, isTrue);
+      expect(closeFailures, hasLength(1));
 
       await lifecycle.show();
       expect(window.events, containsAllInOrder(['ready', 'show', 'focus']));
 
       window.failDestroy = false;
       await lifecycle.close();
+      expect(window.events.last, 'destroy');
+    });
+
+    test('a save error does not report the close as failed', () async {
+      final window = FakeWindowAdapter();
+      final persistence = MemoryPersistence()..failWrites = true;
+      final errors = <Object>[];
+      final closeFailures = <Object>[];
+      final lifecycle = _lifecycle(
+        window: window,
+        persistence: persistence,
+        onError: (error, _) => errors.add(error),
+        onCloseFailed: (error, _) => closeFailures.add(error),
+      );
+
+      await lifecycle.prepare();
+      expect(await lifecycle.close(), isTrue);
+
+      expect(errors, hasLength(1));
+      expect(closeFailures, isEmpty);
       expect(window.events.last, 'destroy');
     });
 
@@ -1047,6 +1103,7 @@ GhostWindowLifecycle _lifecycle({
   Future<bool> Function()? confirmClose,
   Future<bool> Function()? closeInstead,
   void Function(Object, StackTrace)? onError,
+  void Function(Object, StackTrace)? onCloseFailed,
 }) {
   return GhostWindowLifecycle(
     persistence: persistence ?? MemoryPersistence(),
@@ -1069,5 +1126,6 @@ GhostWindowLifecycle _lifecycle({
     confirmClose: confirmClose,
     closeInstead: closeInstead,
     onError: onError,
+    onCloseFailed: onCloseFailed,
   );
 }
