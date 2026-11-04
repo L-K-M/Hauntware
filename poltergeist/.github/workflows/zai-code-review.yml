@@ -207,8 +207,12 @@ jobs:
 
       # A review asked for with the glm-review label clears the label, so
       # adding it again asks for the next one. Runs whatever happened above.
+      # A label added while the PR was a draft skipped the job, so the
+      # review that marking the PR ready starts clears it instead.
       - name: Let the glm-review label request another review
-        if: ${{ always() && github.event.action == 'labeled' }}
+        if: >-
+          ${{ always() && (github.event.action == 'labeled' ||
+              contains(github.event.pull_request.labels.*.name, 'glm-review')) }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
