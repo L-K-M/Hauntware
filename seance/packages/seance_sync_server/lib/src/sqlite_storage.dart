@@ -115,6 +115,7 @@ class SqliteStorage implements Storage {
       CREATE TABLE IF NOT EXISTS records (
         username TEXT NOT NULL,
         id TEXT NOT NULL,
+        envelope_version INTEGER NOT NULL DEFAULT 1,
         updated_at INTEGER NOT NULL,
         device_id TEXT NOT NULL,
         deleted INTEGER NOT NULL,
@@ -123,6 +124,19 @@ class SqliteStorage implements Storage {
         PRIMARY KEY (username, id)
       );
     ''');
+    final recordColumns = _db
+        .select('PRAGMA table_info(records)')
+        .map((row) => row['name'])
+        .toSet();
+    if (!recordColumns.contains('envelope_version')) {
+      // Rows written before protocol v3 are legacy v1 even when their blob
+      // happens to contain a newer-looking payload. Never infer trust from
+      // ciphertext the server cannot authenticate.
+      _db.execute(
+        'ALTER TABLE records ADD COLUMN envelope_version '
+        'INTEGER NOT NULL DEFAULT 1;',
+      );
+    }
     _db.execute('''
       CREATE TABLE IF NOT EXISTS seqs (
         username TEXT PRIMARY KEY,
@@ -583,14 +597,16 @@ class SqliteStorage implements Storage {
 
   void _putRecord(String username, EncryptedRecord record) {
     _db.execute(
-      '''INSERT INTO records (username, id, updated_at, device_id, deleted, seq, blob)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+      '''INSERT INTO records (username, id, envelope_version, updated_at, device_id, deleted, seq, blob)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(username, id) DO UPDATE SET
+           envelope_version=excluded.envelope_version,
            updated_at=excluded.updated_at, device_id=excluded.device_id,
            deleted=excluded.deleted, seq=excluded.seq, blob=excluded.blob''',
       [
         username,
         record.id,
+        record.envelopeVersion,
         record.updatedAt,
         record.deviceId,
         record.deleted ? 1 : 0,
@@ -641,6 +657,7 @@ class SqliteStorage implements Storage {
   }
 
   EncryptedRecord _rowToRecord(Row r) => EncryptedRecord(
+        envelopeVersion: r['envelope_version'] as int,
         id: r['id'] as String,
         updatedAt: r['updated_at'] as int,
         deviceId: r['device_id'] as String,

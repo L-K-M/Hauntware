@@ -323,6 +323,13 @@ class SyncServer {
           'Too many records in one push (max ${settings.maxRecordsPerPush})');
     }
     for (final incoming in r.records) {
+      if (incoming.envelopeVersion != 2) {
+        return _error(
+          400,
+          'record_envelope_version',
+          'Only authenticated record envelope v2 is accepted',
+        );
+      }
       if (incoming.blob.length > settings.maxBlobBytes) {
         return _error(413, 'payload_too_large',
             'A record blob exceeds the ${settings.maxBlobBytes}-byte limit');

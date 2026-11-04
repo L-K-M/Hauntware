@@ -84,6 +84,9 @@ class DecryptedRecord {
 /// resolve conflicts. [seq] is assigned by the server on upsert and is null for
 /// a record the client has not yet pushed.
 class EncryptedRecord {
+  /// Authenticated record-envelope generation. An absent wire value is the
+  /// legacy v1 shape; current writers emit v2 and current sync rejects v1.
+  final int envelopeVersion;
   final String id;
   final int updatedAt;
   final String deviceId;
@@ -95,6 +98,7 @@ class EncryptedRecord {
   final Uint8List blob;
 
   const EncryptedRecord({
+    this.envelopeVersion = 2,
     required this.id,
     required this.updatedAt,
     required this.deviceId,
@@ -111,11 +115,13 @@ class EncryptedRecord {
     required this.id,
     required this.updatedAt,
     required this.deviceId,
-  })  : deleted = true,
+  })  : envelopeVersion = 1,
+        deleted = true,
         seq = null,
         blob = Uint8List(0);
 
   EncryptedRecord withSeq(int newSeq) => EncryptedRecord(
+        envelopeVersion: envelopeVersion,
         id: id,
         updatedAt: updatedAt,
         deviceId: deviceId,
@@ -128,6 +134,7 @@ class EncryptedRecord {
   /// entries, and a push batched against a stale count is a push the server
   /// rejects.
   Map<String, dynamic> toJson() => {
+        'envelopeVersion': envelopeVersion,
         'id': id,
         'updatedAt': updatedAt,
         'deviceId': deviceId,
@@ -144,7 +151,9 @@ class EncryptedRecord {
   /// for why this counts rather than encodes.
   int encodedJsonBytes() {
     final seqValue = seq;
-    return jsonObjectFramingBytes(seqValue == null ? 5 : 6) +
+    return jsonObjectFramingBytes(seqValue == null ? 6 : 7) +
+        jsonKeyBytes('envelopeVersion') +
+        jsonIntBytes(envelopeVersion) +
         jsonKeyBytes('id') +
         jsonStringBytes(id) +
         jsonKeyBytes('updatedAt') +
@@ -162,6 +171,8 @@ class EncryptedRecord {
 
   factory EncryptedRecord.fromJson(Map<String, dynamic> json) =>
       EncryptedRecord(
+        envelopeVersion:
+            (json['envelopeVersion'] as num?)?.toInt() ?? 1,
         id: json['id'] as String,
         updatedAt: (json['updatedAt'] as num).toInt(),
         deviceId: json['deviceId'] as String,
