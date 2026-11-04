@@ -421,24 +421,35 @@ class SyncServer {
     if (since == null || since < 0) {
       return _error(400, 'bad_request', 'Invalid sync cursor');
     }
-    final paged = req.url.queryParameters['page'] == '1';
+    final page = req.url.queryParameters['page'];
+    if (page != null && page != '1') {
+      return _error(400, 'bad_request', 'Invalid sync page flag');
+    }
     final throughText = req.url.queryParameters['through'];
     final through = throughText == null ? null : int.tryParse(throughText);
     if (throughText != null && (through == null || through < 0)) {
       return _error(400, 'bad_request', 'Invalid sync watermark');
     }
-    final snapshot = paged
-        ? await storage.pullPageFor(
-            principal,
-            since,
-            throughSeq: through,
-            limits: PullPageLimits(
-              maxRecords: settings.maxRecordsPerPull,
-              maxBodyBytes: settings.maxPullBodyBytes,
-            ),
-            advertisedLimits: _advertisedPushLimits,
-          )
-        : await storage.pullSnapshotFor(principal, since);
+    final snapshot = await storage.pullPageFor(
+      principal,
+      since,
+      throughSeq: page == '1' ? through : null,
+      limits: PullPageLimits(
+        maxRecords: settings.maxRecordsPerPull,
+        maxBodyBytes: settings.maxPullBodyBytes,
+      ),
+      advertisedLimits: _advertisedPushLimits,
+    );
+    // A request without the page flag predates pagination: its response shape
+    // has no field that could announce a cut, so an answer too large for one
+    // page is refused rather than silently truncated.
+    if (page != '1' && snapshot.hasMore) {
+      return _error(
+        400,
+        'pagination_required',
+        'The account no longer fits one response; retry with page=1',
+      );
+    }
     // Every round pulls before it pushes, so this is where a client learns how
     // to size the push it is about to make — see [PushLimits].
     return _json(
@@ -446,7 +457,7 @@ class SyncServer {
         records: snapshot.records,
         latestSeq: snapshot.latestSeq,
         recordEnvelopeFloor: snapshot.recordEnvelopeFloor,
-        throughSeq: snapshot.throughSeq,
+        throughSeq: page == '1' ? snapshot.throughSeq : null,
         hasMore: snapshot.hasMore,
         limits: _advertisedPushLimits,
       ).toJson(),

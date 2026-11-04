@@ -440,7 +440,7 @@ void _inboxTests(Storage Function() newStorage) {
     });
 
     test(
-      'paged listing is stable and legacy listing keeps its shape',
+      'paged listing is stable and an overflowing legacy listing is refused',
       () async {
         final paged = _Harness(
           newStorage(),
@@ -455,14 +455,16 @@ void _inboxTests(Storage Function() newStorage) {
         await paged.deposit(app.id, app.token, _blob());
         await paged.deposit(app.id, app.token, _blob());
 
+        // The unpaged shape has no field that could say the response was
+        // cut, so an overflowing legacy request is refused rather than
+        // silently truncated.
         final legacy = await paged.send(
           'GET',
           '/v1/inbox?since=0',
           bearer: session,
         );
-        expect(legacy.json['items'], hasLength(2));
-        expect(legacy.json, isNot(contains('throughReceived')));
-        expect(legacy.json, isNot(contains('hasMore')));
+        expect(legacy.status, 400);
+        expect(legacy.code, 'pagination_required');
 
         final first = await paged.send(
           'GET',
@@ -485,6 +487,34 @@ void _inboxTests(Storage Function() newStorage) {
         expect(second.json['hasMore'], isFalse);
       },
     );
+
+    test('a legacy listing keeps its shape while it fits a page', () async {
+      final app = await h.app(alice);
+      await h.deposit(app.id, app.token, _blob());
+
+      final legacy = await h.send(
+        'GET',
+        '/v1/inbox?since=0',
+        bearer: alice,
+      );
+      expect(legacy.status, 200, reason: legacy.text);
+      expect(legacy.json['items'], hasLength(1));
+      expect(legacy.json, isNot(contains('throughReceived')));
+      expect(legacy.json, isNot(contains('nextReceived')));
+      expect(legacy.json, isNot(contains('hasMore')));
+    });
+
+    test('a page flag other than 1 is a bad request', () async {
+      for (final flag in ['0', '2', 'next', '']) {
+        final r = await h.send(
+          'GET',
+          '/v1/inbox?since=0&page=$flag',
+          bearer: alice,
+        );
+        expect(r.status, 400, reason: 'page=$flag');
+        expect(r.code, 'bad_request', reason: 'page=$flag');
+      }
+    });
 
     test('since returns only newer items, in received order', () async {
       final a = await h.app(alice);

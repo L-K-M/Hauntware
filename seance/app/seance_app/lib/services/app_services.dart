@@ -1063,7 +1063,7 @@ class AppServices {
           break;
         }
         if (!verified) {
-          if (remote.records.isEmpty && trustedExistingKey != null) {
+          if (trustedExistingKey != null) {
             if (!_sameBytes(trustedExistingKey, keys.vaultKey)) {
               throw StateError(
                 'The vault encryption passphrase does not match this '
@@ -1082,7 +1082,8 @@ class AppServices {
             );
           } else {
             throw StateError(
-              'This empty legacy account has no vault key check. Sign in '
+              'This empty legacy account or account containing only deleted '
+              'records has no vault key check. Sign in '
               'from an already enrolled device to initialize it, or '
               'recreate the empty account.',
             );

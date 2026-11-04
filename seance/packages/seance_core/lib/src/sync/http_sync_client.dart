@@ -454,6 +454,9 @@ class HttpSyncClient
     }
     final throughValue = json['throughReceived'];
     if (throughValue == null) {
+      if (json['hasMore'] != null || json['nextReceived'] != null) {
+        throw const FormatException('Inbox page lost its snapshot watermark');
+      }
       items.sort((a, b) => a.received.compareTo(b.received));
       return InboxPage(items: items);
     }
@@ -461,14 +464,14 @@ class HttpSyncClient
     final hasMoreValue = json['hasMore'];
     if (throughValue is! num ||
         nextValue is! num ||
-        (hasMoreValue != null && hasMoreValue is! bool)) {
+        hasMoreValue is! bool) {
       throw const FormatException('Inbox page metadata is malformed');
     }
     return InboxPage(
       items: items,
       throughReceived: throughValue.toInt(),
       nextReceived: nextValue.toInt(),
-      hasMore: hasMoreValue as bool? ?? false,
+      hasMore: hasMoreValue,
     );
   }
 

@@ -813,10 +813,10 @@ final class RecordCoordinator {
       var snapshot = since;
       var pulled = 0;
       PushLimits? limits;
-      final dirtyIds =
-          (await _records.dirtyRecords()).map((r) => r.id).toSet();
-      final holdActive = await _pushesHeld();
       await for (final page in pullPages(api, since: since)) {
+        final dirtyIds =
+            (await _records.dirtyRecords()).map((r) => r.id).toSet();
+        final holdActive = await _pushesHeld();
         await observeRecordEnvelopeFloor(
           _records,
           page.recordEnvelopeFloor,

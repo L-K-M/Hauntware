@@ -744,6 +744,7 @@ void main() {
 
   test('an unsealed deleted record cannot prove a legacy vault key', () async {
     final oldKey = List<int>.of(services.vaultKey!);
+    services.settings.syncUsername = 'different-account';
     final transport = _TrackedClient((request) async {
       if (request.url.path == '/v1/prelogin') {
         return http.Response(jsonEncode({
@@ -884,7 +885,8 @@ void main() {
     expect(transport.closes, 1);
   });
 
-  test('an enrolled device initializes an empty legacy account', () async {
+  for (final tombstoneOnly in [false, true]) {
+  test('an enrolled device initializes a legacy account (tombstones=$tombstoneOnly)', () async {
     final keys = await VaultCrypto.deriveKeys(
       passphrase: 'password',
       salt: List<int>.filled(16, 0),
@@ -908,7 +910,13 @@ void main() {
               jsonEncode({'token': 'migrated-token'}), HttpStatus.ok);
         case '/v1/sync':
           return http.Response(
-            jsonEncode(const PullResponse(records: [], latestSeq: 0).toJson()),
+            jsonEncode(PullResponse(
+              records: tombstoneOnly ? [EncryptedRecord.tombstone(
+                id: 'deleted', updatedAt: 1, deviceId: 'old-device',
+              ).withSeq(1)] : const [],
+              latestSeq: tombstoneOnly ? 1 : 0,
+              recordEnvelopeFloor: kLegacyRecordEnvelopeVersion,
+            ).toJson()),
             HttpStatus.ok,
           );
         case '/v1/account/vault-key-check':
@@ -950,6 +958,7 @@ void main() {
     ]);
     expect(await services.masterKeys.getApiKey('sync.token'), 'migrated-token');
   });
+  }
 
   for (final committedBeforeFailure in [false, true]) {
   test('a refused re-key preserves credentials (committed=$committedBeforeFailure)',

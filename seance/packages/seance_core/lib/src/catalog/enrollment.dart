@@ -366,7 +366,7 @@ final class SyncEnrollment {
       }
     }
 
-    // The trial-decrypt: the FIRST non-tombstone record on a decryptable
+    // The legacy trial-decrypt: the FIRST authenticated record on a decryptable
     // id decides — kind-agnostic across every prefix the registration
     // opens (prefixless, hostkey:, and product prefixes such as bookmark:),
     // never secret:/snippet:/unregistered (§3.2's never-decrypt dispatch

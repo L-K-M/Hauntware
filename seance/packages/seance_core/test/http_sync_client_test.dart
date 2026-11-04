@@ -363,6 +363,8 @@ void main() {
       'a',
       'b',
     ]);
+    expect(queries.first['since'], '0');
+    expect(queries.first.containsKey('through'), isFalse);
     expect(queries.last['through'], '3');
     expect(queries.last['since'], '1');
   });
@@ -392,4 +394,19 @@ void main() {
 
     await expectLater(sync.listItems(since: 0), throwsFormatException);
   });
+
+  for (final metadata in [
+    {'hasMore': true},
+    {'throughReceived': 1, 'nextReceived': 0},
+  ]) {
+    test('listItems rejects incomplete page metadata $metadata', () async {
+      final sync = HttpSyncClient(
+        baseUrl: 'https://host',
+        client: MockClient((_) async => http.Response(
+          jsonEncode({'items': [], ...metadata}), 200,
+        )),
+      );
+      await expectLater(sync.listItems(since: 0), throwsFormatException);
+    });
+  }
 }

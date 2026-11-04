@@ -403,6 +403,56 @@ void main() {
     expect(await store.recordEnvelopeFloor(), 2);
   });
 
+  test(
+    'a write made between pull pages is authenticated before merge',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('paged_dirty');
+      try {
+        final records = PersistentLocalRecordStore(
+          path: '${directory.path}/records.json',
+        );
+        final local = await codec.encrypt(
+          const DecryptedRecord(
+            id: 'hostkey:a:22',
+            kind: RecordKind.hostKey,
+            updatedAt: 1,
+            deviceId: 'device-a',
+          ),
+        );
+        final forged = EncryptedRecord(
+          id: local.id,
+          updatedAt: 999999,
+          deviceId: 'forged',
+          deleted: false,
+          seq: 2,
+          blob: local.blob,
+        );
+        final coordinator = RecordCoordinator(
+          records: records,
+          handlers: const [],
+          hostKeys: InMemoryConflictAwareHostKeyStore(),
+          hostKeyMutations: HostKeyMutationGate(),
+          crypto: RecordCrypto(codec),
+          deviceId: 'device-a',
+          pinVerdicts: InMemoryPinVerdictStore(),
+          tripwires: InMemorySyncTripwireStore(),
+          catalogMode: CatalogMode.separate,
+          pushPolicy: PushPolicy.none,
+          enrollment: _HeldEnrollment(),
+        );
+        await coordinator.runRound(
+          _WriteBetweenPagesApi(records, local, forged),
+        );
+        expect((await records.getRecord(local.id))?.updatedAt, 1);
+        expect((await records.dirtyRecords()).map((record) => record.id), [
+          local.id,
+        ]);
+      } finally {
+        await directory.delete(recursive: true);
+      }
+    },
+  );
+
   test('an empty legacy scan finalizes without local preparation', () async {
     final store = InMemoryLocalRecordStore();
     final api = _EmptyLegacyApi();
@@ -852,4 +902,53 @@ final class _HeldEnrollment implements SyncEnrollmentState {
   Future<SyncAccount?> account() async => null;
   @override
   Future<void> setAccount(SyncAccount? account) async {}
+}
+
+final class _WriteBetweenPagesApi implements SyncApi, PagedSyncApi {
+  _WriteBetweenPagesApi(this.store, this.local, this.forged);
+  final PersistentLocalRecordStore store;
+  final EncryptedRecord local;
+  final EncryptedRecord forged;
+  @override
+  Future<PullResponse> pullPage({required int since, int? throughSeq}) async {
+    if (since >= 2) {
+      return const PullResponse(
+        records: [],
+        latestSeq: 2,
+        throughSeq: 2,
+        recordEnvelopeFloor: 1,
+      );
+    }
+    if (since == 0) {
+      return PullResponse(
+        records: [
+          EncryptedRecord(
+            id: 'unclaimed:first',
+            updatedAt: 1,
+            deviceId: 'peer',
+            deleted: false,
+            seq: 1,
+            blob: Uint8List(0),
+          ),
+        ],
+        latestSeq: 2,
+        throughSeq: 2,
+        hasMore: true,
+        recordEnvelopeFloor: 1,
+      );
+    }
+    await store.putLocal(local);
+    return PullResponse(
+      records: [forged],
+      latestSeq: 2,
+      throughSeq: 2,
+      recordEnvelopeFloor: 1,
+    );
+  }
+
+  @override
+  Future<PullResponse> pull({required int since}) => throw UnimplementedError();
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) =>
+      throw StateError('pull-only');
 }

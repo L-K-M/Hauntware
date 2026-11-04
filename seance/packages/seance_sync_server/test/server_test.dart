@@ -680,17 +680,65 @@ void main() {
       expect(second.throughSeq, 2);
       expect(second.hasMore, isFalse);
 
-      final (_, legacyBody) = await c.send(
+      // With a page limit of one, the whole account no longer fits a single
+      // response and the legacy shape has no field that could say so: the
+      // unpaged request is refused rather than silently truncated.
+      final (legacyStatus, legacyBody) = await c.send(
         'GET',
         '/v1/sync',
         auth: true,
         query: {'since': '0'},
       );
-      expect(
-        PullResponse.fromJson(legacyBody).records.map((record) => record.id),
-        ['a', 'b', 'c'],
-        reason: 'an old client still receives its bounded full account',
-      );
+      expect(legacyStatus, 400);
+      expect(legacyBody['error'], 'pagination_required');
+    });
+
+    test(
+      'an unpaged pull keeps its shape while the account fits a page',
+      () async {
+        final server = SyncServer(
+          storage: InMemoryStorage(),
+          settings: const ServerSettings(
+            openRegistration: true,
+            maxRecordsPerPull: 1,
+          ),
+        );
+        final c = await authed(server, 'legacy-pull');
+        await c.send(
+          'PUT',
+          '/v1/records',
+          auth: true,
+          body: PushRequest(records: [rec('a', 10, 'd1')]).toJson(),
+        );
+
+        final (status, body) = await c.send(
+          'GET',
+          '/v1/sync',
+          auth: true,
+          query: {'since': '0'},
+        );
+        expect(status, 200);
+        final pull = PullResponse.fromJson(body);
+        expect(pull.records.map((record) => record.id), ['a']);
+        expect(pull.latestSeq, 1);
+        expect(body, isNot(contains('throughSeq')));
+        expect(body, isNot(contains('hasMore')));
+      },
+    );
+
+    test('a page flag other than 1 is a bad request', () async {
+      final server = makeServer();
+      final c = await authed(server, 'bad-page');
+      for (final flag in ['0', '2', 'next', '']) {
+        final (status, body) = await c.send(
+          'GET',
+          '/v1/sync',
+          auth: true,
+          query: {'since': '0', 'page': flag},
+        );
+        expect(status, 400, reason: 'page=$flag');
+        expect(body['error'], 'bad_request', reason: 'page=$flag');
+      }
     });
 
     test('account quota refusal rolls back a whole HTTP push', () async {

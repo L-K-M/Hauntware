@@ -112,23 +112,33 @@ extension _InboxHandlers on SyncServer {
     if (throughText != null && (through == null || through < 0)) {
       return _error(400, 'bad_request', 'Invalid inbox watermark');
     }
-    await _purgeExpiredInbox();
-    if (req.url.queryParameters['page'] != '1') {
-      final items = await storage.inboxItemsSinceFor(principal, since);
-      return _json({
-        'items': [for (final item in items) item.toJson()],
-      });
+    final pageFlag = req.url.queryParameters['page'];
+    if (pageFlag != null && pageFlag != '1') {
+      return _error(400, 'bad_request', 'Invalid inbox page flag');
     }
+    await _purgeExpiredInbox();
     final page = await storage.inboxPageFor(
       principal,
       since,
-      throughReceived: through,
+      throughReceived: pageFlag == '1' ? through : null,
       limits: PullPageLimits(
         maxRecords: settings.maxRecordsPerPull,
         maxBodyBytes: settings.maxPullBodyBytes,
       ),
     );
-    return _json(page.toJson());
+    if (pageFlag == '1') return _json(page.toJson());
+    // Same refusal as _sync: the unpaged shape has no field that could
+    // announce a cut, so an overflowing legacy request is not truncated.
+    if (page.hasMore) {
+      return _error(
+        400,
+        'pagination_required',
+        'The inbox no longer fits one response; retry with page=1',
+      );
+    }
+    return _json({
+      'items': [for (final item in page.items) item.toJson()],
+    });
   });
 
   /// A 404 here is the claim protocol's answer, not an error: the item was
