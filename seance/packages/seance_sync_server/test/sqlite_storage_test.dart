@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:seance_protocol/seance_protocol.dart';
 import 'package:seance_sync_server/seance_sync_server.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
 /// Exercises the real SQLite storage backend (libsqlite3 is available in CI and
@@ -82,6 +83,63 @@ void main() {
       // Sequence counter also survived.
       expect(await s2.latestSeq('carol'), 1);
       s2.close();
+    } finally {
+      dir.deleteSync(recursive: true);
+    }
+  });
+
+  test('legacy record tables gain a nullable envelope version', () async {
+    final dir = Directory.systemTemp.createTempSync('seance_sqlite_legacy');
+    final path = '${dir.path}/seance.sqlite';
+    try {
+      final legacy = sqlite3.open(path);
+      legacy.execute('''
+        CREATE TABLE records (
+          username TEXT NOT NULL,
+          id TEXT NOT NULL,
+          updated_at INTEGER NOT NULL,
+          device_id TEXT NOT NULL,
+          deleted INTEGER NOT NULL,
+          seq INTEGER NOT NULL,
+          blob BLOB NOT NULL,
+          PRIMARY KEY (username, id)
+        );
+      ''');
+      legacy.execute(
+        'INSERT INTO records VALUES (?, ?, ?, ?, ?, ?, ?)',
+        ['alice', 'r', 42, 'old', 0, 1, Uint8List.fromList([1])],
+      );
+      legacy.dispose();
+
+      final storage = SqliteStorage.open(path);
+      final old = await storage.getRecord('alice', 'r');
+      expect(old!.envelopeVersion, isNull);
+      await storage.putRecord(
+        'alice',
+        EncryptedRecord(
+          id: 'r',
+          updatedAt: 42,
+          deviceId: 'old',
+          deleted: false,
+          seq: 2,
+          envelopeVersion: kRecordEnvelopeVersion,
+          blob: Uint8List.fromList([2]),
+        ),
+      );
+      storage.close();
+
+      final migrated = sqlite3.open(path);
+      final columns = migrated
+          .select('PRAGMA table_info(records)')
+          .map((row) => row['name'])
+          .toSet();
+      expect(columns, contains('envelope_version'));
+      expect(
+        migrated.select('SELECT envelope_version FROM records').single[
+            'envelope_version'],
+        kRecordEnvelopeVersion,
+      );
+      migrated.dispose();
     } finally {
       dir.deleteSync(recursive: true);
     }

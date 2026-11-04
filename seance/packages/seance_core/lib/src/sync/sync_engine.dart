@@ -123,6 +123,9 @@ class SyncEngine {
     while (round < maxRounds) {
       round++;
       final pulled = await _pullOnce(api);
+      if ((pulled.recordEnvelopeVersion ?? 0) < kRecordEnvelopeVersion) {
+        await store.restoreLegacyEnvelopeMigrations();
+      }
       final pushed = await _pushOnce(api, pulled.limits, refused);
       totalPulled += pulled.applied;
       totalPushed += pushed.accepted;
@@ -157,7 +160,8 @@ class SyncEngine {
   /// runs overlapping, could size one run's push against the other's server.
   /// A pull carrying no advertisement yields the shipped defaults, which is
   /// what such a server enforces by definition.
-  Future<({int applied, PushLimits limits})> _pullOnce(SyncApi api) async {
+  Future<({int applied, PushLimits limits, int? recordEnvelopeVersion})>
+      _pullOnce(SyncApi api) async {
     final since = await store.highWaterSeq();
     final resp = await api.pull(since: since);
     final limits = resp.limits ?? const PushLimits();
@@ -182,11 +186,22 @@ class SyncEngine {
         // Adopt the remote version and drop any losing local change.
         await store.putRemote(remote);
         applied++;
+      } else if ((resp.recordEnvelopeVersion ?? 0) <
+              kRecordEnvelopeVersion &&
+          isEnvelopeFormatMigration(remote, local)) {
+        // The local winner differs only by the v2 envelope. An old server
+        // still resolves this tie by its assigned sequence number, so retain
+        // its clean v1 copy and settle the format-only change before push.
+        await store.putRemote(remote);
       }
       // Else the local copy is newer and stays dirty for the push phase.
     }
     await store.setHighWaterSeq(snapshotHighWater);
-    return (applied: applied, limits: limits);
+    return (
+      applied: applied,
+      limits: limits,
+      recordEnvelopeVersion: resp.recordEnvelopeVersion,
+    );
   }
 
   /// Pushes everything dirty, in as many requests as the server's limits

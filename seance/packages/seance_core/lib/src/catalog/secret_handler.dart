@@ -71,6 +71,9 @@ final class SecretHandler implements RecordHandler {
   @override
   bool get trialDecryptable => opensInTrial;
 
+  @override
+  bool get migratesLegacyEnvelopes => publishes;
+
   /// Whether a credential may publish at all: the switch is on and a vault
   /// exists to read it from.
   bool get publishes => _syncSecrets && _vault != null;
@@ -134,8 +137,8 @@ final class SecretHandler implements RecordHandler {
     return ApplyOutcome.applied;
   }
 
-  /// Tombstones stay no-ops — vault material is not something an
-  /// envelope-only signal may strip.
+  /// Tombstones stay no-ops: a credential retraction withdraws the account
+  /// copy, but does not erase another device's local vault material.
   @override
   Future<ApplyOutcome> applyTombstone(
     EncryptedRecord record,

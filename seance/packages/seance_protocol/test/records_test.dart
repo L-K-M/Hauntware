@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:logging/logging.dart';
 import 'package:seance_protocol/seance_protocol.dart';
 import 'package:test/test.dart';
@@ -543,14 +545,16 @@ void main() {
       final enc = await codec.encrypt(rec);
       expect(enc.blob, isNotEmpty);
       expect(enc.seq, isNull);
+      expect(enc.envelopeVersion, kRecordEnvelopeVersion);
 
-      final dec = await codec.decrypt(enc);
-      expect(dec.kind, RecordKind.serverConfig);
-      expect(dec.data['host'], 'example.com');
-      expect(dec.deleted, isFalse);
+      final opened = await codec.openEnvelope(enc);
+      expect(opened.version, kRecordEnvelopeVersion);
+      expect(opened.record.kind, RecordKind.serverConfig);
+      expect(opened.record.data['host'], 'example.com');
+      expect(opened.record.deleted, isFalse);
     });
 
-    test('tombstone carries no payload', () async {
+    test('tombstone seals its identity, kind, author and timestamp', () async {
       final codec = RecordCodec(secureRandomBytes(32));
       final rec = DecryptedRecord(
         id: 'r1',
@@ -560,11 +564,186 @@ void main() {
         deleted: true,
       );
       final enc = await codec.encrypt(rec);
-      expect(enc.blob, isEmpty);
+      expect(enc.blob, isNotEmpty);
       expect(enc.deleted, isTrue);
       final dec = await codec.decrypt(enc);
       expect(dec.deleted, isTrue);
-      expect(dec.kind, RecordKind.unknown);
+      expect(dec.kind, RecordKind.secret);
+      expect(dec.id, 'r1');
+      expect(dec.updatedAt, 42);
+      expect(dec.deviceId, 'device-a');
+    });
+
+    test('authenticated envelope rejects altered client metadata', () async {
+      final codec = RecordCodec(secureRandomBytes(32));
+      final enc = await codec.encrypt(
+        const DecryptedRecord(
+          id: 'r1',
+          kind: RecordKind.serverConfig,
+          updatedAt: 42,
+          deviceId: 'device-a',
+          data: {'host': 'example.com'},
+        ),
+      );
+
+      EncryptedRecord changed({
+        String? id,
+        int? updatedAt,
+        String? deviceId,
+        bool? deleted,
+        int? seq,
+      }) =>
+          EncryptedRecord(
+            id: id ?? enc.id,
+            updatedAt: updatedAt ?? enc.updatedAt,
+            deviceId: deviceId ?? enc.deviceId,
+            deleted: deleted ?? enc.deleted,
+            seq: seq ?? enc.seq,
+            blob: enc.blob,
+          );
+
+      for (final tampered in [
+        changed(id: 'r2'),
+        changed(updatedAt: 43),
+        changed(deviceId: 'device-b'),
+        changed(deleted: true),
+      ]) {
+        await expectLater(codec.decrypt(tampered), throwsFormatException);
+      }
+
+      final sequenced = await codec.decrypt(changed(seq: 99));
+      expect(sequenced.id, 'r1', reason: 'seq is server-owned metadata');
+    });
+
+    test('malformed v2 metadata reports a format error', () async {
+      final key = secureRandomBytes(32);
+      final codec = RecordCodec(key);
+      final valid = <String, dynamic>{
+        'version': 2,
+        'id': 'r1',
+        'updatedAt': 42,
+        'deviceId': 'device-a',
+        'deleted': false,
+        'kind': 'serverConfig',
+        'data': <String, dynamic>{},
+      };
+
+      for (final payload in [
+        {...valid, 'updatedAt': '42'},
+        {...valid, 'deviceId': 7},
+        {...valid, 'deleted': 'false'},
+        {...valid, 'kind': 7},
+        {...valid, 'data': <dynamic>[]},
+      ]) {
+        final malformed = EncryptedRecord(
+          id: 'r1',
+          updatedAt: 42,
+          deviceId: 'device-a',
+          deleted: false,
+          seq: 1,
+          blob: await VaultCrypto.sealJson(key, payload),
+        );
+        await expectLater(codec.decrypt(malformed), throwsFormatException);
+      }
+    });
+
+    test('reads legacy v1 live records but rejects unsealed tombstones',
+        () async {
+      final key = secureRandomBytes(32);
+      final codec = RecordCodec(key);
+      final legacyBlob = await VaultCrypto.sealJson(key, const {
+        'kind': 'snippet',
+        'data': {'id': 's1', 'command': 'uptime'},
+      });
+      final legacyLive = EncryptedRecord(
+        id: 'snippet:s1',
+        updatedAt: 7,
+        deviceId: 'old-device',
+        deleted: false,
+        seq: 2,
+        blob: legacyBlob,
+      );
+
+      final live = await codec.decrypt(legacyLive);
+      expect(live.id, 'snippet:s1');
+      expect(live.kind, RecordKind.snippet);
+      expect(live.updatedAt, 7);
+      expect(live.deviceId, 'old-device');
+      expect(live.data['command'], 'uptime');
+      expect((await codec.openEnvelope(legacyLive)).version, 1);
+
+      final legacyDelete = EncryptedRecord.tombstone(
+        id: 'snippet:s1',
+        updatedAt: 8,
+        deviceId: 'old-device',
+      );
+      await expectLater(codec.decrypt(legacyDelete), throwsFormatException);
+    });
+
+    test('outer envelope version is authenticated but may be absent', () async {
+      final key = secureRandomBytes(32);
+      final codec = RecordCodec(key);
+      final sealed = await codec.encrypt(
+        const DecryptedRecord(
+          id: 'r1',
+          kind: RecordKind.serverConfig,
+          updatedAt: 42,
+          deviceId: 'device-a',
+        ),
+      );
+
+      EncryptedRecord withVersion(int? version) => EncryptedRecord(
+            id: sealed.id,
+            updatedAt: sealed.updatedAt,
+            deviceId: sealed.deviceId,
+            deleted: sealed.deleted,
+            seq: sealed.seq,
+            envelopeVersion: version,
+            blob: sealed.blob,
+          );
+
+      final strippedByOldServer = await codec.openEnvelope(withVersion(null));
+      expect(strippedByOldServer.version, kRecordEnvelopeVersion);
+      await expectLater(codec.decrypt(withVersion(1)), throwsFormatException);
+
+      final legacyBlob = await VaultCrypto.sealJson(key, const {
+        'kind': 'serverConfig',
+        'data': <String, dynamic>{},
+      });
+      final falselyUpgraded = EncryptedRecord(
+        id: 'r1',
+        updatedAt: 42,
+        deviceId: 'device-a',
+        deleted: false,
+        seq: 1,
+        envelopeVersion: kRecordEnvelopeVersion,
+        blob: legacyBlob,
+      );
+      await expectLater(codec.decrypt(falselyUpgraded), throwsFormatException);
+    });
+
+    test('stripping a sealed tombstone blob cannot forge a legacy delete',
+        () async {
+      final codec = RecordCodec(secureRandomBytes(32));
+      final sealed = await codec.encrypt(
+        const DecryptedRecord(
+          id: 'server-1',
+          kind: RecordKind.serverConfig,
+          updatedAt: 42,
+          deviceId: 'device-a',
+          deleted: true,
+        ),
+      );
+      final stripped = EncryptedRecord(
+        id: sealed.id,
+        updatedAt: sealed.updatedAt,
+        deviceId: sealed.deviceId,
+        deleted: true,
+        seq: 5,
+        blob: Uint8List(0),
+      );
+
+      await expectLater(codec.decrypt(stripped), throwsFormatException);
     });
 
     test('serialized envelope has no separate kind field', () async {
@@ -584,8 +763,16 @@ void main() {
       expect(wire['id'], 'bookmark:b1');
       expect(
         wire.keys,
-        unorderedEquals(['id', 'updatedAt', 'deviceId', 'deleted', 'blob']),
+        unorderedEquals([
+          'id',
+          'updatedAt',
+          'deviceId',
+          'deleted',
+          'envelopeVersion',
+          'blob',
+        ]),
       );
+      expect(wire['envelopeVersion'], kRecordEnvelopeVersion);
     });
 
     test('Klabautermann settings seal and open under their own kind',
@@ -655,10 +842,10 @@ void main() {
       expect(enc.toJson()['blob'], isNot(contains('top-secret')));
     });
 
-    test('a tombstone round-trips through the wire form', () async {
-      // Delete propagation relies on this shape surviving JSON: a decoder that
-      // dropped `deleted` or rejected an empty blob would resurrect every
-      // deletion.
+    test('a legacy tombstone round-trips but is not trusted', () async {
+      // Empty tombstones can still exist in local stores written by older
+      // clients, so their wire shape remains decodable for migration. They are
+      // not authenticated records and must never be applied after a pull.
       final original =
           EncryptedRecord.tombstone(id: 's1', updatedAt: 20, deviceId: 'A');
       final back = EncryptedRecord.fromJson(original.toJson());
@@ -669,9 +856,19 @@ void main() {
       expect(back.seq, isNull);
       expect(back.blob, isEmpty);
 
-      // decrypt reads it as a deleted record, no vault key required.
-      final dec = await RecordCodec(secureRandomBytes(32)).decrypt(back);
-      expect(dec.deleted, isTrue);
+      for (final invalid in ['2', 0, -1, 2.5]) {
+        final json = original.toJson()..['envelopeVersion'] = invalid;
+        expect(
+          () => EncryptedRecord.fromJson(json),
+          throwsFormatException,
+          reason: 'envelopeVersion: $invalid',
+        );
+      }
+
+      await expectLater(
+        RecordCodec(secureRandomBytes(32)).decrypt(back),
+        throwsFormatException,
+      );
     });
   });
 
@@ -698,6 +895,61 @@ void main() {
       final b = rec('x', 10, 'bbb');
       expect(Lww.resolve(a, b).deviceId, 'bbb');
       expect(Lww.resolve(b, a).deviceId, 'bbb');
+    });
+
+    test('authenticated format replaces legacy at the same semantic tuple',
+        () {
+      final legacy = rec('x', 10, 'aaa', seq: 9);
+      final authenticated = EncryptedRecord(
+        id: 'x',
+        updatedAt: 10,
+        deviceId: 'aaa',
+        deleted: false,
+        seq: null,
+        envelopeVersion: kRecordEnvelopeVersion,
+        blob: secureRandomBytes(8),
+      );
+
+      expect(Lww.resolve(legacy, authenticated), same(authenticated));
+      expect(Lww.resolve(authenticated, legacy), same(authenticated));
+      expect(
+        Lww.resolve(
+          authenticated,
+          EncryptedRecord(
+            id: 'x',
+            updatedAt: 11,
+            deviceId: 'aaa',
+            deleted: false,
+            seq: 10,
+            blob: secureRandomBytes(8),
+          ),
+        ).updatedAt,
+        11,
+        reason: 'a genuinely newer legacy edit still wins',
+      );
+    });
+
+    test('format never breaks a live/delete tie', () {
+      final liveV2 = EncryptedRecord(
+        id: 'x',
+        updatedAt: 10,
+        deviceId: 'aaa',
+        deleted: false,
+        seq: null,
+        envelopeVersion: kRecordEnvelopeVersion,
+        blob: secureRandomBytes(8),
+      );
+      final legacyDelete = EncryptedRecord(
+        id: 'x',
+        updatedAt: 10,
+        deviceId: 'aaa',
+        deleted: true,
+        seq: 9,
+        blob: secureRandomBytes(8),
+      );
+
+      expect(Lww.resolve(liveV2, legacyDelete), same(legacyDelete));
+      expect(Lww.resolve(legacyDelete, liveV2), same(legacyDelete));
     });
 
     test('merge resolves per id across two sets', () {

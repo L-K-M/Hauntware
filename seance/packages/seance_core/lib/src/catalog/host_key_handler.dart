@@ -48,6 +48,9 @@ final class HostKeyHandler implements RecordHandler {
   bool get trialDecryptable => opensInTrial;
 
   @override
+  bool get migratesLegacyEnvelopes => true;
+
+  @override
   Future<ApplyOutcome> applyLive(
     EncryptedRecord record,
     ApplyContext context,
@@ -93,8 +96,8 @@ final class HostKeyHandler implements RecordHandler {
     });
   }
 
-  /// Never honoured: a `hostkey:` tombstone would hand the sync server a
-  /// primitive for stripping this device's pins.
+  /// Never honoured: forgetting a host is a device-local trust decision,
+  /// backed by that device's durable negative verdict.
   @override
   Future<ApplyOutcome> applyTombstone(
     EncryptedRecord record,

@@ -104,9 +104,9 @@ and adding it again, which is also how a leak is handled.
 Removing an app: `DELETE /v1/apps/{appId}` (drops the token hash and all
 pending items) first, then a sealed `inboxApp` record marked removed and
 carrying no key, so every device forgets the key. Not a tombstone:
-tombstones are unsealed, so a sync server could forge one and drop an app
-on every device. A removal is final; a live copy of a removed app is never
-adopted again.
+the live removal shape remains readable by clients from before authenticated
+tombstones, and a live copy of a removed app is never adopted again. A removal
+is final.
 
 On a device, the app's name and server list are in `inbox_apps.json` and
 its key is a vault entry, `inbox-key:<appId>`, so it is sealed like every

@@ -277,6 +277,7 @@ class SyncServer {
         records: snapshot.records,
         latestSeq: snapshot.latestSeq,
         limits: settings.pushLimits,
+        recordEnvelopeVersion: kRecordEnvelopeVersion,
       ).toJson(),
     );
   });

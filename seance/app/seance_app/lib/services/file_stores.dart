@@ -132,15 +132,16 @@ class FileSnippetStore implements SnippetStore {
 }
 
 /// JSON-file [TombstoneStore]: the deletions this device still owes the sync
-/// server. Each entry is an [EncryptedRecord] tombstone (empty blob, no vault
-/// key needed to mint), persisted so a delete survives an app restart before
-/// the next sync pushes it. `SyncCoordinator` prunes an entry once the server
-/// has taken it, so the file stays small.
+/// server. Each entry is a legacy [EncryptedRecord] staging marker (empty blob,
+/// no vault key needed to mint), persisted so a delete survives an app restart
+/// before the next sync. `SyncCoordinator` seals it before upload and prunes the
+/// entry once the server has taken it, so the file stays small.
 ///
 /// Unlike the sealed record blobs, entries here are plaintext (record id,
 /// deletion timestamp, deviceId) — the same class of metadata `servers.json`
 /// already stores in the clear, and it also travels to the sync server as the
-/// tombstone record. Server and snippet ids are random `uuidV4`s, so an id
+/// sealed tombstone's outer metadata. Server and snippet ids are random
+/// `uuidV4`s, so an id
 /// reveals only that *something* was deleted and when, not what.
 class FileTombstoneStore implements TombstoneStore {
   final File file;

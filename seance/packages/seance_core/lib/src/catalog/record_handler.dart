@@ -79,12 +79,18 @@ abstract interface class RecordHandler {
   /// never-decrypt dispatch binds the trial too.
   bool get trialDecryptable;
 
+  /// Whether this device may decrypt and re-publish a legacy record solely to
+  /// upgrade its authenticated envelope. Read-only mirrors and disabled
+  /// feature handlers return false so migration cannot bypass their normal
+  /// apply/publish policy.
+  bool get migratesLegacyEnvelopes;
+
   /// Apply a pulled live record.
   Future<ApplyOutcome> applyLive(EncryptedRecord record, ApplyContext context);
 
-  /// Apply a pulled tombstone. Tombstones carry no sealed kind, so the
-  /// prefix alone routes them; a prefix whose tombstones must never strip
-  /// local state returns [ApplyOutcome.skipped].
+  /// Apply a pulled tombstone after the coordinator has authenticated its full
+  /// envelope and verified that its sealed kind matches this handler. A prefix
+  /// whose deletions remain local returns [ApplyOutcome.skipped].
   Future<ApplyOutcome> applyTombstone(
     EncryptedRecord record,
     ApplyContext context,

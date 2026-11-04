@@ -19,6 +19,9 @@ final class _StubHandler implements RecordHandler {
   final bool trialDecryptable;
 
   @override
+  bool get migratesLegacyEnvelopes => true;
+
+  @override
   ApplyPhase get phase => ApplyPhase.configs;
 
   @override

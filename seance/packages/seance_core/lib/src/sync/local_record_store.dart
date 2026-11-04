@@ -19,6 +19,12 @@ abstract class LocalRecordStore {
   Future<List<EncryptedRecord>> dirtyRecords();
   Future<void> markSynced(String id, int seq);
 
+  /// Restore clean v1 server records displaced only by a same-tuple v2
+  /// re-encryption. Called after a pull from a server that did not advertise
+  /// preservation of the additive envelope marker, before anything is pushed.
+  /// Returns the number of dirty migrations settled locally.
+  Future<int> restoreLegacyEnvelopeMigrations();
+
   Future<int> highWaterSeq();
   Future<void> setHighWaterSeq(int seq);
 }
@@ -28,6 +34,7 @@ abstract class LocalRecordStore {
 class InMemoryLocalRecordStore implements LocalRecordStore {
   final Map<String, EncryptedRecord> _records = {};
   final Set<String> _dirty = {};
+  final Map<String, EncryptedRecord> _legacyEnvelopeVersions = {};
   int _highWater = 0;
 
   @override
@@ -38,6 +45,12 @@ class InMemoryLocalRecordStore implements LocalRecordStore {
 
   @override
   Future<void> putLocal(EncryptedRecord record) async {
+    final existing = _records[record.id];
+    if (existing != null &&
+        !_dirty.contains(record.id) &&
+        isEnvelopeFormatMigration(existing, record)) {
+      _legacyEnvelopeVersions[record.id] = existing;
+    }
     _records[record.id] = record;
     _dirty.add(record.id);
   }
@@ -46,6 +59,7 @@ class InMemoryLocalRecordStore implements LocalRecordStore {
   Future<void> putRemote(EncryptedRecord record) async {
     _records[record.id] = record;
     _dirty.remove(record.id);
+    _legacyEnvelopeVersions.remove(record.id);
   }
 
   @override
@@ -57,6 +71,26 @@ class InMemoryLocalRecordStore implements LocalRecordStore {
     final r = _records[id];
     if (r != null) _records[id] = r.withSeq(seq);
     _dirty.remove(id);
+    _legacyEnvelopeVersions.remove(id);
+  }
+
+  @override
+  Future<int> restoreLegacyEnvelopeMigrations() async {
+    var restored = 0;
+    for (final id in _dirty.toList()) {
+      final current = _records[id];
+      final legacy = _legacyEnvelopeVersions[id];
+      if (current == null ||
+          legacy == null ||
+          !isEnvelopeFormatMigration(legacy, current)) {
+        continue;
+      }
+      _records[id] = legacy;
+      _dirty.remove(id);
+      _legacyEnvelopeVersions.remove(id);
+      restored++;
+    }
+    return restored;
   }
 
   @override
@@ -67,3 +101,16 @@ class InMemoryLocalRecordStore implements LocalRecordStore {
     if (seq > _highWater) _highWater = seq;
   }
 }
+
+/// Whether [migrated] is only an authenticated-envelope replacement for
+/// [legacy], with the domain LWW tuple unchanged.
+bool isEnvelopeFormatMigration(
+  EncryptedRecord legacy,
+  EncryptedRecord migrated,
+) =>
+    legacy.id == migrated.id &&
+    legacy.updatedAt == migrated.updatedAt &&
+    legacy.deviceId == migrated.deviceId &&
+    legacy.deleted == migrated.deleted &&
+    (legacy.envelopeVersion ?? 1) == 1 &&
+    migrated.envelopeVersion == kRecordEnvelopeVersion;

@@ -3,7 +3,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:seance_core/catalog.dart'
-    show ConflictAwareHostKeyStore, InMemoryPinVerdictStore, PinVerdictStore;
+    show
+        ConflictAwareHostKeyStore,
+        InMemoryPinVerdictStore,
+        PersistentLocalRecordStore,
+        PinVerdictStore;
 import 'package:seance_core/seance_core.dart';
 import 'package:test/test.dart';
 
@@ -13,6 +17,7 @@ class FakeServer implements SyncApi {
   int _seq = 0;
   int pushedRecords = 0;
   int pulls = 0;
+  int? recordEnvelopeVersion = kRecordEnvelopeVersion;
 
   /// The record the server holds under [id], exactly as it was pushed.
   EncryptedRecord? stored(String id) => _store[id];
@@ -26,7 +31,11 @@ class FakeServer implements SyncApi {
     pulls++;
     final records = _store.values.where((r) => (r.seq ?? 0) > since).toList()
       ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
-    return PullResponse(records: records, latestSeq: _seq);
+    return PullResponse(
+      records: records,
+      latestSeq: _seq,
+      recordEnvelopeVersion: recordEnvelopeVersion,
+    );
   }
 
   @override
@@ -93,6 +102,90 @@ ServerConfig server(String id, String label, int updatedAt) => ServerConfig(
     );
 
 void main() {
+  test('legacy server records migrate without changing their LWW tuple',
+      () async {
+    final remote = FakeServer();
+    final key = secureRandomBytes(32);
+    final codec = RecordCodec(key);
+    final config = server('s1', 'legacy', 77);
+    final legacy = EncryptedRecord(
+      id: config.id,
+      updatedAt: config.updatedAt,
+      deviceId: 'new-device',
+      deleted: false,
+      seq: null,
+      blob: await VaultCrypto.sealJson(key, {
+        'kind': RecordKind.serverConfig.name,
+        'data': config.toJson(),
+      }),
+    );
+    await remote.push([legacy]);
+    final configs = InMemoryConfigStore();
+    await configs.putServer(config);
+    final coordinator = SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: codec,
+      local: InMemoryLocalRecordStore(),
+      deviceId: 'new-device',
+    );
+
+    await coordinator.run(remote);
+
+    final migrated = remote.stored('s1')!;
+    expect(migrated.envelopeVersion, kRecordEnvelopeVersion);
+    expect(migrated.updatedAt, 77);
+    expect(migrated.deviceId, 'new-device');
+    expect((await codec.openEnvelope(migrated)).version,
+        kRecordEnvelopeVersion);
+  });
+
+  test('an old server does not receive a high-water v1 format migration',
+      () async {
+    final tempDir = await Directory.systemTemp.createTemp('old_sync_server');
+    addTearDown(() => tempDir.delete(recursive: true));
+    final remote = FakeServer()..recordEnvelopeVersion = null;
+    final key = secureRandomBytes(32);
+    final codec = RecordCodec(key);
+    final config = server('s1', 'legacy', 77);
+    final legacy = EncryptedRecord(
+      id: config.id,
+      updatedAt: config.updatedAt,
+      deviceId: 'new-device',
+      deleted: false,
+      seq: null,
+      blob: await VaultCrypto.sealJson(key, {
+        'kind': RecordKind.serverConfig.name,
+        'data': config.toJson(),
+      }),
+    );
+    await remote.push([legacy]);
+    final local = PersistentLocalRecordStore(
+      path: '${tempDir.path}/sync_records.json',
+    );
+    await local.putRemote(remote.stored('s1')!);
+    await local.setHighWaterSeq(remote.latestSeq);
+    final configs = InMemoryConfigStore();
+    await configs.putServer(config);
+    final coordinator = SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: codec,
+      local: local,
+      deviceId: 'new-device',
+    );
+    final pushesBefore = remote.pushedRecords;
+
+    final outcome = await coordinator.run(remote);
+
+    expect(outcome.pushed, 0);
+    expect(outcome.rounds, 1);
+    expect(remote.pulls, 1);
+    expect(remote.pushedRecords, pushesBefore);
+    expect((await local.getRecord('s1'))!.envelopeVersion, isNull);
+    expect(await local.dirtyRecords(), isEmpty);
+  });
+
   test('server configs and host keys sync between two devices', () async {
     final server0 = FakeServer();
     final vaultKey = secureRandomBytes(32); // shared across the two devices
@@ -1181,7 +1274,11 @@ void main() {
       // would pull it again. Stamping it at the edit that excluded the server
       // makes repeat rounds a no-op.
       expect(tombstone!.updatedAt, 4243);
-      expect(tombstone.blob, isEmpty, reason: 'a tombstone leaks no payload');
+      expect(tombstone.blob, isNotEmpty,
+          reason: 'the tombstone metadata is authenticated');
+      final decoded = await codec.decrypt(tombstone);
+      expect(decoded.deleted, isTrue);
+      expect(decoded.kind, RecordKind.serverConfig);
     });
 
     test('the credential is retracted under the id it was pushed under',
@@ -1357,9 +1454,8 @@ void main() {
       final local = InMemoryLocalRecordStore();
       // This device's own retraction, and one from a device whose server the
       // matching config tombstone has already removed. Neither is honoured:
-      // a tombstone is unsealed, so a sync server can assert one on its own,
-      // and the second case is exactly the shape that attack takes — an id no
-      // local config references any more.
+      // a credential retraction withdraws the account copy but never erases
+      // device-local vault material.
       for (final (id, from) in [
         ('secret:sec-kept', 'A'),
         ('secret:sec-orphan', 'B'),
@@ -1367,11 +1463,8 @@ void main() {
         await local.putRemote(await codec.encrypt(DecryptedRecord(
           id: id,
           kind: RecordKind.secret,
-          // Newer than the exclusion at 21, deliberately. Dated older, a
-          // shield that merely refused tombstones *losing* last-write-wins
-          // would pass this — and the point is that the refusal is
-          // unconditional, because the date on an unsealed tombstone is the
-          // sync server's to choose.
+          // Newer than the exclusion at 21, deliberately. The local-vault
+          // refusal is unconditional, not dependent on last-write-wins.
           updatedAt: 99,
           deviceId: from,
           deleted: true,
@@ -1385,20 +1478,14 @@ void main() {
       // Referenced by the local-only server, so it stays — this device has to
       // keep working.
       expect((await vault.getSecret('sec-kept'))?.value, 'local-only');
-      // Referenced by nothing, and it stays too. This is the deliberate cost:
-      // an orphan the vault carries rather than a delete taken on a sync
-      // server's unauthenticated say-so. Sealing tombstones is what would let
-      // this one be honoured; until then, garbage beats a vault-wipe
-      // primitive.
+      // Referenced by nothing, and it stays too. Retraction removes the account
+      // copy, not credentials already stored on another device.
       expect((await vault.getSecret('sec-orphan'))?.value, 'withdrawn');
-      // And both stay staged, so a build that can verify them still has them:
-      // pulls are incremental, and a dropped record is never redelivered.
+      // Both authenticated tombstones stay in the mirror for LWW history.
       for (final id in ['secret:sec-kept', 'secret:sec-orphan']) {
         final staged = await local.getRecord(id);
         expect(staged, isNotNull);
-        // Still the tombstone as received, not a record the apply rewrote:
-        // what a sealed-tombstone build inherits has to be the deletion
-        // itself, or there is nothing left to verify.
+        // Still the tombstone as received, not a record the apply rewrote.
         expect(staged!.deleted, isTrue);
         expect(staged.updatedAt, 99,
             reason: 'the apply must not rewrite a tombstone it refused');
@@ -1944,16 +2031,17 @@ void main() {
       final secretRecord =
           onServer.records.where((r) => r.id == 'secret:sec-1').last;
       expect(secretRecord.deleted, isTrue);
-      // Payload-free, observed after a real push/pull round trip rather than
-      // straight off the local store: the config and secret retraction paths
-      // are written apart, and only the config one was pinned.
-      expect(secretRecord.blob, isEmpty);
+      // Observed after a real push/pull round trip rather than straight off the
+      // local store: the config and secret retraction paths are written apart.
+      expect(secretRecord.blob, isNotEmpty);
+      final decodedRetraction = await codec.decrypt(secretRecord);
+      expect(decodedRetraction.deleted, isTrue);
+      expect(decodedRetraction.kind, RecordKind.secret);
 
       // A keeps working, which is the point of excluding rather than deleting.
       expect((await vaultA.getSecret('sec-1'))?.value, 'hunter2');
-      // B keeps an orphan: nothing names it, and nothing deletes it either,
-      // because the tombstone that says so is unsealed. Stated as an
-      // assertion so the residual is visible rather than folklore.
+      // B keeps an orphan: nothing names it, and account retraction does not
+      // erase device-local vault material.
       expect((await vaultB.getSecret('sec-1'))?.value, 'hunter2');
     });
 
@@ -2217,9 +2305,8 @@ void main() {
         completion(0),
       );
       expect(vault.deletesAttempted, 0,
-          reason: 'an unsealed tombstone must not reach the vault at all');
-      // And it is still staged, so a build that seals tombstones inherits it
-      // — pulls are incremental, so a dropped one is never delivered again.
+          reason: 'an account retraction must not reach the vault at all');
+      // It remains in the mirror as the account's LWW winner.
       expect(await local.getRecord('secret:sec-1'), isNotNull);
       // The rest of the batch still applied.
       expect((await hostKeys.all()).single.host, 'beta.example.com');
@@ -2321,8 +2408,12 @@ void main() {
           reason: 'the still-live server record must not be re-adopted');
       expect(api.stored('s1')!.deleted, isTrue,
           reason: 'the delete reached the server as a tombstone');
-      expect(api.stored('s1')!.blob, isEmpty,
-          reason: 'a tombstone leaks no payload');
+      expect(api.stored('s1')!.blob, isNotEmpty,
+          reason: 'a legacy local tombstone is authenticated before upload');
+      final sealedDelete = await codec.decrypt(api.stored('s1')!);
+      expect(sealedDelete.deleted, isTrue);
+      expect(sealedDelete.kind, RecordKind.serverConfig);
+      expect(sealedDelete.id, 's1');
       expect(await tombstones.all(), isEmpty,
           reason: 'a tombstone the server has taken is pruned');
     });
@@ -3436,6 +3527,9 @@ class _RefusingLocalStore implements LocalRecordStore {
   Future<List<EncryptedRecord>> dirtyRecords() => inner.dirtyRecords();
   @override
   Future<void> markSynced(String id, int seq) => inner.markSynced(id, seq);
+  @override
+  Future<int> restoreLegacyEnvelopeMigrations() =>
+      inner.restoreLegacyEnvelopeMigrations();
   @override
   Future<int> highWaterSeq() => inner.highWaterSeq();
   @override

@@ -55,10 +55,12 @@ class SqliteStorage implements Storage {
         device_id TEXT NOT NULL,
         deleted INTEGER NOT NULL,
         seq INTEGER NOT NULL,
+        envelope_version INTEGER,
         blob BLOB NOT NULL,
         PRIMARY KEY (username, id)
       );
     ''');
+    _migrateRecordEnvelopeVersion();
     _db.execute('''
       CREATE TABLE IF NOT EXISTS seqs (
         username TEXT PRIMARY KEY,
@@ -68,6 +70,18 @@ class SqliteStorage implements Storage {
     _db.execute(
         'CREATE INDEX IF NOT EXISTS records_seq ON records(username, seq);');
     _migrateInbox();
+  }
+
+  /// Old databases predate the additive outer format marker. Null means the
+  /// legacy v1 shape; no blob rewrite is possible here because storage never
+  /// has the account's end-to-end encryption key.
+  void _migrateRecordEnvelopeVersion() {
+    final columns = _db
+        .select('PRAGMA table_info(records)')
+        .map((row) => row['name'])
+        .toSet();
+    if (columns.contains('envelope_version')) return;
+    _db.execute('ALTER TABLE records ADD COLUMN envelope_version INTEGER;');
   }
 
   /// The command inbox tables (docs/INBOX.md). Created if missing, so a
@@ -292,11 +306,12 @@ class SqliteStorage implements Storage {
 
   void _putRecord(String username, EncryptedRecord record) {
     _db.execute(
-      '''INSERT INTO records (username, id, updated_at, device_id, deleted, seq, blob)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+      '''INSERT INTO records (username, id, updated_at, device_id, deleted, seq, envelope_version, blob)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(username, id) DO UPDATE SET
            updated_at=excluded.updated_at, device_id=excluded.device_id,
-           deleted=excluded.deleted, seq=excluded.seq, blob=excluded.blob''',
+           deleted=excluded.deleted, seq=excluded.seq,
+           envelope_version=excluded.envelope_version, blob=excluded.blob''',
       [
         username,
         record.id,
@@ -304,6 +319,7 @@ class SqliteStorage implements Storage {
         record.deviceId,
         record.deleted ? 1 : 0,
         record.seq ?? 0,
+        record.envelopeVersion,
         record.blob,
       ],
     );
@@ -355,6 +371,7 @@ class SqliteStorage implements Storage {
         deviceId: r['device_id'] as String,
         deleted: (r['deleted'] as int) != 0,
         seq: r['seq'] as int,
+        envelopeVersion: r['envelope_version'] as int?,
         blob: _blobOf(r),
       );
 

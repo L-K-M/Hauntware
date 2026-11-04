@@ -11,7 +11,7 @@ import 'package:seance_protocol/seance_protocol.dart';
 
 /// The one crypto consumer the task permits: Séance's own [RecordCodec]
 /// (XChaCha20-Poly1305 under the HKDF-SHA256-derived vault key,
-/// `{kind, data}` payloads, unknown kind names preserved as
+/// versioned full-metadata payloads, unknown kind names preserved as
 /// [RecordKind.unknown]).
 ///
 /// [open] is deliberately throw-only: a decrypt or JSON failure surfaces,
@@ -22,10 +22,14 @@ final class RecordCrypto {
 
   final RecordCodec _codec;
 
-  /// Decrypt and unwrap `{'kind': ..., 'data': ...}`. Throws on any
-  /// failure — no fallback decode, no defaults.
+  /// Decrypt and authenticate the record envelope. Throws on any failure — no
+  /// fallback decode, no defaults.
   Future<DecryptedRecord> open(EncryptedRecord record) =>
       _codec.decrypt(record);
+
+  /// Open once and retain the authenticated format version for migrations.
+  Future<OpenedRecordEnvelope> openEnvelope(EncryptedRecord record) =>
+      _codec.openEnvelope(record);
 
   /// Wrap and encrypt a [DecryptedRecord] for this vault key.
   Future<EncryptedRecord> seal(DecryptedRecord record) =>

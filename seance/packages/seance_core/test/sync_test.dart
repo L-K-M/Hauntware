@@ -220,18 +220,41 @@ class RejectEverythingApi implements SyncApi {
 }
 
 EncryptedRecord rec(String id, int updatedAt, String device,
-        {bool deleted = false, int tag = 0}) =>
+        {bool deleted = false, int tag = 0, int? envelopeVersion}) =>
     EncryptedRecord(
       id: id,
       updatedAt: updatedAt,
       deviceId: device,
       deleted: deleted,
       seq: null,
+      envelopeVersion: envelopeVersion,
       blob: Uint8List.fromList([tag]),
     );
 
 void main() {
   group('SyncEngine', () {
+    test('in-memory store restores a v1 record displaced by v2 format only',
+        () async {
+      final store = InMemoryLocalRecordStore();
+      await store.putRemote(rec('a', 10, 'A', tag: 1).withSeq(7));
+      await store.putLocal(
+        rec(
+          'a',
+          10,
+          'A',
+          tag: 2,
+          envelopeVersion: kRecordEnvelopeVersion,
+        ),
+      );
+
+      expect(await store.restoreLegacyEnvelopeMigrations(), 1);
+      final restored = await store.getRecord('a');
+      expect(restored!.envelopeVersion, isNull);
+      expect(restored.seq, 7);
+      expect(restored.blob, orderedEquals(const [1]));
+      expect(await store.dirtyRecords(), isEmpty);
+    });
+
     test('pushes local records to an empty server', () async {
       final server = FakeServer();
       final store = InMemoryLocalRecordStore();

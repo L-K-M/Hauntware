@@ -35,6 +35,9 @@ final class BookmarkHandler implements RecordHandler {
   bool get trialDecryptable => true;
 
   @override
+  bool get migratesLegacyEnvelopes => true;
+
+  @override
   Future<ApplyOutcome> applyLive(
     EncryptedRecord record,
     ApplyContext context,
@@ -173,8 +176,8 @@ extension BookmarkRecordWrites on RecordCoordinator {
     ),
   );
 
-  /// A local delete: a real tombstone (empty blob, `deleted: true`) dated
-  /// at the deletion — fixing the resurrection gap Séance's ephemeral
+  /// A local delete: a sealed tombstone dated at the deletion — fixing the
+  /// resurrection gap Séance's ephemeral
   /// store has. Tombstones are retained indefinitely: no GC window is safe
   /// while a long-offline device could still push the old row.
   Future<WriteOutcome> onBookmarkDeleted(String bookmarkId) => writer.sealLocal(

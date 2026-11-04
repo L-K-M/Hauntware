@@ -356,9 +356,9 @@ class InboxProposal {
 /// A producer the user has connected. Synced as a sealed `inboxapp:` record,
 /// which is how the key reaches the user's other devices and never the server.
 ///
-/// Removal is a live record with [removed] set and no key, not a tombstone:
-/// tombstones are unsealed (see `SyncCoordinator.applyToStores`), and one
-/// honoured here would let a sync server drop apps on every device.
+/// Removal is a live record with [removed] set and no key, not a tombstone, so
+/// older clients and newer authenticated-envelope clients share one removal
+/// representation.
 class InboxApp {
   final String id;
   final String name;

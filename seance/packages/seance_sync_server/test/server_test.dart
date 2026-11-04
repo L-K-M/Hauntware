@@ -406,6 +406,7 @@ void main() {
       final pull = PullResponse.fromJson(sBody);
       expect(pull.records.map((r) => r.id).toSet(), {'a', 'b'});
       expect(pull.latestSeq, 2);
+      expect(pull.recordEnvelopeVersion, kRecordEnvelopeVersion);
     });
 
     test('a pull advertises this deployment\'s push limits', () async {

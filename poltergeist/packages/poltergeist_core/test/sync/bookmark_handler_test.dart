@@ -301,7 +301,7 @@ void main() {
     });
 
     test(
-      'onBookmarkDeleted writes a real tombstone (empty blob, deleted)',
+      'onBookmarkDeleted writes a sealed tombstone',
       () async {
         final device = await _Device.create(tempDir, 'a');
         await _save(device, _bookmark('b1'));
@@ -310,7 +310,10 @@ void main() {
         final record = await device.records.getRecord('bookmark:b1');
         expect(record, isNotNull);
         expect(record!.deleted, isTrue);
-        expect(record.blob, isEmpty);
+        expect(record.blob, isNotEmpty);
+        final dec = await device.crypto.open(record);
+        expect(dec.deleted, isTrue);
+        expect(dec.kind, RecordKind.bookmark);
         expect(await device.records.dirtyRecords(), isNotEmpty);
       },
     );

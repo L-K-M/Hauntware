@@ -178,7 +178,9 @@ final class PersistentLocalRecordStore implements SyncRecordStore {
             'Lww.resolve must return one of its arguments — '
             'displaced-winner tracking relies on reference identity',
           );
-          if (!_dirty.contains(record.id) && identical(winner, existing)) {
+          if (!_dirty.contains(record.id) &&
+              (identical(winner, existing) ||
+                  isEnvelopeFormatMigration(existing, record))) {
             _displaced[record.id] = existing;
           }
         }
@@ -233,6 +235,27 @@ final class PersistentLocalRecordStore implements SyncRecordStore {
         _dirty.remove(id);
         _displaced.remove(id);
       });
+
+  @override
+  Future<int> restoreLegacyEnvelopeMigrations() async {
+    var restored = 0;
+    await _mutate(() {
+      for (final id in _dirty.toList()) {
+        final current = _records[id];
+        final legacy = _displaced[id];
+        if (current == null ||
+            legacy == null ||
+            !isEnvelopeFormatMigration(legacy, current)) {
+          continue;
+        }
+        _records[id] = legacy;
+        _dirty.remove(id);
+        _displaced.remove(id);
+        restored++;
+      }
+    });
+    return restored;
+  }
 
   @override
   Future<EncryptedRecord?> settlePush(

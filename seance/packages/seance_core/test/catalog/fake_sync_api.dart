@@ -25,6 +25,10 @@ final class FakeSyncApi implements SyncApi {
   /// The limits every [pull] advertises; null advertises none.
   PushLimits? limits;
 
+  /// The record-envelope marker this server preserves; null models an older
+  /// server that strips the additive outer field.
+  int? recordEnvelopeVersion = kRecordEnvelopeVersion;
+
   /// Ids the server refuses as too large: a push holding one throws the
   /// 413 `payload_too_large` for the whole push, as the real server does.
   final tooLarge = <String>{};
@@ -75,7 +79,12 @@ final class FakeSyncApi implements SyncApi {
     }
     final list = records.values.where((r) => (r.seq ?? 0) > since).toList()
       ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
-    return PullResponse(records: list, latestSeq: _seq, limits: limits);
+    return PullResponse(
+      records: list,
+      latestSeq: _seq,
+      limits: limits,
+      recordEnvelopeVersion: recordEnvelopeVersion,
+    );
   }
 
   @override

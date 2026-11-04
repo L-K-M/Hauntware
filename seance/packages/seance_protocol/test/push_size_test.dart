@@ -21,6 +21,7 @@ EncryptedRecord record({
   String deviceId = 'device-A',
   bool deleted = false,
   int? seq,
+  int? envelopeVersion,
   int blobBytes = 0,
 }) =>
     EncryptedRecord(
@@ -29,6 +30,7 @@ EncryptedRecord record({
       deviceId: deviceId,
       deleted: deleted,
       seq: seq,
+      envelopeVersion: envelopeVersion,
       blob: Uint8List.fromList(List.generate(blobBytes, (i) => i % 256)),
     );
 
@@ -37,6 +39,7 @@ void main() {
     final cases = <String, EncryptedRecord>{
       'unsequenced record': record(),
       'sequenced record': record(seq: 42),
+      'versioned record': record(envelopeVersion: kRecordEnvelopeVersion),
       'tombstone': EncryptedRecord.tombstone(
           id: 'gone', updatedAt: 7, deviceId: 'device-B'),
       'large blob': record(blobBytes: 64 * 1024),
@@ -172,6 +175,18 @@ void main() {
       final decoded = PullResponse.fromJson(
           const PullResponse(records: [], latestSeq: 3).toJson());
       expect(decoded.limits, isNull);
+      expect(decoded.recordEnvelopeVersion, isNull);
+    });
+
+    test('a pull response advertises preserved record envelopes', () {
+      final decoded = PullResponse.fromJson(
+        const PullResponse(
+          records: [],
+          latestSeq: 3,
+          recordEnvelopeVersion: kRecordEnvelopeVersion,
+        ).toJson(),
+      );
+      expect(decoded.recordEnvelopeVersion, kRecordEnvelopeVersion);
     });
 
     test('a malformed limits value degrades to the fallback, not a crash', () {

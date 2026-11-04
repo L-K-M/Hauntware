@@ -181,6 +181,9 @@ final class SnippetMirrorHandler implements RecordHandler {
   bool get trialDecryptable => false;
 
   @override
+  bool get migratesLegacyEnvelopes => false;
+
+  @override
   Future<ApplyOutcome> applyLive(
     EncryptedRecord record,
     ApplyContext context,

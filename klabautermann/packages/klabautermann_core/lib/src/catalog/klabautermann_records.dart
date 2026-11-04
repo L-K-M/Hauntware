@@ -405,6 +405,9 @@ final class KlabautermannRecordHandler implements RecordHandler {
   bool get trialDecryptable => false;
 
   @override
+  bool get migratesLegacyEnvelopes => true;
+
+  @override
   Future<ApplyOutcome> applyLive(
     EncryptedRecord record,
     ApplyContext context,

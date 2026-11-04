@@ -275,6 +275,22 @@ Future<EncryptedRecord> _sealServer(
   ),
 );
 
+Future<EncryptedRecord> _sealLegacyServer(
+  ServerConfig server, {
+  int? updatedAt,
+  String deviceId = 'foreign-device',
+}) async => EncryptedRecord(
+  id: server.id,
+  updatedAt: updatedAt ?? server.updatedAt,
+  deviceId: deviceId,
+  deleted: false,
+  seq: null,
+  blob: await VaultCrypto.sealJson(_key, {
+    'kind': RecordKind.serverConfig.name,
+    'data': server.toJson(),
+  }),
+);
+
 Secret _secret(String id, {int? updatedAt}) => Secret(
   id: id,
   kind: SecretKind.password,
@@ -589,7 +605,7 @@ void main() {
       expect(device.catalog!.servers.single.label, 'web');
     });
 
-    test('a serverConfig tombstone removes the catalog entry', () async {
+    test('a sealed serverConfig tombstone removes the catalog entry', () async {
       final device = await _Device.create(tempDir, 'a', shared: true);
       server.seed(
         await RecordCrypto(RecordCodec(_key)).seal(
@@ -606,18 +622,61 @@ void main() {
       expect(device.catalog!.servers, hasLength(1));
 
       server.seed(
-        EncryptedRecord(
-          id: 'srv-uuid-1',
+        await _sealServer(
+          config('srv-uuid-1', 'web'),
           updatedAt: 2,
           deviceId: 'seance-device',
           deleted: true,
-          seq: null,
-          blob: Uint8List(0),
         ),
       );
       await device.coordinator.runRound(server);
       expect(device.catalog!.servers, isEmpty);
     });
+
+    test(
+      'an unsealed serverConfig tombstone cannot delete a catalog entry',
+      () async {
+        final device = await _Device.create(tempDir, 'a', shared: true);
+        server.seed(await _sealServer(config('srv-uuid-1', 'web')));
+        await device.coordinator.runRound(server);
+
+        server.seed(
+          EncryptedRecord.tombstone(
+            id: 'srv-uuid-1',
+            updatedAt: 2,
+            deviceId: 'seance-device',
+          ),
+        );
+        await device.coordinator.runRound(server);
+
+        expect(device.catalog!.servers.single.id, 'srv-uuid-1');
+      },
+    );
+
+    test(
+      'a tombstone sealed under the wrong kind cannot delete a catalog entry',
+      () async {
+        final device = await _Device.create(tempDir, 'a', shared: true);
+        server.seed(await _sealServer(config('srv-uuid-1', 'web')));
+        await device.coordinator.runRound(server);
+
+        server.seed(
+          await device.crypto.seal(
+            const DecryptedRecord(
+              id: 'srv-uuid-1',
+              kind: RecordKind.hostKey,
+              updatedAt: 2,
+              deviceId: 'seance-device',
+              deleted: true,
+            ),
+          ),
+        );
+        await device.coordinator.runRound(server);
+
+        expect(device.catalog!.servers.single.id, 'srv-uuid-1');
+        expect(await device.tripwires.trippedIds(), contains('srv-uuid-1'));
+      },
+    );
 
     test('separate mode never decrypts prefixless ids', () async {
       final device = await _Device.create(tempDir, 'a');
@@ -667,6 +726,77 @@ void main() {
       expect(dec.deviceId, device.deviceId);
       expect(ServerConfig.fromJson(dec.data).group, 'prod');
       expect(device.catalog!.byId('web')!.label, 'Web');
+    });
+
+    test(
+      'a legacy live record migrates without changing its semantic tuple',
+      () async {
+        final device = await _Device.create(tempDir, 'a', shared: true);
+        final config = _server('web', label: 'Legacy');
+        final legacy = await _sealLegacyServer(
+          config,
+          updatedAt: 77,
+          deviceId: 'old-device',
+        );
+        server.seed(legacy);
+
+        await device.coordinator.runRound(server);
+      expect(server.records['web']!.envelopeVersion, isNull);
+      expect(device.catalog!.byId('web')!.label, 'Legacy');
+
+      // A fresh device validates and materializes v1 before it authenticates
+      // that payload. The following ordinary run migrates the known row.
+      await device.coordinator.runRound(server);
+
+        final migrated = server.records['web']!;
+        expect(migrated.envelopeVersion, kRecordEnvelopeVersion);
+        expect(migrated.updatedAt, 77);
+        expect(migrated.deviceId, 'old-device');
+        final opened = await device.crypto.openEnvelope(migrated);
+        expect(opened.version, kRecordEnvelopeVersion);
+        expect(ServerConfig.fromJson(opened.record.data).label, 'Legacy');
+      },
+    );
+
+    test(
+      'a fresh device does not migrate a legacy payload with another id',
+      () async {
+        final device = await _Device.create(tempDir, 'a', shared: true);
+        final transplanted = _server('other', label: 'Transplanted');
+        server.seed(
+          EncryptedRecord(
+            id: 'web',
+            updatedAt: 77,
+            deviceId: 'old-device',
+            deleted: false,
+            seq: null,
+            blob: await VaultCrypto.sealJson(_key, {
+              'kind': RecordKind.serverConfig.name,
+              'data': transplanted.toJson(),
+            }),
+          ),
+        );
+
+        await device.coordinator.runRound(server);
+
+        expect(server.records['web']!.envelopeVersion, isNull);
+        expect(server.pushCalls, 0);
+        expect(device.catalog!.byId('web'), isNull);
+        expect(await device.tripwires.trippedIds(), contains('web'));
+      },
+    );
+
+    test('an old server remains readable without a migration push', () async {
+      final device = await _Device.create(tempDir, 'a', shared: true);
+      server
+        ..recordEnvelopeVersion = null
+        ..seed(await _sealLegacyServer(_server('web', label: 'Legacy')));
+
+      await device.coordinator.runRound(server);
+
+      expect(server.records['web']!.envelopeVersion, isNull);
+      expect(server.pushCalls, 0);
+      expect(device.catalog!.byId('web')!.label, 'Legacy');
     });
 
     test('a round pushes in batches the pulled limits allow', () async {
@@ -823,13 +953,11 @@ void main() {
       // tombstone; the user re-included locally, so the live row must
       // win — re-dated past the tombstone and re-sealed for the push.
       server.seed(
-        EncryptedRecord(
-          id: 'web',
+        await _sealServer(
+          _server('web'),
           updatedAt: _epochMs + 500,
           deviceId: a.deviceId,
           deleted: true,
-          seq: null,
-          blob: Uint8List(0),
         ),
       );
       await a.coordinator.runRound(server);
@@ -1315,6 +1443,33 @@ void main() {
   });
 
   group('device-level secret switch (Séance syncSecrets)', () {
+    test(
+      'while off, migration never opens or republishes a legacy secret',
+      () async {
+        final a = await _Device.create(tempDir, 'a', shared: true);
+        final secret = _secret('s1');
+        server.seed(
+          EncryptedRecord(
+            id: 'secret:s1',
+            updatedAt: secret.updatedAt,
+            deviceId: 'old-device',
+            deleted: false,
+            seq: null,
+            blob: await VaultCrypto.sealJson(_key, {
+              'kind': RecordKind.secret.name,
+              'data': secret.toJson(),
+            }),
+          ),
+        );
+
+        await a.coordinator.runRound(server);
+
+        expect(server.records['secret:s1']!.envelopeVersion, isNull);
+        expect(server.pushCalls, 0);
+        expect(await a.secrets!.getSecret('s1'), isNull);
+      },
+    );
+
     test(
       'while off, nothing publishes and no pulled credential lands',
       () async {

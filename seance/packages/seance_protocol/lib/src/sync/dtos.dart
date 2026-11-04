@@ -223,16 +223,24 @@ class PullResponse {
   /// making anyway.
   final PushLimits? limits;
 
+  /// Highest record-envelope version whose outer marker this server preserves,
+  /// or null for an older server. Clients use this only to decide whether a
+  /// same-tuple format migration can converge; ciphertext remains authoritative.
+  final int? recordEnvelopeVersion;
+
   const PullResponse({
     required this.records,
     required this.latestSeq,
     this.limits,
+    this.recordEnvelopeVersion,
   });
 
   Map<String, dynamic> toJson() => {
         'records': records.map((r) => r.toJson()).toList(),
         'latestSeq': latestSeq,
         if (limits != null) 'limits': limits!.toJson(),
+        if (recordEnvelopeVersion != null)
+          'recordEnvelopeVersion': recordEnvelopeVersion,
       };
 
   factory PullResponse.fromJson(Map<String, dynamic> json) => PullResponse(
@@ -245,6 +253,10 @@ class PullResponse {
         // a mangled value must not take the records and watermark down with
         // it. The required fields above stay strict on purpose.
         limits: PushLimits.tryFromJson(json['limits']),
+        recordEnvelopeVersion: switch (json['recordEnvelopeVersion']) {
+          final int version when version > 0 => version,
+          _ => null,
+        },
       );
 }
 

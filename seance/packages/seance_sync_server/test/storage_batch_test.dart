@@ -12,12 +12,14 @@ EncryptedRecord _record(
   String id,
   int revision, {
   String deviceId = 'device',
+  int? envelopeVersion,
 }) => EncryptedRecord(
   id: id,
   updatedAt: revision,
   deviceId: deviceId,
   deleted: false,
   seq: null,
+  envelopeVersion: envelopeVersion,
   blob: Uint8List.fromList([revision]),
 );
 
@@ -225,6 +227,28 @@ void main() {
           (await storage.pullSnapshot('alice', 0)).records.single.deviceId,
           'z',
         );
+      });
+
+      test('authenticated envelope upgrades the same semantic tuple',
+          () async {
+        await storage.pushRecords('alice', [_record('same', 10)]);
+        final upgraded = await storage.pushRecords('alice', [
+          _record(
+            'same',
+            10,
+            envelopeVersion: kRecordEnvelopeVersion,
+          ),
+        ]);
+        final downgrade = await storage.pushRecords('alice', [
+          _record('same', 10),
+        ]);
+
+        expect(upgraded.results.single.accepted, isTrue);
+        expect(upgraded.results.single.seq, 2);
+        expect(downgrade.results.single.accepted, isFalse);
+        final stored = (await storage.pullSnapshot('alice', 0)).records.single;
+        expect(stored.envelopeVersion, kRecordEnvelopeVersion);
+        expect(stored.seq, 2);
       });
 
       test(

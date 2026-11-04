@@ -10,6 +10,9 @@ const String _recordLoggerName = 'seance_protocol.records';
 
 final Logger _log = Logger(_recordLoggerName);
 
+/// The authenticated record-envelope format written by this build.
+const int kRecordEnvelopeVersion = 2;
+
 /// The category of a synced record. The kind travels *inside* the encrypted
 /// payload, not in the envelope, so the server cannot even tell a server-config
 /// from a stored secret.
@@ -90,7 +93,17 @@ class EncryptedRecord {
   final bool deleted;
   final int? seq;
 
-  /// `nonce || ciphertext || mac`. Empty for a tombstone.
+  /// The authenticated envelope format, or null for legacy v1 wire records.
+  ///
+  /// This additive outer hint lets clients and servers replace a v1 blob with
+  /// its v2 equivalent without changing the record's semantic LWW timestamp.
+  /// V2 seals the same value inside [blob], so the hint is never trusted by a
+  /// decrypting client on its own. An old server may strip the hint while
+  /// retaining the opaque v2 blob, which is why null remains distinct from 1.
+  final int? envelopeVersion;
+
+  /// `nonce || ciphertext || mac`. V2 tombstones are sealed too; an empty blob
+  /// is only the legacy local-staging shape described by [tombstone].
   final Uint8List blob;
 
   const EncryptedRecord({
@@ -99,19 +112,23 @@ class EncryptedRecord {
     required this.deviceId,
     required this.deleted,
     required this.seq,
+    this.envelopeVersion,
     required this.blob,
   });
 
-  /// A tombstone: the deletion of [id], carrying no payload. Identity and date
-  /// are all a delete needs — [RecordCodec] leaves the empty [blob] unsealed, so
-  /// no vault key is required to mint one — and [seq] stays null until the
-  /// server assigns one on push.
+  /// An unsealed legacy tombstone for durable local staging only.
+  ///
+  /// A sync writer must re-seal this through [RecordCodec] before it reaches a
+  /// server. Pulled empty tombstones are untrusted because any blob server
+  /// could mint one. The shape remains for old on-disk pending-deletion stores,
+  /// which must be migrated after the vault is unlocked.
   EncryptedRecord.tombstone({
     required this.id,
     required this.updatedAt,
     required this.deviceId,
   })  : deleted = true,
         seq = null,
+        envelopeVersion = null,
         blob = Uint8List(0);
 
   EncryptedRecord withSeq(int newSeq) => EncryptedRecord(
@@ -120,6 +137,7 @@ class EncryptedRecord {
         deviceId: deviceId,
         deleted: deleted,
         seq: newSeq,
+        envelopeVersion: envelopeVersion,
         blob: blob,
       );
 
@@ -132,6 +150,7 @@ class EncryptedRecord {
         'deviceId': deviceId,
         'deleted': deleted,
         if (seq != null) 'seq': seq,
+        if (envelopeVersion != null) 'envelopeVersion': envelopeVersion,
         'blob': base64.encode(blob),
       };
 
@@ -143,7 +162,10 @@ class EncryptedRecord {
   /// for why this counts rather than encodes.
   int encodedJsonBytes() {
     final seqValue = seq;
-    return jsonObjectFramingBytes(seqValue == null ? 5 : 6) +
+    final version = envelopeVersion;
+    return jsonObjectFramingBytes(
+          5 + (seqValue == null ? 0 : 1) + (version == null ? 0 : 1),
+        ) +
         jsonKeyBytes('id') +
         jsonStringBytes(id) +
         jsonKeyBytes('updatedAt') +
@@ -155,17 +177,26 @@ class EncryptedRecord {
         (seqValue == null
             ? 0
             : jsonKeyBytes('seq') + jsonIntBytes(seqValue)) +
+        (version == null
+            ? 0
+            : jsonKeyBytes('envelopeVersion') + jsonIntBytes(version)) +
         jsonKeyBytes('blob') +
         jsonBase64StringBytes(blob.length);
   }
 
-  factory EncryptedRecord.fromJson(Map<String, dynamic> json) =>
-      EncryptedRecord(
+  factory EncryptedRecord.fromJson(Map<String, dynamic> json) {
+    final version = json['envelopeVersion'];
+    if (version != null && (version is! int || version < 1)) {
+      throw const FormatException('Invalid record envelope version');
+    }
+    return EncryptedRecord(
         id: json['id'] as String,
         updatedAt: (json['updatedAt'] as num).toInt(),
         deviceId: json['deviceId'] as String,
         deleted: json['deleted'] as bool? ?? false,
         seq: (json['seq'] as num?)?.toInt(),
+        envelopeVersion: version as int?,
         blob: base64.decode(json['blob'] as String? ?? ''),
       );
+  }
 }

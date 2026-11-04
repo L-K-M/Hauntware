@@ -53,6 +53,9 @@ final class ServerConfigHandler implements RecordHandler {
   bool get trialDecryptable => opensInTrial;
 
   @override
+  bool get migratesLegacyEnvelopes => _servers != null;
+
+  @override
   Future<ApplyOutcome> applyLive(
     EncryptedRecord record,
     ApplyContext context,
@@ -117,9 +120,7 @@ final class ServerConfigHandler implements RecordHandler {
   /// live local row is a reversed exclusion — the live record re-dates
   /// past it rather than honouring a decision the user undid. A pull-only
   /// coordinator makes no local decisions to undo and seals no revive, so
-  /// there the tombstone applies like any other. Configs already carry
-  /// the breach-tolerant exposure of an envelope a sync server can assert
-  /// on its own; Séance applies them the same way.
+  /// there the authenticated tombstone applies like any other.
   @override
   Future<ApplyOutcome> applyTombstone(
     EncryptedRecord record,

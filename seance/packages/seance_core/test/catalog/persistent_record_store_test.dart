@@ -17,6 +17,7 @@ EncryptedRecord _record(
   String deviceId = 'device-a',
   bool deleted = false,
   int? seq,
+  int? envelopeVersion,
   List<int>? blob,
 }) =>
     EncryptedRecord(
@@ -25,6 +26,7 @@ EncryptedRecord _record(
       deviceId: deviceId,
       deleted: deleted,
       seq: seq,
+      envelopeVersion: envelopeVersion,
       blob: Uint8List.fromList(blob ?? const [1, 2, 3]),
     );
 
@@ -203,6 +205,37 @@ void main() {
       expect(await reloaded.displacedRecords(), isEmpty);
       expect(await open().displacedRecords(), isEmpty);
       expect(await reloaded.settlePush(sent, rejected), isNull);
+    });
+
+    test('restores a clean v1 record displaced only by a v2 migration',
+        () async {
+      final store = open();
+      final legacy = _record(
+        'bookmark:a',
+        updatedAt: 100,
+        deviceId: 'device-a',
+        seq: 7,
+        blob: const [1],
+      );
+      await store.putRemote(legacy);
+      await store.putLocal(
+        _record(
+          'bookmark:a',
+          updatedAt: 100,
+          deviceId: 'device-a',
+          envelopeVersion: kRecordEnvelopeVersion,
+          blob: const [2],
+        ),
+      );
+
+      final reloaded = open();
+      expect(await reloaded.restoreLegacyEnvelopeMigrations(), 1);
+      final restored = await reloaded.getRecord('bookmark:a');
+      expect(restored!.envelopeVersion, isNull);
+      expect(restored.seq, 7);
+      expect(restored.blob, orderedEquals(const [1]));
+      expect(await reloaded.dirtyRecords(), isEmpty);
+      expect(await reloaded.displacedRecords(), isEmpty);
     });
 
     test('a rejected push waits for a queued write that stashes the winner',

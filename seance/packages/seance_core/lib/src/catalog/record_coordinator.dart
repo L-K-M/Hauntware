@@ -37,6 +37,36 @@ import 'secret_handler.dart';
 import 'server_config_handler.dart';
 import 'server_config_store.dart';
 
+bool _sameJsonValue(Object? a, Object? b) {
+  if (identical(a, b) || a == b) return true;
+  if (a is List && b is List) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!_sameJsonValue(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  if (a is Map && b is Map) {
+    if (a.length != b.length) return false;
+    for (final entry in a.entries) {
+      if (!b.containsKey(entry.key) ||
+          !_sameJsonValue(entry.value, b[entry.key])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+bool _sameDecryptedRecord(DecryptedRecord a, DecryptedRecord b) =>
+    a.id == b.id &&
+    a.kind == b.kind &&
+    a.updatedAt == b.updatedAt &&
+    a.deviceId == b.deviceId &&
+    a.deleted == b.deleted &&
+    _sameJsonValue(a.data, b.data);
+
 /// Whether pulled prefixless `serverConfig` records materialize (04 §4.2).
 /// Shared mode materializes them into the server store and holds the
 /// catalog built from it; separate mode has neither, and its dispatch
@@ -614,10 +644,12 @@ final class RecordCoordinator {
     while (rounds < _maxRounds) {
       rounds++;
       final int roundPulled;
+      final int? recordEnvelopeVersion;
       try {
         final pull = await _pullOnce(api);
         roundPulled = pull.pulled;
         limits = pull.limits ?? limits;
+        recordEnvelopeVersion = pull.recordEnvelopeVersion;
       } on ApiError catch (error) {
         if (error.code != 'unauthorized') rethrow;
         authFailed = true;
@@ -628,6 +660,9 @@ final class RecordCoordinator {
       pulled += roundPulled;
       var progressed = roundPulled > 0;
       if (!_pullOnly && !await _pushesHeld()) {
+        if ((recordEnvelopeVersion ?? 0) >= kRecordEnvelopeVersion) {
+          await _stageEnvelopeMigrations();
+        }
         final dirty = [
           for (final record in await _records.dirtyRecords())
             if (!refused.contains(record.id)) record,
@@ -708,6 +743,38 @@ final class RecordCoordinator {
   Future<bool> _pushesHeld() async =>
       await _enrollment?.passphraseUnverified() ?? false;
 
+  /// Re-seal records whose server still holds a legacy envelope, keeping the
+  /// semantic LWW tuple verbatim. The server advertises marker preservation
+  /// before this runs; otherwise an old server would strip the hint and reject
+  /// the same-tuple replacement forever.
+  ///
+  /// A materialized source must exist and exactly match what the legacy blob
+  /// decrypted to. A fresh device therefore applies a valid v1 record first
+  /// and migrates it on a later run; invalid or transplanted payloads are
+  /// never authenticated before their handler validates them.
+  Future<void> _stageEnvelopeMigrations() async {
+    for (final encrypted in await _records.allRecords()) {
+      if ((encrypted.envelopeVersion ?? 1) >= kRecordEnvelopeVersion) {
+        continue;
+      }
+      final handler = _handlers[syncIdPrefix(encrypted.id)];
+      if (handler == null || !handler.migratesLegacyEnvelopes) continue;
+
+      final OpenedRecordEnvelope opened;
+      try {
+        opened = await _crypto.openEnvelope(encrypted);
+      } catch (_) {
+        continue;
+      }
+      final decoded = opened.record;
+      if (decoded.kind != handler.kind) continue;
+
+      final sourced = await handler.reSourcePending(encrypted);
+      if (sourced == null || !_sameDecryptedRecord(sourced, decoded)) continue;
+      await _writer.sealLocal(sourced);
+    }
+  }
+
   ApplyContext _contextFor({required bool holdActive}) => ApplyContext(
     records: _records,
     crypto: _crypto,
@@ -783,7 +850,8 @@ final class RecordCoordinator {
   /// The pull half of a round, with §3.1's one-time full-resync fallback:
   /// a rejected `since` cursor resets both cursors and re-pulls from zero,
   /// so `applyPulled` re-scans the lifetime set.
-  Future<({int pulled, PushLimits? limits})> _pullOnce(SyncApi api) async {
+  Future<({int pulled, PushLimits? limits, int? recordEnvelopeVersion})>
+  _pullOnce(SyncApi api) async {
     PullResponse response;
     try {
       response = await api.pull(since: await _records.highWaterSeq());
@@ -800,7 +868,11 @@ final class RecordCoordinator {
       await _records.putRemote(remote);
     }
     await _records.setHighWaterSeq(snapshot);
-    return (pulled: response.records.length, limits: response.limits);
+    return (
+      pulled: response.records.length,
+      limits: response.limits,
+      recordEnvelopeVersion: response.recordEnvelopeVersion,
+    );
   }
 
   /// Materialize pulled records — see [applyPulled].
@@ -896,19 +968,27 @@ final class RecordCoordinator {
   /// claims (`snippet:` and every unrecognized `<prefix>:`) are
   /// skip-preserved without ever being opened, and so are prefixless and
   /// `secret:` ids outside shared mode, whose handlers have no store.
-  /// Tombstones carry no sealed kind, so the prefix alone routes them to
-  /// [RecordHandler.applyTombstone]; `hostkey:` and `secret:` tombstones
-  /// stay no-ops there — honouring those would hand the server a primitive
-  /// for stripping this device's pins or vault.
+  /// Tombstones are opened here before [RecordHandler.applyTombstone]: the
+  /// sealed kind must agree with the prefix-selected handler. Empty legacy
+  /// tombstones and tampered envelopes are preserved but never applied.
   Future<ApplyOutcome> _dispatch(
     EncryptedRecord record,
     ApplyContext context,
   ) async {
     final handler = _handlers[syncIdPrefix(record.id)];
     if (handler == null) return ApplyOutcome.skipped;
-    return record.deleted
-        ? handler.applyTombstone(record, context)
-        : handler.applyLive(record, context);
+    if (!record.deleted) return handler.applyLive(record, context);
+
+    final dec = await context.open(record);
+    if (dec == null) {
+      return context.holdActive ? ApplyOutcome.deferred : ApplyOutcome.skipped;
+    }
+    if (!dec.deleted || dec.kind != handler.kind) {
+      await context.tripwires.trip(record.id);
+      return ApplyOutcome.skipped;
+    }
+    await context.tripwires.clear(record.id);
+    return handler.applyTombstone(record, context);
   }
 
   /// Decrypt for the catalog backfill: a failure means the record is not

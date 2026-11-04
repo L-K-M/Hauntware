@@ -1,7 +1,16 @@
-import 'dart:typed_data';
-
 import '../crypto/vault.dart';
 import 'record.dart';
+
+/// One authenticated open, including the format found inside the ciphertext.
+///
+/// Callers migrating legacy records need the inner version without decrypting
+/// a second time. [record] is the same value [RecordCodec.decrypt] returns.
+final class OpenedRecordEnvelope {
+  final DecryptedRecord record;
+  final int version;
+
+  const OpenedRecordEnvelope({required this.record, required this.version});
+}
 
 /// Encrypts [DecryptedRecord]s into [EncryptedRecord]s and back, using the
 /// device's vault key. This is the only bridge between plaintext application
@@ -23,41 +32,107 @@ class RecordCodec {
       );
     }
 
-    // Tombstones carry no payload — nothing to encrypt or leak.
-    final Uint8List blob = record.deleted
-        ? Uint8List(0)
-        : await VaultCrypto.sealJson(vaultKey, {
-            'kind': record.kind.name,
-            'data': record.data,
-          });
+    // The server needs the outer tuple for conflict resolution, but the same
+    // tuple is sealed inside the blob so it cannot alter or transplant it.
+    // `seq` is absent deliberately: the server assigns it after encryption.
+    final blob = await VaultCrypto.sealJson(vaultKey, {
+      'version': kRecordEnvelopeVersion,
+      'id': record.id,
+      'updatedAt': record.updatedAt,
+      'deviceId': record.deviceId,
+      'deleted': record.deleted,
+      'kind': record.kind.name,
+      'data': record.deleted ? const <String, dynamic>{} : record.data,
+    });
     return EncryptedRecord(
       id: record.id,
       updatedAt: record.updatedAt,
       deviceId: record.deviceId,
       deleted: record.deleted,
       seq: null,
+      envelopeVersion: kRecordEnvelopeVersion,
       blob: blob,
     );
   }
 
-  Future<DecryptedRecord> decrypt(EncryptedRecord record) async {
-    if (record.deleted || record.blob.isEmpty) {
-      return DecryptedRecord(
-        id: record.id,
-        kind: RecordKind.unknown,
-        updatedAt: record.updatedAt,
-        deviceId: record.deviceId,
-        deleted: true,
+  Future<DecryptedRecord> decrypt(EncryptedRecord record) async =>
+      (await openEnvelope(record)).record;
+
+  Future<OpenedRecordEnvelope> openEnvelope(EncryptedRecord record) async {
+    if (record.blob.isEmpty) {
+      throw const FormatException('Unsealed record tombstones are not trusted');
+    }
+
+    final payload = await VaultCrypto.openJson(vaultKey, record.blob);
+    final version = payload['version'];
+    if (version == null) {
+      final outerVersion = record.envelopeVersion;
+      if (outerVersion != null && outerVersion != 1) {
+        throw const FormatException('Record envelope version does not match');
+      }
+      return OpenedRecordEnvelope(
+        record: _decryptLegacy(record, payload),
+        version: 1,
       );
     }
-    final payload = await VaultCrypto.openJson(vaultKey, record.blob);
+    if (version != kRecordEnvelopeVersion) {
+      throw FormatException('Unsupported record envelope version: $version');
+    }
+    final outerVersion = record.envelopeVersion;
+    if (outerVersion != null && outerVersion != version) {
+      throw const FormatException('Record envelope version does not match');
+    }
+
+    _verifyEnvelope(record, payload);
+    final deleted = payload['deleted'] as bool;
+    return OpenedRecordEnvelope(
+      version: kRecordEnvelopeVersion,
+      record: DecryptedRecord(
+        id: payload['id'] as String,
+        kind: recordKindFromName(payload['kind'] as String),
+        updatedAt: payload['updatedAt'] as int,
+        deviceId: payload['deviceId'] as String,
+        deleted: deleted,
+        data: deleted
+            ? const {}
+            : (payload['data'] as Map).cast<String, dynamic>(),
+      ),
+    );
+  }
+
+  DecryptedRecord _decryptLegacy(
+    EncryptedRecord record,
+    Map<String, dynamic> payload,
+  ) {
+    // V1 live records did not seal their routing tuple. They remain readable
+    // during migration, but an outer delete is never trusted: accepting it
+    // would let the server strip or replace a v2 blob to forge a tombstone.
+    if (record.deleted) {
+      throw const FormatException('Legacy record tombstones are not trusted');
+    }
+
     return DecryptedRecord(
       id: record.id,
       kind: recordKindFromName(payload['kind'] as String),
       updatedAt: record.updatedAt,
       deviceId: record.deviceId,
-      deleted: false,
       data: (payload['data'] as Map).cast<String, dynamic>(),
     );
+  }
+
+  void _verifyEnvelope(
+    EncryptedRecord record,
+    Map<String, dynamic> payload,
+  ) {
+    final innerUpdatedAt = payload['updatedAt'];
+    if (payload['id'] != record.id ||
+        innerUpdatedAt is! int ||
+        innerUpdatedAt != record.updatedAt ||
+        payload['deviceId'] != record.deviceId ||
+        payload['deleted'] != record.deleted ||
+        payload['kind'] is! String ||
+        payload['data'] is! Map) {
+      throw const FormatException('Record envelope metadata does not match');
+    }
   }
 }

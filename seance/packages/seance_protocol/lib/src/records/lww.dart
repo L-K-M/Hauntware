@@ -6,7 +6,9 @@ import 'record.dart';
 ///   * higher `updatedAt` wins;
 ///   * on an exact timestamp tie, the lexicographically larger `deviceId` wins
 ///     (an arbitrary but *deterministic* rule — both sides compute the same
-///     result without coordination).
+///     result without coordination);
+///   * on the same live/delete state and semantic tuple, a newer authenticated
+///     envelope format wins before the server-assigned sequence number.
 ///
 /// A delete (tombstone) is just another write and competes on the same
 /// timestamp, so a later edit can legitimately resurrect a record and a later
@@ -20,6 +22,15 @@ class Lww {
     }
     final cmp = a.deviceId.compareTo(b.deviceId);
     if (cmp != 0) return cmp > 0 ? a : b;
+    // A format migration is not a domain edit: when the semantic tuple and
+    // deletion state are identical, prefer the authenticated representation
+    // before consulting server-owned sequence numbers. Differing deletion
+    // flags are not equivalent and retain the established seq tie-break.
+    if (a.deleted == b.deleted) {
+      final aVersion = a.envelopeVersion ?? 1;
+      final bVersion = b.envelopeVersion ?? 1;
+      if (aVersion != bVersion) return aVersion > bVersion ? a : b;
+    }
     // Same timestamp and device: prefer whichever the server already sequenced.
     final aSeq = a.seq ?? -1;
     final bSeq = b.seq ?? -1;
