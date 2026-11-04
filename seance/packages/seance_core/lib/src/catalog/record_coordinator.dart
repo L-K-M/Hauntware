@@ -730,7 +730,7 @@ final class RecordCoordinator {
   }
 
   /// The deferred trial-decrypt (04 §4.5): while the hold stands, the flag
-  /// clears only on a **foreign** non-tombstone record that decrypts — this
+  /// clears only on a **foreign** authenticated record that decrypts — this
   /// device's own output would vacuously clear it under whatever key sealed
   /// it. Every foreign candidate on a decryptable id is tried (a corrupt
   /// one cannot condemn the passphrase — the three-cause copy exists
@@ -744,8 +744,7 @@ final class RecordCoordinator {
     }
     final candidates = [
       for (final record in await _records.allRecords())
-        if (!record.deleted &&
-            record.blob.isNotEmpty &&
+        if (record.blob.isNotEmpty &&
             record.deviceId != _deviceId &&
             isDecryptableSyncId(record.id, _productHandlers))
           record,
@@ -770,8 +769,13 @@ final class RecordCoordinator {
       await reSealPendingWrites();
       await enrollment.setPassphraseUnverified(false);
       await enrollment.setNotice(syncNoticePassphraseCheckFailed, false);
-      // A catch-up that ran under the hold deferred whatever failed,
-      // and those records sit behind the apply cursor: re-run it.
+      // Records that could have displaced dirty writes were deliberately
+      // kept out of the mirror while this key was unverified. Re-pull the
+      // account after the hold lifts so the now-proven key gets to judge
+      // those records before LWW settlement.
+      await _records.resetSyncCursors();
+      // A catch-up that ran under the hold deferred whatever failed; re-run
+      // it after resetting the apply cursor.
       await catchUpSecrets();
       return;
     }
@@ -792,15 +796,54 @@ final class RecordCoordinator {
       response = await api.pull(since: 0);
     }
     var snapshot = await _records.highWaterSeq();
+    final dirtyIds = (await _records.dirtyRecords()).map((r) => r.id).toSet();
+    final holdActive = await _pushesHeld();
     for (final remote in response.records) {
       final seq = remote.seq;
       if (seq != null && seq > snapshot) snapshot = seq;
+
+      // Conflict metadata is public for server-side LWW, but it is not
+      // trustworthy until the sealed copy agrees. Authenticate before a
+      // forged future tuple can settle a pending local write. Once the
+      // passphrase is verified, authenticate every record this coordinator
+      // would open for application before it enters the mirror too.
+      if (!await _validBeforeMerge(remote, dirtyIds, holdActive: holdActive)) {
+        continue;
+      }
       // The store merges under the same Lww the server ran — a loser is
       // dropped or parked behind the dirty rival it lost to.
       await _records.putRemote(remote);
     }
     await _records.setHighWaterSeq(snapshot);
     return (pulled: response.records.length, limits: response.limits);
+  }
+
+  Future<bool> _validBeforeMerge(
+    EncryptedRecord record,
+    Set<String> dirtyIds, {
+    required bool holdActive,
+  }) async {
+    final handler = _handlers[syncIdPrefix(record.id)];
+    if (handler == null) return true;
+
+    final wouldOpenLive = !identical(handler, _secretHandler)
+        ? handler.prefix != null || _catalog != null
+        : _secretHandler.publishes;
+    final mustOpen = record.deleted ||
+        dirtyIds.contains(record.id) ||
+        (!holdActive && wouldOpenLive);
+    if (!mustOpen) return true;
+
+    try {
+      final decrypted = await _crypto.open(record);
+      if (decrypted.kind != handler.kind) {
+        await _tripwires.trip(record.id);
+        return false;
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Materialize pulled records — see [applyPulled].
@@ -896,19 +939,28 @@ final class RecordCoordinator {
   /// claims (`snippet:` and every unrecognized `<prefix>:`) are
   /// skip-preserved without ever being opened, and so are prefixless and
   /// `secret:` ids outside shared mode, whose handlers have no store.
-  /// Tombstones carry no sealed kind, so the prefix alone routes them to
-  /// [RecordHandler.applyTombstone]; `hostkey:` and `secret:` tombstones
-  /// stay no-ops there — honouring those would hand the server a primitive
-  /// for stripping this device's pins or vault.
+  /// Tombstones are opened here before their handlers see them: the sealed
+  /// kind and every conflict field must agree with the plaintext envelope.
+  /// `hostkey:` and `secret:` tombstones remain policy no-ops in their
+  /// handlers even after authentication.
   Future<ApplyOutcome> _dispatch(
     EncryptedRecord record,
     ApplyContext context,
   ) async {
     final handler = _handlers[syncIdPrefix(record.id)];
     if (handler == null) return ApplyOutcome.skipped;
-    return record.deleted
-        ? handler.applyTombstone(record, context)
-        : handler.applyLive(record, context);
+    if (!record.deleted) return handler.applyLive(record, context);
+
+    final tombstone = await context.open(record);
+    if (tombstone == null) {
+      return context.holdActive ? ApplyOutcome.deferred : ApplyOutcome.skipped;
+    }
+    if (!tombstone.deleted || tombstone.kind != handler.kind) {
+      await context.tripwires.trip(record.id);
+      return ApplyOutcome.skipped;
+    }
+    await context.tripwires.clear(record.id);
+    return handler.applyTombstone(record, context);
   }
 
   /// Decrypt for the catalog backfill: a failure means the record is not
