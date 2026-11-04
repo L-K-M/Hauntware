@@ -9,7 +9,7 @@ import 'sync_engine.dart';
 /// HTTP client for the Séance sync server. Handles account setup and auth, then
 /// serves as the [SyncApi] the [SyncEngine] drives. All record payloads are
 /// already end-to-end encrypted before they reach this layer.
-class HttpSyncClient implements SyncApi, InboxApi {
+class HttpSyncClient implements SyncApi, PagedSyncApi, InboxApi, PagedInboxApi {
   final String baseUrl;
   final http.Client _client;
   final bool _ownsClient;
@@ -194,10 +194,82 @@ class HttpSyncClient implements SyncApi, InboxApi {
 
   @override
   Future<PullResponse> pull({required int since}) async {
+    final records = <EncryptedRecord>[];
+    PushLimits? limits;
+    int? through;
+    var cursor = since;
+    var latestSeq = since;
+    while (true) {
+      final page = await pullPage(since: cursor, throughSeq: through);
+      final pageThrough = page.throughSeq;
+      if (pageThrough == null) {
+        if (through != null || page.hasMore) {
+          throw const FormatException('Sync page lost its snapshot watermark');
+        }
+      } else {
+        through ??= pageThrough;
+        if (pageThrough != through ||
+            pageThrough < since ||
+            page.latestSeq != pageThrough) {
+          throw const FormatException(
+              'Sync page changed its snapshot watermark');
+        }
+      }
+
+      var observed = cursor;
+      for (final record in page.records) {
+        final seq = record.seq;
+        final upper = pageThrough ?? page.latestSeq;
+        if (seq == null || seq <= observed || seq > upper) {
+          throw const FormatException('Sync page records are not monotonic');
+        }
+        observed = seq;
+      }
+      if (page.hasMore &&
+          (pageThrough == null ||
+              observed == cursor ||
+              observed >= pageThrough)) {
+        throw const FormatException('Sync page did not make progress');
+      }
+
+      records.addAll(page.records);
+      limits = page.limits ?? limits;
+      latestSeq = page.latestSeq;
+      if (!page.hasMore) {
+        return PullResponse(
+          records: records,
+          latestSeq: latestSeq,
+          limits: limits,
+          throughSeq: through,
+        );
+      }
+      cursor = observed;
+    }
+  }
+
+  @override
+  Future<PullResponse> pullPage({required int since, int? throughSeq}) async {
     final res = await _client
-        .get(_uri('/v1/sync', {'since': '$since'}), headers: _authHeaders)
+        .get(
+          _uri('/v1/sync', {
+            'since': '$since',
+            'page': '1',
+            'protocolVersion': '$kProtocolVersion',
+            if (throughSeq != null) 'through': '$throughSeq',
+          }),
+          headers: _authHeaders,
+        )
         .timeout(timeout);
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 400) {
+      try {
+        _fail(res);
+      } on ApiError catch (error) {
+        if (error.code == 'cursor_rejected') {
+          throw SyncCursorRejectedException(error.message);
+        }
+        rethrow;
+      }
+    }
     return PullResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
@@ -241,8 +313,76 @@ class HttpSyncClient implements SyncApi, InboxApi {
 
   @override
   Future<List<InboxItem>> listItems({required int since}) async {
+    final items = <InboxItem>[];
+    await for (final page in listItemPages(since: since)) {
+      items.addAll(page.items);
+    }
+    return items;
+  }
+
+  @override
+  Stream<InboxPage> listItemPages({required int since}) async* {
+    int? through;
+    var cursor = since;
+    while (true) {
+      final page = await _listItemPage(since: cursor, through: through);
+      final pageThrough = page.throughReceived;
+      final next = page.nextReceived;
+      if (pageThrough == null) {
+        if (through != null || page.hasMore) {
+          throw const FormatException(
+              'Inbox page lost its snapshot watermark');
+        }
+      } else {
+        through ??= pageThrough;
+        if (pageThrough != through || pageThrough < since || next == null) {
+          throw const FormatException(
+              'Inbox page changed its snapshot watermark');
+        }
+      }
+
+      var observed = cursor;
+      for (final item in page.items) {
+        final upper = pageThrough ?? next ?? item.received;
+        if (item.received <= observed || item.received > upper) {
+          throw const FormatException('Inbox page items are not monotonic');
+        }
+        observed = item.received;
+      }
+      if (next != null &&
+          (next != observed ||
+              next < cursor ||
+              (pageThrough != null && next > pageThrough))) {
+        throw const FormatException('Inbox page continuation is invalid');
+      }
+      final continuation = next ?? observed;
+      if (page.hasMore &&
+          (pageThrough == null ||
+              continuation <= cursor ||
+              continuation >= pageThrough)) {
+        throw const FormatException('Inbox page did not make progress');
+      }
+
+      yield page;
+      if (!page.hasMore) return;
+      cursor = continuation;
+    }
+  }
+
+  Future<InboxPage> _listItemPage({
+    required int since,
+    int? through,
+  }) async {
     final res = await _client
-        .get(_uri('/v1/inbox', {'since': '$since'}), headers: _authHeaders)
+        .get(
+          _uri('/v1/inbox', {
+            'since': '$since',
+            'page': '1',
+            'protocolVersion': '$kProtocolVersion',
+            if (through != null) 'through': '$through',
+          }),
+          headers: _authHeaders,
+        )
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
     final json = jsonDecode(res.body) as Map<String, dynamic>;
@@ -258,7 +398,24 @@ class HttpSyncClient implements SyncApi, InboxApi {
         continue;
       }
     }
-    return items;
+    final throughValue = json['throughReceived'];
+    if (throughValue == null) {
+      items.sort((a, b) => a.received.compareTo(b.received));
+      return InboxPage(items: items);
+    }
+    final nextValue = json['nextReceived'];
+    final hasMoreValue = json['hasMore'];
+    if (throughValue is! num ||
+        nextValue is! num ||
+        (hasMoreValue != null && hasMoreValue is! bool)) {
+      throw const FormatException('Inbox page metadata is malformed');
+    }
+    return InboxPage(
+      items: items,
+      throughReceived: throughValue.toInt(),
+      nextReceived: nextValue.toInt(),
+      hasMore: hasMoreValue as bool? ?? false,
+    );
   }
 
   @override

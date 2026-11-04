@@ -219,6 +219,66 @@ class RejectEverythingApi implements SyncApi {
       );
 }
 
+class PagedFakeApi implements SyncApi, PagedSyncApi {
+  final List<EncryptedRecord> records;
+  final int pageSize;
+  final List<(int, int?)> requests = [];
+  int? failRequest;
+
+  PagedFakeApi(this.records, {this.pageSize = 1, this.failRequest});
+
+  @override
+  Future<PullResponse> pull({required int since}) =>
+      throw UnsupportedError('the paged capability must be used');
+
+  @override
+  Future<PullResponse> pullPage({required int since, int? throughSeq}) async {
+    requests.add((since, throughSeq));
+    if (failRequest == requests.length) {
+      failRequest = null;
+      throw const ApiError(code: 'storage_busy', message: 'retry');
+    }
+    final through = throughSeq ?? records.fold<int>(0, (value, record) {
+      final seq = record.seq ?? 0;
+      return seq > value ? seq : value;
+    });
+    final remaining = [
+      for (final record in records)
+        if (record.seq! > since && record.seq! <= through) record,
+    ];
+    final page = remaining.take(pageSize).toList();
+    return PullResponse(
+      records: page,
+      latestSeq: through,
+      throughSeq: through,
+      hasMore: remaining.length > page.length,
+    );
+  }
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) async =>
+      const PushResponse(results: [], latestSeq: 0);
+}
+
+class NonProgressingPagedApi implements SyncApi, PagedSyncApi {
+  @override
+  Future<PullResponse> pull({required int since}) =>
+      throw UnsupportedError('the paged capability must be used');
+
+  @override
+  Future<PullResponse> pullPage({required int since, int? throughSeq}) async =>
+      const PullResponse(
+        records: [],
+        latestSeq: 2,
+        throughSeq: 2,
+        hasMore: true,
+      );
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) async =>
+      const PushResponse(results: [], latestSeq: 0);
+}
+
 EncryptedRecord rec(String id, int updatedAt, String device,
         {bool deleted = false, int tag = 0}) =>
     EncryptedRecord(
@@ -350,6 +410,50 @@ void main() {
         expect(await store.highWaterSeq(), 2);
       },
     );
+
+    test('bounded pages share a watermark and advance by observed seq',
+        () async {
+      final api = PagedFakeApi([
+        rec('one', 1, 'B').withSeq(1),
+        rec('two', 2, 'B').withSeq(2),
+      ]);
+      final store = InMemoryLocalRecordStore();
+
+      await SyncEngine(store).sync(api);
+
+      expect((await store.allRecords()).map((r) => r.id), ['one', 'two']);
+      expect(await store.highWaterSeq(), 2);
+      expect(api.requests.take(2), [(0, null), (1, 2)]);
+    });
+
+    test('a later page failure persists only completed page progress',
+        () async {
+      final api = PagedFakeApi([
+        rec('one', 1, 'B').withSeq(1),
+        rec('two', 2, 'B').withSeq(2),
+      ], failRequest: 2);
+      final store = InMemoryLocalRecordStore();
+      final engine = SyncEngine(store);
+
+      await expectLater(engine.sync(api), throwsA(isA<ApiError>()));
+      expect(await store.highWaterSeq(), 1);
+
+      await engine.sync(api);
+      expect(api.requests[2].$1, 1);
+      expect(await store.highWaterSeq(), 2);
+      expect((await store.allRecords()).map((r) => r.id), ['one', 'two']);
+    });
+
+    test('a non-progressing page fails before moving the cursor', () async {
+      final store = InMemoryLocalRecordStore();
+
+      await expectLater(
+        SyncEngine(store).sync(NonProgressingPagedApi()),
+        throwsFormatException,
+      );
+
+      expect(await store.highWaterSeq(), 0);
+    });
 
     test('two devices converge on the same records', () async {
       final server = FakeServer();

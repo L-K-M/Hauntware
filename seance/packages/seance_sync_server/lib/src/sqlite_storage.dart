@@ -27,8 +27,7 @@ class SqliteStorage implements Storage {
   }
 
   /// Open (or create) the database at [path]. Use `:memory:` for ephemeral.
-  factory SqliteStorage.open(String path) =>
-      SqliteStorage(sqlite3.open(path));
+  factory SqliteStorage.open(String path) => SqliteStorage(sqlite3.open(path));
 
   void _migrate() {
     _db.execute('PRAGMA journal_mode=WAL;');
@@ -60,10 +59,10 @@ class SqliteStorage implements Storage {
         "OR generation = ''",
       );
       for (final row in missingGenerations) {
-        _db.execute(
-          'UPDATE accounts SET generation = ? WHERE username = ?',
-          [base64Url.encode(secureRandomBytes(16)), row['username']],
-        );
+        _db.execute('UPDATE accounts SET generation = ? WHERE username = ?', [
+          base64Url.encode(secureRandomBytes(16)),
+          row['username'],
+        ]);
       }
       _db.execute('''
         CREATE TRIGGER IF NOT EXISTS accounts_generation_required_insert
@@ -104,8 +103,10 @@ class SqliteStorage implements Storage {
         expires_at INTEGER NOT NULL
       );
     ''');
-      _db.execute('CREATE INDEX IF NOT EXISTS tokens_account_issued '
-          'ON tokens(username, account_generation, issued_at);');
+      _db.execute(
+        'CREATE INDEX IF NOT EXISTS tokens_account_issued '
+        'ON tokens(username, account_generation, issued_at);',
+      );
       _db.execute('COMMIT;');
     } catch (_) {
       if (!_db.autocommit) _db.execute('ROLLBACK;');
@@ -121,6 +122,7 @@ class SqliteStorage implements Storage {
         deleted INTEGER NOT NULL,
         seq INTEGER NOT NULL,
         blob BLOB NOT NULL,
+        encoded_size INTEGER NOT NULL,
         PRIMARY KEY (username, id)
       );
     ''');
@@ -144,8 +146,10 @@ class SqliteStorage implements Storage {
       );
     ''');
     _db.execute(
-        'CREATE INDEX IF NOT EXISTS records_seq ON records(username, seq);');
+      'CREATE INDEX IF NOT EXISTS records_seq ON records(username, seq);',
+    );
     _migrateInbox();
+    _migrateEncodedSizes();
   }
 
   /// The command inbox tables (docs/INBOX.md). Created if missing, so a
@@ -175,6 +179,7 @@ class SqliteStorage implements Storage {
         received INTEGER NOT NULL,
         blob BLOB NOT NULL,
         stored_at INTEGER NOT NULL,
+        encoded_size INTEGER NOT NULL,
         PRIMARY KEY (app_id, item_id)
       );
     ''');
@@ -186,18 +191,91 @@ class SqliteStorage implements Storage {
         value INTEGER NOT NULL
       );
     ''');
-    _db.execute('CREATE INDEX IF NOT EXISTS inbox_apps_user '
-        'ON inbox_apps(username);');
-    _db.execute('CREATE INDEX IF NOT EXISTS inbox_items_received '
-        'ON inbox_items(username, received);');
-    _db.execute('CREATE INDEX IF NOT EXISTS inbox_items_stored '
-        'ON inbox_items(stored_at);');
+    _db.execute(
+      'CREATE INDEX IF NOT EXISTS inbox_apps_user '
+      'ON inbox_apps(username);',
+    );
+    _db.execute(
+      'CREATE INDEX IF NOT EXISTS inbox_items_received '
+      'ON inbox_items(username, received);',
+    );
+    _db.execute(
+      'CREATE INDEX IF NOT EXISTS inbox_items_stored '
+      'ON inbox_items(stored_at);',
+    );
+  }
+
+  void _migrateEncodedSizes() {
+    void addIfMissing(String table) {
+      final columns = _db.select('PRAGMA table_info($table)');
+      if (columns.any((row) => row['name'] == 'encoded_size')) return;
+      _db.execute('ALTER TABLE $table ADD COLUMN encoded_size INTEGER');
+    }
+
+    /// Return one row after [rowId]. Reading one ciphertext at a time keeps a
+    /// pre-quota database from being materialized in memory during startup.
+    Row? nextRow(String selection, int? rowId) {
+      final rows = _db.select(
+        '$selection ${rowId == null ? '' : 'AND rowid > ? '} '
+        'ORDER BY rowid LIMIT 1',
+        [if (rowId != null) rowId],
+      );
+      return rows.isEmpty ? null : rows.single;
+    }
+
+    _db.execute('BEGIN IMMEDIATE;');
+    try {
+      addIfMissing('records');
+      addIfMissing('inbox_items');
+
+      int? recordRowId;
+      while (true) {
+        final row = nextRow(
+          'SELECT rowid AS migration_rowid, * FROM records '
+          'WHERE encoded_size IS NULL',
+          recordRowId,
+        );
+        if (row == null) break;
+        recordRowId = row['migration_rowid'] as int;
+        _db.execute('UPDATE records SET encoded_size = ? WHERE rowid = ?', [
+          _rowToRecord(row).encodedJsonBytes(),
+          recordRowId,
+        ]);
+      }
+
+      int? inboxRowId;
+      while (true) {
+        final row = nextRow(
+          'SELECT rowid AS migration_rowid, app_id, item_id, received, blob '
+          'FROM inbox_items WHERE encoded_size IS NULL',
+          inboxRowId,
+        );
+        if (row == null) break;
+        inboxRowId = row['migration_rowid'] as int;
+        final item = InboxItem(
+          appId: row['app_id'] as String,
+          itemId: row['item_id'] as String,
+          received: row['received'] as int,
+          blob: _blobOf(row),
+        );
+        _db.execute('UPDATE inbox_items SET encoded_size = ? WHERE rowid = ?', [
+          item.encodedJsonBytes(),
+          inboxRowId,
+        ]);
+      }
+
+      _db.execute('COMMIT;');
+    } catch (_) {
+      if (!_db.autocommit) _db.execute('ROLLBACK;');
+      rethrow;
+    }
   }
 
   @override
   Future<Account?> getAccount(String username) async {
-    final rows = _db
-        .select('SELECT * FROM accounts WHERE username = ?', [username]);
+    final rows = _db.select('SELECT * FROM accounts WHERE username = ?', [
+      username,
+    ]);
     if (rows.isEmpty) return null;
     final r = rows.first;
     return Account(
@@ -207,7 +285,8 @@ class SqliteStorage implements Storage {
       verifierSalt: r['verifier_salt'] as String,
       argonSalt: r['argon_salt'] as String,
       argonParams: Argon2Params.fromJson(
-          (jsonDecode(r['argon_params'] as String) as Map).cast()),
+        (jsonDecode(r['argon_params'] as String) as Map).cast(),
+      ),
       vaultKeyCheck: r['vault_key_check'] as String?,
     );
   }
@@ -232,8 +311,9 @@ class SqliteStorage implements Storage {
         account.vaultKeyCheck,
       ],
     );
-    _db.execute('INSERT OR IGNORE INTO seqs (username, value) VALUES (?, 0)',
-        [account.username]);
+    _db.execute('INSERT OR IGNORE INTO seqs (username, value) VALUES (?, 0)', [
+      account.username,
+    ]);
   }
 
   @override
@@ -284,19 +364,23 @@ class SqliteStorage implements Storage {
   Future<String> createToken(String username) async {
     final account = await getAccount(username);
     if (account == null) throw const StalePrincipalException();
-    return _transaction(_TransactionMode.write, () => _issueToken(
-      account,
-      issuedAt: DateTime.now().millisecondsSinceEpoch,
-      expiresAt: 0x7fffffffffffffff,
-      maxSessions: 0x7fffffff,
-    ));
+    return _transaction(
+      _TransactionMode.write,
+      () => _issueToken(
+        account,
+        issuedAt: DateTime.now().millisecondsSinceEpoch,
+        expiresAt: 0x7fffffffffffffff,
+        maxSessions: 0x7fffffff,
+      ),
+    );
   }
 
   @override
   Future<String?> usernameForToken(String token) async =>
-      (await principalForToken(token,
-              now: DateTime.now().millisecondsSinceEpoch))
-          ?.username;
+      (await principalForToken(
+        token,
+        now: DateTime.now().millisecondsSinceEpoch,
+      ))?.username;
 
   @override
   Future<String?> createTokenFor(
@@ -340,8 +424,9 @@ class SqliteStorage implements Storage {
       [account.username, account.generation],
     );
     for (var i = 0; i <= sessions.length - maxSessions; i++) {
-      _db.execute('DELETE FROM tokens WHERE token_digest = ?',
-          [sessions[i]['token_digest']]);
+      _db.execute('DELETE FROM tokens WHERE token_digest = ?', [
+        sessions[i]['token_digest'],
+      ]);
     }
     while (true) {
       final token = base64Url.encode(secureRandomBytes(32));
@@ -356,8 +441,10 @@ class SqliteStorage implements Storage {
   }
 
   @override
-  Future<AuthPrincipal?> principalForToken(String token,
-      {required int now}) async {
+  Future<AuthPrincipal?> principalForToken(
+    String token, {
+    required int now,
+  }) async {
     final digest = digestBearerToken(token);
     final rows = _db.select(
       'SELECT t.username, t.account_generation, t.expires_at '
@@ -399,8 +486,9 @@ class SqliteStorage implements Storage {
   Future<bool> revokeSession(AuthPrincipal principal) async =>
       _transaction(_TransactionMode.write, () {
         if (!_isCurrent(principal)) return false;
-        _db.execute('DELETE FROM tokens WHERE token_digest = ?',
-            [principal.tokenDigest]);
+        _db.execute('DELETE FROM tokens WHERE token_digest = ?', [
+          principal.tokenDigest,
+        ]);
         return _db.updatedRows == 1;
       });
 
@@ -425,75 +513,106 @@ class SqliteStorage implements Storage {
 
   @override
   Future<String> initializeVaultKeyCheckFor(
-          AuthPrincipal principal, String vaultKeyCheck) async =>
-      _transaction(_TransactionMode.write, () {
-        _requireCurrent(principal);
-        final rows = _db.select(
-          'SELECT vault_key_check FROM accounts WHERE username = ? '
-          'AND generation = ?',
-          [principal.username, principal.accountGeneration],
-        );
-        final existing = rows.single['vault_key_check'] as String?;
-        if (existing != null) return existing;
-        final recordCount = _db.select(
-          'SELECT COUNT(*) AS n FROM records WHERE username = ?',
-          [principal.username],
-        ).single['n'] as int;
-        if (recordCount != 0) {
-          throw const VaultKeyCheckInitializationException();
-        }
-        _db.execute(
-          'UPDATE accounts SET vault_key_check = ? WHERE username = ? '
-          'AND generation = ? AND vault_key_check IS NULL',
-          [vaultKeyCheck, principal.username, principal.accountGeneration],
-        );
-        if (_db.updatedRows == 1) return vaultKeyCheck;
-        final winner = _db.select(
-          'SELECT vault_key_check FROM accounts WHERE username = ? '
-          'AND generation = ?',
-          [principal.username, principal.accountGeneration],
-        ).single['vault_key_check'] as String?;
-        if (winner == null) throw const StalePrincipalException();
-        return winner;
-      });
+    AuthPrincipal principal,
+    String vaultKeyCheck,
+  ) async => _transaction(_TransactionMode.write, () {
+    _requireCurrent(principal);
+    final rows = _db.select(
+      'SELECT vault_key_check FROM accounts WHERE username = ? '
+      'AND generation = ?',
+      [principal.username, principal.accountGeneration],
+    );
+    final existing = rows.single['vault_key_check'] as String?;
+    if (existing != null) return existing;
+    final recordCount =
+        _db.select('SELECT COUNT(*) AS n FROM records WHERE username = ?', [
+              principal.username,
+            ]).single['n']
+            as int;
+    if (recordCount != 0) {
+      throw const VaultKeyCheckInitializationException();
+    }
+    _db.execute(
+      'UPDATE accounts SET vault_key_check = ? WHERE username = ? '
+      'AND generation = ? AND vault_key_check IS NULL',
+      [vaultKeyCheck, principal.username, principal.accountGeneration],
+    );
+    if (_db.updatedRows == 1) return vaultKeyCheck;
+    final winner =
+        _db.select(
+              'SELECT vault_key_check FROM accounts WHERE username = ? '
+              'AND generation = ?',
+              [principal.username, principal.accountGeneration],
+            ).single['vault_key_check']
+            as String?;
+    if (winner == null) throw const StalePrincipalException();
+    return winner;
+  });
 
   @override
   Future<PushResponse> pushRecords(
-      String username, List<EncryptedRecord> records) async {
+    String username,
+    List<EncryptedRecord> records, {
+    AccountQuota? quota,
+  }) async {
     // A no-op push must not contend with writers.
     final mode = records.isEmpty
         ? _TransactionMode.read
         : _TransactionMode.write;
-    return _transaction(mode, () => _pushRecords(username, records));
+    return _transaction(
+      mode,
+      () => _pushRecords(username, records, quota: quota),
+    );
   }
 
-  PushResponse _pushRecords(String username, List<EncryptedRecord> records) {
+  PushResponse _pushRecords(
+    String username,
+    List<EncryptedRecord> records, {
+    AccountQuota? quota,
+  }) {
+    final before = quota == null ? null : _recordUsage(username);
     final results = <PushResult>[];
+    var changed = false;
     for (final incoming in records) {
       final existing = _getRecord(username, incoming.id);
       if (existing != null &&
           !identical(Lww.resolve(existing, incoming), incoming)) {
-        results.add(PushResult(
-            id: incoming.id, seq: existing.seq ?? 0, accepted: false));
+        results.add(
+          PushResult(id: incoming.id, seq: existing.seq ?? 0, accepted: false),
+        );
         continue;
       }
 
       final seq = _nextSeq(username);
       _putRecord(username, incoming.withSeq(seq));
       results.add(PushResult(id: incoming.id, seq: seq, accepted: true));
+      changed = true;
+    }
+    if (changed && quota != null) {
+      final after = _recordUsage(username);
+      enforceAccountQuota(
+        beforeCount: before!.$1,
+        beforeBytes: before.$2,
+        afterCount: after.$1,
+        afterBytes: after.$2,
+        quota: quota,
+      );
     }
     return PushResponse(results: results, latestSeq: _latestSeq(username));
   }
 
   @override
   Future<PushResponse> pushRecordsFor(
-      AuthPrincipal principal, List<EncryptedRecord> records) async {
+    AuthPrincipal principal,
+    List<EncryptedRecord> records, {
+    AccountQuota? quota,
+  }) async {
     final mode = records.isEmpty
         ? _TransactionMode.read
         : _TransactionMode.write;
     return _transaction(mode, () {
       _requireCurrent(principal);
-      return _pushRecords(principal.username, records);
+      return _pushRecords(principal.username, records, quota: quota);
     });
   }
 
@@ -509,16 +628,110 @@ class SqliteStorage implements Storage {
 
   @override
   Future<PullResponse> pullSnapshotFor(
-          AuthPrincipal principal, int since) async =>
-      _transaction(_TransactionMode.read, () {
-        _requireCurrent(principal);
-        final watermark = _latestSeq(principal.username);
-        return PullResponse(
-          records: _recordsSince(principal.username, since,
-              through: watermark),
-          latestSeq: watermark,
-        );
-      });
+    AuthPrincipal principal,
+    int since,
+  ) async => _transaction(_TransactionMode.read, () {
+    _requireCurrent(principal);
+    final watermark = _latestSeq(principal.username);
+    return PullResponse(
+      records: _recordsSince(principal.username, since, through: watermark),
+      latestSeq: watermark,
+    );
+  });
+
+  @override
+  Future<PullResponse> pullPage(
+    String username,
+    int since, {
+    int? throughSeq,
+    required PullPageLimits limits,
+    PushLimits? advertisedLimits,
+  }) async => _transaction(
+    _TransactionMode.read,
+    () => _pullPage(
+      username,
+      since,
+      throughSeq: throughSeq,
+      limits: limits,
+      advertisedLimits: advertisedLimits,
+    ),
+  );
+
+  @override
+  Future<PullResponse> pullPageFor(
+    AuthPrincipal principal,
+    int since, {
+    int? throughSeq,
+    required PullPageLimits limits,
+    PushLimits? advertisedLimits,
+  }) async => _transaction(_TransactionMode.read, () {
+    _requireCurrent(principal);
+    return _pullPage(
+      principal.username,
+      since,
+      throughSeq: throughSeq,
+      limits: limits,
+      advertisedLimits: advertisedLimits,
+    );
+  });
+
+  PullResponse _pullPage(
+    String username,
+    int since, {
+    int? throughSeq,
+    required PullPageLimits limits,
+    PushLimits? advertisedLimits,
+  }) {
+    final latest = _latestSeq(username);
+    final through = throughSeq ?? latest;
+    if (through < since || through > latest) {
+      throw const StorageCursorRejectedException();
+    }
+    final statement = _db.prepare(
+      'SELECT * FROM records WHERE username = ? AND seq > ? '
+      'AND seq <= ? ORDER BY seq ASC',
+    );
+    final cursor = statement.selectCursor([username, since, through]);
+    final records = <EncryptedRecord>[];
+    var recordBytes = 0;
+    var hasMore = false;
+    try {
+      while (cursor.moveNext()) {
+        final candidate = _rowToRecord(cursor.current);
+        if (records.length == limits.maxRecords) {
+          hasMore = true;
+          break;
+        }
+        final nextBytes = recordBytes + candidate.encodedJsonBytes();
+        final fits =
+            PullResponse.bodyBytesFor(
+              recordCount: records.length + 1,
+              recordBytes: nextBytes,
+              latestSeq: through,
+              throughSeq: through,
+              hasMore: false,
+              limits: advertisedLimits,
+            ) <=
+            limits.maxBodyBytes;
+        if (!fits) {
+          if (records.isEmpty) throw const StoragePageTooSmallException();
+          hasMore = true;
+          break;
+        }
+        records.add(candidate);
+        recordBytes = nextBytes;
+      }
+    } finally {
+      statement.dispose();
+    }
+    return PullResponse(
+      records: records,
+      latestSeq: through,
+      throughSeq: through,
+      hasMore: hasMore,
+      limits: advertisedLimits,
+    );
+  }
 
   T _transaction<T>(_TransactionMode mode, T Function() action) {
     // No awaits while the connection owns a transaction. Acquire the write
@@ -546,7 +759,8 @@ class SqliteStorage implements Storage {
     }
   }
 
-  static bool _isBusy(Object error) => error is SqliteException &&
+  static bool _isBusy(Object error) =>
+      error is SqliteException &&
       (error.resultCode == SqlError.SQLITE_BUSY ||
           error.resultCode == SqlError.SQLITE_LOCKED);
 
@@ -568,8 +782,10 @@ class SqliteStorage implements Storage {
     _failure = StorageUnavailableException(cause: cause);
     try {
       // Log types/codes, not SQL, parameters, messages or ciphertext.
-      stderr.writeln('Transaction failed (${_diagnosticCause(cause)}); '
-          'cleanup failed (${_diagnosticCause(cleanupCause)}). $_failure');
+      stderr.writeln(
+        'Transaction failed (${_diagnosticCause(cause)}); '
+        'cleanup failed (${_diagnosticCause(cleanupCause)}). $_failure',
+      );
     } catch (_) {
       // Diagnostics must not replace the original failure.
     }
@@ -587,7 +803,9 @@ class SqliteStorage implements Storage {
 
   EncryptedRecord? _getRecord(String username, String id) {
     final rows = _db.select(
-        'SELECT * FROM records WHERE username = ? AND id = ?', [username, id]);
+      'SELECT * FROM records WHERE username = ? AND id = ?',
+      [username, id],
+    );
     return rows.isEmpty ? null : _rowToRecord(rows.first);
   }
 
@@ -597,12 +815,13 @@ class SqliteStorage implements Storage {
 
   void _putRecord(String username, EncryptedRecord record) {
     _db.execute(
-      '''INSERT INTO records (username, id, envelope_version, updated_at, device_id, deleted, seq, blob)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      '''INSERT INTO records (username, id, envelope_version, updated_at, device_id, deleted, seq, blob, encoded_size)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(username, id) DO UPDATE SET
            envelope_version=excluded.envelope_version,
            updated_at=excluded.updated_at, device_id=excluded.device_id,
-           deleted=excluded.deleted, seq=excluded.seq, blob=excluded.blob''',
+           deleted=excluded.deleted, seq=excluded.seq, blob=excluded.blob,
+           encoded_size=excluded.encoded_size''',
       [
         username,
         record.id,
@@ -612,24 +831,39 @@ class SqliteStorage implements Storage {
         record.deleted ? 1 : 0,
         record.seq ?? 0,
         record.blob,
+        record.encodedJsonBytes(),
       ],
     );
   }
 
+  (int, int) _recordUsage(String username) {
+    final row = _db.select(
+      'SELECT COUNT(*) AS n, COALESCE(SUM(encoded_size), 0) AS bytes '
+      'FROM records WHERE username = ?',
+      [username],
+    ).single;
+    return (row['n'] as int, row['bytes'] as int);
+  }
+
   @override
   Future<List<EncryptedRecord>> recordsSince(
-          String username, int since) async =>
-      _recordsSince(username, since);
+    String username,
+    int since,
+  ) async => _recordsSince(username, since);
 
-  List<EncryptedRecord> _recordsSince(String username, int since,
-      {int? through}) {
+  List<EncryptedRecord> _recordsSince(
+    String username,
+    int since, {
+    int? through,
+  }) {
     final rows = _db.select(
-        through == null
-            ? 'SELECT * FROM records WHERE username = ? AND seq > ? '
+      through == null
+          ? 'SELECT * FROM records WHERE username = ? AND seq > ? '
                 'ORDER BY seq ASC'
-            : 'SELECT * FROM records WHERE username = ? AND seq > ? '
+          : 'SELECT * FROM records WHERE username = ? AND seq > ? '
                 'AND seq <= ? ORDER BY seq ASC',
-        [username, since, if (through != null) through]);
+      [username, since, if (through != null) through],
+    );
     return rows.map(_rowToRecord).toList();
   }
 
@@ -642,8 +876,9 @@ class SqliteStorage implements Storage {
          ON CONFLICT(username) DO UPDATE SET value = value + 1''',
       [username],
     );
-    final rows =
-        _db.select('SELECT value FROM seqs WHERE username = ?', [username]);
+    final rows = _db.select('SELECT value FROM seqs WHERE username = ?', [
+      username,
+    ]);
     return rows.first['value'] as int;
   }
 
@@ -651,20 +886,21 @@ class SqliteStorage implements Storage {
   Future<int> latestSeq(String username) async => _latestSeq(username);
 
   int _latestSeq(String username) {
-    final rows =
-        _db.select('SELECT value FROM seqs WHERE username = ?', [username]);
+    final rows = _db.select('SELECT value FROM seqs WHERE username = ?', [
+      username,
+    ]);
     return rows.isEmpty ? 0 : rows.first['value'] as int;
   }
 
   EncryptedRecord _rowToRecord(Row r) => EncryptedRecord(
-        envelopeVersion: r['envelope_version'] as int,
-        id: r['id'] as String,
-        updatedAt: r['updated_at'] as int,
-        deviceId: r['device_id'] as String,
-        deleted: (r['deleted'] as int) != 0,
-        seq: r['seq'] as int,
-        blob: _blobOf(r),
-      );
+    envelopeVersion: r['envelope_version'] as int,
+    id: r['id'] as String,
+    updatedAt: r['updated_at'] as int,
+    deviceId: r['device_id'] as String,
+    deleted: (r['deleted'] as int) != 0,
+    seq: r['seq'] as int,
+    blob: _blobOf(r),
+  );
 
   static Uint8List _blobOf(Row r) => r['blob'] is Uint8List
       ? r['blob'] as Uint8List
@@ -694,19 +930,21 @@ class SqliteStorage implements Storage {
 
   @override
   Future<bool> createInboxAppFor(
-          AuthPrincipal principal, StoredInboxApp app) async =>
-      _transaction(_TransactionMode.write, () {
-        _requireCurrent(principal);
-        if (app.username != principal.username) {
-          throw ArgumentError.value(app.username, 'app.username');
-        }
-        return _createInboxApp(app);
-      });
+    AuthPrincipal principal,
+    StoredInboxApp app,
+  ) async => _transaction(_TransactionMode.write, () {
+    _requireCurrent(principal);
+    if (app.username != principal.username) {
+      throw ArgumentError.value(app.username, 'app.username');
+    }
+    return _createInboxApp(app);
+  });
 
   @override
   Future<StoredInboxApp?> getInboxApp(String appId) async {
-    final rows =
-        _db.select('SELECT * FROM inbox_apps WHERE app_id = ?', [appId]);
+    final rows = _db.select('SELECT * FROM inbox_apps WHERE app_id = ?', [
+      appId,
+    ]);
     if (rows.isEmpty) return null;
     final r = rows.first;
     return StoredInboxApp(
@@ -744,8 +982,7 @@ class SqliteStorage implements Storage {
   }
 
   @override
-  Future<List<InboxAppInfo>> listInboxAppsFor(
-          AuthPrincipal principal) async =>
+  Future<List<InboxAppInfo>> listInboxAppsFor(AuthPrincipal principal) async =>
       _transaction(_TransactionMode.read, () {
         _requireCurrent(principal);
         return _listInboxApps(principal.username);
@@ -760,20 +997,19 @@ class SqliteStorage implements Storage {
   bool _deleteInboxApp(String username, String appId) {
     // Explicit as well as cascaded, so the items go even on a
     // connection that was opened without the foreign-key pragma.
-    _db.execute(
-      'DELETE FROM inbox_items WHERE app_id = ? AND username = ?',
-      [appId, username],
-    );
-    _db.execute(
-      'DELETE FROM inbox_apps WHERE app_id = ? AND username = ?',
-      [appId, username],
-    );
+    _db.execute('DELETE FROM inbox_items WHERE app_id = ? AND username = ?', [
+      appId,
+      username,
+    ]);
+    _db.execute('DELETE FROM inbox_apps WHERE app_id = ? AND username = ?', [
+      appId,
+      username,
+    ]);
     return _db.updatedRows == 1;
   }
 
   @override
-  Future<bool> deleteInboxAppFor(
-          AuthPrincipal principal, String appId) async =>
+  Future<bool> deleteInboxAppFor(AuthPrincipal principal, String appId) async =>
       _transaction(_TransactionMode.write, () {
         _requireCurrent(principal);
         return _deleteInboxApp(principal.username, appId);
@@ -786,37 +1022,77 @@ class SqliteStorage implements Storage {
     Uint8List blob, {
     required int storedAt,
     required int maxPending,
+    AccountQuota? quota,
   }) async =>
       // One write transaction, so two concurrent deposits cannot both pass
       // the pending cap or draw the same `received` number.
       _transaction(_TransactionMode.write, () {
         final apps = _db.select(
-            'SELECT username FROM inbox_apps WHERE app_id = ?', [appId]);
+          'SELECT username FROM inbox_apps WHERE app_id = ?',
+          [appId],
+        );
         if (apps.isEmpty) {
           return const InboxAddResult(InboxAddStatus.unknownApp);
         }
         final username = apps.first['username'] as String;
-        final pending = _db.select(
-            'SELECT COUNT(*) AS n FROM inbox_items WHERE app_id = ?',
-            [appId]).first['n'] as int;
+        final pending =
+            _db.select(
+                  'SELECT COUNT(*) AS n FROM inbox_items WHERE app_id = ?',
+                  [appId],
+                ).first['n']
+                as int;
         if (pending >= maxPending) {
           return const InboxAddResult(InboxAddStatus.full);
+        }
+        final sequenceRows = _db.select(
+          'SELECT value FROM inbox_seqs WHERE username = ?',
+          [username],
+        );
+        final received =
+            (sequenceRows.isEmpty ? 0 : sequenceRows.single['value'] as int) +
+            1;
+        final item = InboxItem(
+          appId: appId,
+          itemId: itemId,
+          received: received,
+          blob: blob,
+        );
+        if (quota != null) {
+          final usage = _inboxUsage(username);
+          if (usage.$1 + 1 > quota.maxRecords ||
+              usage.$2 + item.encodedJsonBytes() > quota.maxBytes) {
+            return const InboxAddResult(InboxAddStatus.accountFull);
+          }
         }
         _db.execute(
           'INSERT INTO inbox_seqs (username, value) VALUES (?, 1) '
           'ON CONFLICT(username) DO UPDATE SET value = value + 1',
           [username],
         );
-        final received = _db.select(
-            'SELECT value FROM inbox_seqs WHERE username = ?',
-            [username]).first['value'] as int;
         _db.execute(
           'INSERT INTO inbox_items (app_id, item_id, username, received, '
-          'blob, stored_at) VALUES (?, ?, ?, ?, ?, ?)',
-          [appId, itemId, username, received, blob, storedAt],
+          'blob, stored_at, encoded_size) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [
+            appId,
+            itemId,
+            username,
+            received,
+            blob,
+            storedAt,
+            item.encodedJsonBytes(),
+          ],
         );
         return InboxAddResult(InboxAddStatus.added, received);
       });
+
+  (int, int) _inboxUsage(String username) {
+    final row = _db.select(
+      'SELECT COUNT(*) AS n, COALESCE(SUM(encoded_size), 0) AS bytes '
+      'FROM inbox_items WHERE username = ?',
+      [username],
+    ).single;
+    return (row['n'] as int, row['bytes'] as int);
+  }
 
   @override
   Future<List<InboxItem>> inboxItemsSince(String username, int since) async {
@@ -842,15 +1118,116 @@ class SqliteStorage implements Storage {
 
   @override
   Future<List<InboxItem>> inboxItemsSinceFor(
-          AuthPrincipal principal, int since) async =>
-      _transaction(_TransactionMode.read, () {
-        _requireCurrent(principal);
-        return _inboxItemsSince(principal.username, since);
-      });
+    AuthPrincipal principal,
+    int since,
+  ) async => _transaction(_TransactionMode.read, () {
+    _requireCurrent(principal);
+    return _inboxItemsSince(principal.username, since);
+  });
+
+  @override
+  Future<InboxPage> inboxPage(
+    String username,
+    int since, {
+    int? throughReceived,
+    required PullPageLimits limits,
+  }) async => _transaction(
+    _TransactionMode.read,
+    () => _inboxPage(
+      username,
+      since,
+      throughReceived: throughReceived,
+      limits: limits,
+    ),
+  );
+
+  @override
+  Future<InboxPage> inboxPageFor(
+    AuthPrincipal principal,
+    int since, {
+    int? throughReceived,
+    required PullPageLimits limits,
+  }) async => _transaction(_TransactionMode.read, () {
+    _requireCurrent(principal);
+    return _inboxPage(
+      principal.username,
+      since,
+      throughReceived: throughReceived,
+      limits: limits,
+    );
+  });
+
+  InboxPage _inboxPage(
+    String username,
+    int since, {
+    int? throughReceived,
+    required PullPageLimits limits,
+  }) {
+    final rows = _db.select('SELECT value FROM inbox_seqs WHERE username = ?', [
+      username,
+    ]);
+    final latest = rows.isEmpty ? 0 : rows.single['value'] as int;
+    final through = throughReceived ?? latest;
+    if (through < since || through > latest) {
+      throw const StorageCursorRejectedException();
+    }
+    final statement = _db.prepare(
+      'SELECT app_id, item_id, received, blob FROM inbox_items '
+      'WHERE username = ? AND received > ? AND received <= ? '
+      'ORDER BY received ASC',
+    );
+    final cursor = statement.selectCursor([username, since, through]);
+    final items = <InboxItem>[];
+    var itemBytes = 0;
+    var hasMore = false;
+    try {
+      while (cursor.moveNext()) {
+        final row = cursor.current;
+        final candidate = InboxItem(
+          appId: row['app_id'] as String,
+          itemId: row['item_id'] as String,
+          received: row['received'] as int,
+          blob: _blobOf(row),
+        );
+        if (items.length == limits.maxRecords) {
+          hasMore = true;
+          break;
+        }
+        final nextBytes = itemBytes + candidate.encodedJsonBytes();
+        final fits =
+            InboxPage.bodyBytesFor(
+              itemCount: items.length + 1,
+              itemBytes: nextBytes,
+              throughReceived: through,
+              nextReceived: candidate.received,
+              hasMore: false,
+            ) <=
+            limits.maxBodyBytes;
+        if (!fits) {
+          if (items.isEmpty) throw const StoragePageTooSmallException();
+          hasMore = true;
+          break;
+        }
+        items.add(candidate);
+        itemBytes = nextBytes;
+      }
+    } finally {
+      statement.dispose();
+    }
+    return InboxPage(
+      items: items,
+      throughReceived: through,
+      nextReceived: items.isEmpty ? since : items.last.received,
+      hasMore: hasMore,
+    );
+  }
 
   @override
   Future<bool> deleteInboxItem(
-      String username, String appId, String itemId) async {
+    String username,
+    String appId,
+    String itemId,
+  ) async {
     return _deleteInboxItem(username, appId, itemId);
   }
 
@@ -865,16 +1242,17 @@ class SqliteStorage implements Storage {
 
   @override
   Future<bool> deleteInboxItemFor(
-          AuthPrincipal principal, String appId, String itemId) async =>
-      _transaction(_TransactionMode.write, () {
-        _requireCurrent(principal);
-        return _deleteInboxItem(principal.username, appId, itemId);
-      });
+    AuthPrincipal principal,
+    String appId,
+    String itemId,
+  ) async => _transaction(_TransactionMode.write, () {
+    _requireCurrent(principal);
+    return _deleteInboxItem(principal.username, appId, itemId);
+  });
 
   @override
   Future<int> purgeInboxItems({required int storedBefore}) async {
-    _db.execute(
-        'DELETE FROM inbox_items WHERE stored_at < ?', [storedBefore]);
+    _db.execute('DELETE FROM inbox_items WHERE stored_at < ?', [storedBefore]);
     return _db.updatedRows;
   }
 

@@ -12,13 +12,14 @@ EncryptedRecord _record(
   String id,
   int revision, {
   String deviceId = 'device',
+  int blobBytes = 1,
 }) => EncryptedRecord(
   id: id,
   updatedAt: revision,
   deviceId: deviceId,
   deleted: false,
   seq: null,
-  blob: Uint8List.fromList([revision]),
+  blob: Uint8List(blobBytes)..[0] = revision,
 );
 
 Account _account(String username) => Account(
@@ -273,6 +274,89 @@ void main() {
           expect(retry.results.single.seq, before.latestSeq + 1);
         },
       );
+
+      test('stable pages exclude writes after their watermark', () async {
+        await storage.pushRecords('alice', [_record('a', 1), _record('b', 2)]);
+        const limits = PullPageLimits(maxRecords: 1, maxBodyBytes: 4096);
+        final first = await storage.pullPage('alice', 0, limits: limits);
+        expect(first.records.map((record) => record.id), ['a']);
+        expect(first.throughSeq, 2);
+        expect(first.hasMore, isTrue);
+
+        await storage.pushRecords('alice', [_record('c', 3)]);
+        final second = await storage.pullPage(
+          'alice',
+          first.records.single.seq!,
+          throughSeq: first.throughSeq,
+          limits: limits,
+        );
+        expect(second.records.map((record) => record.id), ['b']);
+        expect(second.throughSeq, 2);
+        expect(second.hasMore, isFalse);
+
+        final nextWindow = await storage.pullPage(
+          'alice',
+          second.records.single.seq!,
+          limits: limits,
+        );
+        expect(nextWindow.records.map((record) => record.id), ['c']);
+        expect(nextWindow.throughSeq, 3);
+      });
+
+      test('a page body cap is exact', () async {
+        await storage.pushRecords('alice', [_record('a', 1, blobBytes: 32)]);
+        final record = (await storage.pullSnapshot('alice', 0)).records.single;
+        final exact = PullResponse(
+          records: [record],
+          latestSeq: 1,
+          throughSeq: 1,
+          hasMore: false,
+        ).encodedSizeBytes();
+        final page = await storage.pullPage(
+          'alice',
+          0,
+          limits: PullPageLimits(maxRecords: 1, maxBodyBytes: exact),
+        );
+        expect(page.encodedSizeBytes(), exact);
+        await expectLater(
+          storage.pullPage(
+            'alice',
+            0,
+            limits: PullPageLimits(maxRecords: 1, maxBodyBytes: exact - 1),
+          ),
+          throwsA(isA<StoragePageTooSmallException>()),
+        );
+      });
+
+      test('account quota refusal rolls back records and sequence', () async {
+        await storage.pushRecords('alice', [_record('a', 1)]);
+        await expectLater(
+          storage.pushRecords('alice', [
+            _record('b', 2),
+          ], quota: const AccountQuota(maxRecords: 1, maxBytes: 4096)),
+          throwsA(isA<AccountQuotaExceededException>()),
+        );
+        final after = await storage.pullSnapshot('alice', 0);
+        expect(after.records.map((record) => record.id), ['a']);
+        expect(after.latestSeq, 1);
+        final retry = await storage.pushRecords('alice', [
+          _record('b', 2),
+        ], quota: const AccountQuota(maxRecords: 2, maxBytes: 4096));
+        expect(retry.results.single.seq, 2);
+      });
+
+      test('a legacy over-byte account may shrink in place', () async {
+        await storage.pushRecords('alice', [_record('a', 1, blobBytes: 256)]);
+        final smaller = _record('a', 2, blobBytes: 8);
+        final projected = smaller.withSeq(2).encodedJsonBytes();
+        await storage.pushRecords('alice', [
+          smaller,
+        ], quota: AccountQuota(maxRecords: 1, maxBytes: projected - 1));
+        expect(
+          (await storage.pullSnapshot('alice', 0)).records.single.blob,
+          hasLength(8),
+        );
+      });
     });
   }
 

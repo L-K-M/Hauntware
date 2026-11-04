@@ -10,6 +10,72 @@ abstract class SyncApi {
   Future<PushResponse> push(List<EncryptedRecord> records);
 }
 
+/// A [SyncApi] throws this when the server rejects or has expired a pull
+/// cursor. Durable coordinators use it as the one-time full-resync signal.
+final class SyncCursorRejectedException implements Exception {
+  const SyncCursorRejectedException([this.message = 'sync cursor rejected']);
+
+  final String message;
+
+  @override
+  String toString() => 'SyncCursorRejectedException: $message';
+}
+
+/// Optional bounded-pull capability, separate so existing [SyncApi] fakes do
+/// not gain another required member.
+abstract interface class PagedSyncApi {
+  Future<PullResponse> pullPage({required int since, int? throughSeq});
+}
+
+/// Pull one stable snapshot as pages when [api] supports it, or one legacy
+/// full response otherwise. A page is validated before it is yielded so a
+/// malformed response cannot advance a caller's durable cursor.
+Stream<PullResponse> pullPages(SyncApi api, {required int since}) async* {
+  if (api is! PagedSyncApi) {
+    yield await api.pull(since: since);
+    return;
+  }
+  final paged = api as PagedSyncApi;
+
+  var cursor = since;
+  int? through;
+  while (true) {
+    final page = await paged.pullPage(since: cursor, throughSeq: through);
+    final pageThrough = page.throughSeq;
+    if (pageThrough == null) {
+      if (through != null || page.hasMore) {
+        throw const FormatException(
+            'A paged sync response omitted its snapshot watermark');
+      }
+      yield page;
+      return;
+    }
+    if (page.latestSeq != pageThrough ||
+        pageThrough < cursor ||
+        (through != null && pageThrough != through)) {
+      throw const FormatException('Sync snapshot watermark changed');
+    }
+
+    var next = cursor;
+    for (final record in page.records) {
+      final seq = record.seq;
+      if (seq == null || seq <= next || seq > pageThrough) {
+        throw const FormatException(
+            'Sync page records are not strictly ordered');
+      }
+      next = seq;
+    }
+    if (page.hasMore && (next == cursor || next >= pageThrough)) {
+      throw const FormatException('Sync page made no progress');
+    }
+
+    yield page;
+    if (!page.hasMore) return;
+    cursor = next;
+    through = pageThrough;
+  }
+}
+
 /// Whether a pulled opaque record is safe to enter the local LWW mirror.
 ///
 /// The record's server-owned sequence has already been observed when this is
@@ -167,35 +233,36 @@ class SyncEngine {
   /// what such a server enforces by definition.
   Future<({int applied, PushLimits limits})> _pullOnce(SyncApi api) async {
     final since = await store.highWaterSeq();
-    final resp = await api.pull(since: since);
-    final limits = resp.limits ?? const PushLimits();
     var applied = 0;
     var snapshotHighWater = since;
-    // Pulled records should carry server-assigned seqs; trust only observed seqs.
-    for (final remote in resp.records) {
-      final remoteSeq = remote.seq;
-      if (remoteSeq != null && remoteSeq > snapshotHighWater) {
-        snapshotHighWater = remoteSeq;
+    var limits = const PushLimits();
+    await for (final page in pullPages(api, since: since)) {
+      limits = page.limits ?? limits;
+      for (final remote in page.records) {
+        final remoteSeq = remote.seq;
+        if (remoteSeq != null && remoteSeq > snapshotHighWater) {
+          snapshotHighWater = remoteSeq;
+        }
+        final validator = remoteValidator;
+        if (validator != null && !await validator(remote)) continue;
+        final local = await store.getRecord(remote.id);
+        if (local == null) {
+          await store.putRemote(remote);
+          applied++;
+          continue;
+        }
+        // Lww.resolve returns one of the two objects passed in, so identity
+        // tells us which side won.
+        final remoteWon = identical(Lww.resolve(local, remote), remote);
+        if (remoteWon) {
+          await store.putRemote(remote);
+          applied++;
+        }
       }
-      final validator = remoteValidator;
-      if (validator != null && !await validator(remote)) continue;
-      final local = await store.getRecord(remote.id);
-      if (local == null) {
-        await store.putRemote(remote);
-        applied++;
-        continue;
-      }
-      // Lww.resolve returns one of the two objects passed in, so identity tells
-      // us which side won.
-      final remoteWon = identical(Lww.resolve(local, remote), remote);
-      if (remoteWon) {
-        // Adopt the remote version and drop any losing local change.
-        await store.putRemote(remote);
-        applied++;
-      }
-      // Else the local copy is newer and stays dirty for the push phase.
+      // Advance only through a sequence actually observed on this complete
+      // page. A later timeout resumes here, never at the advertised watermark.
+      await store.setHighWaterSeq(snapshotHighWater);
     }
-    await store.setHighWaterSeq(snapshotHighWater);
     return (applied: applied, limits: limits);
   }
 

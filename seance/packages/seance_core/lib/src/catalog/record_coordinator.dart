@@ -788,34 +788,50 @@ final class RecordCoordinator {
   /// a rejected `since` cursor resets both cursors and re-pulls from zero,
   /// so `applyPulled` re-scans the lifetime set.
   Future<({int pulled, PushLimits? limits})> _pullOnce(SyncApi api) async {
-    PullResponse response;
+    Future<({int pulled, PushLimits? limits})> pullFrom(int since) async {
+      var snapshot = since;
+      var pulled = 0;
+      PushLimits? limits;
+      final dirtyIds =
+          (await _records.dirtyRecords()).map((r) => r.id).toSet();
+      final holdActive = await _pushesHeld();
+      await for (final page in pullPages(api, since: since)) {
+        pulled += page.records.length;
+        limits = page.limits ?? limits;
+        for (final remote in page.records) {
+          final seq = remote.seq;
+          if (seq != null && seq > snapshot) snapshot = seq;
+
+          // Conflict metadata is public for server-side LWW, but it is not
+          // trustworthy until the sealed copy agrees. Authenticate before a
+          // forged future tuple can settle a pending local write. Once the
+          // passphrase is verified, authenticate every record this coordinator
+          // would open for application before it enters the mirror too.
+          if (!await _validBeforeMerge(
+            remote,
+            dirtyIds,
+            holdActive: holdActive,
+          )) {
+            continue;
+          }
+          // The store merges under the same Lww the server ran — a loser is
+          // dropped or parked behind the dirty rival it lost to.
+          await _records.putRemote(remote);
+        }
+        // Commit only an observed sequence after every complete page. A later
+        // request failure resumes here; the advertised snapshot end never
+        // skips a row that was not delivered.
+        await _records.setHighWaterSeq(snapshot);
+      }
+      return (pulled: pulled, limits: limits);
+    }
+
     try {
-      response = await api.pull(since: await _records.highWaterSeq());
+      return await pullFrom(await _records.highWaterSeq());
     } on SyncCursorRejectedException {
       await _records.resetSyncCursors();
-      response = await api.pull(since: 0);
+      return pullFrom(0);
     }
-    var snapshot = await _records.highWaterSeq();
-    final dirtyIds = (await _records.dirtyRecords()).map((r) => r.id).toSet();
-    final holdActive = await _pushesHeld();
-    for (final remote in response.records) {
-      final seq = remote.seq;
-      if (seq != null && seq > snapshot) snapshot = seq;
-
-      // Conflict metadata is public for server-side LWW, but it is not
-      // trustworthy until the sealed copy agrees. Authenticate before a
-      // forged future tuple can settle a pending local write. Once the
-      // passphrase is verified, authenticate every record this coordinator
-      // would open for application before it enters the mirror too.
-      if (!await _validBeforeMerge(remote, dirtyIds, holdActive: holdActive)) {
-        continue;
-      }
-      // The store merges under the same Lww the server ran — a loser is
-      // dropped or parked behind the dirty rival it lost to.
-      await _records.putRemote(remote);
-    }
-    await _records.setHighWaterSeq(snapshot);
-    return (pulled: response.records.length, limits: response.limits);
   }
 
   Future<bool> _validBeforeMerge(

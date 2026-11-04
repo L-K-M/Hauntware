@@ -38,10 +38,14 @@ class _Harness {
   late final Handler handler;
   DateTime now = DateTime.utc(2026, 9, 29, 12);
 
-  _Harness(Storage storage, {RateLimiter? inboxLimiter}) {
+  _Harness(
+    Storage storage, {
+    RateLimiter? inboxLimiter,
+    ServerSettings settings = const ServerSettings(openRegistration: true),
+  }) {
     handler = SyncServer(
       storage: storage,
-      settings: const ServerSettings(openRegistration: true),
+      settings: settings,
       inboxLimiter: inboxLimiter,
       now: () => now,
     ).handler;
@@ -410,6 +414,78 @@ void _inboxTests(Storage Function() newStorage) {
   });
 
   group('the user side', () {
+    test('an item that cannot fit a pull page is never stored', () async {
+      final paged = _Harness(
+        newStorage(),
+        settings: const ServerSettings(
+          openRegistration: true,
+          maxPullBodyBytes: 512,
+        ),
+      );
+      final session = await paged.register('bounded-item');
+      final app = await paged.app(session);
+
+      final refused = await paged.deposit(app.id, app.token, Uint8List(600));
+      expect(refused.status, 413);
+      expect(refused.code, 'item_too_large_for_pull');
+
+      final page = await paged.send(
+        'GET',
+        '/v1/inbox?since=0&page=1',
+        bearer: session,
+      );
+      expect(page.status, 200);
+      expect(page.json['items'], isEmpty);
+      expect(page.json['throughReceived'], 0);
+    });
+
+    test(
+      'paged listing is stable and legacy listing keeps its shape',
+      () async {
+        final paged = _Harness(
+          newStorage(),
+          inboxLimiter: RateLimiter(maxAttempts: 1000),
+          settings: const ServerSettings(
+            openRegistration: true,
+            maxRecordsPerPull: 1,
+          ),
+        );
+        final session = await paged.register('paged');
+        final app = await paged.app(session);
+        await paged.deposit(app.id, app.token, _blob());
+        await paged.deposit(app.id, app.token, _blob());
+
+        final legacy = await paged.send(
+          'GET',
+          '/v1/inbox?since=0',
+          bearer: session,
+        );
+        expect(legacy.json['items'], hasLength(2));
+        expect(legacy.json, isNot(contains('throughReceived')));
+        expect(legacy.json, isNot(contains('hasMore')));
+
+        final first = await paged.send(
+          'GET',
+          '/v1/inbox?since=0&page=1',
+          bearer: session,
+        );
+        expect(first.json['items'], hasLength(1));
+        expect(first.json['throughReceived'], 2);
+        expect(first.json['nextReceived'], 1);
+        expect(first.json['hasMore'], isTrue);
+
+        await paged.deposit(app.id, app.token, _blob());
+        final second = await paged.send(
+          'GET',
+          '/v1/inbox?since=1&page=1&through=2',
+          bearer: session,
+        );
+        expect(second.json['items'], hasLength(1));
+        expect(second.json['nextReceived'], 2);
+        expect(second.json['hasMore'], isFalse);
+      },
+    );
+
     test('since returns only newer items, in received order', () async {
       final a = await h.app(alice);
       final b = await h.app(alice);

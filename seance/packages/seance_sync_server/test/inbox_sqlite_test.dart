@@ -60,12 +60,18 @@ void main() {
 
     final s = SqliteStorage.open(path);
     addTearDown(s.close);
-    expect(await s.usernameForToken('t'), isNull,
-        reason: 'legacy plaintext bearer tokens are invalidated');
+    expect(
+      await s.usernameForToken('t'),
+      isNull,
+      reason: 'legacy plaintext bearer tokens are invalidated',
+    );
     expect((await s.recordsSince('alice', 0)).single.id, 'r');
     expect((await s.getAccount('alice'))!.generation, isNotEmpty);
-    expect((await s.getAccount('alice'))!.vaultKeyCheck, isNull,
-        reason: 'legacy accounts migrate without inventing a key check');
+    expect(
+      (await s.getAccount('alice'))!.vaultKeyCheck,
+      isNull,
+      reason: 'legacy accounts migrate without inventing a key check',
+    );
 
     final appId = newInboxAppId();
     expect(await s.createInboxApp(app(appId)), isTrue);
@@ -92,6 +98,161 @@ void main() {
     expect((await add(s2, appId, 'i2')).received, 2);
     expect((await s2.listInboxApps('alice')).single.pending, 2);
   });
+
+  test('reopen backfills exact sizes for pre-size rows', () async {
+    final s1 = SqliteStorage.open(path);
+    final pushed = await s1.pushRecords('alice', [
+      EncryptedRecord(
+        id: 'r1',
+        updatedAt: 1,
+        deviceId: 'device',
+        deleted: false,
+        seq: null,
+        blob: Uint8List.fromList([1, 2, 3]),
+      ),
+    ]);
+    expect(pushed.latestSeq, 1);
+    final storedRecord = (await s1.getRecord('alice', 'r1'))!;
+    final appId = newInboxAppId();
+    await s1.createInboxApp(app(appId));
+    await add(s1, appId, 'i1');
+    final storedItem = (await s1.inboxItemsSince('alice', 0)).single;
+    s1.close();
+
+    final old = sqlite3.open(path);
+    old.execute('ALTER TABLE records DROP COLUMN encoded_size');
+    old.execute('ALTER TABLE inbox_items DROP COLUMN encoded_size');
+    old.dispose();
+
+    final s2 = SqliteStorage.open(path);
+    addTearDown(s2.close);
+    final inspection = sqlite3.open(path);
+    addTearDown(inspection.dispose);
+    expect(
+      inspection
+          .select('SELECT encoded_size FROM records')
+          .single['encoded_size'],
+      storedRecord.encodedJsonBytes(),
+    );
+    expect(
+      inspection
+          .select('SELECT encoded_size FROM inbox_items')
+          .single['encoded_size'],
+      storedItem.encodedJsonBytes(),
+    );
+
+    await expectLater(
+      s2.pushRecords(
+        'alice',
+        [
+          EncryptedRecord(
+            id: 'r2',
+            updatedAt: 2,
+            deviceId: 'device',
+            deleted: false,
+            seq: null,
+            blob: Uint8List.fromList([4]),
+          ),
+        ],
+        quota: AccountQuota(
+          maxRecords: 10,
+          maxBytes: storedRecord.encodedJsonBytes(),
+        ),
+      ),
+      throwsA(isA<AccountQuotaExceededException>()),
+    );
+    final refused = await s2.addInboxItem(
+      appId,
+      'i2',
+      Uint8List.fromList([4]),
+      storedAt: 11,
+      maxPending: 100,
+      quota: AccountQuota(
+        maxRecords: 10,
+        maxBytes: storedItem.encodedJsonBytes(),
+      ),
+    );
+    expect(refused.status, InboxAddStatus.accountFull);
+  });
+
+  test(
+    'size backfill is atomic and restartable after a bad legacy row',
+    () async {
+      final s1 = SqliteStorage.open(path);
+      await s1.pushRecords('alice', [
+        EncryptedRecord(
+          id: 'good',
+          updatedAt: 1,
+          deviceId: 'device',
+          deleted: false,
+          seq: null,
+          blob: Uint8List.fromList([1]),
+        ),
+        EncryptedRecord(
+          id: 'repair-me',
+          updatedAt: 2,
+          deviceId: 'device',
+          deleted: false,
+          seq: null,
+          blob: Uint8List.fromList([2]),
+        ),
+      ]);
+      final appId = newInboxAppId();
+      await s1.createInboxApp(app(appId));
+      await add(s1, appId, 'i1');
+      await add(s1, appId, 'i2');
+      s1.close();
+
+      final legacy = sqlite3.open(path);
+      legacy.execute('ALTER TABLE records DROP COLUMN encoded_size');
+      legacy.execute('ALTER TABLE inbox_items DROP COLUMN encoded_size');
+      legacy.execute(
+        "UPDATE records SET blob = 'not-a-blob' WHERE id = 'repair-me'",
+      );
+      legacy.dispose();
+
+      final broken = sqlite3.open(path);
+      expect(() => SqliteStorage(broken), throwsA(anything));
+      broken.dispose();
+
+      final afterFailure = sqlite3.open(path);
+      expect(
+        afterFailure
+            .select('PRAGMA table_info(records)')
+            .map((row) => row['name']),
+        isNot(contains('encoded_size')),
+      );
+      expect(
+        afterFailure
+            .select('PRAGMA table_info(inbox_items)')
+            .map((row) => row['name']),
+        isNot(contains('encoded_size')),
+      );
+      afterFailure.execute(
+        "UPDATE records SET blob = x'02' WHERE id = 'repair-me'",
+      );
+      afterFailure.dispose();
+
+      final repaired = SqliteStorage.open(path);
+      addTearDown(repaired.close);
+      final inspection = sqlite3.open(path);
+      addTearDown(inspection.dispose);
+      expect(
+        inspection
+            .select('SELECT encoded_size FROM records ORDER BY id')
+            .map((row) => row['encoded_size']),
+        everyElement(isA<int>()),
+      );
+      expect(
+        inspection
+            .select('SELECT encoded_size FROM inbox_items ORDER BY item_id')
+            .map((row) => row['encoded_size']),
+        everyElement(isA<int>()),
+      );
+      expect(await repaired.recordsSince('alice', 0), hasLength(2));
+      expect(await repaired.inboxItemsSince('alice', 0), hasLength(2));
+    },
+  );
 
   test('the schema cascades an app removal to its items', () async {
     final db = sqlite3.open(path);
@@ -124,5 +285,58 @@ void main() {
       InboxAddStatus.unknownApp,
     );
     expect(await s.inboxItemsSince('alice', 0), isEmpty);
+  });
+
+  test('stable pages exclude later deposits', () async {
+    final s = SqliteStorage.open(path);
+    addTearDown(s.close);
+    final appId = newInboxAppId();
+    await s.createInboxApp(app(appId));
+    await add(s, appId, 'i1');
+    await add(s, appId, 'i2');
+    const limits = PullPageLimits(maxRecords: 1, maxBodyBytes: 4096);
+    final first = await s.inboxPage('alice', 0, limits: limits);
+    expect(first.items.map((item) => item.itemId), ['i1']);
+    expect(first.throughReceived, 2);
+    expect(first.hasMore, isTrue);
+
+    await add(s, appId, 'i3');
+    final second = await s.inboxPage(
+      'alice',
+      first.nextReceived!,
+      throughReceived: first.throughReceived!,
+      limits: limits,
+    );
+    expect(second.items.map((item) => item.itemId), ['i2']);
+    expect(second.hasMore, isFalse);
+    final next = await s.inboxPage(
+      'alice',
+      second.nextReceived!,
+      limits: limits,
+    );
+    expect(next.items.map((item) => item.itemId), ['i3']);
+  });
+
+  test('inbox quota refusal does not consume a sequence', () async {
+    final s = SqliteStorage.open(path);
+    addTearDown(s.close);
+    final appId = newInboxAppId();
+    await s.createInboxApp(app(appId));
+    await add(s, appId, 'i1');
+    final refused = await s.addInboxItem(
+      appId,
+      'i2',
+      Uint8List.fromList([1, 2, 3]),
+      storedAt: 10,
+      maxPending: 100,
+      quota: const AccountQuota(maxRecords: 1, maxBytes: 4096),
+    );
+    expect(refused.status, InboxAddStatus.accountFull);
+    final accepted = await add(s, appId, 'i3');
+    expect(accepted.received, 2);
+    expect((await s.inboxItemsSince('alice', 0)).map((item) => item.itemId), [
+      'i1',
+      'i3',
+    ]);
   });
 }

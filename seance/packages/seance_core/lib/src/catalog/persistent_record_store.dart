@@ -53,20 +53,6 @@ abstract interface class SyncRecordStore implements LocalRecordStore {
   Future<List<EncryptedRecord>> displacedRecords();
 }
 
-/// A [SyncApi] implementation throws this from `pull` when the server
-/// rejects or has expired the `since` cursor (events pruned past
-/// `highWaterSeq`, a stream reset). The coordinator's round treats it as
-/// the one-time full-resync trigger (04 §3.1): reset both cursors and
-/// re-pull from zero.
-final class SyncCursorRejectedException implements Exception {
-  const SyncCursorRejectedException([this.message = 'sync cursor rejected']);
-
-  final String message;
-
-  @override
-  String toString() => 'SyncCursorRejectedException: $message';
-}
-
 /// The quarantine name for a corrupt record store at [path]: a UTC stamp
 /// plus an existence-checked counter so a same-timestamp second corruption
 /// cannot overwrite the first rescue copy — which may hold the only copy

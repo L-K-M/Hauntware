@@ -204,69 +204,93 @@ class InboxService {
   /// the app record may simply not have synced here yet.
   Future<List<PendingProposal>> refresh() async {
     final current = await cache.load();
-    // Sorted here rather than trusted: the cursor logic below is only sound
-    // in `received` order, and an item skipped past is never fetched again.
-    final items = [...await api.listItems(since: current.cursor)]
-      ..sort((a, b) => a.received.compareTo(b.received));
     final proposals = [...current.proposals];
     final failures = {...current.failures};
     var cursor = current.cursor;
     var blocked = false;
 
-    for (final item in items) {
-      final app = await apps.getApp(item.appId);
-      if (app == null) {
-        blocked = true;
-        continue;
-      }
-      if (!blocked && item.received > cursor) cursor = item.received;
-      if (proposals.any((p) => p.itemId == item.itemId)) continue;
+    Future<void> consume(List<InboxItem> received) async {
+      // The legacy endpoint did not promise ordering. Paged transports do,
+      // but sorting again is cheap and makes the cursor invariant local to
+      // this boundary instead of trusting every optional implementation.
+      final items = [...received]
+        ..sort((a, b) => a.received.compareTo(b.received));
+      for (final item in items) {
+        final app = await apps.getApp(item.appId);
+        if (app == null) {
+          blocked = true;
+          continue;
+        }
+        if (!blocked && item.received > cursor) cursor = item.received;
+        if (proposals.any((p) => p.itemId == item.itemId)) continue;
 
-      if (app.removed) {
-        await _deleteQuietly(item.appId, item.itemId);
-        continue;
-      }
-      final CachedProposal cached;
-      try {
-        final clear = await InboxCrypto.open(app.key!, app.id, item.blob);
-        cached = CachedProposal(
-          appId: app.id,
-          itemId: item.itemId,
-          received: item.received,
-          proposal: InboxProposal.parse(clear, now: now()),
+        if (app.removed) {
+          await _deleteQuietly(item.appId, item.itemId);
+          continue;
+        }
+        final CachedProposal cached;
+        try {
+          final clear = await InboxCrypto.open(app.key!, app.id, item.blob);
+          cached = CachedProposal(
+            appId: app.id,
+            itemId: item.itemId,
+            received: item.received,
+            proposal: InboxProposal.parse(clear, now: now()),
+          );
+        } catch (error) {
+          // The type only: the message of a validation error can quote the
+          // producer's input, which is not for the log.
+          developer.log(
+            'Inbox item ${item.itemId} from app ${app.id} refused: '
+            '${error.runtimeType}',
+            name: _inboxLoggerName,
+            level: _warningLogLevel,
+          );
+          failures[app.id] = (failures[app.id] ?? 0) + 1;
+          await _deleteQuietly(item.appId, item.itemId);
+          continue;
+        }
+        // A proposal id is unique per app. A repeat is a replay (or a
+        // producer bug) and must not re-announce something already handled.
+        final handled =
+            await statuses.getStatus(app.id, cached.proposal.id) != null;
+        final duplicate = proposals.any(
+          (p) => p.appId == app.id && p.proposal.id == cached.proposal.id,
         );
-      } catch (error) {
-        // The type only: the message of a validation error can quote the
-        // producer's input, which is not for the log.
-        developer.log(
-          'Inbox item ${item.itemId} from app ${app.id} refused: '
-          '${error.runtimeType}',
-          name: _inboxLoggerName,
-          level: _warningLogLevel,
-        );
-        failures[app.id] = (failures[app.id] ?? 0) + 1;
-        await _deleteQuietly(item.appId, item.itemId);
-        continue;
+        if (handled || duplicate) {
+          await _deleteQuietly(item.appId, item.itemId);
+          continue;
+        }
+        proposals.add(cached);
       }
-      // A proposal id is unique per app. A repeat is a replay (or a
-      // producer bug) and must not re-announce something already handled.
-      final handled =
-          await statuses.getStatus(app.id, cached.proposal.id) != null;
-      final duplicate = proposals.any(
-        (p) => p.appId == app.id && p.proposal.id == cached.proposal.id,
-      );
-      if (handled || duplicate) {
-        await _deleteQuietly(item.appId, item.itemId);
-        continue;
-      }
-      proposals.add(cached);
     }
 
-    await cache.save(InboxCache(
-      cursor: cursor,
-      proposals: await _live(proposals),
-      failures: failures,
-    ));
+    Future<void> checkpoint() async {
+      final live = await _live(proposals);
+      proposals
+        ..clear()
+        ..addAll(live);
+      await cache.save(
+        InboxCache(cursor: cursor, proposals: live, failures: failures),
+      );
+    }
+
+    if (api is PagedInboxApi) {
+      final paged = api as PagedInboxApi;
+      await for (final page in paged.listItemPages(since: current.cursor)) {
+        await consume(page.items);
+        // Commit progress after each bounded page. A later request failure can
+        // then resume from this page instead of re-opening the whole window.
+        await checkpoint();
+        // An unknown app's synced key may arrive in the next record round.
+        // Do not spend the rest of this snapshot only to re-fetch it later:
+        // the durable cursor deliberately remains before the unknown item.
+        if (blocked) break;
+      }
+    } else {
+      await consume(await api.listItems(since: current.cursor));
+      await checkpoint();
+    }
     return pending();
   }
 
