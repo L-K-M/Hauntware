@@ -257,6 +257,7 @@ void main() {
       final state = await launch(AppLockMode.on);
       final services = state.services;
       services.settings.syncBaseUrl = 'https://sync.example';
+      services.settings.syncUsername = 'user';
       services.settings.llmApiKeyRef = 'anthropic';
       services.settings.braveApiKeyRef = 'brave';
       keystore.values['seance.apikey.anthropic'] = 'api-key';
@@ -447,6 +448,7 @@ void main() {
   test('manual inbox refresh reports cancellation and allows retry', () async {
     final state = await launch(AppLockMode.on);
     state.services.settings.syncBaseUrl = 'https://sync.example';
+    state.services.settings.syncUsername = 'user';
     device.reject();
     await state.refreshInbox();
     expect(state.inboxError, 'Auth cancelled');

@@ -42,6 +42,7 @@ export 'src/catalog/host_key_mutations.dart'
 export 'src/catalog/persistent_record_store.dart'
     show
         PersistentLocalRecordStore,
+        SyncAccountScope,
         SyncRecordStore,
         recordStoreQuarantinePath;
 export 'src/catalog/pin_verdicts.dart'

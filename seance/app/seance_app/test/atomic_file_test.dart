@@ -3,7 +3,32 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/services/atomic_file.dart';
 import 'package:seance_app/services/file_stores.dart';
+import 'package:seance_core/catalog.dart' show PersistentLocalRecordStore;
 import 'package:seance_core/seance_core.dart';
+
+class _AcceptingSyncApi implements SyncApi {
+  final Map<String, EncryptedRecord> records = {};
+  int _latestSeq = 0;
+
+  @override
+  Future<PullResponse> pull({required int since}) async => PullResponse(
+    records: records.values
+        .where((record) => (record.seq ?? 0) > since)
+        .toList(),
+    latestSeq: _latestSeq,
+  );
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> pushed) async {
+    final results = <PushResult>[];
+    for (final record in pushed) {
+      final stored = record.withSeq(++_latestSeq);
+      records[record.id] = stored;
+      results.add(PushResult(id: record.id, seq: _latestSeq, accepted: true));
+    }
+    return PushResponse(results: results, latestSeq: _latestSeq);
+  }
+}
 
 void main() {
   late Directory dir;
@@ -121,6 +146,91 @@ void main() {
       expect(servers, hasLength(1));
       expect(servers.single.host, 'example.com');
     });
+
+    test(
+      'a quarantined partial rewrite heals from the durable sync mirror',
+      () async {
+        final serversFile = File('${dir.path}/servers.json');
+        final mirrorFile = File('${dir.path}/sync_records.json');
+        final marker = File('${serversFile.path}.sync-recovery');
+        final key = secureRandomBytes(32);
+        final codec = RecordCodec(key);
+        const mirrored = ServerConfig(
+          id: 'mirrored',
+          label: 'Mirrored',
+          host: 'mirrored.example.com',
+          username: 'deploy',
+          createdAt: 1,
+          updatedAt: 10,
+        );
+        const writtenAfterDamage = ServerConfig(
+          id: 'new',
+          label: 'New',
+          host: 'new.example.com',
+          username: 'deploy',
+          createdAt: 20,
+          updatedAt: 20,
+        );
+
+        final mirror = PersistentLocalRecordStore(path: mirrorFile.path);
+        await mirror.initialize();
+        await mirror.putLocal(
+          await codec.encrypt(
+            DecryptedRecord(
+              id: mirrored.id,
+              kind: RecordKind.serverConfig,
+              updatedAt: mirrored.updatedAt,
+              deviceId: 'local',
+              data: mirrored.toJson(),
+            ),
+          ),
+        );
+
+        await serversFile.writeAsString('{not valid json');
+        final damaged = FileConfigStore(serversFile);
+        expect(await damaged.listServers(), isEmpty);
+        expect(marker.existsSync(), isTrue);
+
+        // A save before the next sync is a valid but incomplete snapshot. The
+        // durable sidecar must survive it and the following process restart.
+        await damaged.putServer(writtenAfterDamage);
+        final reopenedSource = FileConfigStore(serversFile);
+        expect(
+          reopenedSource.syncCollectionFailed,
+          isFalse,
+          reason: 'the source has not loaded its durable marker yet',
+        );
+        expect(
+          (await reopenedSource.listServers()).map((server) => server.id),
+          [writtenAfterDamage.id],
+        );
+        expect(reopenedSource.syncCollectionFailed, isTrue);
+
+        final reopenedMirror = PersistentLocalRecordStore(
+          path: mirrorFile.path,
+        );
+        await reopenedMirror.initialize();
+        final api = _AcceptingSyncApi();
+        await SyncCoordinator(
+          configStore: reopenedSource,
+          hostKeyStore: InMemoryHostKeyStore(),
+          codec: codec,
+          local: reopenedMirror,
+          deviceId: 'local',
+        ).run(api);
+
+        expect(
+          (await reopenedSource.listServers()).map((server) => server.id),
+          unorderedEquals([mirrored.id, writtenAfterDamage.id]),
+        );
+        expect(
+          api.records.keys,
+          unorderedEquals([mirrored.id, writtenAfterDamage.id]),
+        );
+        expect(reopenedSource.syncCollectionFailed, isFalse);
+        expect(marker.existsSync(), isFalse);
+      },
+    );
   });
 
   test('concurrent host-key approvals persist every approved key', () async {

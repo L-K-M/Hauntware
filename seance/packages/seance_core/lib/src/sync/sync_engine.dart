@@ -11,7 +11,8 @@ abstract class SyncApi {
 }
 
 /// A [SyncApi] throws this when the server rejects or has expired a pull
-/// cursor. Durable coordinators use it as the one-time full-resync signal.
+/// cursor. The engine uses it for one bounded reset-to-zero when the local
+/// store supports durable cursor recovery.
 final class SyncCursorRejectedException implements Exception {
   const SyncCursorRejectedException([this.message = 'sync cursor rejected']);
 
@@ -184,10 +185,22 @@ class SyncEngine {
   /// Throws [SyncRecordsRefused] once the run is otherwise complete if the
   /// server refused any record as too large; any other failure is thrown where
   /// it happens.
-  Future<SyncOutcome> sync(SyncApi api) async {
+  Future<SyncOutcome> sync(
+    SyncApi api, {
+    Future<void> Function()? beforeCursorRecoveryPull,
+    Future<void> Function()? afterCursorRecovery,
+  }) async {
     var totalPulled = 0;
     var totalPushed = 0;
     var round = 0;
+    var resetRejectedCursor = false;
+    final recoverable = store is RecoverableSyncCursorStore
+        ? store as RecoverableSyncCursorStore
+        : null;
+    var recoveryPending = false;
+    if (recoverable != null) {
+      recoveryPending = await recoverable.cursorRecoveryPending();
+    }
     // Ids the server refused as too large during this run. Each is sent once
     // per run, not once per round: nothing between rounds can shrink it, and
     // re-sending a record past the cap every round would upload it up to
@@ -196,7 +209,37 @@ class SyncEngine {
     final refused = <String>{};
     while (round < maxRounds) {
       round++;
-      final pulled = await _pullOnce(api);
+      final ({int applied, PushLimits limits}) pulled;
+      try {
+        pulled = await _pullOnce(api);
+      } on SyncCursorRejectedException {
+        if (resetRejectedCursor || recoverable == null) {
+          rethrow;
+        }
+        // A server restore invalidates both the durable high-water mark and
+        // every sequence assigned by the lost history. Re-queue the mirror
+        // under its original conflict tuples and persist a recovery phase.
+        // The zero pull must finish before the owner applies and recollects:
+        // otherwise an unreadable source can look like an opt-out and erase
+        // the mirror's only surviving copy. A server that also rejects zero
+        // still fails instead of looping forever.
+        await recoverable.recoverFromRejectedCursor();
+        recoveryPending = true;
+        await beforeCursorRecoveryPull?.call();
+        resetRejectedCursor = true;
+        round--;
+        continue;
+      }
+      if (recoveryPending) {
+        // Pulling first lets normal domain policy decide what should be
+        // restored, withheld, expired, or cancelled. Complete the durable
+        // phase only after that policy and its recollection succeed; a crash
+        // or callback failure resumes here on the next run instead of pushing
+        // an unreviewed recovered copy.
+        await afterCursorRecovery?.call();
+        await recoverable!.completeCursorRecovery();
+        recoveryPending = false;
+      }
       final pushed = await _pushOnce(api, pulled.limits, refused);
       totalPulled += pulled.applied;
       totalPushed += pushed.accepted;
@@ -311,13 +354,27 @@ class SyncEngine {
         refused.add(batch.single.id);
         continue;
       }
+      final sentById = {for (final record in batch) record.id: record};
       for (final result in resp.results) {
-        if (result.accepted) {
+        final sent = sentById[result.id];
+        if (sent == null) {
+          throw StateError(
+            'Sync server returned a push result for unsent record '
+            '${result.id}',
+          );
+        }
+        final settling = store;
+        if (settling is PushSettlingRecordStore) {
+          await settling.settlePush(sent, result);
+        } else if (result.accepted) {
           await store.markSynced(result.id, result.seq);
+        }
+        if (result.accepted) {
           accepted++;
         } else {
-          // Keep the losing local version dirty until a pull adopts the server
-          // winner; assigning the winner's seq here would mislabel our payload.
+          // A settling store may restore the displaced server winner here. A
+          // simpler store keeps the losing version dirty until a pull adopts
+          // that winner; assigning its seq to our payload would mislabel it.
           rejected++;
         }
       }

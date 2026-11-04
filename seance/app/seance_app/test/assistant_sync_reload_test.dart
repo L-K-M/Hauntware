@@ -34,6 +34,7 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
     services = await AppServices.initialize();
     services.settings.syncBaseUrl = _baseUrl;
+    services.settings.syncUsername = 'user';
     services.settings.syncAssistant = true;
     await services.masterKeys.putApiKey('sync.token', 'session-token');
   });

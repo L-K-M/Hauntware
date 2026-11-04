@@ -3,7 +3,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:seance_core/catalog.dart'
-    show ConflictAwareHostKeyStore, InMemoryPinVerdictStore, PinVerdictStore;
+    show
+        ConflictAwareHostKeyStore,
+        InMemoryPinVerdictStore,
+        PersistentLocalRecordStore,
+        PinVerdictStore;
 import 'package:seance_core/seance_core.dart';
 import 'package:test/test.dart';
 
@@ -13,6 +17,9 @@ class FakeServer implements SyncApi {
   int _seq = 0;
   int pushedRecords = 0;
   int pulls = 0;
+  int rejectedPullsRemaining = 0;
+  Object? nextPushError;
+  Future<void> Function()? beforeRejectedPull;
 
   /// The record the server holds under [id], exactly as it was pushed.
   EncryptedRecord? stored(String id) => _store[id];
@@ -24,6 +31,13 @@ class FakeServer implements SyncApi {
   @override
   Future<PullResponse> pull({required int since}) async {
     pulls++;
+    if (rejectedPullsRemaining > 0) {
+      rejectedPullsRemaining--;
+      final beforeReject = beforeRejectedPull;
+      beforeRejectedPull = null;
+      await beforeReject?.call();
+      throw const SyncCursorRejectedException('server history rolled back');
+    }
     final records = _store.values.where((r) => (r.seq ?? 0) > since).toList()
       ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
     return PullResponse(records: records, latestSeq: _seq);
@@ -31,6 +45,11 @@ class FakeServer implements SyncApi {
 
   @override
   Future<PushResponse> push(List<EncryptedRecord> records) async {
+    final error = nextPushError;
+    if (error != null) {
+      nextPushError = null;
+      throw error;
+    }
     pushedRecords += records.length;
     final results = <PushResult>[];
     for (final incoming in records) {
@@ -81,6 +100,93 @@ class _UnreadableVaultStore implements VaultStore {
     if (failReads) throw const FileSystemException('vault unreadable');
     return inner.allSecretBlobs();
   }
+}
+
+class _WithheldInboxAppStore implements InboxAppStore {
+  _WithheldInboxAppStore(this.app);
+
+  InboxApp? app;
+  bool withhold = false;
+
+  @override
+  Future<List<InboxApp>> listApps() async =>
+      withhold || app == null ? const [] : [app!];
+
+  @override
+  Future<InboxApp?> getApp(String id) async =>
+      withhold || app?.id != id ? null : app;
+
+  @override
+  Future<void> putApp(InboxApp value) async {
+    app = value;
+    withhold = false;
+  }
+}
+
+class _FailingConfigStore implements ConfigStore {
+  final InMemoryConfigStore inner = InMemoryConfigStore();
+  bool failWrites = true;
+
+  @override
+  Future<List<ServerConfig>> listServers() => inner.listServers();
+
+  @override
+  Future<ServerConfig?> getServer(String id) => inner.getServer(id);
+
+  @override
+  Future<void> putServer(ServerConfig config) {
+    if (failWrites) {
+      throw StateError('config store unavailable');
+    }
+    return inner.putServer(config);
+  }
+
+  @override
+  Future<void> deleteServer(String id) => inner.deleteServer(id);
+}
+
+class _IncompleteConfigStore extends InMemoryConfigStore
+    implements SyncCollectionHealth {
+  bool failed = true;
+
+  @override
+  bool get syncCollectionFailed => failed;
+
+  @override
+  Future<void> markSyncCollectionRecovered() async => failed = false;
+}
+
+class _IncompleteSnippetStore extends InMemorySnippetStore
+    implements SyncCollectionHealth {
+  bool failed = true;
+
+  @override
+  bool get syncCollectionFailed => failed;
+
+  @override
+  Future<void> markSyncCollectionRecovered() async => failed = false;
+}
+
+class _IncompleteHostKeyStore extends InMemoryHostKeyStore
+    implements SyncCollectionHealth {
+  bool failed = true;
+
+  @override
+  bool get syncCollectionFailed => failed;
+
+  @override
+  Future<void> markSyncCollectionRecovered() async => failed = false;
+}
+
+class _IncompleteInboxStatusStore extends InMemoryInboxStatusStore
+    implements SyncCollectionHealth {
+  bool failed = true;
+
+  @override
+  bool get syncCollectionFailed => failed;
+
+  @override
+  Future<void> markSyncCollectionRecovered() async => failed = false;
 }
 
 ServerConfig server(String id, String label, int updatedAt) => ServerConfig(
@@ -482,6 +588,848 @@ void main() {
     expect(api.stored('s1'), isNotNull);
   });
 
+  test(
+    'cursor recovery preserves a clean credential after vault damage',
+    () async {
+      final api = FakeServer();
+      final key = secureRandomBytes(32);
+      final codec = RecordCodec(key);
+      final configs = InMemoryConfigStore();
+      final vaultStore = InMemoryVaultStore();
+      final vault = SecretVault(vaultStore, key);
+      await configs.putServer(
+        server(
+          's1',
+          'server',
+          10,
+        ).copyWith(secretRef: 'secret', syncSecret: true),
+      );
+      await vault.putSecret(
+        const Secret(
+          id: 'secret',
+          kind: SecretKind.password,
+          value: 'recoverable',
+          updatedAt: 20,
+        ),
+      );
+      final local = InMemoryLocalRecordStore();
+      final coordinator = SyncCoordinator(
+        configStore: configs,
+        hostKeyStore: InMemoryHostKeyStore(),
+        codec: codec,
+        local: local,
+        deviceId: 'A',
+        syncSecrets: true,
+        secretVault: vault,
+      );
+      await coordinator.run(api);
+      expect(await local.dirtyRecords(), isEmpty);
+      api._store.clear();
+      api._seq = 0;
+      api.rejectedPullsRemaining = 1;
+
+      await SecretVault(vaultStore, secureRandomBytes(32)).putSecret(
+        const Secret(
+          id: 'secret',
+          kind: SecretKind.password,
+          value: 'damaged',
+          updatedAt: 30,
+        ),
+      );
+
+      await coordinator.run(api);
+
+      expect(api.stored('secret:secret')!.updatedAt, 20);
+      expect((await vault.getSecret('secret'))!.value, 'recoverable');
+      expect(await local.dirtyRecords(), isEmpty);
+    },
+  );
+
+  test(
+    'cursor recovery restores empty domain sources before republishing',
+    () async {
+      final api = FakeServer()..rejectedPullsRemaining = 1;
+      final key = secureRandomBytes(32);
+      final codec = RecordCodec(key);
+      final local = InMemoryLocalRecordStore();
+      final config = server(
+        'recovered-server',
+        'recovered',
+        10,
+      ).copyWith(secretRef: 'credential', syncSecret: true);
+      const secret = Secret(
+        id: 'credential',
+        kind: SecretKind.password,
+        value: 'private',
+        updatedAt: 11,
+      );
+      const snippet = Snippet(
+        id: 'recovered-snippet',
+        title: 'Recovered snippet',
+        body: 'uptime',
+        createdAt: 1,
+        updatedAt: 12,
+      );
+      const pin = HostKey(
+        host: 'recovered.example.com',
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:recovered',
+        pinnedAt: 13,
+      );
+      final status = InboxStatus(
+        appId: newInboxAppId(),
+        proposalId: 'recovered-proposal',
+        state: InboxStatusState.ran,
+        updatedAt: 14,
+      );
+      final records = <DecryptedRecord>[
+        DecryptedRecord(
+          id: config.id,
+          kind: RecordKind.serverConfig,
+          updatedAt: config.updatedAt,
+          deviceId: 'peer',
+          data: config.toJson(),
+        ),
+        DecryptedRecord(
+          id: 'secret:${secret.id}',
+          kind: RecordKind.secret,
+          updatedAt: secret.updatedAt,
+          deviceId: 'peer',
+          data: secret.toJson(),
+        ),
+        DecryptedRecord(
+          id: 'snippet:${snippet.id}',
+          kind: RecordKind.snippet,
+          updatedAt: snippet.updatedAt,
+          deviceId: 'peer',
+          data: snippet.toJson(),
+        ),
+        DecryptedRecord(
+          id: pin.recordId,
+          kind: RecordKind.hostKey,
+          updatedAt: pin.pinnedAt,
+          deviceId: 'peer',
+          data: pin.toJson(),
+        ),
+        DecryptedRecord(
+          id: status.recordId,
+          kind: RecordKind.inboxStatus,
+          updatedAt: status.updatedAt,
+          deviceId: 'peer',
+          data: status.toJson(),
+        ),
+      ];
+      for (var i = 0; i < records.length; i++) {
+        await local.putRemote((await codec.encrypt(records[i])).withSeq(i + 1));
+      }
+      await local.setHighWaterSeq(records.length);
+
+      final configs = InMemoryConfigStore();
+      final snippets = InMemorySnippetStore();
+      final hostKeys = InMemoryHostKeyStore();
+      final statuses = InMemoryInboxStatusStore();
+      final vaultStore = InMemoryVaultStore();
+      await vaultStore.putSecretBlob('credential', Uint8List.fromList([1]));
+      final vault = SecretVault(vaultStore, key);
+      final coordinator = SyncCoordinator(
+        configStore: configs,
+        hostKeyStore: hostKeys,
+        snippetStore: snippets,
+        inboxStatusStore: statuses,
+        codec: codec,
+        local: local,
+        deviceId: 'local',
+        syncSecrets: true,
+        secretVault: vault,
+        now: () => DateTime.fromMillisecondsSinceEpoch(1000),
+      );
+
+      await coordinator.run(api);
+
+      expect(api.pushedRecords, records.length);
+      expect(await configs.getServer(config.id), isNotNull);
+      expect((await vault.getSecret(secret.id))!.value, secret.value);
+      expect(await snippets.getSnippet(snippet.id), isNotNull);
+      expect(await hostKeys.get(pin.host, pin.port), isNotNull);
+      expect(
+        await statuses.getStatus(status.appId, status.proposalId),
+        isNotNull,
+      );
+      expect(await local.cursorRecoveryPending(), isFalse);
+      expect(await local.dirtyRecords(), isEmpty);
+    },
+  );
+
+  test(
+    'incomplete sources preserve and heal offline dirty publications',
+    () async {
+      final api = FakeServer();
+      final key = secureRandomBytes(32);
+      final codec = RecordCodec(key);
+      final local = InMemoryLocalRecordStore();
+      final config = server(
+        'offline-server',
+        'offline',
+        10,
+      ).copyWith(secretRef: 'credential', syncSecret: true);
+      const secret = Secret(
+        id: 'credential',
+        kind: SecretKind.password,
+        value: 'private',
+        updatedAt: 11,
+      );
+      const snippet = Snippet(
+        id: 'offline-snippet',
+        title: 'Offline snippet',
+        body: 'uptime',
+        createdAt: 1,
+        updatedAt: 12,
+      );
+      const pin = HostKey(
+        host: 'offline.example.com',
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:offline',
+        pinnedAt: 13,
+      );
+      final status = InboxStatus(
+        appId: newInboxAppId(),
+        proposalId: 'offline-proposal',
+        state: InboxStatusState.ran,
+        updatedAt: 14,
+      );
+      final records = <DecryptedRecord>[
+        DecryptedRecord(
+          id: config.id,
+          kind: RecordKind.serverConfig,
+          updatedAt: config.updatedAt,
+          deviceId: 'local',
+          data: config.toJson(),
+        ),
+        DecryptedRecord(
+          id: 'secret:${secret.id}',
+          kind: RecordKind.secret,
+          updatedAt: secret.updatedAt,
+          deviceId: 'local',
+          data: secret.toJson(),
+        ),
+        DecryptedRecord(
+          id: 'snippet:${snippet.id}',
+          kind: RecordKind.snippet,
+          updatedAt: snippet.updatedAt,
+          deviceId: 'local',
+          data: snippet.toJson(),
+        ),
+        DecryptedRecord(
+          id: pin.recordId,
+          kind: RecordKind.hostKey,
+          updatedAt: pin.pinnedAt,
+          deviceId: 'local',
+          data: pin.toJson(),
+        ),
+        DecryptedRecord(
+          id: status.recordId,
+          kind: RecordKind.inboxStatus,
+          updatedAt: status.updatedAt,
+          deviceId: 'local',
+          data: status.toJson(),
+        ),
+      ];
+      for (final record in records) {
+        await local.putLocal(await codec.encrypt(record));
+      }
+      final configs = _IncompleteConfigStore();
+      final snippets = _IncompleteSnippetStore();
+      final hostKeys = _IncompleteHostKeyStore();
+      final statuses = _IncompleteInboxStatusStore();
+      final vaultStore = InMemoryVaultStore();
+      await vaultStore.putSecretBlob('credential', Uint8List.fromList([1]));
+      final vault = SecretVault(vaultStore, key);
+      final coordinator = SyncCoordinator(
+        configStore: configs,
+        hostKeyStore: hostKeys,
+        snippetStore: snippets,
+        inboxStatusStore: statuses,
+        codec: codec,
+        local: local,
+        deviceId: 'local',
+        syncSecrets: true,
+        secretVault: vault,
+        now: () => DateTime.fromMillisecondsSinceEpoch(1000),
+      );
+
+      await coordinator.run(api);
+
+      expect(api.pushedRecords, records.length);
+      expect(await configs.getServer(config.id), isNotNull);
+      expect((await vault.getSecret(secret.id))!.value, secret.value);
+      expect(await snippets.getSnippet(snippet.id), isNotNull);
+      expect(await hostKeys.get(pin.host, pin.port), isNotNull);
+      expect(
+        await statuses.getStatus(status.appId, status.proposalId),
+        isNotNull,
+      );
+      expect(await local.dirtyRecords(), isEmpty);
+      expect(configs.failed, isFalse);
+      expect(snippets.failed, isFalse);
+      expect(hostKeys.failed, isFalse);
+      expect(statuses.failed, isFalse);
+    },
+  );
+
+  test('lost excluded config policy never republishes its orphan pin',
+      () async {
+    final api = FakeServer();
+    final codec = RecordCodec(secureRandomBytes(32));
+    final local = InMemoryLocalRecordStore();
+    const pin = HostKey(
+      host: 'private.example.com',
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:private',
+      pinnedAt: 9,
+    );
+    await local.putLocal(await codec.encrypt(const DecryptedRecord(
+      id: 'excluded-config',
+      kind: RecordKind.serverConfig,
+      updatedAt: 10,
+      deviceId: 'local',
+      deleted: true,
+    )));
+    await local.putLocal(await codec.encrypt(DecryptedRecord(
+      id: pin.recordId,
+      kind: RecordKind.hostKey,
+      updatedAt: pin.pinnedAt,
+      deviceId: 'local',
+      data: pin.toJson(),
+    )));
+    final configs = _IncompleteConfigStore();
+    final hostKeys = InMemoryHostKeyStore();
+    await hostKeys.put(pin);
+
+    await SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: hostKeys,
+      codec: codec,
+      local: local,
+      deviceId: 'local',
+    ).run(api);
+
+    expect(api.stored('excluded-config')?.deleted, isTrue);
+    expect(api.stored(pin.recordId), isNull,
+        reason: 'an orphan cannot reveal the lost excluded address');
+    expect((await local.dirtyRecords()).map((record) => record.id),
+        isNot(contains(pin.recordId)));
+  });
+
+  test('host-key recovery never trusts or republishes a rejected key',
+      () async {
+    final api = FakeServer()..rejectedPullsRemaining = 1;
+    final codec = RecordCodec(secureRandomBytes(32));
+    final local = InMemoryLocalRecordStore();
+    final configs = InMemoryConfigStore();
+    await configs.putServer(server('eligible', 'rejected', 10));
+    const rejected = HostKey(
+      host: 'rejected.example.com',
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:rejected',
+      pinnedAt: 11,
+    );
+    await local.putRemote((await codec.encrypt(DecryptedRecord(
+      id: rejected.recordId,
+      kind: RecordKind.hostKey,
+      updatedAt: rejected.pinnedAt,
+      deviceId: 'peer',
+      data: rejected.toJson(),
+    )))
+        .withSeq(1));
+    await local.setHighWaterSeq(1);
+    final hostKeys = _IncompleteHostKeyStore();
+    final verdicts = InMemoryPinVerdictStore();
+    await verdicts.recordKeptVerdict(
+      rejected.locator,
+      rejected.fingerprintSha256,
+    );
+
+    await SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: hostKeys,
+      pinVerdicts: verdicts,
+      codec: codec,
+      local: local,
+      deviceId: 'local',
+    ).run(api);
+
+    expect(await hostKeys.get(rejected.host, rejected.port), isNull);
+    expect(api.stored(rejected.recordId), isNull);
+    expect((await local.dirtyRecords()).map((record) => record.id),
+        isNot(contains(rejected.recordId)));
+  });
+
+  test('rollback restores the kept local pin, not its rejected rival',
+      () async {
+    final api = FakeServer()..rejectedPullsRemaining = 1;
+    final codec = RecordCodec(secureRandomBytes(32));
+    final local = InMemoryLocalRecordStore();
+    final configs = InMemoryConfigStore();
+    await configs.putServer(server('eligible', 'rejected', 10));
+    const trusted = HostKey(
+      host: 'rejected.example.com',
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:trusted',
+      pinnedAt: 10,
+    );
+    const rejected = HostKey(
+      host: 'rejected.example.com',
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:rejected',
+      pinnedAt: 20,
+    );
+    await local.putRemote((await codec.encrypt(DecryptedRecord(
+      id: rejected.recordId,
+      kind: RecordKind.hostKey,
+      updatedAt: rejected.pinnedAt,
+      deviceId: 'peer',
+      data: rejected.toJson(),
+    )))
+        .withSeq(1));
+    await local.setHighWaterSeq(1);
+    final hostKeys = InMemoryHostKeyStore();
+    await hostKeys.put(trusted);
+    final verdicts = InMemoryPinVerdictStore();
+    await verdicts.recordKeptVerdict(
+      rejected.locator,
+      rejected.fingerprintSha256,
+    );
+
+    await SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: hostKeys,
+      pinVerdicts: verdicts,
+      codec: codec,
+      local: local,
+      deviceId: 'local',
+    ).run(api);
+
+    expect((await hostKeys.get(trusted.host, trusted.port))?.fingerprintSha256,
+        trusted.fingerprintSha256);
+    final restored = await codec.decrypt(api.stored(trusted.recordId)!);
+    expect(restored.data['fingerprintSha256'], trusted.fingerprintSha256);
+  });
+
+  test('rollback restores a locally trusted pin over an unresolved rival',
+      () async {
+    final api = FakeServer()..rejectedPullsRemaining = 1;
+    final codec = RecordCodec(secureRandomBytes(32));
+    final local = InMemoryLocalRecordStore();
+    final configs = InMemoryConfigStore();
+    await configs.putServer(server('eligible', 'conflict', 10));
+    const trusted = HostKey(
+      host: 'conflict.example.com',
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:trusted',
+      pinnedAt: 10,
+    );
+    const unresolved = HostKey(
+      host: 'conflict.example.com',
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:unresolved',
+      pinnedAt: 20,
+    );
+    await local.putRemote((await codec.encrypt(DecryptedRecord(
+      id: unresolved.recordId,
+      kind: RecordKind.hostKey,
+      updatedAt: unresolved.pinnedAt,
+      deviceId: 'peer',
+      data: unresolved.toJson(),
+    )))
+        .withSeq(1));
+    await local.setHighWaterSeq(1);
+    final hostKeys = InMemoryHostKeyStore();
+    await hostKeys.put(trusted);
+
+    await SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: hostKeys,
+      codec: codec,
+      local: local,
+      deviceId: 'local',
+    ).run(api);
+
+    expect((await hostKeys.get(trusted.host, trusted.port))?.fingerprintSha256,
+        trusted.fingerprintSha256);
+    final restored = await codec.decrypt(api.stored(trusted.recordId)!);
+    expect(restored.data['fingerprintSha256'], trusted.fingerprintSha256);
+  });
+
+  test('rollback publishes no key for a negatively pinned locator', () async {
+    final api = FakeServer()..rejectedPullsRemaining = 1;
+    final codec = RecordCodec(secureRandomBytes(32));
+    final local = InMemoryLocalRecordStore();
+    final configs = InMemoryConfigStore();
+    await configs.putServer(server('eligible', 'untrusted', 10));
+    const staleLocal = HostKey(
+      host: 'untrusted.example.com',
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:stale-local',
+      pinnedAt: 10,
+    );
+    const recovered = HostKey(
+      host: 'untrusted.example.com',
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:recovered',
+      pinnedAt: 20,
+    );
+    await local.putRemote((await codec.encrypt(DecryptedRecord(
+      id: recovered.recordId,
+      kind: RecordKind.hostKey,
+      updatedAt: recovered.pinnedAt,
+      deviceId: 'peer',
+      data: recovered.toJson(),
+    )))
+        .withSeq(1));
+    await local.setHighWaterSeq(1);
+    final hostKeys = InMemoryHostKeyStore();
+    await hostKeys.put(staleLocal);
+    final verdicts = InMemoryPinVerdictStore();
+    await verdicts.addNegativePin(recovered.locator);
+
+    await SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: hostKeys,
+      pinVerdicts: verdicts,
+      codec: codec,
+      local: local,
+      deviceId: 'local',
+    ).run(api);
+
+    expect(api.stored(recovered.recordId), isNull);
+    expect((await local.dirtyRecords()).map((record) => record.id),
+        isNot(contains(recovered.recordId)));
+  });
+
+  test('cursor recovery keeps its mirror when a domain write fails', () async {
+    final api = FakeServer()..rejectedPullsRemaining = 1;
+    final codec = RecordCodec(secureRandomBytes(32));
+    final local = InMemoryLocalRecordStore();
+    final config = server('mirror-only', 'Mirror only', 10);
+    await local.putRemote(
+      (await codec.encrypt(
+        DecryptedRecord(
+          id: config.id,
+          kind: RecordKind.serverConfig,
+          updatedAt: config.updatedAt,
+          deviceId: 'peer',
+          data: config.toJson(),
+        ),
+      )).withSeq(1),
+    );
+    await local.setHighWaterSeq(1);
+    final configs = _FailingConfigStore();
+    final coordinator = SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: codec,
+      local: local,
+      deviceId: 'local',
+    );
+
+    await expectLater(coordinator.run(api), throwsA(isA<StateError>()));
+
+    expect(api.pushedRecords, 0);
+    expect(await local.cursorRecoveryPending(), isTrue);
+    expect(await local.getRecord(config.id), isNotNull);
+    expect((await local.dirtyRecords()).map((record) => record.id), [
+      config.id,
+    ]);
+
+    configs.failWrites = false;
+    await coordinator.run(api);
+
+    expect(api.stored(config.id), isNotNull);
+    expect(await configs.getServer(config.id), isNotNull);
+    expect(await local.cursorRecoveryPending(), isFalse);
+    expect(await local.dirtyRecords(), isEmpty);
+  });
+
+  test(
+    'an edit made during persisted recovery replaces the old mirror',
+    () async {
+      final api = FakeServer();
+      final codec = RecordCodec(secureRandomBytes(32));
+      final local = InMemoryLocalRecordStore();
+      await local.putRemote(
+        (await codec.encrypt(
+          DecryptedRecord(
+            id: 'edited-during-recovery',
+            kind: RecordKind.serverConfig,
+            updatedAt: 10,
+            deviceId: 'peer',
+            data: server('edited-during-recovery', 'Old', 10).toJson(),
+          ),
+        )).withSeq(1),
+      );
+      await local.setHighWaterSeq(1);
+      await local.recoverFromRejectedCursor();
+      final configs = InMemoryConfigStore();
+      await configs.putServer(server('edited-during-recovery', 'New', 20));
+      final coordinator = SyncCoordinator(
+        configStore: configs,
+        hostKeyStore: InMemoryHostKeyStore(),
+        codec: codec,
+        local: local,
+        deviceId: 'local',
+      );
+
+      await coordinator.run(api);
+
+      expect(api.stored('edited-during-recovery')!.updatedAt, 20);
+      expect((await configs.getServer('edited-during-recovery'))!.label, 'New');
+      expect(await local.cursorRecoveryPending(), isFalse);
+    },
+  );
+
+  test(
+    'an edit landing with cursor rejection is refreshed before the pull',
+    () async {
+      final api = FakeServer()..rejectedPullsRemaining = 1;
+      final codec = RecordCodec(secureRandomBytes(32));
+      final configs = InMemoryConfigStore();
+      await configs.putServer(server('in-flight-edit', 'Old', 10));
+      final local = InMemoryLocalRecordStore();
+      final coordinator = SyncCoordinator(
+        configStore: configs,
+        hostKeyStore: InMemoryHostKeyStore(),
+        codec: codec,
+        local: local,
+        deviceId: 'local',
+      );
+      api.beforeRejectedPull = () async {
+        await configs.putServer(server('in-flight-edit', 'New', 20));
+      };
+
+      await coordinator.run(api);
+
+      expect(api.stored('in-flight-edit')!.updatedAt, 20);
+      expect((await configs.getServer('in-flight-edit'))!.label, 'New');
+    },
+  );
+
+  test(
+    'a deletion made during persisted recovery replaces the old mirror',
+    () async {
+      final api = FakeServer();
+      final codec = RecordCodec(secureRandomBytes(32));
+      final local = InMemoryLocalRecordStore();
+      await local.putRemote(
+        (await codec.encrypt(
+          DecryptedRecord(
+            id: 'deleted-during-recovery',
+            kind: RecordKind.serverConfig,
+            updatedAt: 10,
+            deviceId: 'peer',
+            data: server('deleted-during-recovery', 'Old', 10).toJson(),
+          ),
+        )).withSeq(1),
+      );
+      await local.setHighWaterSeq(1);
+      await local.recoverFromRejectedCursor();
+      final tombstones = InMemoryTombstoneStore();
+      await tombstones.add(
+        EncryptedRecord.tombstone(
+          id: 'deleted-during-recovery',
+          deviceId: 'local',
+          updatedAt: 20,
+        ),
+      );
+      final configs = InMemoryConfigStore();
+      final coordinator = SyncCoordinator(
+        configStore: configs,
+        hostKeyStore: InMemoryHostKeyStore(),
+        codec: codec,
+        local: local,
+        deviceId: 'local',
+        tombstoneStore: tombstones,
+      );
+
+      await coordinator.run(api);
+
+      expect(api.stored('deleted-during-recovery')!.deleted, isTrue);
+      expect(await configs.getServer('deleted-during-recovery'), isNull);
+      expect(await local.cursorRecoveryPending(), isFalse);
+    },
+  );
+
+  test('cursor recovery reapplies opt-out, trust, and expiry policy', () async {
+    final api = FakeServer()..rejectedPullsRemaining = 1;
+    final codec = RecordCodec(secureRandomBytes(32));
+    final local = InMemoryLocalRecordStore();
+    const excludedPin = HostKey(
+      host: 'excluded.example.com',
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:excluded',
+      pinnedAt: 10,
+    );
+    const negativePin = HostKey(
+      host: 'negative.example.com',
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:negative',
+      pinnedAt: 11,
+    );
+    final expired = InboxStatus(
+      appId: newInboxAppId(),
+      proposalId: 'expired-proposal',
+      state: InboxStatusState.dismissed,
+      updatedAt: 1,
+    );
+    const secret = Secret(
+      id: 'local-only-credential',
+      kind: SecretKind.password,
+      value: 'private',
+      updatedAt: 12,
+    );
+    final recovered = <DecryptedRecord>[
+      DecryptedRecord(
+        id: excludedPin.recordId,
+        kind: RecordKind.hostKey,
+        updatedAt: excludedPin.pinnedAt,
+        deviceId: 'peer',
+        data: excludedPin.toJson(),
+      ),
+      DecryptedRecord(
+        id: negativePin.recordId,
+        kind: RecordKind.hostKey,
+        updatedAt: negativePin.pinnedAt,
+        deviceId: 'peer',
+        data: negativePin.toJson(),
+      ),
+      DecryptedRecord(
+        id: expired.recordId,
+        kind: RecordKind.inboxStatus,
+        updatedAt: expired.updatedAt,
+        deviceId: 'peer',
+        data: expired.toJson(),
+      ),
+      DecryptedRecord(
+        id: 'secret:${secret.id}',
+        kind: RecordKind.secret,
+        updatedAt: secret.updatedAt,
+        deviceId: 'peer',
+        data: secret.toJson(),
+      ),
+    ];
+    for (var i = 0; i < recovered.length; i++) {
+      await local.putRemote((await codec.encrypt(recovered[i])).withSeq(i + 1));
+    }
+    await local.setHighWaterSeq(recovered.length);
+
+    final configs = InMemoryConfigStore();
+    await configs.putServer(
+      ServerConfig(
+        id: 'excluded',
+        label: 'Excluded',
+        host: excludedPin.host,
+        username: 'u',
+        excludeFromSync: true,
+        createdAt: 1,
+        updatedAt: 20,
+      ),
+    );
+    await configs.putServer(
+      server(
+        'synced',
+        'Synced',
+        20,
+      ).copyWith(secretRef: secret.id, syncSecret: true),
+    );
+    final verdicts = InMemoryPinVerdictStore();
+    await verdicts.addNegativePin(negativePin.locator);
+    final coordinator = SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      pinVerdicts: verdicts,
+      inboxStatusStore: InMemoryInboxStatusStore(),
+      codec: codec,
+      local: local,
+      deviceId: 'local',
+      syncSecrets: false,
+      now: () => DateTime.fromMillisecondsSinceEpoch(
+        kInboxStatusRetention.inMilliseconds + 2,
+      ),
+    );
+
+    await coordinator.run(api);
+
+    for (final record in recovered) {
+      expect(api.stored(record.id), isNull, reason: record.id);
+      expect(await local.getRecord(record.id), isNull, reason: record.id);
+    }
+    expect(await local.cursorRecoveryPending(), isFalse);
+  });
+
+  test('permanent recovery rejects bypass publication protectors', () async {
+    final api = FakeServer();
+    final key = secureRandomBytes(32);
+    final codec = RecordCodec(key);
+    final local = InMemoryLocalRecordStore();
+    final payloadApp = InboxApp(
+      id: newInboxAppId(),
+      name: 'Malformed route',
+      key: secureRandomBytes(32),
+      createdAt: 1,
+      updatedAt: 11,
+    );
+    final wrongAppId = 'inboxapp:${newInboxAppId()}';
+    await local.putRemote(
+      (await codec.encrypt(
+        const DecryptedRecord(
+          id: 'secret:credential',
+          kind: RecordKind.secret,
+          updatedAt: 10,
+          deviceId: 'peer',
+          data: {'id': 'credential', 'kind': 'password'},
+        ),
+      )).withSeq(1),
+    );
+    await local.putRemote(
+      (await codec.encrypt(
+        DecryptedRecord(
+          id: wrongAppId,
+          kind: RecordKind.inboxApp,
+          updatedAt: payloadApp.updatedAt,
+          deviceId: 'peer',
+          data: payloadApp.toJson(),
+        ),
+      )).withSeq(2),
+    );
+    await local.setHighWaterSeq(2);
+    await local.recoverFromRejectedCursor();
+    final configs = InMemoryConfigStore();
+    await configs.putServer(
+      server(
+        'credential-owner',
+        'Credential owner',
+        20,
+      ).copyWith(secretRef: 'credential', syncSecret: true),
+    );
+    final coordinator = SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      inboxAppStore: InMemoryInboxAppStore(),
+      codec: codec,
+      local: local,
+      deviceId: 'local',
+      syncSecrets: true,
+      secretVault: SecretVault(InMemoryVaultStore(), key),
+    );
+
+    await coordinator.run(api);
+
+    expect(api.stored('secret:credential'), isNull);
+    expect(api.stored(wrongAppId), isNull);
+    expect(await local.getRecord('secret:credential'), isNull);
+    expect(await local.getRecord(wrongAppId), isNull);
+    expect(await local.cursorRecoveryPending(), isFalse);
+  });
+
   test('a store that cannot be read never counts as an absent credential',
       () async {
     final key = secureRandomBytes(32);
@@ -768,6 +1716,43 @@ void main() {
     });
   }
 
+  test('disabling credential publication cancels an offline dirty copy',
+      () async {
+    final key = secureRandomBytes(32);
+    final codec = RecordCodec(key);
+    final configs = InMemoryConfigStore();
+    final vault = SecretVault(InMemoryVaultStore(), key);
+    await vault.putLocalSecret(const Secret(
+      id: 'credential',
+      kind: SecretKind.password,
+      value: 'private',
+    ), updatedAt: 10);
+    await configs.putServer(server('s1', 'alpha', 10).copyWith(
+      secretRef: 'credential',
+      syncSecret: true,
+    ));
+    final local = InMemoryLocalRecordStore();
+    SyncCoordinator coordinator(bool syncSecrets) => SyncCoordinator(
+          configStore: configs,
+          hostKeyStore: InMemoryHostKeyStore(),
+          codec: codec,
+          local: local,
+          deviceId: 'A',
+          syncSecrets: syncSecrets,
+          secretVault: syncSecrets ? vault : null,
+        );
+    await coordinator(true).collectLocal();
+    expect((await local.dirtyRecords()).map((r) => r.id),
+        contains('secret:credential'));
+
+    final remote = FakeServer();
+    await coordinator(false).run(remote);
+
+    expect(remote.stored('secret:credential'), isNull);
+    expect((await local.allRecords()).map((r) => r.id),
+        isNot(contains('secret:credential')));
+  });
+
   test('snippets sync between two devices', () async {
     final srv = FakeServer();
     final codec = RecordCodec(secureRandomBytes(32));
@@ -970,6 +1955,172 @@ void main() {
     expect(after.deleted, isFalse);
     expect(after.seq, before.seq);
     expect(after.blob, orderedEquals(before.blob));
+  });
+
+  test('collecting unchanged local state preserves the sequenced record',
+      () async {
+    final codec = RecordCodec(secureRandomBytes(32));
+    final configs = InMemoryConfigStore();
+    final local = InMemoryLocalRecordStore();
+    await configs.putServer(server('s1', 'alpha', 10));
+    final coordinator = SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: codec,
+      local: local,
+      deviceId: 'A',
+    );
+
+    await coordinator.collectLocal();
+    final first = (await local.getRecord('s1'))!;
+    await local.markSynced('s1', 7);
+    await coordinator.collectLocal();
+    final second = (await local.getRecord('s1'))!;
+
+    expect(second.seq, 7);
+    expect(second.blob, orderedEquals(first.blob));
+    expect(await local.dirtyRecords(), isEmpty);
+  });
+
+  test('collecting a pulled semantic match preserves its peer ownership',
+      () async {
+    final codec = RecordCodec(secureRandomBytes(32));
+    final configs = InMemoryConfigStore();
+    final local = InMemoryLocalRecordStore();
+    final config = server('s1', 'alpha', 10);
+    await configs.putServer(config);
+    final pulled = (await codec.encrypt(DecryptedRecord(
+      id: config.id,
+      kind: RecordKind.serverConfig,
+      updatedAt: config.updatedAt,
+      deviceId: 'peer',
+      data: config.toJson(),
+    )))
+        .withSeq(9);
+    await local.putRemote(pulled);
+    final coordinator = SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: codec,
+      local: local,
+      deviceId: 'this-device',
+    );
+
+    await coordinator.collectLocal();
+    final kept = (await local.getRecord('s1'))!;
+
+    expect(kept.deviceId, 'peer');
+    expect(kept.seq, 9);
+    expect(kept.blob, orderedEquals(pulled.blob));
+    expect(await local.dirtyRecords(), isEmpty);
+  });
+
+  test('collection cannot overwrite an unapplied equal-stamp winner',
+      () async {
+    final codec = RecordCodec(secureRandomBytes(32));
+    final configs = InMemoryConfigStore();
+    final local = InMemoryLocalRecordStore();
+    await configs.putServer(server('s1', 'stale', 10));
+    final remoteConfig = server('s1', 'remote', 10);
+    final pulled = (await codec.encrypt(DecryptedRecord(
+      id: remoteConfig.id,
+      kind: RecordKind.serverConfig,
+      updatedAt: remoteConfig.updatedAt,
+      deviceId: 'A',
+      data: remoteConfig.toJson(),
+    )))
+        .withSeq(9);
+    await local.putRemote(pulled);
+    final coordinator = SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: codec,
+      local: local,
+      deviceId: 'Z',
+    );
+
+    await coordinator.collectLocal();
+    await coordinator.applyToStores();
+
+    expect((await local.getRecord('s1'))!.blob, orderedEquals(pulled.blob));
+    expect(await local.dirtyRecords(), isEmpty);
+    expect((await configs.getServer('s1'))!.label, 'remote');
+  });
+
+  test('collecting a real local edit replaces the mirror and marks it dirty',
+      () async {
+    final codec = RecordCodec(secureRandomBytes(32));
+    final configs = InMemoryConfigStore();
+    final local = InMemoryLocalRecordStore();
+    await configs.putServer(server('s1', 'alpha', 10));
+    final coordinator = SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: codec,
+      local: local,
+      deviceId: 'A',
+    );
+    await coordinator.collectLocal();
+    final before = (await local.getRecord('s1'))!;
+    await local.markSynced('s1', 3);
+    await configs.putServer(server('s1', 'renamed', 20));
+
+    await coordinator.collectLocal();
+    final after = (await local.getRecord('s1'))!;
+
+    expect(after.updatedAt, 20);
+    expect(after.seq, isNull);
+    expect(after.blob, isNot(orderedEquals(before.blob)));
+    expect((await local.dirtyRecords()).single.id, 's1');
+  });
+
+  test('a rejected stale push restores the winner below the durable cursor',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('sync-mirror-');
+    addTearDown(() => directory.delete(recursive: true));
+    final codec = RecordCodec(secureRandomBytes(32));
+    final api = FakeServer();
+    final remoteConfig = server('s1', 'remote', 20);
+    await api.push([
+      await codec.encrypt(DecryptedRecord(
+        id: remoteConfig.id,
+        kind: RecordKind.serverConfig,
+        updatedAt: remoteConfig.updatedAt,
+        deviceId: 'peer',
+        data: remoteConfig.toJson(),
+      )),
+    ]);
+    final remote = api.stored('s1')!;
+    final local = PersistentLocalRecordStore(
+      path: '${directory.path}/records.json',
+    );
+    await local.putRemote(remote);
+    final staleConfig = server('s1', 'stale', 10);
+    await local.putLocal(await codec.encrypt(DecryptedRecord(
+      id: staleConfig.id,
+      kind: RecordKind.serverConfig,
+      updatedAt: staleConfig.updatedAt,
+      deviceId: 'this-device',
+      data: staleConfig.toJson(),
+    )));
+    await local.setHighWaterSeq(remote.seq!);
+    final configs = InMemoryConfigStore();
+    await configs.putServer(staleConfig);
+    final coordinator = SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: codec,
+      local: local,
+      deviceId: 'this-device',
+    );
+
+    await coordinator.run(api);
+
+    expect((await configs.getServer('s1'))!.label, 'remote');
+    expect((await local.getRecord('s1'))!.blob, orderedEquals(remote.blob));
+    expect(await local.dirtyRecords(), isEmpty);
+    expect(api.pushedRecords, 2,
+        reason: 'the stale operation is rejected once, then settled');
   });
 
   test('persistent records are re-applied without another pull', () async {
@@ -1627,8 +2778,10 @@ void main() {
       // for a host they may still reach through a server of their own. The
       // copy already on the server stays; only new pins stop going out.
       expect(records.containsKey('hostkey:beta.example.com:22'), isFalse);
-      // A host no excluded server names is unaffected either way.
-      expect(records.containsKey('hostkey:gamma.example.com:22'), isTrue);
+      // An orphan pin is withheld as well: without a synced config it is not
+      // useful to a peer, and after config-file recovery an orphan cannot be
+      // distinguished from the address of a lost excluded config.
+      expect(records.containsKey('hostkey:gamma.example.com:22'), isFalse);
     });
 
     test('applying records never deletes or overwrites an excluded server',
@@ -2194,6 +3347,7 @@ void main() {
       final configs = InMemoryConfigStore();
       final hostKeys = InMemoryHostKeyStore();
       final local = InMemoryLocalRecordStore();
+      await configs.putServer(server('beta', 'beta', 1));
 
       await local.putRemote(await codec.encrypt(const DecryptedRecord(
         id: 'secret:sec-1',
@@ -2336,6 +3490,48 @@ void main() {
           reason: 'the tombstone authenticates its routing metadata');
       expect(await tombstones.all(), isEmpty,
           reason: 'a tombstone the server has taken is pruned');
+    });
+
+    test('a server rollback cannot resurrect a confirmed deletion', () async {
+      final api = FakeServer();
+      final codec = RecordCodec(secureRandomBytes(32));
+      final cfg = InMemoryConfigStore();
+      final tombstones = InMemoryTombstoneStore();
+      final local = InMemoryLocalRecordStore();
+      final coordinator = SyncCoordinator(
+        configStore: cfg,
+        hostKeyStore: InMemoryHostKeyStore(),
+        codec: codec,
+        local: local,
+        deviceId: 'A',
+        tombstoneStore: tombstones,
+      );
+
+      await cfg.putServer(server('s1', 'alpha', 10));
+      await coordinator.run(api);
+      final liveBeforeDeletion = api.stored('s1')!;
+      await cfg.deleteServer('s1');
+      await tombstones.add(tombstoneFor('s1', 'A', 20));
+      await coordinator.run(api);
+      expect(await tombstones.all(), isEmpty,
+          reason: 'the accepted deletion intent was pruned');
+
+      api._store['s1'] = liveBeforeDeletion;
+      api._seq = liveBeforeDeletion.seq!;
+      api.rejectedPullsRemaining = 1;
+      api.nextPushError = const FileSystemException('offline after pull');
+      await expectLater(
+        coordinator.run(api),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect((await local.getRecord('s1'))!.deleted, isTrue,
+          reason: 'a failed repair push must keep the deletion queued');
+      await coordinator.run(api);
+
+      expect(await cfg.getServer('s1'), isNull);
+      expect(api.stored('s1')!.deleted, isTrue,
+          reason: 'the retained mirror tombstone must repair the rollback');
+      expect(await local.dirtyRecords(), isEmpty);
     });
 
     test('the deletion converges to a second device', () async {
@@ -2511,6 +3707,36 @@ void main() {
               'record and pruned (the app also clears it on re-save)');
     });
 
+    test('an equal-stamp tombstone keeps its deleting device tie-break',
+        () async {
+      final codec = RecordCodec(secureRandomBytes(32));
+      final tombstones = InMemoryTombstoneStore();
+      await tombstones.add(tombstoneFor('s1', 'Z', 20));
+      final local = InMemoryLocalRecordStore();
+      await local.putRemote((await codec.encrypt(const DecryptedRecord(
+        id: 's1',
+        kind: RecordKind.serverConfig,
+        updatedAt: 20,
+        deviceId: 'A',
+        deleted: true,
+      )))
+          .withSeq(1));
+      final coordinator = SyncCoordinator(
+        configStore: InMemoryConfigStore(),
+        hostKeyStore: InMemoryHostKeyStore(),
+        codec: codec,
+        local: local,
+        deviceId: 'Z',
+        tombstoneStore: tombstones,
+      );
+
+      await coordinator.collectLocal();
+
+      final winner = await local.getRecord('s1');
+      expect(winner!.deviceId, 'Z');
+      expect((await local.dirtyRecords()).map((record) => record.id), ['s1']);
+    });
+
     test('a snippet deletion converges to a second device', () async {
       final api = FakeServer();
       final codec = RecordCodec(secureRandomBytes(32));
@@ -2549,6 +3775,43 @@ void main() {
           reason: 'a snippet tombstone is honoured on the peer, unlike '
               'secret:/hostkey:');
     });
+  });
+
+  test('cursor recovery preserves a clean app after its key disappears',
+      () async {
+    final api = FakeServer();
+    final codec = RecordCodec(secureRandomBytes(32));
+    final app = InboxApp(
+      id: newInboxAppId(),
+      name: 'Automation',
+      key: secureRandomBytes(32),
+      createdAt: 10,
+      updatedAt: 10,
+    );
+    final apps = _WithheldInboxAppStore(app);
+    final local = InMemoryLocalRecordStore();
+    final coordinator = SyncCoordinator(
+      configStore: InMemoryConfigStore(),
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: codec,
+      local: local,
+      deviceId: 'A',
+      inboxAppStore: apps,
+    );
+    await coordinator.run(api);
+    expect(await local.dirtyRecords(), isEmpty);
+    api._store.clear();
+    api._seq = 0;
+    api.rejectedPullsRemaining = 1;
+
+    apps.withhold = true;
+    await coordinator.run(api);
+
+    expect(api.stored(app.recordId), isNotNull);
+    expect(apps.withhold, isFalse,
+        reason: 'the durable record must restore the missing app key');
+    expect(apps.app!.key, app.key);
+    expect(await local.dirtyRecords(), isEmpty);
   });
 
   group('assistant settings', () {
@@ -2687,6 +3950,27 @@ void main() {
         (await local.allRecords()).map((r) => r.id),
         isNot(contains(AssistantSettings.recordId)),
       );
+    });
+
+    test('cursor recovery preserves clean settings during a keyring failure',
+        () async {
+      final remote = FakeServer();
+      final local = InMemoryLocalRecordStore();
+      await coordinator(
+        'A',
+        local,
+        store: InMemoryAssistantSettingsStore(assistant(updatedAt: 30)),
+      ).run(remote);
+      expect(await local.dirtyRecords(), isEmpty);
+      remote._store.clear();
+      remote._seq = 0;
+      remote.rejectedPullsRemaining = 1;
+
+      await coordinator('A', local, store: _ThrowingAssistantStore())
+          .run(remote);
+
+      expect(remote.stored(AssistantSettings.recordId)!.updatedAt, 30);
+      expect(await local.dirtyRecords(), isEmpty);
     });
 
     test('a store that throws on apply costs the assistant its record, '
@@ -2912,6 +4196,24 @@ void main() {
       expect(remote.latestSeq, seqBefore);
     });
 
+    test('opting out cancels an assistant edit staged while offline', () async {
+      final remote = FakeServer();
+      final local = InMemoryLocalRecordStore();
+      await coordinator(
+        'A',
+        local,
+        store: InMemoryAssistantSettingsStore(assistant()),
+      ).collectLocal();
+      expect((await local.dirtyRecords()).map((r) => r.id),
+          contains(AssistantSettings.recordId));
+
+      await coordinator('A', local).run(remote);
+
+      expect(remote.stored(AssistantSettings.recordId), isNull);
+      expect((await local.allRecords()).map((r) => r.id),
+          isNot(contains(AssistantSettings.recordId)));
+    });
+
     test('a record with no provider is not a configuration', () async {
       // fromJson degrades a missing field to '' so a record from a newer
       // build stays readable; a provider name is written from an enum and can
@@ -2937,6 +4239,39 @@ void main() {
         isNot(contains(AssistantSettings.recordId)),
       );
     });
+
+    test(
+      'recovery drops a nonviable assistant instead of republishing it',
+      () async {
+        final remote = FakeServer();
+        final local = InMemoryLocalRecordStore();
+        await local.putRemote(
+          (await _sharedCodec.encrypt(
+            DecryptedRecord(
+              id: AssistantSettings.recordId,
+              kind: RecordKind.assistantSettings,
+              updatedAt: 99,
+              deviceId: 'peer',
+              data: assistant(updatedAt: 99)
+                  .copyWith(providerKind: '')
+                  .toJson(),
+            ),
+          )).withSeq(1),
+        );
+        await local.setHighWaterSeq(1);
+        await local.recoverFromRejectedCursor();
+
+        await coordinator(
+          'local',
+          local,
+          store: InMemoryAssistantSettingsStore(),
+        ).run(remote);
+
+        expect(remote.stored(AssistantSettings.recordId), isNull);
+        expect(await local.getRecord(AssistantSettings.recordId), isNull);
+        expect(await local.cursorRecoveryPending(), isFalse);
+      },
+    );
 
     test('a pulled record never overwrites a newer local edit', () async {
       // The assistant configuration is edited straight into its store between
@@ -3218,7 +4553,7 @@ void main() {
       final pinsB = InMemoryHostKeyStore();
       await pinsB.put(k2);
       await SyncCoordinator(
-        configStore: InMemoryConfigStore(),
+        configStore: configs,
         hostKeyStore: pinsB,
         codec: codec,
         local: InMemoryLocalRecordStore(),
@@ -3322,7 +4657,7 @@ void main() {
       final pinsC = InMemoryHostKeyStore();
       await pinsC.put(pin('SHA256:k3', 30));
       await SyncCoordinator(
-        configStore: InMemoryConfigStore(),
+        configStore: account.configs,
         hostKeyStore: pinsC,
         codec: account.codec,
         local: InMemoryLocalRecordStore(),
@@ -3583,12 +4918,15 @@ class _BlobCapServer extends FakeServer {
 /// decode error would.
 class _UnreadableRecordStore extends InMemoryLocalRecordStore {
   final String unreadableId;
+  var _readsRemaining = 1;
 
   _UnreadableRecordStore(this.unreadableId);
 
   @override
   Future<EncryptedRecord?> getRecord(String id) async {
-    if (id == unreadableId) throw StateError('cannot read $id');
+    if (id == unreadableId && _readsRemaining-- == 0) {
+      throw StateError('cannot read $id');
+    }
     return super.getRecord(id);
   }
 }
