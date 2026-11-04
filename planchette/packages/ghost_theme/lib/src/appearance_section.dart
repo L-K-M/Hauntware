@@ -67,6 +67,9 @@ class GhostAppearanceStrings {
       'they are mixed from that surface and the text instead. Lines and the '
       'selection may be translucent.';
   String get accent => 'Accent';
+  String accentContrastNote(String chosen, String foreground) =>
+      'You chose $chosen. Links and focus use $foreground for contrast; '
+      'accent fills keep the chosen colour.';
 
   String slotLabel(ThemeSlot slot) => switch (slot) {
     ThemeSlot.surface => 'Surface',
@@ -501,6 +504,7 @@ class _GhostAppearanceSectionState extends State<GhostAppearanceSection> {
       _palette,
       _automatic,
     );
+    final accent = GhostTheme.resolveAccent(widget.style, _palette, _automatic);
     final current = _presets.matching(_palette);
     final terminalSection = widget.terminalSection;
     return widget.page([
@@ -529,6 +533,13 @@ class _GhostAppearanceSectionState extends State<GhostAppearanceSection> {
         color: _palette.accent,
         onPick: _pickAccent,
       ),
+      if (accent.fill != accent.foreground)
+        _Footnote(
+          _s.accentContrastNote(
+            formatThemeColor(_palette.accent),
+            formatThemeColor(accent.foreground),
+          ),
+        ),
       for (final slot in _colourSlots) _slotRow(slot, resolved),
       const Divider(height: 40),
       header(_s.statusTitle),

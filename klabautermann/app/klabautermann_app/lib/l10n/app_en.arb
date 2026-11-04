@@ -8144,6 +8144,20 @@
   "@appearanceAccent": {
     "description": "Appearance tab: the accent colour row."
   },
+  "appearanceAccentContrastNote": "You chose {chosen}. Links and focus use {foreground} for contrast; accent fills keep the chosen colour.",
+  "@appearanceAccentContrastNote": {
+    "description": "Appearance tab: explains a contrast-safe foreground adjustment while preserving the chosen accent for fills.",
+    "placeholders": {
+      "chosen": {
+        "type": "String",
+        "example": "#FFD600"
+      },
+      "foreground": {
+        "type": "String",
+        "example": "#706000"
+      }
+    }
+  },
   "appearanceSlotSurface": "Surface",
   "@appearanceSlotSurface": {
     "description": "Appearance tab: name of a colour slot."

@@ -38,6 +38,14 @@ ColorScheme _legacyScheme(Brightness brightness) {
   );
 }
 
+Color _rawAccentSelection(Color accent) {
+  for (var step = 0; step < 20; step++) {
+    final candidate = Color.lerp(accent, Colors.black, step / 20)!;
+    if (contrastRatio(Colors.white, candidate) >= 4.5) return candidate;
+  }
+  return Colors.black;
+}
+
 void main() {
   group('the Séance palette draws what the app always drew', () {
     for (final platform in [TargetPlatform.macOS, TargetPlatform.android]) {
@@ -195,11 +203,20 @@ void main() {
       final theme = GhostTheme.build(seanceStyle, palette, Brightness.light);
       final scheme = theme.colorScheme;
       final chrome = theme.extension<GhostChrome>()!;
+      final accent = GhostTheme.resolveAccent(
+        seanceStyle,
+        palette,
+        Brightness.light,
+      );
 
       // A dark surface of its own makes the theme dark, whatever was asked.
       expect(theme.brightness, Brightness.dark);
-      expect(scheme.primary, palette.accent);
-      expect(scheme.onPrimary, const Color(0xFFFFFFFF));
+      expect(scheme.primary, accent.foreground);
+      expect(accent.fill, palette.accent);
+      expect(
+        contrastRatio(scheme.onPrimary, scheme.primary),
+        greaterThanOrEqualTo(4.5),
+      );
       expect(scheme.surface, palette.surface);
       expect(theme.scaffoldBackgroundColor, palette.surface);
       expect(chrome.paneBackground, palette.surface);
@@ -279,6 +296,112 @@ void main() {
       expect(chrome.selectionFill, isNot(const Color(0xFF5A4BC0)));
       expect(
         contrastRatio(chrome.onSelection, chrome.selectionFill),
+        greaterThanOrEqualTo(4.5),
+      );
+    });
+
+    test('custom accent foregrounds clear light and dark surfaces', () {
+      for (final accent in const [
+        Color(0xFFFFD600),
+        Color(0xFF3949AB),
+        Color(0xFF6B5BD3),
+      ]) {
+        for (final brightness in Brightness.values) {
+          final scheme = GhostTheme.build(
+            seanceStyle,
+            seancePresets.brand.copyWith(accent: accent),
+            brightness,
+          ).colorScheme;
+          final where = '${formatThemeColor(accent)} ${brightness.name}';
+
+          expect(
+            contrastRatio(scheme.primary, scheme.surface),
+            greaterThanOrEqualTo(4.5),
+            reason: where,
+          );
+          expect(
+            contrastRatio(scheme.onPrimary, scheme.primary),
+            greaterThanOrEqualTo(4.5),
+            reason: 'onPrimary $where',
+          );
+        }
+      }
+    });
+
+    test('adjusted accent remains safe at stored colour precision', () {
+      const accent = Color(0xFFB846C1);
+      const surface = Color(0xFFFFFFFF);
+      final palette = ThemePalette(accent: accent, surface: surface);
+      final resolved = GhostTheme.resolveAccent(
+        seanceStyle,
+        palette,
+        Brightness.light,
+      );
+      final storedForeground = Color(resolved.foreground.toARGB32());
+
+      expect(storedForeground, isNot(accent));
+      expect(
+        contrastRatio(storedForeground, surface),
+        greaterThanOrEqualTo(4.5),
+      );
+    });
+
+    test('safe custom accents remain exactly as chosen', () {
+      for (final (brightness, accent) in const [
+        (Brightness.light, Color(0xFF5847C2)),
+        (Brightness.dark, Color(0xFFADA1FF)),
+      ]) {
+        final palette = seancePresets.brand.copyWith(accent: accent);
+        final resolved = GhostTheme.resolveAccent(
+          seanceStyle,
+          palette,
+          brightness,
+        );
+        final scheme = GhostTheme.build(
+          seanceStyle,
+          palette,
+          brightness,
+        ).colorScheme;
+
+        expect(resolved, (fill: accent, foreground: accent));
+        expect(scheme.primary, accent);
+      }
+    });
+
+    test('contrast adjustment preserves raw accent fill roles', () {
+      const accent = Color(0xFFFFD600);
+      const surface = Color(0xFFFFFFFF);
+      final palette = ThemePalette(
+        accent: accent,
+        surface: surface,
+        text: Colors.black,
+      );
+      final theme = GhostTheme.build(seanceStyle, palette, Brightness.light);
+      final scheme = theme.colorScheme;
+      final chrome = theme.extension<GhostChrome>()!;
+      final resolved = GhostTheme.resolveAccent(
+        seanceStyle,
+        palette,
+        Brightness.dark,
+      );
+      final rawSeeded = ColorScheme.fromSeed(
+        seedColor: accent,
+        brightness: Brightness.light,
+      );
+
+      expect(resolved.fill, accent);
+      expect(resolved.foreground, scheme.primary);
+      expect(resolved.foreground, isNot(accent));
+      expect(chrome.activePaneIndicator, accent);
+      expect(chrome.selectionFill, _rawAccentSelection(accent));
+      expect(scheme.primaryContainer, rawSeeded.primaryContainer);
+      expect(scheme.secondaryContainer, Color.lerp(surface, accent, 0.22));
+      expect(
+        contrastRatio(scheme.primary, scheme.surface),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrastRatio(scheme.onPrimary, scheme.primary),
         greaterThanOrEqualTo(4.5),
       );
     });

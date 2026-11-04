@@ -23,6 +23,11 @@ import 'theme_palette.dart';
 const Color _white = Color(0xFFFFFFFF);
 const Color _black = Color(0xFF000000);
 
+/// The two accent roles a theme resolves: [fill] keeps the colour the user
+/// chose for solid identity marks, while [foreground] is the nearest variant
+/// that can carry links, focus and selected controls over the theme surface.
+typedef GhostAccentResolution = ({Color fill, Color foreground});
+
 /// How far each Automatic shade is mixed from a palette's own surface
 /// toward its text (or, for secondary text, from the text toward the
 /// surface). Measured against the dark table: mixed from its own surface
@@ -78,6 +83,43 @@ Brightness _drawnAt(ThemePalette palette, Brightness brightness) {
   return surface == null ? brightness : surfaceBrightness(surface);
 }
 
+GhostAccentResolution _accentFor(
+  GhostThemeStyle style,
+  ThemePalette palette,
+  Brightness brightness,
+) {
+  final table = brightness == Brightness.dark ? style.dark : style.light;
+  final tuned = palette.accent == style.seed;
+  final fill = tuned ? table.primary : palette.accent;
+  final surface = palette.surface ?? table.surface;
+  if (tuned || contrastRatio(fill, surface) >= _textContrast) {
+    return (fill: fill, foreground: fill);
+  }
+
+  // Move only as far as necessary toward the black-or-white endpoint that is
+  // guaranteed to read on this surface. Channel-wise interpolation toward a
+  // single endpoint is monotonic once the failing colour crosses the surface;
+  // Test candidates at the same 8-bit precision palettes store and display;
+  // retaining an observed passing candidate keeps the returned byte colour
+  // safely on the passing side of the threshold.
+  const steps = 16;
+  final endpoint = legibleOn(surface);
+  var failing = 0.0;
+  var passing = 1.0;
+  var foreground = endpoint;
+  for (var step = 0; step < steps; step++) {
+    final amount = (failing + passing) / 2;
+    final candidate = Color(_mix(fill, endpoint, amount).toARGB32());
+    if (contrastRatio(candidate, surface) >= _textContrast) {
+      passing = amount;
+      foreground = candidate;
+    } else {
+      failing = amount;
+    }
+  }
+  return (fill: fill, foreground: foreground);
+}
+
 /// The neutrals [palette] draws with at [brightness] (already resolved by
 /// [_drawnAt]): the style's table for that brightness, with every slot the
 /// palette sets laid over it.
@@ -111,14 +153,14 @@ GhostThemeNeutrals _neutralsFor(
 
   // The table's primary family is the hand-tuned rendering of the seed (a
   // lighter shade on dark, a deeper one on light, each clearing its
-  // surface), so the seed keeps it. Any other accent is drawn as picked,
-  // which is what the colour well promises; its containers come from
-  // Material's scheme for it.
+  // surface), so the seed keeps it. Any other accent stays exactly as picked
+  // in fill roles; only its link/focus foreground is adjusted when needed.
+  // Its containers still come from Material's scheme for the raw accent.
   final tuned = palette.accent == style.seed;
   final seeded = tuned
       ? null
       : ColorScheme.fromSeed(seedColor: palette.accent, brightness: brightness);
-  final primary = tuned ? table.primary : palette.accent;
+  final accent = _accentFor(style, palette, brightness);
 
   final ownSelection = palette.selection != null || !tuned;
   final selection =
@@ -159,13 +201,13 @@ GhostThemeNeutrals _neutralsFor(
         auto(table.outlineVariant, _mix(surface, text, _hairlineMix)),
     inverseSurface: auto(table.inverseSurface, text),
     onInverseSurface: auto(table.onInverseSurface, surface),
-    primary: primary,
-    onPrimary: seeded == null ? table.onPrimary : legibleOn(primary),
+    primary: accent.foreground,
+    onPrimary: seeded == null ? table.onPrimary : legibleOn(accent.foreground),
     primaryContainer: seeded?.primaryContainer ?? table.primaryContainer,
     onPrimaryContainer: seeded?.onPrimaryContainer ?? table.onPrimaryContainer,
     secondaryContainer: auto(
       table.secondaryContainer,
-      _mix(surface, primary, _secondaryContainerMix),
+      _mix(surface, accent.fill, _secondaryContainerMix),
     ),
     onSecondaryContainer: auto(table.onSecondaryContainer, text),
     selection: selection,
@@ -406,6 +448,7 @@ GhostChrome _chromeOver(
   GhostThemeNeutrals n,
   ({Color online, Color offline, Color connecting, Color unknown}) status,
   TargetPlatform platform, {
+  required Color accentFill,
   required double cornerScale,
 }) {
   final desktop = isGhostDesktopPlatform(platform);
@@ -420,7 +463,7 @@ GhostChrome _chromeOver(
     selectionFill: n.selection,
     onSelection: n.onSelection,
     inactiveSelectionFill: n.containerHighest,
-    activePaneIndicator: n.primary,
+    activePaneIndicator: accentFill,
     secondaryText: n.onSurfaceVariant,
     statusConnected: status.online,
     statusConnecting: status.connecting,
@@ -441,11 +484,13 @@ GhostChrome _chromeFor(
   Brightness brightness,
   TargetPlatform platform,
 ) {
-  final n = _neutralsFor(style, palette, _drawnAt(palette, brightness));
+  final drawnAt = _drawnAt(palette, brightness);
+  final n = _neutralsFor(style, palette, drawnAt);
   return _chromeOver(
     n,
     _statusFor(palette, n),
     platform,
+    accentFill: _accentFor(style, palette, drawnAt).fill,
     cornerScale: palette.cornerScale,
   );
 }
@@ -553,6 +598,16 @@ abstract final class GhostTheme {
     };
   }
 
+  /// The accent roles [palette] draws with when Automatic colours follow
+  /// [brightness]. Exact seed palettes keep their hand-tuned primary; custom
+  /// accents retain the chosen fill while their foreground is adjusted only
+  /// when links and focus would miss WCAG AA against the resolved surface.
+  static GhostAccentResolution resolveAccent(
+    GhostThemeStyle style,
+    ThemePalette palette,
+    Brightness brightness,
+  ) => _accentFor(style, palette, _drawnAt(palette, brightness));
+
   /// [palette] as a theme. [brightness] is what its Automatic colours
   /// follow — the system's, or the mode's; a palette that sets its own
   /// surface is drawn at that surface's brightness instead (see
@@ -626,6 +681,7 @@ abstract final class GhostTheme {
       n,
       _statusFor(palette, n),
       resolvedPlatform,
+      accentFill: _accentFor(style, palette, drawnAt).fill,
       cornerScale: scale,
     );
     final theme = base.copyWith(

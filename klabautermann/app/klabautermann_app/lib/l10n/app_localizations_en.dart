@@ -6788,6 +6788,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearanceAccent => 'Accent';
 
   @override
+  String appearanceAccentContrastNote(String chosen, String foreground) {
+    return 'You chose $chosen. Links and focus use $foreground for contrast; accent fills keep the chosen colour.';
+  }
+
+  @override
   String get appearanceSlotSurface => 'Surface';
 
   @override

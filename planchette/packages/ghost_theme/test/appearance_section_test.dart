@@ -38,6 +38,10 @@ final class _Pirate extends GhostAppearanceStrings {
 
   @override
   String presetLabel(String storedName) => '$storedName (arr)';
+
+  @override
+  String accentContrastNote(String chosen, String foreground) =>
+      'Rigging keeps $chosen but signals with $foreground';
 }
 
 Widget _header(String title, {String? helpTitle, String? help}) =>
@@ -162,11 +166,57 @@ void main() {
   });
 
   testWidgets('every word comes from the strings bag', (tester) async {
-    await _pump(tester, strings: const _Pirate());
+    await _pump(
+      tester,
+      strings: const _Pirate(),
+      palette: seancePresets.brand.copyWith(accent: const Color(0xFFFFD600)),
+    );
     expect(find.text('# Colours of the ship'), findsOneWidget);
     expect(find.text('Paper (arr)'), findsOneWidget);
     expect(find.byTooltip('Use the Paper (arr) theme'), findsOneWidget);
     expect(find.text('Reset to Terminal (arr)'), findsOneWidget);
+    final resolved = GhostTheme.resolveAccent(
+      seanceStyle,
+      seancePresets.brand.copyWith(accent: const Color(0xFFFFD600)),
+      Brightness.light,
+    );
+    expect(
+      find.text(
+        'Rigging keeps #FFD600 but signals with '
+        '${formatThemeColor(resolved.foreground)}',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('an adjusted accent note names both colours', (tester) async {
+    final unsafe = seancePresets.brand.copyWith(
+      accent: const Color(0xFFB846C1),
+    );
+    await _pump(tester, palette: unsafe);
+    final resolved = GhostTheme.resolveAccent(
+      seanceStyle,
+      unsafe,
+      Brightness.light,
+    );
+    expect(resolved.fill, isNot(resolved.foreground));
+    expect(formatThemeColor(resolved.foreground), isNot('#B846C1'));
+    expect(
+      find.text(
+        'You chose #B846C1. Links and focus use '
+        '${formatThemeColor(resolved.foreground)} for contrast; accent fills '
+        'keep the chosen colour.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a safe accent needs no adjustment note', (tester) async {
+    await _pump(
+      tester,
+      palette: seancePresets.brand.copyWith(accent: const Color(0xFF5847C2)),
+    );
+    expect(find.textContaining('Links and focus use'), findsNothing);
   });
 
   testWidgets('a clipboard without a theme leaves the palette alone', (

@@ -8584,6 +8584,12 @@ abstract class AppLocalizations {
   /// **'Accent'**
   String get appearanceAccent;
 
+  /// Appearance tab: explains a contrast-safe foreground adjustment while preserving the chosen accent for fills.
+  ///
+  /// In en, this message translates to:
+  /// **'You chose {chosen}. Links and focus use {foreground} for contrast; accent fills keep the chosen colour.'**
+  String appearanceAccentContrastNote(String chosen, String foreground);
+
   /// Appearance tab: name of a colour slot.
   ///
   /// In en, this message translates to:

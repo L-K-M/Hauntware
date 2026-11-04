@@ -96,6 +96,33 @@ void main() {
     );
   });
 
+  testWidgets('the localized accent adjustment names both colours', (
+    tester,
+  ) async {
+    final palette = klabautermannThemePresets.initial.copyWith(
+      accent: const Color(0xFFFFD600),
+    );
+    await _pumpTab(
+      tester,
+      AppearanceController(initial: AppAppearance(palette: palette)),
+    );
+    final resolved = GhostTheme.resolveAccent(
+      klabautermannThemeStyle,
+      palette,
+      Brightness.light,
+    );
+
+    expect(resolved.fill, isNot(resolved.foreground));
+    expect(
+      find.text(
+        'You chose #FFD600. Links and focus use '
+        '${formatThemeColor(resolved.foreground)} for contrast; accent fills '
+        'keep the chosen colour.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a change the app does not take puts the editor back on the '
       "app's appearance and says so", (tester) async {
     await _pumpTab(tester, _Refusing());
