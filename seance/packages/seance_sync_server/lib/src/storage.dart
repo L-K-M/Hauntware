@@ -65,6 +65,39 @@ class StorageBusyException implements Exception {
   const StorageBusyException();
 }
 
+/// The requested stable cursor cannot exist for this account generation.
+class StorageCursorRejectedException implements Exception {
+  const StorageCursorRejectedException();
+}
+
+/// A single stored row cannot fit the operator's configured response page.
+class StoragePageTooSmallException implements Exception {
+  const StoragePageTooSmallException();
+}
+
+/// A write would grow an account past its durable storage budget.
+class AccountQuotaExceededException implements Exception {
+  const AccountQuotaExceededException();
+}
+
+/// Bounds one response page. Both dimensions apply at once.
+class PullPageLimits {
+  final int maxRecords;
+  final int maxBodyBytes;
+
+  const PullPageLimits({required this.maxRecords, required this.maxBodyBytes});
+}
+
+/// Bounds one account's current winning rows. Null means unbounded, which
+/// preserves the public storage helpers used by tests and embedders; the HTTP
+/// server always supplies its configured quota.
+class AccountQuota {
+  final int maxRecords;
+  final int maxBytes;
+
+  const AccountQuota({required this.maxRecords, required this.maxBytes});
+}
+
 /// A registered inbox app as the server stores it. Like [Account], only a
 /// salted hash of the deposit token is kept: a leaked database must not hand
 /// out tokens that let anyone fill the user's inbox. The app key is never
@@ -97,6 +130,9 @@ enum InboxAddStatus {
 
   /// The app already holds the maximum number of pending items.
   full,
+
+  /// This account's pending inbox bytes reached the durable quota.
+  accountFull,
 }
 
 /// What [Storage.addInboxItem] did. [received] is set only when [status] is
@@ -157,13 +193,37 @@ abstract class Storage {
   /// Process entries in list order, including repeated ids. Later entries resolve
   /// against earlier staged writes. Empty batches return the current watermark.
   Future<PushResponse> pushRecords(
-      String username, List<EncryptedRecord> records);
+    String username,
+    List<EncryptedRecord> records, {
+    AccountQuota? quota,
+  });
   Future<PushResponse> pushRecordsFor(
-      AuthPrincipal principal, List<EncryptedRecord> records);
+    AuthPrincipal principal,
+    List<EncryptedRecord> records, {
+    AccountQuota? quota,
+  });
 
   /// Return records and their watermark from one consistent snapshot.
   Future<PullResponse> pullSnapshot(String username, int since);
+
+  /// One bounded page from a stable account watermark. The first request
+  /// omits [throughSeq] and captures the current sequence; continuations send
+  /// it back so concurrent pushes wait for the next sync window.
+  Future<PullResponse> pullPage(
+    String username,
+    int since, {
+    int? throughSeq,
+    required PullPageLimits limits,
+    PushLimits? advertisedLimits,
+  });
   Future<PullResponse> pullSnapshotFor(AuthPrincipal principal, int since);
+  Future<PullResponse> pullPageFor(
+    AuthPrincipal principal,
+    int since, {
+    int? throughSeq,
+    required PullPageLimits limits,
+    PushLimits? advertisedLimits,
+  });
 
   // Compatibility primitives; sync handlers must use the atomic operations.
   Future<EncryptedRecord?> getRecord(String username, String id);
@@ -208,12 +268,28 @@ abstract class Storage {
     Uint8List blob, {
     required int storedAt,
     required int maxPending,
+    AccountQuota? quota,
   });
 
   /// [username]'s items with `received` greater than [since], ascending.
   Future<List<InboxItem>> inboxItemsSince(String username, int since);
+
+  /// One bounded page of pending items under a stable per-account received
+  /// watermark.
+  Future<InboxPage> inboxPage(
+    String username,
+    int since, {
+    int? throughReceived,
+    required PullPageLimits limits,
+  });
   Future<List<InboxItem>> inboxItemsSinceFor(
       AuthPrincipal principal, int since);
+  Future<InboxPage> inboxPageFor(
+    AuthPrincipal principal,
+    int since, {
+    int? throughReceived,
+    required PullPageLimits limits,
+  });
 
   /// Remove one item. Returns false when it is not (or no longer) there,
   /// which is how a device learns another one claimed it first.
@@ -224,6 +300,35 @@ abstract class Storage {
   /// Drop every item stored before [storedBefore] (ms since the epoch), in
   /// all accounts. Returns how many were dropped.
   Future<int> purgeInboxItems({required int storedBefore});
+}
+
+int _recordBytes(Iterable<EncryptedRecord> records) =>
+    records.fold(0, (total, record) => total + record.encodedJsonBytes());
+
+int _inboxBytes(Iterable<InboxItem> items) =>
+    items.fold(0, (total, item) => total + item.encodedJsonBytes());
+
+void enforceAccountQuota({
+  required int beforeCount,
+  required int beforeBytes,
+  required int afterCount,
+  required int afterBytes,
+  required AccountQuota quota,
+}) {
+  // Existing deployments may already exceed a newly configured cap. Permit a
+  // transaction that does not increase an already-over-budget dimension;
+  // refusing a smaller replacement would make the account impossible to
+  // repair without editing SQLite. Record count cannot shrink because current
+  // tombstones are records too, so equality must remain legal there.
+  final countRefused =
+      afterCount > quota.maxRecords &&
+      (beforeCount <= quota.maxRecords || afterCount > beforeCount);
+  final bytesRefused =
+      afterBytes > quota.maxBytes &&
+      (beforeBytes <= quota.maxBytes || afterBytes > beforeBytes);
+  if (countRefused || bytesRefused) {
+    throw const AccountQuotaExceededException();
+  }
 }
 
 class _MemoryInboxItem {
@@ -474,23 +579,40 @@ class InMemoryStorage implements Storage {
 
   @override
   Future<PushResponse> pushRecords(
-      String username, List<EncryptedRecord> records) async {
+    String username,
+    List<EncryptedRecord> records, {
+    AccountQuota? quota,
+  }) async {
     // Stage without awaits so failures and concurrent requests see no partial batch.
-    final staged = Map<String, EncryptedRecord>.of(_records[username] ?? {});
+    final current = _records[username] ?? const <String, EncryptedRecord>{};
+    final staged = Map<String, EncryptedRecord>.of(current);
     var seq = _seq[username] ?? 0;
     final results = <PushResult>[];
+    var changed = false;
     for (final incoming in records) {
       final existing = staged[incoming.id];
       if (existing != null &&
           !identical(Lww.resolve(existing, incoming), incoming)) {
-        results.add(PushResult(
-            id: incoming.id, seq: existing.seq ?? 0, accepted: false));
+        results.add(
+          PushResult(id: incoming.id, seq: existing.seq ?? 0, accepted: false),
+        );
         continue;
       }
 
       seq++;
       staged[incoming.id] = incoming.withSeq(seq);
       results.add(PushResult(id: incoming.id, seq: seq, accepted: true));
+      changed = true;
+    }
+
+    if (changed && quota != null) {
+      enforceAccountQuota(
+        beforeCount: current.length,
+        beforeBytes: _recordBytes(current.values),
+        afterCount: staged.length,
+        afterBytes: _recordBytes(staged.values),
+        quota: quota,
+      );
     }
 
     _records[username] = staged;
@@ -500,9 +622,12 @@ class InMemoryStorage implements Storage {
 
   @override
   Future<PushResponse> pushRecordsFor(
-      AuthPrincipal principal, List<EncryptedRecord> records) {
+    AuthPrincipal principal,
+    List<EncryptedRecord> records, {
+    AccountQuota? quota,
+  }) {
     _requireCurrent(principal);
-    return pushRecords(principal.username, records);
+    return pushRecords(principal.username, records, quota: quota);
   }
 
   @override
@@ -517,10 +642,80 @@ class InMemoryStorage implements Storage {
   }
 
   @override
-  Future<PullResponse> pullSnapshotFor(
-      AuthPrincipal principal, int since) {
+  Future<PullResponse> pullPage(
+    String username,
+    int since, {
+    int? throughSeq,
+    required PullPageLimits limits,
+    PushLimits? advertisedLimits,
+  }) async {
+    final latest = _seq[username] ?? 0;
+    final through = throughSeq ?? latest;
+    if (through < since || through > latest) {
+      throw const StorageCursorRejectedException();
+    }
+    final candidates =
+        (_records[username]?.values ?? const <EncryptedRecord>[]).where((
+          record,
+        ) {
+          final seq = record.seq ?? 0;
+          return seq > since && seq <= through;
+        }).toList()..sort((a, b) => a.seq!.compareTo(b.seq!));
+    final records = <EncryptedRecord>[];
+    var recordBytes = 0;
+    for (final candidate in candidates) {
+      if (records.length == limits.maxRecords) break;
+      final nextBytes = recordBytes + candidate.encodedJsonBytes();
+      final fits =
+          PullResponse.bodyBytesFor(
+            recordCount: records.length + 1,
+            recordBytes: nextBytes,
+            latestSeq: through,
+            throughSeq: through,
+            hasMore: false,
+            limits: advertisedLimits,
+          ) <=
+          limits.maxBodyBytes;
+      if (!fits) {
+        if (records.isEmpty) throw const StoragePageTooSmallException();
+        break;
+      }
+      records.add(candidate);
+      recordBytes = nextBytes;
+    }
+    final next = records.isEmpty ? since : records.last.seq!;
+    final hasMore = candidates.any((record) => record.seq! > next);
+    return PullResponse(
+      records: records,
+      latestSeq: through,
+      throughSeq: through,
+      hasMore: hasMore,
+      limits: advertisedLimits,
+    );
+  }
+
+  @override
+  Future<PullResponse> pullSnapshotFor(AuthPrincipal principal, int since) {
     _requireCurrent(principal);
     return pullSnapshot(principal.username, since);
+  }
+
+  @override
+  Future<PullResponse> pullPageFor(
+    AuthPrincipal principal,
+    int since, {
+    int? throughSeq,
+    required PullPageLimits limits,
+    PushLimits? advertisedLimits,
+  }) {
+    _requireCurrent(principal);
+    return pullPage(
+      principal.username,
+      since,
+      throughSeq: throughSeq,
+      limits: limits,
+      advertisedLimits: advertisedLimits,
+    );
   }
 
   @override
@@ -613,6 +808,7 @@ class InMemoryStorage implements Storage {
     Uint8List blob, {
     required int storedAt,
     required int maxPending,
+    AccountQuota? quota,
   }) async {
     final app = _inboxApps[appId];
     if (app == null) return const InboxAddResult(InboxAddStatus.unknownApp);
@@ -620,6 +816,23 @@ class InMemoryStorage implements Storage {
       return const InboxAddResult(InboxAddStatus.full);
     }
     final received = (_inboxReceived[app.username] ?? 0) + 1;
+    if (quota != null) {
+      final current = [
+        for (final item in _inboxItems)
+          if (item.username == app.username) item.toItem(),
+      ];
+      final incoming = InboxItem(
+        appId: appId,
+        itemId: itemId,
+        received: received,
+        blob: blob,
+      );
+      final afterBytes = _inboxBytes(current) + incoming.encodedJsonBytes();
+      if (current.length + 1 > quota.maxRecords ||
+          afterBytes > quota.maxBytes) {
+        return const InboxAddResult(InboxAddStatus.accountFull);
+      }
+    }
     _inboxReceived[app.username] = received;
     _inboxItems.add(_MemoryInboxItem(
         app.username, appId, itemId, received, blob, storedAt));
@@ -634,10 +847,76 @@ class InMemoryStorage implements Storage {
       ];
 
   @override
+  Future<InboxPage> inboxPage(
+    String username,
+    int since, {
+    int? throughReceived,
+    required PullPageLimits limits,
+  }) async {
+    final latest = _inboxReceived[username] ?? 0;
+    final through = throughReceived ?? latest;
+    if (through < since || through > latest) {
+      throw const StorageCursorRejectedException();
+    }
+    final candidates = [
+      for (final item in _inboxItems)
+        if (item.username == username &&
+            item.received > since &&
+            item.received <= through)
+          item.toItem(),
+    ]..sort((a, b) => a.received.compareTo(b.received));
+    final items = <InboxItem>[];
+    var itemBytes = 0;
+    for (final candidate in candidates) {
+      if (items.length == limits.maxRecords) break;
+      final nextBytes = itemBytes + candidate.encodedJsonBytes();
+      final fits =
+          InboxPage.bodyBytesFor(
+            itemCount: items.length + 1,
+            itemBytes: nextBytes,
+            throughReceived: through,
+            nextReceived: candidate.received,
+            hasMore: false,
+          ) <=
+          limits.maxBodyBytes;
+      if (!fits) {
+        if (items.isEmpty) throw const StoragePageTooSmallException();
+        break;
+      }
+      items.add(candidate);
+      itemBytes = nextBytes;
+    }
+    final next = items.isEmpty ? since : items.last.received;
+    final hasMore = candidates.any((item) => item.received > next);
+    return InboxPage(
+      items: items,
+      throughReceived: through,
+      nextReceived: next,
+      hasMore: hasMore,
+    );
+  }
+
+  @override
   Future<List<InboxItem>> inboxItemsSinceFor(
       AuthPrincipal principal, int since) {
     _requireCurrent(principal);
     return inboxItemsSince(principal.username, since);
+  }
+
+  @override
+  Future<InboxPage> inboxPageFor(
+    AuthPrincipal principal,
+    int since, {
+    int? throughReceived,
+    required PullPageLimits limits,
+  }) {
+    _requireCurrent(principal);
+    return inboxPage(
+      principal.username,
+      since,
+      throughReceived: throughReceived,
+      limits: limits,
+    );
   }
 
   @override

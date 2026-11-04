@@ -42,7 +42,6 @@ export 'src/catalog/host_key_mutations.dart'
 export 'src/catalog/persistent_record_store.dart'
     show
         PersistentLocalRecordStore,
-        SyncCursorRejectedException,
         SyncRecordStore,
         recordStoreQuarantinePath;
 export 'src/catalog/pin_verdicts.dart'
@@ -75,6 +74,7 @@ export 'src/catalog/server_config_store.dart'
         SyncTrackingServerStore,
         serverStoreQuarantinePath;
 export 'src/catalog/sync_tuple.dart' show SyncTuple;
+export 'src/sync/sync_engine.dart' show SyncCursorRejectedException;
 // F3b's file-backed host-key and vault stores
 // (docs/design/catalog-library.md section 8). Exported here rather than
 // from seance_core.dart, where these names would clash with the Séance

@@ -103,12 +103,32 @@ extension _InboxHandlers on SyncServer {
       });
 
   Future<Response> _listInbox(Request req) => _withAuth(req, (principal) async {
-    final since = int.tryParse(req.url.queryParameters['since'] ?? '0') ?? 0;
+    final since = int.tryParse(req.url.queryParameters['since'] ?? '0');
+    if (since == null || since < 0) {
+      return _error(400, 'bad_request', 'Invalid inbox cursor');
+    }
+    final throughText = req.url.queryParameters['through'];
+    final through = throughText == null ? null : int.tryParse(throughText);
+    if (throughText != null && (through == null || through < 0)) {
+      return _error(400, 'bad_request', 'Invalid inbox watermark');
+    }
     await _purgeExpiredInbox();
-    final items = await storage.inboxItemsSinceFor(principal, since);
-    return _json({
-      'items': [for (final item in items) item.toJson()],
-    });
+    if (req.url.queryParameters['page'] != '1') {
+      final items = await storage.inboxItemsSinceFor(principal, since);
+      return _json({
+        'items': [for (final item in items) item.toJson()],
+      });
+    }
+    final page = await storage.inboxPageFor(
+      principal,
+      since,
+      throughReceived: through,
+      limits: PullPageLimits(
+        maxRecords: settings.maxRecordsPerPull,
+        maxBodyBytes: settings.maxPullBodyBytes,
+      ),
+    );
+    return _json(page.toJson());
   });
 
   /// A 404 here is the claim protocol's answer, not an error: the item was
@@ -148,12 +168,23 @@ extension _InboxHandlers on SyncServer {
 
     await _purgeExpiredInbox();
     final itemId = uuidV4();
+    if (!_inboxItemFitsPullPage(appId, itemId, blob)) {
+      return _error(
+        413,
+        'item_too_large_for_pull',
+        'The stored item would exceed the configured pull page limit',
+      );
+    }
     final result = await storage.addInboxItem(
       appId,
       itemId,
       blob,
       storedAt: _now().millisecondsSinceEpoch,
       maxPending: _inboxMaxPendingPerApp,
+      quota: AccountQuota(
+        maxRecords: settings.maxRecordsPerAccount,
+        maxBytes: settings.maxAccountBytes,
+      ),
     );
     switch (result.status) {
       case InboxAddStatus.added:
@@ -164,6 +195,13 @@ extension _InboxHandlers on SyncServer {
           'inbox_full',
           'The app has $_inboxMaxPendingPerApp pending proposals; wait for '
               'the user to handle some',
+        );
+      case InboxAddStatus.accountFull:
+        return _error(
+          429,
+          'inbox_account_full',
+          'The account has reached its pending inbox storage quota; handle '
+              'some proposals first',
         );
       case InboxAddStatus.unknownApp:
         // Removed between the token check and the insert.

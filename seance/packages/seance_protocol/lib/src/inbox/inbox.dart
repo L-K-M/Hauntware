@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 
 import '../crypto/random.dart';
+import '../json_size.dart';
 
 /// The command inbox: producers (bots, scripts) that may not touch a server
 /// hand the user proposed commands through the sync server. See
@@ -587,6 +588,18 @@ class InboxItem {
         'blob': base64.encode(blob),
       };
 
+  /// Exact UTF-8 byte length of [toJson] after `jsonEncode`.
+  int encodedJsonBytes() =>
+      jsonObjectFramingBytes(4) +
+      jsonKeyBytes('app') +
+      jsonStringBytes(appId) +
+      jsonKeyBytes('item') +
+      jsonStringBytes(itemId) +
+      jsonKeyBytes('received') +
+      jsonIntBytes(received) +
+      jsonKeyBytes('blob') +
+      jsonBase64StringBytes(blob.length);
+
   /// Throws [FormatException] for anything that is not an item, so a
   /// damaged server response reads as such rather than as a cast failure.
   factory InboxItem.fromJson(Map<String, dynamic> json) {
@@ -604,4 +617,74 @@ class InboxItem {
       blob: base64.decode(blob),
     );
   }
+}
+
+/// One bounded page from `GET /v1/inbox`.
+class InboxPage {
+  final List<InboxItem> items;
+
+  /// The fixed account watermark this page belongs to. Null marks a legacy
+  /// unpaged response.
+  final int? throughReceived;
+
+  /// The last server row considered, used as the next transport cursor.
+  final int? nextReceived;
+  final bool hasMore;
+
+  const InboxPage({
+    required this.items,
+    this.throughReceived,
+    this.nextReceived,
+    this.hasMore = false,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'items': [for (final item in items) item.toJson()],
+        if (throughReceived != null) ...{
+          'throughReceived': throughReceived,
+          'nextReceived': nextReceived,
+          'hasMore': hasMore,
+        },
+      };
+
+  int encodedSizeBytes() => bodyBytesFor(
+        itemCount: items.length,
+        itemBytes:
+            items.fold(0, (sum, item) => sum + item.encodedJsonBytes()),
+        throughReceived: throughReceived,
+        nextReceived: nextReceived,
+        hasMore: hasMore,
+      );
+
+  static int bodyBytesFor({
+    required int itemCount,
+    required int itemBytes,
+    int? throughReceived,
+    int? nextReceived,
+    required bool hasMore,
+  }) {
+    final paged = throughReceived != null;
+    return jsonObjectFramingBytes(paged ? 4 : 1) +
+        jsonKeyBytes('items') +
+        jsonArrayFramingBytes(itemCount) +
+        itemBytes +
+        (paged
+            ? jsonKeyBytes('throughReceived') +
+                jsonIntBytes(throughReceived) +
+                jsonKeyBytes('nextReceived') +
+                (nextReceived == null ? 4 : jsonIntBytes(nextReceived)) +
+                jsonKeyBytes('hasMore') +
+                jsonBoolBytes(hasMore)
+            : 0);
+  }
+
+  factory InboxPage.fromJson(Map<String, dynamic> json) => InboxPage(
+        items: [
+          for (final raw in json['items'] as List)
+            InboxItem.fromJson((raw as Map).cast<String, dynamic>()),
+        ],
+        throughReceived: (json['throughReceived'] as num?)?.toInt(),
+        nextReceived: (json['nextReceived'] as num?)?.toInt(),
+        hasMore: json['hasMore'] as bool? ?? false,
+      );
 }

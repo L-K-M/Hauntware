@@ -150,6 +150,16 @@ class PushLimits {
         'maxBlobBytes': maxBlobBytes,
       };
 
+  /// Exact UTF-8 byte length of [toJson] after `jsonEncode`.
+  int encodedJsonBytes() =>
+      jsonObjectFramingBytes(3) +
+      jsonKeyBytes('maxBodyBytes') +
+      jsonIntBytes(maxBodyBytes) +
+      jsonKeyBytes('maxRecordsPerPush') +
+      jsonIntBytes(maxRecordsPerPush) +
+      jsonKeyBytes('maxBlobBytes') +
+      jsonIntBytes(maxBlobBytes);
+
   /// Strict decoder, for data this process produced — a present field that is
   /// not a number throws. Decode a *server's* advertisement with [tryFromJson],
   /// which answers null instead of taking the response down with it.
@@ -227,6 +237,13 @@ class PullResponse {
   final List<EncryptedRecord> records;
   final int latestSeq;
 
+  /// The fixed account watermark this page belongs to. Null is a legacy,
+  /// unpaged response.
+  final int? throughSeq;
+
+  /// Whether another page exists at [throughSeq]. False for legacy responses.
+  final bool hasMore;
+
   /// The limits the next push must respect, or null from a server that does
   /// not advertise them. Carried here rather than on an endpoint of its own
   /// because every sync round pulls before it pushes: the client learns the
@@ -238,13 +255,59 @@ class PullResponse {
     required this.records,
     required this.latestSeq,
     this.limits,
+    this.throughSeq,
+    this.hasMore = false,
   });
 
   Map<String, dynamic> toJson() => {
         'records': records.map((r) => r.toJson()).toList(),
         'latestSeq': latestSeq,
         if (limits != null) 'limits': limits!.toJson(),
+        if (throughSeq != null) ...{
+          'throughSeq': throughSeq,
+          'hasMore': hasMore,
+        },
       };
+
+  /// Exact UTF-8 byte length of [toJson], without making a second base64 copy
+  /// of every record blob.
+  int encodedSizeBytes() => bodyBytesFor(
+        recordCount: records.length,
+        recordBytes:
+            records.fold(0, (sum, record) => sum + record.encodedJsonBytes()),
+        latestSeq: latestSeq,
+        throughSeq: throughSeq,
+        hasMore: hasMore,
+        limits: limits,
+      );
+
+  /// Exact encoded size when the records' encoded sizes are already known.
+  static int bodyBytesFor({
+    required int recordCount,
+    required int recordBytes,
+    required int latestSeq,
+    int? throughSeq,
+    required bool hasMore,
+    PushLimits? limits,
+  }) {
+    final entries =
+        2 + (limits == null ? 0 : 1) + (throughSeq == null ? 0 : 2);
+    return jsonObjectFramingBytes(entries) +
+        jsonKeyBytes('records') +
+        jsonArrayFramingBytes(recordCount) +
+        recordBytes +
+        jsonKeyBytes('latestSeq') +
+        jsonIntBytes(latestSeq) +
+        (limits == null
+            ? 0
+            : jsonKeyBytes('limits') + limits.encodedJsonBytes()) +
+        (throughSeq == null
+            ? 0
+            : jsonKeyBytes('throughSeq') +
+                jsonIntBytes(throughSeq) +
+                jsonKeyBytes('hasMore') +
+                jsonBoolBytes(hasMore));
+  }
 
   factory PullResponse.fromJson(Map<String, dynamic> json) => PullResponse(
         records: (json['records'] as List)
@@ -256,6 +319,8 @@ class PullResponse {
         // a mangled value must not take the records and watermark down with
         // it. The required fields above stay strict on purpose.
         limits: PushLimits.tryFromJson(json['limits']),
+        throughSeq: (json['throughSeq'] as num?)?.toInt(),
+        hasMore: json['hasMore'] as bool? ?? false,
       );
 }
 
