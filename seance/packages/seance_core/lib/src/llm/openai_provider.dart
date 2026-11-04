@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'bounded_http.dart';
 import 'provider.dart';
 import 'sse.dart';
 
@@ -9,21 +10,50 @@ import 'sse.dart';
 /// [baseUrl] covers Ollama, LM Studio, vLLM, OpenRouter, and Groq — anything
 /// exposing `/chat/completions`. For keyless local endpoints, leave [apiKey]
 /// empty and no Authorization header is sent.
-class OpenAiCompatibleProvider implements LlmProvider {
+class OpenAiCompatibleProvider implements LlmProvider, ClosableLlmProvider {
   @override
   final String model;
   final String baseUrl;
   final String apiKey;
   final Duration timeout;
+  final Duration headerTimeout;
+  final Duration idleTimeout;
+  final Duration totalTimeout;
+  final int maxResponseBytes;
+  final int maxSseLineBytes;
+  final int maxSseEventBytes;
+  final int maxSseEvents;
   final http.Client _client;
+  final bool _ownsClient;
+  bool _closed = false;
 
   OpenAiCompatibleProvider({
     required this.baseUrl,
     this.apiKey = '',
     this.model = 'gpt-5.4-mini',
-    this.timeout = const Duration(seconds: 120),
+    Duration timeout = const Duration(seconds: 120),
+    Duration? headerTimeout,
+    Duration? idleTimeout,
+    Duration? totalTimeout,
+    this.maxResponseBytes = maxAssistantResponseBytes,
+    this.maxSseLineBytes = maxAssistantSseLineBytes,
+    this.maxSseEventBytes = maxAssistantSseEventBytes,
+    this.maxSseEvents = maxAssistantSseEvents,
     http.Client? client,
-  }) : _client = client ?? http.Client();
+    http.Client Function()? clientFactory,
+  }) : timeout = timeout,
+       headerTimeout = headerTimeout ?? timeout,
+       idleTimeout = idleTimeout ?? const Duration(seconds: 30),
+       totalTimeout = totalTimeout ?? timeout,
+       _client = _providerClient(client, clientFactory),
+       _ownsClient = client == null;
+
+  @override
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    if (_ownsClient) _client.close();
+  }
 
   Uri get _endpoint => Uri.parse('$baseUrl/chat/completions');
 
@@ -92,30 +122,22 @@ class OpenAiCompatibleProvider implements LlmProvider {
     required List<LlmMessage> messages,
     List<ToolSpec> tools = const [],
   }) async {
-    final res = await _client
-        .post(
-          _endpoint,
-          headers: _headers,
-          body: jsonEncode(buildBody(messages: messages, tools: tools)),
-        )
-        .timeout(timeout);
-    if (res.statusCode >= 400) {
-      throw http.ClientException(
-          'OpenAI-compatible API error HTTP ${res.statusCode}: ${res.body}');
-    }
-    return parseResponse(jsonDecode(res.body) as Map<String, dynamic>);
+    _ensureOpen();
+    final request = http.Request('POST', _endpoint)
+      ..headers.addAll(_headers)
+      ..body = jsonEncode(buildBody(messages: messages, tools: tools));
+    final response = await _sendJson(request, 'OpenAI-compatible API');
+    _ensureOpen();
+    return parseResponse(response);
   }
 
   @override
   Future<List<String>> listModels() async {
-    final res = await _client
-        .get(Uri.parse('$baseUrl/models'), headers: _headers)
-        .timeout(timeout);
-    if (res.statusCode >= 400) {
-      throw http.ClientException(
-          'OpenAI-compatible API error HTTP ${res.statusCode}: ${res.body}');
-    }
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    _ensureOpen();
+    final request = http.Request('GET', Uri.parse('$baseUrl/models'))
+      ..headers.addAll(_headers);
+    final json = await _sendJson(request, 'OpenAI-compatible models API');
+    _ensureOpen();
     final data = (json['data'] as List?) ?? const [];
     return data
         .map((m) => (m as Map<String, dynamic>)['id'] as String?)
@@ -137,15 +159,34 @@ class OpenAiCompatibleProvider implements LlmProvider {
 
   @override
   Stream<String> streamChat({required List<LlmMessage> messages}) async* {
+    _ensureOpen();
     final req = http.Request('POST', _endpoint)
       ..headers.addAll(_headers)
       ..body = jsonEncode(buildBody(messages: messages, stream: true));
-    final res = await _client.send(req).timeout(timeout);
-    if (res.statusCode >= 400) {
-      throw http.ClientException(
-          'OpenAI-compatible stream failed: HTTP ${res.statusCode}');
-    }
-    await for (final event in parseSseJson(res.stream)) {
+    final started = await sendWithResponseDeadlines(
+      _client,
+      req,
+      headerTimeout: headerTimeout,
+      totalTimeout: totalTimeout,
+      operation: 'OpenAI-compatible stream',
+    );
+    await requireSuccessfulResponse(
+      started.response,
+      operation: 'OpenAI-compatible stream',
+      abort: started.abort,
+    );
+    await for (final event in parseSseJson(
+      started.response.stream,
+      maxBytes: maxResponseBytes,
+      maxLineBytes: maxSseLineBytes,
+      maxEventBytes: maxSseEventBytes,
+      maxEvents: maxSseEvents,
+      idleTimeout: idleTimeout,
+      totalTimeout: started.remaining,
+      operation: 'OpenAI-compatible stream',
+      abort: started.abort,
+    )) {
+      _ensureOpen();
       final choices = event['choices'] as List?;
       if (choices == null || choices.isEmpty) continue;
       final delta =
@@ -154,4 +195,44 @@ class OpenAiCompatibleProvider implements LlmProvider {
       if (text != null && text.isNotEmpty) yield text;
     }
   }
+
+  Future<Map<String, dynamic>> _sendJson(
+    http.Request request,
+    String operation,
+  ) async {
+    final started = await sendWithResponseDeadlines(
+      _client,
+      request,
+      headerTimeout: headerTimeout,
+      totalTimeout: totalTimeout,
+      operation: operation,
+    );
+    await requireSuccessfulResponse(
+      started.response,
+      operation: operation,
+      abort: started.abort,
+    );
+    return readBoundedJsonObject(
+      started.response.stream,
+      maxBytes: maxResponseBytes,
+      idleTimeout: idleTimeout,
+      totalTimeout: started.remaining,
+      operation: operation,
+      abort: started.abort,
+    );
+  }
+
+  void _ensureOpen() {
+    if (_closed) throw StateError('OpenAI-compatible provider is closed.');
+  }
+}
+
+http.Client _providerClient(
+  http.Client? client,
+  http.Client Function()? clientFactory,
+) {
+  if (client != null && clientFactory != null) {
+    throw ArgumentError('client and clientFactory cannot both be supplied.');
+  }
+  return client ?? clientFactory?.call() ?? http.Client();
 }

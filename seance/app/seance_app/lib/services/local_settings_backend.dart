@@ -29,10 +29,13 @@ class LocalSettingsBackend implements SettingsBackend {
   LocalSettingsBackend(
     this._state, {
     this._exportFiles = const PlatformSecretsExportFiles(),
-  });
+    LlmProvider Function(ModelQuery query, String apiKey)? modelProviderBuilder,
+  }) : _modelProviderBuilder = modelProviderBuilder ?? _buildModelProvider;
 
   final AppState _state;
   final SecretsExportFiles _exportFiles;
+  final LlmProvider Function(ModelQuery query, String apiKey)
+      _modelProviderBuilder;
 
   AppSettings get _s => _state.services.settings;
 
@@ -177,21 +180,14 @@ class LocalSettingsBackend implements SettingsBackend {
     final key = query.typedApiKey.isNotEmpty
         ? query.typedApiKey
         : (await _state.services.masterKeys.getApiKey(ref) ?? '');
-    final baseUrl = query.baseUrl.trim();
-    final LlmProvider provider = query.kind == LlmProviderKind.anthropic
-        ? AnthropicProvider(
-            apiKey: key,
-            baseUrl: baseUrl,
-            model: query.model.trim(),
-          )
-        : OpenAiCompatibleProvider(
-            baseUrl: baseUrl,
-            apiKey: key,
-            model: query.model.trim(),
-          );
-    final models = await provider.listModels();
-    models.sort();
-    return models;
+    final provider = _modelProviderBuilder(query, key);
+    try {
+      final models = await provider.listModels();
+      models.sort();
+      return models;
+    } finally {
+      closeLlmProvider(provider);
+    }
   }
 
   AssistantSaveResult _result(
@@ -552,4 +548,16 @@ class LocalSettingsBackend implements SettingsBackend {
       );
     }
   }
+}
+
+LlmProvider _buildModelProvider(ModelQuery query, String apiKey) {
+  final baseUrl = query.baseUrl.trim();
+  final model = query.model.trim();
+  return query.kind == LlmProviderKind.anthropic
+      ? AnthropicProvider(apiKey: apiKey, baseUrl: baseUrl, model: model)
+      : OpenAiCompatibleProvider(
+          baseUrl: baseUrl,
+          apiKey: apiKey,
+          model: model,
+        );
 }

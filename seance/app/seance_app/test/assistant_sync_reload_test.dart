@@ -13,6 +13,16 @@ import 'package:seance_core/seance_core.dart';
 const _baseUrl = 'https://sync.test';
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
+class _ClosableProvider implements LlmProvider, ClosableLlmProvider {
+  int closeCalls = 0;
+
+  @override
+  void close() => closeCalls++;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 /// A round that adopts the assistant record and *then* fails must still
 /// rebuild the chat provider.
 ///
@@ -291,12 +301,19 @@ void main() {
     // settings changed on another device, reload the fields, and refuse.
     final state = AppState(services);
     addTearDown(state.dispose);
+    final previousProvider = _ClosableProvider();
+    state.chat.adoptController(
+      ChatController(provider: previousProvider, onPaste: (_) {}),
+      state.llmConfigVersion,
+    );
 
     // With nothing configured first — the early return a future optimisation
     // would most plausibly add ("no provider, nothing to reload").
     final before = state.llmConfigVersion;
     await state.reloadLlmProvider();
     expect(state.llmConfigVersion, before + 1);
+    expect(previousProvider.closeCalls, 1);
+    expect(state.chat.controllerFor(before), isNull);
 
     // And with a key stored, where the reload has something to do. Twice in a
     // row with the same configuration too: a bump conditional on the config

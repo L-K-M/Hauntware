@@ -1248,6 +1248,9 @@ class AppServices {
   );
 
   /// Build the configured LLM provider, resolving its API key from the keystore.
+  ///
+  /// Each call returns a new provider. The caller must close it when it also
+  /// implements [ClosableLlmProvider].
   Future<LlmProvider> buildLlmProvider() async {
     final apiKey = settings.llmApiKeyRef.isEmpty
         ? ''
@@ -1295,43 +1298,48 @@ class AppServices {
   /// how you drop one; filling several is how you use them all (see
   /// [CompositeSearch]). Null when nothing is configured, which
   /// is what hides the search tool from the assistant.
+  /// The caller owns a non-null result and must close it when it implements
+  /// [ClosableSearchProvider].
   Future<SearchProvider?> buildSearchProvider() async {
-    final backends = <SearchProvider>[];
     // Trimmed, like the key refs below it: a URL that is only whitespace has
     // nothing to resolve against — it would build a `SearxngSearch` whose
     // every request fails, and the only sign would be the mid-search failure
     // log. The settings screen already writes trimmed-or-null; a hand-edited
     // or synced `settings.json` need not.
     final searxngUrl = settings.searxngUrl?.trim() ?? '';
-    if (searxngUrl.isNotEmpty) {
-      backends.add(SearxngSearch(baseUrl: searxngUrl));
-    }
     // Trimmed for the reason the URL above is: these arrive from a
     // hand-edited `settings.json` or over sync, and a padded name addresses no
     // keystore entry. Untrimmed, it passes the emptiness check, misses its
     // lookup, and is reported as a locked keyring — sending the user to debug
     // a keystore that is working.
     final braveRef = settings.braveApiKeyRef?.trim() ?? '';
+    String? braveKey;
     if (braveRef.isNotEmpty) {
       // getApiKey answers null on a locked keyring rather than throwing, so a
       // keystore that is down reads as "this backend is not available" and the
       // others still work.
-      final key = await masterKeys.getApiKey(braveRef);
-      if (key != null) {
-        backends.add(BraveSearch(apiKey: key));
-      } else {
+      braveKey = await masterKeys.getApiKey(braveRef);
+      if (braveKey == null) {
         _searchBackendUnavailable('Brave');
       }
     }
     final zaiRef = settings.zaiApiKeyRef?.trim() ?? '';
+    String? zaiKey;
     if (zaiRef.isNotEmpty) {
-      final key = await masterKeys.getApiKey(zaiRef);
-      if (key != null) {
-        backends.add(ZaiSearch(apiKey: key));
-      } else {
+      zaiKey = await masterKeys.getApiKey(zaiRef);
+      if (zaiKey == null) {
         _searchBackendUnavailable('Z.AI');
       }
     }
+
+    // Resolve every credential before allocating a client. App Lock may
+    // reject either read; if it does, there is no partially-built backend to
+    // leak while the error returns to the caller.
+    final backends = <SearchProvider>[
+      if (searxngUrl.isNotEmpty) SearxngSearch(baseUrl: searxngUrl),
+      if (braveKey != null) BraveSearch(apiKey: braveKey),
+      if (zaiKey != null) ZaiSearch(apiKey: zaiKey),
+    ];
     if (backends.isEmpty) return null;
     return backends.length == 1 ? backends.single : CompositeSearch(backends);
   }
