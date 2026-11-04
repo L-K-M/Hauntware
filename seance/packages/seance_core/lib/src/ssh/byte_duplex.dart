@@ -28,9 +28,8 @@ abstract interface class ByteDuplex {
   Future<void> close();
 }
 
-/// Maximum pre-listen bytes one duplex or process stream holds before the
-/// channel is paused and the peer stops receiving window credit.
-const _inboundBufferLimit = 4 * 1024 * 1024;
+/// Maximum bytes retained for one late or paused inbound stream.
+const inboundReplayBufferLimit = 4 * 1024 * 1024;
 
 /// dartssh2 channel wrapped as a [ByteDuplex]. Not barrel-exported: the
 /// public surface stays free of dartssh2 types.
@@ -38,7 +37,7 @@ final class ChannelByteDuplex implements ByteDuplex {
   ChannelByteDuplex(this._socket, {void Function()? onData})
     : _inbound = InboundReplay(
         _socket.stream,
-        maxBufferedBytes: _inboundBufferLimit,
+        maxBufferedBytes: inboundReplayBufferLimit,
         onData: onData,
       );
 
@@ -84,19 +83,25 @@ const _closeBound = Duration(seconds: 5);
 ///
 /// The source subscription is taken immediately, so no wire bytes are lost
 /// between channel open and the consumer's `listen`. Buffered bytes are
-/// bounded by [maxBufferedBytes]: at the bound the source subscription pauses,
-/// which is exactly what dartssh2 checks before granting window credit — the
-/// peer stalls instead of the buffer growing without limit. A `null` bound
-/// drains unconditionally (stderr), which trades memory for never stalling
-/// the remote process. Cancelling the consumer pauses the source rather than
-/// cancelling it, keeping the bounded-memory property for an abandoned read
-/// side while the write side stays open.
+/// bounded by [maxBufferedBytes]. [InboundReplayOverflow.backpressure] pauses
+/// the source at the bound, which is exactly what dartssh2 checks before
+/// granting window credit. [InboundReplayOverflow.discardOldest] keeps
+/// draining instead and retains only the newest bytes. Cancelling a consumer
+/// follows the selected policy while the owning channel stays open.
 final class InboundReplay {
   InboundReplay(
-    Stream<Uint8List> source, {
-    this.maxBufferedBytes,
+    Stream<List<int>> source, {
+    required this.maxBufferedBytes,
+    this.overflow = InboundReplayOverflow.backpressure,
     this.onData,
   }) {
+    if (maxBufferedBytes <= 0) {
+      throw ArgumentError.value(
+        maxBufferedBytes,
+        'maxBufferedBytes',
+        'Must be positive.',
+      );
+    }
     _subscription = source.listen(
       _receive,
       onError: _receiveError,
@@ -104,14 +109,16 @@ final class InboundReplay {
     );
   }
 
-  /// Pre-listen bound; growth past it pauses the source. `null` drains
-  /// unconditionally (the stderr contract).
-  final int? maxBufferedBytes;
+  /// Maximum bytes retained while the consumer is absent or paused.
+  final int maxBufferedBytes;
+
+  /// What happens when buffered input reaches [maxBufferedBytes].
+  final InboundReplayOverflow overflow;
 
   /// Liveness probe wired to the owning link's inbound-byte watch.
   final void Function()? onData;
 
-  late final StreamSubscription<Uint8List> _subscription;
+  late final StreamSubscription<List<int>> _subscription;
 
   final _pending = Queue<List<int>>();
   var _pendingBytes = 0;
@@ -139,13 +146,39 @@ final class InboundReplay {
     _pump();
   }
 
-  void _receive(Uint8List data) {
+  void _receive(List<int> data) {
     onData?.call();
     if (_controller.isClosed) return;
     _pending.addLast(data);
     _pendingBytes += data.length;
+    _discardOldestOverflow();
     _pauseUpstreamIfFull();
     _pump();
+  }
+
+  void _discardOldestOverflow() {
+    if (overflow != InboundReplayOverflow.discardOldest ||
+        _pendingBytes <= maxBufferedBytes) {
+      return;
+    }
+
+    var bytesToDiscard = _pendingBytes - maxBufferedBytes;
+    while (bytesToDiscard > 0) {
+      final first = _pending.removeFirst();
+      if (first.length <= bytesToDiscard) {
+        _pendingBytes -= first.length;
+        bytesToDiscard -= first.length;
+        continue;
+      }
+
+      // Copy the retained tail so a small slice cannot keep a large source
+      // buffer alive.
+      final tail = Uint8List(first.length - bytesToDiscard)
+        ..setRange(0, first.length - bytesToDiscard, first, bytesToDiscard);
+      _pending.addFirst(tail);
+      _pendingBytes -= bytesToDiscard;
+      bytesToDiscard = 0;
+    }
   }
 
   void _receiveError(Object error, StackTrace stackTrace) {
@@ -179,26 +212,43 @@ final class InboundReplay {
   }
 
   void _pauseUpstreamIfFull() {
-    final max = maxBufferedBytes;
-    if (_upstreamPaused || max == null || _pendingBytes < max) return;
+    if (_upstreamPaused ||
+        overflow != InboundReplayOverflow.backpressure ||
+        _pendingBytes < maxBufferedBytes) {
+      return;
+    }
     _upstreamPaused = true;
     _subscription.pause();
   }
 
   void _resumeUpstreamIfDrained() {
-    final max = maxBufferedBytes;
     // Resume once the backlog is well under the limit, so a consumer
     // dribbling reads does not flap the channel window every event.
-    if (!_upstreamPaused || max == null || _pendingBytes > max ~/ 2) return;
+    if (!_upstreamPaused ||
+        overflow != InboundReplayOverflow.backpressure ||
+        _pendingBytes > maxBufferedBytes ~/ 2) {
+      return;
+    }
     _upstreamPaused = false;
     _subscription.resume();
   }
 
   void _pauseUpstream() {
-    // An unbounded replay keeps draining even while the consumer is paused:
-    // that is the stderr contract, never stalling the remote process.
-    if (_upstreamPaused || maxBufferedBytes == null) return;
+    // Discard-oldest mode keeps draining while the consumer is absent or
+    // paused so an unread diagnostic stream cannot stall its process.
+    if (_upstreamPaused || overflow == InboundReplayOverflow.discardOldest) {
+      return;
+    }
     _upstreamPaused = true;
     _subscription.pause();
   }
+}
+
+/// How [InboundReplay] enforces its byte bound.
+enum InboundReplayOverflow {
+  /// Pause the source until the consumer drains enough buffered bytes.
+  backpressure,
+
+  /// Keep draining and discard the oldest buffered bytes first.
+  discardOldest,
 }

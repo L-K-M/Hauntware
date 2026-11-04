@@ -230,6 +230,35 @@ void main() {
       expect((await process.exit).exitCode, 3);
     });
 
+    test('bounds unread stderr without holding process exit open', () async {
+      const chunkSize = 16 * 1024;
+      const chunkCount = 6 * 1024 * 1024 ~/ chunkSize;
+      const retainedChunkCount = 4 * 1024 * 1024 ~/ chunkSize;
+      final link = await openTestLink();
+      addTearDown(link.link.close);
+      link.peer.onExec = (channel, command) {
+        for (var chunk = 0; chunk < chunkCount; chunk++) {
+          channel.sendStderr(List<int>.filled(chunkSize, chunk & 0xff));
+        }
+        channel
+          ..sendExitStatus(0)
+          ..sendEof()
+          ..sendClose();
+      };
+
+      final process = await link.link.start('noisy');
+      expect((await process.exit).exitCode, 0);
+
+      final stderr = await process.stderr.expand((chunk) => chunk).toList();
+      expect(stderr, hasLength(retainedChunkCount * chunkSize));
+      for (var offset = 0; offset < stderr.length; offset += chunkSize) {
+        final sourceChunk =
+            chunkCount - retainedChunkCount + offset ~/ chunkSize;
+        expect(stderr[offset], sourceChunk & 0xff);
+        expect(stderr[offset + chunkSize - 1], sourceChunk & 0xff);
+      }
+    });
+
     test('requests a PTY with the given dimensions', () async {
       final link = await openTestLink();
       addTearDown(link.link.close);

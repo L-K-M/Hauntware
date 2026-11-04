@@ -41,14 +41,15 @@ enum RemoteSignal { hup, int_, quit, kill, term, usr1, usr2 }
 ///
 /// [stdout] is backpressured like a [ByteDuplex]: bytes buffer while no
 /// listener is attached and the channel pauses past the bound, so the remote
-/// process stalls rather than the buffer growing without limit. [stderr] is
-/// drained unconditionally so the remote process never stalls on an unread
-/// diagnostic stream. Closing [stdin] sends channel EOF.
+/// process stalls rather than the buffer growing without limit. [stderr]
+/// keeps draining so an unread diagnostic stream never stalls the process;
+/// a late or paused listener receives only its newest 4 MiB. Closing [stdin]
+/// sends channel EOF.
 abstract interface class RemoteProcess {
   /// Inbound stdout; replayed for a listener that attaches late.
   Stream<List<int>> get stdout;
 
-  /// Inbound stderr, always drained.
+  /// Inbound stderr, always drained with the newest 4 MiB replayed.
   Stream<List<int>> get stderr;
 
   /// The process's stdin; [StreamSink.close] sends channel EOF.
@@ -101,12 +102,15 @@ final class SshRemoteProcess implements RemoteProcess {
   }) {
     _stdout = InboundReplay(
       _session.stdout,
-      maxBufferedBytes: _processBufferLimit,
+      maxBufferedBytes: inboundReplayBufferLimit,
       onData: onData,
     );
-    // No bound: stderr is drained unconditionally so the remote process
-    // cannot stall on an unread diagnostic stream.
-    _stderr = InboundReplay(_session.stderr, onData: onData);
+    _stderr = InboundReplay(
+      _session.stderr,
+      maxBufferedBytes: inboundReplayBufferLimit,
+      overflow: InboundReplayOverflow.discardOldest,
+      onData: onData,
+    );
     _exit = _session.done
         .then(
           (_) => RemoteExit(
@@ -173,8 +177,6 @@ final class SshRemoteProcess implements RemoteProcess {
   );
 }
 
-/// Pre-listen bound per process stream (see [InboundReplay]).
-const _processBufferLimit = 4 * 1024 * 1024;
 const _closeBound = Duration(seconds: 5);
 
 extension on RemoteSignal {
