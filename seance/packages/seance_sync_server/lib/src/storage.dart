@@ -20,6 +20,21 @@ class Account {
     required this.argonSalt,
     required this.argonParams,
   });
+
+  AccountPrincipal get principal =>
+      AccountPrincipal(username: username, generation: verifierSalt);
+}
+
+/// One immutable registration of a username.
+///
+/// [generation] is the server-generated verifier salt. It changes whenever a
+/// deleted username is registered again, so an operation authorized against
+/// the old account cannot act on the replacement.
+final class AccountPrincipal {
+  final String username;
+  final String generation;
+
+  const AccountPrincipal({required this.username, required this.generation});
 }
 
 /// The result of atomically creating an account and its initial session.
@@ -35,6 +50,26 @@ final class AccountRegistered extends AccountRegistrationResult {
 
 final class AccountAlreadyExists extends AccountRegistrationResult {
   const AccountAlreadyExists();
+}
+
+/// The result of issuing a session for a previously read account generation.
+sealed class AccountTokenIssueResult {
+  const AccountTokenIssueResult();
+}
+
+final class AccountTokenIssued extends AccountTokenIssueResult {
+  final String token;
+
+  const AccountTokenIssued(this.token);
+}
+
+final class AccountTokenRejected extends AccountTokenIssueResult {
+  const AccountTokenRejected();
+}
+
+/// The account was deleted or replaced after its bearer token was resolved.
+final class StaleAccountPrincipalException implements Exception {
+  const StaleAccountPrincipalException();
 }
 
 /// A backend disabled after an unrecoverable transaction failure.
@@ -75,6 +110,17 @@ class StoredInboxApp {
     required this.tokenSalt,
     required this.created,
   });
+
+  InboxAppPrincipal get principal =>
+      InboxAppPrincipal(appId: appId, generation: tokenSalt);
+}
+
+/// One immutable registration of a producer app id.
+final class InboxAppPrincipal {
+  final String appId;
+  final String generation;
+
+  const InboxAppPrincipal({required this.appId, required this.generation});
 }
 
 enum InboxAddStatus {
@@ -112,21 +158,25 @@ abstract class Storage {
   // handlers must use [registerAccount] so conflict detection and the initial
   // token are atomic.
   Future<void> createAccount(Account account);
-  Future<void> deleteAccount(String username);
+  Future<void> deleteAccount(AccountPrincipal account);
 
-  /// Create and persist a bearer token for [username]; returns the token.
-  Future<String> createToken(String username);
-  Future<String?> usernameForToken(String token);
+  /// Issue a bearer token only while [account] is still the current generation.
+  Future<AccountTokenIssueResult> issueToken(AccountPrincipal account);
+
+  /// Resolve [token] to the account generation it currently authenticates.
+  Future<AccountPrincipal?> authenticateToken(String token);
 
   /// Resolve LWW, allocate sequences and commit a whole batch atomically.
   /// A rejected LWW write is a result; a storage failure commits nothing.
   /// Process entries in list order, including repeated ids. Later entries resolve
   /// against earlier staged writes. Empty batches return the current watermark.
   Future<PushResponse> pushRecords(
-      String username, List<EncryptedRecord> records);
+    AccountPrincipal account,
+    List<EncryptedRecord> records,
+  );
 
   /// Return records and their watermark from one consistent snapshot.
-  Future<PullResponse> pullSnapshot(String username, int since);
+  Future<PullResponse> pullSnapshot(AccountPrincipal account, int since);
 
   // Compatibility primitives; sync handlers must use the atomic operations.
   Future<EncryptedRecord?> getRecord(String username, String id);
@@ -146,35 +196,39 @@ abstract class Storage {
 
   /// Register [app]. Returns false, changing nothing, when its id is taken
   /// by any account.
-  Future<bool> createInboxApp(StoredInboxApp app);
+  Future<bool> createInboxApp(AccountPrincipal account, StoredInboxApp app);
 
   /// The app with [appId] in any account, for checking a deposit token.
   Future<StoredInboxApp?> getInboxApp(String appId);
 
-  /// [username]'s apps with their pending item counts, oldest first.
-  Future<List<InboxAppInfo>> listInboxApps(String username);
+  /// [account]'s apps with their pending item counts, oldest first.
+  Future<List<InboxAppInfo>> listInboxApps(AccountPrincipal account);
 
-  /// Remove [username]'s app and every item pending for it. Returns false
-  /// when [username] has no such app.
-  Future<bool> deleteInboxApp(String username, String appId);
+  /// Remove [account]'s app and every item pending for it. Returns false
+  /// when that account has no such app.
+  Future<bool> deleteInboxApp(AccountPrincipal account, String appId);
 
-  /// Queue [blob] for [appId]'s account under the next per-account
+  /// Queue [blob] for [app]'s account under the next per-account
   /// `received` number, unless the app already holds [maxPending] items.
   /// [storedAt] (ms since the epoch) is what retention is measured from.
   Future<InboxAddResult> addInboxItem(
-    String appId,
+    InboxAppPrincipal app,
     String itemId,
     Uint8List blob, {
     required int storedAt,
     required int maxPending,
   });
 
-  /// [username]'s items with `received` greater than [since], ascending.
-  Future<List<InboxItem>> inboxItemsSince(String username, int since);
+  /// [account]'s items with `received` greater than [since], ascending.
+  Future<List<InboxItem>> inboxItemsSince(AccountPrincipal account, int since);
 
   /// Remove one item. Returns false when it is not (or no longer) there,
   /// which is how a device learns another one claimed it first.
-  Future<bool> deleteInboxItem(String username, String appId, String itemId);
+  Future<bool> deleteInboxItem(
+    AccountPrincipal account,
+    String appId,
+    String itemId,
+  );
 
   /// Drop every item stored before [storedBefore] (ms since the epoch), in
   /// all accounts. Returns how many were dropped.
@@ -230,6 +284,13 @@ class InMemoryStorage implements Storage {
     return AccountRegistered(_createToken(username));
   }
 
+  bool _isCurrent(AccountPrincipal account) =>
+      _accounts[account.username]?.verifierSalt == account.generation;
+
+  void _requireCurrent(AccountPrincipal account) {
+    if (!_isCurrent(account)) throw const StaleAccountPrincipalException();
+  }
+
   @override
   Future<void> createAccount(Account account) async {
     _accounts[account.username] = account;
@@ -238,7 +299,9 @@ class InMemoryStorage implements Storage {
   }
 
   @override
-  Future<void> deleteAccount(String username) async {
+  Future<void> deleteAccount(AccountPrincipal account) async {
+    _requireCurrent(account);
+    final username = account.username;
     _accounts.remove(username);
     _records.remove(username);
     _seq.remove(username);
@@ -249,7 +312,10 @@ class InMemoryStorage implements Storage {
   }
 
   @override
-  Future<String> createToken(String username) async => _createToken(username);
+  Future<AccountTokenIssueResult> issueToken(AccountPrincipal account) async {
+    if (!_isCurrent(account)) return const AccountTokenRejected();
+    return AccountTokenIssued(_createToken(account.username));
+  }
 
   String _createToken(String username) {
     final token = base64Url.encode(secureRandomBytes(32));
@@ -258,11 +324,19 @@ class InMemoryStorage implements Storage {
   }
 
   @override
-  Future<String?> usernameForToken(String token) async => _tokens[token];
+  Future<AccountPrincipal?> authenticateToken(String token) async {
+    final username = _tokens[token];
+    if (username == null) return null;
+    return _accounts[username]?.principal;
+  }
 
   @override
   Future<PushResponse> pushRecords(
-      String username, List<EncryptedRecord> records) async {
+    AccountPrincipal account,
+    List<EncryptedRecord> records,
+  ) async {
+    _requireCurrent(account);
+    final username = account.username;
     // Stage without awaits so failures and concurrent requests see no partial batch.
     final staged = Map<String, EncryptedRecord>.of(_records[username] ?? {});
     var seq = _seq[username] ?? 0;
@@ -287,7 +361,9 @@ class InMemoryStorage implements Storage {
   }
 
   @override
-  Future<PullResponse> pullSnapshot(String username, int since) async {
+  Future<PullResponse> pullSnapshot(AccountPrincipal account, int since) async {
+    _requireCurrent(account);
+    final username = account.username;
     // Copy the rows and watermark in one synchronous turn.
     final watermark = _seq[username] ?? 0;
     final records = (_records[username]?.values ?? const <EncryptedRecord>[])
@@ -325,7 +401,14 @@ class InMemoryStorage implements Storage {
   Future<int> latestSeq(String username) async => _seq[username] ?? 0;
 
   @override
-  Future<bool> createInboxApp(StoredInboxApp app) async {
+  Future<bool> createInboxApp(
+    AccountPrincipal account,
+    StoredInboxApp app,
+  ) async {
+    _requireCurrent(account);
+    if (app.username != account.username) {
+      throw ArgumentError('Inbox app owner must match its account principal');
+    }
     if (_inboxApps.containsKey(app.appId)) return false;
     _inboxApps[app.appId] = app;
     return true;
@@ -335,7 +418,9 @@ class InMemoryStorage implements Storage {
   Future<StoredInboxApp?> getInboxApp(String appId) async => _inboxApps[appId];
 
   @override
-  Future<List<InboxAppInfo>> listInboxApps(String username) async {
+  Future<List<InboxAppInfo>> listInboxApps(AccountPrincipal account) async {
+    _requireCurrent(account);
+    final username = account.username;
     final apps = _inboxApps.values.where((a) => a.username == username).toList()
       ..sort((a, b) => a.created.compareTo(b.created));
     return [
@@ -350,7 +435,9 @@ class InMemoryStorage implements Storage {
   }
 
   @override
-  Future<bool> deleteInboxApp(String username, String appId) async {
+  Future<bool> deleteInboxApp(AccountPrincipal account, String appId) async {
+    _requireCurrent(account);
+    final username = account.username;
     if (_inboxApps[appId]?.username != username) return false;
     _inboxApps.remove(appId);
     _inboxItems.removeWhere((i) => i.appId == appId);
@@ -359,14 +446,17 @@ class InMemoryStorage implements Storage {
 
   @override
   Future<InboxAddResult> addInboxItem(
-    String appId,
+    InboxAppPrincipal principal,
     String itemId,
     Uint8List blob, {
     required int storedAt,
     required int maxPending,
   }) async {
-    final app = _inboxApps[appId];
-    if (app == null) return const InboxAddResult(InboxAddStatus.unknownApp);
+    final app = _inboxApps[principal.appId];
+    if (app == null || app.tokenSalt != principal.generation) {
+      return const InboxAddResult(InboxAddStatus.unknownApp);
+    }
+    final appId = app.appId;
     if (_inboxItems.where((i) => i.appId == appId).length >= maxPending) {
       return const InboxAddResult(InboxAddStatus.full);
     }
@@ -378,15 +468,26 @@ class InMemoryStorage implements Storage {
   }
 
   @override
-  Future<List<InboxItem>> inboxItemsSince(String username, int since) async => [
-        for (final item in _inboxItems)
-          if (item.username == username && item.received > since)
-            item.toItem(),
-      ];
+  Future<List<InboxItem>> inboxItemsSince(
+    AccountPrincipal account,
+    int since,
+  ) async {
+    _requireCurrent(account);
+    return [
+      for (final item in _inboxItems)
+        if (item.username == account.username && item.received > since)
+          item.toItem(),
+    ];
+  }
 
   @override
   Future<bool> deleteInboxItem(
-      String username, String appId, String itemId) async {
+    AccountPrincipal account,
+    String appId,
+    String itemId,
+  ) async {
+    _requireCurrent(account);
+    final username = account.username;
     final before = _inboxItems.length;
     _inboxItems.removeWhere((i) =>
         i.username == username && i.appId == appId && i.itemId == itemId);

@@ -29,6 +29,14 @@ Account _account(String username) => Account(
   argonParams: const Argon2Params(),
 );
 
+AccountPrincipal _principal(String username) => _account(username).principal;
+
+Future<String> _issueToken(Storage storage, String username) async =>
+    switch (await storage.issueToken(_principal(username))) {
+      AccountTokenIssued(:final token) => token,
+      AccountTokenRejected() => throw StateError('account disappeared'),
+    };
+
 enum _CleanupFault { rollback, stateRead }
 
 class _FaultingDatabase implements Database {
@@ -87,7 +95,7 @@ void main() {
       ''');
 
         await expectLater(
-          storage.pushRecords('user', [_record('record', 10)]),
+          storage.pushRecords(_principal('user'), [_record('record', 10)]),
           throwsA(
             isA<StorageUnavailableException>().having(
               (e) => e.cause,
@@ -134,7 +142,7 @@ void main() {
     );
     addTearDown(storage.close);
     await storage.createAccount(_account('user'));
-    final token = await storage.createToken('user');
+    final token = await _issueToken(storage, 'user');
     final handler = SyncServer(
       storage: storage,
       settings: const ServerSettings(),
@@ -180,8 +188,8 @@ void main() {
       });
 
       test('mixed batches allocate only accepted writes, in order', () async {
-        await storage.pushRecords('alice', [_record('old', 20)]);
-        final result = await storage.pushRecords('alice', [
+        await storage.pushRecords(_principal('alice'), [_record('old', 20)]);
+        final result = await storage.pushRecords(_principal('alice'), [
           _record('old', 10),
           _record('new', 30),
           _record('another', 40),
@@ -189,14 +197,17 @@ void main() {
         expect(result.results.map((r) => r.accepted), [false, true, true]);
         expect(result.results.map((r) => r.seq), [1, 2, 3]);
         expect(result.latestSeq, 3);
-        final delta = await storage.pullSnapshot('alice', 1);
+        final delta = await storage.pullSnapshot(_principal('alice'), 1);
         expect(delta.records.map((r) => r.id), ['new', 'another']);
         expect(delta.latestSeq, 3);
-        expect((await storage.pullSnapshot('alice', 3)).records, isEmpty);
+        expect(
+          (await storage.pullSnapshot(_principal('alice'), 3)).records,
+          isEmpty,
+        );
       });
 
       test('repeated ids resolve against earlier staged writes', () async {
-        final result = await storage.pushRecords('alice', [
+        final result = await storage.pushRecords(_principal('alice'), [
           _record('same', 10),
           _record('same', 20),
           _record('same', 15),
@@ -205,16 +216,19 @@ void main() {
         expect(result.results.map((r) => r.seq), [1, 2, 2]);
         expect(result.latestSeq, 2);
         expect(
-          (await storage.pullSnapshot('alice', 0)).records.single.updatedAt,
+          (await storage.pullSnapshot(
+            _principal('alice'),
+            0,
+          )).records.single.updatedAt,
           20,
         );
       });
 
       test('timestamp ties use device id then server sequence', () async {
-        await storage.pushRecords('alice', [
+        await storage.pushRecords(_principal('alice'), [
           _record('same', 10, deviceId: 'a'),
         ]);
-        final result = await storage.pushRecords('alice', [
+        final result = await storage.pushRecords(_principal('alice'), [
           _record('same', 10, deviceId: 'z'),
           _record('same', 10, deviceId: 'b'),
           _record('same', 10, deviceId: 'z'),
@@ -222,7 +236,10 @@ void main() {
         expect(result.results.map((r) => r.accepted), [true, false, false]);
         expect(result.results.map((r) => r.seq), [2, 2, 2]);
         expect(
-          (await storage.pullSnapshot('alice', 0)).records.single.deviceId,
+          (await storage.pullSnapshot(
+            _principal('alice'),
+            0,
+          )).records.single.deviceId,
           'z',
         );
       });
@@ -230,40 +247,54 @@ void main() {
       test(
         'accounts, empty batches and captured snapshots stay isolated',
         () async {
-          expect((await storage.pushRecords('alice', [])).latestSeq, 0);
-          await storage.pushRecords('alice', [_record('same-id', 10)]);
-          final snapshot = await storage.pullSnapshot('alice', 0);
-          await storage.pushRecords('alice', [_record('same-id', 20)]);
-          await storage.pushRecords('bob', [_record('same-id', 30)]);
+          expect(
+            (await storage.pushRecords(_principal('alice'), [])).latestSeq,
+            0,
+          );
+          await storage.pushRecords(_principal('alice'), [
+            _record('same-id', 10),
+          ]);
+          final snapshot = await storage.pullSnapshot(_principal('alice'), 0);
+          await storage.pushRecords(_principal('alice'), [
+            _record('same-id', 20),
+          ]);
+          await storage.pushRecords(_principal('bob'), [
+            _record('same-id', 30),
+          ]);
 
           expect(snapshot.latestSeq, 1);
           expect(snapshot.records.single.updatedAt, 10);
-          final bob = await storage.pullSnapshot('bob', 0);
+          final bob = await storage.pullSnapshot(_principal('bob'), 0);
           expect(bob.latestSeq, 1);
           expect(bob.records.single.updatedAt, 30);
-          expect((await storage.pushRecords('alice', [])).latestSeq, 2);
+          expect(
+            (await storage.pushRecords(_principal('alice'), [])).latestSeq,
+            2,
+          );
         },
       );
 
       test(
         'a failed batch leaves both records and sequence unchanged',
         () async {
-          await storage.pushRecords('alice', [_record('existing', 10)]);
-          final before = await storage.pullSnapshot('alice', 0);
+          await storage.pushRecords(_principal('alice'), [
+            _record('existing', 10),
+          ]);
+          final before = await storage.pullSnapshot(_principal('alice'), 0);
           // A lazy list failure exercises rollback after the first staged write.
           final invalid = <Object>[
             _record('existing', 20),
             'not a record',
           ].cast<EncryptedRecord>();
           await expectLater(
-            storage.pushRecords('alice', invalid),
+            storage.pushRecords(_principal('alice'), invalid),
             throwsA(isA<TypeError>()),
           );
           expect(
-            (await storage.pullSnapshot('alice', 0)).toJson(),
+            (await storage.pullSnapshot(_principal('alice'), 0)).toJson(),
             before.toJson(),
           );
-          final retry = await storage.pushRecords('alice', [
+          final retry = await storage.pushRecords(_principal('alice'), [
             _record('existing', 20),
           ]);
           expect(retry.results.single.seq, before.latestSeq + 1);
@@ -285,7 +316,10 @@ void main() {
       BEGIN SELECT RAISE(ROLLBACK, 'injected rollback'); END;
     ''');
       await expectLater(
-        storage.pushRecords('user', [_record('ok', 10), _record('poison', 20)]),
+        storage.pushRecords(_principal('user'), [
+          _record('ok', 10),
+          _record('poison', 20),
+        ]),
         throwsA(
           isA<SqliteException>().having(
             (e) => e.message,
@@ -295,11 +329,13 @@ void main() {
         ),
       );
       expect(database.autocommit, isTrue);
-      final snapshot = await storage.pullSnapshot('user', 0);
+      final snapshot = await storage.pullSnapshot(_principal('user'), 0);
       expect(snapshot.records, isEmpty);
       expect(snapshot.latestSeq, 0);
       expect(
-        (await storage.pushRecords('user', [_record('ok', 10)])).latestSeq,
+        (await storage.pushRecords(_principal('user'), [
+          _record('ok', 10),
+        ])).latestSeq,
         1,
       );
     },

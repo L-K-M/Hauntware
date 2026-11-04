@@ -173,12 +173,24 @@ class SqliteStorage implements Storage {
     );
   }
 
+  bool _isCurrent(AccountPrincipal account) => _db.select(
+    'SELECT 1 FROM accounts WHERE username = ? AND verifier_salt = ? LIMIT 1',
+    [account.username, account.generation],
+  ).isNotEmpty;
+
+  void _requireCurrent(AccountPrincipal account) {
+    if (!_isCurrent(account)) throw const StaleAccountPrincipalException();
+  }
+
   @override
-  Future<void> deleteAccount(String username) async {
+  Future<void> deleteAccount(AccountPrincipal account) async {
     // A failed cleanup must not remove the account while leaving usable
     // tokens or encrypted records behind. Reuse the record-write rollback and
     // contention policy so deletion either commits in full or can be retried.
-    _transaction(_TransactionMode.write, () => _deleteAccountRows(username));
+    _transaction(_TransactionMode.write, () {
+      _requireCurrent(account);
+      _deleteAccountRows(account.username);
+    });
   }
 
   void _deleteAccountRows(String username) {
@@ -192,7 +204,11 @@ class SqliteStorage implements Storage {
   }
 
   @override
-  Future<String> createToken(String username) async => _createToken(username);
+  Future<AccountTokenIssueResult> issueToken(AccountPrincipal account) async =>
+      _transaction(_TransactionMode.write, () {
+        if (!_isCurrent(account)) return const AccountTokenRejected();
+        return AccountTokenIssued(_createToken(account.username));
+      });
 
   String _createToken(String username) {
     final token = base64Url.encode(secureRandomBytes(32));
@@ -202,20 +218,31 @@ class SqliteStorage implements Storage {
   }
 
   @override
-  Future<String?> usernameForToken(String token) async {
-    final rows =
-        _db.select('SELECT username FROM tokens WHERE token = ?', [token]);
-    return rows.isEmpty ? null : rows.first['username'] as String;
+  Future<AccountPrincipal?> authenticateToken(String token) async {
+    final rows = _db.select(
+      'SELECT a.username, a.verifier_salt FROM tokens t '
+      'JOIN accounts a ON a.username = t.username WHERE t.token = ?',
+      [token],
+    );
+    if (rows.isEmpty) return null;
+    return AccountPrincipal(
+      username: rows.first['username'] as String,
+      generation: rows.first['verifier_salt'] as String,
+    );
   }
 
   @override
   Future<PushResponse> pushRecords(
-      String username, List<EncryptedRecord> records) async {
+    AccountPrincipal account,
+    List<EncryptedRecord> records,
+  ) async {
     // A no-op push must not contend with writers.
     final mode = records.isEmpty
         ? _TransactionMode.read
         : _TransactionMode.write;
     return _transaction(mode, () {
+      _requireCurrent(account);
+      final username = account.username;
       final results = <PushResult>[];
       for (final incoming in records) {
         final existing = _getRecord(username, incoming.id);
@@ -235,14 +262,18 @@ class SqliteStorage implements Storage {
   }
 
   @override
-  Future<PullResponse> pullSnapshot(String username, int since) async =>
-      _transaction(_TransactionMode.read, () {
-        final watermark = _latestSeq(username);
-        return PullResponse(
-          records: _recordsSince(username, since, through: watermark),
-          latestSeq: watermark,
-        );
-      });
+  Future<PullResponse> pullSnapshot(
+    AccountPrincipal account,
+    int since,
+  ) async => _transaction(_TransactionMode.read, () {
+    _requireCurrent(account);
+    final username = account.username;
+    final watermark = _latestSeq(username);
+    return PullResponse(
+      records: _recordsSince(username, since, through: watermark),
+      latestSeq: watermark,
+    );
+  });
 
   T _transaction<T>(_TransactionMode mode, T Function() action) {
     // No awaits while the connection owns a transaction. Acquire the write
@@ -392,22 +423,28 @@ class SqliteStorage implements Storage {
       : Uint8List.fromList((r['blob'] as List).cast<int>());
 
   @override
-  Future<bool> createInboxApp(StoredInboxApp app) async =>
-      _transaction(_TransactionMode.write, () {
-        _db.execute(
-          'INSERT OR IGNORE INTO inbox_apps (app_id, username, name, '
-          'token_salt, token_hash, created) VALUES (?, ?, ?, ?, ?, ?)',
-          [
-            app.appId,
-            app.username,
-            app.name,
-            app.tokenSalt,
-            app.tokenHash,
-            app.created,
-          ],
-        );
-        return _db.updatedRows == 1;
-      });
+  Future<bool> createInboxApp(
+    AccountPrincipal account,
+    StoredInboxApp app,
+  ) async => _transaction(_TransactionMode.write, () {
+    _requireCurrent(account);
+    if (app.username != account.username) {
+      throw ArgumentError('Inbox app owner must match its account principal');
+    }
+    _db.execute(
+      'INSERT OR IGNORE INTO inbox_apps (app_id, username, name, '
+      'token_salt, token_hash, created) VALUES (?, ?, ?, ?, ?, ?)',
+      [
+        app.appId,
+        app.username,
+        app.name,
+        app.tokenSalt,
+        app.tokenHash,
+        app.created,
+      ],
+    );
+    return _db.updatedRows == 1;
+  });
 
   @override
   Future<StoredInboxApp?> getInboxApp(String appId) async {
@@ -426,28 +463,32 @@ class SqliteStorage implements Storage {
   }
 
   @override
-  Future<List<InboxAppInfo>> listInboxApps(String username) async {
-    final rows = _db.select(
-      'SELECT a.app_id, a.name, a.created, '
-      '(SELECT COUNT(*) FROM inbox_items i WHERE i.app_id = a.app_id) '
-      'AS pending FROM inbox_apps a WHERE a.username = ? '
-      'ORDER BY a.created ASC, a.app_id ASC',
-      [username],
-    );
-    return [
-      for (final r in rows)
-        InboxAppInfo(
-          appId: r['app_id'] as String,
-          name: r['name'] as String,
-          created: r['created'] as int,
-          pending: r['pending'] as int,
-        ),
-    ];
-  }
+  Future<List<InboxAppInfo>> listInboxApps(AccountPrincipal account) async =>
+      _transaction(_TransactionMode.read, () {
+        _requireCurrent(account);
+        final rows = _db.select(
+          'SELECT a.app_id, a.name, a.created, '
+          '(SELECT COUNT(*) FROM inbox_items i WHERE i.app_id = a.app_id) '
+          'AS pending FROM inbox_apps a WHERE a.username = ? '
+          'ORDER BY a.created ASC, a.app_id ASC',
+          [account.username],
+        );
+        return [
+          for (final r in rows)
+            InboxAppInfo(
+              appId: r['app_id'] as String,
+              name: r['name'] as String,
+              created: r['created'] as int,
+              pending: r['pending'] as int,
+            ),
+        ];
+      });
 
   @override
-  Future<bool> deleteInboxApp(String username, String appId) async =>
+  Future<bool> deleteInboxApp(AccountPrincipal account, String appId) async =>
       _transaction(_TransactionMode.write, () {
+        _requireCurrent(account);
+        final username = account.username;
         // Explicit as well as cascaded, so the items go even on a
         // connection that was opened without the foreign-key pragma.
         _db.execute(
@@ -463,7 +504,7 @@ class SqliteStorage implements Storage {
 
   @override
   Future<InboxAddResult> addInboxItem(
-    String appId,
+    InboxAppPrincipal principal,
     String itemId,
     Uint8List blob, {
     required int storedAt,
@@ -473,10 +514,14 @@ class SqliteStorage implements Storage {
       // the pending cap or draw the same `received` number.
       _transaction(_TransactionMode.write, () {
         final apps = _db.select(
-            'SELECT username FROM inbox_apps WHERE app_id = ?', [appId]);
+          'SELECT username FROM inbox_apps '
+          'WHERE app_id = ? AND token_salt = ?',
+          [principal.appId, principal.generation],
+        );
         if (apps.isEmpty) {
           return const InboxAddResult(InboxAddStatus.unknownApp);
         }
+        final appId = principal.appId;
         final username = apps.first['username'] as String;
         final pending = _db.select(
             'SELECT COUNT(*) AS n FROM inbox_items WHERE app_id = ?',
@@ -501,11 +546,15 @@ class SqliteStorage implements Storage {
       });
 
   @override
-  Future<List<InboxItem>> inboxItemsSince(String username, int since) async {
+  Future<List<InboxItem>> inboxItemsSince(
+    AccountPrincipal account,
+    int since,
+  ) async => _transaction(_TransactionMode.read, () {
+    _requireCurrent(account);
     final rows = _db.select(
       'SELECT app_id, item_id, received, blob FROM inbox_items '
       'WHERE username = ? AND received > ? ORDER BY received ASC',
-      [username, since],
+      [account.username, since],
     );
     return [
       for (final r in rows)
@@ -516,18 +565,22 @@ class SqliteStorage implements Storage {
           blob: _blobOf(r),
         ),
     ];
-  }
+  });
 
   @override
   Future<bool> deleteInboxItem(
-      String username, String appId, String itemId) async {
+    AccountPrincipal account,
+    String appId,
+    String itemId,
+  ) async => _transaction(_TransactionMode.write, () {
+    _requireCurrent(account);
     _db.execute(
       'DELETE FROM inbox_items WHERE username = ? AND app_id = ? '
       'AND item_id = ?',
-      [username, appId, itemId],
+      [account.username, appId, itemId],
     );
     return _db.updatedRows == 1;
-  }
+  });
 
   @override
   Future<int> purgeInboxItems({required int storedBefore}) async {

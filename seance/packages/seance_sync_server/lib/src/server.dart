@@ -54,7 +54,7 @@ class SyncServer {
   final ServerSettings settings;
   final RateLimiter loginLimiter;
 
-  /// Deposits per inbox app, keyed by app id (docs/INBOX.md: 30 a minute).
+  /// Deposits per inbox app generation (docs/INBOX.md: 30 a minute).
   final RateLimiter inboxLimiter;
 
   /// The clock inbox retention is measured with; injectable for tests.
@@ -265,14 +265,19 @@ class SyncServer {
     if (account == null || !_constantTimeEquals(provided, expected)) {
       return _error(401, 'invalid_credentials', 'Invalid credentials');
     }
-    final token = await storage.createToken(r.username);
-    loginLimiter.reset('login:${r.username}');
-    return _json(LoginResponse(token: token).toJson());
+    final issued = await storage.issueToken(account.principal);
+    switch (issued) {
+      case AccountTokenIssued(:final token):
+        loginLimiter.reset('login:${r.username}');
+        return _json(LoginResponse(token: token).toJson());
+      case AccountTokenRejected():
+        return _error(401, 'invalid_credentials', 'Invalid credentials');
+    }
   }
 
-  Future<Response> _sync(Request req) => _withAuth(req, (username) async {
+  Future<Response> _sync(Request req) => _withAuth(req, (account) async {
     final since = int.tryParse(req.url.queryParameters['since'] ?? '0') ?? 0;
-    final snapshot = await storage.pullSnapshot(username, since);
+    final snapshot = await storage.pullSnapshot(account, since);
     // Every round pulls before it pushes, so this is where a client learns how
     // to size the push it is about to make — see [PushLimits].
     return _json(
@@ -284,7 +289,7 @@ class SyncServer {
     );
   });
 
-  Future<Response> _push(Request req) => _withAuth(req, (username) async {
+  Future<Response> _push(Request req) => _withAuth(req, (account) async {
     final body = await _readJson(req, settings.maxBodyBytes);
     if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
     final PushRequest r;
@@ -306,13 +311,13 @@ class SyncServer {
             'A record blob exceeds the ${settings.maxBlobBytes}-byte limit');
       }
     }
-    final pushed = await storage.pushRecords(username, r.records);
+    final pushed = await storage.pushRecords(account, r.records);
     return _json(pushed.toJson());
   });
 
   Future<Response> _deleteAccount(Request req) =>
-      _withAuth(req, (username) async {
-        await storage.deleteAccount(username);
+      _withAuth(req, (account) async {
+        await storage.deleteAccount(account);
         return _json({'ok': true});
       });
 
@@ -320,17 +325,21 @@ class SyncServer {
 
   Future<Response> _withAuth(
     Request req,
-    Future<Response> Function(String username) fn,
+    Future<Response> Function(AccountPrincipal account) fn,
   ) async {
     final auth = req.headers['authorization'];
     if (auth == null || !auth.startsWith('Bearer ')) {
       return _error(401, 'unauthorized', 'Missing bearer token');
     }
-    final username = await storage.usernameForToken(auth.substring(7));
-    if (username == null) {
+    final account = await storage.authenticateToken(auth.substring(7));
+    if (account == null) {
       return _error(401, 'unauthorized', 'Invalid token');
     }
-    return fn(username);
+    try {
+      return await fn(account);
+    } on StaleAccountPrincipalException {
+      return _error(401, 'unauthorized', 'Invalid token');
+    }
   }
 
   int get _authBodyCap => min(settings.maxBodyBytes, _maxAuthBodyBytes);

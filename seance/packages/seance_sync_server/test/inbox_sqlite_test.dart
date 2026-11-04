@@ -28,9 +28,22 @@ void main() {
         created: 1,
       );
 
+  Account account(String username) => Account(
+    username: username,
+    authVerifierHash: 'hash',
+    verifierSalt: 'account-salt',
+    argonSalt: 'argon-salt',
+    argonParams: const Argon2Params(),
+  );
+
+  AccountPrincipal principal(
+    String username, {
+    String generation = 'account-salt',
+  }) => AccountPrincipal(username: username, generation: generation);
+
   Future<InboxAddResult> add(SqliteStorage s, String appId, String itemId) =>
       s.addInboxItem(
-        appId,
+        InboxAppPrincipal(appId: appId, generation: 'salt'),
         itemId,
         Uint8List.fromList([1, 2, 3]),
         storedAt: 10,
@@ -60,11 +73,12 @@ void main() {
 
     final s = SqliteStorage.open(path);
     addTearDown(s.close);
-    expect(await s.usernameForToken('t'), 'alice');
+    final alice = principal('alice', generation: 's');
+    expect((await s.authenticateToken('t'))?.username, 'alice');
     expect((await s.recordsSince('alice', 0)).single.id, 'r');
 
     final appId = newInboxAppId();
-    expect(await s.createInboxApp(app(appId)), isTrue);
+    expect(await s.createInboxApp(alice, app(appId)), isTrue);
     final added = await add(s, appId, 'i1');
     expect(added.status, InboxAddStatus.added);
     expect(added.received, 1);
@@ -75,40 +89,46 @@ void main() {
   test('apps and items survive a reopen', () async {
     final appId = newInboxAppId();
     final s1 = SqliteStorage.open(path);
-    await s1.createInboxApp(app(appId));
+    final alice = account('alice');
+    await s1.createAccount(alice);
+    await s1.createInboxApp(alice.principal, app(appId));
     await add(s1, appId, 'i1');
     s1.close();
 
     final s2 = SqliteStorage.open(path);
     addTearDown(s2.close);
     expect((await s2.getInboxApp(appId))!.tokenHash, 'hash');
-    final items = await s2.inboxItemsSince('alice', 0);
+    final items = await s2.inboxItemsSince(alice.principal, 0);
     expect(items.single.itemId, 'i1');
     expect(items.single.blob, [1, 2, 3]);
     expect((await add(s2, appId, 'i2')).received, 2);
-    expect((await s2.listInboxApps('alice')).single.pending, 2);
+    expect((await s2.listInboxApps(alice.principal)).single.pending, 2);
   });
 
   test('the schema cascades an app removal to its items', () async {
     final db = sqlite3.open(path);
     final s = SqliteStorage(db);
     addTearDown(s.close);
+    final alice = account('alice');
+    await s.createAccount(alice);
     final appId = newInboxAppId();
-    await s.createInboxApp(app(appId));
+    await s.createInboxApp(alice.principal, app(appId));
     await add(s, appId, 'i1');
 
     // Straight at the table, bypassing the storage's own item delete.
     db.execute('DELETE FROM inbox_apps WHERE app_id = ?', [appId]);
-    expect(await s.inboxItemsSince('alice', 0), isEmpty);
+    expect(await s.inboxItemsSince(alice.principal, 0), isEmpty);
   });
 
   test('a pending cap and a vanished app are reported, not stored', () async {
     final s = SqliteStorage.open(path);
     addTearDown(s.close);
+    final alice = account('alice');
+    await s.createAccount(alice);
     final appId = newInboxAppId();
-    await s.createInboxApp(app(appId));
+    await s.createInboxApp(alice.principal, app(appId));
     final full = await s.addInboxItem(
-      appId,
+      app(appId).principal,
       'i1',
       Uint8List(40),
       storedAt: 1,
@@ -119,6 +139,6 @@ void main() {
       (await add(s, newInboxAppId(), 'i1')).status,
       InboxAddStatus.unknownApp,
     );
-    expect(await s.inboxItemsSince('alice', 0), isEmpty);
+    expect(await s.inboxItemsSince(alice.principal, 0), isEmpty);
   });
 }

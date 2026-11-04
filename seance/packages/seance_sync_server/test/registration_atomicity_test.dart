@@ -86,14 +86,18 @@ Future<String> _seedOwnedState(
   String username,
   String marker,
 ) async {
-  final token = await storage.createToken(username);
+  final account = (await storage.getAccount(username))!;
+  final token = switch (await storage.issueToken(account.principal)) {
+    AccountTokenIssued(:final token) => token,
+    AccountTokenRejected() => throw StateError('account disappeared'),
+  };
   final seq = await storage.nextSeq(username);
   await storage.putRecord(username, _record(marker, seq));
   final app = _inboxApp(username, marker);
-  expect(await storage.createInboxApp(app), isTrue);
+  expect(await storage.createInboxApp(account.principal, app), isTrue);
   expect(
     (await storage.addInboxItem(
-      app.appId,
+      app.principal,
       'item-$marker',
       Uint8List.fromList([1, 2, 3]),
       storedAt: 1,
@@ -153,7 +157,10 @@ void main() {
 
       final winner = replies.indexWhere((reply) => reply.status == 200);
       final initialToken = replies[winner].body['token'] as String;
-      expect(await storage.usernameForToken(initialToken), 'alice');
+      expect(
+        (await storage.authenticateToken(initialToken))?.username,
+        'alice',
+      );
       for (var i = 0; i < registrations.length; i++) {
         final login = await _post(
           handler,
@@ -165,28 +172,6 @@ void main() {
         );
         expect(login.status, i == winner ? 200 : 401);
       }
-    });
-
-    test('registration clears orphaned state with $backend', () async {
-      late final Storage storage;
-      if (backend == 'in-memory') {
-        storage = InMemoryStorage();
-      } else {
-        final sqlite = SqliteStorage(sqlite3.openInMemory());
-        addTearDown(sqlite.close);
-        storage = sqlite;
-      }
-      final oldToken = await _seedOwnedState(storage, 'alice', 'orphan');
-
-      final result = await storage.registerAccount(_account('alice', 'new'));
-
-      expect(result, isA<AccountRegistered>());
-      expect(await storage.usernameForToken(oldToken), isNull);
-      expect(await storage.latestSeq('alice'), 0);
-      expect(await storage.getRecord('alice', 'record-orphan'), isNull);
-      expect(await storage.getInboxApp('app-orphan'), isNull);
-      expect(await storage.listInboxApps('alice'), isEmpty);
-      expect(await storage.inboxItemsSince('alice', 0), isEmpty);
     });
 
     test(
@@ -211,15 +196,40 @@ void main() {
           (await storage.getAccount('alice'))?.authVerifierHash,
           existing.authVerifierHash,
         );
-        expect(await storage.usernameForToken(token), 'alice');
+        expect((await storage.authenticateToken(token))?.username, 'alice');
         expect(await storage.latestSeq('alice'), 1);
         expect(await storage.getRecord('alice', 'record-existing'), isNotNull);
         expect(await storage.getInboxApp('app-existing'), isNotNull);
-        expect(await storage.listInboxApps('alice'), hasLength(1));
-        expect(await storage.inboxItemsSince('alice', 0), hasLength(1));
+        expect(await storage.listInboxApps(existing.principal), hasLength(1));
+        expect(
+          await storage.inboxItemsSince(existing.principal, 0),
+          hasLength(1),
+        );
       },
     );
   }
+
+  test('registration clears rows orphaned by an older SQLite server', () async {
+    final database = sqlite3.openInMemory();
+    final storage = SqliteStorage(database);
+    addTearDown(storage.close);
+    final old = _account('alice', 'old');
+    await storage.createAccount(old);
+    final oldToken = await _seedOwnedState(storage, 'alice', 'orphan');
+    // Reproduce a pre-atomic-deletion database: only the account row is gone.
+    database.execute('DELETE FROM accounts WHERE username = ?', ['alice']);
+
+    final result = await storage.registerAccount(_account('alice', 'new'));
+
+    expect(result, isA<AccountRegistered>());
+    expect(await storage.authenticateToken(oldToken), isNull);
+    expect(await storage.latestSeq('alice'), 0);
+    expect(await storage.getRecord('alice', 'record-orphan'), isNull);
+    expect(await storage.getInboxApp('app-orphan'), isNull);
+    final current = (await storage.getAccount('alice'))!.principal;
+    expect(await storage.listInboxApps(current), isEmpty);
+    expect(await storage.inboxItemsSince(current, 0), isEmpty);
+  });
 
   test('failed initial token insert rolls back account creation', () async {
     final database = sqlite3.openInMemory();

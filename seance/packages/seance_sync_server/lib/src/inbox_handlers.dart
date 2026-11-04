@@ -32,7 +32,7 @@ final String _unknownAppHash = VaultCrypto.hashAuthVerifier(
 /// no say in what Séance believes (the key).
 extension _InboxHandlers on SyncServer {
   Future<Response> _createInboxApp(Request req) =>
-      _withAuth(req, (username) async {
+      _withAuth(req, (account) async {
         final body = await _readJson(req, _authBodyCap);
         if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
         final CreateInboxAppRequest r;
@@ -55,7 +55,7 @@ extension _InboxHandlers on SyncServer {
                 'control characters',
           );
         }
-        if ((await storage.listInboxApps(username)).length >=
+        if ((await storage.listInboxApps(account)).length >=
             _inboxMaxAppsPerAccount) {
           return _error(
             429,
@@ -68,8 +68,9 @@ extension _InboxHandlers on SyncServer {
         // that could fill the inbox.
         final salt = secureRandomBytes(16);
         final created = await storage.createInboxApp(
+          account,
           StoredInboxApp(
-            username: username,
+            username: account.username,
             appId: r.appId,
             name: name,
             tokenHash: _hashDepositToken(r.token, salt),
@@ -84,27 +85,27 @@ extension _InboxHandlers on SyncServer {
       });
 
   Future<Response> _listInboxApps(Request req) =>
-      _withAuth(req, (username) async {
+      _withAuth(req, (account) async {
         // Purged first, so pending counts leave out what already expired.
         await _purgeExpiredInbox();
-        final apps = await storage.listInboxApps(username);
+        final apps = await storage.listInboxApps(account);
         return _json({
           'apps': [for (final app in apps) app.toJson()],
         });
       });
 
   Future<Response> _deleteInboxApp(Request req, String appId) =>
-      _withAuth(req, (username) async {
-        if (!await storage.deleteInboxApp(username, appId)) {
+      _withAuth(req, (account) async {
+        if (!await storage.deleteInboxApp(account, appId)) {
           return _error(404, 'not_found', 'No such app');
         }
         return Response(204);
       });
 
-  Future<Response> _listInbox(Request req) => _withAuth(req, (username) async {
+  Future<Response> _listInbox(Request req) => _withAuth(req, (account) async {
     final since = int.tryParse(req.url.queryParameters['since'] ?? '0') ?? 0;
     await _purgeExpiredInbox();
-    final items = await storage.inboxItemsSince(username, since);
+    final items = await storage.inboxItemsSince(account, since);
     return _json({
       'items': [for (final item in items) item.toJson()],
     });
@@ -114,8 +115,8 @@ extension _InboxHandlers on SyncServer {
   /// already deleted, usually by another device that ran or dismissed it.
   /// It must stay a 404 with `not_found` for every absent item.
   Future<Response> _deleteInboxItem(Request req, String appId, String itemId) =>
-      _withAuth(req, (username) async {
-        if (!await storage.deleteInboxItem(username, appId, itemId)) {
+      _withAuth(req, (account) async {
+        if (!await storage.deleteInboxItem(account, appId, itemId)) {
           return _error(404, 'not_found', 'No such inbox item');
         }
         return Response(204);
@@ -131,8 +132,9 @@ extension _InboxHandlers on SyncServer {
     final declared = req.contentLength;
     if (declared != null && declared > cap) throw const _PayloadTooLarge();
 
-    if (!await _producerAuthorized(req, appId)) return _depositUnauthorized();
-    if (!inboxLimiter.allow('inbox:$appId')) {
+    final app = await _authorizedProducer(req, appId);
+    if (app == null) return _depositUnauthorized();
+    if (!inboxLimiter.allow('inbox:${app.appId}:${app.generation}')) {
       return _error(429, 'rate_limited', 'Too many proposals; slow down');
     }
 
@@ -148,7 +150,7 @@ extension _InboxHandlers on SyncServer {
     await _purgeExpiredInbox();
     final itemId = uuidV4();
     final result = await storage.addInboxItem(
-      appId,
+      app,
       itemId,
       blob,
       storedAt: _now().millisecondsSinceEpoch,
@@ -175,7 +177,10 @@ extension _InboxHandlers on SyncServer {
   /// all end in the same 401, so a caller learns nothing about which apps
   /// exist. (The ids are 128 random bits, so the lookup's own timing gives
   /// away nothing guessable either.)
-  Future<bool> _producerAuthorized(Request req, String appId) async {
+  Future<InboxAppPrincipal?> _authorizedProducer(
+    Request req,
+    String appId,
+  ) async {
     final auth = req.headers['authorization'];
     // The scheme is case-insensitive (RFC 9110 11.1); hand-written producer
     // clients are the ones likely to send `bearer`.
@@ -194,7 +199,7 @@ extension _InboxHandlers on SyncServer {
     final provided = _hashDepositToken(token, salt);
     final expected = app?.tokenHash ?? _unknownAppHash;
     final matches = SyncServer._constantTimeEquals(provided, expected);
-    return app != null && matches;
+    return app != null && matches ? app.principal : null;
   }
 
   Response _depositUnauthorized() =>

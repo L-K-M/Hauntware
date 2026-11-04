@@ -10,6 +10,9 @@ import 'package:test/test.dart';
 
 const _username = 'alice';
 
+AccountPrincipal _principal(String username) =>
+    AccountPrincipal(username: username, generation: 'salt');
+
 Future<String> _seed(
   SqliteStorage storage, {
   String username = _username,
@@ -23,7 +26,7 @@ Future<String> _seed(
       argonParams: const Argon2Params(),
     ),
   );
-  await storage.pushRecords(username, [
+  await storage.pushRecords(_principal(username), [
     EncryptedRecord(
       id: 'record',
       updatedAt: 1,
@@ -33,7 +36,10 @@ Future<String> _seed(
       blob: Uint8List.fromList([1, 2, 3]),
     ),
   ]);
-  return storage.createToken(username);
+  return switch (await storage.issueToken(_principal(username))) {
+    AccountTokenIssued(:final token) => token,
+    AccountTokenRejected() => throw StateError('account disappeared'),
+  };
 }
 
 Future<void> _expectAccountIntact(
@@ -42,7 +48,7 @@ Future<void> _expectAccountIntact(
   String username = _username,
 }) async {
   expect(await storage.getAccount(username), isNotNull);
-  expect(await storage.usernameForToken(token), username);
+  expect((await storage.authenticateToken(token))?.username, username);
   expect(await storage.latestSeq(username), 1);
   final records = await storage.recordsSince(username, 0);
   expect(records.single.id, 'record');
@@ -51,7 +57,7 @@ Future<void> _expectAccountIntact(
 
 Future<void> _expectAccountDeleted(SqliteStorage storage, String token) async {
   expect(await storage.getAccount(_username), isNull);
-  expect(await storage.usernameForToken(token), isNull);
+  expect(await storage.authenticateToken(token), isNull);
   expect(await storage.latestSeq(_username), 0);
   expect(await storage.recordsSince(_username, 0), isEmpty);
 }
@@ -69,7 +75,7 @@ void main() {
       ''');
 
       await expectLater(
-        storage.deleteAccount(_username),
+        storage.deleteAccount(_principal(_username)),
         throwsA(isA<SqliteException>()),
       );
       await _expectAccountIntact(storage, token);
@@ -93,7 +99,7 @@ void main() {
       await _expectAccountIntact(storage, token);
 
       database.execute('DROP TRIGGER fail_delete');
-      await storage.deleteAccount(_username);
+      await storage.deleteAccount(_principal(_username));
       await _expectAccountDeleted(storage, token);
     });
   }
@@ -108,7 +114,7 @@ void main() {
       addTearDown(() => storage.close());
       final token = await _seed(storage);
       final otherToken = await _seed(storage, username: 'bob');
-      await storage.deleteAccount(_username);
+      await storage.deleteAccount(_principal(_username));
       storage.close();
       storage = SqliteStorage.open(path);
 

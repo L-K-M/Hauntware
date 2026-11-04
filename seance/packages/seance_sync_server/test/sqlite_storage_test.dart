@@ -28,11 +28,12 @@ void main() {
 
   test('account, token, and record round-trips in :memory:', () async {
     final s = SqliteStorage.open(':memory:');
-    await s.createAccount(account('alice'));
+    final alice = account('alice');
+    await s.createAccount(alice);
     expect((await s.getAccount('alice'))!.argonSalt, 'asalt');
 
-    final token = await s.createToken('alice');
-    expect(await s.usernameForToken(token), 'alice');
+    final issued = await s.issueToken(alice.principal) as AccountTokenIssued;
+    expect((await s.authenticateToken(issued.token))?.username, 'alice');
 
     expect(await s.nextSeq('alice'), 1);
     expect(await s.nextSeq('alice'), 2);
@@ -45,7 +46,7 @@ void main() {
     expect(since1.map((r) => r.id), ['b']);
     expect((await s.getRecord('alice', 'a'))!.blob, [1, 2, 3, 1]);
 
-    await s.deleteAccount('alice');
+    await s.deleteAccount(alice.principal);
     expect(await s.getAccount('alice'), isNull);
     expect(await s.recordsSince('alice', 0), isEmpty);
     s.close();
