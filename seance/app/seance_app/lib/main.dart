@@ -210,6 +210,11 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
       if (ctx == null) return const <String>[];
       return showKeyboardInteractiveDialog(ctx, challenge);
     };
+    state.tabCleanupFailureReporter = (report) {
+      final overlay = navigatorKey.currentState?.overlay;
+      if (overlay == null) return;
+      showTopToast(overlay, message: report.userMessage);
+    };
 
     await state.load();
     if (Platform.isMacOS) installMacMenu(state);

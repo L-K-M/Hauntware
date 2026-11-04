@@ -41,6 +41,53 @@ import 'ui/terminal_appearance.dart';
 /// server list (green / grey / red, with a spinner while connecting).
 enum TerminalStatus { connecting, connected, disconnected, error }
 
+/// One resource that could not be released while a terminal tab was torn
+/// down. The operation is safe to show in diagnostics; [error] and
+/// [stackTrace] stay out of user-facing copy because they can contain local
+/// paths or remote details.
+@immutable
+class TabCleanupFailure {
+  const TabCleanupFailure({
+    required this.operation,
+    required this.error,
+    required this.stackTrace,
+  });
+
+  final String operation;
+  final Object error;
+  final StackTrace stackTrace;
+}
+
+/// Outcome of closing one tab, or a group of tabs.
+///
+/// A close always removes the tab and attempts every teardown step. Failures
+/// are returned rather than thrown midway, so callers can tell the user that
+/// cleanup was incomplete without leaving later resources alive.
+@immutable
+class TabCloseReport {
+  const TabCloseReport.success() : failures = const [];
+
+  const TabCloseReport._(this.failures);
+
+  factory TabCloseReport.combine(Iterable<TabCloseReport> reports) =>
+      TabCloseReport._(
+        List.unmodifiable([
+          for (final report in reports) ...report.failures,
+        ]),
+      );
+
+  final List<TabCleanupFailure> failures;
+
+  bool get hasFailures => failures.isNotEmpty;
+
+  String get userMessage =>
+      'The tab closed, but cleanup did not finish. A connection may remain '
+      'until Séance exits; any undeleted local edits remain available for '
+      'recovery.';
+}
+
+typedef TabCleanupFailureReporter = void Function(TabCloseReport report);
+
 /// What the remote shell has told us about a session: its working directory
 /// ([ShellLocation]), the OSC 0/2 terminal title, and the command it is
 /// running right now. Used to name the session's tab.
@@ -323,14 +370,32 @@ class TerminalSession extends PaneTab {
   /// listener from an already-disposed notifier is explicitly supported.
   @override
   void dispose() {
-    _commandReveal?.cancel();
-    contextStack.dispose();
-    _shellLocation.removeListener(_syncDirectory);
-    _shellLocation.dispose();
-    engine.terminalTitle.removeListener(_syncTitle);
-    engine.activeCommand.removeListener(_syncRunningCommand);
-    metadata.dispose();
-    customName.dispose();
+    Object? firstError;
+    StackTrace? firstStackTrace;
+
+    void release(void Function() action) {
+      try {
+        action();
+      } catch (error, stackTrace) {
+        firstError ??= error;
+        firstStackTrace ??= stackTrace;
+      }
+    }
+
+    // A broken notifier or context consumer must not keep the remaining tab
+    // resources alive. The caller records the first failure after every
+    // independent release has had its chance to run.
+    release(() => _commandReveal?.cancel());
+    release(contextStack.dispose);
+    release(() => _shellLocation.removeListener(_syncDirectory));
+    release(_shellLocation.dispose);
+    release(() => engine.terminalTitle.removeListener(_syncTitle));
+    release(() => engine.activeCommand.removeListener(_syncRunningCommand));
+    release(metadata.dispose);
+    release(customName.dispose);
+
+    final error = firstError;
+    if (error != null) Error.throwWithStackTrace(error, firstStackTrace!);
   }
 
   bool get isConnected => session != null && !session!.isClosed;
@@ -546,6 +611,10 @@ class AppState extends ChangeNotifier {
   /// and adjacent tabs are always same-server.
   final List<PaneTab> tabs = [];
 
+  /// Prevents an asynchronous close from notifying after [dispose] has torn
+  /// down this notifier. The cleanup itself still runs to completion.
+  bool _disposed = false;
+
   /// The id of the tab shown in the right pane (see [activeServerId],
   /// which is derived from it).
   String? activeTabId;
@@ -624,6 +693,11 @@ class AppState extends ChangeNotifier {
   /// shown). Default to a safe "deny" if the UI hasn't set them yet.
   HostKeyPrompter? hostKeyPrompter;
   KeyboardInteractiveResponder? keyboardInteractiveResponder;
+
+  /// Shows the non-fatal result of a session close whose teardown could not
+  /// release everything. The tab is already gone when this runs; durable
+  /// managed-edit records are deliberately left recoverable on disk.
+  TabCleanupFailureReporter? tabCleanupFailureReporter;
 
   // --- Update check ---
 
@@ -1753,9 +1827,18 @@ class AppState extends ChangeNotifier {
     );
     tabs[index] = replacement;
     if (activeTabId == old.id) _setActive(replacement.id);
-    await _disposeSession(old);
-    replacement.retainedLocalCopies.addAll(old.retainedLocalCopies);
-    old.retainedLocalCopies.clear();
+    // _disposeSession transfers both retained and controller-owned copies
+    // synchronously before its first await. A failed old transport close must
+    // not strand those copies on the disposed tab or abort the replacement.
+    final cleanup = await _disposeSession(
+      old,
+      retainLocalCopiesIn: replacement.retainedLocalCopies,
+    );
+    _reportCleanupFailures(cleanup);
+    // The replacement can be closed (or the whole state disposed) while the
+    // old transport takes its time to shut down. Never resurrect that tab
+    // with a late dial or notify a notifier whose owner is already gone.
+    if (_disposed || !identical(tabById(replacement.id), replacement)) return;
     notifyListeners();
     await (replacement.isLocal
         ? _startLocalShell(replacement)
@@ -1781,45 +1864,132 @@ class AppState extends ChangeNotifier {
   /// Close a session's SSH connection AND dispose its engine. For a session
   /// that never connected (still connecting, or errored) there is no session
   /// to close the engine for us, so dispose it directly.
-  Future<void> _disposeSession(
+  Future<TabCloseReport> _disposeSession(
     TerminalSession tab, {
     bool deleteLocalCopies = false,
+    Map<String, ManagedRemoteFile>? retainLocalCopiesIn,
   }) async {
+    final failures = <TabCleanupFailure>[];
+
+    void record(String operation, Object error, StackTrace stackTrace) {
+      failures.add(
+        TabCleanupFailure(
+          operation: operation,
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
+
+    void attemptSync(String operation, void Function() action) {
+      try {
+        action();
+      } catch (error, stackTrace) {
+        record(operation, error, stackTrace);
+      }
+    }
+
+    Future<void> attempt(
+      String operation,
+      FutureOr<void> Function() action,
+    ) async {
+      try {
+        await action();
+      } catch (error, stackTrace) {
+        record(operation, error, stackTrace);
+      }
+    }
+
+    // Detach every owner before the first await. The tab can already have
+    // disappeared from [tabs], and an onClosed callback or a second close must
+    // not race this teardown for the same controller or transport.
     final files = tab.files;
-    if (files != null) {
-      if (deleteLocalCopies) {
-        await files.deleteAllLocalCopies();
-      } else {
-        tab.retainedLocalCopies.addAll(files.takeLocalCopies());
-      }
-      files.dispose();
-      tab.files = null;
-    }
-    tab.git?.dispose();
+    tab.files = null;
+    final git = tab.git;
     tab.git = null;
-    if (deleteLocalCopies && tab.retainedLocalCopies.isNotEmpty) {
-      for (final copy in tab.retainedLocalCopies.values) {
-        await services.managedRemoteFiles.remove(copy.id);
-      }
-      tab.retainedLocalCopies.clear();
+    final transport = tab.session;
+    tab.session = null;
+    tab.connecting = false;
+
+    final localCopies = Map<String, ManagedRemoteFile>.of(
+      tab.retainedLocalCopies,
+    );
+    tab.retainedLocalCopies.clear();
+    if (files != null) {
+      attemptSync(
+        'detach managed local copies',
+        () => localCopies.addAll(files.takeLocalCopies()),
+      );
     }
+    if (!deleteLocalCopies) {
+      (retainLocalCopiesIn ?? tab.retainedLocalCopies).addAll(localCopies);
+    }
+
     // Sever the log's callback before anything async begins: a trace line
     // arriving during (or after) teardown would otherwise reach a notifier
     // that is about to be disposed, which asserts. Freezing also stops the
     // transcript growing while the transport closes.
-    tab.log.freeze();
-    try {
-      if (tab.session != null) {
-        await tab.session!.close(); // SshSession.close disposes the engine
-      } else {
-        await tab.engine.dispose();
-      }
-    } finally {
-      tab.logNotifier.dispose();
+    attemptSync('freeze connection log', tab.log.freeze);
+    if (transport != null) {
+      attemptSync('detach session close callback', () {
+        transport.onClosed = null;
+      });
     }
+
+    // Controllers no longer own the copies above, so they can be disposed
+    // even when deleting one checkout fails. Every durable copy is removed
+    // independently; a failed remove remains indexed for recovery next run.
+    if (files != null) {
+      await attempt('dispose remote files', files.dispose);
+    }
+    if (git != null) await attempt('dispose remote Git', git.dispose);
+    if (deleteLocalCopies) {
+      for (final copy in localCopies.values) {
+        await attempt(
+          'delete managed local copy',
+          () => services.managedRemoteFiles.remove(copy.id),
+        );
+      }
+    }
+
+    if (transport != null) {
+      await attempt('close session transport', transport.close);
+    }
+    // SessionTransport.close owns the engine, but a transport is allowed to
+    // throw before reaching that step. XtermTerminalEngine.dispose is
+    // idempotent, so this final attempt closes both paths without guessing.
+    await attempt('dispose terminal engine', tab.engine.dispose);
+    await attempt('dispose connection log notifier', tab.logNotifier.dispose);
     // Only here, not in disconnect(): a disconnected tab stays in the strip and
     // keeps showing where it last was.
-    tab.dispose();
+    await attempt('dispose terminal tab', tab.dispose);
+
+    return TabCloseReport._(List.unmodifiable(failures));
+  }
+
+  void _reportCleanupFailures(TabCloseReport report, {bool notifyUser = true}) {
+    if (!report.hasFailures) return;
+    for (final failure in report.failures) {
+      developer.log(
+        'Session cleanup failed while trying to ${failure.operation}',
+        name: 'seance.app',
+        level: 1000,
+        error: failure.error,
+        stackTrace: failure.stackTrace,
+      );
+    }
+    if (!notifyUser) return;
+    try {
+      tabCleanupFailureReporter?.call(report);
+    } catch (error, stackTrace) {
+      developer.log(
+        'Could not report incomplete session cleanup',
+        name: 'seance.app',
+        level: 1000,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// Seed the built-in snippets on first launch only (guarded by a persisted
@@ -2661,9 +2831,14 @@ class AppState extends ChangeNotifier {
   /// teardown deletes the local copies they write to. (The UI asks about
   /// unsaved editor buffers before calling this; a programmatic close is
   /// allowed to drop them.)
-  Future<void> closeTab(String tabId) async {
+  Future<TabCloseReport> closeTab(String tabId) => _closeTab(tabId);
+
+  Future<TabCloseReport> _closeTab(
+    String tabId, {
+    bool reportFailures = true,
+  }) async {
     final tab = tabById(tabId);
-    if (tab == null) return;
+    if (tab == null) return const TabCloseReport.success();
     if (tab is TerminalSession) {
       for (final editor in editorTabsOwnedBy(tab)) {
         tabs.remove(editor);
@@ -2674,26 +2849,52 @@ class AppState extends ChangeNotifier {
     final siblingsBefore = tabsForServer(tab.serverId);
     tabs.remove(tab);
     _dropLastTabFor(tab);
-    if (tab is TerminalSession) {
-      await _disposeSession(tab, deleteLocalCopies: true);
-    } else {
-      tab.dispose();
+    final cleanup = tab is TerminalSession
+        ? _disposeSession(tab, deleteLocalCopies: true)
+        : Future<TabCloseReport>.sync(() {
+            tab.dispose();
+            return const TabCloseReport.success();
+          });
+
+    void recoverSelection() {
+      // The fallback is needed whenever the tab the pane was showing is gone
+      // — the closed tab itself, or an editor cascaded away with its session.
+      if (tabById(activeTabId) == null) {
+        _setActive(
+          fallbackAfterClosing(
+            closed: tab,
+            siblingsBefore: siblingsBefore,
+            remaining: tabs,
+            lastTabForServer: _lastTabForServer,
+          )?.id,
+        );
+      }
     }
 
-    // The fallback is needed whenever the tab the pane was showing is gone —
-    // the closed tab itself, or an editor cascaded away with its session.
-    if (tabById(activeTabId) == null) {
-      _setActive(
-        fallbackAfterClosing(
-          closed: tab,
-          siblingsBefore: siblingsBefore,
-          remaining: tabs,
-          lastTabForServer: _lastTabForServer,
-        )?.id,
-      );
+    // The tab and all its resource owners were detached synchronously above.
+    // Repaint now instead of leaving a dead pane visible while a transport
+    // takes time to close.
+    if (!_disposed) {
+      recoverSelection();
+      notifyListeners();
+      _refreshKeepAlive();
     }
-    notifyListeners();
-    _refreshKeepAlive();
+
+    late final TabCloseReport report;
+    try {
+      report = await cleanup;
+      if (!_disposed && reportFailures) _reportCleanupFailures(report);
+    } finally {
+      // A cleanup failure must never skip focus recovery, repaint, or the
+      // Android keep-alive count. A concurrent close may have removed the
+      // fallback chosen above, so validate it once more after the await.
+      if (!_disposed) {
+        recoverSelection();
+        notifyListeners();
+        _refreshKeepAlive();
+      }
+    }
+    return report;
   }
 
   /// Forget [tab] as its server's most-recent tab, if it still is.
@@ -2733,11 +2934,15 @@ class AppState extends ChangeNotifier {
   }
 
   /// Close every tab of a server (used when the server is deleted).
-  Future<void> closeAllTabsForServer(String serverId) async {
+  Future<TabCloseReport> closeAllTabsForServer(String serverId) async {
     final ids = [for (final s in tabsForServer(serverId)) s.id];
+    final reports = <TabCloseReport>[];
     for (final id in ids) {
-      await closeTab(id);
+      reports.add(await _closeTab(id, reportFailures: false));
     }
+    final report = TabCloseReport.combine(reports);
+    if (!_disposed) _reportCleanupFailures(report);
+    return report;
   }
 
   /// Recreate disconnected placeholder tabs for durable managed edits. The
@@ -2773,6 +2978,8 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    tabCleanupFailureReporter = null;
     _probeSub?.cancel();
     _autoSyncTimer?.cancel();
     _syncDebounce?.cancel();
@@ -2796,9 +3003,15 @@ class AppState extends ChangeNotifier {
         // failure explicitly rather than leaving an unhandled async error to
         // surface long after the state object is gone.
         unawaited(
-          _disposeSession(t).catchError((Object error, StackTrace stack) {
-            debugPrint('Session teardown failed: $error\n$stack');
-          }),
+          _disposeSession(t).then(
+            (report) => _reportCleanupFailures(report, notifyUser: false),
+            onError: (Object error, StackTrace stack) {
+              // _disposeSession collects every expected cleanup failure. This
+              // remains as a final guard against a programming error escaping
+              // from the collector after AppState itself is gone.
+              debugPrint('Session teardown failed: $error\n$stack');
+            },
+          ),
         );
       } else {
         t.dispose();
