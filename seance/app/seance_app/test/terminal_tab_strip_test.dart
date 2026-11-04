@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -25,6 +27,50 @@ BoxDecoration _stripBackground(WidgetTester tester) =>
             )
             .decoration
         as BoxDecoration;
+
+ServerConfig _testServer() => ServerConfig(
+  id: 'server',
+  label: 'Server',
+  host: 'example.com',
+  port: 22,
+  username: 'user',
+  authMethod: AuthMethod.password,
+  createdAt: 0,
+  updatedAt: 0,
+);
+
+TerminalSession _testSession(String id, ServerConfig config, {String? name}) {
+  final engine = XtermTerminalEngine();
+  final tab = TerminalSession(
+    id: id,
+    serverId: config.id,
+    config: config,
+    engine: engine,
+    connecting: false,
+    initialCustomName: name,
+  );
+  addTearDown(tab.dispose);
+  addTearDown(engine.dispose);
+  return tab;
+}
+
+Finder _tabViewport() => find.descendant(
+  of: find.byType(TerminalTabStrip),
+  matching: find.byType(SingleChildScrollView),
+);
+
+ScrollPosition _tabScrollPosition(WidgetTester tester) => tester
+    .state<ScrollableState>(
+      find.descendant(of: _tabViewport(), matching: find.byType(Scrollable)),
+    )
+    .position;
+
+void _expectInsideViewport(WidgetTester tester, Finder label) {
+  final viewport = tester.getRect(_tabViewport());
+  final visible = tester.getRect(label);
+  expect(visible.left, greaterThanOrEqualTo(viewport.left - 0.5));
+  expect(visible.right, lessThanOrEqualTo(viewport.right + 0.5));
+}
 
 void main() {
   testWidgets('a single session keeps tab actions reachable at phone width', (
@@ -71,6 +117,7 @@ void main() {
     );
 
     expect(find.text('Session 1'), findsOneWidget);
+    expect(find.byTooltip('All tabs'), findsNothing);
     expect(find.byTooltip('New tab'), findsOneWidget);
     expect(find.byTooltip('Generate command'), findsOneWidget);
 
@@ -133,6 +180,297 @@ void main() {
     await tester.pump();
     expect(find.text('user'), findsOneWidget);
     expect(find.text('log'), findsOneWidget);
+  });
+
+  testWidgets('overflow reveals the active tab and keeps actions fixed', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final config = _testServer();
+    final tabs = [
+      for (var i = 1; i <= 6; i++)
+        _testSession('tab-$i', config, name: 'tab $i'),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TerminalTabStrip(
+            tabs: tabs,
+            activeTabId: tabs.last.id,
+            onFocus: (_) {},
+            onClose: (_) {},
+            onNewTab: () {},
+            onGenerateCommand: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    _expectInsideViewport(tester, find.text('tab 6'));
+    expect(find.byTooltip('All tabs'), findsOneWidget);
+    expect(find.byTooltip('New tab'), findsOneWidget);
+    expect(find.byTooltip('Generate command'), findsOneWidget);
+    expect(
+      tester.getRect(find.byTooltip('New tab')).right,
+      lessThanOrEqualTo(420),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'changing the active tab reveals it without moving visible tabs',
+    (tester) async {
+      tester.view.physicalSize = const Size(440, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final config = _testServer();
+      final tabs = [
+        for (var i = 1; i <= 6; i++)
+          _testSession('tab-$i', config, name: 'tab $i'),
+      ];
+      var active = tabs.first.id;
+      late StateSetter rebuild;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) {
+                rebuild = setState;
+                return TerminalTabStrip(
+                  tabs: tabs,
+                  activeTabId: active,
+                  onFocus: (_) {},
+                  onClose: (_) {},
+                  onNewTab: () {},
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_tabScrollPosition(tester).pixels, 0);
+
+      rebuild(() => active = tabs.last.id);
+      await tester.pumpAndSettle();
+      _expectInsideViewport(tester, find.text('tab 6'));
+      expect(_tabScrollPosition(tester).pixels, greaterThan(0));
+
+      final stableOffset = _tabScrollPosition(tester).pixels;
+      rebuild(() => active = tabs[4].id);
+      await tester.pumpAndSettle();
+      _expectInsideViewport(tester, find.text('tab 5'));
+      expect(_tabScrollPosition(tester).pixels, stableOffset);
+    },
+  );
+
+  testWidgets('a vertical mouse wheel scrolls the horizontal tab viewport', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final config = _testServer();
+    final tabs = [
+      for (var i = 1; i <= 6; i++)
+        _testSession('tab-$i', config, name: 'workspace $i'),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TerminalTabStrip(
+            tabs: tabs,
+            activeTabId: tabs.first.id,
+            onFocus: (_) {},
+            onClose: (_) {},
+            onNewTab: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final position = _tabScrollPosition(tester);
+    expect(position.pixels, 0);
+
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(_tabViewport()),
+        scrollDelta: const Offset(5, 120),
+        kind: PointerDeviceKind.mouse,
+      ),
+    );
+    await tester.pump();
+    expect(position.pixels, greaterThan(0));
+  });
+
+  testWidgets('the overflow menu identifies and reveals every tab kind', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final config = _testServer();
+    final terminals = [
+      for (var i = 1; i <= 4; i++)
+        _testSession('tab-$i', config, name: 'workspace $i'),
+    ];
+    final editor = EditorTab(
+      id: 'editor',
+      serverId: config.id,
+      config: config,
+      remotePath: '/var/log/notes.txt',
+      localPath: 'notes.txt',
+      ownerEditSessionId: terminals.first.editSessionId,
+    )..dirty.value = true;
+    final tabs = <PaneTab>[...terminals, editor];
+    var active = terminals.first.id;
+    var focused = '';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) => TerminalTabStrip(
+              tabs: tabs,
+              activeTabId: active,
+              onFocus: (id) => setState(() {
+                focused = id;
+                active = id;
+              }),
+              onClose: (_) {},
+              onNewTab: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('All tabs'));
+    await tester.pumpAndSettle();
+
+    for (var i = 1; i <= 4; i++) {
+      expect(find.text('workspace $i'), findsNWidgets(2));
+    }
+    expect(find.text('notes.txt'), findsNWidgets(2));
+    expect(find.text('Terminal'), findsNWidgets(4));
+    expect(find.text('File • Unsaved'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('all-tabs-tab-1')),
+        matching: find.byIcon(Icons.check),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getSemantics(find.byKey(const ValueKey('all-tabs-semantics-tab-1')))
+          .flagsCollection
+          .isSelected,
+      ui.Tristate.isTrue,
+    );
+    expect(
+      tester
+          .getSemantics(find.byKey(const ValueKey('all-tabs-semantics-editor')))
+          .flagsCollection
+          .isSelected,
+      ui.Tristate.isFalse,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('all-tabs-editor')));
+    await tester.pumpAndSettle();
+    expect(focused, editor.id);
+    _expectInsideViewport(tester, find.text('notes.txt'));
+    semantics.dispose();
+  });
+
+  testWidgets('label growth keeps the active tab in view', (tester) async {
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final config = _testServer();
+    final tabs = [
+      for (var i = 1; i <= 5; i++)
+        _testSession('tab-$i', config, name: 'tab $i'),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TerminalTabStrip(
+            tabs: tabs,
+            activeTabId: tabs.last.id,
+            onFocus: (_) {},
+            onClose: (_) {},
+            onNewTab: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    _expectInsideViewport(tester, find.text('tab 5'));
+
+    tabs.first.customName.value = 'a much wider workspace label';
+    await tester.pumpAndSettle();
+    _expectInsideViewport(tester, find.text('tab 5'));
+  });
+
+  testWidgets('the overflow menu disappears after tabs shrink to fit', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final config = _testServer();
+    final allTabs = [
+      for (var i = 1; i <= 6; i++)
+        _testSession('tab-$i', config, name: 'a wide workspace $i'),
+    ];
+    List<PaneTab> shownTabs = [...allTabs];
+    late StateSetter rebuild;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              rebuild = setState;
+              return TerminalTabStrip(
+                tabs: shownTabs,
+                activeTabId: shownTabs.first.id,
+                onFocus: (_) {},
+                onClose: (_) {},
+                onNewTab: () {},
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('All tabs'), findsOneWidget);
+
+    for (var i = 0; i < 3; i++) {
+      allTabs[i].customName.value = String.fromCharCodes(
+        List.filled(3, 'a'.codeUnitAt(0) + i),
+      );
+    }
+    rebuild(() => shownTabs = allTabs.take(3).toList());
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byTooltip('All tabs'),
+      findsNothing,
+      reason:
+          'remaining overflow: ${_tabScrollPosition(tester).maxScrollExtent}',
+    );
+    expect(_tabScrollPosition(tester).maxScrollExtent, 0);
   });
 
   testWidgets('an editor tab sits beside terminal tabs in the strip', (

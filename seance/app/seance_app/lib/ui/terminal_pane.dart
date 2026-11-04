@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
@@ -281,7 +282,7 @@ class TerminalPane extends StatelessWidget {
 /// side — including actions to open another session and generate a command
 /// for the current one. It remains visible for a single session so those
 /// actions are always reachable.
-class TerminalTabStrip extends StatelessWidget {
+class TerminalTabStrip extends StatefulWidget {
   final List<PaneTab> tabs;
   final String? activeTabId;
   final ValueChanged<String> onFocus;
@@ -318,12 +319,192 @@ class TerminalTabStrip extends StatelessWidget {
   });
 
   @override
+  State<TerminalTabStrip> createState() => _TerminalTabStripState();
+}
+
+class _TerminalTabStripState extends State<TerminalTabStrip> {
+  static const _overflowTolerance = 1.0;
+  static const _overflowMenuWidth = 40.0;
+
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _viewportKey = GlobalKey();
+  final Map<String, GlobalKey> _tabKeys = {};
+  bool _hasOverflow = false;
+  bool _revealScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleRevealActive();
+  }
+
+  @override
+  void didUpdateWidget(TerminalTabStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final ids = {for (final tab in widget.tabs) tab.id};
+    _tabKeys.removeWhere((id, _) => !ids.contains(id));
+    _scheduleRevealActive();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scheduleRevealActive() {
+    if (widget.activeTabId == null || _revealScheduled) return;
+    _revealScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _revealScheduled = false;
+      if (!mounted) return;
+      final id = widget.activeTabId;
+      if (id != null) _revealTab(id);
+    });
+  }
+
+  void _revealTab(String id) {
+    if (!_scrollController.hasClients) return;
+    final tabBox = _tabKeys[id]?.currentContext?.findRenderObject();
+    final viewportBox = _viewportKey.currentContext?.findRenderObject();
+    if (tabBox is! RenderBox ||
+        viewportBox is! RenderBox ||
+        !tabBox.hasSize ||
+        !viewportBox.hasSize) {
+      return;
+    }
+
+    final tabStart = tabBox.localToGlobal(Offset.zero).dx;
+    final tabEnd = tabBox.localToGlobal(Offset(tabBox.size.width, 0)).dx;
+    final viewportStart = viewportBox.localToGlobal(Offset.zero).dx;
+    final viewportEnd = viewportBox
+        .localToGlobal(Offset(viewportBox.size.width, 0))
+        .dx;
+    var target = _scrollController.offset;
+    if (tabStart < viewportStart) {
+      target -= viewportStart - tabStart;
+    } else if (tabEnd > viewportEnd) {
+      target += tabEnd - viewportEnd;
+    } else {
+      return;
+    }
+
+    final position = _scrollController.position;
+    target = target.clamp(position.minScrollExtent, position.maxScrollExtent);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) {
+      _scrollController.jumpTo(target);
+    } else {
+      _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  bool _updateOverflow(ScrollMetrics metrics) {
+    // Once shown, the menu itself removes width from the viewport. Measure
+    // whether the chips would still overflow with that width returned, or a
+    // menu could keep itself alive after tabs close or labels shrink.
+    final menuExtent = _hasOverflow ? _overflowMenuWidth : 0.0;
+    final hasOverflow =
+        widget.tabs.length > 1 &&
+        metrics.maxScrollExtent > menuExtent + _overflowTolerance;
+    if (hasOverflow == _hasOverflow) return false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || hasOverflow == _hasOverflow) return;
+      setState(() => _hasOverflow = hasOverflow);
+    });
+    return false;
+  }
+
+  void _handlePointerSignal(PointerSignalEvent signal) {
+    if (signal is! PointerScrollEvent || !_scrollController.hasClients) return;
+    final delta = signal.scrollDelta;
+    if (delta.dy == 0 || delta.dy.abs() <= delta.dx.abs()) return;
+
+    GestureBinding.instance.pointerSignalResolver.register(signal, (event) {
+      if (event is! PointerScrollEvent || !_scrollController.hasClients) {
+        return;
+      }
+      final position = _scrollController.position;
+      final target = (_scrollController.offset + event.scrollDelta.dy).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      );
+      _scrollController.jumpTo(target);
+    });
+  }
+
+  void _focusFromMenu(String id) {
+    widget.onFocus(id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _revealTab(id);
+    });
+  }
+
+  Widget _overflowMenu(BuildContext context, List<String> labels) => SizedBox(
+    width: _overflowMenuWidth,
+    height: TerminalTabStrip.height,
+    child: PopupMenuButton<String>(
+      tooltip: 'All tabs',
+      icon: const Icon(Icons.tab),
+      iconSize: 18,
+      padding: EdgeInsets.zero,
+      onSelected: _focusFromMenu,
+      itemBuilder: (context) => [
+        for (var i = 0; i < widget.tabs.length; i++)
+          PopupMenuItem<String>(
+            key: ValueKey('all-tabs-${widget.tabs[i].id}'),
+            value: widget.tabs[i].id,
+            child: Semantics(
+              key: ValueKey('all-tabs-semantics-${widget.tabs[i].id}'),
+              selected: widget.tabs[i].id == widget.activeTabId,
+              child: Row(
+                children: [
+                  Icon(
+                    widget.tabs[i] is EditorTab
+                        ? Icons.edit_document
+                        : Icons.terminal,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(labels[i], overflow: TextOverflow.ellipsis),
+                        Text(switch (widget.tabs[i]) {
+                          EditorTab(:final dirty) =>
+                            dirty.value ? 'File • Unsaved' : 'File',
+                          TerminalSession() => 'Terminal',
+                        }, style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                  if (widget.tabs[i].id == widget.activeTabId)
+                    const Padding(
+                      padding: EdgeInsetsDirectional.only(start: 12),
+                      child: Icon(Icons.check, size: 18),
+                    ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final chrome = SeanceChrome.of(context, seanceThemeStyle);
-    final accent = this.accent;
+    final accent = widget.accent;
     return Container(
-      height: height,
+      height: TerminalTabStrip.height,
       // Over the tabs' top edge, where Poltergeist paints its active-pane
       // line. In front rather than a border, so it takes no height: the tabs
       // sit the same with or without a colour. Below the tabs it sat against
@@ -353,77 +534,107 @@ class TerminalTabStrip extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                // One listenable over every tab's name sources, not one per
-                // chip: a name change on one tab can add or remove another
-                // tab's disambiguating suffix, so labels are computed across
-                // the strip. Still scoped to this server's tabs — nothing here
-                // repaints the rest of the app.
-                child: ListenableBuilder(
-                  listenable: Listenable.merge([
-                    for (final tab in tabs)
-                      if (tab is TerminalSession) ...[
-                        tab.metadata,
-                        tab.customName,
-                      ] else if (tab is EditorTab)
-                        tab.dirty,
-                  ]),
-                  builder: (context, _) {
-                    // Editor tabs do not count for a terminal's "Session N"
-                    // fallback: the ordinal numbers the shell sessions. One
-                    // map keyed on the tab feeds both the label pass and the
-                    // chip, so the two can never disagree.
-                    final ordinals = <TerminalSession, int>{};
-                    for (final tab in tabs) {
-                      if (tab is TerminalSession) {
-                        ordinals[tab] = ordinals.length + 1;
-                      }
+              // One listenable over every tab's name sources, not one per
+              // chip: a name change on one tab can add or remove another
+              // tab's disambiguating suffix, so labels are computed across
+              // the strip. Still scoped to this server's tabs — nothing here
+              // repaints the rest of the app.
+              child: ListenableBuilder(
+                listenable: Listenable.merge([
+                  for (final tab in widget.tabs)
+                    if (tab is TerminalSession) ...[
+                      tab.metadata,
+                      tab.customName,
+                    ] else if (tab is EditorTab)
+                      tab.dirty,
+                ]),
+                builder: (context, _) {
+                  // A label change can resize every disambiguated chip.
+                  _scheduleRevealActive();
+                  // Editor tabs do not count for a terminal's "Session N"
+                  // fallback: the ordinal numbers the shell sessions. One
+                  // map keyed on the tab feeds both the label pass and the
+                  // chip, so the two can never disagree.
+                  final ordinals = <TerminalSession, int>{};
+                  for (final tab in widget.tabs) {
+                    if (tab is TerminalSession) {
+                      ordinals[tab] = ordinals.length + 1;
                     }
-                    final labels = disambiguateTabLabels([
-                      for (final tab in tabs)
-                        switch (tab) {
-                          TerminalSession() => sessionTabLabel(
-                            // 1-based ordinal within the server, used only as
-                            // the fallback name when the shell reports nothing.
-                            ordinal: ordinals[tab]!,
-                            customName: tab.customName.value,
-                            workingDirectory:
-                                tab.metadata.value.workingDirectory,
-                            terminalTitle: tab.metadata.value.terminalTitle,
-                            runningCommand: tab.metadata.value.runningCommand,
+                  }
+                  final labels = disambiguateTabLabels([
+                    for (final tab in widget.tabs)
+                      switch (tab) {
+                        TerminalSession() => sessionTabLabel(
+                          // 1-based ordinal within the server, used only as
+                          // the fallback name when the shell reports nothing.
+                          ordinal: ordinals[tab]!,
+                          customName: tab.customName.value,
+                          workingDirectory: tab.metadata.value.workingDirectory,
+                          terminalTitle: tab.metadata.value.terminalTitle,
+                          runningCommand: tab.metadata.value.runningCommand,
+                        ),
+                        EditorTab() => editorTabLabel(tab.remotePath),
+                      },
+                  ]);
+                  Widget chip(PaneTab tab, String label) => switch (tab) {
+                    TerminalSession() => _TabChip(
+                      ordinal: ordinals[tab]!,
+                      label: label,
+                      session: tab,
+                      selected: tab.id == widget.activeTabId,
+                      onTap: () => widget.onFocus(tab.id),
+                      onClose: () => widget.onClose(tab.id),
+                      onRename: widget.onRename == null
+                          ? null
+                          : () => _rename(context, tab),
+                    ),
+                    EditorTab() => _EditorTabChip(
+                      tab: tab,
+                      label: label,
+                      selected: tab.id == widget.activeTabId,
+                      onTap: () => widget.onFocus(tab.id),
+                      onClose: () => widget.onClose(tab.id),
+                    ),
+                  };
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: NotificationListener<ScrollMetricsNotification>(
+                          onNotification: (notification) =>
+                              _updateOverflow(notification.metrics),
+                          child: NotificationListener<ScrollNotification>(
+                            onNotification: (notification) =>
+                                _updateOverflow(notification.metrics),
+                            child: SingleChildScrollView(
+                              key: _viewportKey,
+                              controller: _scrollController,
+                              scrollDirection: Axis.horizontal,
+                              // Register before Scrollable for dominant
+                              // vertical wheel signals. Horizontal
+                              // trackpad signals fall through unchanged.
+                              child: Listener(
+                                onPointerSignal: _handlePointerSignal,
+                                child: Row(
+                                  children: [
+                                    for (var i = 0; i < widget.tabs.length; i++)
+                                      KeyedSubtree(
+                                        key: _tabKeys.putIfAbsent(
+                                          widget.tabs[i].id,
+                                          GlobalKey.new,
+                                        ),
+                                        child: chip(widget.tabs[i], labels[i]),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
-                          EditorTab() => editorTabLabel(tab.remotePath),
-                        },
-                    ]);
-                    Widget chip(PaneTab tab, String label) => switch (tab) {
-                      TerminalSession() => _TabChip(
-                        ordinal: ordinals[tab]!,
-                        label: label,
-                        session: tab,
-                        selected: tab.id == activeTabId,
-                        onTap: () => onFocus(tab.id),
-                        onClose: () => onClose(tab.id),
-                        onRename: onRename == null
-                            ? null
-                            : () => _rename(context, tab),
+                        ),
                       ),
-                      EditorTab() => _EditorTabChip(
-                        tab: tab,
-                        label: label,
-                        selected: tab.id == activeTabId,
-                        onTap: () => onFocus(tab.id),
-                        onClose: () => onClose(tab.id),
-                      ),
-                    };
-                    return Row(
-                      children: [
-                        for (var i = 0; i < tabs.length; i++)
-                          chip(tabs[i], labels[i]),
-                      ],
-                    );
-                  },
-                ),
+                      if (_hasOverflow) _overflowMenu(context, labels),
+                    ],
+                  );
+                },
               ),
             ),
             IconButton(
@@ -433,12 +644,12 @@ class TerminalTabStrip extends StatelessWidget {
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(
                 minWidth: 40,
-                minHeight: height,
+                minHeight: TerminalTabStrip.height,
               ),
               icon: const Icon(Icons.add),
-              onPressed: onNewTab,
+              onPressed: widget.onNewTab,
             ),
-            if (onGenerateCommand case final generate?) ...[
+            if (widget.onGenerateCommand case final generate?) ...[
               VerticalDivider(
                 width: 1,
                 indent: 7,
@@ -452,7 +663,7 @@ class TerminalTabStrip extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(
                   minWidth: 40,
-                  minHeight: height,
+                  minHeight: TerminalTabStrip.height,
                 ),
                 // The assistant's purple (Poltergeist's D34).
                 icon: Icon(
@@ -473,7 +684,7 @@ class TerminalTabStrip extends StatelessWidget {
     // `null` is "cancelled"; the dialog reports a clear as an empty string,
     // which renameSession turns back into automatic naming.
     if (name == null) return;
-    onRename?.call(session.id, name.isEmpty ? null : name);
+    widget.onRename?.call(session.id, name.isEmpty ? null : name);
   }
 }
 
