@@ -1,23 +1,31 @@
 name: GLM 5.3 PR Review
 
+# Reviews run when a PR is opened, reopened or marked ready, not on every
+# push: each review spends Z.ai plan quota. Adding the glm-review label asks
+# for another one; the last step removes it again so it can be re-added.
 on:
   pull_request_target:
     types:
       - opened
       - reopened
-      - synchronize
       - ready_for_review
+      - labeled
 
 permissions:
   contents: read
   pull-requests: write
   issues: write
 
-# One review per PR at a time; superseded reviews of an outdated diff are
-# worthless, so cancel them. Keyed on the PR number — for pull_request_target
-# github.ref is the base branch, which would collide across PRs.
+# One review per PR at a time; a newer review request supersedes a review of
+# an older diff, so cancel it. Keyed on the PR number — for pull_request_target
+# github.ref is the base branch, which would collide across PRs. Any other
+# label also starts a run that the job condition skips; it gets a group of its
+# own so that it cannot cancel a review in progress.
 concurrency:
-  group: zai-review-${{ github.event.pull_request.number }}
+  group: >-
+    zai-review-${{ github.event.pull_request.number }}${{
+    github.event.action == 'labeled' && github.event.label.name != 'glm-review'
+    && format('-label-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 jobs:
@@ -30,15 +38,16 @@ jobs:
     # shorter, so a step timeout always fires first. That keeps running out of
     # time a step failure, which the retry/reporting steps can act on, and
     # leaves "cancelled" to mean only what the concurrency group above means
-    # by it: a newer push took over. Sized for two full attempts (2 x 170)
-    # plus reporting overhead; 350 stays under the 360 minute ceiling for
-    # GitHub-hosted runners.
+    # by it: a newer review request took over. Sized for two full attempts
+    # (2 x 170) plus reporting overhead; 350 stays under the 360 minute
+    # ceiling for GitHub-hosted runners.
     timeout-minutes: 350
     # pull_request_target exposes repository secrets and a write-capable token.
     # Never run this privileged job for branches from untrusted forks.
     if: >-
       ${{ github.event.pull_request.draft == false &&
-          github.event.pull_request.head.repo.full_name == github.repository }}
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          (github.event.action != 'labeled' || github.event.label.name == 'glm-review') }}
     env:
       ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
     steps:
@@ -93,7 +102,7 @@ jobs:
           # The first review of a PR has no state to compare against and still
           # runs full, which is what the budget above is sized for. Override per
           # PR with a zai-review:full / zai-review:hybrid / zai-review:incremental
-          # label, applied before the push that triggers the next review.
+          # label, applied before asking for the next review.
           ZAI_REVIEW_MODE: hybrid
           # Left at the action's own default. Raising it to cut the request
           # count backfires: at 25000, three of Seance PR #89's 17 chunks spent the
@@ -142,9 +151,9 @@ jobs:
         # Both review attempts failed, so this revision got no findings — say
         # so on the PR: silence is otherwise indistinguishable from a reviewer
         # that found nothing. Cancellations are excluded deliberately, because
-        # the concurrency group cancels a superseded run on every new push
-        # and that is not a failure. A retry success skips this step, since
-        # that revision did get its findings. The not-success comparison
+        # the concurrency group cancels a run that a newer review request
+        # supersedes, and that is not a failure. A retry success skips this
+        # step, since that revision did get its findings. The not-success comparison
         # fails closed if the retry is ever skipped rather than failed.
         if: ${{ !cancelled() && steps.review.outcome == 'failure' && steps.review_retry.outcome != 'success' }}
         env:
@@ -195,3 +204,15 @@ jobs:
       - name: Skip when Z.ai API key is unavailable
         if: ${{ env.ZAI_API_KEY == '' }}
         run: echo "Skipping Z.ai review because ZAI_API_KEY is not configured."
+
+      # A review asked for with the glm-review label clears the label, so
+      # adding it again asks for the next one. Runs whatever happened above.
+      - name: Let the glm-review label request another review
+        if: ${{ always() && github.event.action == 'labeled' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        # Someone may have removed the label already; that is not a failure.
+        run: |
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels/glm-review" ||
+            echo "::notice::The glm-review label was already gone."
