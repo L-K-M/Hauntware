@@ -95,6 +95,11 @@ class RemoteFilesController extends ChangeNotifier {
   String? _lastCommand;
   Timer? _remoteSnapshotDebounce;
   int _remoteSnapshotGeneration = 0;
+  Timer? _transferProgressNotifyTimer;
+
+  /// Progress counters can change for every SFTP chunk, but the pane cannot
+  /// usefully repaint faster than this.
+  static const _transferProgressNotifyInterval = Duration(milliseconds: 100);
 
   /// Collapses a burst of finished shell commands (a pasted multi-line
   /// script) into one re-stat pass over the managed copies.
@@ -1299,7 +1304,15 @@ class RemoteFilesController extends ChangeNotifier {
   ) {
     transfer.transferred = transferred;
     transfer.total = total ?? transfer.total;
-    _notify();
+    _notifyTransferProgress();
+  }
+
+  void _notifyTransferProgress() {
+    if (_disposed || _transferProgressNotifyTimer != null) return;
+    _transferProgressNotifyTimer = Timer(_transferProgressNotifyInterval, () {
+      _transferProgressNotifyTimer = null;
+      _notify();
+    });
   }
 
   void _failTransfer(RemoteTransferItem transfer, Object failure) {
@@ -1626,6 +1639,8 @@ class RemoteFilesController extends ChangeNotifier {
   }
 
   void _notify() {
+    _transferProgressNotifyTimer?.cancel();
+    _transferProgressNotifyTimer = null;
     if (!_disposed) notifyListeners();
   }
 
@@ -1637,6 +1652,8 @@ class RemoteFilesController extends ChangeNotifier {
     terminalTitle.removeListener(_followTitle);
     activeCommand.removeListener(_followActiveCommand);
     _remoteSnapshotDebounce?.cancel();
+    _transferProgressNotifyTimer?.cancel();
+    _transferProgressNotifyTimer = null;
     for (final transfer in transfers) {
       transfer.cancellation.cancel();
     }
