@@ -26,6 +26,7 @@ import 'services/remote_files_controller.dart';
 import 'services/remote_git_controller.dart';
 import 'services/secrets_recovery.dart';
 import 'services/server_duplication.dart';
+import 'services/server_credential_save.dart';
 import 'services/server_links.dart';
 import 'services/shell_location.dart';
 import 'services/terminal_context.dart';
@@ -689,6 +690,7 @@ class AppState extends ChangeNotifier {
     String? draftPassword,
     String? draftPrivateKey,
     String? draftKeyPassphrase,
+    PassphraseIntent? draftPassphraseIntent,
     IdentityFileBookmark? draftIdentityBookmark,
     SshConnectionLog? log,
   }) {
@@ -699,6 +701,7 @@ class AppState extends ChangeNotifier {
         draftPassword: draftPassword,
         draftPrivateKey: draftPrivateKey,
         draftKeyPassphrase: draftKeyPassphrase,
+        draftPassphraseIntent: draftPassphraseIntent,
         draftIdentityBookmark: draftIdentityBookmark,
       ),
       authenticate: liveHostAuthenticator(
@@ -882,11 +885,17 @@ class AppState extends ChangeNotifier {
   Future<void> saveServer(
     ServerConfig config, {
     Secret? secret,
+    String? retiredSecretRef,
+    String? retainedSecretRef,
+    Secret? retainedSecretSnapshot,
     IdentityFileBookmark? identityFileBookmark,
   }) => _mutate(
     () => _saveServerNow(
       config,
       secret: secret,
+      retiredSecretRef: retiredSecretRef,
+      retainedSecretRef: retainedSecretRef,
+      retainedSecretSnapshot: retainedSecretSnapshot,
       identityFileBookmark: identityFileBookmark,
     ),
   );
@@ -895,12 +904,26 @@ class AppState extends ChangeNotifier {
   Future<void> _saveServerNow(
     ServerConfig config, {
     Secret? secret,
+    String? retiredSecretRef,
+    String? retainedSecretRef,
+    Secret? retainedSecretSnapshot,
     IdentityFileBookmark? identityFileBookmark,
   }) async {
-    if (secret != null) {
-      await services.vault.putLocalSecret(secret, updatedAt: config.updatedAt);
-    }
-    await services.configStore.putServer(config);
+    // The editor may have carried an unedited passphrase or PEM from this
+    // revision into a fresh entry. Recheck it inside the mutation queue so a
+    // sync apply that landed after the editor's read cannot be overwritten by
+    // a stale plan.
+    await verifyRetainedCredential(
+      vault: services.vault,
+      retainedSecretRef: retainedSecretRef,
+      expected: retainedSecretSnapshot,
+    );
+    await writeServerWithCredential(
+      vault: services.vault,
+      configStore: services.configStore,
+      config: config,
+      secret: secret,
+    );
     // Re-saving an id (re-creating one deleted while offline, or an import
     // restoring it) cancels any pending deletion for it, so a stale tombstone
     // cannot shadow the live record collectLocal is about to publish. Fail-soft:
@@ -928,6 +951,27 @@ class AppState extends ChangeNotifier {
       await services.saveSettings();
     }
     servers = await services.configStore.listServers();
+    try {
+      await retireReplacedSecret(
+        vault: services.vault,
+        tombstones: services.tombstoneStore,
+        deviceId: services.settings.deviceId,
+        config: config,
+        retiredSecretRef: retiredSecretRef,
+        servers: servers,
+      );
+    } catch (error, stackTrace) {
+      // The config already points at the replacement. A lingering unreferenced
+      // vault entry is recoverable and invisible; turning this into a failed
+      // save would encourage a retry of work that already landed.
+      developer.log(
+        'Could not retire the replaced credential for server ${config.id}',
+        name: 'seance.app',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
     services.probe.updateServers(servers);
     notifyListeners();
     _scheduleAutoSync();
@@ -2986,9 +3030,7 @@ class AppState extends ChangeNotifier {
     Uint8List export,
     String code, {
     required RestoreConflictPolicy policy,
-  }) => _mutate(
-    () => services.restoreSecrets(export, code, policy: policy),
-  );
+  }) => _mutate(() => services.restoreSecrets(export, code, policy: policy));
 
   /// Connect a producer. Returns the pairing string, which is shown once.
   Future<String> addInboxApp({

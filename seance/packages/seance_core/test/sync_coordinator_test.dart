@@ -2327,6 +2327,60 @@ void main() {
           reason: 'a tombstone the server has taken is pruned');
     });
 
+    test('a retired credential is not restored from the sync mirror',
+        () async {
+      final api = FakeServer();
+      final vaultKey = secureRandomBytes(32);
+      final codec = RecordCodec(vaultKey);
+      final cfg = InMemoryConfigStore();
+      final vault = SecretVault(InMemoryVaultStore(), vaultKey);
+      final tombstones = InMemoryTombstoneStore();
+
+      SyncCoordinator withSecrets() => SyncCoordinator(
+            configStore: cfg,
+            hostKeyStore: InMemoryHostKeyStore(),
+            codec: codec,
+            local: InMemoryLocalRecordStore(),
+            deviceId: 'A',
+            syncSecrets: true,
+            secretVault: vault,
+            tombstoneStore: tombstones,
+          );
+
+      await vault.putSecret(const Secret(
+        id: 'old',
+        kind: SecretKind.password,
+        value: 'old-password',
+        updatedAt: 10,
+      ));
+      await cfg.putServer(server('s1', 'alpha', 10).copyWith(
+            secretRef: 'old',
+            syncSecret: true,
+          ));
+      await withSecrets().run(api);
+      expect(api.stored('secret:old')!.deleted, isFalse);
+
+      await vault.putSecret(const Secret(
+        id: 'new',
+        kind: SecretKind.password,
+        value: 'new-password',
+        updatedAt: 30,
+      ));
+      await cfg.putServer(server('s1', 'alpha', 30).copyWith(
+            secretRef: 'new',
+            syncSecret: true,
+          ));
+      await tombstones.add(tombstoneFor('secret:old', 'A', 30));
+      await vault.deleteSecret('old');
+
+      await withSecrets().run(api);
+
+      expect(await vault.getSecret('old'), isNull,
+          reason: 'the pulled live record must not recreate retired material');
+      expect(api.stored('secret:old')!.deleted, isTrue);
+      expect(api.stored('secret:new')!.deleted, isFalse);
+    });
+
     test('the deletion converges to a second device', () async {
       final api = FakeServer();
       final codec = RecordCodec(secureRandomBytes(32)); // shared vault

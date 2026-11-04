@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/app_state.dart';
+import 'package:seance_app/services/app_settings.dart';
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/ui/server_appearance.dart';
 import 'package:seance_app/ui/server_editor.dart';
@@ -112,6 +113,23 @@ void main() {
     expect(done(), isTrue, reason: 'timed out after 5 s waiting for a save');
   }
 
+  /// Poll while alternating the widget clock and the real event loop. Vault
+  /// calls cross both in a widget test: file I/O needs real time, while a
+  /// method-channel response only reaches the pending save after a pump.
+  Future<void> waitUntilPumped(
+    WidgetTester tester,
+    bool Function() done,
+  ) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 5));
+    while (!done() && DateTime.now().isBefore(deadline)) {
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+    }
+    expect(done(), isTrue, reason: 'timed out after 5 s waiting for a save');
+  }
+
   /// Press [key] with the editor open, and give a save it triggers time to
   /// finish. The save writes through the config store on the real event
   /// loop, so the key press that starts it has to happen inside `runAsync`
@@ -146,8 +164,9 @@ void main() {
       expect(find.textContaining('isn\'t supported yet'), findsNothing);
     });
 
-    testWidgets('editing preserves the saved jump host and start directory',
-        (tester) async {
+    testWidgets('editing preserves the saved jump host and start directory', (
+      tester,
+    ) async {
       await boot(tester);
       final existing = ServerConfig(
         id: 'target',
@@ -394,8 +413,6 @@ void main() {
       await fillRequired(tester);
       await chooseAuth(tester, 'Password');
       await tester.enterText(field('Password'), 'hunter2');
-      await tester.tap(field('Label'));
-      await tester.pump();
 
       await saveAndSettle(tester);
 
@@ -417,4 +434,273 @@ void main() {
       expect(find.text('Set up a recovery code?'), findsNothing);
     });
   });
+
+  group('Explicit credential intents', () {
+    testWidgets('a method switch to a mismatched credential blocks the save', (
+      tester,
+    ) async {
+      await boot(tester);
+      final existing = ServerConfig(
+        id: 'box',
+        label: 'box',
+        host: 'box.example.com',
+        username: 'deploy',
+        authMethod: AuthMethod.password,
+        secretRef: 'sec-1',
+        createdAt: 1,
+        updatedAt: 1,
+      );
+      await tester.runAsync(() async {
+        await state!.saveServer(
+          existing,
+          secret: const Secret(
+            id: 'sec-1',
+            kind: SecretKind.password,
+            value: 'hunter2',
+          ),
+        );
+      });
+      await openEditor(tester, existing: existing);
+      // Wait for the editor to learn what is stored (a vault read).
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 200)),
+      );
+      await tester.pumpAndSettle();
+
+      final dropdown = find.byType(DropdownButtonFormField<AuthMethod>);
+      await scrollTo(tester, dropdown);
+      await tester.tap(dropdown);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Private key').last);
+      await tester.pumpAndSettle();
+      // identityFilePath is absent, so this is pasted-key mode: retaining the
+      // password would make it be read as key material.
+
+      expect(
+        find.textContaining('does not match this sign-in method'),
+        findsOneWidget,
+      );
+      // The Save button refuses while the mismatch stands.
+      final save = find.widgetWithText(FilledButton, 'Save');
+      await scrollTo(tester, save);
+      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+
+      // Choosing Replace and typing new material unblocks it.
+      await scrollTo(tester, find.text('Replace').first);
+      await tester.tap(find.text('Replace').first);
+      await tester.pumpAndSettle();
+      final pem = field('Private key (PEM/OpenSSH)');
+      await scrollTo(tester, pem);
+      await tester.enterText(pem, 'PEM');
+      await tester.pump();
+      expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+      await scrollTo(tester, save);
+
+      tester.widget<FilledButton>(save).onPressed!();
+      await waitUntilPumped(
+        tester,
+        () => state!.servers.single.authMethod == AuthMethod.privateKey,
+      );
+      await tester.pumpAndSettle();
+
+      // The wrong-kind entry was retired, not retained: the config points
+      // at the replacement.
+      final saved = state!.servers.single;
+      expect(saved.secretRef, isNot('sec-1'));
+    });
+
+    testWidgets('a referenced key passphrase offers an explicit clear', (
+      tester,
+    ) async {
+      await boot(tester);
+      final existing = ServerConfig(
+        id: 'box',
+        label: 'box',
+        host: 'box.example.com',
+        username: 'deploy',
+        authMethod: AuthMethod.privateKey,
+        secretRef: 'sec-1',
+        identityFilePath: '~/.ssh/id_ed25519',
+        createdAt: 1,
+        updatedAt: 1,
+      );
+      await tester.runAsync(() async {
+        await state!.saveServer(
+          existing,
+          secret: const Secret(
+            id: 'sec-1',
+            kind: SecretKind.privateKey,
+            value: '',
+            keyPassphrase: 'legacy-file-phrase',
+            credentialVersion: 1,
+          ),
+        );
+      });
+      await openEditor(tester, existing: existing);
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 200)),
+      );
+      await tester.pumpAndSettle();
+
+      // The stored state is visible, and the explicit Clear choice with it.
+      expect(find.textContaining('passphrase stored'), findsOneWidget);
+      await scrollTo(tester, find.text('Clear'));
+      await tester.tap(find.text('Clear'));
+      await tester.pumpAndSettle();
+
+      final save = find.widgetWithText(FilledButton, 'Save');
+      await scrollTo(tester, save);
+      expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+      expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Clear'))
+            .selected,
+        isTrue,
+      );
+    });
+
+    testWidgets('Keep ignores and clears typed replacement material', (
+      tester,
+    ) async {
+      await boot(tester);
+      final existing = ServerConfig(
+        id: 'box',
+        label: 'box',
+        host: 'box.example.com',
+        username: 'deploy',
+        authMethod: AuthMethod.password,
+        secretRef: 'sec-1',
+        createdAt: 1,
+        updatedAt: 1,
+      );
+      await tester.runAsync(() async {
+        await state!.saveServer(
+          existing,
+          secret: const Secret(
+            id: 'sec-1',
+            kind: SecretKind.password,
+            value: 'saved-password',
+          ),
+        );
+      });
+      final capturing = _CapturingState(state!.services);
+      state = capturing;
+      await openEditor(tester, existing: existing);
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 200)),
+      );
+      await tester.pumpAndSettle();
+
+      final password = field('Password');
+      await scrollTo(tester, password);
+      await tester.enterText(password, 'typed-password');
+      await tester.pump();
+      expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Replace'))
+            .selected,
+        isTrue,
+      );
+
+      final keep = find.text('Keep saved');
+      await scrollTo(tester, keep);
+      await tester.tap(keep);
+      await tester.pump();
+      expect(tester.widget<TextFormField>(password).controller!.text, isEmpty);
+
+      final testButton = find.widgetWithText(OutlinedButton, 'Test connection');
+      await scrollTo(tester, testButton);
+      await tester.runAsync(() async {
+        await tester.tap(testButton);
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+      await tester.pumpAndSettle();
+
+      expect(capturing.lastPassword, isNull);
+    });
+
+    testWidgets('Test connection carries the same passphrase intent', (
+      tester,
+    ) async {
+      await boot(tester);
+      final existing = ServerConfig(
+        id: 'box',
+        label: 'box',
+        host: 'box.example.com',
+        username: 'deploy',
+        authMethod: AuthMethod.privateKey,
+        secretRef: 'sec-1',
+        identityFilePath: '~/.ssh/id_ed25519',
+        createdAt: 1,
+        updatedAt: 1,
+      );
+      await tester.runAsync(() async {
+        await state!.saveServer(
+          existing,
+          secret: const Secret(
+            id: 'sec-1',
+            kind: SecretKind.privateKey,
+            value: '',
+            keyPassphrase: 'legacy-file-phrase',
+            credentialVersion: 1,
+          ),
+        );
+      });
+      final capturing = _CapturingState(state!.services);
+      state = capturing;
+      await openEditor(tester, existing: existing);
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 200)),
+      );
+      await tester.pumpAndSettle();
+
+      await scrollTo(tester, find.text('Clear'));
+      await tester.tap(find.text('Clear'));
+      await tester.pumpAndSettle();
+      final testButton = find.widgetWithText(OutlinedButton, 'Test connection');
+      await scrollTo(tester, testButton);
+      await tester.runAsync(() async {
+        await tester.tap(testButton);
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+      await tester.pumpAndSettle();
+
+      expect(capturing.lastPassphraseIntent, PassphraseIntent.clear);
+      // The test runs against the saved form, not a stale credential: with
+      // Clear chosen it must not send a passphrase to fall back with.
+      expect(capturing.lastKeyPassphrase ?? '', isEmpty);
+    });
+  });
+}
+
+/// Captures what the editor sends a connection test, so a test can pin that
+/// Test resolves the same intent the Save would write.
+class _CapturingState extends AppState {
+  _CapturingState(super.services);
+
+  PassphraseIntent? lastPassphraseIntent;
+  String? lastKeyPassphrase;
+  String? lastPassword;
+  String? lastPrivateKey;
+
+  @override
+  Future<ConnectionTestResult> testServerConnection(
+    ServerConfig config, {
+    String? draftPassword,
+    String? draftPrivateKey,
+    String? draftKeyPassphrase,
+    PassphraseIntent? draftPassphraseIntent,
+    IdentityFileBookmark? draftIdentityBookmark,
+    SshConnectionLog? log,
+  }) async {
+    lastPassphraseIntent = draftPassphraseIntent;
+    lastKeyPassphrase = draftKeyPassphrase;
+    lastPassword = draftPassword;
+    lastPrivateKey = draftPrivateKey;
+    return const ConnectionTestResult(
+      ok: true,
+      summary: 'Authenticated',
+      log: '',
+    );
+  }
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -74,7 +75,10 @@ Future<bool> confirmSyncExclusion(BuildContext context) async {
 /// vault is followed by the offer of a recovery code (CRED-05), on a device
 /// that has none and was not told "Not now".
 Future<void> showServerEditor(
-    BuildContext context, AppState state, ServerConfig? existing) async {
+  BuildContext context,
+  AppState state,
+  ServerConfig? existing,
+) async {
   final wroteCredential = await showDialog<bool>(
     context: context,
     builder: (_) => Dialog(
@@ -127,6 +131,11 @@ class _ServerEditorState extends State<_ServerEditor> {
   bool _referenceKeyFile = true;
   late bool _syncSecret;
   late bool _excludeFromSync;
+  late CredentialIntent _credentialIntent;
+  late PassphraseIntent _passphraseIntent;
+  Secret? _storedSecret;
+  bool _storedCredentialLoaded = false;
+  Object? _storedCredentialError;
   bool _busy = false;
 
   /// The id a *new* server will be saved under, minted once rather than per
@@ -172,13 +181,21 @@ class _ServerEditorState extends State<_ServerEditor> {
     _auth = e?.authMethod ?? AuthMethod.agent;
     _keyPath.text = e?.identityFilePath ?? '';
     _referenceKeyFile = e?.identityFilePath != null;
+    _credentialIntent = e?.secretRef == null
+        ? (_auth == AuthMethod.password ||
+                  (_auth == AuthMethod.privateKey && !_referenceKeyFile)
+              ? CredentialIntent.replace
+              : CredentialIntent.keep)
+        : CredentialIntent.keep;
+    _passphraseIntent = _auth == AuthMethod.privateKey && e?.secretRef == null
+        ? PassphraseIntent.clear
+        : PassphraseIntent.keep;
     _loginScript.text = e?.loginScript ?? '';
     if (e != null) {
       // Load the stored grant with the path it was actually minted for (which
       // a synced edit may have diverged from), so re-saving can't re-bless a
       // bookmark under a path it doesn't open.
-      final stored =
-          widget.state.services.settings.identityFileBookmarks[e.id];
+      final stored = widget.state.services.settings.identityFileBookmarks[e.id];
       _keyBookmark = stored?.bookmark;
       _keyBookmarkPath = stored?.path;
     }
@@ -189,21 +206,109 @@ class _ServerEditorState extends State<_ServerEditor> {
     for (final field in _connectionFields) {
       field.addListener(_dropTestResult);
     }
+    _password.addListener(_credentialTextChanged);
+    _keyPem.addListener(_credentialTextChanged);
+    _keyPassphrase.addListener(_passphraseTextChanged);
+    unawaited(_loadStoredCredential());
+  }
+
+  Future<void> _loadStoredCredential() async {
+    final ref = widget.existing?.secretRef;
+    if (ref == null) {
+      _storedCredentialLoaded = true;
+      return;
+    }
+    try {
+      final secret = await widget.state.services.vault.getSecret(ref);
+      if (!mounted) return;
+      setState(() {
+        _storedSecret = secret;
+        _storedCredentialLoaded = true;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _storedCredentialError = error;
+        _storedCredentialLoaded = true;
+      });
+    }
+  }
+
+  void _credentialTextChanged() {
+    final hasReplacement = _auth == AuthMethod.password
+        ? _password.text.isNotEmpty
+        : _auth == AuthMethod.privateKey &&
+              !_referenceKeyFile &&
+              _keyPem.text.isNotEmpty;
+    if (hasReplacement && _credentialIntent != CredentialIntent.replace) {
+      setState(() => _credentialIntent = CredentialIntent.replace);
+    }
+  }
+
+  void _passphraseTextChanged() {
+    if (_keyPassphrase.text.isNotEmpty &&
+        _passphraseIntent != PassphraseIntent.replace) {
+      setState(() => _passphraseIntent = PassphraseIntent.replace);
+    }
+  }
+
+  void _normalizeCredentialIntents() {
+    if (_auth != AuthMethod.privateKey) {
+      _passphraseIntent = PassphraseIntent.keep;
+    }
+    if (_auth == AuthMethod.agent ||
+        (_auth == AuthMethod.privateKey && _referenceKeyFile)) {
+      if (_credentialIntent == CredentialIntent.replace) {
+        _credentialIntent = CredentialIntent.keep;
+      }
+    } else if (widget.existing?.secretRef == null &&
+        _credentialIntent == CredentialIntent.keep) {
+      _credentialIntent = CredentialIntent.replace;
+    }
+    if (_auth == AuthMethod.privateKey &&
+        widget.existing?.secretRef == null &&
+        _keyPassphrase.text.isEmpty) {
+      _passphraseIntent = PassphraseIntent.clear;
+    }
+  }
+
+  SecretKind? get _retainedKind {
+    final stored = _storedSecret;
+    if (stored != null) return stored.kind;
+    final existing = widget.existing;
+    if (existing?.secretRef == null) return null;
+    return switch (existing!.authMethod) {
+      AuthMethod.password => SecretKind.password,
+      AuthMethod.privateKey => SecretKind.privateKey,
+      AuthMethod.agent => null,
+    };
+  }
+
+  bool get _credentialMismatch {
+    if (_credentialIntent != CredentialIntent.keep) return false;
+    if (_auth == AuthMethod.privateKey &&
+        _referenceKeyFile &&
+        _passphraseIntent != PassphraseIntent.keep) {
+      return false;
+    }
+    final kind = _retainedKind;
+    if (kind == null) return false;
+    return !retainedCredentialMatches(auth: _auth, storedKind: kind);
   }
 
   /// Every text field in the form, so [dispose] releases them all.
   List<TextEditingController> get _fields => [
-        _label,
-        _host,
-        _port,
-        _user,
-        _group,
-        _password,
-        _keyPem,
-        _keyPath,
-        _keyPassphrase,
-        _loginScript,
-      ];
+    _label,
+    _host,
+    _port,
+    _user,
+    _group,
+    _password,
+    _keyPem,
+    _keyPath,
+    _keyPassphrase,
+    _loginScript,
+  ];
 
   /// The fields a connection test's outcome actually depends on.
   ///
@@ -215,14 +320,14 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// discarding a result the user waited minutes for over a typo in the name
   /// is a cost with nothing bought for it.
   List<TextEditingController> get _connectionFields => [
-        _host,
-        _port,
-        _user,
-        _password,
-        _keyPem,
-        _keyPath,
-        _keyPassphrase,
-      ];
+    _host,
+    _port,
+    _user,
+    _password,
+    _keyPem,
+    _keyPath,
+    _keyPassphrase,
+  ];
 
   /// Forget the last test result, and abandon one still running, because the
   /// form no longer describes what is being tested.
@@ -304,10 +409,12 @@ class _ServerEditorState extends State<_ServerEditor> {
         // The chord editors use for "submit despite being multi-line", on
         // both modifier conventions, since the shortcut is unbound otherwise
         // and a macOS user's hands expect the one, a Linux user's the other.
-        SingleActivator(LogicalKeyboardKey.enter, control: true):
-            _SaveIntent(anywhere: true),
-        SingleActivator(LogicalKeyboardKey.enter, meta: true):
-            _SaveIntent(anywhere: true),
+        SingleActivator(LogicalKeyboardKey.enter, control: true): _SaveIntent(
+          anywhere: true,
+        ),
+        SingleActivator(LogicalKeyboardKey.enter, meta: true): _SaveIntent(
+          anywhere: true,
+        ),
         SingleActivator(LogicalKeyboardKey.numpadEnter, control: true):
             _SaveIntent(anywhere: true),
         SingleActivator(LogicalKeyboardKey.numpadEnter, meta: true):
@@ -329,8 +436,10 @@ class _ServerEditorState extends State<_ServerEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.existing == null ? 'Add server' : 'Edit server',
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              widget.existing == null ? 'Add server' : 'Edit server',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _label,
@@ -369,18 +478,27 @@ class _ServerEditorState extends State<_ServerEditor> {
               decoration: const InputDecoration(labelText: 'Authentication'),
               items: const [
                 DropdownMenuItem(
-                    value: AuthMethod.agent, child: Text('ssh-agent')),
+                  value: AuthMethod.agent,
+                  child: Text('ssh-agent'),
+                ),
                 DropdownMenuItem(
-                    value: AuthMethod.password, child: Text('Password')),
+                  value: AuthMethod.password,
+                  child: Text('Password'),
+                ),
                 DropdownMenuItem(
-                    value: AuthMethod.privateKey, child: Text('Private key')),
+                  value: AuthMethod.privateKey,
+                  child: Text('Private key'),
+                ),
               ],
               // Through _dropTestResult, not a bare clear: the auth method is
               // baked into the config a test runs against, so one already in
               // flight is describing a credential the form no longer holds —
               // and would otherwise land looking current.
               onChanged: (v) {
-                setState(() => _auth = v ?? AuthMethod.agent);
+                setState(() {
+                  _auth = v ?? AuthMethod.agent;
+                  _normalizeCredentialIntents();
+                });
                 _dropTestResult();
               },
             ),
@@ -403,7 +521,9 @@ class _ServerEditorState extends State<_ServerEditor> {
                   child: Align(
                     alignment: AlignmentDirectional.centerStart,
                     child: OutlinedButton.icon(
-                      onPressed: _busy || _testing ? null : _testConnection,
+                      onPressed: _busy || _testing || _credentialMismatch
+                          ? null
+                          : _testConnection,
                       icon: _testing
                           ? const SizedBox(
                               width: 16,
@@ -432,19 +552,20 @@ class _ServerEditorState extends State<_ServerEditor> {
                 // minutes an authentication may take is worse than letting it
                 // finish unwatched.
                 TextButton(
-                    onPressed:
-                        _busy ? null : () => Navigator.of(context).pop(),
-                    child: const Text('Cancel')),
+                  onPressed: _busy ? null : () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
                 const SizedBox(width: 8),
                 FilledButton(
-                    // Not disabled while a test runs: an attempt can take minutes,
-                    // and the only other way out was typing a character into
-                    // any field to drop the test. Saving mid-test is sound —
-                    // any edit that could make the two disagree already
-                    // supersedes the attempt, and the save pops the editor, so
-                    // the late result is discarded by the mounted check.
-                    onPressed: _busy ? null : _save,
-                    child: const Text('Save')),
+                  // Not disabled while a test runs: an attempt can take minutes,
+                  // and the only other way out was typing a character into
+                  // any field to drop the test. Saving mid-test is sound —
+                  // any edit that could make the two disagree already
+                  // supersedes the attempt, and the save pops the editor, so
+                  // the late result is discarded by the mounted check.
+                  onPressed: _busy || _credentialMismatch ? null : _save,
+                  child: const Text('Save'),
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -453,8 +574,8 @@ class _ServerEditorState extends State<_ServerEditor> {
               'login script. A host key you approve here is trusted for the '
               'test only — the first real connection asks again.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).hintColor,
-                  ),
+                color: Theme.of(context).hintColor,
+              ),
             ),
             if (_testResult != null) const SizedBox(height: 12),
             // The spinner announces that a test started; without this the one
@@ -480,13 +601,18 @@ class _ServerEditorState extends State<_ServerEditor> {
       case AuthMethod.agent:
         return [
           const Text('Keys are provided by your ssh-agent; nothing is stored.'),
+          if (widget.existing?.secretRef != null) ..._credentialControls(),
         ];
       case AuthMethod.password:
         return [
+          ..._credentialControls(allowReplace: true),
           TextFormField(
             controller: _password,
             obscureText: true,
             decoration: const InputDecoration(labelText: 'Password'),
+            validator: (value) => _credentialIntent == CredentialIntent.replace
+                ? _required(value)
+                : null,
           ),
           _syncSecretToggle(),
         ];
@@ -501,10 +627,14 @@ class _ServerEditorState extends State<_ServerEditor> {
             // key on disk and the pasted one, so an attempt already running
             // is about the other of the two.
             onChanged: (v) {
-              setState(() => _referenceKeyFile = v);
+              setState(() {
+                _referenceKeyFile = v;
+                _normalizeCredentialIntents();
+              });
               _dropTestResult();
             },
           ),
+          ..._credentialControls(allowReplace: !_referenceKeyFile),
           if (_referenceKeyFile)
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -513,8 +643,9 @@ class _ServerEditorState extends State<_ServerEditor> {
                   child: TextFormField(
                     controller: _keyPath,
                     decoration: const InputDecoration(
-                        labelText: 'Identity file path',
-                        hintText: '~/.ssh/id_ed25519'),
+                      labelText: 'Identity file path',
+                      hintText: '~/.ssh/id_ed25519',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -530,20 +661,159 @@ class _ServerEditorState extends State<_ServerEditor> {
               maxLines: 5,
               style: SeanceTheme.mono.copyWith(fontSize: 12),
               decoration: const InputDecoration(
-                  labelText: 'Private key (PEM/OpenSSH)',
-                  border: OutlineInputBorder()),
+                labelText: 'Private key (PEM/OpenSSH)',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) =>
+                  _credentialIntent == CredentialIntent.replace
+                  ? _required(value)
+                  : null,
             ),
+          ..._passphraseControls(),
           TextFormField(
             controller: _keyPassphrase,
             obscureText: true,
             decoration: const InputDecoration(
-                labelText: 'Key passphrase (optional)'),
+              labelText: 'Key passphrase (optional)',
+            ),
+            validator: (value) => _passphraseIntent == PassphraseIntent.replace
+                ? _required(value)
+                : null,
           ),
           // Only the stored key (not the referenced-file case) is a secret that
           // could sync.
           if (!_referenceKeyFile) _syncSecretToggle(),
         ];
     }
+  }
+
+  List<Widget> _credentialControls({bool allowReplace = false}) {
+    final hasRetained = widget.existing?.secretRef != null;
+    if (!hasRetained && !allowReplace) return const [];
+    final status = _storedCredentialStatus();
+    return [
+      if (status != null) ...[
+        Text(status, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 6),
+      ],
+      if (_credentialMismatch) ...[
+        Text(
+          'The saved credential does not match this sign-in method. '
+          'Choose Replace or Remove before saving.',
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+        const SizedBox(height: 6),
+      ],
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          if (hasRetained)
+            ChoiceChip(
+              label: const Text('Keep saved'),
+              selected: _credentialIntent == CredentialIntent.keep,
+              onSelected: (_) => _setCredentialIntent(CredentialIntent.keep),
+            ),
+          if (allowReplace)
+            ChoiceChip(
+              label: const Text('Replace'),
+              selected: _credentialIntent == CredentialIntent.replace,
+              onSelected: (_) => _setCredentialIntent(CredentialIntent.replace),
+            ),
+          if (hasRetained)
+            ChoiceChip(
+              label: const Text('Remove'),
+              selected: _credentialIntent == CredentialIntent.clear,
+              onSelected: (_) => _setCredentialIntent(CredentialIntent.clear),
+            ),
+        ],
+      ),
+      const SizedBox(height: 8),
+    ];
+  }
+
+  void _setCredentialIntent(CredentialIntent intent) {
+    setState(() {
+      _credentialIntent = intent;
+      if (intent != CredentialIntent.replace) {
+        if (_auth == AuthMethod.password) {
+          _password.clear();
+        } else if (_auth == AuthMethod.privateKey && !_referenceKeyFile) {
+          _keyPem.clear();
+        }
+      }
+      if (intent == CredentialIntent.clear) {
+        _passphraseIntent = PassphraseIntent.keep;
+        _keyPassphrase.clear();
+      }
+    });
+    _dropTestResult();
+  }
+
+  List<Widget> _passphraseControls() {
+    if (_credentialIntent == CredentialIntent.clear) return const [];
+    final hasRetained = widget.existing?.secretRef != null;
+    return [
+      Text(
+        _referenceKeyFile
+            ? 'Referenced-key passphrase'
+            : 'Stored-key passphrase',
+        style: Theme.of(context).textTheme.labelMedium,
+      ),
+      const SizedBox(height: 4),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          if (hasRetained)
+            ChoiceChip(
+              label: const Text('Keep'),
+              selected: _passphraseIntent == PassphraseIntent.keep,
+              onSelected: (_) => _setPassphraseIntent(PassphraseIntent.keep),
+            ),
+          ChoiceChip(
+            label: const Text('Set'),
+            selected: _passphraseIntent == PassphraseIntent.replace,
+            onSelected: (_) => _setPassphraseIntent(PassphraseIntent.replace),
+          ),
+          ChoiceChip(
+            label: const Text('Clear'),
+            selected: _passphraseIntent == PassphraseIntent.clear,
+            onSelected: (_) => _setPassphraseIntent(PassphraseIntent.clear),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+    ];
+  }
+
+  void _setPassphraseIntent(PassphraseIntent intent) {
+    setState(() {
+      _passphraseIntent = intent;
+      if (intent != PassphraseIntent.replace) _keyPassphrase.clear();
+    });
+    _dropTestResult();
+  }
+
+  String? _storedCredentialStatus() {
+    if (widget.existing?.secretRef == null) return null;
+    if (!_storedCredentialLoaded) return 'Checking saved credential…';
+    if (_storedCredentialError != null) {
+      return 'Saved credential details unavailable. You can keep, replace, '
+          'or remove it.';
+    }
+    final secret = _storedSecret;
+    if (secret == null) return 'Saved credential is not on this device.';
+    if (secret.kind == SecretKind.password) return 'Saved password';
+    final pasted = secret.keyPassphrase == null
+        ? 'no stored-key passphrase'
+        : 'stored-key passphrase stored';
+    final referenced = secret.usesLegacySharedPassphrase
+        ? 'legacy passphrase ownership is ambiguous'
+        : secret.identityPassphrase == null
+        ? 'no referenced-key passphrase'
+        : 'referenced-key passphrase stored';
+    return 'Saved private key; $pasted; $referenced.';
   }
 
   /// An optional command to run in this server's shell once it opens. Typed
@@ -569,9 +839,9 @@ class _ServerEditorState extends State<_ServerEditor> {
       Text(
         'Runs as if typed at the prompt right after connecting. Its text and '
         'output land in scrollback — keep secrets out. Blank for none.',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).hintColor,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
       ),
     ];
   }
@@ -639,10 +909,7 @@ class _ServerEditorState extends State<_ServerEditor> {
             ),
           // Last, after the named ten: the picker is the way past them, not
           // the first thing to reach for.
-          _CustomColorSwatch(
-            color: _tint.custom,
-            onTap: _pickCustomColor,
-          ),
+          _CustomColorSwatch(color: _tint.custom, onTap: _pickCustomColor),
         ],
       ),
       const SizedBox(height: 16),
@@ -713,16 +980,17 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// has to give them back the answer they picked, not silently opt their
   /// credential out on the way through.
   Widget _syncSecretToggle() => SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Allow this credential to sync'),
-        subtitle: Text(_excludeFromSync
-            ? 'Not used while this server is excluded from sync.'
-            : 'End-to-end encrypted. Also needs sync set up with '
-                '"Sync saved passwords & keys" enabled.'),
-        value: _syncSecret && !_excludeFromSync,
-        onChanged:
-            _excludeFromSync ? null : (v) => setState(() => _syncSecret = v),
-      );
+    contentPadding: EdgeInsets.zero,
+    title: const Text('Allow this credential to sync'),
+    subtitle: Text(
+      _excludeFromSync
+          ? 'Not used while this server is excluded from sync.'
+          : 'End-to-end encrypted. Also needs sync set up with '
+                '"Sync saved passwords & keys" enabled.',
+    ),
+    value: _syncSecret && !_excludeFromSync,
+    onChanged: _excludeFromSync ? null : (v) => setState(() => _syncSecret = v),
+  );
 
   /// Whether this server takes part in sync at all.
   ///
@@ -731,21 +999,23 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// tombstone, so the other devices lose their copy. Only this device keeps
   /// one, which is the point — but it is not something to find out afterwards.
   List<Widget> _syncFields() => [
-        const Divider(),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Exclude from sync'),
-          subtitle: Text(_excludeFromSync
-              ? 'Kept on this device only. A copy that synced earlier is '
+    const Divider(),
+    SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: const Text('Exclude from sync'),
+      subtitle: Text(
+        _excludeFromSync
+            ? 'Kept on this device only. A copy that synced earlier is '
                   'removed from the sync server and from your other devices.'
-              : 'Keep this server on this device only — never upload it.'),
-          value: _excludeFromSync,
-          onChanged: (v) async {
-            if (v && !await _confirmExclusion()) return;
-            if (mounted) setState(() => _excludeFromSync = v);
-          },
-        ),
-      ];
+            : 'Keep this server on this device only — never upload it.',
+      ),
+      value: _excludeFromSync,
+      onChanged: (v) async {
+        if (v && !await _confirmExclusion()) return;
+        if (mounted) setState(() => _excludeFromSync = v);
+      },
+    ),
+  ];
 
   /// Ask before an exclusion that reaches other devices.
   ///
@@ -759,12 +1029,13 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// has never been anywhere, and with no sync account configured there is no
   /// other device to lose it. Turning the switch back off is not destructive
   /// either way.
-  Future<bool> _confirmExclusion() => excludingNeedsConfirmation(
+  Future<bool> _confirmExclusion() =>
+      excludingNeedsConfirmation(
         existing: widget.existing,
         syncConfigured: widget.state.services.isSyncConfigured,
       )
-          ? confirmSyncExclusion(context)
-          : Future<bool>.value(true);
+      ? confirmSyncExclusion(context)
+      : Future<bool>.value(true);
 
   /// Pick an identity file. On macOS this also mints the security-scoped
   /// bookmark that keeps a key outside ~/.ssh readable across relaunches.
@@ -807,7 +1078,8 @@ class _ServerEditorState extends State<_ServerEditor> {
       // Blank reads as "no file referenced", not as a path made of nothing:
       // the validator blocks an empty path, and a caller that ever reached
       // here without it would otherwise ask the SSH layer to read `''`.
-      identityFilePath: (_auth == AuthMethod.privateKey &&
+      identityFilePath:
+          (_auth == AuthMethod.privateKey &&
               _referenceKeyFile &&
               _keyPath.text.trim().isNotEmpty)
           ? _keyPath.text.trim()
@@ -864,7 +1136,9 @@ class _ServerEditorState extends State<_ServerEditor> {
 
     final log = SshConnectionLog();
     final config = _formConfig(
-      secretRef: widget.existing?.secretRef,
+      secretRef: _credentialIntent == CredentialIntent.clear
+          ? null
+          : widget.existing?.secretRef,
       now: DateTime.now().millisecondsSinceEpoch,
     );
     final ConnectionTestResult result;
@@ -878,12 +1152,23 @@ class _ServerEditorState extends State<_ServerEditor> {
         // method, so this changes nothing it does — it makes the call site
         // say what it means. The passphrase stays with the method, not the
         // reference toggle: it decrypts the on-disk key too.
-        draftPassword: _auth == AuthMethod.password ? _password.text : null,
-        draftPrivateKey: _auth == AuthMethod.privateKey && !_referenceKeyFile
+        draftPassword:
+            _auth == AuthMethod.password &&
+                _credentialIntent == CredentialIntent.replace
+            ? _password.text
+            : null,
+        draftPrivateKey:
+            _auth == AuthMethod.privateKey &&
+                !_referenceKeyFile &&
+                _credentialIntent == CredentialIntent.replace
             ? _keyPem.text
             : null,
-        draftKeyPassphrase:
-            _auth == AuthMethod.privateKey ? _keyPassphrase.text : null,
+        draftKeyPassphrase: _auth == AuthMethod.privateKey
+            ? _keyPassphrase.text
+            : null,
+        draftPassphraseIntent: _auth == AuthMethod.privateKey
+            ? _passphraseIntent
+            : null,
         draftIdentityBookmark: _bookmarkFor(config.identityFilePath),
         log: log,
       );
@@ -928,9 +1213,9 @@ class _ServerEditorState extends State<_ServerEditor> {
     final latest = existing == null
         ? null
         : widget.state.servers
-            .where((s) => s.id == existing.id)
-            .map((s) => s.updatedAt)
-            .fold<int>(existing.updatedAt, math.max);
+              .where((s) => s.id == existing.id)
+              .map((s) => s.updatedAt)
+              .fold<int>(existing.updatedAt, math.max);
     final now = nextUpdatedAt(
       latest,
       now: DateTime.now().millisecondsSinceEpoch,
@@ -955,6 +1240,8 @@ class _ServerEditorState extends State<_ServerEditor> {
     // corruption the carry-over logic exists to prevent.
     final auth = _auth;
     final referenceKeyFile = _referenceKeyFile;
+    final credentialIntent = _credentialIntent;
+    final passphraseIntent = _passphraseIntent;
     // The config too, and not only the credential fields: it reads seven more
     // controllers. Its `secretRef` is the one thing that cannot be known yet
     // — whether a credential is written depends on what the vault answers —
@@ -966,15 +1253,17 @@ class _ServerEditorState extends State<_ServerEditor> {
     // matched against a path from a different moment and silently dropped,
     // leaving a saved config whose identity file has no grant to open it.
     final identityFileBookmark = _bookmarkFor(formConfig.identityFilePath);
-    // Only when a referenced key's passphrase is about to be written over an
-    // entry that may hold a PEM: every other branch replaces the entry whole.
+    // Read only for a branch that validates or carries retained material. A
+    // locked vault is not "nothing stored": treating it that way would turn
+    // an explicit edit into an overwrite of material the app could not see.
+    final readsStored = planServerCredentialEditReadsStored(
+      auth: auth,
+      referenceKeyFile: referenceKeyFile,
+      credential: credentialIntent,
+      passphrase: passphraseIntent,
+    );
     Secret? stored;
-    if (existingRef != null &&
-        plannedCredentialReadsStored(
-          auth: auth,
-          referenceKeyFile: referenceKeyFile,
-          keyPassphrase: keyPassphrase,
-        )) {
+    if (existingRef != null && readsStored) {
       try {
         stored = await widget.state.services.vault.getSecret(existingRef);
       } catch (e) {
@@ -986,22 +1275,31 @@ class _ServerEditorState extends State<_ServerEditor> {
         return;
       }
     }
-    final secretId = existingRef ?? _draftSecretId;
-    final secret = plannedCredential(
-      auth: auth,
-      referenceKeyFile: referenceKeyFile,
-      password: password,
-      keyPem: keyPem,
-      keyPassphrase: keyPassphrase,
-      secretId: secretId,
-      stored: stored,
-    );
+    final ServerCredentialEdit edit;
+    try {
+      edit = planServerCredentialEdit(
+        auth: auth,
+        referenceKeyFile: referenceKeyFile,
+        credential: credentialIntent,
+        passphrase: passphraseIntent,
+        password: password,
+        keyPem: keyPem,
+        keyPassphrase: keyPassphrase,
+        secretId: _draftSecretId,
+        retainedRef: existingRef,
+        stored: stored,
+      );
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      showTopToastIn(context, message: 'Could not save: $error');
+      return;
+    }
 
-    final config = secret != null && secretId != existingRef
-        // `updatedAt` is not restated here: `_formConfig` already stamped it
-        // with the same `now`, and repeating it reads as though a save that
-        // reuses its secret entry keeps an older one.
-        ? formConfig.copyWith(secretRef: secretId)
+    final config = edit.secret != null
+        ? formConfig.copyWith(secretRef: edit.secret!.id)
+        : edit.clearRef
+        ? formConfig.copyWith(clearSecretRef: true)
         : formConfig;
     try {
       // The vault write inside throws (VaultLockedException) when the OS
@@ -1009,7 +1307,10 @@ class _ServerEditorState extends State<_ServerEditor> {
       // with _busy stuck on.
       await widget.state.saveServer(
         config,
-        secret: secret,
+        secret: edit.secret,
+        retiredSecretRef: edit.retiredRef,
+        retainedSecretRef: readsStored ? existingRef : null,
+        retainedSecretSnapshot: stored,
         identityFileBookmark: identityFileBookmark,
       );
     } catch (e) {
@@ -1018,7 +1319,7 @@ class _ServerEditorState extends State<_ServerEditor> {
       showTopToastIn(context, message: 'Could not save: $e');
       return;
     }
-    if (mounted) Navigator.of(context).pop(secret != null);
+    if (mounted) Navigator.of(context).pop(edit.secret != null);
   }
 }
 
@@ -1151,8 +1452,12 @@ class _CustomColorSwatch extends StatelessWidget {
                   : SweepGradient(
                       colors: [
                         for (var hue = 0; hue <= 360; hue += 60)
-                          HSVColor.fromAHSV(1, hue.toDouble(), 0.6, 0.95)
-                              .toColor(),
+                          HSVColor.fromAHSV(
+                            1,
+                            hue.toDouble(),
+                            0.6,
+                            0.95,
+                          ).toColor(),
                       ],
                     ),
               shape: BoxShape.circle,

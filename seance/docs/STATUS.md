@@ -2131,52 +2131,15 @@ revocation and concurrent login/deletion lifecycle work remain separate.
     the same reason, at the cost of an orphaned vault entry and an
     unretracted pin on the other devices. An authenticator over id, kind and
     date keyed like the payload closes all three at once.
-17. **No way to clear a referenced key's stored passphrase.** In
-    "reference a key file on disk" mode a blank passphrase box means "keep what
-    is stored", which is what makes `Test connection` faithful to Save — both
-    fall back to the stored passphrase. It also means a rotation from a
-    passphrase-protected key to an unprotected one cannot be expressed: the box
-    is already empty, so the old passphrase keeps being tried, and what that
-    costs depends on the key's format. dartssh2 4.1.0, like 3.0.2, refuses a
-    passphrase it does not need for an OpenSSH key (`openssh_key_pair.dart`)
-    and for a legacy EC one (`sec1_ec_key_pair.dart`), both with
-    `ArgumentError('Passphrase is not required for unencrypted keys')` — so
-    the attempt fails, naming the reason, for a configuration that is
-    correct. A legacy PKCS#1 RSA key takes the quieter path: `isEncrypted` is
-    false, the passphrase is never consulted
-    (`pkcs1_rsa_key_pair.dart`), and the connection succeeds while the
-    vault keeps a passphrase nothing will ever use — the worse half, since
-    nothing surfaces it. Detecting
-    "new key material" is not reliable enough to hang the rule on: a changed
-    path catches only a rotation to a *different* file, the macOS
-    security-scoped bookmark is re-minted per grant (so it differs even for
-    the same file) and is null on every other platform, and same-path rotation
-    — writing a new key over the old one — needs a stored key fingerprint the
-    config does not carry. The fix is
-    an explicit "no passphrase" affordance in the editor, honoured identically
-    by `resolveCredentials` and `plannedCredential`.
-18. **A method switch can leave a credential of the wrong kind referenced.**
-    Every credential box starts blank when an existing server is opened, and
-    blank means "keep what is stored". Switch the auth method without typing
-    anything and nothing is written, so the config keeps a `secretRef` pointing
-    at a credential of the old kind — a password under a server now set to key
-    auth, which a later connect reads as a PEM and fails to parse. Clearing the
-    ref instead would throw away a working credential on a switch the user may
-    undo in the same sitting, so neither half is right on its own: the fix is
-    for the editor to notice the mismatch and say so, rather than for `_save`
-    to pick one silently.
-
-19. **One passphrase slot serves two keys.** A second failure mode of the same
-    slot, reachable without any method switch: referencing a key file writes
-    the *typed* passphrase beside the PEM the entry already held, because one
-    entry carries one passphrase and the referenced key needs its own. A device
-    that had a pasted key under passphrase A, then referenced a different key
-    file under passphrase B, stores `{PEM A, passphrase B}` — and switching
-    back to a pasted key without re-pasting leaves a PEM that no longer
-    decrypts. Carrying the old passphrase instead would break the referenced
-    key, which is the one the server is actually set to use, so this wants the
-    same family of fix as item 18: two slots, or an editor that says which key
-    a passphrase belongs to.
+17. **Resolved — referenced-key passphrases can be cleared.** The editor now
+    offers Keep, Set and Clear, and Test connection resolves the same explicit
+    choice that Save persists.
+18. **Resolved — method switches cannot silently retain the wrong kind.** The
+    editor identifies the stored kind, blocks Test and Save on a mismatch, and
+    requires an explicit replacement or removal.
+19. **Resolved — pasted and referenced keys have separate passphrase slots.**
+    Legacy one-slot entries migrate on the first explicit edit without
+    overwriting the other key's material.
 
 20. **Test connection validates the whole form, not the connection.**
     `_testConnection` opens with `_form.currentState!.validate()`, which runs
@@ -2191,28 +2154,9 @@ revocation and concurrent login/deletion lifecycle work remain separate.
     tree — a restructure rather than a guard, which is why it is written down
     here instead.
 
-21. **A re-pasted key with a blank passphrase box loses its passphrase.**
-    Every other blank credential box in the editor means "keep what is
-    stored" — a blank password keeps the stored password, a blank PEM keeps
-    the stored key. The passphrase box in *pasted-key* mode is the one that
-    means "no passphrase": `plannedCredential` writes `keyPassphrase: null`
-    whenever the box is empty and a PEM was pasted. Re-paste the same
-    encrypted key without retyping the passphrase and the stored one is gone,
-    with nothing in the UI saying a passphrase was ever there — the break
-    only shows at the next connect.
-
-    Not simply a bug to invert, which is why it is written down rather than
-    fixed: carrying the stored passphrase forward would attach it to a key
-    that may not have one, since pasting a *new* key is at least as common as
-    re-pasting the old, and the box is blank in both cases for the same
-    reason. The editor cannot tell them apart because it never shows whether
-    a passphrase is stored. That, and not the branch, is the fix — and it is
-    the same family of fix items 17, 18 and 19 want — each names a different
-    affordance (a "no passphrase" choice, a kind-mismatch notice, passphrase
-    ownership), and all four are the editor saying what is stored instead of
-    leaving it implied. Four notes in one family is a design asking for one
-    change: an editor that says which key a stored passphrase belongs to, and
-    lets it be cleared.
+21. **Resolved — re-pasting a key has an explicit passphrase choice.** Keep
+    carries the saved pasted-key passphrase, Set replaces it, and Clear drops
+    it; stale typed text is cleared when a non-replacement choice is selected.
 
 22. **Nothing closes an LLM or search client's connection pool.** Every
     provider in `seance_core/lib/src/llm` takes an optional `http.Client` and

@@ -1103,6 +1103,7 @@ class AppServices {
     String? draftPassword,
     String? draftPrivateKey,
     String? draftKeyPassphrase,
+    PassphraseIntent? draftPassphraseIntent,
     IdentityFileBookmark? draftIdentityBookmark,
   }) => _credentialResolver.resolve(
     config,
@@ -1110,6 +1111,7 @@ class AppServices {
       password: draftPassword,
       privateKeyPem: draftPrivateKey,
       keyPassphrase: draftKeyPassphrase,
+      passphraseIntent: draftPassphraseIntent,
       identityBookmark: draftIdentityBookmark,
     ),
   );

@@ -1,6 +1,10 @@
 /// What a vault [Secret] holds.
 enum SecretKind { password, privateKey }
 
+/// Credential schema that separates a stored PEM passphrase from the
+/// passphrase for a referenced identity file.
+const int currentCredentialVersion = 2;
+
 SecretKind _secretKindFromName(String name) =>
     SecretKind.values.firstWhere((k) => k.name == name,
         orElse: () => SecretKind.password);
@@ -21,13 +25,32 @@ class Secret {
   /// Passphrase for an encrypted private key, if the user chose to store it.
   final String? keyPassphrase;
 
+  /// Passphrase for a server's referenced `identityFilePath`.
+  ///
+  /// Version-one entries predate this field and used [keyPassphrase] for both
+  /// kinds of key. Readers retain that fallback only while
+  /// [credentialVersion] is one. A version-two entry with this field absent
+  /// therefore means an explicit "no referenced-key passphrase" rather than
+  /// "look in the PEM slot".
+  final String? identityPassphrase;
+
+  /// Layout version for credential-specific fields.
+  ///
+  /// New in-memory entries default to the split layout. JSON written by older
+  /// releases has no marker and decodes as version one.
+  final int credentialVersion;
+
   const Secret({
     required this.id,
     required this.kind,
     required this.value,
     this.keyPassphrase,
+    this.identityPassphrase,
+    this.credentialVersion = currentCredentialVersion,
     this.updatedAt = 0,
-  });
+  }) : assert(credentialVersion >= 1);
+
+  bool get usesLegacySharedPassphrase => credentialVersion < 2;
 
   /// This secret with the given fields replaced; a null argument keeps the
   /// current value — [id] included, so a caller re-keying a credential has to
@@ -40,20 +63,30 @@ class Secret {
   /// actually catches a missed one is a JSON comparison — one in this
   /// package's `records_test.dart`, so it cannot go missing with a client,
   /// and one in the app's `server_duplication_test.dart` covering the call
-  /// site. And since a null argument means "keep",
-  /// [keyPassphrase] cannot be cleared through this.
+  /// site. Nullable fields use explicit clear flags so callers cannot confuse
+  /// "keep" with "remove".
   Secret copyWith({
     String? id,
     SecretKind? kind,
     String? value,
     String? keyPassphrase,
+    bool clearKeyPassphrase = false,
+    String? identityPassphrase,
+    bool clearIdentityPassphrase = false,
+    int? credentialVersion,
     int? updatedAt,
   }) =>
       Secret(
         id: id ?? this.id,
         kind: kind ?? this.kind,
         value: value ?? this.value,
-        keyPassphrase: keyPassphrase ?? this.keyPassphrase,
+        keyPassphrase: clearKeyPassphrase
+            ? null
+            : (keyPassphrase ?? this.keyPassphrase),
+        identityPassphrase: clearIdentityPassphrase
+            ? null
+            : (identityPassphrase ?? this.identityPassphrase),
+        credentialVersion: credentialVersion ?? this.credentialVersion,
         updatedAt: updatedAt ?? this.updatedAt,
       );
 
@@ -63,6 +96,9 @@ class Secret {
         'value': value,
         if (updatedAt != 0) 'updatedAt': updatedAt,
         if (keyPassphrase != null) 'keyPassphrase': keyPassphrase,
+        if (identityPassphrase != null)
+          'identityPassphrase': identityPassphrase,
+        if (credentialVersion != 1) 'credentialVersion': credentialVersion,
       };
 
   factory Secret.fromJson(Map<String, dynamic> json) => Secret(
@@ -70,6 +106,8 @@ class Secret {
         kind: _secretKindFromName(json['kind'] as String? ?? 'password'),
         value: json['value'] as String,
         keyPassphrase: json['keyPassphrase'] as String?,
+        identityPassphrase: json['identityPassphrase'] as String?,
+        credentialVersion: json['credentialVersion'] as int? ?? 1,
         updatedAt: json['updatedAt'] as int? ?? 0,
       );
 

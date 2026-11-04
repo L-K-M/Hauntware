@@ -13,6 +13,7 @@ void main() {
       kind: SecretKind.privateKey,
       value: 'PEM',
       keyPassphrase: 'phrase',
+      identityPassphrase: 'file-phrase',
       updatedAt: 42,
     );
     final rekeyed = original.copyWith(id: 'copy');
@@ -21,6 +22,7 @@ void main() {
     // field the fixture sets. Pin that for the nullable one, which is the
     // field a serializer is most likely to omit.
     expect(original.toJson(), containsPair('keyPassphrase', 'phrase'));
+    expect(original.toJson(), containsPair('identityPassphrase', 'file-phrase'));
     expect(original.toJson(), containsPair('updatedAt', 42));
     expect({...rekeyed.toJson(), 'id': original.id}, original.toJson());
     // Directly too, which survives a serializer omission: a field dropped from
@@ -30,6 +32,8 @@ void main() {
     expect(rekeyed.kind, original.kind);
     expect(rekeyed.value, original.value);
     expect(rekeyed.keyPassphrase, original.keyPassphrase);
+    expect(rekeyed.identityPassphrase, original.identityPassphrase);
+    expect(rekeyed.credentialVersion, original.credentialVersion);
     expect(rekeyed.updatedAt, original.updatedAt);
     expect(Secret.fromJson(original.toJson()).updatedAt, 42);
     // And the other half of the contract: a parameter that is passed has to
@@ -46,7 +50,40 @@ void main() {
     expect(original.copyWith(kind: otherKind).kind, otherKind);
     expect(original.copyWith(keyPassphrase: 'rekeyed').keyPassphrase,
         'rekeyed');
+    expect(original.copyWith(identityPassphrase: 'rekeyed').identityPassphrase,
+        'rekeyed');
     expect(original.copyWith(updatedAt: 43).updatedAt, 43);
+  });
+
+  test('the referenced-file passphrase round-trips and stays optional', () {
+    // Written only when set, while the version marker distinguishes a new
+    // explicit null from a legacy entry that shared keyPassphrase.
+    const withSlot = Secret(
+      id: 's',
+      kind: SecretKind.privateKey,
+      value: 'PEM',
+      identityPassphrase: 'file-phrase',
+    );
+    final round = Secret.fromJson(withSlot.toJson());
+    expect(round.identityPassphrase, 'file-phrase');
+    final without = Secret.fromJson(const Secret(
+      id: 's',
+      kind: SecretKind.privateKey,
+      value: 'PEM',
+    ).toJson());
+    expect(without.identityPassphrase, isNull);
+    expect(without.toJson(), isNot(contains('identityPassphrase')));
+    expect(without.toJson(), containsPair('credentialVersion', 2));
+
+    final legacy = Secret.fromJson({
+      'id': 'legacy',
+      'kind': 'privateKey',
+      'value': 'PEM',
+      'keyPassphrase': 'shared',
+    });
+    expect(legacy.credentialVersion, 1);
+    expect(legacy.usesLegacySharedPassphrase, isTrue);
+    expect(legacy.toJson(), isNot(contains('credentialVersion')));
   });
 
   test('legacy credentials have an unknown edit timestamp', () {

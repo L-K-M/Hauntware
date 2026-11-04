@@ -28,12 +28,14 @@ final class CredentialDraft {
     this.password,
     this.privateKeyPem,
     this.keyPassphrase,
+    this.passphraseIntent,
     this.identityBookmark,
   });
 
   final String? password;
   final String? privateKeyPem;
   final String? keyPassphrase;
+  final PassphraseIntent? passphraseIntent;
 
   /// A host-specific grant for the referenced key file (Séance's macOS
   /// security-scoped bookmark). Opaque here: the resolver checks only its
@@ -156,31 +158,100 @@ final class CredentialResolver {
         // "Reference, don't store": read the key from disk at connect time.
         if (config.identityFilePath != null) {
           final pem = await _source.identityFile(config, draft);
+          final intent = draft?.passphraseIntent;
+          if (intent == PassphraseIntent.clear) {
+            return SshCredentials.privateKey(pem);
+          }
+          final typedPassphrase = typed(draft?.keyPassphrase);
+          if (intent == PassphraseIntent.replace) {
+            if (typedPassphrase == null) {
+              throw ArgumentError.value(
+                draft?.keyPassphrase,
+                'keyPassphrase',
+                'must not be empty when replacing it',
+              );
+            }
+            return SshCredentials.privateKey(
+              pem,
+              keyPassphrase: typedPassphrase,
+            );
+          }
+          // Preserve the pre-intent API for callers that only supply a
+          // draft value: a typed passphrase is complete input and must not
+          // trigger an unnecessary keyring read.
+          if (intent == null && typedPassphrase != null) {
+            return SshCredentials.privateKey(
+              pem,
+              keyPassphrase: typedPassphrase,
+            );
+          }
+          final stored = config.secretRef == null
+              ? null
+              : await _source.storedSecret(config.secretRef!);
           return SshCredentials.privateKey(
             pem,
-            // A typed passphrase needs no stored-passphrase read or unlock.
-            keyPassphrase:
-                typed(draft?.keyPassphrase) ??
-                (config.secretRef == null
-                    ? null
-                    : (await _source.storedSecret(
-                        config.secretRef!,
-                      ))?.keyPassphrase),
+            // Explicit Keep falls through to storage even beside newly
+            // selected key material. The null intent retains the historical
+            // typed-value-first behavior for other app consumers.
+            keyPassphrase: intent == PassphraseIntent.keep
+                ? _referencedPassphrase(stored)
+                : typedPassphrase ?? _referencedPassphrase(stored),
           );
         }
         final typedPem = typed(draft?.privateKeyPem);
         if (typedPem != null) {
-          return SshCredentials.privateKey(
-            typedPem,
-            keyPassphrase: typed(draft?.keyPassphrase),
-          );
+          final intent = draft?.passphraseIntent;
+          final typedPassphrase = typed(draft?.keyPassphrase);
+          if (intent == PassphraseIntent.replace && typedPassphrase == null) {
+            throw ArgumentError.value(
+              draft?.keyPassphrase,
+              'keyPassphrase',
+              'must not be empty when replacing it',
+            );
+          }
+          String? passphrase;
+          switch (intent) {
+            case PassphraseIntent.keep:
+              if (config.secretRef != null) {
+                passphrase = (await _source.storedSecret(
+                  config.secretRef!,
+                ))?.keyPassphrase;
+              }
+            case PassphraseIntent.replace:
+              passphrase = typedPassphrase;
+            case PassphraseIntent.clear:
+              break;
+            case null:
+              passphrase = typedPassphrase;
+          }
+          return SshCredentials.privateKey(typedPem, keyPassphrase: passphrase);
         }
         final secret = await _savedSecret(config);
+        final intent = draft?.passphraseIntent;
+        final typedPassphrase = typed(draft?.keyPassphrase);
+        if (intent == PassphraseIntent.replace && typedPassphrase == null) {
+          throw ArgumentError.value(
+            draft?.keyPassphrase,
+            'keyPassphrase',
+            'must not be empty when replacing it',
+          );
+        }
         return SshCredentials.privateKey(
           secret?.value ?? '',
-          keyPassphrase: typed(draft?.keyPassphrase) ?? secret?.keyPassphrase,
+          keyPassphrase: switch (intent) {
+            PassphraseIntent.clear => null,
+            PassphraseIntent.replace => typedPassphrase,
+            PassphraseIntent.keep => secret?.keyPassphrase,
+            null => typedPassphrase ?? secret?.keyPassphrase,
+          },
         );
     }
+  }
+
+  static String? _referencedPassphrase(Secret? secret) {
+    if (secret == null) return null;
+    if (!secret.usesLegacySharedPassphrase) return secret.identityPassphrase;
+    return secret.identityPassphrase ?? secret.keyPassphrase;
   }
 
   /// An [SshJumpHostResolver] that looks a saved hop up with [lookup] and

@@ -16,16 +16,15 @@ void main() {
       String keyPem = '',
       String keyPassphrase = '',
       Secret? stored,
-    }) =>
-        plannedCredential(
-          auth: auth,
-          referenceKeyFile: referenceKeyFile,
-          password: password,
-          keyPem: keyPem,
-          keyPassphrase: keyPassphrase,
-          secretId: 'sec-1',
-          stored: stored,
-        );
+    }) => plannedCredential(
+      auth: auth,
+      referenceKeyFile: referenceKeyFile,
+      password: password,
+      keyPem: keyPem,
+      keyPassphrase: keyPassphrase,
+      secretId: 'sec-1',
+      stored: stored,
+    );
 
     test('a referenced key stores the passphrase that decrypts it', () {
       // The box is shown in this mode and used to be dropped: `Test
@@ -33,14 +32,15 @@ void main() {
       // for a key the saved server could not decrypt.
       final secret = plan(keyPassphrase: 'hunter2');
       expect(secret, isNotNull);
-      expect(secret!.keyPassphrase, 'hunter2');
+      expect(secret!.identityPassphrase, 'hunter2');
+      expect(secret.keyPassphrase, isNull);
+      expect(secret.credentialVersion, currentCredentialVersion);
       expect(secret.id, 'sec-1');
       // The key itself stays on disk.
       expect(secret.value, isEmpty);
     });
 
-    test('a PEM stored under the same entry survives the passphrase write',
-        () {
+    test('a PEM stored under the same entry survives the passphrase write', () {
       // Switching to a referenced file leaves the stored key unread, not
       // discarded — switching back has to find it again.
       final secret = plan(
@@ -52,12 +52,8 @@ void main() {
         ),
       );
       expect(secret!.value, 'PEM');
-      expect(secret.keyPassphrase, 'hunter2');
-      // And the pair that leaves behind: the carried PEM was stored with its
-      // own passphrase, and this write replaces it with the referenced key's.
-      // Pinned as the documented behaviour rather than as a desirable one —
-      // one entry holds one passphrase, and the referenced key is the one the
-      // server is set to use. STATUS follow-up 17.
+      expect(secret.identityPassphrase, 'hunter2');
+      expect(secret.keyPassphrase, isNull);
     });
 
     test('a typed PEM does not inherit the stored passphrase', () {
@@ -85,8 +81,11 @@ void main() {
       // With something stored, which is the case the name is about: nothing
       // written means the entry is left as it is, and a plan built from it
       // would be a write nobody asked for.
-      const stored =
-          Secret(id: 'sec-1', kind: SecretKind.privateKey, value: 'PEM');
+      const stored = Secret(
+        id: 'sec-1',
+        kind: SecretKind.privateKey,
+        value: 'PEM',
+      );
       expect(plan(), isNull);
       expect(plan(stored: stored), isNull);
       expect(plan(referenceKeyFile: false, stored: stored), isNull);
@@ -96,8 +95,11 @@ void main() {
     });
 
     test('a typed key carries its passphrase, or none', () {
-      final withPass =
-          plan(referenceKeyFile: false, keyPem: 'PEM', keyPassphrase: 'p');
+      final withPass = plan(
+        referenceKeyFile: false,
+        keyPem: 'PEM',
+        keyPassphrase: 'p',
+      );
       expect(withPass!.value, 'PEM');
       expect(withPass.keyPassphrase, 'p');
       final without = plan(referenceKeyFile: false, keyPem: 'PEM');
@@ -123,7 +125,8 @@ void main() {
       // would take the passphrase for a password.
       expect(secret!.kind, SecretKind.privateKey);
       expect(secret.value, isEmpty);
-      expect(secret.keyPassphrase, 'hunter2');
+      expect(secret.identityPassphrase, 'hunter2');
+      expect(secret.keyPassphrase, isNull);
     });
 
     test('a password is stored as one', () {
@@ -157,16 +160,17 @@ void main() {
                   keyPassphrase: keyPassphrase,
                 );
                 Secret? call({Secret? with_}) => plan(
-                      auth: auth,
-                      referenceKeyFile: referenceKeyFile,
-                      password: password,
-                      keyPem: keyPem,
-                      keyPassphrase: keyPassphrase,
-                      stored: with_,
-                    );
+                  auth: auth,
+                  referenceKeyFile: referenceKeyFile,
+                  password: password,
+                  keyPem: keyPem,
+                  keyPassphrase: keyPassphrase,
+                  stored: with_,
+                );
                 final withStored = call(with_: stored);
                 final without = call();
-                final combination = 'auth=$auth reference=$referenceKeyFile '
+                final combination =
+                    'auth=$auth reference=$referenceKeyFile '
                     'password="$password" pem="$keyPem" '
                     'passphrase="$keyPassphrase"';
                 if (reads) {
@@ -189,12 +193,26 @@ void main() {
                   // entry's kind would stamp a private key as a password —
                   // the cross-method contamination the neighbouring tests are
                   // about — and the two fields below would not notice.
-                  expect(withStored?.kind, without?.kind,
-                      reason: 'reads stored without saying so: $combination');
-                  expect(withStored?.value, without?.value,
-                      reason: 'reads stored without saying so: $combination');
-                  expect(withStored?.keyPassphrase, without?.keyPassphrase,
-                      reason: 'reads stored without saying so: $combination');
+                  expect(
+                    withStored?.kind,
+                    without?.kind,
+                    reason: 'reads stored without saying so: $combination',
+                  );
+                  expect(
+                    withStored?.value,
+                    without?.value,
+                    reason: 'reads stored without saying so: $combination',
+                  );
+                  expect(
+                    withStored?.keyPassphrase,
+                    without?.keyPassphrase,
+                    reason: 'reads stored without saying so: $combination',
+                  );
+                  expect(
+                    withStored?.identityPassphrase,
+                    without?.identityPassphrase,
+                    reason: 'reads stored without saying so: $combination',
+                  );
                 }
               }
             }
@@ -248,23 +266,25 @@ void main() {
       );
     });
 
-    test('a typed PEM writes the key, blank passphrase dropping the old one',
-        () {
-      final secret = plannedCredential(
-        auth: AuthMethod.privateKey,
-        referenceKeyFile: false,
-        password: '',
-        keyPem: 'PEM-BYTES',
-        keyPassphrase: '',
-        secretId: 's',
-        stored: storedPem,
-      )!;
-      expect(secret.kind, SecretKind.privateKey);
-      expect(secret.value, 'PEM-BYTES');
-      // A re-pasted key brings its own passphrase — the stored one must not
-      // silently apply to new material.
-      expect(secret.keyPassphrase, isNull);
-    });
+    test(
+      'a typed PEM writes the key, blank passphrase dropping the old one',
+      () {
+        final secret = plannedCredential(
+          auth: AuthMethod.privateKey,
+          referenceKeyFile: false,
+          password: '',
+          keyPem: 'PEM-BYTES',
+          keyPassphrase: '',
+          secretId: 's',
+          stored: storedPem,
+        )!;
+        expect(secret.kind, SecretKind.privateKey);
+        expect(secret.value, 'PEM-BYTES');
+        // A re-pasted key brings its own passphrase — the stored one must not
+        // silently apply to new material.
+        expect(secret.keyPassphrase, isNull);
+      },
+    );
 
     test('a referenced key writes only its passphrase, carrying the PEM', () {
       // Blank passphrase in reference mode plans nothing — the stored entry
@@ -290,14 +310,14 @@ void main() {
         secretId: 's',
         stored: storedPem,
       )!;
-      // The file's passphrase, not the stored PEM's, and the stored key
-      // material carried so the entry stays a key.
-      expect(secret.keyPassphrase, 'file-phrase');
+      // The file's passphrase has its own slot, while the stored key material
+      // and its passphrase stay paired.
+      expect(secret.identityPassphrase, 'file-phrase');
+      expect(secret.keyPassphrase, 'old-phrase');
       expect(secret.value, 'STORED-PEM');
     });
 
-    test('a referenced key over a password-kind entry stores an empty PEM',
-        () {
+    test('a referenced key over a password-kind entry stores an empty PEM', () {
       final secret = plannedCredential(
         auth: AuthMethod.privateKey,
         referenceKeyFile: true,
