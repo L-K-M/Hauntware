@@ -52,6 +52,7 @@ class HttpSyncClient implements SyncApi, InboxApi {
 
   Map<String, String> get _authHeaders => {
         'content-type': 'application/json',
+        'x-seance-protocol-version': '$kProtocolVersion',
         if (token != null) 'authorization': 'Bearer $token',
       };
 

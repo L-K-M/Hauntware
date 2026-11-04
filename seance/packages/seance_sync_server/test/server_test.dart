@@ -18,6 +18,7 @@ class TestClient {
     Object? body,
     bool auth = false,
     Map<String, String> query = const {},
+    int? protocolVersion = kProtocolVersion,
   }) async {
     final uri = Uri.parse(
       'http://localhost$path',
@@ -27,6 +28,8 @@ class TestClient {
       uri,
       headers: {
         'content-type': 'application/json',
+        if (protocolVersion != null)
+          'x-seance-protocol-version': '$protocolVersion',
         if (auth && token != null) 'authorization': 'Bearer $token',
       },
       body: body == null ? null : jsonEncode(body),
@@ -492,6 +495,21 @@ void main() {
 
       expect(status, 400);
       expect(body['error'], 'record_envelope_version');
+    });
+
+    test('pull refuses an already-issued protocol v2 session', () async {
+      final server = makeServer();
+      final c = await authed(server, 'old-pull-session');
+
+      final (status, body) = await c.send(
+        'GET',
+        '/v1/sync',
+        auth: true,
+        protocolVersion: 2,
+      );
+
+      expect(status, 400);
+      expect(body['error'], 'protocol_version');
     });
 
     test('a pull advertises this deployment\'s push limits', () async {

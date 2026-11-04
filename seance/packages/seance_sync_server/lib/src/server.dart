@@ -293,6 +293,16 @@ class SyncServer {
   }
 
   Future<Response> _sync(Request req) => _withAuth(req, (principal) async {
+    final protocolVersion =
+        int.tryParse(req.headers['x-seance-protocol-version'] ?? '');
+    if (protocolVersion != kProtocolVersion) {
+      return _error(
+        400,
+        'protocol_version',
+        'Client protocol v${protocolVersion ?? 'missing'} != server '
+            'v$kProtocolVersion',
+      );
+    }
     final since = int.tryParse(req.url.queryParameters['since'] ?? '0') ?? 0;
     final snapshot = await storage.pullSnapshotFor(principal, since);
     // Every round pulls before it pushes, so this is where a client learns how
