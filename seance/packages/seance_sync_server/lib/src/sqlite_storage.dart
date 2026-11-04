@@ -439,9 +439,11 @@ class SqliteStorage implements Storage {
     Uint8List blob, {
     required int storedAt,
     required int maxPending,
+    required int maxAccountPendingItems,
+    required int maxAccountPendingBytes,
   }) async =>
       // One write transaction, so two concurrent deposits cannot both pass
-      // the pending cap or draw the same `received` number.
+      // a cap or draw the same `received` number.
       _transaction(_TransactionMode.write, () {
         final apps = _db.select(
             'SELECT username FROM inbox_apps WHERE app_id = ?', [appId]);
@@ -454,6 +456,17 @@ class SqliteStorage implements Storage {
             [appId]).first['n'] as int;
         if (pending >= maxPending) {
           return const InboxAddResult(InboxAddStatus.full);
+        }
+        // The account caps are aggregates over every app's pending items,
+        // so one abandoned account cannot pin hundreds of MiB of blobs.
+        final account = _db.select(
+          'SELECT COUNT(*) AS items, COALESCE(SUM(LENGTH(blob)), 0) AS bytes '
+          'FROM inbox_items WHERE username = ?',
+          [username],
+        ).first;
+        if ((account['items'] as int) >= maxAccountPendingItems ||
+            (account['bytes'] as int) + blob.length > maxAccountPendingBytes) {
+          return const InboxAddResult(InboxAddStatus.accountFull);
         }
         _db.execute(
           'INSERT INTO inbox_seqs (username, value) VALUES (?, 1) '
@@ -472,11 +485,15 @@ class SqliteStorage implements Storage {
       });
 
   @override
-  Future<List<InboxItem>> inboxItemsSince(String username, int since) async {
+  Future<List<InboxItem>> inboxItemsSince(String username, int since,
+      {required int limit}) async {
+    if (limit < 1) {
+      throw ArgumentError.value(limit, 'limit', 'must be positive');
+    }
     final rows = _db.select(
       'SELECT app_id, item_id, received, blob FROM inbox_items '
-      'WHERE username = ? AND received > ? ORDER BY received ASC',
-      [username, since],
+      'WHERE username = ? AND received > ? ORDER BY received ASC LIMIT ?',
+      [username, since, limit],
     );
     return [
       for (final r in rows)

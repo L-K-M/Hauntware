@@ -57,6 +57,11 @@ class SyncServer {
   /// Deposits per inbox app, keyed by app id (docs/INBOX.md: 30 a minute).
   final RateLimiter inboxLimiter;
 
+  /// Account-wide inbox caps, injectable so tests can exercise the
+  /// account-full refusal without allocating the production 32 MiB.
+  final int _maxInboxAccountPendingItems;
+  final int _maxInboxAccountPendingBytes;
+
   /// The clock inbox retention is measured with; injectable for tests.
   final DateTime Function() _now;
 
@@ -65,8 +70,14 @@ class SyncServer {
     required this.settings,
     RateLimiter? loginLimiter,
     RateLimiter? inboxLimiter,
+    int? maxInboxAccountPendingItems,
+    int? maxInboxAccountPendingBytes,
     DateTime Function()? now,
-  }) : _now = now ?? DateTime.now,
+  }) : _maxInboxAccountPendingItems =
+           maxInboxAccountPendingItems ?? _inboxMaxAccountPendingItems,
+       _maxInboxAccountPendingBytes =
+           maxInboxAccountPendingBytes ?? _inboxMaxAccountPendingBytes,
+       _now = now ?? DateTime.now,
        loginLimiter =
            loginLimiter ??
            RateLimiter(

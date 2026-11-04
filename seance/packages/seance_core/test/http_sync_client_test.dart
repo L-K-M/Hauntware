@@ -155,4 +155,116 @@ void main() {
     final items = await sync.listItems(since: 0);
     expect(items.map((i) => i.itemId), ['i1']);
   });
+
+  group('HttpSyncClient.listItems paging', () {
+    Map<String, Object> page(List<int> received, {Object? nextSince}) => {
+          'items': [
+            for (final r in received)
+              {
+                'app': 'AAAAAAAAAAAAAAAAAAAAAA',
+                'item': 'i$r',
+                'received': r,
+                'blob': base64.encode(List<int>.filled(48, 0)),
+              },
+          ],
+          if (nextSince != null) 'nextSince': nextSince,
+        };
+
+    HttpSyncClient pagingClient(
+      Object? Function(int since) respond, {
+      List<String>? sinces,
+    }) {
+      int calls = 0;
+      return HttpSyncClient(
+        baseUrl: 'https://host',
+        client: MockClient((req) async {
+          final since = req.url.queryParameters['since'] ?? '';
+          calls++;
+          sinces?.add(since);
+          if (calls > 4) fail('more requests than the paging bound');
+          return http.Response(jsonEncode(respond(int.tryParse(since) ?? 0)),
+              200);
+        }),
+      );
+    }
+
+    test('follows a strictly increasing nextSince across pages', () async {
+      final sinces = <String>[];
+      final sync = pagingClient(
+        (since) => since == 0 ? page([1, 2], nextSince: 2) : page([3]),
+        sinces: sinces,
+      );
+      final items = await sync.listItems(since: 0);
+      expect(items.map((i) => i.received), [1, 2, 3]);
+      expect(sinces, ['0', '2']);
+    });
+
+    test('one response from an old server with no nextSince', () async {
+      final sinces = <String>[];
+      final sync = pagingClient(
+        (since) => page([1, 2]),
+        sinces: sinces,
+      );
+      final items = await sync.listItems(since: 0);
+      expect(items.map((i) => i.received), [1, 2]);
+      expect(sinces, ['0']);
+      final scan = sync as InboxPageScan;
+      expect(scan.inboxScanHasMore, isFalse);
+    });
+
+    test('stops after four responses however long the queue is', () async {
+      final sinces = <String>[];
+      final sync = pagingClient(
+        (since) => page([since + 1], nextSince: since + 1),
+        sinces: sinces,
+      );
+      final items = await sync.listItems(since: 0);
+      expect(items.map((i) => i.received), [1, 2, 3, 4]);
+      expect(sinces, ['0', '1', '2', '3']);
+      final scan = sync as InboxPageScan;
+      expect(scan.inboxScanHasMore, isTrue);
+      expect(scan.inboxScanCursor, 4);
+    });
+
+    test('bounds a legacy unpaged response and exposes its continuation',
+        () async {
+      final sinces = <String>[];
+      final sync = pagingClient(
+        (since) => page([for (var i = 1; i <= 129; i++) since + i]),
+        sinces: sinces,
+      );
+      final items = await sync.listItems(since: 0);
+      expect(items, hasLength(128));
+      expect(items.first.received, 1);
+      expect(items.last.received, 128);
+      expect(sinces, ['0']);
+      final scan = sync as InboxPageScan;
+      expect(scan.inboxScanHasMore, isTrue);
+      expect(scan.inboxScanCursor, 128);
+    });
+
+    test('a non-integer continuation is a FormatException', () async {
+      final sync = pagingClient((since) => page([1], nextSince: 'two'));
+      await expectLater(
+        sync.listItems(since: 0),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('a non-increasing continuation is a FormatException', () async {
+      for (final bad in [0, -1]) {
+        final sync = pagingClient((since) => page([1], nextSince: bad));
+        await expectLater(
+          sync.listItems(since: 0),
+          throwsA(isA<FormatException>()),
+          reason: 'nextSince $bad',
+        );
+      }
+      final stuck = pagingClient((since) => page([1], nextSince: 2));
+      await expectLater(
+        stuck.listItems(since: 2),
+        throwsA(isA<FormatException>()),
+      );
+    });
+  });
 }

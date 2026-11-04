@@ -35,6 +35,8 @@ void main() {
         Uint8List.fromList([1, 2, 3]),
         storedAt: 10,
         maxPending: 100,
+        maxAccountPendingItems: 5000,
+        maxAccountPendingBytes: 32 * 1024 * 1024,
       );
 
   test('a database from before the inbox upgrades in place', () async {
@@ -82,7 +84,7 @@ void main() {
     final s2 = SqliteStorage.open(path);
     addTearDown(s2.close);
     expect((await s2.getInboxApp(appId))!.tokenHash, 'hash');
-    final items = await s2.inboxItemsSince('alice', 0);
+    final items = await s2.inboxItemsSince('alice', 0, limit: 100);
     expect(items.single.itemId, 'i1');
     expect(items.single.blob, [1, 2, 3]);
     expect((await add(s2, appId, 'i2')).received, 2);
@@ -99,7 +101,7 @@ void main() {
 
     // Straight at the table, bypassing the storage's own item delete.
     db.execute('DELETE FROM inbox_apps WHERE app_id = ?', [appId]);
-    expect(await s.inboxItemsSince('alice', 0), isEmpty);
+    expect(await s.inboxItemsSince('alice', 0, limit: 100), isEmpty);
   });
 
   test('a pending cap and a vanished app are reported, not stored', () async {
@@ -113,12 +115,14 @@ void main() {
       Uint8List(40),
       storedAt: 1,
       maxPending: 0,
+      maxAccountPendingItems: 5000,
+      maxAccountPendingBytes: 32 * 1024 * 1024,
     );
     expect(full.status, InboxAddStatus.full);
     expect(
       (await add(s, newInboxAppId(), 'i1')).status,
       InboxAddStatus.unknownApp,
     );
-    expect(await s.inboxItemsSince('alice', 0), isEmpty);
+    expect(await s.inboxItemsSince('alice', 0, limit: 100), isEmpty);
   });
 }

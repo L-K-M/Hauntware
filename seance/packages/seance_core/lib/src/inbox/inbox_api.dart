@@ -24,3 +24,15 @@ abstract class InboxApi {
   /// would drop a proposal nobody ran.
   Future<bool> deleteItem(String appId, String itemId);
 }
+
+/// Pagination progress exposed by inbox transports that bound one
+/// [InboxApi.listItems] call. [InboxService] persists this separately from
+/// its processing cursor so an unresolved early item cannot starve later
+/// pages, while the processing cursor still prevents that item being skipped.
+abstract interface class InboxPageScan {
+  /// The cursor after the last page or locally truncated legacy response.
+  int get inboxScanCursor;
+
+  /// Whether another call should continue from [inboxScanCursor].
+  bool get inboxScanHasMore;
+}

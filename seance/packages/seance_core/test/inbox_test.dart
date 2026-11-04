@@ -79,6 +79,30 @@ class _FakeInbox implements InboxApi {
   }
 }
 
+class _PagedFakeInbox extends _FakeInbox implements InboxPageScan {
+  final int pageSize;
+  final List<int> requestedSince = [];
+
+  @override
+  int inboxScanCursor = 0;
+
+  @override
+  bool inboxScanHasMore = false;
+
+  _PagedFakeInbox({required this.pageSize});
+
+  @override
+  Future<List<InboxItem>> listItems({required int since}) async {
+    requestedSince.add(since);
+    final available = items.values.where((i) => i.received > since).toList()
+      ..sort((a, b) => a.received.compareTo(b.received));
+    final page = available.take(pageSize).toList();
+    inboxScanHasMore = available.length > page.length;
+    inboxScanCursor = page.isEmpty ? since : page.last.received;
+    return page;
+  }
+}
+
 /// A record sync server, as small as the coordinator needs.
 class _FakeRecords implements SyncApi {
   final Map<String, EncryptedRecord> _store = {};
@@ -140,7 +164,7 @@ class _Device {
   late final SyncCoordinator sync;
   DateTime clock = _t0;
 
-  _Device(this.id, _FakeInbox server, RecordCodec codec) {
+  _Device(this.id, InboxApi server, RecordCodec codec) {
     inbox = InboxService(
       api: server,
       apps: apps,
@@ -213,6 +237,49 @@ void main() {
     expect(await b.inbox.pending(), isEmpty);
     final status = await b.statuses.getStatus(pairing.appId, 'p1');
     expect(status?.state, InboxStatusState.ran);
+  });
+
+  test('paging scans past an unresolved first item without skipping it',
+      () async {
+    final paged = _PagedFakeInbox(pageSize: 128);
+    server = paged;
+    a = _Device('A', server, codec);
+    final known = await connect(a);
+    final unknownId = newInboxAppId();
+    final unknownToken = newInboxToken();
+    server.tokens[unknownId] = unknownToken;
+    await server.depositBlob(
+      unknownId,
+      unknownToken,
+      Future.value(Uint8List(40)),
+    );
+    for (var received = 2; received <= 129; received++) {
+      await server.deposit(known, _proposal('p$received'));
+    }
+
+    expect(await a.inbox.refresh(), hasLength(127));
+    var saved = await a.cache.load();
+    expect(saved.cursor, 0, reason: 'the unknown item still pins processing');
+    expect(saved.scanCursor, 128);
+
+    final afterSecondRefresh = await a.inbox.refresh();
+    expect(afterSecondRefresh, hasLength(128));
+    expect(afterSecondRefresh.any((p) => p.proposal.id == 'p129'), isTrue);
+    expect(paged.requestedSince, [0, 128]);
+    saved = await a.cache.load();
+    expect(saved.cursor, 0, reason: 'scanning must not skip the unknown item');
+    expect(saved.scanCursor, 0, reason: 'end of queue restarts the scan');
+  });
+
+  test('cache scan cursor round-trips and defaults to the legacy cursor', () {
+    final legacy = InboxCache.fromJson({'cursor': 7, 'proposals': <Object>[]});
+    expect(legacy.scanCursor, 7);
+
+    final scanned = InboxCache.fromJson(
+      const InboxCache(cursor: 3, scanCursor: 9).toJson(),
+    );
+    expect(scanned.cursor, 3);
+    expect(scanned.scanCursor, 9);
   });
 
   test('two devices claiming before they sync: only the first runs', () async {

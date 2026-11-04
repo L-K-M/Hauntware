@@ -58,27 +58,33 @@ class CachedProposal {
   }
 }
 
-/// This device's view of the server queue: the fetched proposals, the
-/// `since` cursor, and per-app counts of items that could not be opened.
+/// This device's view of the server queue: the fetched proposals, the durable
+/// processing [cursor], a bounded transport [scanCursor], and per-app counts
+/// of items that could not be opened.
 class InboxCache {
   final int cursor;
+  final int scanCursor;
   final List<CachedProposal> proposals;
   final Map<String, int> failures;
 
   const InboxCache({
-    this.cursor = 0,
+    int cursor = 0,
+    int? scanCursor,
     this.proposals = const [],
     this.failures = const {},
-  });
+  }) : cursor = cursor,
+       scanCursor = scanCursor ?? cursor;
 
   Map<String, dynamic> toJson() => {
         'cursor': cursor,
+        if (scanCursor != cursor) 'scanCursor': scanCursor,
         'proposals': [for (final p in proposals) p.toJson()],
         if (failures.isNotEmpty) 'failures': failures,
       };
 
   /// A damaged entry costs only itself.
   factory InboxCache.fromJson(Map<String, dynamic> json) {
+    final cursor = (json['cursor'] as num?)?.toInt() ?? 0;
     final proposals = <CachedProposal>[];
     for (final raw in json['proposals'] as List? ?? const []) {
       try {
@@ -90,7 +96,8 @@ class InboxCache {
       }
     }
     return InboxCache(
-      cursor: (json['cursor'] as num?)?.toInt() ?? 0,
+      cursor: cursor,
+      scanCursor: (json['scanCursor'] as num?)?.toInt() ?? cursor,
       proposals: proposals,
       failures: {
         for (final e

@@ -38,11 +38,18 @@ class _Harness {
   late final Handler handler;
   DateTime now = DateTime.utc(2026, 9, 29, 12);
 
-  _Harness(Storage storage, {RateLimiter? inboxLimiter}) {
+  _Harness(
+    Storage storage, {
+    RateLimiter? inboxLimiter,
+    int? maxInboxAccountPendingItems,
+    int? maxInboxAccountPendingBytes,
+  }) {
     handler = SyncServer(
       storage: storage,
       settings: const ServerSettings(openRegistration: true),
       inboxLimiter: inboxLimiter,
+      maxInboxAccountPendingItems: maxInboxAccountPendingItems,
+      maxInboxAccountPendingBytes: maxInboxAccountPendingBytes,
       now: () => now,
     ).handler;
   }
@@ -384,6 +391,51 @@ void _inboxTests(Storage Function() newStorage) {
       expect((await h.deposit(app.id, app.token, _blob())).status, 201);
     });
 
+    test('an account quota refusal is one indistinguishable inbox_full',
+        () async {
+      // Items: two apps' single items fill the account, and a third
+      // deposit anywhere is refused.
+      h = _Harness(
+        newStorage(),
+        inboxLimiter: RateLimiter(maxAttempts: 1000),
+        maxInboxAccountPendingItems: 2,
+      );
+      alice = await h.register('alice');
+      final a = await h.app(alice);
+      final b = await h.app(alice);
+      expect((await h.deposit(a.id, a.token, _blob())).status, 201);
+      expect((await h.deposit(b.id, b.token, _blob())).status, 201);
+      final byItems = await h.deposit(a.id, a.token, _blob());
+      expect(byItems.status, 429);
+      expect(byItems.code, 'inbox_full');
+
+      // Bytes: the exact 40+40 boundary is fine, the next byte is not.
+      h = _Harness(
+        newStorage(),
+        inboxLimiter: RateLimiter(maxAttempts: 1000),
+        maxInboxAccountPendingBytes: 80,
+      );
+      alice = await h.register('alice');
+      final c = await h.app(alice);
+      expect((await h.deposit(c.id, c.token, _blob(40))).status, 201);
+      final byBytes = await h.deposit(c.id, c.token, _blob(41));
+      expect(byBytes.status, 429);
+
+      // The same refusal either way: a producer must not learn which
+      // account resource was exhausted.
+      expect(byBytes.code, 'inbox_full');
+      expect(byBytes.text, byItems.text);
+
+      // Handling items restores capacity.
+      final item = (await h.items(alice)).single;
+      await h.send(
+        'DELETE',
+        '/v1/inbox/${item.appId}/${item.itemId}',
+        bearer: alice,
+      );
+      expect((await h.deposit(c.id, c.token, _blob(40))).status, 201);
+    });
+
     test('deposits are rate limited per app, after the token check', () async {
       h = _Harness(newStorage());
       alice = await h.register('alice');
@@ -426,6 +478,42 @@ void _inboxTests(Storage Function() newStorage) {
       await h.send('DELETE', '/v1/apps/${a.id}', bearer: alice);
       await h.deposit(b.id, b.token, _blob());
       expect((await h.items(alice, since: 3)).single.received, 4);
+    });
+
+    test('the inbox is listed in pages of 32 with a continuation cursor',
+        () async {
+      final app = await h.app(alice);
+      for (var i = 0; i < 33; i++) {
+        expect((await h.deposit(app.id, app.token, _blob())).status, 201);
+      }
+
+      final first = await h.send('GET', '/v1/inbox?since=0', bearer: alice);
+      expect(first.status, 200, reason: first.text);
+      final items = first.json['items'] as List;
+      expect(items, hasLength(32));
+      // nextSince is the last emitted item's received, not the lookahead
+      // row's, and appears only when another page exists.
+      expect(first.json['nextSince'], items.last['received']);
+      expect(first.json['nextSince'], 32);
+
+      final second = await h.send(
+        'GET',
+        '/v1/inbox?since=${first.json['nextSince']}',
+        bearer: alice,
+      );
+      expect(second.status, 200, reason: second.text);
+      expect(second.json['items'], hasLength(1));
+      expect((second.json['items'] as List).single['received'], 33);
+      expect(second.json.containsKey('nextSince'), isFalse);
+
+      // A full page without a lookahead row is the last page.
+      final exact = await h.send('GET', '/v1/inbox?since=1', bearer: alice);
+      expect(exact.json['items'], hasLength(32));
+      expect(exact.json.containsKey('nextSince'), isFalse);
+
+      final empty = await h.send('GET', '/v1/inbox?since=33', bearer: alice);
+      expect(empty.json['items'], isEmpty);
+      expect(empty.json.containsKey('nextSince'), isFalse);
     });
 
     test('items are per account', () async {

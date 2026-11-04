@@ -9,11 +9,19 @@ import 'sync_engine.dart';
 /// HTTP client for the Séance sync server. Handles account setup and auth, then
 /// serves as the [SyncApi] the [SyncEngine] drives. All record payloads are
 /// already end-to-end encrypted before they reach this layer.
-class HttpSyncClient implements SyncApi, InboxApi {
+class HttpSyncClient implements SyncApi, InboxApi, InboxPageScan {
   final String baseUrl;
   final http.Client _client;
   final bool _ownsClient;
   bool _closed = false;
+  int _inboxScanCursor = 0;
+  bool _inboxScanHasMore = false;
+
+  @override
+  int get inboxScanCursor => _inboxScanCursor;
+
+  @override
+  bool get inboxScanHasMore => _inboxScanHasMore;
 
   /// Per-request timeout. Without one, a hung connection would leave
   /// `AppState.syncing` stuck true forever (spinner frozen, auto-sync wedged
@@ -203,22 +211,57 @@ class HttpSyncClient implements SyncApi, InboxApi {
 
   @override
   Future<List<InboxItem>> listItems({required int since}) async {
-    final res = await _client
-        .get(_uri('/v1/inbox', {'since': '$since'}), headers: _authHeaders)
-        .timeout(timeout);
-    if (res.statusCode >= 400) _fail(res);
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    // A paged server says so with `nextSince`, the `received` to re-ask
+    // from; bounded so one refresh cannot pull an unbounded queue into
+    // memory. What is left waits for the next refresh, which re-asks from
+    // the last item actually returned.
+    const maxResponses = 4;
+    const maxItems = 128;
     final items = <InboxItem>[];
-    // One malformed entry must not hide every other proposal, so it is
-    // skipped rather than failing the whole list.
-    for (final item in json['items'] as List) {
-      try {
-        items.add(InboxItem.fromJson((item as Map).cast()));
-      } on FormatException {
-        continue;
-      } on TypeError {
-        continue;
+    var cursor = since;
+    _inboxScanCursor = since;
+    _inboxScanHasMore = false;
+    for (var page = 0; page < maxResponses; page++) {
+      final res = await _client
+          .get(_uri('/v1/inbox', {'since': '$cursor'}), headers: _authHeaders)
+          .timeout(timeout);
+      if (res.statusCode >= 400) _fail(res);
+      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      var locallyTruncated = false;
+      for (final item in json['items'] as List) {
+        if (items.length >= maxItems) {
+          locallyTruncated = true;
+          break;
+        }
+        // One malformed entry must not hide every other proposal, so it is
+        // skipped rather than failing the whole list.
+        try {
+          items.add(InboxItem.fromJson((item as Map).cast()));
+        } on FormatException {
+          continue;
+        } on TypeError {
+          continue;
+        }
       }
+      if (locallyTruncated) {
+        _inboxScanCursor = items.last.received;
+        _inboxScanHasMore = true;
+        break;
+      }
+      // No `nextSince` means this was the last page. Old servers never
+      // send it, so their one response is the whole answer.
+      if (!json.containsKey('nextSince')) {
+        _inboxScanHasMore = false;
+        break;
+      }
+      final next = json['nextSince'];
+      if (next is! int || next <= cursor) {
+        throw FormatException('Malformed inbox continuation: $next');
+      }
+      _inboxScanCursor = next;
+      _inboxScanHasMore = true;
+      if (items.length >= maxItems) break;
+      cursor = next;
     }
     return items;
   }

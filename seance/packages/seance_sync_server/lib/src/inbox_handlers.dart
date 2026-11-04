@@ -4,12 +4,29 @@ part of 'server.dart';
 /// nobody reads them is stopped here rather than filling the database.
 const int _inboxMaxPendingPerApp = 100;
 
+/// Pending items one account may hold across every app. The per-app cap
+/// alone bounds nothing: 50 apps x 100 items x 96 KiB is about 469 MiB of
+/// raw blobs one account could pin, so the account total is capped too.
+const int _inboxMaxAccountPendingItems = 5000;
+
+/// Raw blob bytes one account's pending items may occupy in total. This,
+/// not the item count, is what bounds the memory one account can hold.
+const int _inboxMaxAccountPendingBytes = 32 * 1024 * 1024;
+
 /// Apps one account may register. Without it the per-app pending cap bounds
 /// nothing: a session could keep adding apps, and every one's queue lands in
 /// each `GET /v1/inbox`. The check and the insert are not atomic, so two
 /// concurrent registrations can pass it by one; it bounds growth, it is not
 /// an exact quota.
 const int _inboxMaxAppsPerAccount = 50;
+
+/// Items one `GET /v1/inbox` response carries, so one refresh's response
+/// stays bounded however many proposals are pending.
+const int _inboxPageSize = 32;
+
+/// How many items the handler asks storage for: a page plus one, so the
+/// extra row is the lookahead that says another page exists.
+const int _inboxFetchLimit = _inboxPageSize + 1;
 
 const int _inboxDepositsPerWindow = 30;
 const Duration _inboxDepositWindow = Duration(minutes: 1);
@@ -104,9 +121,18 @@ extension _InboxHandlers on SyncServer {
   Future<Response> _listInbox(Request req) => _withAuth(req, (username) async {
     final since = int.tryParse(req.url.queryParameters['since'] ?? '0') ?? 0;
     await _purgeExpiredInbox();
-    final items = await storage.inboxItemsSince(username, since);
+    final items = await storage.inboxItemsSince(username, since,
+        limit: _inboxFetchLimit);
+    // A 33rd row only says another page exists. The page itself is what is
+    // emitted, and `nextSince` is the last emitted item's `received`, so a
+    // client that follows it re-asks from where the page stopped, never
+    // from the lookahead row. Old clients ignore the extra field and old
+    // servers omit it, so the wire stays additive.
+    final hasMore = items.length > _inboxPageSize;
+    final page = hasMore ? items.sublist(0, _inboxPageSize) : items;
     return _json({
-      'items': [for (final item in items) item.toJson()],
+      'items': [for (final item in page) item.toJson()],
+      if (hasMore) 'nextSince': page.last.received,
     });
   });
 
@@ -153,16 +179,20 @@ extension _InboxHandlers on SyncServer {
       blob,
       storedAt: _now().millisecondsSinceEpoch,
       maxPending: _inboxMaxPendingPerApp,
+      maxAccountPendingItems: _maxInboxAccountPendingItems,
+      maxAccountPendingBytes: _maxInboxAccountPendingBytes,
     );
     switch (result.status) {
       case InboxAddStatus.added:
         return _json({'item': itemId}, status: 201);
       case InboxAddStatus.full:
+      case InboxAddStatus.accountFull:
+        // One response for the per-app, account-item, and account-byte caps:
+        // a producer learns only that there is no capacity right now.
         return _error(
           429,
           'inbox_full',
-          'The app has $_inboxMaxPendingPerApp pending proposals; wait for '
-              'the user to handle some',
+          'The inbox is full; wait for the user to handle some proposals',
         );
       case InboxAddStatus.unknownApp:
         // Removed between the token check and the insert.

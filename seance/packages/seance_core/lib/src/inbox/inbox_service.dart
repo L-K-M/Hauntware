@@ -187,6 +187,7 @@ class InboxService {
     final current = await cache.load();
     await cache.save(InboxCache(
       cursor: current.cursor,
+      scanCursor: current.scanCursor,
       proposals: [
         for (final p in current.proposals)
           if (p.appId != appId) p,
@@ -204,14 +205,21 @@ class InboxService {
   /// the app record may simply not have synced here yet.
   Future<List<PendingProposal>> refresh() async {
     final current = await cache.load();
+    final paged = api is InboxPageScan ? api as InboxPageScan : null;
+    final requestCursor = paged == null || current.scanCursor < current.cursor
+        ? current.cursor
+        : current.scanCursor;
     // Sorted here rather than trusted: the cursor logic below is only sound
     // in `received` order, and an item skipped past is never fetched again.
-    final items = [...await api.listItems(since: current.cursor)]
+    final items = [...await api.listItems(since: requestCursor)]
       ..sort((a, b) => a.received.compareTo(b.received));
     final proposals = [...current.proposals];
     final failures = {...current.failures};
     var cursor = current.cursor;
-    var blocked = false;
+    // A prior bounded scan may already be past an unresolved item. Keep the
+    // durable processing cursor pinned until a scan reaches the end and wraps
+    // back to it.
+    var blocked = requestCursor > current.cursor;
 
     for (final item in items) {
       final app = await apps.getApp(item.appId);
@@ -262,8 +270,12 @@ class InboxService {
       proposals.add(cached);
     }
 
+    final scanCursor = paged != null && paged.inboxScanHasMore
+        ? paged.inboxScanCursor
+        : cursor;
     await cache.save(InboxCache(
       cursor: cursor,
+      scanCursor: scanCursor,
       proposals: await _live(proposals),
       failures: failures,
     ));
@@ -362,6 +374,7 @@ class InboxService {
     final current = await cache.load();
     await cache.save(InboxCache(
       cursor: current.cursor,
+      scanCursor: current.scanCursor,
       proposals: [
         for (final p in current.proposals)
           if (p.itemId != cached.itemId) p,

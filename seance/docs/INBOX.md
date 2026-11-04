@@ -170,12 +170,15 @@ Body: blob (at most 96 KiB)
 201 {"item": "<itemId>"}
 401 unknown app or wrong token (indistinguishable)
 413 too large
-429 rate_limited (30 a minute), or inbox_full (100 pending items)
+429 rate_limited (30 a minute), or inbox_full (100 pending items in the
+   app, or the account caps: 5,000 pending items or 32 MiB of raw blobs
+   across all its apps; the refusal does not say which)
 ```
 
 The token can only add items to its own app. It cannot list, read or
 delete anything. Rate limit per app: 30 per minute, reusing
-`RateLimiter`.
+`RateLimiter`. The account caps are checked in the same transaction as
+the insert, and a refusal consumes no `received` number.
 
 User side (existing session auth, `_withAuth`):
 
@@ -183,9 +186,17 @@ User side (existing session auth, `_withAuth`):
 POST   /v1/apps                    {"app", "name", "token"}  -> 201 {}, 429 too_many_apps (50 per account)
 GET    /v1/apps                    -> {"apps": [{"app", "name", "created", "pending"}]}
 DELETE /v1/apps/{appId}            -> 204, 404 not_found
-GET    /v1/inbox?since=<received>  -> {"items": [{"app", "item", "received", "blob"}]}
+GET    /v1/inbox?since=<received>  -> {"items": [...up to 32...], "nextSince": <received>?}
 DELETE /v1/inbox/{appId}/{itemId}  -> 204, 404 not_found
 ```
+
+A `GET /v1/inbox` response carries at most 32 items. When more exist it
+also carries `nextSince`, the `received` of the last item in the page;
+asking again with `since=<nextSince>` returns the following page. The
+field appears only when another page exists, and is additive: old
+clients ignore it and old servers omit it. Clients follow it for at
+most four responses (128 items) per refresh; the rest arrive on the
+next refresh, which re-asks from the last item actually returned.
 
 The 404 on an item carries the error code `not_found`. The client reads
 only that as "another device claimed it": a plain 404 is a server too old
@@ -196,10 +207,12 @@ token_salt, token_hash, created)`, `inbox_items(app_id, item_id, username,
 received, stored_at, blob)` with `ON DELETE CASCADE` from apps, and
 `inbox_seqs` for the per-account `received` counter, kept apart from the
 record sequence so a deposit never moves the sync cursor. App ids are
-global, since the producer endpoint names only the app. Retention is by
-`stored_at`; expired items are purged when apps or items are listed and on
-each deposit. The in-memory storage does the same. Deleting the account
-deletes all of it.
+global, since the producer endpoint names only the app. Deposits are
+capped three ways, all checked with the insert in one write transaction:
+100 pending items per app, 5,000 pending items per account, and 32 MiB of
+raw blobs per account. Retention is by `stored_at`; expired items are
+purged when apps or items are listed and on each deposit. The in-memory
+storage does the same. Deleting the account deletes all of it.
 
 Items stay on the server until a device deletes one after the user has
 run or dismissed it, or until 7 days after the server stored it
@@ -235,15 +248,16 @@ left to users; it needs nothing from Séance.
 ## Client
 
 Fetching: the sync coordinator calls `GET /v1/inbox?since=` on every
-sync cycle while logged in. For each item it looks up the `inboxApp`
-record, decrypts, validates and keeps the proposal in a device-local
-cache (owner-only, like the other stores). Every device fetches the same
-items, so each sees every proposal without any device-to-device sync of
-proposals. A device deletes an item on the server when the user runs or
-dismisses it, or when it fails to decrypt or validate (a counter on the
-app records the failures, so a misconfigured producer is visible). An
-item for an unknown app is left alone: this device may not have synced
-the app record yet.
+sync cycle while logged in, following the continuation cursor for at
+most four pages (128 items) per round. For each item it looks up the
+`inboxApp` record, decrypts, validates and keeps the proposal in a
+device-local cache (owner-only, like the other stores). Every device
+fetches the same items, so each sees every proposal without any
+device-to-device sync of proposals. A device deletes an item on the
+server when the user runs or dismisses it, or when it fails to decrypt
+or validate (a counter on the app records the failures, so a
+misconfigured producer is visible). An item for an unknown app is left
+alone: this device may not have synced the app record yet.
 
 UI: a banner above the server list with the count of waiting proposals
 opens the inbox, a list newest first with the app name, target and title.

@@ -70,6 +70,11 @@ enum InboxAddStatus {
 
   /// The app already holds the maximum number of pending items.
   full,
+
+  /// The account holds the maximum number of pending items or the maximum
+  /// total of raw blob bytes. Which of the two tripped is not told, and no
+  /// `received` number was consumed.
+  accountFull,
 }
 
 /// What [Storage.addInboxItem] did. [received] is set only when [status] is
@@ -134,18 +139,28 @@ abstract class Storage {
   Future<bool> deleteInboxApp(String username, String appId);
 
   /// Queue [blob] for [appId]'s account under the next per-account
-  /// `received` number, unless the app already holds [maxPending] items.
-  /// [storedAt] (ms since the epoch) is what retention is measured from.
+  /// `received` number, unless a cap refuses it: [maxPending] counts the
+  /// app's own pending items, [maxAccountPendingItems] and
+  /// [maxAccountPendingBytes] the whole account's items and raw blob bytes
+  /// (the new blob included). A refusal stores nothing and consumes no
+  /// `received` number. [storedAt] (ms since the epoch) is what retention
+  /// is measured from.
   Future<InboxAddResult> addInboxItem(
     String appId,
     String itemId,
     Uint8List blob, {
     required int storedAt,
     required int maxPending,
+    required int maxAccountPendingItems,
+    required int maxAccountPendingBytes,
   });
 
-  /// [username]'s items with `received` greater than [since], ascending.
-  Future<List<InboxItem>> inboxItemsSince(String username, int since);
+  /// [username]'s items with `received` greater than [since], ascending,
+  /// at most the first [limit] of them. [limit] must be positive; callers
+  /// fetch a page plus one so an extra row is the lookahead that says
+  /// another page exists.
+  Future<List<InboxItem>> inboxItemsSince(String username, int since,
+      {required int limit});
 
   /// Remove one item. Returns false when it is not (or no longer) there,
   /// which is how a device learns another one claimed it first.
@@ -315,11 +330,28 @@ class InMemoryStorage implements Storage {
     Uint8List blob, {
     required int storedAt,
     required int maxPending,
+    required int maxAccountPendingItems,
+    required int maxAccountPendingBytes,
   }) async {
     final app = _inboxApps[appId];
     if (app == null) return const InboxAddResult(InboxAddStatus.unknownApp);
-    if (_inboxItems.where((i) => i.appId == appId).length >= maxPending) {
+    // One synchronous pass, and the mutation below is in the same turn, so
+    // no interleaved deposit can pass a cap it should have failed.
+    var appPending = 0;
+    var accountPending = 0;
+    var accountBytes = 0;
+    for (final item in _inboxItems) {
+      if (item.username != app.username) continue;
+      accountPending += 1;
+      accountBytes += item.blob.length;
+      if (item.appId == appId) appPending += 1;
+    }
+    if (appPending >= maxPending) {
       return const InboxAddResult(InboxAddStatus.full);
+    }
+    if (accountPending >= maxAccountPendingItems ||
+        accountBytes + blob.length > maxAccountPendingBytes) {
+      return const InboxAddResult(InboxAddStatus.accountFull);
     }
     final received = (_inboxReceived[app.username] ?? 0) + 1;
     _inboxReceived[app.username] = received;
@@ -329,11 +361,21 @@ class InMemoryStorage implements Storage {
   }
 
   @override
-  Future<List<InboxItem>> inboxItemsSince(String username, int since) async => [
-        for (final item in _inboxItems)
-          if (item.username == username && item.received > since)
-            item.toItem(),
-      ];
+  Future<List<InboxItem>> inboxItemsSince(String username, int since,
+      {required int limit}) async {
+    if (limit < 1) {
+      throw ArgumentError.value(limit, 'limit', 'must be positive');
+    }
+    // Items are appended in `received` order. Stop as soon as the bounded
+    // result is full instead of materializing the account's whole queue.
+    final result = <InboxItem>[];
+    for (final item in _inboxItems) {
+      if (item.username != username || item.received <= since) continue;
+      result.add(item.toItem());
+      if (result.length == limit) break;
+    }
+    return result;
+  }
 
   @override
   Future<bool> deleteInboxItem(
