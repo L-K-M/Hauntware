@@ -11,6 +11,7 @@ import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/local_reveal.dart';
 import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/ui/context_pane.dart';
+import 'package:seance_app/ui/middle_ellipsis_text.dart';
 import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
@@ -104,7 +105,9 @@ void main() {
 
   Future<List<String>> menuFor(WidgetTester tester, String label) async {
     final row = find.ancestor(
-      of: find.text(label),
+      of: find.byWidgetPredicate(
+        (widget) => widget is MiddleEllipsisText && widget.text == label,
+      ),
       matching: find.byType(ListTile),
     );
     await tester.tap(

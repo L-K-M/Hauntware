@@ -34,11 +34,23 @@ final class _ShoutingDuplex implements ByteDuplex {
   }
 }
 
-Future<String> _ask(int port, String text) async {
+Future<String> _ask(
+  int port,
+  String text, {
+  bool resetIsEmpty = false,
+}) async {
   final socket = await Socket.connect(InternetAddress.loopbackIPv4, port);
-  socket.add(utf8.encode(text));
-  await socket.close();
-  return utf8.decode(await socket.expand((bytes) => bytes).toList());
+  try {
+    socket.add(utf8.encode(text));
+    await socket.close();
+    return utf8.decode(await socket.expand((bytes) => bytes).toList());
+  } on SocketException {
+    // Darwin reports the forward destroying an accepted-but-refused relay as
+    // ECONNRESET, while other hosts surface the same outcome as an empty EOF.
+    // Socket.connect already succeeded, so this cannot hide a dead listener.
+    if (resetIsEmpty) return '';
+    rethrow;
+  }
 }
 
 void main() {
@@ -91,7 +103,7 @@ void main() {
     });
     addTearDown(forward.close);
 
-    expect(await _ask(forward.port, 'lost'), isEmpty);
+    expect(await _ask(forward.port, 'lost', resetIsEmpty: true), isEmpty);
     expect(await _ask(forward.port, 'kept'), 'KEPT');
   });
 
