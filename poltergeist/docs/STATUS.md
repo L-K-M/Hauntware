@@ -9,9 +9,14 @@ next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 Owner decision: a tier-B run on a CPU other than the baseline's still
 skips its comparison and prints the CPU notice, but no longer counts
 toward the seven-run `baseline stale` failure. `ubuntu-latest` serves
-several CPU models at once, and about 60% of recent runs landed off the
-recorded `AMD EPYC 7763`, so the streak tracked runner assignment and
-reddened main without a refresh being able to help. A store's legacy
+several CPU models at once: of the 15 main CI runs on
+`ubuntu-latest@20261026.354.1` between Oct 26 and Oct 31, 9 landed off
+the recorded `AMD EPYC 7763` (the #580 refresh's pool lists them), so
+the streak tracked runner assignment and reddened main without a refresh
+being able to help. A run whose only drift is the CPU model now also
+counts as clean when nothing else failed, so it clears a streak left by
+an earlier controlled-axis drift; main run 41209440287 failed on such a
+streak right after the #580 refresh. A store's legacy
 `tier-b/cpu` streak is never graded and goes with the next write.
 Controlled-axis drift, such as a runner-image rotation, escalates as
 before. The accepted cost, recorded in 08 §6: a pool that leaves the

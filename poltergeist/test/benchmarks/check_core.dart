@@ -1153,6 +1153,10 @@ CheckReport evaluate({
     );
   }
   var tierBDrifted = false;
+  // A CPU-model mismatch with every controlled axis matching: the run
+  // proves the baseline's controlled fingerprint current even though it
+  // could not compare (see [legacyCpuDriftKey]).
+  var tierBCpuOnlyDrift = false;
   // Every expected tier-B scenario that reached comparison must actually
   // compare for the run to count as a clean observation: a single
   // skipped comparison (e.g. a missing baseline entry) vetoes the reset.
@@ -1194,6 +1198,7 @@ CheckReport evaluate({
     } else if (baseline.fingerprint.cpuModel != tierBFingerprint.cpuModel) {
       // Skipped and reported, but no streak: see [legacyCpuDriftKey].
       tierBDrifted = true;
+      tierBCpuOnlyDrift = true;
       notices.add(
         'NOTICE: hardware drift — refresh the baseline: tier-B CPU model '
         'mismatch (${baseline.fingerprint.cpuModel} != '
@@ -1437,17 +1442,21 @@ CheckReport evaluate({
         'fresh count',
       );
     }
-    // Reset eligibility: only a fully clean run that actually observed a
-    // tier-B comparison may clear prior streaks. A run with failures,
-    // skipped/unobserved comparisons, or fresh drift preserves them —
+    // Reset eligibility: only a fully clean run may clear prior streaks:
+    // no failures, no fresh drift, and either every expected tier-B
+    // comparison observed or a CPU-only mismatch over expected tier-B
+    // rows. The latter matched every controlled axis, which is all a
+    // streak records, so a mixed CPU fleet cannot hold a stale streak
+    // after a refresh until a run lands on the recorded CPU. A run with
+    // failures, other skipped comparisons, or fresh drift preserves them —
     // and any drift that did fire still counts even when other gates
     // failed (measurement validity, drift, and budget failures are
     // distinct).
     final mayReset =
         failures.isEmpty &&
         firedDriftKeys.isEmpty &&
-        tierBCompared > 0 &&
-        tierBCompared == tierBExpected;
+        tierBExpected > 0 &&
+        (tierBCpuOnlyDrift || tierBCompared == tierBExpected);
     // A main run persists something only when it has news: drift that
     // fired, or a genuinely clean observation that clears streaks. A
     // failed/unobserved run with no drift records nothing — rewriting

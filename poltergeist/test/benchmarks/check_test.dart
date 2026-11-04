@@ -271,7 +271,7 @@ void main() {
         'now',
         mayReset: false,
       );
-      expect(next.notices.containsKey(legacyCpuDriftKey), isFalse);
+      expect(next.notices.keys, ['tier-b/controlled/runnerImage']);
       expect(
         next.notices['tier-b/controlled/runnerImage']!.consecutiveMainRuns,
         3,

@@ -139,9 +139,11 @@ the corrective baseline or performance PR from passing its tier-A gate.
 The same tier-B controlled-axis drift notice firing on ≥ 7 consecutive
 main runs reddens tier-B invocations with `baseline stale — refresh required` once
 `BENCH_ENFORCE_B` is set. Only a genuinely clean main run — no graded
-failures, no fresh drift, and every expected tier-B comparison actually
-observed (at least one) — may reset prior counts; failed, missing, or
-unobserved tier-B
+failures, no fresh controlled-axis drift, and every expected tier-B
+comparison actually observed (at least one), or a CPU-model mismatch
+alone over the expected tier-B rows — may reset prior counts. A
+CPU-only run matched every controlled axis, which is all a streak
+records. Failed, missing, or otherwise unobserved tier-B
 comparisons preserve them (though drift that genuinely fired still
 counts even when other gates fail: measurement validity, drift, and
 budget failures are distinct). A run with nothing to record leaves the
@@ -150,7 +152,8 @@ unknown: fired notices count conservatively at the escalation
 threshold, never as a fresh count (08 §6's "never a reset").
 Controlled-axis mismatch against the baseline is a hard non-zero exit
 once enforced but a loud exit-zero notice while soft; the CPU-model axis
-skips with a notice, keeps no streak and never reddens (owner decision,
+skips with a notice, keeps no streak and exits zero in soft and enforced
+mode alike (owner decision,
 2026-11-04: a mixed CPU fleet tracks runner assignment, which no refresh
 can change; a store's legacy `tier-b/cpu` streak is never graded). State
 publication is atomic through an owned, uniquely named temporary file

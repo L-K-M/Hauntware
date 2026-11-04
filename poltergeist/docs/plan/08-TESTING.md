@@ -817,7 +817,8 @@ Mechanics:
   "count unknown — continue counting conservatively," never a reset — and
   once the same controlled-axis drift notice has fired on ≥ 7 consecutive
   main-branch runs (any intervening clean **main-branch** run resets the
-  count) the job
+  count; a run whose only drift is the CPU model counts as clean when
+  nothing else failed, since it matched every controlled axis) the job
   reddens with "baseline stale — refresh required". The CPU-model notice
   keeps no streak and never escalates (owner decision, 2026-11-04): with
   `ubuntu-latest` serving several CPU models at once, a run of non-recorded

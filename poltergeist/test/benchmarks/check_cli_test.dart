@@ -1677,6 +1677,7 @@ void main() {
       required String statePath,
       required DriftRunKind runKind,
       Map<String, String> environment = const {'BENCH_ENFORCE_B': '1'},
+      Set<String> landedIds = const {'P1'},
     }) async => runChecker(
       arguments: [
         '--results',
@@ -1684,7 +1685,7 @@ void main() {
         '--tiers',
         'b',
         '--budgets',
-        await writeFixture('budgets.json', _budgetsJson(landedIds: {'P1'})),
+        await writeFixture('budgets.json', _budgetsJson(landedIds: landedIds)),
         '--baseline',
         await writeFixture('baseline.json', _baselineJson()),
         '--drift-state',
@@ -1777,32 +1778,64 @@ void main() {
       expect(state.notices.keys, ['tier-b/controlled/runnerImage']);
     });
 
-    test('a CPU-drift run is not a clean observation: controlled streaks '
-        'survive it', () async {
+    test('a clean CPU-drift run clears a stale controlled streak', () async {
+      // Main run 41209440287's first attempt: right after a runner-image
+      // refresh, a run on another CPU matched every controlled axis but
+      // still failed on the streak it could not clear.
       final statePath = pathOf('state.json');
       await File(statePath).writeAsString(
         jsonEncode(
-          const DriftState({
+          DriftState({
             'tier-b/controlled/runnerImage': DriftNoticeState(
-              consecutiveMainRuns: 3,
+              consecutiveMainRuns: driftStaleThreshold + 7,
               lastSeenUtc: '2026-09-14T00:00:00Z',
             ),
           }).toJson('2026-09-14T00:00:00Z'),
         ),
       );
-      final before = await File(statePath).readAsString();
 
-      final (exitCodeValue, stdoutText, _) = await runTierB(
+      final (exitCodeValue, stdoutText, stderrText) = await runTierB(
         results: await writeCpuDriftResults(),
         statePath: statePath,
         runKind: DriftRunKind.mainRun,
       );
-      expect(exitCodeValue, 0, reason: stdoutText);
+      expect(exitCodeValue, 0, reason: '$stdoutText\n$stderrText');
       expect(stdoutText, contains('tier-B CPU model mismatch'));
+      expect('$stdoutText$stderrText', isNot(contains('stale')));
+      final state = DriftState.fromJson(
+        jsonDecode(await File(statePath).readAsString()),
+      );
+      expect(state.notices, isEmpty);
+    });
+
+    test('a CPU-drift run with a failing gate keeps controlled streaks',
+        () async {
+      final statePath = pathOf('state.json');
+      final prior = DriftState({
+        'tier-b/controlled/runnerImage': const DriftNoticeState(
+          consecutiveMainRuns: 3,
+          lastSeenUtc: '2026-09-14T00:00:00Z',
+        ),
+      });
+      await File(statePath).writeAsString(
+        jsonEncode(prior.toJson('2026-09-14T00:00:00Z')),
+      );
+
+      // P2 is landed but has no rows: the missing scenario fails the run,
+      // so it is no clean observation even though only the CPU drifted.
+      final (exitCodeValue, stdoutText, _) = await runTierB(
+        results: await writeCpuDriftResults(),
+        statePath: statePath,
+        runKind: DriftRunKind.mainRun,
+        landedIds: {'P1', 'P2'},
+      );
+      expect(exitCodeValue, 1, reason: stdoutText);
+      final state = DriftState.fromJson(
+        jsonDecode(await File(statePath).readAsString()),
+      );
       expect(
-        await File(statePath).readAsString(),
-        before,
-        reason: 'a skipped comparison never clears a streak',
+        state.notices['tier-b/controlled/runnerImage']!.consecutiveMainRuns,
+        3,
       );
     });
   });
