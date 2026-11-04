@@ -9,7 +9,7 @@ services:
     build:
       context: ../..
       dockerfile: packages/seance_sync_server/Dockerfile
-    image: seance-sync:latest
+    image: "${SEANCE_IMAGE:-seance-sync:latest}"
     restart: unless-stopped
     ports:
       # Plain HTTP is intended to sit behind a local TLS reverse proxy. By
@@ -19,7 +19,7 @@ services:
       # SEANCE_PUBLISH_ADDR in packages/seance_sync_server/.env (gitignored,
       # survives updates; see .env.example): 172.17.0.1 publishes only on the
       # Docker bridge gateway, 0.0.0.0 on every interface (firewall it).
-      - "${SEANCE_PUBLISH_ADDR:-127.0.0.1}:8787:8787"
+      - "${SEANCE_PUBLISH_ADDR:-127.0.0.1}:${SEANCE_PUBLISH_PORT:-8787}:8787"
     environment:
       SEANCE_BIND: "0.0.0.0"
       SEANCE_PORT: "8787"
