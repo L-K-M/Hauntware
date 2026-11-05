@@ -170,6 +170,25 @@ String linkStatusWord(AppLocalizations l10n, LinkStatus status) {
 /// `IdentityFile` line that names it: the sandbox grants no key files
 /// (04 §12.1), and a server whose import names a key file offers only
 /// that file (D70).
+/// What a user's retry does for a link in [status] (03 D71), or null when
+/// the link needs none: the engine redials on its own, or the endpoint's
+/// confirmation, not a retry, lifts the block.
+enum ConnectRetry {
+  /// Connect again, so the engine asks for the key again.
+  review,
+
+  /// Connect again after a failure that waits for the user.
+  retry,
+}
+
+/// The retry [status] offers, if any.
+ConnectRetry? connectRetryFor(LinkStatus status) => switch (status) {
+  LinkBlocked(reason: LinkBlockedReason.hostKeyChanged) => ConnectRetry.review,
+  LinkClosed(reason: LinkClosedReason.connectFailed, failure: _?) =>
+    ConnectRetry.retry,
+  _ => null,
+};
+
 String? linkFailureText(AppLocalizations l10n, LinkStatus status) {
   if (status case LinkClosed(:final failure?)) {
     return switch (failure) {

@@ -355,6 +355,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'A key for this server or a jump host on its route needs its passphrase. Klabautermann asks for it only when you open the server, and does not save it.';
 
   @override
+  String serverConnectRetry(String action) {
+    String _temp0 = intl.Intl.selectLogic(action, {
+      'review': 'Review the new key',
+      'retry': 'Try again',
+      'other': 'Try again',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get linkFailureKeyFileHiddenBySandbox =>
       'A key file for this server cannot be read in the Flatpak sandbox. Load the key into ssh-agent and remove the IdentityFile line that names it from ~/.ssh/config, then import the config again.';
 

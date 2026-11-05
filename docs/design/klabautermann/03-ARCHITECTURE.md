@@ -252,8 +252,9 @@ D62 sync state files and the keystore port · D63 pull-only sync in the
 engine · D64 a server's confirmation covers its route · D65 spike S3
 and admin validation · D66 spike S4 and Docker-scoped sudo rules · D67
 spike S6 and the privileged write · D68 spike S8 and update checks · D69
-admin-mode memory · D70 key passphrases asked per connect. The proposals
-the owner answered on 2026-11-04 close the section.
+admin-mode memory · D70 key passphrases asked per connect · D71 the
+user's retry of a connect. The proposals the owner answered on
+2026-11-04 close the section.
 
 ### Shape and scope
 
@@ -1430,6 +1431,20 @@ the owner answered on 2026-11-04 close the section.
   dismissed prompt (one remedy, opening the server, so one kind);
   testing a passphrase in the connector before the dial (a second key
   derivation, and a dartssh2 dependency the engine does not take).
+- **D71. The server header offers the user's retry of a connect that
+  waits for them.** A connect that failed for a reason other than
+  reaching the server (rejected credentials, a cancelled prompt, a
+  declined or changed host key) waits for the user (5.1), and a view
+  opened again within the 30 s leave grace sends nothing. Under the link
+  failure, the header shows "Try again", or "Review the new key" for a
+  server a changed host key blocked; either sends `Connect` again as
+  the user's own, so the engine reviews a changed key (D61) or starts a
+  new attempt. `MonitoringController.retryConnect` sends it only while a
+  view shows the server. *Rejected:* a retry for an endpoint change,
+  whose confirmation (D16) lifts the block; one for a failure the engine
+  already redials (unreachable, timed out), whose backoff runs on its
+  own; ending the grace on a retry, which would drop a link the user
+  still looks at.
 
 ### Persistence, alerts and tiers
 

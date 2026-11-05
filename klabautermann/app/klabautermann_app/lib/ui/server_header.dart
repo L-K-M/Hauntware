@@ -13,7 +13,8 @@ import 'access/access_panel.dart' show engineNameText;
 import 'actions/detached_operations.dart';
 import 'coverage.dart' show ServerCoverageChip;
 import 'docker/docker_endpoint.dart';
-import 'fleet_rail.dart' show linkFailureText, linkStatusWord;
+import 'fleet_rail.dart'
+    show connectRetryFor, linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
 import 'fleet_rows.dart' show fleetStatusIcon, fleetStatusStrings;
 import 'hand_off_actions.dart';
@@ -66,10 +67,10 @@ class ServerHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final failure = linkFailureText(
-      AppLocalizations.of(context),
-      fleet.linkStatusFor(server.id),
-    );
+    final l10n = AppLocalizations.of(context);
+    final status = fleet.linkStatusFor(server.id);
+    final failure = linkFailureText(l10n, status);
+    final retry = connectRetryFor(status);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: 8,
@@ -132,6 +133,11 @@ class ServerHeader extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        if (retry != null)
+          TextButton(
+            onPressed: () => monitoring.retryConnect(server.id),
+            child: Text(l10n.serverConnectRetry(retry.name)),
           ),
       ],
     );
