@@ -352,7 +352,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get linkFailureKeyPassphraseRequired =>
-      'A key for this server needs its passphrase. Klabautermann asks for it only when you open the server, and does not save it.';
+      'A key for this server or a jump host on its route needs its passphrase. Klabautermann asks for it only when you open the server, and does not save it.';
 
   @override
   String get linkFailureKeyFileHiddenBySandbox =>

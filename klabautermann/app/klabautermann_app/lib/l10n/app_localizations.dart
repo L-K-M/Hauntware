@@ -619,7 +619,7 @@ abstract class AppLocalizations {
   /// Why a connect failed (03 §10.1, D70): the private key of this server or of a jump host on its route is encrypted, and no passphrase was entered for it. Background connects never ask, and a passphrase is never saved, so the user enters it by opening the server, which asks for it.
   ///
   /// In en, this message translates to:
-  /// **'A key for this server needs its passphrase. Klabautermann asks for it only when you open the server, and does not save it.'**
+  /// **'A key for this server or a jump host on its route needs its passphrase. Klabautermann asks for it only when you open the server, and does not save it.'**
   String get linkFailureKeyPassphraseRequired;
 
   /// Why a connect failed (03 §4.5, §10.1): the Flatpak sandbox shows the app only the paths its manifest grants, so the key file of this server or of a jump host on its route reads as missing. A server whose ssh_config entry names a key file uses only that file, so the agent signs only once the IdentityFile line is gone and the config is imported again. ssh-agent, IdentityFile and ~/.ssh/config are OpenSSH names, not translated.

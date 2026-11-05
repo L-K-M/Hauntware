@@ -352,7 +352,7 @@
   "@linkFailureCredentialUnavailable": {
     "description": "Why a connect failed (03 §10.1): a key file could not be read or holds no key the app can use, or ssh-agent holds no keys. ssh-agent is the OpenSSH program's name, not translated."
   },
-  "linkFailureKeyPassphraseRequired": "A key for this server needs its passphrase. Klabautermann asks for it only when you open the server, and does not save it.",
+  "linkFailureKeyPassphraseRequired": "A key for this server or a jump host on its route needs its passphrase. Klabautermann asks for it only when you open the server, and does not save it.",
   "@linkFailureKeyPassphraseRequired": {
     "description": "Why a connect failed (03 §10.1, D70): the private key of this server or of a jump host on its route is encrypted, and no passphrase was entered for it. Background connects never ask, and a passphrase is never saved, so the user enters it by opening the server, which asks for it."
   },

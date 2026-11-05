@@ -17,8 +17,9 @@ const Map<LinkFailureKind, String> failureTexts = {
       'file can be read and holds a supported key, or load a key into '
       'ssh-agent.',
   LinkFailureKind.keyPassphraseRequired:
-      'A key for this server needs its passphrase. Klabautermann asks for it '
-      'only when you open the server, and does not save it.',
+      'A key for this server or a jump host on its route needs its '
+      'passphrase. Klabautermann asks for it only when you open the server, '
+      'and does not save it.',
   // The Flatpak variant.
   LinkFailureKind.keyFileHiddenBySandbox:
       'A key file for this server cannot be read in the Flatpak sandbox. '
