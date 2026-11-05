@@ -84,7 +84,8 @@ repo_dir="$(cd "$klab_dir/.." && pwd)"
 readonly repo_dir
 readonly fixtures_root="$klab_dir/packages/klabautermann_host/test/fixtures"
 
-# Bounds one capture; the tool's own reply timeout is 5 minutes.
+# Bounds one whole capture. The capture tool also bounds each reply it
+# waits for, at 5 minutes per reply.
 readonly capture_timeout_seconds=300
 readonly pull_attempts=3
 readonly capture_hostname='capture-host'
@@ -294,6 +295,7 @@ if [[ "$scope" == all ]]; then
   for package in "${!debs[@]}"; do
     read -r pool sha <<<"${debs[$package]}"
     curl -fsSL --retry 5 --retry-all-errors --connect-timeout 30 \
+      --max-time 300 \
       -o "$work/debs/$package.deb" "$deb_snapshot/$pool"
     echo "$sha  $work/debs/$package.deb" | sha256sum --check --quiet ||
       die "$package: the download does not match its pinned SHA-256"

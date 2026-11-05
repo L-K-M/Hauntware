@@ -46,6 +46,12 @@ readonly inventory_allowlist="$integration_dir/inventory_allowlist.txt"
 readonly seed_image='mirror.gcr.io/library/busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e'
 readonly pull_attempts=3
 readonly dart_binary="${DART_BIN:-dart}"
+# The tests read this too, from the package directory, so a relative
+# path would scatter their evidence: resolve it once for every reader.
+if [[ -n "${KLABAUTERMANN_EVIDENCE_DIR:-}" ]]; then
+  KLABAUTERMANN_EVIDENCE_DIR="$(realpath -m -- "$KLABAUTERMANN_EVIDENCE_DIR")"
+  export KLABAUTERMANN_EVIDENCE_DIR
+fi
 readonly evidence_dir="${KLABAUTERMANN_EVIDENCE_DIR:+$KLABAUTERMANN_EVIDENCE_DIR/fixture}"
 readonly fixture_user='klab'
 # Every sshd service, the Docker host's negative variants (M3 D11)

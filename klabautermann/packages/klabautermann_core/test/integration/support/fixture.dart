@@ -696,19 +696,24 @@ Host encrypted
 
   Future<void> _stop(String name) async {
     try {
+      // Each server on its own, so one that does not close still lets the
+      // rest disconnect.
       for (final serverId in _connected) {
-        send(Disconnect(serverId));
-        await until<LinkState>(
-          (event) =>
-              event.serverId == serverId &&
-              event.status == const LinkClosed(LinkClosedReason.closedByOwner),
-          const Duration(seconds: 10),
-        );
+        try {
+          send(Disconnect(serverId));
+          await until<LinkState>(
+            (event) =>
+                event.serverId == serverId &&
+                event.status ==
+                    const LinkClosed(LinkClosedReason.closedByOwner),
+            const Duration(seconds: 10),
+          );
+        } on Object catch (error) {
+          // A test that failed mid-connect may leave nothing to close, or
+          // a prompt open; its own failure is the one to report.
+          note('! stop $serverId: $error');
+        }
       }
-    } on Object catch (error) {
-      // A test that failed mid-connect may leave nothing to close, or a
-      // prompt open; its own failure is the one to report.
-      note('! stop: $error');
     } finally {
       // The iterator goes first: it pauses the client's broadcast stream
       // while no read is pending, and a paused listener would hold up the
