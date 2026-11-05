@@ -62,6 +62,26 @@ void main() {
     updatedAt: 1,
   );
 
+  /// A primary click on [position] whose events carry [at] as their stamp.
+  Future<void> pressAt(
+    WidgetTester tester,
+    Offset position,
+    Duration at,
+  ) async {
+    await tester.sendEventToBinding(
+      PointerDownEvent(
+        pointer: 1,
+        position: position,
+        timeStamp: at,
+        buttons: kPrimaryButton,
+      ),
+    );
+    await tester.sendEventToBinding(
+      PointerUpEvent(pointer: 1, position: position, timeStamp: at),
+    );
+    await tester.pump();
+  }
+
   /// The files pane over a connected session backed by [remote].
   Future<RemoteFilesController> pumpFilesPane(
     WidgetTester tester,
@@ -109,9 +129,8 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(textScale)),
           child: AppScope(state: state!, child: child!),
         ),
         home: Scaffold(
@@ -475,6 +494,30 @@ void main() {
   );
 
   platformTest(
+    'a press stamped before the last one starts no double-click',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      final docs = tester.getCenter(find.text('docs'));
+
+      // An event clock that reset between two presses: the second carries
+      // an earlier stamp. A third press soon after it on the old clock's
+      // terms must not pair with the out-of-order one.
+      for (final at in [
+        kDoubleTapTimeout * 4,
+        kDoubleTapTimeout,
+        kDoubleTapTimeout + const Duration(milliseconds: 50),
+      ]) {
+        await pressAt(tester, docs, at);
+      }
+      await tester.runAsync(() async {});
+      await tester.pump();
+      expect(files.currentPath, _home);
+      expect(files.selectedPaths, {'$_home/docs'});
+    },
+  );
+
+  platformTest(
     'a press sharing its predecessor\'s stamp still double-clicks',
     TargetPlatform.linux,
     (tester) async {
@@ -522,13 +565,14 @@ void main() {
       final files = await pumpFilesPane(tester, _ListFileSystem());
       final docs = tester.getCenter(find.text('docs'));
 
-      await tester.tapAt(docs);
-      await tester.pump();
+      // Explicit stamps 100 ms apart, so the pair is inside the window by
+      // its stamps alone rather than because test taps share a zero stamp.
+      const first = Duration(seconds: 1);
+      await pressAt(tester, docs, first);
       // Real time passes while the fake clock stands still: the presses
       // were back to back, only their handling was stretched.
       await tester.runAsync(() => Future<void>.delayed(kDoubleTapTimeout * 2));
-      await tester.tapAt(docs);
-      await tester.pump();
+      await pressAt(tester, docs, first + const Duration(milliseconds: 100));
       await tester.runAsync(() async {});
       await tester.pump();
       expect(files.currentPath, '$_home/docs');

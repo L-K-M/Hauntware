@@ -99,6 +99,15 @@ cannot run that workflow. Obtain an independent local review and disclose the
 automation gap. Later PRs use GLM. Follow the shared stopping rules below;
 review severity labels require primary evidence, not automatic acceptance.
 
+CI and GLM run on ready PRs only. While iterating, open the PR as a draft
+(`gh pr create --draft`) and test locally: CI skips drafts, and
+`gh pr ready <n>` starts CI and the GLM review. GLM reviews a PR when it
+is opened, reopened or marked ready, not on every push. After pushing
+fixes for its findings, ask for the next round with
+`gh pr edit <n> --add-label glm-review`; the workflow removes the label
+when it finishes. Pushes therefore no longer start or cancel reviews,
+whatever the shared rules below say about them.
+
 Native macOS data/keychain, mixed-monitor and real-device flows remain manual
 checks where the product notes say so. Automated compilation is not a device
 smoke test. Retain original repositories and data; sandbox rollback requires
