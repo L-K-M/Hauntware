@@ -94,6 +94,27 @@ void main() {
     expect((answers.single! as GhostPasswordReply).password, 'hunter2');
   });
 
+  testWidgets('pasted secrets keep the keyboard from learning them', (
+    tester,
+  ) async {
+    TextField field(String key) =>
+        tester.widget<TextField>(find.byKey(ValueKey(key)));
+    void expectNoLearning(TextField secret) {
+      expect(secret.autocorrect, isFalse);
+      expect(secret.enableSuggestions, isFalse);
+      expect(secret.enableIMEPersonalizedLearning, isFalse);
+    }
+
+    await open(tester, authMethod: AuthMethod.password);
+    expectNoLearning(field('credential.password'));
+    Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+    await tester.pumpAndSettle();
+
+    await open(tester, authMethod: AuthMethod.privateKey);
+    expectNoLearning(field('credential.key'));
+    expectNoLearning(field('credential.passphrase'));
+  });
+
   testWidgets('a key comes from a file or a paste, with its passphrase', (
     tester,
   ) async {

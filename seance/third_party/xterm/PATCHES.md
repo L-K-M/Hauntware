@@ -518,7 +518,9 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     double/triple tap lifts with a selection, and
     `selectionToolbarAnchors` gives the global points above the first and
     below the last selected row, clamped to the view. Mouse selections do
-    not report.
+    not report. A stylus long-press selects and reports like a finger;
+    upstream's long-press recognizer accepted touch only, and a mouse
+    long-press still never starts a touch selection.
 
 ### Touch selection handles (regressions: `test/src/ui/selection_handles_test.dart`, `app/seance_app/test/terminal_selection_toolbar_test.dart`)
 

@@ -567,8 +567,10 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     // got scheduled: a stalled main thread between two quick clicks must
     // not split them, and two slow clicks must not merge.
     // The gap must be non-negative: a mis-stamped or synthetic press
-    // (remote input, automation) can carry an earlier stamp than its
-    // predecessor, and the negative gap would read as a double-click. Zero
+    // (remote input, automation) or a reset event clock can carry an
+    // earlier stamp than its predecessor, and the negative gap would read
+    // as a double-click. Such a press also starts no pair of its own: the
+    // next press could otherwise pair with it across the break. Zero
     // counts as inside — taps from tests and coarsely stamped synthetic
     // input share a stamp.
     final sinceLast = event.timeStamp - _lastPrimaryDownAt;
@@ -577,7 +579,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
         !sinceLast.isNegative &&
         sinceLast <= kDoubleTapTimeout;
     _lastPrimaryDownAt = event.timeStamp;
-    _lastPrimaryDownPath = entry.path;
+    _lastPrimaryDownPath = sinceLast.isNegative ? null : entry.path;
     controller.selectOnly(entry.path);
     if (doubleClick) {
       _lastPrimaryDownPath = null;
