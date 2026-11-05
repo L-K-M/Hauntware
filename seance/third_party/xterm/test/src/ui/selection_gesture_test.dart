@@ -1025,23 +1025,29 @@ void main() {
       expect(points.secondaryAnchor!.dy, closeTo(word.dy + row / 2, 0.01));
     });
 
-    testWidgets('a stylus long-press selects and reports like a finger',
-        (tester) async {
-      final terminal = Terminal();
-      final controller = TerminalController();
-      final reports = await pumpReporting(tester, terminal, controller);
+    // A pen's eraser end reports as an inverted stylus; both ends select.
+    for (final kind in [
+      PointerDeviceKind.stylus,
+      PointerDeviceKind.invertedStylus,
+    ]) {
+      testWidgets('${kind.name} long-press selects and reports like a finger',
+          (tester) async {
+        final terminal = Terminal();
+        final controller = TerminalController();
+        final reports = await pumpReporting(tester, terminal, controller);
 
-      final gesture = await tester.startGesture(
-        cellCenter(tester, 8, 1),
-        kind: PointerDeviceKind.stylus,
-      );
-      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
-      expect(terminal.buffer.getText(controller.selection!).trim(), 'delta');
+        final gesture = await tester.startGesture(
+          cellCenter(tester, 8, 1),
+          kind: kind,
+        );
+        await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+        expect(terminal.buffer.getText(controller.selection!).trim(), 'delta');
 
-      await gesture.up();
-      await tester.pump(const Duration(milliseconds: 600));
-      expect(reports, hasLength(1));
-    });
+        await gesture.up();
+        await tester.pump(const Duration(milliseconds: 600));
+        expect(reports, hasLength(1));
+      });
+    }
 
     testWidgets('a mouse long-press neither selects a word nor reports',
         (tester) async {
