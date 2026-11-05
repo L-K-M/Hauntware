@@ -1634,24 +1634,34 @@ void engineMain(
             );
         }
         // Not awaited: planning reads over the link, and the queue keeps
-        // serving the app meanwhile.
+        // serving the app meanwhile. A planner that throws rather than
+        // refusing still answers, or the app's preview would stay
+        // pending for good.
         unawaited(
-          attempt.then((attempt) {
-            final plan = attempt.plan;
-            if (plan == null) {
-              refuse(attempt.refusal!);
-              return;
-            }
-            // The switch and name as they are now, when the user sees
-            // the plan; the preview lists the line among the steps.
-            final held = withHostAuditLine(
-              plan,
-              enabled: safetyPolicy.servers[serverId]?.hostAuditLine ?? true,
-              deviceName: deviceName,
-            );
-            final planId = plans.hold(held, linkGeneration: generation);
-            uiPort.send(ActionPlanned(planId, held.preview));
-          }),
+          attempt
+              .catchError(
+                (Object _) => (
+                  plan: null,
+                  refusal: ActionRefusalReason.engineUnavailable,
+                ),
+              )
+              .then((attempt) {
+                final plan = attempt.plan;
+                if (plan == null) {
+                  refuse(attempt.refusal!);
+                  return;
+                }
+                // The switch and name as they are now, when the user sees
+                // the plan; the preview lists the line among the steps.
+                final held = withHostAuditLine(
+                  plan,
+                  enabled:
+                      safetyPolicy.servers[serverId]?.hostAuditLine ?? true,
+                  deviceName: deviceName,
+                );
+                final planId = plans.hold(held, linkGeneration: generation);
+                uiPort.send(ActionPlanned(planId, held.preview));
+              }),
         );
       case FootprintQuery(:final serverId):
         if (!fleetIds.contains(serverId)) {
@@ -1762,7 +1772,11 @@ void engineMain(
               profile: profiles[serverId],
               now: DateTime.now().toUtc(),
             ),
-          ).then(uiPort.send),
+          ).then(
+            uiPort.send,
+            // A read that throws still answers, so the view stops waiting.
+            onError: (Object _) => fail(UserCrontabsFailure.transport),
+          ),
         );
       case ReadAccounts(:final serverId, :final requestId):
         final link = links?.link(serverId);
