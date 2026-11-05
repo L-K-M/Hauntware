@@ -198,7 +198,33 @@ void main() {
       expect(_shapes(r.value), [
         ('/etc/crontab', '@daily', '/opt/run.sh', 'nightly'),
       ]);
-      expect(r.warnings, hasLength(3));
+      // Two short lines, the macro line ending at its user field, and the
+      // @daily line whose "user" is a path.
+      expect(r.warnings, hasLength(4));
+      expect(
+        r.warnings,
+        contains(contains('user "/opt/run.sh" looks like a command')),
+      );
+    });
+
+    test('a system line missing its user field stays listed, with a '
+        'warning', () {
+      // cron runs it as a user named after the command's first word.
+      final r = parseCron(
+        _payload(
+          etc: '*/5 * * * * /usr/bin/x --flag\n0 3 * * * root /usr/bin/y',
+        ),
+        _ctx,
+      );
+      expect(_shapes(r.value), [
+        ('/etc/crontab', '*/5 * * * *', '/usr/bin/x', '--flag'),
+        ('/etc/crontab', '0 3 * * *', 'root', '/usr/bin/y'),
+      ]);
+      expect(r.warnings, [
+        contains(
+          'user "/usr/bin/x" looks like a command (missing user field?)',
+        ),
+      ]);
     });
 
     test('an unknown macro keeps the system shape and warns', () {

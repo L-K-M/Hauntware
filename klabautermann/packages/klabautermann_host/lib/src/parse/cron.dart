@@ -424,6 +424,15 @@ void _cronJob(
   final (fields, command) = split;
   final schedule = macro ? fields.first : fields.take(5).join(' ');
   final user = system ? fields.last : null;
+  // cron takes any word there, so a line missing its user field runs as
+  // a user named after the command's first word. It stays listed, as
+  // cron reads it, with a warning that says why it looks wrong.
+  if (user != null && user.contains('/')) {
+    warnings.add(
+      'cron $source: user "$user" looks like a command '
+      '(missing user field?)',
+    );
+  }
   final expression = CronExpression.parse(schedule);
   if (expression == null) {
     warnings.add('cron $source: unparseable schedule "$schedule"');
