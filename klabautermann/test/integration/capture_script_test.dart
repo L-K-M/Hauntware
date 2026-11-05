@@ -938,24 +938,26 @@ String _function(String script, String name) {
   return script.substring(start, script.indexOf('\n}\n', start));
 }
 
-/// [script]'s commands, one per logical line: continuation lines joined,
-/// comments and leading whitespace dropped.
 /// A capture container gets no way into the host: no host namespaces,
-/// added capabilities or devices, on top of `--privileged`, which each
-/// caller checks.
+/// added capabilities, devices or GPUs, on top of `--privileged`, which
+/// each caller checks.
 void _expectNoHostAccess(String command) {
   expect(
     command,
-    isNot(matches(RegExp(r'--(pid|ipc|uts|userns|network|net)[= ]host\b'))),
+    isNot(
+      matches(RegExp(r'--(pid|ipc|uts|userns|cgroupns|network|net)[= ]host\b')),
+    ),
     reason: command,
   );
   expect(
     command,
-    isNot(matches(RegExp(r'\s--(cap-add|device)\b'))),
+    isNot(matches(RegExp(r'\s--(cap-add|device|gpus)\b'))),
     reason: command,
   );
 }
 
+/// [script]'s commands, one per logical line: continuation lines joined,
+/// comments and leading whitespace dropped.
 List<String> _commands(String script) => [
   for (final line
       in script
