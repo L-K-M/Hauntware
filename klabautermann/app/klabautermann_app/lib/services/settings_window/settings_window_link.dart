@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 
 import '../../controllers/account_size.dart';
+import '../../controllers/admin_memory.dart' show AdminMemoryNotSavedException;
 import '../../controllers/announcement_controller.dart'
     show AnnouncementNotSavedException;
 import '../../controllers/threshold_controller.dart'
@@ -80,6 +81,10 @@ enum SettingsLinkMethod {
   /// `[serverId, name]`, a [CadenceCap] name or null to lift the cap.
   setCadenceCap,
 
+  /// The Servers tab's per-server admin memory (FL-16); the argument is
+  /// `[serverId, remembered]`, remembered a bool.
+  setAdminRemembered,
+
   /// The General tab's log display (A11Y-12); the argument is as
   /// [encodeLogDisplay] writes it.
   setLogDisplay,
@@ -140,6 +145,10 @@ enum SettingsLinkKey {
   /// Each capped server's [CadenceCap] name by server id, or null when
   /// the app offers no caps.
   cadenceCaps,
+
+  /// The ids of the servers whose admin memory is on (FL-16), or null
+  /// when the app offers none.
+  adminMemory,
 
   /// The log display as [encodeLogDisplay] writes it, or null when the app
   /// offers none.
@@ -272,6 +281,10 @@ enum SettingsLinkError {
   /// [CadenceNotSavedException].
   cadenceNotSaved,
 
+  /// As [notSaved], for admin memory: the window rebuilds the
+  /// [AdminMemoryNotSavedException].
+  adminMemoryNotSaved,
+
   /// As [notSaved], for the log display: the window rebuilds the
   /// [LogDisplayNotSavedException].
   logDisplayNotSaved,
@@ -317,6 +330,8 @@ PlatformException encodeLinkError(Object error) => PlatformException(
     AnnouncementNotSavedException() =>
       SettingsLinkError.announcementNotSaved.name,
     CadenceNotSavedException() => SettingsLinkError.cadenceNotSaved.name,
+    AdminMemoryNotSavedException() =>
+      SettingsLinkError.adminMemoryNotSaved.name,
     LogDisplayNotSavedException() => SettingsLinkError.logDisplayNotSaved.name,
     TimeDisplayNotSavedException() =>
       SettingsLinkError.timeDisplayNotSaved.name,
@@ -409,6 +424,9 @@ Exception decodeLinkError(PlatformException error) {
       message,
     ),
     SettingsLinkError.cadenceNotSaved => CadenceNotSavedException(message),
+    SettingsLinkError.adminMemoryNotSaved => AdminMemoryNotSavedException(
+      message,
+    ),
     SettingsLinkError.logDisplayNotSaved => LogDisplayNotSavedException(
       message,
     ),

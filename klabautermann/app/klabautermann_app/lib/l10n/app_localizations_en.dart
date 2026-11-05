@@ -4612,6 +4612,26 @@ class AppLocalizationsEn extends AppLocalizations {
       'The refresh limit could not be changed.';
 
   @override
+  String get settingsAdminMemoryTitle => 'Remember admin mode';
+
+  @override
+  String get settingsAdminMemoryDetail =>
+      'Turn admin mode back on the first time you open a server after Klabautermann starts. It asks for the sudo password at each launch and never saves it. Admin mode lets you make changes on that server as root. It still ends after inactivity, when the connection drops, and on a phone or tablet when Klabautermann goes to the background. Servers where actions are not allowed stay observe-only.';
+
+  @override
+  String settingsAdminMemorySwitch(String server) {
+    return 'Remember admin mode on $server';
+  }
+
+  @override
+  String get settingsAdminMemoryNotSaved =>
+      'The admin mode setting changed but could not be saved. It lasts until Klabautermann quits.';
+
+  @override
+  String get settingsAdminMemoryNotChanged =>
+      'The admin mode setting could not be changed.';
+
+  @override
   String get settingsAnnounceBands => 'Announce threshold changes';
 
   @override

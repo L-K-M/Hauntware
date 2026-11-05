@@ -4,6 +4,24 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## D12 CPU drift no longer escalates (2026-11-04)
+
+Owner decision: a tier-B run on a CPU other than the baseline's still
+skips its comparison and prints the CPU notice, but no longer counts
+toward the seven-run `baseline stale` failure. `ubuntu-latest` serves
+several CPU models at once: of the 15 main CI runs on
+`ubuntu-latest@20261026.354.1` between Oct 26 and Oct 31, 9 landed off
+the recorded `AMD EPYC 7763` (the #580 refresh's pool lists them), so
+the streak tracked runner assignment and reddened main without a refresh
+being able to help. A run whose only drift is the CPU model now also
+counts as clean when nothing else failed, so it clears a streak left by
+an earlier controlled-axis drift; main run 41209440287 failed on such a
+streak right after the #580 refresh. A store's legacy
+`tier-b/cpu` streak is never graded and goes with the next write.
+Controlled-axis drift, such as a runner-image rotation, escalates as
+before. The accepted cost, recorded in 08 §6: a pool that leaves the
+recorded CPU for good skips tier B without reddening.
+
 ## D12 runner-image baseline refresh (2026-10-31)
 
 `ubuntu-latest` rotated from `20261023.334.3` to `20261026.354.1`. After

@@ -12,7 +12,9 @@ on:
   schedule:
     - cron: '41 5 * * 1'
   workflow_dispatch:
+  # Drafts skip it like the rest of CI; marking the PR ready runs it.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'klabautermann/test/integration/*.sh'
       - 'klabautermann/test/integration/docker-compose*.yml'
@@ -25,6 +27,7 @@ permissions:
 jobs:
   check:
     name: Digest-pinned images resolve
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
