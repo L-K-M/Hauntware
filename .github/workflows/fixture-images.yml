@@ -13,7 +13,9 @@ name: Fixture images
 
 on:
   workflow_dispatch:
+  # Drafts skip it like the rest of CI; marking the PR ready runs it.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'poltergeist/test/integration/sshd-modern-base/**'
       - '.github/workflows/fixture-images.yml'
@@ -34,7 +36,7 @@ env:
 jobs:
   verify:
     name: Build the sshd-modern base image
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

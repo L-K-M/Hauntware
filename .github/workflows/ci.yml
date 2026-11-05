@@ -17,8 +17,10 @@ name: CI
 on:
   push:
     branches: [main]
+  # Draft PRs get no CI: every job below either carries the not-draft
+  # condition or needs a job that does. Marking a draft ready starts CI.
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
     inputs:
       skip_m0:
@@ -71,6 +73,7 @@ jobs:
   # identity). Guarding the guards — a workflow that drops a timeout
   # or an asset glob must not merge green.
   contracts:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: Workflow and tool contracts
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -111,6 +114,7 @@ jobs:
   # declaration must track it. `check` proves the tree is in lockstep;
   # the tool's own tests prove the contract itself.
   suite_tool:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: Suite release tool
     runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 10
@@ -138,6 +142,7 @@ jobs:
   # record. The shared gates above and the detector-filtered legs below
   # are not gated.
   affected:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: Detect affected products
     runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
@@ -437,6 +442,7 @@ jobs:
 
   # These guards use POSIX tools, Docker, or GNU timeout, not native contracts.
   dart_tools:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: Suite guards and Poltergeist tooling (Ubuntu)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -551,6 +557,7 @@ jobs:
         run: dart run tool/license_gate/bin/check.dart --marker-only
 
   seance_pin_audit:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: Séance pin audit
     runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
@@ -604,6 +611,7 @@ jobs:
         run: scripts/audit-seance-pin.sh
 
   detect_integration:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: Detect SSH integration changes
     runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
@@ -757,6 +765,7 @@ jobs:
   # committed, its absence fails the detector on every event. The check
   # reads the first-parent history of HEAD, hence the full clone.
   detect_klabautermann_integration:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: Detect Klabautermann integration changes
     runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
@@ -940,6 +949,7 @@ jobs:
           retention-days: 30
 
   detect_bench:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: Detect bench-relevant changes
     runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
