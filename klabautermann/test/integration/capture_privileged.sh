@@ -71,6 +71,7 @@ priv_prepare() {
   for package in "${!priv_debs[@]}"; do
     read -r pool sha <<<"${priv_debs[$package]}"
     curl -fsSL --retry 5 --retry-all-errors --connect-timeout 30 \
+      --max-time 300 \
       -o "$work/priv-debs/$package.deb" "$deb_snapshot/$pool"
     echo "$sha  $work/priv-debs/$package.deb" | sha256sum --check --quiet ||
       die "$package: the download does not match its pinned SHA-256"

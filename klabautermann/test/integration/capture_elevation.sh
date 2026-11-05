@@ -132,6 +132,7 @@ elev_prepare() {
       alpine) url="$elev_alpine_mirror/$path" ;;
     esac
     curl -fsSL --retry 5 --retry-all-errors --connect-timeout 30 \
+      --max-time 300 \
       -o "$work/elev-packages/$package.${path##*.}" "$url"
     echo "$sha  $work/elev-packages/$package.${path##*.}" |
       sha256sum --check --quiet ||
@@ -140,6 +141,7 @@ elev_prepare() {
   for package in busybox mksh zsh-common zsh; do
     read -r path sha <<<"${debs[$package]}"
     curl -fsSL --retry 5 --retry-all-errors --connect-timeout 30 \
+      --max-time 300 \
       -o "$work/elev-packages/$package.deb" "$deb_snapshot/$path"
     echo "$sha  $work/elev-packages/$package.deb" | sha256sum --check --quiet ||
       die "$package: the download does not match its pinned SHA-256"

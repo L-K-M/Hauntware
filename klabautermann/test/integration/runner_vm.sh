@@ -95,6 +95,12 @@ readonly integration_dir
 klabautermann_dir="$(cd "$integration_dir/../.." && pwd)"
 readonly klabautermann_dir
 readonly dart_binary="${DART_BIN:-dart}"
+# The tests read this too, from the package directory, so a relative
+# path would scatter their evidence: resolve it once for every reader.
+if [[ -n "${KLABAUTERMANN_EVIDENCE_DIR:-}" ]]; then
+  KLABAUTERMANN_EVIDENCE_DIR="$(realpath -m -- "$KLABAUTERMANN_EVIDENCE_DIR")"
+  export KLABAUTERMANN_EVIDENCE_DIR
+fi
 readonly evidence_dir="${KLABAUTERMANN_EVIDENCE_DIR:+$KLABAUTERMANN_EVIDENCE_DIR/runner-vm}"
 readonly limited_user='klab-vm'
 readonly journal_user='klab-vm-journal'

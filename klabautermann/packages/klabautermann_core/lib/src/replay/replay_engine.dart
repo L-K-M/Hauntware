@@ -71,10 +71,10 @@ final class ReplayPlan {
 ///   advanced to the read's time.
 /// - [OpenLogStream] is rejected as `LogStreamRouter` rejects it (03
 ///   §7.6): a reused id, a server outside the fleet, or a server holding
-///   [kLogStreamsPerServerMax] streams. Unlike the router, which rejects
-///   follows until K26, it serves them: a journal or kernel follow runs
-///   at [ReplayPlan.logLinesPerSecond] until closed, in [LogBatch]es at
-///   most 20 a second (03 §10.1). A window 03 §8.8 refuses ends as
+///   [kLogStreamsPerServerMax] streams. Where the router hands a follow
+///   to its server's `LogFollower`, the replay serves it itself: a journal
+///   or kernel follow runs at [ReplayPlan.logLinesPerSecond] until closed,
+///   in [LogBatch]es at most 20 a second (03 §10.1). A window 03 §8.8 refuses ends as
 ///   invalid at once; any other window gets the newest journal rows it
 ///   holds once, newest first, and ends filled, or at the oldest when it
 ///   holds them all; a file ends as [LogStreamEndReason.missing]. A

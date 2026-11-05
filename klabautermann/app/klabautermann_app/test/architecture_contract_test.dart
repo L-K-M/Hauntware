@@ -96,7 +96,8 @@ void main() {
     final offenders = <String>[];
     for (final path in _sourceDirectories) {
       final directory = Directory(path);
-      if (!directory.existsSync()) continue;
+      // A renamed directory would leave the contract checking nothing.
+      expect(directory.existsSync(), isTrue, reason: '$path is missing');
 
       for (final entity in directory.listSync(recursive: true)) {
         if (entity is! File || !entity.path.endsWith('.dart')) continue;
@@ -159,7 +160,8 @@ void main() {
       final offenders = <String>[];
       for (final path in _sourceDirectories) {
         final directory = Directory(path);
-        if (!directory.existsSync()) continue;
+        // A renamed directory would leave the contract checking nothing.
+        expect(directory.existsSync(), isTrue, reason: '$path is missing');
         for (final entity in directory.listSync(recursive: true)) {
           if (entity is! File || !entity.path.endsWith('.dart')) continue;
           for (final match in _terminalImport.allMatches(

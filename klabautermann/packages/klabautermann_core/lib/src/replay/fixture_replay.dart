@@ -274,7 +274,7 @@ const _batchInterval = Duration(
   microseconds: Duration.microsecondsPerSecond ~/ kMaxLogBatchesPerSecond,
 );
 
-/// A stand-in for the follower K26 builds (03 §7.6, §10.1): it takes
+/// The replay's stand-in for `LogFollower` (03 §7.6, §10.1): it takes
 /// `journalctl -f -o json` output in the chunks a channel delivers,
 /// decodes and splits it into lines, parses each into a [JournalRecord]
 /// and hands out [LogBatch]es on a 50 ms beat, never more than

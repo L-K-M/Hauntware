@@ -190,6 +190,7 @@ void main() {
       for (final command in starts) {
         expect(command, contains(r'--label "$run_label"'), reason: command);
         expect(command, isNot(contains('--privileged')), reason: command);
+        _expectNoHostAccess(command);
         expect(command, isNot(matches(RegExp(r'\s(-p|--publish)\b'))));
         expect(command, isNot(matches(RegExp(r'\s(-v|--volume|--mount)\b'))));
       }
@@ -727,6 +728,7 @@ void main() {
         expect(command, contains(r'--label "$run_label"'), reason: command);
         expect(command, contains('--network none'), reason: command);
         expect(command, isNot(contains('--privileged')), reason: command);
+        _expectNoHostAccess(command);
         expect(command, isNot(matches(RegExp(r'\s(-p|--publish)\b'))));
         expect(command, isNot(matches(RegExp(r'\s(-v|--volume|--mount)\b'))));
       }
@@ -864,6 +866,7 @@ void main() {
       expect(command, contains(r'--label "$run_label"'));
       expect(command, contains('--network none'));
       expect(command, isNot(contains('--privileged')));
+      _expectNoHostAccess(command);
       expect(command, isNot(matches(RegExp(r'\s(-p|--publish)\b'))));
       expect(command, isNot(matches(RegExp(r'\s(-v|--volume|--mount)\b'))));
       expect(
@@ -933,6 +936,24 @@ String _function(String script, String name) {
   final start = script.indexOf('\n$name() {\n');
   if (start < 0) throw StateError('no function $name');
   return script.substring(start, script.indexOf('\n}\n', start));
+}
+
+/// A capture container gets no way into the host: no host namespaces,
+/// added capabilities, devices or GPUs, on top of `--privileged`, which
+/// each caller checks.
+void _expectNoHostAccess(String command) {
+  expect(
+    command,
+    isNot(
+      matches(RegExp(r'--(pid|ipc|uts|userns|cgroupns|network|net)[= ]host\b')),
+    ),
+    reason: command,
+  );
+  expect(
+    command,
+    isNot(matches(RegExp(r'\s--(cap-add|device|gpus)\b'))),
+    reason: command,
+  );
 }
 
 /// [script]'s commands, one per logical line: continuation lines joined,
