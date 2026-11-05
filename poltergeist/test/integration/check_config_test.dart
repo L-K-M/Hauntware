@@ -195,7 +195,12 @@ void main() {
     );
 
     final verify = jobs['verify'] as YamlMap;
-    expect(verify['if'], "github.event_name == 'pull_request'");
+    // Drafts skip it like the rest of CI.
+    expect(
+      verify['if'],
+      "github.event_name == 'pull_request' && "
+      '!github.event.pull_request.draft',
+    );
     expect(verify.containsKey('permissions'), isFalse);
     expect(build('verify')['push'], isFalse);
 
