@@ -1259,6 +1259,11 @@ Future<(SSHClient, AuthKind)> _authenticateSshHost({
 }) async {
   final config = host.config;
   final credentials = host.credentials;
+  // The client keeps its callbacks while it lives, and with them every
+  // variable this scope's closures capture, so they capture the password
+  // alone: `credentials` may carry a key passphrase, which must not
+  // outlive the sign-in.
+  final password = credentials.password;
   final target = _target(config);
   void note(String message) => log?.add(message);
 
@@ -1296,7 +1301,7 @@ Future<(SSHClient, AuthKind)> _authenticateSshHost({
       onPasswordRequest: credentials.method == AuthMethod.password
           ? () {
               authKind = AuthKind.storedPassword;
-              return credentials.password;
+              return password;
             }
           : null,
       onUserInfoRequest: _keyboardInteractiveHandler(
