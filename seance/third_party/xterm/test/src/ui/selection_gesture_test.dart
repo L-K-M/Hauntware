@@ -1025,6 +1025,51 @@ void main() {
       expect(points.secondaryAnchor!.dy, closeTo(word.dy + row / 2, 0.01));
     });
 
+    // A pen's eraser end reports as an inverted stylus; both ends select.
+    for (final kind in [
+      PointerDeviceKind.stylus,
+      PointerDeviceKind.invertedStylus,
+    ]) {
+      testWidgets('${kind.name} long-press selects and reports like a finger',
+          (tester) async {
+        final terminal = Terminal();
+        final controller = TerminalController();
+        final reports = await pumpReporting(tester, terminal, controller);
+
+        final gesture = await tester.startGesture(
+          cellCenter(tester, 8, 1),
+          kind: kind,
+        );
+        await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+        expect(controller.selection, isNotNull);
+        expect(terminal.buffer.getText(controller.selection!).trim(), 'delta');
+
+        await gesture.up();
+        await tester.pump(const Duration(milliseconds: 600));
+        expect(reports, hasLength(1));
+      });
+    }
+
+    testWidgets('a mouse long-press neither selects a word nor reports',
+        (tester) async {
+      final terminal = Terminal();
+      final controller = TerminalController();
+      final reports = await pumpReporting(tester, terminal, controller);
+
+      // A held primary button is the start of a mouse drag or click, never
+      // a touch selection: no word, no toolbar report.
+      final gesture = await tester.startGesture(
+        cellCenter(tester, 8, 1),
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      expect(controller.selection, isNull);
+
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(reports, isEmpty);
+    });
+
     testWidgets('a touch double-tap reports; a mouse double-click does not',
         (tester) async {
       final terminal = Terminal();

@@ -278,9 +278,12 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
         GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
       () => LongPressGestureRecognizer(
         debugOwner: this,
+        // [seance fork] A pen selects like a finger. A mouse never does: a
+        // held button is the start of a click or drag selection.
         supportedDevices: {
           PointerDeviceKind.touch,
-          // PointerDeviceKind.mouse, // for debugging purposes only
+          PointerDeviceKind.stylus,
+          PointerDeviceKind.invertedStylus,
         },
       ),
       (LongPressGestureRecognizer instance) {

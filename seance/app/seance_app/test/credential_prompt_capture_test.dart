@@ -180,15 +180,15 @@ void main() {
           await tester.pumpAndSettle();
           expect(save(tester).onPressed, isNotNull);
 
-          // Pixels cannot show these: the password field keeps Flutter's
-          // default input flags (a null autocorrect is the platform's
-          // choice), takes focus, and submits on Enter.
+          // Pixels cannot show these: the password field keeps the
+          // keyboard from learning or suggesting the secret, takes focus,
+          // and submits on Enter.
           final password = field(tester, 'credential.password');
           expect(password.autofocus, isTrue);
           expect(password.obscureText, isTrue);
-          expect(password.autocorrect, isNull);
-          expect(password.enableSuggestions, isTrue);
-          expect(password.enableIMEPersonalizedLearning, isTrue);
+          expect(password.autocorrect, isFalse);
+          expect(password.enableSuggestions, isFalse);
+          expect(password.enableIMEPersonalizedLearning, isFalse);
           expect(password.onSubmitted, isNotNull);
         },
         finish: () async {
@@ -219,9 +219,12 @@ void main() {
           expect(key.autofocus, isFalse);
           expect(key.autocorrect, isFalse);
           expect(key.enableSuggestions, isFalse);
+          expect(key.enableIMEPersonalizedLearning, isFalse);
           final passphrase = field(tester, 'credential.passphrase');
           expect(passphrase.obscureText, isTrue);
-          expect(passphrase.autocorrect, isNull);
+          expect(passphrase.autocorrect, isFalse);
+          expect(passphrase.enableSuggestions, isFalse);
+          expect(passphrase.enableIMEPersonalizedLearning, isFalse);
           expect(passphrase.onSubmitted, isNull);
         },
         finish: () async {
