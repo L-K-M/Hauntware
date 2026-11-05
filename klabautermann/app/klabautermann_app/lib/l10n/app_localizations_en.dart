@@ -3302,8 +3302,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get servicesLogsEmpty => 'The journal holds no lines for this unit.';
 
   @override
-  String get servicesLogsRefused =>
-      'Reading unit logs is not available in this version yet.';
+  String get servicesLogsRefused => 'The engine did not open this unit\'s log.';
 
   @override
   String get servicesLogsEngineStopped =>
@@ -8535,6 +8534,16 @@ class AppLocalizationsEn extends AppLocalizations {
           'Docker cannot read this container\'s logs: driver $driver, cache disabled. Docker reads another driver\'s logs only through its local cache.',
       'other':
           'Docker cannot read this container\'s logs: its logging driver keeps none it can read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerLogsEnded(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'missing': 'The server has no such container.',
+      'invalid': 'The engine refused this log window.',
+      'other': 'The log ended.',
     });
     return '$_temp0';
   }

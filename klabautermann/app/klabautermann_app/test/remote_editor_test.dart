@@ -323,6 +323,44 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
   });
 
+  testWidgets('a review opened while a finished save reads the new base '
+      'saves against that base', (tester) async {
+    final editor = await _pump(tester);
+    await editor.answer(tester, _content(_original));
+    const mine = '$_original# mine\n';
+    await editor.type(tester, mine);
+    await editor.review(tester);
+    await tester.tap(find.text('Save to server'));
+    await tester.pump();
+    editor.engine.emit(ActionPlanned('plan-1', _preview(editor.plans.single)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Run'));
+    await tester.pumpAndSettle();
+    editor.engine.emit(
+      const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
+    );
+    await tester.pumpAndSettle();
+
+    // More edits and a review while the new base is still being read.
+    const more = '$mine# more\n';
+    await editor.type(tester, more);
+    await editor.review(tester);
+    await editor.answer(tester, _content(mine, sha: 'saved'));
+    await tester.tap(find.text('Save to server'));
+    await tester.pump();
+    await settleDiff(tester);
+
+    // The review shows again against the new base before anything goes.
+    expect(editor.plans, hasLength(1));
+    expect(find.text('+# more'), findsOneWidget);
+    await tester.tap(find.text('Save to server'));
+    await tester.pumpAndSettle();
+    expect(editor.plans, hasLength(2));
+    expect(editor.plans.last.text, more);
+    expect(editor.plans.last.baseSha256, 'saved');
+    await tester.pump(const Duration(seconds: 10));
+  });
+
   testWidgets('closing with changes asks first', (tester) async {
     final editor = await _pump(
       tester,

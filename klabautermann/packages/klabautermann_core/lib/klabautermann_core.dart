@@ -379,7 +379,10 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
         RegistryRateLimit,
         SystemDf,
         VolumeSummary,
+        bareImageId,
+        containersByImage,
         dockerSummary,
+        imageContainerCount,
         kComposeMaxScale;
 // A container's managed-by badge (DKE-10), from its inspected labels; a
 // stack's is its ComposeProject.ownership.

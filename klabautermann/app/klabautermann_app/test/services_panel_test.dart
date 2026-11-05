@@ -268,6 +268,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final subscribe = harness.engine.sentOfType<Subscribe>().last as Subscribe;
+    expect(subscribe.serverId, 'srv-1');
     expect(subscribe.streams, {SampleStream.units});
     expect(find.text('Waiting for the first list of units…'), findsOneWidget);
 
@@ -401,7 +402,7 @@ void main() {
       const RequestRejected('OpenLogStream', 'no fleet server srv-1'),
     );
     expect(
-      find.text('Reading unit logs is not available in this version yet.'),
+      find.text("The engine did not open this unit's log."),
       findsOneWidget,
     );
     expect(_line('Address in use'), findsNothing);
@@ -1000,6 +1001,7 @@ void main() {
           .sentOfType<Subscribe>()
           .cast<Subscribe>()
           .last;
+      expect(subscribe.serverId, 'srv-1');
       expect(subscribe.streams, {SampleStream.userUnits});
       // The panel's own id, so another panel on the server cannot end it.
       expect(subscribe.subscriptionId, startsWith('services.user-'));

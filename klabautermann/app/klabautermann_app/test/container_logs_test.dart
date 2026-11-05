@@ -589,7 +589,8 @@ void main() {
       });
     }
 
-    testWidgets('other ends keep the log wording and retry', (tester) async {
+    testWidgets('other ends keep the retry; a missing container and a '
+        'refused window name the container', (tester) async {
       final harness = await _pump(tester);
       await _openLogs(tester);
       await harness.status(
@@ -599,7 +600,11 @@ void main() {
           detail: 'No such container: b7e9d0c1a2f3',
         ),
       );
-      expect(find.text('The server has no such file or log tool.'), findsOne);
+      expect(find.text('The server has no such container.'), findsOne);
+      expect(
+        find.text('The server has no such file or log tool.'),
+        findsNothing,
+      );
       expect(find.text('No such container: b7e9d0c1a2f3'), findsOne);
 
       await tester.tap(find.text('Retry'));
@@ -610,6 +615,14 @@ void main() {
         const LogStreamEnded(LogStreamEndReason.failed, detail: 'HTTP 500'),
       );
       expect(find.text('Reading the log failed.'), findsOne);
+
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      await harness.status(
+        tester,
+        const LogStreamEnded(LogStreamEndReason.invalid),
+      );
+      expect(find.text('The engine refused this log window.'), findsOne);
     });
 
     testWidgets('a read that ended empty says so', (tester) async {
@@ -621,6 +634,32 @@ void main() {
       );
       expect(find.text('This container has no log lines.'), findsOne);
     });
+  });
+
+  testWidgets('closing the pane gives focus back to the button that '
+      'opened it', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.text('web-db').first);
+    await tester.pumpAndSettle();
+    final show = Focus.of(
+      tester.element(
+        find.descendant(
+          of: find.byTooltip('Show logs'),
+          matching: find.byType(Icon),
+        ),
+      ),
+    );
+    show.requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.byType(ContainerLogsPane), findsOne);
+    expect(show.hasPrimaryFocus, isFalse, reason: 'the close button took it');
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(ContainerLogsPane), findsNothing);
+    expect(show.hasPrimaryFocus, isTrue);
   });
 
   testWidgets('the pane follows only while the tab shows; Escape and the '

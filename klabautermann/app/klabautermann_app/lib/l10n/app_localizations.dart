@@ -4434,10 +4434,10 @@ abstract class AppLocalizations {
   /// **'The journal holds no lines for this unit.'**
   String get servicesLogsEmpty;
 
-  /// The app's engine cannot read logs yet and refused the request; no log lines are shown.
+  /// The app's engine refused the request to read the unit's log (a reused id, a server outside the fleet, or too many open logs on the server); no log lines are shown.
   ///
   /// In en, this message translates to:
-  /// **'Reading unit logs is not available in this version yet.'**
+  /// **'The engine did not open this unit\'s log.'**
   String get servicesLogsRefused;
 
   /// The app's engine, which starts once per launch, stopped before answering the unit-log read; no log lines are shown until the app restarts.
@@ -10791,6 +10791,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{reason, select, none{This container keeps no logs: driver none.} podman{Podman cannot read this container\'s logs: driver {driver}. Podman reads only the json-file, k8s-file and journald drivers.} cacheDisabled{Docker cannot read this container\'s logs: driver {driver}, cache disabled. Docker reads another driver\'s logs only through its local cache.} other{Docker cannot read this container\'s logs: its logging driver keeps none it can read.}}'**
   String dockerLogsDriverUnreadable(String reason, String driver);
+
+  /// Status line of a container's log when its stream ended because the server has no such container, for example after it was removed (missing), or the engine refused the requested time window (invalid). Replaces the general log status, which names files and filters.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, missing{The server has no such container.} invalid{The engine refused this log window.} other{The log ended.}}'**
+  String dockerLogsEnded(String reason);
 
   /// Stacks list: shown until the first list arrives.
   ///

@@ -716,9 +716,17 @@ class LogLiveChip extends StatelessWidget {
 /// is doing or why it stopped, with any host error output and a Retry
 /// where reading again may help; nothing while a follow runs.
 class LogStatusNotice extends StatelessWidget {
-  const LogStatusNotice({super.key, required this.panel});
+  const LogStatusNotice({
+    super.key,
+    required this.panel,
+    this.container = false,
+  });
 
   final LogsPanelController panel;
+
+  /// Whether [panel] reads a container's log, whose missing and invalid
+  /// ends name the container and its window rather than a file or filter.
+  final bool container;
 
   @override
   Widget build(BuildContext context) {
@@ -733,7 +741,11 @@ class LogStatusNotice extends StatelessWidget {
         _StatusWord.gap => Icons.info_outline,
         _ => Icons.hourglass_empty,
       },
-      text: l10n.logsPanelStatus(word.name),
+      text: switch (word) {
+        _StatusWord.missing ||
+        _StatusWord.invalid when container => l10n.dockerLogsEnded(word.name),
+        _ => l10n.logsPanelStatus(word.name),
+      },
       // The host's error output is server data, shown as sent.
       detail: switch (panel.status) {
         LogStreamEnded(:final detail?) => detail,

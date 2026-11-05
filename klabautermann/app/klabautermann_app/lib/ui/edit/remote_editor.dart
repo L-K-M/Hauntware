@@ -273,6 +273,13 @@ class _RemoteEditorState extends State<RemoteEditor> {
       path: _path,
     );
     if (save != true || !mounted) return;
+    // A save that finished meanwhile read a new base: review against that
+    // one, or this save would go out with the old hash and bounce through
+    // the conflict sheet.
+    if (!identical(_base, base)) {
+      if (_dirty) await _review();
+      return;
+    }
 
     startAction(
       context,
@@ -600,10 +607,14 @@ class _EditReview extends StatelessWidget {
       future: diff,
       builder: (context, snapshot) {
         final result = snapshot.data;
+        // The review opens only for an edited text, so a diff that could
+        // not be shown (too large, too slow, or failed) still differs; the
+        // engine checks the target's hash again when it plans the save.
         final changed = switch (result?.status) {
           UnifiedDiffStatus.differs ||
           UnifiedDiffStatus.tooLarge ||
-          UnifiedDiffStatus.timedOut => true,
+          UnifiedDiffStatus.timedOut ||
+          UnifiedDiffStatus.failed => true,
           _ => false,
         };
         return Column(
@@ -723,20 +734,22 @@ class _DiffBody extends StatelessWidget {
               final header =
                   index < 2 &&
                   (line.startsWith('+++') || line.startsWith('---'));
-              final tint = header
-                  ? null
+              // A tinted row takes its tint's own text colour, so it keeps
+              // its contrast in every theme.
+              final (tint, ink) = header
+                  ? (null, null)
                   : line.startsWith('+')
-                  ? scheme.primaryContainer
+                  ? (scheme.primaryContainer, scheme.onPrimaryContainer)
                   : line.startsWith('-')
-                  ? scheme.errorContainer
-                  : null;
+                  ? (scheme.errorContainer, scheme.onErrorContainer)
+                  : (null, null);
               return ColoredBox(
                 color: tint ?? Colors.transparent,
                 child: Text(
                   line,
                   style: line.startsWith('@@') || header
                       ? mono?.copyWith(color: scheme.onSurfaceVariant)
-                      : mono,
+                      : mono?.copyWith(color: ink),
                 ),
               );
             },

@@ -71,7 +71,13 @@ export 'src/compose/parsers.dart'
         parseComposeVersion;
 export 'src/docker_client.dart' show DockerClient, negotiateDockerClient;
 export 'src/docker_parse_result.dart' show DockerParseResult;
-export 'src/docker_summary.dart' show DockerSummary, dockerSummary;
+export 'src/docker_summary.dart'
+    show
+        DockerSummary,
+        bareImageId,
+        containersByImage,
+        dockerSummary,
+        imageContainerCount;
 export 'src/duplex.dart' show ByteDuplex, DuplexOpener, HijackedDuplex;
 export 'src/endpoints.dart' show DockerEndpoints, DockerSignal;
 export 'src/errors.dart'
