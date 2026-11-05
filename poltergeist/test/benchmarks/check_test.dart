@@ -155,19 +155,19 @@ void main() {
       final next = advanceDriftState(
         null,
         true,
-        {'tier-b/cpu'},
+        {'tier-b/controlled/runnerImage'},
         'now',
         mayReset: false,
       );
       expect(
-        next.notices['tier-b/cpu']!.consecutiveMainRuns,
+        next.notices['tier-b/controlled/runnerImage']!.consecutiveMainRuns,
         driftStaleThreshold,
       );
     });
 
     test('a fired key increments its prior streak', () {
       final prior = DriftState({
-        'tier-b/cpu': const DriftNoticeState(
+        'tier-b/controlled/runnerImage': const DriftNoticeState(
           consecutiveMainRuns: 6,
           lastSeenUtc: 'earlier',
         ),
@@ -175,11 +175,14 @@ void main() {
       final next = advanceDriftState(
         prior,
         false,
-        {'tier-b/cpu'},
+        {'tier-b/controlled/runnerImage'},
         'now',
         mayReset: false,
       );
-      expect(next.notices['tier-b/cpu']!.consecutiveMainRuns, 7);
+      expect(
+        next.notices['tier-b/controlled/runnerImage']!.consecutiveMainRuns,
+        7,
+      );
     });
 
     test('a new key starts at 1 when history is known', () {
@@ -198,7 +201,7 @@ void main() {
 
     test('an intervening run without the notice drops the streak', () {
       final prior = DriftState({
-        'tier-b/cpu': const DriftNoticeState(
+        'tier-b/controlled/runnerImage': const DriftNoticeState(
           consecutiveMainRuns: 6,
           lastSeenUtc: 'earlier',
         ),
@@ -210,12 +213,15 @@ void main() {
         'now',
         mayReset: true,
       );
-      expect(next.notices.containsKey('tier-b/cpu'), isFalse);
+      expect(
+        next.notices.containsKey('tier-b/controlled/runnerImage'),
+        isFalse,
+      );
     });
 
     test('a clean run clears every streak', () {
       final prior = DriftState({
-        'tier-b/cpu': const DriftNoticeState(
+        'tier-b/controlled/runnerImage': const DriftNoticeState(
           consecutiveMainRuns: 3,
           lastSeenUtc: 'earlier',
         ),
@@ -239,9 +245,36 @@ void main() {
         mayReset: false,
       );
       expect(
-        preserved.notices['tier-b/cpu']!.consecutiveMainRuns,
+        preserved.notices['tier-b/controlled/runnerImage']!.consecutiveMainRuns,
         3,
         reason: 'a non-clean run preserves prior streaks',
+      );
+    });
+
+    test('a preserved legacy CPU streak is dropped, not carried forward', () {
+      final prior = DriftState({
+        legacyCpuDriftKey: const DriftNoticeState(
+          consecutiveMainRuns: driftStaleThreshold,
+          lastSeenUtc: 'earlier',
+        ),
+        'tier-b/controlled/runnerImage': const DriftNoticeState(
+          consecutiveMainRuns: 3,
+          lastSeenUtc: 'earlier',
+        ),
+      });
+      // A non-clean run preserves every other streak verbatim; the CPU
+      // axis no longer keys a streak, so its leftover entry goes.
+      final next = advanceDriftState(
+        prior,
+        false,
+        const {},
+        'now',
+        mayReset: false,
+      );
+      expect(next.notices.keys, ['tier-b/controlled/runnerImage']);
+      expect(
+        next.notices['tier-b/controlled/runnerImage']!.consecutiveMainRuns,
+        3,
       );
     });
   });

@@ -5904,6 +5904,36 @@ abstract class AppLocalizations {
   /// **'The refresh limit could not be changed.'**
   String get settingsCadenceCapNotChanged;
 
+  /// Settings, Servers: the heading of the per-server admin mode memory switches (FL-16, 03 D69).
+  ///
+  /// In en, this message translates to:
+  /// **'Remember admin mode'**
+  String get settingsAdminMemoryTitle;
+
+  /// Settings, Servers: what remembering admin mode does (FL-16, 03 §8.2): it asks for the password at each launch, allows changes as root, and still ends as admin mode does.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn admin mode back on the first time you open a server after Klabautermann starts. It asks for the sudo password at each launch and never saves it. Admin mode lets you make changes on that server as root. It still ends after inactivity, when the connection drops, and on a phone or tablet when Klabautermann goes to the background. Servers where actions are not allowed stay observe-only.'**
+  String get settingsAdminMemoryDetail;
+
+  /// Settings, Servers: screen reader label of one server's admin mode memory switch (FL-16); server is the server's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Remember admin mode on {server}'**
+  String settingsAdminMemorySwitch(String server);
+
+  /// Settings, Servers: toast when a server's admin mode memory switch applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The admin mode setting changed but could not be saved. It lasts until Klabautermann quits.'**
+  String get settingsAdminMemoryNotSaved;
+
+  /// Settings, Servers: toast when a server's admin mode memory switch change failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The admin mode setting could not be changed.'**
+  String get settingsAdminMemoryNotChanged;
+
   /// Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level.
   ///
   /// In en, this message translates to:

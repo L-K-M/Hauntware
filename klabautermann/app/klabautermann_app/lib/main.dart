@@ -13,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'app.dart';
 import 'controllers/admin_controller.dart';
+import 'controllers/admin_memory.dart';
 import 'controllers/alert_center.dart';
 import 'controllers/alert_notifications.dart';
 import 'controllers/alert_rules_controller.dart';
@@ -462,6 +463,23 @@ Future<void> main(List<String> args) async {
     prefs: serverPrefs,
   );
 
+  // FL-16's admin memory, off per server until the user turns it on and
+  // device-local in settings.json, never in a pref record (D69). At a
+  // remembered server's first user-visible connect of the launch, admin
+  // mode asks for the sudo password again; it ends as any admin mode does.
+  final adminMemory = AdminMemoryController(
+    remembered: settings.adminMemory,
+    save: settings.setAdminMemory,
+  );
+  AdminRearm(
+    engine: engine,
+    admin: admin,
+    remembered: adminMemory,
+    visibleServers: monitoring.visibleServers,
+    safety: safety,
+    appLock: appLock,
+  );
+
   // The device name the host syslog line gives (SAF-13, M5 plan Q6),
   // device-local in settings.json and applied to the engine now, since it
   // names no device until told.
@@ -528,6 +546,7 @@ Future<void> main(List<String> args) async {
     accountSize: sync.accountSize,
     cadence: cadence,
     cadenceCaps: cadenceCaps,
+    adminMemory: adminMemory,
     logDisplay: logDisplay,
     timeDisplay: timeDisplay,
   );
@@ -546,6 +565,7 @@ Future<void> main(List<String> args) async {
       overviewLayout: overviewLayout,
       fleetDensity: fleetDensity,
       cadenceCaps: cadenceCaps,
+      adminMemory: adminMemory,
       deviceName: deviceName,
       safety: safety,
       appLock: appLock,

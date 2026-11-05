@@ -83,22 +83,36 @@ void main() {
     return (budgets: budgets, baseline: baseline, results: results);
   }
 
-  /// The drift fixture shared by the drift-state battery: three P1
-  /// repetitions in profile mode on a mismatching CPU model.
-  Future<String> writeDriftResults() => writeFixture(
-    'results.json',
-    _resultsJson(
-      rows: [
-        for (var i = 0; i < 3; i++)
-          _rowJson(
-            scenario: 'P1',
-            repetition: i,
-            unit: 'ms',
-            fingerprint: _fingerprintJson(mode: 'profile', cpuModel: 'new-cpu'),
-          ),
-      ],
-    ),
+  /// Three P1 repetitions in profile mode under [fingerprint].
+  Future<String> writeP1Results(Map<String, Object?> fingerprint) =>
+      writeFixture(
+        'results.json',
+        _resultsJson(
+          rows: [
+            for (var i = 0; i < 3; i++)
+              _rowJson(
+                scenario: 'P1',
+                repetition: i,
+                unit: 'ms',
+                fingerprint: fingerprint,
+              ),
+          ],
+        ),
+      );
+
+  /// The drift fixture shared by the drift-state battery: P1 on a runner
+  /// image the default baseline (image-2026) was not recorded on — a
+  /// controlled-axis drift that keys `tier-b/controlled/runnerImage`.
+  /// Under BENCH_ENFORCE_B that mismatch also fails on its own, so
+  /// enforced streak tests assert on the "baseline stale" line itself.
+  Future<String> writeDriftResults() => writeP1Results(
+    _fingerprintJson(mode: 'profile', runnerImage: 'image-2027'),
   );
+
+  /// CPU-model-only drift against the default baseline (test-cpu): the
+  /// comparison is skipped with a notice, but no streak is keyed.
+  Future<String> writeCpuDriftResults() =>
+      writeP1Results(_fingerprintJson(mode: 'profile', cpuModel: 'new-cpu'));
 
   test('usage errors exit 64 with the usage text on stderr', () async {
     final (exitCodeValue, stdoutText, stderrText) = await runChecker(
@@ -170,10 +184,7 @@ void main() {
         'budgets.json',
         _budgetsJson(landedIds: {'P1'}),
       );
-      final baseline = await writeFixture(
-        'baseline.json',
-        _baselineJson(cpuModel: 'baseline-cpu'),
-      );
+      final baseline = await writeFixture('baseline.json', _baselineJson());
       final results = await writeDriftResults();
       // Exists but unreadable (EACCES): history loss, not an exit-74 abort —
       // the usage text promises "missing/unreadable means unknown history".
@@ -216,6 +227,9 @@ void main() {
         );
         expect(exitCodeValue, 1, reason: 'conservative counting reddens');
         expect(stdoutText, contains('drift history unknown'));
+        // The enforced controlled mismatch fails on its own; the stale
+        // line is what proves the unknown history counted conservatively.
+        expect(stdoutText, contains('baseline stale — refresh required'));
       } finally {
         await Process.run('chmod', ['644', locked.path]);
       }
@@ -1391,17 +1405,14 @@ void main() {
     });
   });
 
-  group('drift-state progression (tier-B CPU axis)', () {
-    test('six runs stay green, the seventh reddens once enforced, and a '
-        'clean run resets', () async {
+  group('drift-state progression (tier-B controlled axis)', () {
+    test('six runs stay below the threshold, the seventh adds the stale '
+        'failure once enforced, and a clean run resets', () async {
       final budgets = await writeFixture(
         'budgets.json',
         _budgetsJson(landedIds: {'P1'}),
       );
-      final baseline = await writeFixture(
-        'baseline.json',
-        _baselineJson(cpuModel: 'baseline-cpu'),
-      );
+      final baseline = await writeFixture('baseline.json', _baselineJson());
       final results = await writeDriftResults();
       final statePath = pathOf('drift-state.json');
       // A prior clean main run's state: the progression below then counts
@@ -1411,6 +1422,8 @@ void main() {
         jsonEncode(const DriftState({}).toJson('2026-09-14T00:00:00Z')),
       );
 
+      // Every enforced run fails on the controlled mismatch itself; the
+      // streak shows only in whether the "baseline stale" line joins it.
       for (var run = 1; run < driftStaleThreshold; run++) {
         final (exitCodeValue, stdoutText, _) = await runChecker(
           arguments: [
@@ -1428,25 +1441,27 @@ void main() {
           ],
           environment: {'BENCH_ENFORCE_B': '1'},
         );
-        expect(exitCodeValue, 0, reason: 'run $run must not redden');
+        expect(exitCodeValue, 1, reason: 'run $run: controlled mismatch');
         expect(
           stdoutText,
-          contains(
-            'hardware drift — refresh the '
-            'baseline',
-          ),
+          contains('FAIL: tier-B baseline controlled axis runnerImage'),
+        );
+        expect(
+          stdoutText,
+          isNot(contains('baseline stale')),
+          reason: 'run $run must not escalate',
         );
         final state = DriftState.fromJson(
           jsonDecode(await File(statePath).readAsString()),
         );
         expect(
-          state.notices['tier-b/cpu']!.consecutiveMainRuns,
+          state.notices['tier-b/controlled/runnerImage']!.consecutiveMainRuns,
           run,
           reason: 'run $run must count up',
         );
       }
 
-      // The seventh consecutive drift run reddens.
+      // The seventh consecutive drift run escalates.
       final (seventhExit, seventhOut, _) = await runChecker(
         arguments: [
           '--results',
@@ -1464,25 +1479,17 @@ void main() {
         environment: {'BENCH_ENFORCE_B': '1'},
       );
       expect(seventhExit, 1);
-      expect(seventhOut, contains('baseline stale — refresh required'));
+      expect(
+        seventhOut,
+        contains(
+          'baseline stale — refresh required: drift notice '
+          'tier-b/controlled/runnerImage',
+        ),
+      );
 
       // An intervening clean main run resets the count.
-      final cleanResults = await writeFixture(
-        'clean.json',
-        _resultsJson(
-          rows: [
-            for (var i = 0; i < 3; i++)
-              _rowJson(
-                scenario: 'P1',
-                repetition: i,
-                unit: 'ms',
-                fingerprint: _fingerprintJson(
-                  mode: 'profile',
-                  cpuModel: 'baseline-cpu',
-                ),
-              ),
-          ],
-        ),
+      final cleanResults = await writeP1Results(
+        _fingerprintJson(mode: 'profile'),
       );
       final (cleanExit, _, _) = await runChecker(
         arguments: [
@@ -1512,18 +1519,14 @@ void main() {
         'budgets.json',
         _budgetsJson(landedIds: {'P1'}),
       );
-      final baseline = await writeFixture(
-        'baseline.json',
-        _baselineJson(cpuModel: 'baseline-cpu'),
-      );
+      final baseline = await writeFixture('baseline.json', _baselineJson());
       final results = await writeDriftResults();
       final statePath = pathOf('drift-state.json');
       await File(statePath).writeAsString(
         jsonEncode(const DriftState({}).toJson('2026-09-14T00:00:00Z')),
       );
-      var (exitCodeValue, stdoutText, _) = (0, '', '');
-      for (var run = 0; run < driftStaleThreshold; run++) {
-        (exitCodeValue, stdoutText, _) = await runChecker(
+      for (var run = 1; run <= driftStaleThreshold; run++) {
+        final (exitCodeValue, stdoutText, _) = await runChecker(
           arguments: [
             '--results',
             results,
@@ -1539,12 +1542,14 @@ void main() {
           ],
         );
         expect(exitCodeValue, 0, reason: 'soft mode reddens nothing here');
+        expect(
+          stdoutText.contains('red once BENCH_ENFORCE_B is set'),
+          run >= driftStaleThreshold,
+          reason:
+              'run $run: the threshold crossing is still announced '
+              'while soft, and only once reached',
+        );
       }
-      expect(
-        stdoutText,
-        contains('red once BENCH_ENFORCE_B is set'),
-        reason: 'the threshold crossing is still announced while soft',
-      );
     });
 
     test('PR invocations never mutate state', () async {
@@ -1552,10 +1557,7 @@ void main() {
         'budgets.json',
         _budgetsJson(landedIds: {'P1'}),
       );
-      final baseline = await writeFixture(
-        'baseline.json',
-        _baselineJson(cpuModel: 'baseline-cpu'),
-      );
+      final baseline = await writeFixture('baseline.json', _baselineJson());
       final results = await writeDriftResults();
       final statePath = pathOf('drift-state.json');
       await runChecker(
@@ -1587,30 +1589,13 @@ void main() {
           'budgets.json',
           _budgetsJson(landedIds: {'P1'}),
         );
-        final baseline = await writeFixture(
-          'baseline.json',
-          _baselineJson(cpuModel: 'baseline-cpu'),
-        );
-        final results = await writeFixture(
-          'results.json',
-          _resultsJson(
-            rows: [
-              for (var i = 0; i < 3; i++)
-                _rowJson(
-                  scenario: 'P1',
-                  repetition: i,
-                  unit: 'ms',
-                  fingerprint: _fingerprintJson(
-                    mode: 'profile',
-                    cpuModel: 'new-cpu',
-                  ),
-                ),
-            ],
-          ),
-        );
+        final baseline = await writeFixture('baseline.json', _baselineJson());
+        final results = await writeDriftResults();
 
         // No state file at all: unknown history escalates immediately under
-        // enforcement instead of restarting from a fresh count.
+        // enforcement instead of restarting from a fresh count. The
+        // controlled mismatch fails on its own, so the stale line is the
+        // evidence of conservative counting.
         var (exitCodeValue, stdoutText, _) = await runChecker(
           arguments: [
             '--results',
@@ -1650,6 +1635,7 @@ void main() {
         );
         expect(exitCodeValue, 1);
         expect(stdoutText, contains('drift history unknown'));
+        expect(stdoutText, contains('baseline stale — refresh required'));
       },
     );
 
@@ -1676,6 +1662,180 @@ void main() {
           '--update-drift-state requires --tiers '
           'including b',
         ),
+      );
+    });
+  });
+
+  // Owner decision (2026-11-04): the CPU axis follows runner assignment,
+  // which no baseline refresh can change, so a CPU-model mismatch skips
+  // the comparison with a notice but never keys or grades a streak.
+  group('CPU-model drift never escalates', () {
+    /// One tier-B call against landed P1 and the default baseline
+    /// (test-cpu, image-2026); enforced unless [environment] says not.
+    Future<(int, String, String)> runTierB({
+      required String results,
+      required String statePath,
+      required DriftRunKind runKind,
+      Map<String, String> environment = const {'BENCH_ENFORCE_B': '1'},
+      Set<String> landedIds = const {'P1'},
+    }) async => runChecker(
+      arguments: [
+        '--results',
+        results,
+        '--tiers',
+        'b',
+        '--budgets',
+        await writeFixture('budgets.json', _budgetsJson(landedIds: landedIds)),
+        '--baseline',
+        await writeFixture('baseline.json', _baselineJson()),
+        '--drift-state',
+        statePath,
+        if (runKind == DriftRunKind.mainRun) '--update-drift-state',
+      ],
+      environment: environment,
+    );
+
+    test('consecutive enforced main runs on another CPU model stay green '
+        'and key no streak', () async {
+      final results = await writeCpuDriftResults();
+      final statePath = pathOf('state.json');
+      await File(statePath).writeAsString(
+        jsonEncode(const DriftState({}).toJson('2026-09-14T00:00:00Z')),
+      );
+      for (var run = 1; run <= driftStaleThreshold + 1; run++) {
+        final (exitCodeValue, stdoutText, _) = await runTierB(
+          results: results,
+          statePath: statePath,
+          runKind: DriftRunKind.mainRun,
+        );
+        expect(exitCodeValue, 0, reason: 'run $run: $stdoutText');
+        expect(
+          stdoutText,
+          contains('tier-B CPU model mismatch (test-cpu != new-cpu)'),
+        );
+        expect(stdoutText, isNot(contains('stale')), reason: 'run $run');
+        final state = DriftState.fromJson(
+          jsonDecode(await File(statePath).readAsString()),
+        );
+        expect(
+          state.notices.keys,
+          isNot(contains(legacyCpuDriftKey)),
+          reason: 'run $run',
+        );
+      }
+
+      // Unknown history counts conservatively only for keys that fire,
+      // and CPU drift fires none.
+      final (unknownExit, unknownOut, _) = await runTierB(
+        results: results,
+        statePath: pathOf('never-existed.json'),
+        runKind: DriftRunKind.mainRun,
+      );
+      expect(unknownExit, 0, reason: unknownOut);
+      expect(unknownOut, contains('drift history unknown'));
+      expect(unknownOut, isNot(contains('stale')));
+    });
+
+    test('a persisted legacy CPU streak never reddens, and the next '
+        'writing main run drops it', () async {
+      final statePath = pathOf('state.json');
+      await File(statePath).writeAsString(
+        jsonEncode(
+          const DriftState({
+            legacyCpuDriftKey: DriftNoticeState(
+              consecutiveMainRuns: driftStaleThreshold + 1,
+              lastSeenUtc: '2026-09-14T00:00:00Z',
+            ),
+          }).toJson('2026-09-14T00:00:00Z'),
+        ),
+      );
+      final cpuResults = await writeCpuDriftResults();
+      // Read-only first, so it sees the legacy entry whatever the main
+      // run then does with it.
+      for (final runKind in [DriftRunKind.readOnly, DriftRunKind.mainRun]) {
+        final (exitCodeValue, stdoutText, _) = await runTierB(
+          results: cpuResults,
+          statePath: statePath,
+          runKind: runKind,
+        );
+        expect(exitCodeValue, 0, reason: '$runKind: $stdoutText');
+        expect(stdoutText, isNot(contains('stale')), reason: '$runKind');
+      }
+
+      // A CPU-only run has nothing to record, so the legacy entry goes
+      // with the next main run that writes the store — here a soft
+      // controlled-axis drift, which otherwise preserves prior streaks.
+      final (driftExit, driftOut, _) = await runTierB(
+        results: await writeDriftResults(),
+        statePath: statePath,
+        runKind: DriftRunKind.mainRun,
+        environment: const {},
+      );
+      expect(driftExit, 0, reason: driftOut);
+      final state = DriftState.fromJson(
+        jsonDecode(await File(statePath).readAsString()),
+      );
+      expect(state.notices.keys, ['tier-b/controlled/runnerImage']);
+    });
+
+    test('a clean CPU-drift run clears a stale controlled streak', () async {
+      // Main run 41209440287's first attempt: right after a runner-image
+      // refresh, a run on another CPU matched every controlled axis but
+      // still failed on the streak it could not clear.
+      final statePath = pathOf('state.json');
+      await File(statePath).writeAsString(
+        jsonEncode(
+          DriftState({
+            'tier-b/controlled/runnerImage': DriftNoticeState(
+              consecutiveMainRuns: driftStaleThreshold + 7,
+              lastSeenUtc: '2026-09-14T00:00:00Z',
+            ),
+          }).toJson('2026-09-14T00:00:00Z'),
+        ),
+      );
+
+      final (exitCodeValue, stdoutText, stderrText) = await runTierB(
+        results: await writeCpuDriftResults(),
+        statePath: statePath,
+        runKind: DriftRunKind.mainRun,
+      );
+      expect(exitCodeValue, 0, reason: '$stdoutText\n$stderrText');
+      expect(stdoutText, contains('tier-B CPU model mismatch'));
+      expect('$stdoutText$stderrText', isNot(contains('stale')));
+      final state = DriftState.fromJson(
+        jsonDecode(await File(statePath).readAsString()),
+      );
+      expect(state.notices, isEmpty);
+    });
+
+    test('a CPU-drift run with a failing gate keeps controlled streaks',
+        () async {
+      final statePath = pathOf('state.json');
+      final prior = DriftState({
+        'tier-b/controlled/runnerImage': const DriftNoticeState(
+          consecutiveMainRuns: 3,
+          lastSeenUtc: '2026-09-14T00:00:00Z',
+        ),
+      });
+      await File(statePath).writeAsString(
+        jsonEncode(prior.toJson('2026-09-14T00:00:00Z')),
+      );
+
+      // P2 is landed but has no rows: the missing scenario fails the run,
+      // so it is no clean observation even though only the CPU drifted.
+      final (exitCodeValue, stdoutText, _) = await runTierB(
+        results: await writeCpuDriftResults(),
+        statePath: statePath,
+        runKind: DriftRunKind.mainRun,
+        landedIds: {'P1', 'P2'},
+      );
+      expect(exitCodeValue, 1, reason: stdoutText);
+      final state = DriftState.fromJson(
+        jsonDecode(await File(statePath).readAsString()),
+      );
+      expect(
+        state.notices['tier-b/controlled/runnerImage']!.consecutiveMainRuns,
+        3,
       );
     });
   });
@@ -1870,14 +2030,11 @@ void main() {
       'budgets.json',
       _budgetsJson(landedIds: {'P1'}),
     );
-    final baseline = await writeFixture(
-      'baseline.json',
-      _baselineJson(cpuModel: 'baseline-cpu'),
-    );
+    final baseline = await writeFixture('baseline.json', _baselineJson());
     final results = await writeDriftResults();
     final statePath = pathOf('state.json');
     final seven = const DriftState({
-      'tier-b/cpu': DriftNoticeState(
+      'tier-b/controlled/runnerImage': DriftNoticeState(
         consecutiveMainRuns: driftStaleThreshold,
         lastSeenUtc: '2026-09-14T00:00:00Z',
       ),
@@ -1899,12 +2056,17 @@ void main() {
       ],
       environment: {'BENCH_ENFORCE_B': '1'},
     );
+    // The enforced controlled mismatch fails on its own; the stale line
+    // is what shows the persisted streak was graded.
+    expect(exitCodeValue, 1);
     expect(
-      exitCodeValue,
-      1,
+      stdoutText,
+      contains(
+        'baseline stale — refresh required: drift notice '
+        'tier-b/controlled/runnerImage',
+      ),
       reason: 'seven actual main drift runs already happened',
     );
-    expect(stdoutText, contains('baseline stale — refresh required'));
   });
 
   test(
@@ -1914,16 +2076,13 @@ void main() {
         'budgets.json',
         _budgetsJson(landedIds: {'P1'}),
       );
-      final baseline = await writeFixture(
-        'baseline.json',
-        _baselineJson(cpuModel: 'baseline-cpu'),
-      );
+      final baseline = await writeFixture('baseline.json', _baselineJson());
       final results = await writeDriftResults();
       final statePath = pathOf('state.json');
       // Six actual main drift runs are six for this PR too; the seventh
       // escalation belongs to an actual main run, not a read-only call.
       final six = const DriftState({
-        'tier-b/cpu': DriftNoticeState(
+        'tier-b/controlled/runnerImage': DriftNoticeState(
           consecutiveMainRuns: 6,
           lastSeenUtc: '2026-09-14T00:00:00Z',
         ),
@@ -1946,7 +2105,12 @@ void main() {
         ],
         environment: {'BENCH_ENFORCE_B': '1'},
       );
-      expect(exitCodeValue, 0, reason: stdoutText);
+      // Exit 1 comes from the enforced controlled mismatch alone.
+      expect(exitCodeValue, 1, reason: stdoutText);
+      expect(
+        stdoutText,
+        contains('FAIL: tier-B baseline controlled axis runnerImage'),
+      );
       expect(stdoutText, isNot(contains('baseline stale')));
       expect(
         await File(statePath).readAsString(),
@@ -2165,12 +2329,9 @@ void main() {
       _budgetsJson(landedIds: {'P1'}),
     );
     // Same failing shape, but the observed environment genuinely moved:
-    // the CPU axis counts even though P1's comparison never ran —
+    // the runner image counts even though P1's comparison never ran —
     // measurement validity, drift, and budget failures are distinct.
-    final baseline = await writeFixture(
-      'baseline.json',
-      _baselineJson(cpuModel: 'baseline-cpu'),
-    );
+    final baseline = await writeFixture('baseline.json', _baselineJson());
     final results = await writeFixture(
       'results.json',
       _resultsJson(
@@ -2179,14 +2340,17 @@ void main() {
             scenario: 'P2',
             repetition: 0,
             unit: 'ms',
-            fingerprint: _fingerprintJson(mode: 'profile'),
+            fingerprint: _fingerprintJson(
+              mode: 'profile',
+              runnerImage: 'image-2027',
+            ),
           ),
         ],
       ),
     );
     final statePath = pathOf('state.json');
     final six = const DriftState({
-      'tier-b/cpu': DriftNoticeState(
+      'tier-b/controlled/runnerImage': DriftNoticeState(
         consecutiveMainRuns: 6,
         lastSeenUtc: '2026-09-14T00:00:00Z',
       ),
@@ -2214,7 +2378,7 @@ void main() {
       jsonDecode(await File(statePath).readAsString()),
     );
     expect(
-      state.notices['tier-b/cpu']!.consecutiveMainRuns,
+      state.notices['tier-b/controlled/runnerImage']!.consecutiveMainRuns,
       7,
       reason: 'an observed environment drift must keep counting',
     );
@@ -2277,27 +2441,8 @@ void main() {
       'budgets.json',
       _budgetsJson(landedIds: {'P1'}),
     );
-    final baseline = await writeFixture(
-      'baseline.json',
-      _baselineJson(cpuModel: 'baseline-cpu'),
-    );
-    final results = await writeFixture(
-      'results.json',
-      _resultsJson(
-        rows: [
-          for (var i = 0; i < 3; i++)
-            _rowJson(
-              scenario: 'P1',
-              repetition: i,
-              unit: 'ms',
-              fingerprint: _fingerprintJson(
-                mode: 'profile',
-                cpuModel: 'new-cpu',
-              ),
-            ),
-        ],
-      ),
-    );
+    final baseline = await writeFixture('baseline.json', _baselineJson());
+    final results = await writeDriftResults();
     final unrelated = File(pathOf('unrelated.json'));
     await unrelated.writeAsString('keep me');
     final statePath = pathOf('nested/state.json');
@@ -2316,10 +2461,10 @@ void main() {
         '--update-drift-state',
       ],
     );
-    expect(
+    final state = DriftState.fromJson(
       jsonDecode(await File(statePath).readAsString()),
-      isA<Map<String, Object?>>(),
     );
+    expect(state.notices.keys, ['tier-b/controlled/runnerImage']);
     expect(
       await File('$statePath.tmp').exists(),
       isFalse,

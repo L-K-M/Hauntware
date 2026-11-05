@@ -8,6 +8,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
     show MonitorEligibility, kAdminExpiryChoices, kMonitorSetLimit;
 
 import '../controllers/account_size.dart';
+import '../controllers/admin_memory.dart';
 import '../controllers/announcement_controller.dart';
 import '../controllers/cadence_controller.dart';
 import '../controllers/app_lock_controller.dart';
@@ -49,6 +50,7 @@ class SettingsPage extends StatefulWidget {
     this.thresholds,
     this.cadence,
     this.cadenceCaps,
+    this.adminMemory,
     this.logDisplay,
     this.timeDisplay,
     this.deviceName,
@@ -76,6 +78,10 @@ class SettingsPage extends StatefulWidget {
   /// The per-server caps (SAF-19) in Servers; null in tests that leave
   /// them out, where Servers shows none.
   final CadenceCapSettings? cadenceCaps;
+
+  /// FL-16's per-server admin memory in Servers; null in tests that leave
+  /// it out, where Servers shows none.
+  final AdminMemorySettings? adminMemory;
 
   /// The log text size and wrapping (A11Y-12) in General; null in tests
   /// that leave it out, where General shows neither.
@@ -190,6 +196,7 @@ class _SettingsPageState extends State<SettingsPage>
               SettingsTab.servers => ServersTab(
                 monitorSet: widget.monitorSet,
                 cadenceCaps: widget.cadenceCaps,
+                adminMemory: widget.adminMemory,
               ),
               SettingsTab.sync when widget.syncSecrets != null => SyncTab(
                 syncSecrets: widget.syncSecrets!,
@@ -767,14 +774,48 @@ class SyncTab extends StatelessWidget {
 /// fleet server in fleet order. A server that cannot join says why and
 /// its switch is off and disabled; one more than the set holds says the
 /// set is full when its switch is turned on. Below it, each server's
-/// polling cap (SAF-19) when [cadenceCaps] is given.
+/// polling cap (SAF-19) when [cadenceCaps] is given, and its admin memory
+/// switch (FL-16) when [adminMemory] is given.
 class ServersTab extends StatelessWidget {
-  const ServersTab({super.key, required this.monitorSet, this.cadenceCaps});
+  const ServersTab({
+    super.key,
+    required this.monitorSet,
+    this.cadenceCaps,
+    this.adminMemory,
+  });
 
   final MonitorSetSettings monitorSet;
 
   /// As [SettingsPage.cadenceCaps].
   final CadenceCapSettings? cadenceCaps;
+
+  /// As [SettingsPage.adminMemory].
+  final AdminMemorySettings? adminMemory;
+
+  /// Turns [serverId]'s admin memory on or off and says in a toast when
+  /// that applied but was not saved, or did not apply, as [_setCap] does.
+  Future<void> _setRemembered(
+    BuildContext context,
+    AdminMemorySettings memory,
+    String serverId, {
+    required bool remembered,
+  }) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await memory.setRemembered(serverId, remembered: remembered);
+    } on AdminMemoryNotSavedException catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsAdminMemoryNotSaved);
+      }
+    } on Exception catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsAdminMemoryNotChanged);
+      }
+    }
+  }
 
   /// Caps [serverId] at [cap] and says in a toast when that applied but
   /// was not saved, or did not apply, as General's preset does.
@@ -806,8 +847,9 @@ class ServersTab extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final textTheme = Theme.of(context).textTheme;
     final caps = cadenceCaps;
+    final memory = adminMemory;
     return ListenableBuilder(
-      listenable: Listenable.merge([monitorSet, ?caps]),
+      listenable: Listenable.merge([monitorSet, ?caps, ?memory]),
       builder: (context, _) {
         final candidates = monitorSet.value;
         final monitored = candidates.where((c) => c.monitored).length;
@@ -921,6 +963,39 @@ class ServersTab extends StatelessWidget {
                     ],
                     onChanged: (cap) => unawaited(
                       _setCap(context, caps, candidate.serverId, cap),
+                    ),
+                  ),
+                ),
+            ],
+            if (memory != null && candidates.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Semantics(
+                header: true,
+                child: Text(
+                  l10n.settingsAdminMemoryTitle,
+                  style: textTheme.titleSmall,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(l10n.settingsAdminMemoryDetail, style: textTheme.bodyMedium),
+              for (final candidate in candidates)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: memory.value.contains(candidate.serverId),
+                  onChanged: (remembered) => unawaited(
+                    _setRemembered(
+                      context,
+                      memory,
+                      candidate.serverId,
+                      remembered: remembered,
+                    ),
+                  ),
+                  // The monitor set's switch above carries the same name,
+                  // so a screen reader hears which switch this is.
+                  title: Text(
+                    candidate.label,
+                    semanticsLabel: l10n.settingsAdminMemorySwitch(
+                      candidate.label,
                     ),
                   ),
                 ),

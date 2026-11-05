@@ -13,6 +13,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
         SyncStoreIssue;
 
 import 'controllers/admin_controller.dart';
+import 'controllers/admin_memory.dart';
 import 'controllers/alert_center.dart';
 import 'controllers/alert_notifications.dart';
 import 'controllers/alert_rules_controller.dart';
@@ -103,6 +104,7 @@ class KlabautermannApp extends StatelessWidget {
     this.overviewLayout,
     this.fleetDensity,
     this.cadenceCaps,
+    this.adminMemory,
     this.deviceName,
     this.safety,
     this.appLock,
@@ -167,6 +169,10 @@ class KlabautermannApp extends StatelessWidget {
   /// The per-server caps (SAF-19) in Settings > Servers; null in tests
   /// that leave them out.
   final CadenceCapsController? cadenceCaps;
+
+  /// FL-16's per-server admin memory in Settings > Servers; null in tests
+  /// that leave it out.
+  final AdminMemoryController? adminMemory;
 
   /// The safety preferences the engine enforces (M4 plan M4); like
   /// [appearance], they outlive an engine run. Null in tests that leave
@@ -609,6 +615,7 @@ class KlabautermannApp extends StatelessWidget {
               thresholds: thresholds,
               cadence: cadence,
               cadenceCaps: cadenceCaps,
+              adminMemory: adminMemory,
               logDisplay: logDisplay,
               timeDisplay: timeDisplay,
               deviceName: deviceName,
