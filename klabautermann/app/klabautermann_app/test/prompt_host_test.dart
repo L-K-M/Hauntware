@@ -569,4 +569,149 @@ void main() {
       expect(_answers(harness.engine), ['p-1: secret null']);
     });
   });
+
+  group('the key passphrase prompt (03 §4.5, D70)', () {
+    final title = find.text('Key passphrase for web-1');
+    final passphrase = find.descendant(
+      of: find.byType(Dialog),
+      matching: find.byType(TextField),
+    );
+    final connect = find.widgetWithText(FilledButton, 'Connect');
+    const never =
+        'Used for this connection only and never saved. '
+        'Klabautermann asks again next time.';
+
+    testWidgets('names the server, account and key file, masks the '
+        'passphrase, and sends it unsaved', (tester) async {
+      final harness = await pumpApp(tester, servers: twoServers);
+      harness.engine.emit(
+        _prompt(
+          'p-1',
+          const KeyPassphrasePromptRequest(
+            user: 'deploy',
+            keyPath: '~/.ssh/id_ed25519',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(title, findsOneWidget);
+      expect(find.text('deploy@web-1.example:22'), findsOneWidget);
+      expect(find.text('Key file'), findsOneWidget);
+      expect(find.text('~/.ssh/id_ed25519'), findsOneWidget);
+      expect(find.text(never), findsOneWidget);
+      // No vault offer: a passphrase is never kept.
+      expect(
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.byType(Checkbox),
+        ),
+        findsNothing,
+      );
+      expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+
+      await tester.enterText(passphrase, 'correct horse');
+      await tester.pump();
+      final field = tester.widget<TextField>(passphrase);
+      expect(field.obscureText, isTrue);
+      expect(field.autocorrect, isFalse);
+      expect(field.enableSuggestions, isFalse);
+      expect(field.enableIMEPersonalizedLearning, isFalse);
+      await tester.tap(connect);
+      await tester.pumpAndSettle();
+
+      expect(_answers(harness.engine), ['p-1: secret correct horse']);
+      expect(title, findsNothing);
+    });
+
+    testWidgets('says when the last passphrase did not open the key', (
+      tester,
+    ) async {
+      final harness = await pumpApp(tester, servers: twoServers);
+      harness.engine.emit(
+        _prompt(
+          'p-1',
+          const KeyPassphrasePromptRequest(
+            user: 'deploy',
+            keyPath: '~/.ssh/id_ed25519',
+            retry: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('That passphrase did not open the key.'),
+        findsOneWidget,
+      );
+      expect(find.text(never), findsNothing);
+      await tester.enterText(passphrase, 'correct horse');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(_answers(harness.engine), ['p-1: secret correct horse']);
+    });
+
+    testWidgets('a key the vault holds is asked for without a file', (
+      tester,
+    ) async {
+      final harness = await pumpApp(tester, servers: twoServers);
+      harness.engine.emit(
+        _prompt('p-1', const KeyPassphrasePromptRequest(user: 'deploy')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(title, findsOneWidget);
+      expect(find.text('Key file'), findsNothing);
+      expect(find.text('Passphrase'), findsOneWidget);
+      await tester.enterText(passphrase, 'correct horse');
+      await tester.pump();
+      await tester.tap(connect);
+      await tester.pumpAndSettle();
+      expect(_answers(harness.engine), ['p-1: secret correct horse']);
+    });
+
+    testWidgets('Cancel answers none', (tester) async {
+      final harness = await pumpApp(tester, servers: twoServers);
+      harness.engine.emit(
+        _prompt(
+          'p-1',
+          const KeyPassphrasePromptRequest(
+            user: 'deploy',
+            keyPath: '~/.ssh/id_ed25519',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(passphrase, 'half typed');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(_answers(harness.engine), ['p-1: secret null']);
+      expect(title, findsNothing);
+    });
+
+    testWidgets('a withdrawn prompt closes the dialog unanswered', (
+      tester,
+    ) async {
+      final harness = await pumpApp(tester, servers: twoServers);
+      harness.engine.emit(
+        _prompt(
+          'p-1',
+          const KeyPassphrasePromptRequest(
+            user: 'deploy',
+            keyPath: '~/.ssh/id_ed25519',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(passphrase, 'half typed');
+      harness.engine.emit(
+        const PromptWithdrawn('p-1', PromptWithdrawnReason.expired),
+      );
+      await tester.pumpAndSettle();
+
+      expect(title, findsNothing);
+      expect(_answers(harness.engine), isEmpty);
+    });
+  });
 }

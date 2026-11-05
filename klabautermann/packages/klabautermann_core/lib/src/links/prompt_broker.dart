@@ -128,6 +128,7 @@ final class PromptBroker {
               answer is PromptResponsesAnswer &&
                   answer.responses.length == questions.length,
         CredentialPromptRequest() ||
+        KeyPassphrasePromptRequest() ||
         ElevationPromptRequest() => answer is PromptSecretAnswer,
       };
 }

@@ -12,8 +12,9 @@ MVP preview), M5's editing, shells and sync writes (v1 part 1) and M6's
 breadth (v1 part 2) are on main. M3, M5 and M6 met all of their
 automated exits and M4 all but one ([M3 exit](#m3-exit),
 [M4 exit](#m4-exit), [M5 exit](#m5-exit) and [M6 exit](#m6-exit),
-below); M4's remaining case, a sudo rule scoped to `docker`, waits on a
-decision. M7, v1 hardening and release readiness, is under way
+below); M4's remaining case, a sudo rule scoped to `docker`, stays as
+built by the owner's decision of 2026-11-04 (below). M7, v1 hardening
+and release readiness, is under way
 ([M7 progress](#m7-progress), below).
 The real-host and device checks stay open under the manual gates. What
 is on main:
@@ -629,9 +630,9 @@ is on main:
   the process lacks exclusive access to the support directory, D61).
   Only interactive connects prompt: background connects decline a
   first-seen host key and offer no keyboard-interactive, and a changed
-  key blocks the link until the user's connect reviews it (K44a). There
-  is no passphrase prompt yet; the app shows the host-key and
-  keyboard-interactive prompts (K43). The engine
+  key blocks the link until the user's connect reviews it (K44a). The
+  app shows the host-key and keyboard-interactive prompts (K43), and
+  since K45b an encrypted key's passphrase prompt (below). The engine
   wires the connector and the broker in behind links, which the app
   turns on since K44b (below).
 - Link supervisor (M2, 03 §5.1, §5.12, K19a, #206): `LinkSupervisor`
@@ -769,16 +770,54 @@ is on main:
   an invalid route or a host-key refusal without a declined prompt
   stays unclassified. Inside Flatpak a key file the sandbox hides is the
   new `keyFileHiddenBySandbox`. The supervisor's prompt decision is
-  exhaustive over the kinds, and it neither redials a
-  `keyPassphraseRequired` failure nor hands an unattended one to the
-  user's request, since no prompt can fix it yet. Every kind has ARB
-  copy: the server header shows it under its facts, and the fleet row
-  adds it to its tooltip and screen-reader label, not its visible line.
-  Until a passphrase prompt (K45b, owner question O5) and the Flatpak
-  grant (O1) exist, both new kinds' copy says to load the key into
-  ssh-agent and drop the `IdentityFile` line that names it. The message
+  exhaustive over the kinds; it never redials a `keyPassphraseRequired`
+  failure, and since K45b (below) hands an unattended one to the user's
+  request. Every kind has ARB copy: the server header shows it under its
+  facts, and the fleet row adds it to its tooltip and screen-reader
+  label, not its visible line. Since K45b the passphrase kind's copy
+  says to open the server; the sandbox kind's copy says to load the key
+  into ssh-agent and drop the `IdentityFile` line that names it, since
+  the owner kept the Flatpak grant at `~/.ssh/config:ro` (O1). The message
   goes once a backoff replaces the closed state, since `LinkBackoff`
   carries no failure, and an unreachable agent stays unclassified.
+- Key passphrase prompt (K45b, owner decision O5 of 2026-11-04, 03 D70,
+  §4.5, §10.1): the user's connect asks for the passphrase of each
+  encrypted key on the route, the server's or a jump host's, that no
+  passphrase it has opens, with the new
+  `KeyPassphrasePromptRequest(user, keyPath, retry)` answered by
+  `PromptSecretAnswer`; a passphrase the vault holds is tried first. A
+  wrong one asks again with `retry`; Cancel, expiry or the attempt's end
+  fails the attempt as `keyPassphraseRequired`, and an unattended
+  connect fails that way without asking. The passphrase is never kept:
+  no vault save is offered or honoured, nothing reaches the keystore,
+  the connector drops the attempt's passphrases when it ends, and
+  `seance_core`'s authenticated client no longer captures the
+  credentials it signed in with, which its callbacks had kept alive for
+  the link's life. Each dial tries at most one new passphrase, in route
+  order, since seance_core opens every key before its first socket and
+  does not say whose key failed; a retried dial reaches no host, and a
+  key the server and a hop share is asked for once. The app shows it
+  through `ghost_servers`' secret-only credential dialog: the key file,
+  a masked field with autocorrect, suggestions and IME learning off, no
+  vault offer, and a line saying it is used for this connection only,
+  or that the last one did not open the key. Tested: the protocol round
+  trip, the broker's answer fit, the connector against real
+  ssh-keygen keys through the real `SshLink` (prompt, retry, dismissal,
+  expiry, abandonment, unattended, stored passphrase, a hop's own key,
+  a shared key, no socket before a key opens, nothing written to the
+  support directory, no credentials held by the callbacks a link
+  keeps), the supervisor's hand-over, an engine round trip over the
+  isolate boundary, seance_core's retention of the credentials by an
+  open client and link, the dialog's widget tests, and a fixture case
+  against the real sshd with an encrypted copy of the fixture key.
+  Deferred, as the owner left them: trying ssh-agent before the key
+  file, and OpenSSH's default key files (`~/.ssh/id_*`).
+- Owner answers of 2026-11-04 beside O5: O1 keeps the Flatpak grant at
+  `~/.ssh/config:ro`, so a key file reaches the Flatpak build only
+  through the agent; O6 keeps imports confirmed on the importing device
+  (03 §2, §4.3); O8 keeps the host-key re-pin policy as built (D61); and
+  admin mode for an account whose only sudo rule is NOPASSWD `docker`
+  keeps asking for a password (M4's X5, below).
 - `SshLink` liveness and channel-budget tests (M2, `seance_core`, X7,
   #239): tests only, added before K44b made `SshLink` production code.
   On fake time, a silent peer closes the link as `pingTimeout` 30 s
@@ -886,8 +925,9 @@ is on main:
   view's disconnect), the store (round trip, damaged values, read-only),
   the controller (defaults per platform, eligibility, limit, purge on
   save, not-saved), the row menu and both settings surfaces. Not
-  checked: a jump host's credentials, and an encrypted key file, which
-  fails the unattended connect until K45; on a real device, unverified.
+  checked: a jump host's credentials, and an encrypted key file, whose
+  unattended connect fails since only the user's connect asks for its
+  passphrase and nothing keeps it (K45b); on a real device, unverified.
 - Server header and Overview part 1 (M2, 03 §10.2, §10.4, OV-01, OV-03,
   OV-04, MEM-01, MEM-02, K32a, #223): the desktop workspace and the
   phone's server screen open with a header showing the link state as a
@@ -1275,10 +1315,11 @@ is on main:
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
   The flatpak grants read-only `~/.ssh/config` for the FL-02 import and
   nothing else under `~/.ssh` (04 §12.1). Links are on in the app since
-  K44b, and their identity-file reads (K17, above) need the wider grant,
-  which waits for the owner's sign-off (O1): until then the Flatpak
-  build cannot read a host's `IdentityFile`, and signs in through an
-  ssh-agent only for hosts that name none. Locally the scripts have only
+  K44b, and their identity-file reads (K17, above) would need the wider
+  grant, which the owner declined on 2026-11-04 (O1: keep
+  `~/.ssh/config:ro`): the Flatpak build cannot read a host's
+  `IdentityFile`, and signs in through an ssh-agent only for hosts that
+  name none. Locally the scripts have only
   run on stub bundles;
   CI's Linux client leg runs them on the real release bundle, with
   appimagetool and flatpak-builder.
@@ -1707,8 +1748,8 @@ is on main:
   mode and under `systemd-run --user` with linger without it. Every
   step names the socket with `--host`. The docker-scoped NOPASSWD
   account's rank 3 and its refused root operation stay untested: admin
-  mode asks that account for a password it lacks (owner decision
-  pending).
+  mode asks that account for a password it lacks, which the owner kept
+  on 2026-11-04.
 - M4 runner-VM actions suite (E29): on the GitHub-hosted runner, as
   throwaway accounts, the engine turns admin mode on after a wrong
   password is asked again, and under `timestamp_timeout=0` (rung 4);
@@ -2531,7 +2572,7 @@ is on main:
   Klabautermann's own (network, ssh-auth, Secret Service,
   `~/.ssh/config:ro`, no home access). A key under `~/.ssh` reaches a
   Flatpak build through the agent or an import into the app's keystore;
-  widening the grant to `~/.ssh:ro` waits on the owner's decision.
+  the owner kept the grant at `~/.ssh/config:ro` on 2026-11-04 (O1).
 - Keyboard model (M6 N60b, PLT-06, A11Y-10): every sortable list moves
   with `j`/`k` beside the arrows and opens the keyboard map on `?`; `/`
   focuses the filter of Containers, Images, Volumes, Networks and
@@ -2645,7 +2686,7 @@ planned.
 | X2: integration tests for each mutation path | E28's `docker_actions_test.dart` (every container, image and stack action and the user's own process signals) on the Docker fixture; E29's `runner_vm_actions_test.dart` (unit actions, run timer now, other users' crontabs, a kill through elevation) on the runner VM; E28's suite also showed Docker logging a pause before its list holds it, so an action now reads its container again (#333) | met |
 | X3: the detached compose flow with re-attach under the user runners | BusyBox `setsid` on the Docker fixture (E28); `systemd-run` on the system manager, `--uid` and `--user` with linger on the runner VM (E30); every recorded host's runner rows, from RHEL 8's systemd 239 (`detached_runner_fixtures_test.dart`) | met |
 | X4: in admin mode as the login user and as root through the sudo relay, pinned with `--host` | E30's redeploys as root over rank 3 and as the login user under `--uid`, each step naming the socket while root's default Docker context points at a dead socket | met |
-| X5: the rank 3 relay, also under a NOPASSWD rule scoped to `docker`, where the account's detached root operation is refused | Rank 3 through the password prelude (E30); the scoped rule's listing and `systemd-run`'s refusal on the runner VM in spike S4 (D66), and the planner's `sudoRightMissing` over fakes | partial: admin mode asks such an account for a password it lacks, so neither its rank 3 nor the refusal is reached on a host; waits on a decision |
+| X5: the rank 3 relay, also under a NOPASSWD rule scoped to `docker`, where the account's detached root operation is refused | Rank 3 through the password prelude (E30); the scoped rule's listing and `systemd-run`'s refusal on the runner VM in spike S4 (D66), and the planner's `sudoRightMissing` over fakes | partial: admin mode asks such an account for a password it lacks, so neither its rank 3 nor the refusal is reached on a host; the owner kept that on 2026-11-04 |
 | X6: the host write inventory (03 §11.5) | E31's `inventory.sh` around a scripted MVP session on the Docker fixture host, against 03 §8.11's rows in `inventory_allowlist.txt` | met |
 | X7: the elevation CI test (03 §11.1) | E29's suite on the runner VM, beside Séance's real-sudo test | met |
 | X8: the manual checklist on one phone per OS and three real hosts | [Open manual gates](#open-manual-gates) | open |
@@ -2685,9 +2726,10 @@ paste (X-01, shipped with M4).
 
 Left open: the pin publication switch, which waits on the release above;
 admin mode for an account whose only sudo rule is NOPASSWD `docker`
-(M4's X5, still an owner decision); and the device and real-host checks
-below, which M5 extends by privileged writes under SELinux, link intake
-on real devices and the container terminal on phones.
+(M4's X5, which the owner kept as built on 2026-11-04); and the device
+and real-host checks below, which M5 extends by privileged writes under
+SELinux, link intake on real devices and the container terminal on
+phones.
 
 ## M6 exit
 

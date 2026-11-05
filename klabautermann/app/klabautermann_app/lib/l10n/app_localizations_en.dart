@@ -352,7 +352,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get linkFailureKeyPassphraseRequired =>
-      'A key for this server needs a passphrase, which Klabautermann cannot ask for. Load the key into ssh-agent and remove the IdentityFile line that names it from ~/.ssh/config, then import the config again.';
+      'A key for this server or a jump host on its route needs its passphrase. Klabautermann asks for it only when you open the server, and does not save it.';
 
   @override
   String get linkFailureKeyFileHiddenBySandbox =>
@@ -5365,6 +5365,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get credentialConnect => 'Connect';
+
+  @override
+  String keyPassphraseTitle(String label) {
+    return 'Key passphrase for $label';
+  }
+
+  @override
+  String get keyPassphraseExplanation =>
+      'Used for this connection only and never saved. Klabautermann asks again next time.';
+
+  @override
+  String get keyPassphraseRetryExplanation =>
+      'That passphrase did not open the key. Try again. It is used for this connection only and never saved.';
+
+  @override
+  String get keyPassphraseKeyFile => 'Key file';
+
+  @override
+  String get keyPassphraseField => 'Passphrase';
+
+  @override
+  String get keyPassphraseCancel => 'Cancel';
+
+  @override
+  String get keyPassphraseConnect => 'Connect';
 
   @override
   String elevationTitle(String host) {

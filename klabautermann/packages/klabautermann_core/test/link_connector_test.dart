@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/fleet/imported_fleet.dart';
@@ -28,6 +29,8 @@ import 'package:seance_core/seance_core.dart'
         SshLink,
         TofuVerifier;
 import 'package:test/test.dart';
+
+import 'support/encrypted_key.dart';
 
 final class _FakeLink implements SshLink {
   @override
@@ -95,6 +98,25 @@ SshConnectException _connectError(
 
 LinkFailureKind? _failure(LinkConnectResult result) =>
     (result as LinkConnectFailed).failure;
+
+/// The passphrase [reference]'s credentials carry, read in a frame of its
+/// own: a temporary in the test's async frame would hold the credentials
+/// across its later awaits.
+String? _passphraseOf(WeakReference<SshCredentials> reference) =>
+    reference.target?.keyPassphrase;
+
+/// Allocates until [reference] clears or a generous budget runs out: no
+/// public API forces a collection, and allocation pressure runs both the
+/// young and the old generation's collector.
+Future<bool> _collected(WeakReference<Object> reference) async {
+  final garbage = <Uint8List>[];
+  for (var i = 0; i < 512 && reference.target != null; i++) {
+    garbage.add(Uint8List(1 << 20));
+    if (garbage.length > 32) garbage.clear();
+    await Future<void>.delayed(Duration.zero);
+  }
+  return reference.target == null;
+}
 
 void main() {
   late Directory temp;
@@ -764,6 +786,411 @@ void main() {
 
       expect(_failure(await result), LinkFailureKind.credentialUnavailable);
       expect(dials, isEmpty);
+    });
+  });
+
+  group('an encrypted key (03 §4.5, D70)', () {
+    // A loopback port that drops each connection at once: a dial that
+    // reaches it opened every key on its route, since seance_core opens
+    // them all before its first socket, and then fails as unreachable.
+    late int port;
+    late int accepted;
+
+    // How many of the attempt's prompts the test has answered.
+    late int answered;
+
+    setUp(() async {
+      final listener = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(listener.close);
+      port = listener.port;
+      accepted = 0;
+      answered = 0;
+      listener.listen((socket) {
+        accepted++;
+        socket.destroy();
+      });
+      await writeEncryptedKey('${temp.path}/.ssh/id_web', 'web phrase');
+    });
+
+    ServerConfig keyed({
+      String id = 'ssh-config:web',
+      String key = '~/.ssh/id_web',
+      String? jumpHostId,
+      String? secretRef,
+    }) => _server(
+      id: id,
+      host: '127.0.0.1',
+      port: port,
+      authMethod: AuthMethod.privateKey,
+      identityFilePath: key,
+      jumpHostId: jumpHostId,
+      secretRef: secretRef,
+    );
+
+    /// The passphrase prompts sent so far, oldest first.
+    List<Prompt> asked() => [
+      for (final prompt in events.whereType<Prompt>())
+        if (prompt.request is KeyPassphrasePromptRequest) prompt,
+    ];
+
+    KeyPassphrasePromptRequest request(Prompt prompt) =>
+        prompt.request as KeyPassphrasePromptRequest;
+
+    /// Waits for the next prompt, which comes after real file reads and,
+    /// on a retry, a real dial, then answers it with [answer].
+    Future<Prompt> answerAsked(PromptAnswer answer) async {
+      List<Prompt> prompts() => events.whereType<Prompt>().toList();
+      for (var i = 0; i < 2000 && prompts().length <= answered; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      final prompt = prompts()[answered++];
+      expect(
+        broker.answer(prompt.promptId, answer),
+        PromptAnswerResult.answered,
+      );
+      return prompt;
+    }
+
+    /// Waits until a prompt beyond those answered is out.
+    Future<void> untilAsked() async {
+      for (
+        var i = 0;
+        i < 2000 && events.whereType<Prompt>().length <= answered;
+        i++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+    }
+
+    test('is asked for on an interactive connect, from the server, and '
+        'reaches the dial', () async {
+      final phases = <LinkStatus>[];
+      final result = connect(
+        server: keyed(),
+        purpose: ConnectPurpose.interactive,
+        onPhase: phases.add,
+      );
+      final prompt = await answerAsked(const PromptSecretAnswer('web phrase'));
+
+      expect(await result, isA<LinkConnected>());
+      expect(
+        (prompt.serverId, prompt.host, prompt.port),
+        ('ssh-config:web', '127.0.0.1', port),
+      );
+      final asking = request(prompt);
+      expect(asking.kind, PromptKind.keyPassphrase);
+      expect(
+        (asking.user, asking.keyPath, asking.retry),
+        ('me', '~/.ssh/id_web', false),
+      );
+      expect(dials.single.credentials.keyPassphrase, 'web phrase');
+      expect(
+        dials.single.credentials.privateKeyPem,
+        await File('${temp.path}/.ssh/id_web').readAsString(),
+      );
+      // The deadline stops while the prompt waits and starts again after.
+      expect(phases, [
+        LinkNeedsUser(
+          promptId: prompt.promptId,
+          kind: PromptKind.keyPassphrase,
+        ),
+        const LinkConnecting(),
+      ]);
+    });
+
+    test('one that does not open the key is asked for again with retry, '
+        'and no socket opens until one does', () async {
+      final result = connect(
+        server: keyed(),
+        purpose: ConnectPurpose.interactive,
+        realDial: true,
+      );
+      await answerAsked(const PromptSecretAnswer('wrong phrase'));
+      expect(accepted, 0);
+      await answerAsked(const PromptSecretAnswer('web phrase'));
+
+      final failed = await result;
+      expect(asked().map((p) => request(p).retry), [false, true]);
+      // The key opened: the dial reached the dropping port once.
+      expect(_failure(failed), LinkFailureKind.unreachable);
+      expect(accepted, 1);
+      // Nothing the engine might log carries a passphrase.
+      final error = '${(failed as LinkConnectFailed).error}';
+      expect(error, isNot(contains('phrase')));
+    });
+
+    test('a dismissed prompt fails as needing the passphrase, before '
+        'dialing', () async {
+      for (final dismissal in const ['', null]) {
+        final result = connect(
+          server: keyed(),
+          purpose: ConnectPurpose.interactive,
+        );
+        await answerAsked(PromptSecretAnswer(dismissal));
+
+        expect(_failure(await result), LinkFailureKind.keyPassphraseRequired);
+      }
+      expect(dials, isEmpty);
+    });
+
+    test('an expired prompt fails the same way', () async {
+      broker = PromptBroker(emit: events.add, expiry: Duration.zero);
+
+      final result = await connect(
+        server: keyed(),
+        purpose: ConnectPurpose.interactive,
+      );
+
+      expect(_failure(result), LinkFailureKind.keyPassphraseRequired);
+      expect(
+        (events.last as PromptWithdrawn).reason,
+        PromptWithdrawnReason.expired,
+      );
+      expect(dials, isEmpty);
+    });
+
+    test('an abandoned attempt withdraws the prompt and never dials', () async {
+      final abandon = Completer<void>();
+      final result = connect(
+        server: keyed(),
+        purpose: ConnectPurpose.interactive,
+        abandoned: abandon.future,
+      );
+      await untilAsked();
+      abandon.complete();
+
+      expect(await result, isA<LinkConnectFailed>());
+      expect(
+        (events.last as PromptWithdrawn).reason,
+        PromptWithdrawnReason.attemptEnded,
+      );
+      expect(dials, isEmpty);
+    });
+
+    test('a background connect never asks and opens no socket', () async {
+      final result = await connect(server: keyed(), realDial: true);
+
+      expect(_failure(result), LinkFailureKind.keyPassphraseRequired);
+      expect(events.whereType<Prompt>(), isEmpty);
+      expect(accepted, 0);
+    });
+
+    test('a stored passphrase opens the key without a prompt, and one that '
+        'does not is asked for without retry', () async {
+      final server = keyed(secretRef: 'secret-web');
+      vault['secret-web'] = const Secret(
+        id: 'secret-web',
+        kind: SecretKind.privateKey,
+        value: '',
+        keyPassphrase: 'web phrase',
+      );
+
+      final stored = await connect(
+        server: server,
+        purpose: ConnectPurpose.interactive,
+        realDial: true,
+      );
+      expect(_failure(stored), LinkFailureKind.unreachable);
+      expect(events.whereType<Prompt>(), isEmpty);
+
+      vault['secret-web'] = const Secret(
+        id: 'secret-web',
+        kind: SecretKind.privateKey,
+        value: '',
+        keyPassphrase: 'stale phrase',
+      );
+      final result = connect(
+        server: server,
+        purpose: ConnectPurpose.interactive,
+        realDial: true,
+      );
+      final prompt = await answerAsked(const PromptSecretAnswer('web phrase'));
+
+      expect(_failure(await result), LinkFailureKind.unreachable);
+      expect(request(prompt).retry, isFalse);
+      expect(accepted, 2);
+    });
+
+    test('each key on the route is asked for in turn, the server\'s first, '
+        'and a hop\'s wrong one again', () async {
+      await writeEncryptedKey('${temp.path}/.ssh/id_gw', 'gw phrase');
+      final hop = keyed(id: 'ssh-config-hop:gw', key: '~/.ssh/id_gw');
+      hops[hop.id] = hop;
+
+      final result = connect(
+        server: keyed(jumpHostId: hop.id),
+        purpose: ConnectPurpose.interactive,
+        realDial: true,
+      );
+      await answerAsked(const PromptSecretAnswer('web phrase'));
+      await answerAsked(const PromptSecretAnswer('wrong phrase'));
+      await answerAsked(const PromptSecretAnswer('gw phrase'));
+
+      expect(_failure(await result), LinkFailureKind.unreachable);
+      expect(
+        [
+          for (final p in asked())
+            (p.serverId, request(p).keyPath, request(p).retry),
+        ],
+        [
+          ('ssh-config:web', '~/.ssh/id_web', false),
+          ('ssh-config:web', '~/.ssh/id_gw', false),
+          ('ssh-config:web', '~/.ssh/id_gw', true),
+        ],
+      );
+      expect(accepted, 1);
+    });
+
+    test('a wrong passphrase for the server is its own, even with a hop '
+        'still to ask', () async {
+      await writeEncryptedKey('${temp.path}/.ssh/id_gw', 'gw phrase');
+      final hop = keyed(id: 'ssh-config-hop:gw', key: '~/.ssh/id_gw');
+      hops[hop.id] = hop;
+
+      final result = connect(
+        server: keyed(jumpHostId: hop.id),
+        purpose: ConnectPurpose.interactive,
+        realDial: true,
+      );
+      await answerAsked(const PromptSecretAnswer('wrong phrase'));
+      await answerAsked(const PromptSecretAnswer('web phrase'));
+      await answerAsked(const PromptSecretAnswer('gw phrase'));
+
+      expect(_failure(await result), LinkFailureKind.unreachable);
+      expect(
+        [for (final p in asked()) (request(p).keyPath, request(p).retry)],
+        [
+          ('~/.ssh/id_web', false),
+          ('~/.ssh/id_web', true),
+          ('~/.ssh/id_gw', false),
+        ],
+      );
+    });
+
+    test('a key the server and its hop share is asked for once', () async {
+      final hop = keyed(id: 'ssh-config-hop:gw');
+      hops[hop.id] = hop;
+
+      final result = connect(
+        server: keyed(jumpHostId: hop.id),
+        purpose: ConnectPurpose.interactive,
+        realDial: true,
+      );
+      await answerAsked(const PromptSecretAnswer('web phrase'));
+
+      expect(_failure(await result), LinkFailureKind.unreachable);
+      expect(asked(), hasLength(1));
+      expect(accepted, 1);
+    });
+
+    test('a hop\'s dismissed prompt fails as needing the passphrase', () async {
+      await writeEncryptedKey('${temp.path}/.ssh/id_gw', 'gw phrase');
+      final hop = keyed(id: 'ssh-config-hop:gw', key: '~/.ssh/id_gw');
+      hops[hop.id] = hop;
+
+      final result = connect(
+        server: keyed(jumpHostId: hop.id),
+        purpose: ConnectPurpose.interactive,
+        realDial: true,
+      );
+      await answerAsked(const PromptSecretAnswer('web phrase'));
+      await answerAsked(const PromptSecretAnswer(null));
+
+      expect(_failure(await result), LinkFailureKind.keyPassphraseRequired);
+      expect(accepted, 0);
+    });
+
+    group('is not kept past its attempt', () {
+      test(
+        'the next connect asks again, and an unattended one fails',
+        () async {
+          final links = connector(realDial: true);
+          final server = keyed();
+
+          final first = links.connect(
+            server,
+            purpose: ConnectPurpose.interactive,
+          );
+          await answerAsked(const PromptSecretAnswer('web phrase'));
+          expect(_failure(await first), LinkFailureKind.unreachable);
+
+          final unattended = await links.connect(
+            server,
+            purpose: ConnectPurpose.background,
+          );
+          expect(_failure(unattended), LinkFailureKind.keyPassphraseRequired);
+
+          final second = links.connect(
+            server,
+            purpose: ConnectPurpose.interactive,
+          );
+          await answerAsked(const PromptSecretAnswer('web phrase'));
+          expect(_failure(await second), LinkFailureKind.unreachable);
+          expect(asked(), hasLength(2));
+          expect(accepted, 2);
+        },
+      );
+
+      test('nor written to the support directory', () async {
+        final result = connect(
+          server: keyed(),
+          purpose: ConnectPurpose.interactive,
+          realDial: true,
+        );
+        await answerAsked(const PromptSecretAnswer('wrong phrase'));
+        await answerAsked(const PromptSecretAnswer('web phrase'));
+        await result;
+
+        // The identity-read audit log is the one file a connect writes.
+        final files = [
+          await for (final entry in temp.list(recursive: true))
+            if (entry is File && !entry.path.contains('/.ssh/')) entry,
+        ];
+        expect(files, isNotEmpty);
+        for (final file in files) {
+          expect(await file.readAsString(), isNot(contains('phrase')));
+        }
+      });
+
+      test('nor held by the callbacks a link keeps', () async {
+        // The hop shares the server's key, so one dial carries the
+        // passphrase on both.
+        final hop = keyed(id: 'ssh-config-hop:gw');
+        hops[hop.id] = hop;
+
+        // A link's client keeps the callbacks it was given while it lives;
+        // the dial keeps them here, and only weak references to what
+        // carried a passphrase.
+        final kept = <Object?>[];
+        late WeakReference<SshCredentials> server;
+        late WeakReference<SshCredentials> jump;
+        onDial = (dial) async {
+          kept.addAll([
+            dial.tofu,
+            dial.onHostKey,
+            dial.onKeyboardInteractive,
+            dial.resolveJumpHost,
+          ]);
+          server = WeakReference(dial.credentials);
+          final resolved = await dial.resolveJumpHost!(hop.id);
+          jump = WeakReference(resolved!.credentials);
+          return _FakeLink();
+        };
+
+        final result = connect(
+          server: keyed(jumpHostId: hop.id),
+          purpose: ConnectPurpose.interactive,
+        );
+        await answerAsked(const PromptSecretAnswer('web phrase'));
+        expect(await result, isA<LinkConnected>());
+        expect(_passphraseOf(server), 'web phrase');
+        expect(_passphraseOf(jump), 'web phrase');
+        dials.clear();
+
+        expect(await _collected(server), isTrue);
+        expect(await _collected(jump), isTrue);
+        expect(kept, hasLength(4));
+      });
     });
   });
 

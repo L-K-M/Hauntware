@@ -2118,6 +2118,7 @@ void main() {
         const LinkDegraded(LinkDegradedReason.sessionLimitLearned),
         LinkBackoff(DateTime.utc(2026, 10, 14, 12, 0, 30)),
         const LinkNeedsUser(promptId: 'p-1', kind: PromptKind.hostKey),
+        const LinkNeedsUser(promptId: 'p-2', kind: PromptKind.keyPassphrase),
         const LinkBlocked(LinkBlockedReason.hostKeyChanged),
         const LinkClosed(LinkClosedReason.closedByOwner),
         const LinkClosed(
@@ -2294,6 +2295,26 @@ void main() {
       expect(credential.user, 'deploy');
       expect(credential.retry, isTrue);
 
+      final passphrase =
+          await request(
+                const KeyPassphrasePromptRequest(
+                  user: 'jump',
+                  keyPath: '~/.ssh/id_ed25519',
+                  retry: true,
+                ),
+              )
+              as KeyPassphrasePromptRequest;
+      expect(passphrase.kind, PromptKind.keyPassphrase);
+      expect(
+        (passphrase.user, passphrase.keyPath, passphrase.retry),
+        ('jump', '~/.ssh/id_ed25519', true),
+      );
+      // A key the vault holds names no file.
+      final vaultKey =
+          await request(const KeyPassphrasePromptRequest(user: 'deploy'))
+              as KeyPassphrasePromptRequest;
+      expect((vaultKey.keyPath, vaultKey.retry), (null, false));
+
       final elevation =
           await request(const ElevationPromptRequest(user: 'deploy'))
               as ElevationPromptRequest;
@@ -2336,6 +2357,16 @@ void main() {
           await roundTrip(const AnswerPrompt('p', PromptCancelAnswer()))
               as AnswerPrompt;
       expect(cancel.answer, isA<PromptCancelAnswer>());
+      final secret =
+          await roundTrip(const AnswerPrompt('p', PromptSecretAnswer('phrase')))
+              as AnswerPrompt;
+      expect(
+        (
+          (secret.answer as PromptSecretAnswer).secret,
+          (secret.answer as PromptSecretAnswer).save,
+        ),
+        ('phrase', false),
+      );
 
       final bytes =
           await roundTrip(TerminalBytes('t', Uint8List.fromList(const [9, 8])))
