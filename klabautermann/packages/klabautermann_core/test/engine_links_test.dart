@@ -28,6 +28,7 @@ import 'package:seance_core/seance_core.dart'
 import 'package:test/test.dart';
 
 import 'support/answering_link.dart';
+import 'support/encrypted_key.dart';
 import 'support/forwarding_link.dart';
 import 'support/scripted_link.dart';
 
@@ -271,6 +272,44 @@ void main() {
     final dialed = dials.single;
     expect((dialed.config.host, dialed.config.username), ('192.0.2.10', 'me'));
     expect(dialed.onKeyboardInteractive, isNotNull, reason: 'interactive');
+  });
+
+  test('an encrypted key\'s passphrase is asked for over the boundary and '
+      'answered with a secret, never a cancel (D70)', () async {
+    final key = '${support.path}/keys/id_web';
+    await writeEncryptedKey(key, 'web phrase');
+    final engine = await startEngine();
+    await engine.import('$_webConfig  IdentityFile $key\n');
+
+    engine.send(const Connect(_web));
+    expect(await engine.next(), _connecting);
+    final prompt = await engine.next() as Prompt;
+    final request = prompt.request as KeyPassphrasePromptRequest;
+    expect((prompt.serverId, prompt.host), (_web, '192.0.2.10'));
+    expect((request.user, request.keyPath, request.retry), ('me', key, false));
+    expect(
+      await engine.next(),
+      _state(
+        LinkNeedsUser(
+          promptId: prompt.promptId,
+          kind: PromptKind.keyPassphrase,
+        ),
+      ),
+    );
+
+    engine
+      ..send(AnswerPrompt(prompt.promptId, const PromptCancelAnswer()))
+      ..send(
+        AnswerPrompt(prompt.promptId, const PromptSecretAnswer('web phrase')),
+      );
+    expect(await engine.rejected(), 'AnswerPrompt');
+    expect(await engine.next(), _connecting);
+    // The fake dial asks about the host key next, as a real one would.
+    expect(
+      (await engine.next() as Prompt).request,
+      isA<HostKeyPromptRequest>(),
+    );
+    expect(dials.single.config.id, _web);
   });
 
   test('a cancelled keyboard-interactive prompt fails the connect as the '

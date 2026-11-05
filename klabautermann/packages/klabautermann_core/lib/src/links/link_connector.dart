@@ -14,6 +14,7 @@ import 'package:seance_core/seance_core.dart'
         HostKeyStore,
         HostKeyVerdict,
         KeyboardInteractiveResponder,
+        ResolvedSshHost,
         Secret,
         SecretKind,
         ServerConfig,
@@ -22,7 +23,8 @@ import 'package:seance_core/seance_core.dart'
         SshCredentials,
         SshJumpHostResolver,
         SshLink,
-        TofuVerifier;
+        TofuVerifier,
+        privateKeyNeedsPassphrase;
 
 import '../catalog/engine_vault.dart' show VaultUnavailableException;
 import '../engine/protocol.dart';
@@ -38,13 +40,15 @@ const Set<int> _connectTimedOutCodes = {60, 110, 10060};
 
 /// Who a connect is for, which decides whether it may ask the user.
 enum ConnectPurpose {
-  /// The user opened the server: a first-seen host key and a
-  /// keyboard-interactive challenge become [Prompt]s.
+  /// The user opened the server: a first-seen host key, a
+  /// keyboard-interactive challenge, a missing password and an encrypted
+  /// key's passphrase become [Prompt]s.
   interactive,
 
   /// Work the user did not start, such as background sampling (03 §4.5,
-  /// §5.1): nothing prompts. A first-seen host key is declined and
-  /// keyboard-interactive is not offered, so a server that needs either
+  /// §5.1): nothing prompts. A first-seen host key is declined,
+  /// keyboard-interactive is not offered and an encrypted key without a
+  /// stored passphrase stays closed, so a server that needs any of them
   /// fails and waits for the user.
   background,
 }
@@ -121,7 +125,9 @@ final class LinkConnectFailed extends LinkConnectResult {
 /// Each attempt's prompts are withdrawn when it ends. An interactive
 /// connect to a password server whose password the vault lacks asks for
 /// it, and keeps it in the vault when the user says so and the server
-/// accepts it (03 §4.5). A changed host key
+/// accepts it (03 §4.5). An interactive connect also asks for the
+/// passphrase of each encrypted key on the route that none it has opens,
+/// and keeps it for that attempt only (D70). A changed host key
 /// blocks the link (03 §10.1) unless the connect reviews it
 /// ([ChangedHostKey.review]). Reconnects, backoff and
 /// the connect cap belong to the link supervisor above it, which hears
@@ -242,6 +248,12 @@ final class LinkConnector {
     String? typedPassword;
     var savePassword = false;
 
+    // The passphrases of this attempt's encrypted keys; only the user's
+    // connect asks for them.
+    final passphrases = interactive
+        ? _KeyPassphrases(attempt, onAnswered: () => phase(progress()))
+        : null;
+
     try {
       // A password server asks the user, on a connect they started, when it
       // names no vault entry or one this device lacks (03 §4.5).
@@ -280,60 +292,88 @@ final class LinkConnector {
           draft: CredentialDraft(password: typedPassword),
         );
       }
-      if (gaveUp) return LinkConnectFailed(_abandonedError);
-      if (config.jumpHostId == null) onDialing?.call();
+      // Each turn dials once; only a key a passphrase did or did not open
+      // brings another, which [_KeyPassphrases] decides. Keys are opened
+      // before any socket, so a turn that ends that way reached no host.
+      while (true) {
+        hops = 0;
+        checks = 0;
+        final dialCredentials =
+            await passphrases?.unlock(config, credentials) ?? credentials;
+        if (gaveUp) return LinkConnectFailed(_abandonedError);
+        if (config.jumpHostId == null) onDialing?.call();
 
-      final link = await _dial(
-        config: config,
-        credentials: credentials,
-        tofu: tofu,
-        onHostKey: onHostKey,
-        onKeyboardInteractive: interactive
-            ? (challenge) async {
-                // A round without questions, which OpenSSH's PAM backend
-                // sends to end a successful login, is answered without
-                // asking, as OpenSSH's client does. No event only shows
-                // text, so its name and instruction go unseen.
-                if (challenge.prompts.isEmpty) return const [];
+        final SshLink link;
+        try {
+          link = await _dial(
+            config: config,
+            credentials: dialCredentials,
+            tofu: tofu,
+            onHostKey: onHostKey,
+            onKeyboardInteractive: interactive
+                ? (challenge) async {
+                    // A round without questions, which OpenSSH's PAM backend
+                    // sends to end a successful login, is answered without
+                    // asking, as OpenSSH's client does. No event only shows
+                    // text, so its name and instruction go unseen.
+                    if (challenge.prompts.isEmpty) return const [];
 
-                final answer = await attempt.ask(
-                  host: challenge.server.host,
-                  port: challenge.server.port,
-                  request: KeyboardInteractivePromptRequest(
-                    user: challenge.server.username,
-                    name: challenge.name,
-                    instruction: challenge.instruction,
-                    questions: challenge.prompts,
-                  ),
-                );
-                // A withdrawn or cancelled prompt answers with no
-                // responses: dartssh2 rejects a count other than the
-                // question count by closing the connection, so no made-up
-                // answer reaches the server.
-                if (answer is PromptCancelAnswer) cancelledQuestions = true;
-                if (answer is! PromptResponsesAnswer) return const [];
-                answeredQuestions = true;
-                phase(progress());
-                return answer.responses;
-              }
-            : null,
-        resolveJumpHost: (id) async {
-          final hop = await resolveHop(id);
-          // Hops resolve before any socket opens: an abandoned attempt
-          // stops here, its route left incomplete, instead of dialing.
-          if (gaveUp) return null;
-          if (hop == null) return null;
-          hops++;
-          // The first hop to dial ends the route.
-          if (hop.config.jumpHostId == null) onDialing?.call();
-          return hop;
-        },
-      );
-      if (savePassword) await _save(config, typedPassword!);
-      return LinkConnected(link, keyboardInteractive: answeredQuestions);
+                    final answer = await attempt.ask(
+                      host: challenge.server.host,
+                      port: challenge.server.port,
+                      request: KeyboardInteractivePromptRequest(
+                        user: challenge.server.username,
+                        name: challenge.name,
+                        instruction: challenge.instruction,
+                        questions: challenge.prompts,
+                      ),
+                    );
+                    // A withdrawn or cancelled prompt answers with no
+                    // responses: dartssh2 rejects a count other than the
+                    // question count by closing the connection, so no made-up
+                    // answer reaches the server.
+                    if (answer is PromptCancelAnswer) cancelledQuestions = true;
+                    if (answer is! PromptResponsesAnswer) return const [];
+                    answeredQuestions = true;
+                    phase(progress());
+                    return answer.responses;
+                  }
+                : null,
+            resolveJumpHost: (id) async {
+              final resolved = await resolveHop(id);
+              // Hops resolve before any socket opens: an abandoned attempt
+              // stops here, its route left incomplete, instead of dialing.
+              if (gaveUp) return null;
+              if (resolved == null) return null;
+              final hop = passphrases == null
+                  ? resolved
+                  : ResolvedSshHost(
+                      resolved.config,
+                      await passphrases.unlock(
+                        resolved.config,
+                        resolved.credentials,
+                      ),
+                    );
+              if (gaveUp) return null;
+              hops++;
+              // The first hop to dial ends the route.
+              if (hop.config.jumpHostId == null) onDialing?.call();
+              return hop;
+            },
+          );
+        } on SshConnectException catch (error) {
+          if (passphrases?.dialAgainAfter(error.kind) ?? false) continue;
+          rethrow;
+        }
+        if (savePassword) await _save(config, typedPassword!);
+        return LinkConnected(link, keyboardInteractive: answeredQuestions);
+      }
     } on Exception catch (error) {
       return _classify(error, refused, cancelledQuestions: cancelledQuestions);
     } finally {
+      // The callbacks above live on in the link's client, and with them
+      // what this scope captured, so the passphrases go now (D70).
+      passphrases?.forget();
       attempt.end();
     }
   }
@@ -404,6 +444,11 @@ final class LinkConnector {
         failure: LinkFailureKind.credentialUnavailable,
         identityFile: failure,
       ),
+      // The user dismissed a passphrase prompt or let it expire.
+      _PassphraseNotGiven() => LinkConnectFailed(
+        error,
+        failure: LinkFailureKind.keyPassphraseRequired,
+      ),
       CredentialMissingException() ||
       VaultUnavailableException() => LinkConnectFailed(
         error,
@@ -440,10 +485,10 @@ final class LinkConnector {
         // before it was resolved; nothing was dialed and nothing the user
         // can fix on the server.
         SshConnectFailureKind.routeInvalid => null,
-        // One remedy for both, a passphrase that opens the key. Until the
-        // passphrase prompt (K45b) the app words it as loading the key
-        // into an agent; the prompt can then say a retry, as the password
-        // prompt does.
+        // One remedy for both, a passphrase that opens the key: an
+        // interactive connect asks for it again with `retry` before it
+        // gets here (D70), so either reaches the app only from an
+        // unattended connect or a stored passphrase.
         SshConnectFailureKind.keyPassphraseRequired ||
         SshConnectFailureKind.keyPassphraseWrong =>
           LinkFailureKind.keyPassphraseRequired,
@@ -472,6 +517,144 @@ final StateError _abandonedError = StateError('connect attempt abandoned');
 
 /// What an attempt whose password prompt went unanswered fails with.
 final StateError _noPasswordError = StateError('no password was entered');
+
+/// The user dismissed a key passphrase prompt, or it expired or was
+/// withdrawn. Thrown from a jump hop's resolver too, which seance_core
+/// wraps as the cause of its connect exception.
+final class _PassphraseNotGiven implements Exception {
+  const _PassphraseNotGiven();
+
+  @override
+  String toString() => 'no key passphrase was entered';
+}
+
+/// The passphrases of one interactive connect's encrypted keys (03 §4.5,
+/// D70), kept for that attempt only and dropped by [forget] when it ends.
+/// Keys are told apart by their PEM text, so a key the server and a hop
+/// share is asked for once.
+///
+/// seance_core opens every key of the route before it opens a socket, in
+/// route order (the server's, then each hop's toward the first dialed),
+/// and stops at the first that does not open, saying only whether that key
+/// had a passphrase (`keyPassphraseWrong`) or none
+/// (`keyPassphraseRequired`), not whose key it was. So each dial carries
+/// at most one passphrase that has not opened its key yet, the trial, on
+/// the first key that needs one, and keys after it get none. A wrong
+/// passphrase is then the trial's, which is asked for again with `retry`;
+/// a missing one means the trial opened its key, and the next dial tries
+/// the next key.
+final class _KeyPassphrases {
+  _KeyPassphrases(this._attempt, {required this._onAnswered});
+
+  final PromptAttempt _attempt;
+
+  /// Called once the user has answered a prompt, so the attempt reports it
+  /// goes on.
+  final void Function() _onAnswered;
+
+  /// The passphrase that opened each key, by the key's PEM.
+  final Map<String, String> _opened = {};
+
+  /// The one passphrase the current dial tries, and whether the user typed
+  /// it or the vault held it.
+  ({String pem, String passphrase, bool typed})? _trial;
+
+  /// Keys whose stored passphrase did not open them, so the user is asked.
+  final Set<String> _storedRefused = {};
+
+  /// The key whose typed passphrase last did not open it.
+  String? _typedRefused;
+
+  /// [credentials] for the host [config] names, with the passphrase this
+  /// dial gives its key. Asks the user when the key is encrypted, no
+  /// passphrase of this attempt has opened it and it is the dial's first
+  /// such key; throws [_PassphraseNotGiven] when the prompt gets no
+  /// passphrase.
+  Future<SshCredentials> unlock(
+    ServerConfig config,
+    SshCredentials credentials,
+  ) async {
+    if (credentials.method != AuthMethod.privateKey) return credentials;
+    final pem = credentials.privateKeyPem ?? '';
+    if (!privateKeyNeedsPassphrase(pem)) return credentials;
+
+    final opened = _opened[pem];
+    if (opened != null) return _withPassphrase(credentials, opened);
+
+    // A later key that is the trial's own takes the trial's passphrase:
+    // it opens after the trial's, so a wrong one still fails there first.
+    final trial = _trial;
+    if (trial != null) {
+      return _withPassphrase(
+        credentials,
+        trial.pem == pem ? trial.passphrase : null,
+      );
+    }
+
+    final stored = credentials.keyPassphrase;
+    if (stored != null && !_storedRefused.contains(pem)) {
+      _trial = (pem: pem, passphrase: stored, typed: false);
+      return credentials;
+    }
+
+    final answer = await _attempt.ask(
+      host: config.host,
+      port: config.port,
+      request: KeyPassphrasePromptRequest(
+        user: config.username,
+        keyPath: config.identityFilePath,
+        retry: pem == _typedRefused,
+      ),
+    );
+    final passphrase = answer is PromptSecretAnswer ? answer.secret : null;
+    if (passphrase == null || passphrase.isEmpty) {
+      throw const _PassphraseNotGiven();
+    }
+
+    _onAnswered();
+    _trial = (pem: pem, passphrase: passphrase, typed: true);
+    return _withPassphrase(credentials, passphrase);
+  }
+
+  /// Reads a dial's failure of [kind]: true when it is the trial's verdict,
+  /// so another dial gets further, and false for anything else.
+  bool dialAgainAfter(SshConnectFailureKind kind) {
+    final trial = _trial;
+    _trial = null;
+    if (trial == null) return false;
+
+    switch (kind) {
+      case SshConnectFailureKind.keyPassphraseWrong:
+        if (trial.typed) {
+          _typedRefused = trial.pem;
+        } else {
+          _storedRefused.add(trial.pem);
+        }
+        return true;
+      case SshConnectFailureKind.keyPassphraseRequired:
+        _opened[trial.pem] = trial.passphrase;
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /// Drops every passphrase and key this attempt held.
+  void forget() {
+    _opened.clear();
+    _trial = null;
+    _storedRefused.clear();
+    _typedRefused = null;
+  }
+
+  static SshCredentials _withPassphrase(
+    SshCredentials credentials,
+    String? passphrase,
+  ) => SshCredentials.privateKey(
+    credentials.privateKeyPem,
+    keyPassphrase: passphrase,
+  );
+}
 
 /// A [TofuVerifier] that reports each check's decision, so the connector
 /// can tell when the server's own key has passed.

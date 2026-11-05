@@ -616,10 +616,10 @@ abstract class AppLocalizations {
   /// **'No credential could be offered to this server. Check that its key file can be read and holds a supported key, or load a key into ssh-agent.'**
   String get linkFailureCredentialUnavailable;
 
-  /// Why a connect failed (03 §10.1): the private key of this server or of a jump host on its route is encrypted, and the app has no passphrase prompt yet. A server whose ssh_config entry names a key file uses only that file, so the agent signs only once the IdentityFile line is gone and the config is imported again. ssh-agent, IdentityFile and ~/.ssh/config are OpenSSH names, not translated.
+  /// Why a connect failed (03 §10.1, D70): the private key of this server or of a jump host on its route is encrypted, and no passphrase was entered for it. Background connects never ask, and a passphrase is never saved, so the user enters it by opening the server, which asks for it.
   ///
   /// In en, this message translates to:
-  /// **'A key for this server needs a passphrase, which Klabautermann cannot ask for. Load the key into ssh-agent and remove the IdentityFile line that names it from ~/.ssh/config, then import the config again.'**
+  /// **'A key for this server or a jump host on its route needs its passphrase. Klabautermann asks for it only when you open the server, and does not save it.'**
   String get linkFailureKeyPassphraseRequired;
 
   /// Why a connect failed (03 §4.5, §10.1): the Flatpak sandbox shows the app only the paths its manifest grants, so the key file of this server or of a jump host on its route reads as missing. A server whose ssh_config entry names a key file uses only that file, so the agent signs only once the IdentityFile line is gone and the config is imported again. ssh-agent, IdentityFile and ~/.ssh/config are OpenSSH names, not translated.
@@ -6915,6 +6915,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Connect'**
   String get credentialConnect;
+
+  /// Title of the dialog that asks, on connect, for the passphrase of an encrypted private key of the server or of a jump host on its route (03 §4.5, D70); label is the server's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Key passphrase for {label}'**
+  String keyPassphraseTitle(String label);
+
+  /// Line under the key passphrase dialog's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Used for this connection only and never saved. Klabautermann asks again next time.'**
+  String get keyPassphraseExplanation;
+
+  /// Line under the key passphrase dialog's title when the previous passphrase did not open the key.
+  ///
+  /// In en, this message translates to:
+  /// **'That passphrase did not open the key. Try again. It is used for this connection only and never saved.'**
+  String get keyPassphraseRetryExplanation;
+
+  /// Label over the key file path the key passphrase dialog shows, as the server's ssh_config names it.
+  ///
+  /// In en, this message translates to:
+  /// **'Key file'**
+  String get keyPassphraseKeyFile;
+
+  /// Label of the masked passphrase field in the key passphrase dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Passphrase'**
+  String get keyPassphraseField;
+
+  /// Button that closes the key passphrase dialog without connecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get keyPassphraseCancel;
+
+  /// Button that connects with the typed passphrase.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get keyPassphraseConnect;
 
   /// Title of the admin mode password dialog (SAF-02); host is the server's address.
   ///

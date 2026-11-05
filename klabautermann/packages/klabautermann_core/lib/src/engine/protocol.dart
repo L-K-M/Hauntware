@@ -333,6 +333,11 @@ import '../operations/plan_types.dart';
 /// Port forwards then joined v3 the same way (03 §5.11 NET-11, DKE-09, M6
 /// plan N22): [OpenPortForward] and [ClosePortForward], answered by
 /// [PortForwardState].
+///
+/// The key passphrase prompt then joined v3 the same way (03 §4.5, D70):
+/// [KeyPassphrasePromptRequest] asks for the passphrase of an encrypted
+/// private key, the server's or a jump host's, and is answered with
+/// [PromptSecretAnswer], whose `save` it never honours.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -6302,7 +6307,13 @@ final class ActionPreview {
 enum ActionOutcome { succeeded, failed, cancelled }
 
 /// The 03 §10.1 prompt kinds, in the table's own order.
-enum PromptKind { hostKey, keyboardInteractive, credential, elevation }
+enum PromptKind {
+  hostKey,
+  keyboardInteractive,
+  credential,
+  keyPassphrase,
+  elevation,
+}
 
 /// What a [Prompt] asks; one variant per [PromptKind].
 @immutable
@@ -6391,6 +6402,32 @@ final class CredentialPromptRequest extends PromptRequest {
   PromptKind get kind => PromptKind.credential;
 }
 
+/// The passphrase of the encrypted private key [user] signs in with on the
+/// asking machine, the server or one of its jump hosts (03 §4.5, D70):
+/// asked on a connect the user started, when no passphrase the engine has
+/// for this attempt opens the key. The answer opens the key for this
+/// attempt only and is never kept: no vault entry, no keystore, and
+/// nothing after the attempt ends, so the next connect asks again.
+final class KeyPassphrasePromptRequest extends PromptRequest {
+  const KeyPassphrasePromptRequest({
+    required this.user,
+    this.keyPath,
+    this.retry = false,
+  });
+
+  final String user;
+
+  /// The key file as the server's config names it, such as
+  /// `~/.ssh/id_ed25519` (not expanded), or null for a key the vault holds.
+  final String? keyPath;
+
+  /// Whether the previous answer to this question did not open the key.
+  final bool retry;
+
+  @override
+  PromptKind get kind => PromptKind.keyPassphrase;
+}
+
 /// The sudo password of [user] for admin mode (03 §8.2, D41).
 final class ElevationPromptRequest extends PromptRequest {
   const ElevationPromptRequest({required this.user, this.retry = false});
@@ -6427,15 +6464,16 @@ final class PromptTrustAnswer extends PromptAnswer {
   final bool accepted;
 }
 
-/// One secret for [PromptKind.credential] and [PromptKind.elevation];
-/// null dismisses the prompt without answering.
+/// One secret for [PromptKind.credential], [PromptKind.keyPassphrase] and
+/// [PromptKind.elevation]; null dismisses the prompt without answering.
 final class PromptSecretAnswer extends PromptAnswer {
   const PromptSecretAnswer(this.secret, {this.save = false});
 
   final String? secret;
 
   /// Keep [secret] in the vault once the server accepts it; honoured only
-  /// for a [CredentialPromptRequest] whose `canSave` is set.
+  /// for a [CredentialPromptRequest] whose `canSave` is set, never for a
+  /// key passphrase.
   final bool save;
 }
 
@@ -6450,8 +6488,8 @@ final class PromptResponsesAnswer extends PromptAnswer {
 /// engine sends the server no responses, so the attempt fails with
 /// [LinkFailureKind.keyboardInteractiveCancelled] at once rather than
 /// when the prompt expires. Only that kind takes it: a host key is
-/// declined with `PromptTrustAnswer(false)`, a password prompt dismissed
-/// with `PromptSecretAnswer(null)`.
+/// declined with `PromptTrustAnswer(false)`, a password or passphrase
+/// prompt dismissed with `PromptSecretAnswer(null)`.
 final class PromptCancelAnswer extends PromptAnswer {
   const PromptCancelAnswer();
 }
@@ -6648,9 +6686,9 @@ enum LinkFailureKind {
   credentialUnavailable,
 
   /// The private key is encrypted and the engine has no passphrase that
-  /// opens it: none was given, or the one given was wrong. Nothing reached
-  /// the server. No prompt asks for one yet, so only an agent holding the
-  /// key gets past it.
+  /// opens it: an unattended connect, which never asks, or a connect whose
+  /// [KeyPassphrasePromptRequest] the user dismissed or let expire.
+  /// Nothing reached the server. The user's next connect asks for it.
   keyPassphraseRequired,
 
   /// Inside the Flatpak sandbox, a key file could not be found: the

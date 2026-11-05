@@ -171,12 +171,13 @@ void main() {
       '123456',
     ]);
 
-    // Password prompts take a secret, or null to dismiss.
+    // Password and passphrase prompts take a secret, or null to dismiss.
     final attempt = broker.attempt('ssh-config:web');
     final secrets = [
-      for (final request in const [
+      for (final request in const <PromptRequest>[
         CredentialPromptRequest(user: 'me'),
         ElevationPromptRequest(user: 'me'),
+        KeyPassphrasePromptRequest(user: 'me', keyPath: '~/.ssh/id_ed25519'),
       ])
         attempt.ask(host: 'h', port: 22, request: request),
     ];
@@ -192,9 +193,20 @@ void main() {
       broker.answer('prompt-3', const PromptSecretAnswer(null)),
       PromptAnswerResult.answered,
     );
+    for (final wrong in const <PromptAnswer>[
+      PromptTrustAnswer(true),
+      PromptResponsesAnswer(['phrase']),
+    ]) {
+      expect(broker.answer('prompt-4', wrong), PromptAnswerResult.doesNotFit);
+    }
+    expect(
+      broker.answer('prompt-4', const PromptSecretAnswer('phrase')),
+      PromptAnswerResult.answered,
+    );
     expect(((await secrets[0])! as PromptSecretAnswer).secret, 'pw');
     // A dismissal is an answer, unlike a withdrawal's null.
     expect(((await secrets[1])! as PromptSecretAnswer).secret, isNull);
+    expect(((await secrets[2])! as PromptSecretAnswer).secret, 'phrase');
   });
 
   test('a keyboard-interactive cancel ends the prompt at once', () async {
@@ -228,11 +240,12 @@ void main() {
       _hostKey,
       CredentialPromptRequest(user: 'me'),
       ElevationPromptRequest(user: 'me'),
+      KeyPassphrasePromptRequest(user: 'me'),
     ]) {
       unawaited(attempt.ask(host: 'h', port: 22, request: request));
     }
 
-    for (final promptId in ['prompt-1', 'prompt-2', 'prompt-3']) {
+    for (final promptId in ['prompt-1', 'prompt-2', 'prompt-3', 'prompt-4']) {
       expect(
         broker.answer(promptId, const PromptCancelAnswer()),
         PromptAnswerResult.doesNotFit,

@@ -1,7 +1,8 @@
 // The engine against the sshd fixture (03 §11.3, D53; 04 §13 M2 exit):
 // sampler start and ticks, timeout recovery, reconnect with the sample
-// seq continuing, dead-peer detection, ProxyJump, and agent and
-// IdentityFile sign-in, over real SSH with the engine in its own isolate.
+// seq continuing, dead-peer detection, ProxyJump, agent and IdentityFile
+// sign-in, and an encrypted IdentityFile's passphrase prompt (D70), over
+// real SSH with the engine in its own isolate.
 // run.sh starts the fixture and runs these one at a time; without it they
 // skip. The restart and pause tests change the shared host, so they run
 // last, and each leaves it running.
@@ -130,6 +131,97 @@ void main() {
 
     // Only the agent holds this key: run.sh deleted its file.
     expect(await acceptedKeys(logged), [contains(fixture.agentFingerprint)]);
+  });
+
+  test('an encrypted IdentityFile asks for its passphrase on the user\'s '
+      'connect, again after a wrong one, and keeps it nowhere (D70)', () async {
+    const passphrase = 'fixture key phrase';
+    final key = await fixture.encryptedIdentityFile(passphrase);
+    final engine = await FixtureEngine.startEncryptedKey(
+      fixture,
+      'encrypted key',
+      identityFile: key,
+    );
+    final logged = (await fixture.logs(FixtureService.sshd)).length;
+
+    /// Connects [encryptedKeyServer], answering its passphrase prompts with
+    /// [answers] in turn and trusting the fixture's host key; returns each
+    /// passphrase prompt's `retry` and the status the attempt ended in.
+    Future<(List<bool>, LinkStatus)> connect(List<String?> answers) async {
+      final retries = <bool>[];
+      engine.send(const Connect(encryptedKeyServer));
+      while (true) {
+        final event = await engine.until<EngineEvent>(
+          (event) =>
+              event is Prompt ||
+              (event is LinkState && event.serverId == encryptedKeyServer),
+        );
+        switch (event) {
+          case Prompt(
+            :final promptId,
+            request: KeyPassphrasePromptRequest(:final keyPath, :final retry),
+          ):
+            expect(keyPath, key);
+            retries.add(retry);
+            engine.send(
+              AnswerPrompt(promptId, PromptSecretAnswer(answers.removeAt(0))),
+            );
+          case Prompt(
+            :final promptId,
+            :final host,
+            :final port,
+            request: HostKeyPromptRequest(:final fingerprintSha256),
+          ):
+            expect(
+              hostKeys[(host: host, port: port)],
+              contains(fingerprintSha256),
+            );
+            engine.send(AnswerPrompt(promptId, const PromptTrustAnswer(true)));
+          case Prompt():
+            fail('unexpected prompt: ${event.request}');
+          case LinkState(status: final status && (LinkReady() || LinkClosed())):
+            return (retries, status);
+          default:
+            break;
+        }
+      }
+    }
+
+    final (retries, ready) = await connect(['wrong phrase', passphrase]);
+    expect(retries, [false, true]);
+    expect(ready, const LinkReady());
+    // sshd accepted the key the passphrase opened.
+    expect(await acceptedKeys(logged), [contains(fixture.identityFingerprint)]);
+
+    // Nothing kept it: the next connect asks again, and a dismissal fails
+    // it before sshd hears of it.
+    engine.send(const Disconnect(encryptedKeyServer));
+    await engine.until<LinkState>(
+      (event) =>
+          event.serverId == encryptedKeyServer && event.status is LinkClosed,
+    );
+    final (again, closed) = await connect([null]);
+    expect(again, [false]);
+    expect(
+      closed,
+      const LinkClosed(
+        LinkClosedReason.connectFailed,
+        failure: LinkFailureKind.keyPassphraseRequired,
+      ),
+    );
+    expect(await acceptedKeys(logged), hasLength(1));
+    await for (final entry in Directory(
+      engine.supportDirectory,
+    ).list(recursive: true)) {
+      if (entry is! File) continue;
+      // Read as Latin-1, which decodes any bytes, so a binary file is
+      // searched too.
+      expect(
+        latin1.decode(await entry.readAsBytes()),
+        isNot(contains(passphrase)),
+        reason: entry.path,
+      );
+    }
   });
 
   test('a ProxyJump host connects and samples through the jump host', () async {
