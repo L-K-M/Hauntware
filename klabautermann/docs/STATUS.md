@@ -2462,6 +2462,22 @@ is on main:
   device and offered in the desktop settings window. Tested in the
   sampling subscriptions and scheduler, the store, the controllers, the
   General and Servers tabs and the settings window.
+- Admin-mode memory (FL-16, owner decision 2026-11-04, 03 D69):
+  Settings > Servers has a "Remember admin mode" switch per server, off
+  by default and kept in `settings.json` only
+  (`klabautermann.admin.remembered`), never in the engine or a `pref`
+  record, so no other device can turn it on. With it on, the server's
+  first user-visible connect of a launch (a view open in the foreground,
+  the app unlocked, the link up and probed in this run) sends the chip's
+  `SetAdminMode`, so the engine asks for the sudo password as before; a
+  link the monitor set dialed unattended decides nothing, and an
+  observe-only or read-only server stays silent. A cancel, or an end
+  through inactivity, the background, the lock or link loss, holds until
+  the next launch. The desktop settings window offers the switch over the
+  settings link. Tested in the store, `admin_memory_test.dart` (the
+  controller, the re-arm rules, the Servers tab and the password prompt
+  in the app) and the settings window. Real-device checks of the prompt
+  at launch stay under the manual gates' admin mode items.
 - Copy as commands and snippets (M6 N65, AUT-01, AUT-02): every action
   preview's "Copy as commands" puts its steps on the clipboard as one
   script, with `sudo` before an elevated step and Docker API requests as
@@ -2698,13 +2714,15 @@ next runs (N71).
 | Y3: notification copy states the coverage limit | N51's `alert_notifications_test.dart` (the prompt and the switch say that rules are evaluated only while the app is open, before the system asks, and each notification carries the limit) and N50c's `alert_rules_test.dart` | met |
 | Y4: gap rendering covered by goldens | `time_series_goldens_test.dart` (a labelled hatched gap, a gap too narrow for its label, an open gap), N52b's `history_goldens_test.dart` (48 hours with a band per gap reason) and the chart and container log goldens | met |
 
-Left open: FL-16's admin-mode memory, deferred because remembering admin
-mode across launches would undo SAF-01's observe-only default (FL-16's
-cadence, endpoint and program overrides are built); `ncdu` and `gdu`
-streaming for the explorer (N32, above); the Flatpak `~/.ssh:ro` grant,
-which waits on the owner (PLT-09); M4's sudo rule scoped to `docker`;
-and the device checks below, which M6 extends by notifications, the app
-lock, the share sheet, port forwards and the tablet split.
+Left open: `ncdu` and `gdu` streaming for the explorer (N32, above);
+the Flatpak `~/.ssh:ro` grant, which waits on the owner (PLT-09); M4's
+sudo rule scoped to `docker`; and the device checks below, which M6
+extends by notifications, the app lock, the share sheet, port forwards
+and the tablet split. FL-16's admin-mode memory, left open at M6 because
+remembering admin mode across launches would undo SAF-01's observe-only
+default, is built since the owner accepted it as a per-server opt-in on
+2026-11-04 (03 D69, above); FL-16's cadence, endpoint and program
+overrides were already built.
 
 ## M7 progress
 

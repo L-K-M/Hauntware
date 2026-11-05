@@ -9,6 +9,7 @@ import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 
 import '../../controllers/account_size.dart';
+import '../../controllers/admin_memory.dart';
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/cadence_controller.dart';
 import '../../controllers/log_display.dart';
@@ -43,6 +44,7 @@ SettingsWindowHost? settingsWindowHostFor(
   AppLockSettings? appLock,
   CadenceSettings? cadence,
   CadenceCapSettings? cadenceCaps,
+  AdminMemorySettings? adminMemory,
   LogDisplaySettings? logDisplay,
   TimeDisplaySettings? timeDisplay,
 }) => switch (platform) {
@@ -62,6 +64,7 @@ SettingsWindowHost? settingsWindowHostFor(
     appLock: appLock,
     cadence: cadence,
     cadenceCaps: cadenceCaps,
+    adminMemory: adminMemory,
     logDisplay: logDisplay,
     timeDisplay: timeDisplay,
   ),
@@ -95,6 +98,7 @@ final class SettingsWindowHost {
     AppLockSettings? appLock,
     CadenceSettings? cadence,
     CadenceCapSettings? cadenceCaps,
+    AdminMemorySettings? adminMemory,
     LogDisplaySettings? logDisplay,
     TimeDisplaySettings? timeDisplay,
     MethodChannel control = settingsWindowControlChannel,
@@ -112,6 +116,7 @@ final class SettingsWindowHost {
        _appLock = appLock,
        _cadence = cadence,
        _cadenceCaps = cadenceCaps,
+       _adminMemory = adminMemory,
        _logDisplay = logDisplay,
        _timeDisplay = timeDisplay {
     _engine = GhostSettingsWindowHost(
@@ -134,6 +139,7 @@ final class SettingsWindowHost {
           ?appLock,
           ?cadence,
           ?cadenceCaps,
+          ?adminMemory,
           ?logDisplay,
           ?timeDisplay,
         ],
@@ -156,6 +162,7 @@ final class SettingsWindowHost {
   final AppLockSettings? _appLock;
   final CadenceSettings? _cadence;
   final CadenceCapSettings? _cadenceCaps;
+  final AdminMemorySettings? _adminMemory;
   final LogDisplaySettings? _logDisplay;
   final TimeDisplaySettings? _timeDisplay;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
@@ -182,6 +189,10 @@ final class SettingsWindowHost {
       final caps? => {
         for (final MapEntry(:key, :value) in caps.entries) key: value.name,
       },
+      null => null,
+    },
+    SettingsLinkKey.adminMemory.name: switch (_adminMemory?.value) {
+      final ids? => ids.toList()..sort(),
       null => null,
     },
     SettingsLinkKey.logDisplay.name: switch (_logDisplay?.value) {
@@ -239,6 +250,11 @@ final class SettingsWindowHost {
       case SettingsLinkMethod.setCadenceCap:
         final [serverId as String, name as String?] = argument! as List;
         await _cadenceCaps?.setCap(serverId, CadenceCap.parse(name));
+      case SettingsLinkMethod.setAdminRemembered:
+        final [serverId as String, remembered as bool] = argument! as List;
+        final adminMemory = _adminMemory;
+        if (adminMemory == null) throw StateError('No admin memory settings');
+        await adminMemory.setRemembered(serverId, remembered: remembered);
       case SettingsLinkMethod.setLogDisplay:
         await _logDisplay?.setLogDisplay(decodeLogDisplay(argument));
       case SettingsLinkMethod.setTimeDisplay:
