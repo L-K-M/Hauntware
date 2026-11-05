@@ -1166,14 +1166,15 @@ void main() {
       // The next pause replaces it; a dismissal clears it.
       timed.setAppActivity(AppActivity.background);
       expect(timed.backgroundPause.value, isNull);
-      timed
-        ..setAppActivity(AppActivity.foreground)
-        ..dismissBackgroundPause();
+      timed.setAppActivity(AppActivity.foreground);
+      expect(timed.backgroundPause.value, isNotNull);
+      timed.dismissBackgroundPause();
       expect(timed.backgroundPause.value, isNull);
 
       // It belongs to the screen open at the return: leaving clears it,
       // and a server shown only later has no return to tell.
       awayAndBack();
+      expect(timed.backgroundPause.value, isNotNull);
       timed.leaveServer('srv-1');
       expect(timed.backgroundPause.value, isNull);
       awayAndBack();

@@ -353,7 +353,7 @@ class _ContainerLogsViewState extends State<ContainerLogsView> {
         announce: true,
       );
     }
-    return LogStatusNotice(panel: _panel);
+    return LogStatusNotice(panel: _panel, container: true);
   }
 
   /// Why [driver] keeps no logs the API reads, by the rule the engine
@@ -367,9 +367,13 @@ class _ContainerLogsViewState extends State<ContainerLogsView> {
         .value
         ?.route
         ?.runtime;
-    return runtime == EngineRuntime.podman
-        ? _DriverReason.podman
-        : _DriverReason.cacheDisabled;
+    // An endpoint not known yet says nothing about the runtime, so it
+    // names neither runtime's rule.
+    return switch (runtime) {
+      EngineRuntime.podman => _DriverReason.podman,
+      EngineRuntime.docker => _DriverReason.cacheDisabled,
+      null => _DriverReason.other,
+    };
   }
 
   Widget _lines(AppLocalizations l10n) => Stack(

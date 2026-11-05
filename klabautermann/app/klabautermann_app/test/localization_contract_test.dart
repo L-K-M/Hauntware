@@ -693,12 +693,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
   },
   'lib/ui/docker/images_view.dart': {
-    // The tag `docker images` prints for none and the digest algorithm
-    // image ids start with, matched, never shown; the one an image id's
-    // algorithm ends with; the line break between the fields the search
-    // reads; the separator between an image's tags, machine data.
+    // The tag `docker images` prints for none, matched, never shown; the
+    // colon an image id's algorithm ends with; the line break between the
+    // fields the search reads; the separator between an image's tags,
+    // machine data.
     "'<none>:<none>'",
-    "'sha256:'",
     "':'",
     r"'\n'",
     "', '",

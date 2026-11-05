@@ -131,17 +131,28 @@ FailedUnitsResult _failed([List<String> units = const []]) =>
     ]);
 
 /// Two running containers, one of them unhealthy, a paused and an
-/// exited one.
+/// exited one, created from the two images in use.
 final _containers = [
-  dockerContainer('c-web', name: 'web', health: HealthStatus.healthy),
+  dockerContainer(
+    'c-web',
+    name: 'web',
+    imageId: 'sha256:a',
+    health: HealthStatus.healthy,
+  ),
   dockerContainer(
     'c-db',
     name: 'db',
+    imageId: 'sha256:b',
     status: 'Up 3 hours (unhealthy)',
     health: HealthStatus.unhealthy,
   ),
-  dockerContainer('c-cache', name: 'cache', state: 'paused'),
-  dockerContainer('c-old', name: 'old', state: 'exited'),
+  dockerContainer(
+    'c-cache',
+    name: 'cache',
+    imageId: 'sha256:a',
+    state: 'paused',
+  ),
+  dockerContainer('c-old', name: 'old', imageId: 'sha256:b', state: 'exited'),
 ];
 
 /// Two images in use and a dangling one.

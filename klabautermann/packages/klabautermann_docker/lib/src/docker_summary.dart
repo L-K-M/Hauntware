@@ -48,9 +48,11 @@ final class DockerSummary {
 /// (`all=1`); [images] is `/images/json` parsed through the 1.51 gate;
 /// [df] is the last `/system/df` result, if any.
 ///
-/// An image's `Containers` count is used when the daemon reported one
-/// (API 1.51 and later). Below that it is null, and an image is in use
-/// when a container's `ImageID` names it (03 §7.14).
+/// An image is in use when a container in [containers] was created from
+/// it ([imageContainerCount]): the engine re-lists the containers on a
+/// container event but not the images, so the count the image list
+/// carries from API 1.51 lags, and the Images tab counts the same way
+/// (03 §7.14).
 DockerSummary dockerSummary(
   List<ContainerSummary> containers,
   List<ImageSummary> images, [
@@ -60,7 +62,6 @@ DockerSummary dockerSummary(
   var paused = 0;
   var stopped = 0;
   var unhealthy = 0;
-  final containerImageIds = <String>{};
   for (final c in containers) {
     switch (c.state) {
       case 'running':
@@ -71,19 +72,13 @@ DockerSummary dockerSummary(
         stopped++;
     }
     if (c.health == HealthStatus.unhealthy) unhealthy++;
-    final imageId = c.imageId;
-    if (imageId != null) containerImageIds.add(_bareImageId(imageId));
   }
 
+  final byImage = containersByImage(containers);
   var inUse = 0;
   var dangling = 0;
   for (final i in images) {
-    final count = i.containers;
-    // -1 means the daemon did not compute the count.
-    final used = count != null && count >= 0
-        ? count > 0
-        : containerImageIds.contains(_bareImageId(i.id));
-    if (used) inUse++;
+    if ((imageContainerCount(i, byImage) ?? 0) > 0) inUse++;
     if (i.isDangling) dangling++;
   }
 
@@ -99,7 +94,38 @@ DockerSummary dockerSummary(
   );
 }
 
-/// Image ids compare without the `sha256:` prefix, so a bare id on
-/// either side still matches.
-String _bareImageId(String id) =>
-    id.startsWith('sha256:') ? id.substring('sha256:'.length) : id;
+/// The digest algorithm Docker prefixes image ids with.
+const _sha256Prefix = 'sha256:';
+
+/// [id] without its `sha256:` prefix, so an image's id and a container's
+/// `ImageID` match whichever of them carries it.
+String bareImageId(String id) =>
+    id.startsWith(_sha256Prefix) ? id.substring(_sha256Prefix.length) : id;
+
+/// How many containers, running or not, were created from each image,
+/// by [bareImageId], as [containers] (the full list) name them.
+Map<String, int> containersByImage(List<ContainerSummary> containers) {
+  final counts = <String, int>{};
+  for (final container in containers) {
+    final imageId = container.imageId;
+    if (imageId == null || imageId.isEmpty) continue;
+    counts.update(bareImageId(imageId), (n) => n + 1, ifAbsent: () => 1);
+  }
+  return counts;
+}
+
+/// How many containers use [image], or null when nothing tells.
+///
+/// The container list counts, whenever one was read ([byImage], from
+/// [containersByImage]): the engine re-lists the containers on a
+/// container event but not the images, so an image's own count lags a
+/// container created or removed. Without a container list, the count the
+/// image list carries from API 1.51 stands in; below 1.51 it has none,
+/// and a negative count is one the daemon did not compute.
+int? imageContainerCount(ImageSummary image, Map<String, int>? byImage) {
+  if (byImage != null) return byImage[bareImageId(image.id)] ?? 0;
+
+  final count = image.containers;
+  if (count == null || count < 0) return null;
+  return count;
+}

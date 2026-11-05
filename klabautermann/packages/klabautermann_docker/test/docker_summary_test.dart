@@ -64,14 +64,21 @@ void main() {
       expect(s.danglingImages, 1);
     });
 
-    test('from 1.51 the Containers count decides', () {
+    test('from 1.51 the container list still decides, as the Images tab '
+        'counts', () {
+      // The image list's own count lags a container event: here it still
+      // names a container the container list no longer has.
       final s = dockerSummary(
         const [],
         images('images-1.55.json', countGate: true),
       );
       expect(s.images, 2);
-      expect(s.imagesInUse, 1);
+      expect(s.imagesInUse, 0);
       expect(s.danglingImages, 1);
+
+      const stale = ImageSummary(id: 'sha256:def', containers: 0);
+      const created = ContainerSummary(id: 'd', imageId: 'sha256:def');
+      expect(dockerSummary(const [created], const [stale]).imagesInUse, 1);
     });
 
     test('an uncomputed count (-1) falls back to the container list', () {

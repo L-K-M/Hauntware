@@ -1,5 +1,11 @@
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show ContainerSummary, ImageSummary, ImageUpdateRow, ImageUpdateStatus;
+    show
+        ContainerSummary,
+        ImageSummary,
+        ImageUpdateRow,
+        ImageUpdateStatus,
+        containersByImage,
+        imageContainerCount;
 
 import 'containers_view.dart' show shortContainerId;
 
@@ -14,14 +20,6 @@ enum ImageFilter { all, unused, dangling, updates }
 
 /// The tag `docker images` prints as `<none>:<none>`, which names no tag.
 const _untagged = '<none>:<none>';
-
-/// The digest algorithm Docker prefixes image ids with.
-const _sha256Prefix = 'sha256:';
-
-/// [id] without its `sha256:` prefix, so an image's id and a container's
-/// `ImageID` match whichever of them carries it.
-String bareImageId(String id) =>
-    id.startsWith(_sha256Prefix) ? id.substring(_sha256Prefix.length) : id;
 
 /// [id] as `docker images` shortens it: the digest without its algorithm,
 /// cut to 12 characters.
@@ -39,34 +37,6 @@ List<String> imageTagsOf(ImageSummary image) => [
 /// [tags] on one line, the engine's names comma-separated, as the
 /// Containers sub-tab lists a container's ports.
 String imageTagsText(List<String> tags) => tags.join(', ');
-
-/// How many containers, running or not, were created from each image,
-/// by [bareImageId], as [containers] (the full list) name them.
-Map<String, int> containersByImage(List<ContainerSummary> containers) {
-  final counts = <String, int>{};
-  for (final container in containers) {
-    final imageId = container.imageId;
-    if (imageId == null || imageId.isEmpty) continue;
-    counts.update(bareImageId(imageId), (n) => n + 1, ifAbsent: () => 1);
-  }
-  return counts;
-}
-
-/// How many containers use [image], or null when nothing tells.
-///
-/// The container list counts, whenever one was read ([byImage], from
-/// [containersByImage]): the engine re-lists the containers on a
-/// container event but not the images, so an image's own count lags a
-/// container created or removed. Without a container list, the count the
-/// image list carries from API 1.51 stands in; below 1.51 it has none,
-/// and a negative count is one the daemon did not compute.
-int? imageContainerCount(ImageSummary image, Map<String, int>? byImage) {
-  if (byImage != null) return byImage[bareImageId(image.id)] ?? 0;
-
-  final count = image.containers;
-  if (count == null || count < 0) return null;
-  return count;
-}
 
 /// One image the tab lists, with how many containers use it and what
 /// the update check said of its tags.

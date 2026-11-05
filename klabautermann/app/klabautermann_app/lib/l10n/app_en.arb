@@ -3990,9 +3990,9 @@
   "@servicesLogsEmpty": {
     "description": "A unit's log read finished without any journal line."
   },
-  "servicesLogsRefused": "Reading unit logs is not available in this version yet.",
+  "servicesLogsRefused": "The engine did not open this unit's log.",
   "@servicesLogsRefused": {
-    "description": "The app's engine cannot read logs yet and refused the request; no log lines are shown."
+    "description": "The app's engine refused the request to read the unit's log (a reused id, a server outside the fleet, or too many open logs on the server); no log lines are shown."
   },
   "servicesLogsEngineStopped": "The app's engine stopped. Restart the app to read unit logs.",
   "@servicesLogsEngineStopped": {
@@ -10277,6 +10277,15 @@
         "type": "String"
       },
       "driver": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerLogsEnded": "{reason, select, missing{The server has no such container.} invalid{The engine refused this log window.} other{The log ended.}}",
+  "@dockerLogsEnded": {
+    "description": "Status line of a container's log when its stream ended because the server has no such container, for example after it was removed (missing), or the engine refused the requested time window (invalid). Replaces the general log status, which names files and filters.",
+    "placeholders": {
+      "reason": {
         "type": "String"
       }
     }

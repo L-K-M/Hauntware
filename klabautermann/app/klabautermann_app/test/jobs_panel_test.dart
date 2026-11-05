@@ -239,6 +239,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final jobs = harness.engine.sentOfType<Subscribe>().cast<Subscribe>().last;
+    expect(jobs.serverId, 'srv-1');
     expect(jobs.streams, {SampleStream.cron, SampleStream.timers});
     expect(find.text('Waiting for the first reading.'), findsOneWidget);
   });
