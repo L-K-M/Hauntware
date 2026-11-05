@@ -1041,6 +1041,7 @@ void main() {
           kind: kind,
         );
         await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+        expect(controller.selection, isNotNull);
         expect(terminal.buffer.getText(controller.selection!).trim(), 'delta');
 
         await gesture.up();
