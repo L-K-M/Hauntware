@@ -638,6 +638,25 @@ void main() {
       expect(engine.sentOfType<Connect>(), hasLength(2));
     });
 
+    testWidgets('a retry connects again while a view shows the server, '
+        'and not after the last left (D71)', (tester) async {
+      final links = MonitoringController(engine);
+      addTearDown(links.dispose);
+
+      links.openServer('srv-1');
+      expect(engine.sentOfType<Connect>(), hasLength(1));
+      links.retryConnect('srv-1');
+      expect(engine.sentOfType<Connect>(), hasLength(2));
+      // A server no view shows has nothing to retry.
+      links.retryConnect('srv-2');
+      expect(engine.sentOfType<Connect>(), hasLength(2));
+
+      links.leaveServer('srv-1');
+      links.retryConnect('srv-1');
+      expect(engine.sentOfType<Connect>(), hasLength(2));
+      await tester.pump(kLinkLeaveGrace);
+    });
+
     test('a zero grace disconnects as the last view leaves', () {
       final links = MonitoringController(engine, linkGrace: Duration.zero);
       addTearDown(links.dispose);

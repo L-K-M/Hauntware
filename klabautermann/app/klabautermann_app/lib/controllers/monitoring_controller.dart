@@ -609,6 +609,17 @@ final class MonitoringController extends ChangeNotifier {
     if (_listed(serverId)) _connect(serverId);
   }
 
+  /// The user's retry of [serverId]'s connect while a view shows it (03
+  /// D71): a connect that failed waiting for them, or a host key that
+  /// changed, is otherwise tried again only by the next [openServer]
+  /// after the grace. The engine takes the [Connect] as the user's own,
+  /// so a changed key is reviewed again. Nothing is sent while no view
+  /// shows the server or the fleet does not list it.
+  void retryConnect(String serverId) {
+    if ((_openViews[serverId] ?? 0) == 0 || !_listed(serverId)) return;
+    _connect(serverId);
+  }
+
   /// A view [openServer] counted closed. The last sends [Disconnect] once
   /// the grace passes without another open.
   void leaveServer(String serverId) {

@@ -622,6 +622,12 @@ abstract class AppLocalizations {
   /// **'A key for this server or a jump host on its route needs its passphrase. Klabautermann asks for it only when you open the server, and does not save it.'**
   String get linkFailureKeyPassphraseRequired;
 
+  /// Button under the server header's link state (03 D71): review asks the engine to connect again so it shows the server's changed host key for review; retry connects again after a failure that waits for the user, such as rejected credentials or a cancelled prompt.
+  ///
+  /// In en, this message translates to:
+  /// **'{action, select, review{Review the new key} retry{Try again} other{Try again}}'**
+  String serverConnectRetry(String action);
+
   /// Why a connect failed (03 §4.5, §10.1): the Flatpak sandbox shows the app only the paths its manifest grants, so the key file of this server or of a jump host on its route reads as missing. A server whose ssh_config entry names a key file uses only that file, so the agent signs only once the IdentityFile line is gone and the config is imported again. ssh-agent, IdentityFile and ~/.ssh/config are OpenSSH names, not translated.
   ///
   /// In en, this message translates to:

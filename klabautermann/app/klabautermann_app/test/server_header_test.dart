@@ -284,6 +284,56 @@ void main() {
       expect(message(), findsNothing);
     });
 
+    testWidgets('a failure waiting for the user and a changed key offer a '
+        'retry that connects again (D71)', (tester) async {
+      final harness = await _openWeb1(tester, const Size(1280, 800));
+      int connects() => harness.engine
+          .sentOfType<Connect>()
+          .whereType<Connect>()
+          .where((c) => c.serverId == 'srv-1')
+          .length;
+      final before = connects();
+
+      harness.engine.emit(
+        const LinkState('srv-1', LinkBlocked(LinkBlockedReason.hostKeyChanged)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(_inHeader(find.text('Review the new key')));
+      await tester.pumpAndSettle();
+      expect(connects(), before + 1);
+
+      harness.engine.emit(
+        const LinkState(
+          'srv-1',
+          LinkClosed(
+            LinkClosedReason.connectFailed,
+            failure: LinkFailureKind.authenticationRejected,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(_inHeader(find.text('Try again')));
+      await tester.pumpAndSettle();
+      expect(connects(), before + 2);
+
+      // Nothing to retry: the engine redials, the endpoint's confirmation
+      // lifts its block, or the link is up.
+      for (final status in const <LinkStatus>[
+        LinkReady(),
+        LinkClosed(LinkClosedReason.linkLost),
+        LinkBlocked(LinkBlockedReason.endpointChanged),
+      ]) {
+        harness.engine.emit(LinkState('srv-1', status));
+        await tester.pumpAndSettle();
+        expect(_inHeader(find.text('Try again')), findsNothing);
+        expect(
+          _inHeader(find.text('Review the new key')),
+          findsNothing,
+          reason: '$status',
+        );
+      }
+    });
+
     testWidgets('the selected server\'s, not another\'s', (tester) async {
       final harness = await _openWeb1(tester, const Size(1280, 800));
       harness.engine.emit(

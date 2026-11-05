@@ -356,6 +356,15 @@
   "@linkFailureKeyPassphraseRequired": {
     "description": "Why a connect failed (03 §10.1, D70): the private key of this server or of a jump host on its route is encrypted, and no passphrase was entered for it. Background connects never ask, and a passphrase is never saved, so the user enters it by opening the server, which asks for it."
   },
+  "serverConnectRetry": "{action, select, review{Review the new key} retry{Try again} other{Try again}}",
+  "@serverConnectRetry": {
+    "description": "Button under the server header's link state (03 D71): review asks the engine to connect again so it shows the server's changed host key for review; retry connects again after a failure that waits for the user, such as rejected credentials or a cancelled prompt.",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
   "linkFailureKeyFileHiddenBySandbox": "A key file for this server cannot be read in the Flatpak sandbox. Load the key into ssh-agent and remove the IdentityFile line that names it from ~/.ssh/config, then import the config again.",
   "@linkFailureKeyFileHiddenBySandbox": {
     "description": "Why a connect failed (03 §4.5, §10.1): the Flatpak sandbox shows the app only the paths its manifest grants, so the key file of this server or of a jump host on its route reads as missing. A server whose ssh_config entry names a key file uses only that file, so the agent signs only once the IdentityFile line is gone and the config is imported again. ssh-agent, IdentityFile and ~/.ssh/config are OpenSSH names, not translated."
