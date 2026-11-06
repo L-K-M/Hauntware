@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/services/download_provenance.dart';
@@ -557,6 +558,130 @@ void main() {
     expect(controller.transfers.single.transferred, 3);
 
     controller.dispose();
+    shellDirectory.dispose();
+  });
+
+  test(
+    'coalesces transfer progress while other updates stay immediate',
+    () async {
+      final remote = _FakeRemoteFileSystem();
+      final shellDirectory = ValueNotifier<String?>(null);
+      final controller = RemoteFilesController(
+        () async => remote,
+        shellDirectory: _located(shellDirectory),
+        managedFileStore: _store(),
+        serverId: 'server',
+        editSessionId: 'session',
+      );
+      await controller.initialize();
+      final content = StreamController<List<int>>(sync: true);
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      late Future<RemoteFileEntry> uploading;
+
+      fakeAsync((time) {
+        uploading = controller.upload(
+          name: 'large.txt',
+          content: content.stream,
+          length: 5,
+        );
+        expect(
+          notifications,
+          1,
+          reason: 'the new transfer appears immediately',
+        );
+        notifications = 0;
+
+        content
+          ..add([1])
+          ..add([2])
+          ..add([3]);
+        time.flushMicrotasks();
+
+        expect(controller.transfers.single.transferred, 3);
+        expect(notifications, 0);
+        expect(time.nonPeriodicTimerCount, 1);
+
+        time.elapse(const Duration(milliseconds: 99));
+        expect(notifications, 0);
+        time.elapse(const Duration(milliseconds: 1));
+        expect(notifications, 1);
+
+        content
+          ..add([4])
+          ..add([5]);
+        time.flushMicrotasks();
+        expect(controller.transfers.single.transferred, 5);
+        expect(time.nonPeriodicTimerCount, 1);
+
+        controller.setFilterQuery('large');
+        expect(notifications, 2, reason: 'filtering must repaint immediately');
+        expect(time.nonPeriodicTimerCount, 0);
+        time.elapse(const Duration(milliseconds: 100));
+        expect(
+          notifications,
+          2,
+          reason: 'the cancelled timer must not repaint',
+        );
+
+        content.close();
+        time.flushMicrotasks();
+        expect(
+          controller.transfers.single.status,
+          RemoteTransferStatus.completed,
+        );
+        expect(
+          notifications,
+          greaterThan(2),
+          reason: 'completion must repaint without waiting for the timer',
+        );
+        expect(time.nonPeriodicTimerCount, 0);
+        uploading.ignore();
+        controller.dispose();
+      });
+
+      shellDirectory.dispose();
+    },
+  );
+
+  test('dispose cancels a pending transfer progress repaint', () async {
+    final remote = _FakeRemoteFileSystem();
+    final shellDirectory = ValueNotifier<String?>(null);
+    final controller = RemoteFilesController(
+      () async => remote,
+      shellDirectory: _located(shellDirectory),
+      managedFileStore: _store(),
+      serverId: 'server',
+      editSessionId: 'session',
+    );
+    await controller.initialize();
+    final content = StreamController<List<int>>(sync: true);
+    var notifications = 0;
+    controller.addListener(() => notifications++);
+    late Future<RemoteFileEntry> uploading;
+
+    fakeAsync((time) {
+      uploading = controller.upload(
+        name: 'large.txt',
+        content: content.stream,
+        length: 1,
+      );
+      notifications = 0;
+      content.add([1]);
+      time.flushMicrotasks();
+
+      expect(time.nonPeriodicTimerCount, 1);
+      controller.dispose();
+      expect(time.nonPeriodicTimerCount, 0);
+      final notificationsAtDispose = notifications;
+      time.elapse(const Duration(milliseconds: 100));
+      expect(notifications, notificationsAtDispose);
+
+      content.close();
+      time.flushMicrotasks();
+      uploading.ignore();
+    });
+
     shellDirectory.dispose();
   });
 
