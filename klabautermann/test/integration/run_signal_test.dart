@@ -89,6 +89,7 @@ on_term() {
 trap on_term TERM
 if [[ "$run" == suites ]]; then
   echo "harness ${KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS:-}" >>"$STUB_LOG"
+  echo "current harness ${KLABAUTERMANN_CURRENT_HARNESS:-}" >>"$STUB_LOG"
 fi
 echo "$run started" >>"$STUB_LOG"
 if [[ "$run" == soak && -z "${STUB_SOAK_NO_EVIDENCE:-}" ]]; then
@@ -162,7 +163,11 @@ void main() {
       ..writeAsStringSync(
         '#!/usr/bin/env bash\n'
         'echo "previous-release \$*" >>"\$STUB_LOG"\n'
-        'echo /stub/previous-release/harness\n',
+        'if [[ "\$1" == --current ]]; then\n'
+        '  echo /stub/current/harness\n'
+        'else\n'
+        '  echo /stub/previous-release/harness\n'
+        'fi\n',
       );
     final chmod = await Process.run('chmod', [
       '+x',
@@ -464,8 +469,8 @@ void main() {
     );
   });
 
-  test('run.sh builds the previous-release harness once the sync service '
-      'answers, and hands its path to the suites', () async {
+  test('run.sh sequentially builds both client harnesses once sync answers '
+      'and hands both paths to the suites', () async {
     final (process: _, :exitCode, :output) = await startRun(suitesExit: '0');
 
     expect(
@@ -478,7 +483,12 @@ void main() {
       containsAllInOrder([
         startsWith('curl '),
         allOf(startsWith('previous-release '), endsWith('/previous-release')),
+        allOf(
+          startsWith('previous-release --current '),
+          endsWith('/current-harness'),
+        ),
         'harness /stub/previous-release/harness',
+        'current harness /stub/current/harness',
         'suites started',
       ]),
     );
