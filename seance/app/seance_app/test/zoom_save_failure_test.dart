@@ -221,7 +221,8 @@ void main() {
     await chord(
       tester,
       LogicalKeyboardKey.equal,
-      apple: editorPlatform == TargetPlatform.macOS ||
+      apple:
+          editorPlatform == TargetPlatform.macOS ||
           editorPlatform == TargetPlatform.iOS,
       terminal: false,
     );

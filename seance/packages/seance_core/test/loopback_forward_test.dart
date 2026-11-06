@@ -34,11 +34,7 @@ final class _ShoutingDuplex implements ByteDuplex {
   }
 }
 
-Future<String> _ask(
-  int port,
-  String text, {
-  bool resetIsEmpty = false,
-}) async {
+Future<String> _ask(int port, String text, {bool resetIsEmpty = false}) async {
   final socket = await Socket.connect(InternetAddress.loopbackIPv4, port);
   try {
     socket.add(utf8.encode(text));
@@ -49,9 +45,7 @@ Future<String> _ask(
     // ECONNRESET (error code 54), while other hosts surface the same outcome
     // as an empty EOF. Socket.connect already succeeded, so this cannot hide
     // a dead listener.
-    if (resetIsEmpty &&
-        Platform.isMacOS &&
-        error.osError?.errorCode == 54) {
+    if (resetIsEmpty && Platform.isMacOS && error.osError?.errorCode == 54) {
       return '';
     }
     rethrow;
