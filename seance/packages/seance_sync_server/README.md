@@ -26,10 +26,19 @@ then set it back to `false` and restart. Put a TLS-terminating reverse proxy
 The compose file and `docker run` example bind the host port to loopback only;
 publish it more broadly only behind TLS or on a trusted private network.
 
-To update a running deployment (pull the latest code, rebuild the image,
-recreate the container in one step), run `./update.sh` from `seance/`. It
-probes the published `/healthz` after the recreate and fails with the
-container's logs when the server doesn't answer.
+To update a running deployment, run `./update.sh` from `seance/`. It builds a
+versioned candidate, snapshots the stopped SQLite/WAL files, restarts the old
+service, and preflights the candidate against a temporary copy. Only then does
+it stop the old service again for a fresh rollback snapshot, replace production,
+and require `/readyz`. A failure before candidate startup restores both that
+final snapshot and the tagged previous image with its preserved Compose
+configuration. Once the candidate may have accepted writes, automatic recovery
+instead stops it and retains the unchanged live database plus snapshot for
+explicit recovery. It does not start an older image against a potentially
+migrated schema or erase writes accepted during the readiness probe. Cleanup
+happens only after the candidate is ready; the previous tagged image is retained
+for manual rollback too. The updater refuses concurrent runs and keeps its
+recovery bundle whenever manual recovery is required.
 
 ### Moving from a standalone Séance clone
 
@@ -117,6 +126,7 @@ so an old client and new server detect a mismatch instead of corrupting data.
 | Method & path | Auth | Purpose |
 |---|---|---|
 | `GET /healthz` | — | Liveness check |
+| `GET /readyz` | — | Storage readiness check |
 | `POST /v1/register` | — | Create an account, returns a bearer token |
 | `POST /v1/prelogin` | — | Return the KDF salt/params for a username |
 | `POST /v1/login` | — | Exchange the auth verifier for a token |
@@ -178,8 +188,10 @@ If transaction cleanup itself fails, SQLite storage fails closed and returns
 Diagnostics retain the original cause and log only exception types/SQLite numeric
 codes—not messages, SQL, parameters or blobs. Restart after investigating the
 database failure; automatic reopen could
-silently replace an injected or in-memory database. `/healthz` remains liveness,
-not storage readiness. Closing the disabled connection is safe to repeat.
+silently replace an injected or in-memory database. `/healthz` reports only
+process liveness; `/readyz` performs a real storage access and returns 503 when
+the backend is busy or unavailable. Deployment health checks use `/readyz`.
+Closing the disabled connection is safe to repeat.
 The memory backend stages batches without yielding, then swaps state together.
 
 Custom server `Storage` implementations must implement `pushRecords` and
