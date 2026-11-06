@@ -176,7 +176,8 @@ final class EngineSync {
       hostKeys: hostKeys,
       keystore: keystore,
       vault: vault,
-      transport: transport ??
+      transport:
+          transport ??
           (baseUrl, {token}) => HttpSyncTransport(
             baseUrl,
             token: token,
