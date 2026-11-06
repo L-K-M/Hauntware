@@ -59,8 +59,9 @@ class ServerConfig {
   final String username;
   final AuthMethod authMethod;
 
-  /// Vault entry id holding the password or private key, when [authMethod]
-  /// stores a secret. Null for `agent` or for [identityFilePath] references.
+  /// Vault entry id holding the password, private key, or an optional
+  /// passphrase bound to [identityFilePath]. Null for `agent` and for an
+  /// unencrypted referenced key whose passphrase is not saved.
   final String? secretRef;
 
   /// "Reference, don't store": path to an on-disk OpenSSH private key. The

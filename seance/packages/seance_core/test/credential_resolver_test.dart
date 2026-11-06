@@ -54,7 +54,16 @@ Secret _secret(
   String value, {
   SecretKind kind = SecretKind.password,
   String? keyPassphrase,
-}) => Secret(id: id, kind: kind, value: value, keyPassphrase: keyPassphrase);
+  String? identityFilePath,
+  String? identityFilePassphrase,
+}) => Secret(
+  id: id,
+  kind: kind,
+  value: value,
+  keyPassphrase: keyPassphrase,
+  identityFilePath: identityFilePath,
+  identityFilePassphrase: identityFilePassphrase,
+);
 
 const _grant = 'opaque-grant';
 
@@ -64,6 +73,168 @@ void main() {
       CredentialResolver(_FakeSource()).missingSecretPolicy,
       MissingSecretPolicy.fail,
     );
+  });
+
+  group('explicit credential edits', () {
+    test('a referenced file uses only its path-bound passphrase slot',
+        () async {
+      final source = _FakeSource(
+        secrets: {
+          'ref': _secret(
+            'ref',
+            'PASTED PEM',
+            kind: SecretKind.privateKey,
+            keyPassphrase: 'pasted phrase',
+            identityFilePath: '/keys/deploy',
+            identityFilePassphrase: 'file phrase',
+          ),
+        },
+      );
+
+      final credentials = await CredentialResolver(source).resolve(
+        _config(
+          AuthMethod.privateKey,
+          secretRef: 'ref',
+          identityFilePath: '/keys/deploy',
+        ),
+        draft: const CredentialDraft(
+          credentialAction: CredentialEditAction.keep,
+          passphraseAction: KeyPassphraseAction.keep,
+        ),
+      );
+
+      expect(credentials.privateKeyPem, 'FILE-PEM');
+      expect(credentials.keyPassphrase, 'file phrase');
+    });
+
+    test('a different referenced path cannot inherit the old passphrase',
+        () async {
+      final source = _FakeSource(
+        secrets: {
+          'ref': _secret(
+            'ref',
+            '',
+            kind: SecretKind.privateKey,
+            identityFilePath: '/keys/old',
+            identityFilePassphrase: 'old phrase',
+          ),
+        },
+      );
+
+      await expectLater(
+        CredentialResolver(source).resolve(
+          _config(
+            AuthMethod.privateKey,
+            secretRef: 'ref',
+            identityFilePath: '/keys/new',
+          ),
+          draft: const CredentialDraft(
+            credentialAction: CredentialEditAction.replace,
+            passphraseAction: KeyPassphraseAction.keep,
+          ),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('clear never falls back to a stored credential', () async {
+      final source = _FakeSource(
+        secrets: {'ref': _secret('ref', 'saved password')},
+      );
+      final credentials = await CredentialResolver(source).resolve(
+        _config(AuthMethod.password, secretRef: 'ref'),
+        draft: const CredentialDraft(
+          credentialAction: CredentialEditAction.clear,
+        ),
+      );
+
+      expect(credentials.password, '');
+      expect(source.secretReads, isEmpty);
+    });
+
+    test('keep rejects a stored credential of the wrong kind', () async {
+      final source = _FakeSource(
+        secrets: {'ref': _secret('ref', 'saved password')},
+      );
+
+      await expectLater(
+        CredentialResolver(source).resolve(
+          _config(AuthMethod.privateKey, secretRef: 'ref'),
+          draft: const CredentialDraft(
+            credentialAction: CredentialEditAction.keep,
+          ),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('keep rejects an empty pasted-key slot', () async {
+      final source = _FakeSource(
+        secrets: {
+          'ref': _secret('ref', '', kind: SecretKind.privateKey),
+        },
+      );
+
+      await expectLater(
+        CredentialResolver(source).resolve(
+          _config(AuthMethod.privateKey, secretRef: 'ref'),
+          draft: const CredentialDraft(
+            credentialAction: CredentialEditAction.keep,
+          ),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('re-pasting the same PEM may keep its passphrase', () async {
+      final source = _FakeSource(
+        secrets: {
+          'ref': _secret(
+            'ref',
+            'SAME PEM',
+            kind: SecretKind.privateKey,
+            keyPassphrase: 'saved phrase',
+          ),
+        },
+      );
+      final credentials = await CredentialResolver(source).resolve(
+        _config(AuthMethod.privateKey, secretRef: 'ref'),
+        draft: const CredentialDraft(
+          privateKeyPem: 'SAME PEM',
+          credentialAction: CredentialEditAction.replace,
+          passphraseAction: KeyPassphraseAction.keep,
+        ),
+      );
+
+      expect(credentials.privateKeyPem, 'SAME PEM');
+      expect(credentials.keyPassphrase, 'saved phrase');
+    });
+
+    test('a different pasted PEM cannot keep another key passphrase',
+        () async {
+      final source = _FakeSource(
+        secrets: {
+          'ref': _secret(
+            'ref',
+            'OLD PEM',
+            kind: SecretKind.privateKey,
+            keyPassphrase: 'old phrase',
+          ),
+        },
+      );
+
+      await expectLater(
+        CredentialResolver(source).resolve(
+          _config(AuthMethod.privateKey, secretRef: 'ref'),
+          draft: const CredentialDraft(
+            privateKeyPem: 'NEW PEM',
+            credentialAction: CredentialEditAction.replace,
+            passphraseAction: KeyPassphraseAction.keep,
+          ),
+        ),
+        throwsArgumentError,
+      );
+    });
   });
 
   group('agent auth', () {
@@ -247,6 +418,56 @@ void main() {
       expect(credentials.privateKeyPem, 'FILE-PEM');
       expect(credentials.keyPassphrase, 'stored');
       expect(source.secretReads, ['ref']);
+    });
+
+    test('a saved connection uses the passphrase bound to its file', () async {
+      final source = _FakeSource(
+        secrets: {
+          'ref': _secret(
+            'ref',
+            'PASTED',
+            kind: SecretKind.privateKey,
+            keyPassphrase: 'pasted phrase',
+            identityFilePath: '/k',
+            identityFilePassphrase: 'file phrase',
+          ),
+        },
+      );
+
+      final credentials = await CredentialResolver(source).resolve(
+        _config(
+          AuthMethod.privateKey,
+          secretRef: 'ref',
+          identityFilePath: '/k',
+        ),
+      );
+
+      expect(credentials.keyPassphrase, 'file phrase');
+    });
+
+    test('a saved file passphrase cannot move to a different path', () async {
+      final source = _FakeSource(
+        secrets: {
+          'ref': _secret(
+            'ref',
+            '',
+            kind: SecretKind.privateKey,
+            identityFilePath: '/old',
+            identityFilePassphrase: 'old phrase',
+          ),
+        },
+      );
+
+      await expectLater(
+        CredentialResolver(source).resolve(
+          _config(
+            AuthMethod.privateKey,
+            secretRef: 'ref',
+            identityFilePath: '/new',
+          ),
+        ),
+        throwsArgumentError,
+      );
     });
 
     test('no secretRef means no passphrase and no vault read', () async {
