@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/painting.dart';
 import 'package:quiver/collection.dart';
 
@@ -27,6 +28,13 @@ class TerminalPainter {
   /// [_textStyle] is changed, or when the system font changes.
   final _paragraphCache = ParagraphCache(10240);
 
+  /// Resolved foreground styles are shared by every glyph with the same
+  /// colour and painted flags. This avoids rebuilding equivalent [TextStyle]
+  /// objects as new glyphs enter the paragraph cache.
+  final _foregroundStyleCache = LruMap<(Color, int), TextStyle>(
+    maximumSize: _foregroundStyleCacheSize,
+  );
+
   /// [seance fork] Laid-out runs for ligature drawing (see [paintLine]),
   /// keyed by the run's text and painted style exactly: runs vary far more
   /// than single glyphs, so an int hash like [_paragraphCache]'s would
@@ -34,6 +42,8 @@ class TerminalPainter {
   final _runCache = LruMap<String, _RunLayout>(maximumSize: _runCacheSize);
 
   static const _runCacheSize = 4096;
+
+  static const _foregroundStyleCacheSize = 4096;
 
   /// [seance fork] The longest run shaped as one. Ligatures span two to
   /// four characters; the cap bounds the layout a long unbroken token
@@ -54,6 +64,7 @@ class TerminalPainter {
     _textStyle = value;
     _cellSize = _measureCharSize();
     _paragraphCache.clear();
+    _foregroundStyleCache.clear();
     _runCache.clear();
   }
 
@@ -74,6 +85,7 @@ class TerminalPainter {
     _theme = value;
     _colorPalette = PaletteBuilder(value).build();
     _paragraphCache.clear();
+    _foregroundStyleCache.clear();
     _runCache.clear();
   }
 
@@ -101,6 +113,12 @@ class TerminalPainter {
 
   /// The size of each character in the terminal.
   Size get cellSize => _cellSize;
+
+  @visibleForTesting
+  int get cachedParagraphCount => _paragraphCache.length;
+
+  @visibleForTesting
+  int get cachedForegroundStyleCount => _foregroundStyleCache.length;
 
   /// When the set of font available to the system changes, call this method to
   /// clear cached state related to font rendering.
@@ -392,12 +410,15 @@ class TerminalPainter {
       color = color.withOpacity(0.5);
     }
 
-    return _textStyle.toTextStyle(
-      color: color,
-      bold: cellFlags & CellFlags.bold != 0,
-      italic: cellFlags & CellFlags.italic != 0,
-      underline: cellFlags & CellFlags.underline != 0,
-    );
+    final paintedFlags =
+        cellFlags & (CellFlags.bold | CellFlags.italic | CellFlags.underline);
+    return _foregroundStyleCache[(color, paintedFlags)] ??= _textStyle
+        .toTextStyle(
+          color: color,
+          bold: paintedFlags & CellFlags.bold != 0,
+          italic: paintedFlags & CellFlags.italic != 0,
+          underline: paintedFlags & CellFlags.underline != 0,
+        );
   }
 
   /// Paints the background of a cell represented by [cellData] to [canvas] at

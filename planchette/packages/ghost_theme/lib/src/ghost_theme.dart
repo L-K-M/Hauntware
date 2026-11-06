@@ -7,6 +7,7 @@ import 'package:ghost_ui/ghost_ui.dart'
         FamilyPalette,
         GhostFileTheme,
         GhostMenuTheme,
+        GhostMenuThemeTokens,
         SidebarThemeTokens,
         ThemeModePreference,
         compositeOver,
@@ -44,6 +45,35 @@ const double _lowestMix = 0.2;
 /// under white text.
 const double _textContrast = 4.5;
 
+/// The picked accent split into the fill the user chose and the functional
+/// tones the interface draws over its three chrome regions.
+///
+/// A custom [fill] remains exact on filled controls. The indicator colours
+/// are the nearest black/white mixes which keep body-text contrast against
+/// the surfaces they paint on. [suggestedAccent] is a single replacement
+/// which works on every region, when one exists; the Appearance editor can
+/// offer it without silently changing the stored colour.
+@immutable
+final class GhostResolvedAccent {
+  const GhostResolvedAccent({
+    required this.fill,
+    required this.onFill,
+    required this.paneIndicator,
+    required this.sidebarIndicator,
+    required this.headerIndicator,
+    required this.suggestedAccent,
+    required this.adjusted,
+  });
+
+  final Color fill;
+  final Color onFill;
+  final Color paneIndicator;
+  final Color sidebarIndicator;
+  final Color headerIndicator;
+  final Color? suggestedAccent;
+  final bool adjusted;
+}
+
 /// Material's own corner radii, which [ThemePalette.cornerScale] scales:
 /// the M3 defaults, except the menu's and the tooltip's, which the sibling
 /// apps set themselves. A button's is half its standard 40 px height, where
@@ -70,6 +100,65 @@ bool isGhostDesktopPlatform(TargetPlatform platform) => switch (platform) {
 };
 
 Color _mix(Color from, Color to, double t) => Color.lerp(from, to, t)!;
+
+({Color color, int step})? _accessibleMix(
+  Color accent,
+  Iterable<Color> backgrounds,
+) {
+  final surfaces = backgrounds.toList(growable: false);
+  bool clears(Color color) => surfaces.every(
+    (background) => contrastRatio(color, background) >= _textContrast,
+  );
+  if (clears(accent)) return (color: accent, step: 0);
+
+  ({Color color, int step})? best;
+  for (final endpoint in const [_black, _white]) {
+    for (var step = 1; step <= 255; step++) {
+      final mixed = Color(_mix(accent, endpoint, step / 255).toARGB32());
+      if (!clears(mixed)) continue;
+      if (best == null || step < best.step) {
+        best = (color: mixed, step: step);
+      }
+    }
+  }
+  return best;
+}
+
+double _minimumContrast(Color color, List<Color> backgrounds) => backgrounds
+    .map((background) => contrastRatio(color, background))
+    .reduce((lowest, ratio) => ratio < lowest ? ratio : lowest);
+
+Color _bestEffortMix(Color accent, Iterable<Color> backgrounds) {
+  final surfaces = backgrounds.toList(growable: false);
+  var bestColor = accent;
+  var bestStep = 0;
+  var bestContrast = _minimumContrast(accent, surfaces);
+
+  for (final endpoint in const [_black, _white]) {
+    for (var step = 1; step <= 255; step++) {
+      final mixed = Color(_mix(accent, endpoint, step / 255).toARGB32());
+      final minimum = _minimumContrast(mixed, surfaces);
+      if (minimum > bestContrast ||
+          (minimum == bestContrast && step < bestStep)) {
+        bestColor = mixed;
+        bestStep = step;
+        bestContrast = minimum;
+      }
+    }
+  }
+  return bestColor;
+}
+
+({Color color, bool accessible}) _functionalMix(
+  Color accent,
+  Iterable<Color> backgrounds,
+) {
+  final surfaces = backgrounds.toList(growable: false);
+  final accessible = _accessibleMix(accent, surfaces);
+  return accessible == null
+      ? (color: _bestEffortMix(accent, surfaces), accessible: false)
+      : (color: accessible.color, accessible: true);
+}
 
 /// The brightness [palette] is drawn at when Automatic colours follow
 /// [brightness]: see [resolveBrightness].
@@ -207,6 +296,70 @@ Color _selectionFor(Color accent) {
   unknown: palette.unknown ?? n.unknown,
 );
 
+GhostResolvedAccent _accentFor(
+  GhostThemeStyle style,
+  ThemePalette palette,
+  GhostThemeNeutrals n,
+) {
+  final tuned = palette.accent == style.seed;
+  // The exact seed keeps the hand-tuned fill family. Its indicators may
+  // still need adjusting when the user puts that family over custom chrome.
+  final fill = tuned ? n.primary : palette.accent;
+  final onFill = tuned ? n.onPrimary : legibleOn(fill);
+  if (tuned &&
+      palette.surface == null &&
+      palette.sidebar == null &&
+      palette.raised == null &&
+      palette.text == null) {
+    return GhostResolvedAccent(
+      fill: fill,
+      onFill: onFill,
+      paneIndicator: fill,
+      sidebarIndicator: fill,
+      headerIndicator: fill,
+      suggestedAccent: null,
+      adjusted: false,
+    );
+  }
+  final pane = n.surface;
+  final paneSurfaces = [
+    pane,
+    compositeOver(n.onSurface.withValues(alpha: 0.06), pane),
+    compositeOver(n.containerHighest, pane),
+  ];
+  final rail = n.containerLow;
+  final sidebarSurfaces = [
+    rail,
+    compositeOver(n.onSurface.withValues(alpha: 0.06), rail),
+    compositeOver(n.containerHighest, rail),
+  ];
+  final paneIndicator = _functionalMix(fill, paneSurfaces);
+  final sidebarIndicator = _functionalMix(fill, sidebarSurfaces);
+  final headerIndicator = _functionalMix(fill, [n.container]);
+  final suggested = _accessibleMix(fill, [
+    ...paneSurfaces,
+    ...sidebarSurfaces,
+    n.container,
+  ])?.color;
+  final adjusted =
+      !paneIndicator.accessible ||
+      !sidebarIndicator.accessible ||
+      !headerIndicator.accessible ||
+      paneIndicator.color != fill ||
+      sidebarIndicator.color != fill ||
+      headerIndicator.color != fill;
+
+  return GhostResolvedAccent(
+    fill: fill,
+    onFill: onFill,
+    paneIndicator: paneIndicator.color,
+    sidebarIndicator: sidebarIndicator.color,
+    headerIndicator: headerIndicator.color,
+    suggestedAccent: adjusted ? suggested : null,
+    adjusted: adjusted,
+  );
+}
+
 /// The chrome tokens the shell regions paint — Séance's fields plus the
 /// four status colours Poltergeist keeps beside them (its ledger's design:
 /// status belongs where it is held to the same contrast floor).
@@ -223,7 +376,11 @@ class GhostChrome extends ThemeExtension<GhostChrome> {
     required this.selectionFill,
     required this.onSelection,
     required this.inactiveSelectionFill,
+    required this.accentFill,
+    required this.onAccentFill,
     required this.activePaneIndicator,
+    required this.sidebarIndicator,
+    required this.headerIndicator,
     required this.secondaryText,
     required this.statusConnected,
     required this.statusConnecting,
@@ -245,7 +402,11 @@ class GhostChrome extends ThemeExtension<GhostChrome> {
   final Color selectionFill;
   final Color onSelection;
   final Color inactiveSelectionFill;
+  final Color accentFill;
+  final Color onAccentFill;
   final Color activePaneIndicator;
+  final Color sidebarIndicator;
+  final Color headerIndicator;
   final Color secondaryText;
 
   /// The one "connected" status colour (server dots, tab chips, probe
@@ -304,7 +465,11 @@ class GhostChrome extends ThemeExtension<GhostChrome> {
     Color? selectionFill,
     Color? onSelection,
     Color? inactiveSelectionFill,
+    Color? accentFill,
+    Color? onAccentFill,
     Color? activePaneIndicator,
+    Color? sidebarIndicator,
+    Color? headerIndicator,
     Color? secondaryText,
     Color? statusConnected,
     Color? statusConnecting,
@@ -327,7 +492,11 @@ class GhostChrome extends ThemeExtension<GhostChrome> {
       onSelection: onSelection ?? this.onSelection,
       inactiveSelectionFill:
           inactiveSelectionFill ?? this.inactiveSelectionFill,
+      accentFill: accentFill ?? this.accentFill,
+      onAccentFill: onAccentFill ?? this.onAccentFill,
       activePaneIndicator: activePaneIndicator ?? this.activePaneIndicator,
+      sidebarIndicator: sidebarIndicator ?? this.sidebarIndicator,
+      headerIndicator: headerIndicator ?? this.headerIndicator,
       secondaryText: secondaryText ?? this.secondaryText,
       statusConnected: statusConnected ?? this.statusConnected,
       statusConnecting: statusConnecting ?? this.statusConnecting,
@@ -375,11 +544,19 @@ class GhostChrome extends ThemeExtension<GhostChrome> {
         other.inactiveSelectionFill,
         t,
       )!,
+      accentFill: Color.lerp(accentFill, other.accentFill, t)!,
+      onAccentFill: Color.lerp(onAccentFill, other.onAccentFill, t)!,
       activePaneIndicator: Color.lerp(
         activePaneIndicator,
         other.activePaneIndicator,
         t,
       )!,
+      sidebarIndicator: Color.lerp(
+        sidebarIndicator,
+        other.sidebarIndicator,
+        t,
+      )!,
+      headerIndicator: Color.lerp(headerIndicator, other.headerIndicator, t)!,
       secondaryText: Color.lerp(secondaryText, other.secondaryText, t)!,
       statusConnected: Color.lerp(statusConnected, other.statusConnected, t)!,
       statusConnecting: Color.lerp(
@@ -405,6 +582,7 @@ class GhostChrome extends ThemeExtension<GhostChrome> {
 GhostChrome _chromeOver(
   GhostThemeNeutrals n,
   ({Color online, Color offline, Color connecting, Color unknown}) status,
+  GhostResolvedAccent accent,
   TargetPlatform platform, {
   required double cornerScale,
 }) {
@@ -420,7 +598,11 @@ GhostChrome _chromeOver(
     selectionFill: n.selection,
     onSelection: n.onSelection,
     inactiveSelectionFill: n.containerHighest,
-    activePaneIndicator: n.primary,
+    accentFill: accent.fill,
+    onAccentFill: accent.onFill,
+    activePaneIndicator: accent.paneIndicator,
+    sidebarIndicator: accent.sidebarIndicator,
+    headerIndicator: accent.headerIndicator,
     secondaryText: n.onSurfaceVariant,
     statusConnected: status.online,
     statusConnecting: status.connecting,
@@ -445,6 +627,7 @@ GhostChrome _chromeFor(
   return _chromeOver(
     n,
     _statusFor(palette, n),
+    _accentFor(style, palette, n),
     platform,
     cornerScale: palette.cornerScale,
   );
@@ -480,6 +663,18 @@ TextTheme _desktopText(TextTheme base) => base.copyWith(
 /// tweaks are the style's, so a second host binds its own values rather
 /// than porting the builder.
 abstract final class GhostTheme {
+  /// The picked accent as it is drawn on fills and as contrast-safe
+  /// functional tones over the pane, sidebar and header regions.
+  static GhostResolvedAccent resolveAccent(
+    GhostThemeStyle style,
+    ThemePalette palette,
+    Brightness brightness,
+  ) {
+    final drawnAt = _drawnAt(palette, brightness);
+    final n = _neutralsFor(style, palette, drawnAt);
+    return _accentFor(style, palette, n);
+  }
+
   /// The style's brand-preset themes, the Automatic palette at each
   /// brightness. [platform] overrides the host platform the type ramp and
   /// row extents are chosen for — tests and captures render the desktop
@@ -565,6 +760,7 @@ abstract final class GhostTheme {
   }) {
     final drawnAt = _drawnAt(palette, brightness);
     final n = _neutralsFor(style, palette, drawnAt);
+    final accent = _accentFor(style, palette, n);
     final ownSurface = palette.surface != null;
     final scheme =
         ColorScheme.fromSeed(
@@ -591,8 +787,12 @@ abstract final class GhostTheme {
           outlineVariant: n.outlineVariant,
           inverseSurface: n.inverseSurface,
           onInverseSurface: n.onInverseSurface,
-          primary: n.primary,
-          onPrimary: n.onPrimary,
+          primary: accent.paneIndicator,
+          onPrimary:
+              palette.accent == style.seed &&
+                  accent.paneIndicator == accent.fill
+              ? n.onPrimary
+              : legibleOn(accent.paneIndicator),
           primaryContainer: n.primaryContainer,
           onPrimaryContainer: n.onPrimaryContainer,
           secondaryContainer: n.secondaryContainer,
@@ -625,6 +825,7 @@ abstract final class GhostTheme {
     final chrome = _chromeOver(
       n,
       _statusFor(palette, n),
+      accent,
       resolvedPlatform,
       cornerScale: scale,
     );
@@ -693,9 +894,20 @@ abstract final class GhostTheme {
               ),
             )
           : null,
-      filledButtonTheme: scaled
+      filledButtonTheme:
+          (scaled || palette.accent != style.seed || accent.adjusted)
           ? FilledButtonThemeData(
-              style: FilledButton.styleFrom(shape: buttonShape),
+              style: FilledButton.styleFrom(
+                backgroundColor:
+                    palette.accent == style.seed && !accent.adjusted
+                    ? null
+                    : accent.fill,
+                foregroundColor:
+                    palette.accent == style.seed && !accent.adjusted
+                    ? null
+                    : accent.onFill,
+                shape: scaled ? buttonShape : null,
+              ),
             )
           : null,
       floatingActionButtonTheme: scaled && style.fabRadius != null
@@ -730,12 +942,14 @@ abstract final class GhostTheme {
       extensions: [
         chrome,
         FamilyPalette.forBrightness(drawnAt),
+        GhostMenuThemeTokens(indicator: chrome.headerIndicator),
         SidebarThemeTokens(
           sidebarBackground: chrome.sidebarBackground,
           separator: chrome.separator,
           hoverFill: chrome.hoverFill,
           capsuleFill: chrome.capsuleFill,
           inactiveSelectionFill: chrome.inactiveSelectionFill,
+          indicator: chrome.sidebarIndicator,
           secondaryText: chrome.secondaryText,
           sidebarRowExtent: chrome.sidebarRowExtent,
           cornerScale: chrome.cornerScale,

@@ -163,6 +163,44 @@ void main() {
     }
   }
 
+  test('custom accents keep their fill and get contrast-safe chrome tones', () {
+    for (final brightness in Brightness.values) {
+      final palette = klabautermannThemePresets.brand.copyWith(
+        accent: brightness == Brightness.light
+            ? const Color(0xFFFFD600)
+            : const Color(0xFF3949AB),
+      );
+      final theme = GhostTheme.build(
+        klabautermannThemeStyle,
+        palette,
+        brightness,
+      );
+      final chrome = theme.extension<GhostChrome>()!;
+      final rail = chrome.sidebarBackground;
+      final surfaces = {
+        'pane': (chrome.activePaneIndicator, chrome.paneBackground),
+        'sidebar': (chrome.sidebarIndicator, rail),
+        'sidebar hover': (
+          chrome.sidebarIndicator,
+          compositeOver(chrome.hoverFill, rail),
+        ),
+        'header': (chrome.headerIndicator, chrome.headerBackground),
+      };
+      for (final MapEntry(key: name, value: pair) in surfaces.entries) {
+        expect(
+          contrastRatio(pair.$1, pair.$2),
+          greaterThanOrEqualTo(_textContrast),
+          reason: '$name, ${brightness.name}',
+        );
+      }
+      expect(chrome.accentFill, palette.accent);
+      expect(
+        theme.filledButtonTheme.style?.backgroundColor?.resolve({}),
+        palette.accent,
+      );
+    }
+  });
+
   testWidgets('a fleet row paints its dot from the theme chrome', (
     tester,
   ) async {

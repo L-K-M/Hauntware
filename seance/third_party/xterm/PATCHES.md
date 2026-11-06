@@ -252,40 +252,36 @@ what must be preserved.
 ### Robustness (regressions: `app/seance_app/test/terminal_runaway_sequence_test.dart`,
 `test/src/core/escape/parser_test.dart`)
 
-27. **An unfinished escape sequence is no longer unbounded**
-    (`core/escape/parser.dart#_process`, `kMaxPendingSequenceLength`):
-    upstream parks an incomplete sequence by rolling the whole run back onto
-    the `ByteConsumer` and waiting for the rest on a later `write`. That is
-    right for a sequence split across a chunk boundary and catastrophic for
-    one that never finishes: every later `write` re-parses the entire pending
-    run from the top, so the cost is **quadratic** in the output that follows,
-    and the queue pins all of it in memory at ~26x (`ByteConsumer` stores one
-    `int` per rune, and `_consumeOsc` rebuilds a `StringBuffer` over the whole
-    run each pass). OSC closes only on BEL or ESC, so a single stray `ESC ]`
-    — a log with captured escapes, a binary, a program killed mid-title — was
-    enough. Measured on the real parser at 4 KiB chunks: 1 MiB of following
-    output took 2.1 s, 4 MiB took 31 s, 8 MiB took 120 s, 32 MiB did not
-    finish in 10 minutes, and **nothing was ever rendered** — the terminal was
-    wedged for the rest of the session at 100% CPU with the heap climbing. A
-    well-formed but large payload (an `imgcat` OSC 1337, a big OSC 52
-    clipboard) hit the same wall without being malformed at all.
+27. **Escape parsing is incremental, bounded, and quarantines control
+    strings** (`core/escape/parser.dart`): upstream parks an incomplete
+    sequence by rolling the whole run back onto `ByteConsumer`. Every later
+    `write` then re-parses the entire pending run, making an unterminated OSC
+    quadratic in time and unbounded in memory. A single stray `ESC ]` in a
+    log, binary, or program killed mid-title could wedge a session at 100% CPU.
 
-    The parser now only parks a run while it is still short enough to be a
-    real sequence; past `kMaxPendingSequenceLength` (64 KiB — every supported
-    sequence is orders of magnitude shorter) it drops what it has consumed and
-    resumes parsing, so the payload reverts to ordinary text and a later
-    terminator lands normally. Same measurements after: 8 MiB in 148 ms and
-    32 MiB in 555 ms, both linear and level with plain output, RSS flat. At
-    most one cap's worth plus the current write is lost, once per runaway
-    sequence. The cap is injectable on the constructor so tests can drive the
-    abandon path without generating 64 KiB.
+    The parser is now a persistent state machine over runes. Every input rune
+    is consumed once, incomplete CSI/OSC/SCS state survives write boundaries,
+    and debugger token offsets remain global exclusive rune offsets. OSC keeps
+    at most `kMaxPendingSequenceLength` (64 KiB, injectable for tests). On
+    overflow it clears the retained payload and discards through BEL or ST;
+    neither payload nor terminator can become terminal input. Unsupported DCS,
+    SOS, PM, and APC are likewise quarantined through ST, including embedded
+    controls. CAN and SUB cancel every incomplete sequence, and a split ST is
+    recognized without reparsing.
 
-    Note this is a *bound*, not a fix for the underlying design: the parser is
-    documented as having "no internal state", which is exactly why it must
-    re-parse. Making OSC/CSI parsing resumable across writes would make it
-    O(n) and support arbitrarily large legitimate payloads — worth doing if
-    inline images or large OSC 52 clipboard traffic ever matter here, and
-    unnecessary until then.
+    CSI is limited to 4096 runes and 32 positional parameters. Extra or
+    structurally invalid input is ignored through the final byte. Decimal
+    accumulation saturates at 1,000,000 before multiplication; this tighter
+    limit bounds the work requested from downstream terminal handlers. The
+    parser keeps valid empty parameters, private
+    markers, intermediates, and SCS designations compatible with the fork.
+
+    SGR 38/48 validates group length and the 0..255 RGB/palette ranges. A
+    truncated group or unknown mode stops the remainder from being
+    reinterpreted as unrelated styles; a complete range-invalid group is
+    skipped atomically. Remote CSI 8 window resizing is disabled because
+    remote output must not resize the local UI; local `Terminal.resize` and
+    CSI 18 size queries remain supported.
 
 ### Selection is bounded by the content
 
@@ -644,6 +640,22 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     already did (patch 45), and the handed-on cells are cleared. The
     randomized round trip in `test/src/core/reflow_property_test.dart`
     now covers one column.
+
+### Bounded completed controls
+
+49. **REP cannot monopolize the UI isolate**
+    (`terminal.dart#repeatPreviousCharacter`; regressions:
+    `test/src/terminal_test.dart`,
+    `app/seance_app/test/terminal_rep_bound_test.dart`): a remote program could
+    send a short `CSI 999999999 b` sequence and make the terminal synchronously
+    write that many cells. Pending-sequence limits do not help once a control
+    is complete. REP now performs at most one active visible scrolling
+    region's worth of cell writes (`viewWidth * DECSTBM height`). A
+    scroll-aware sub-bound prevents a cursor at the bottom margin from making
+    each of those writes copy the entire region. Normal counts, zero's default
+    of one, reduced scrolling margins, and the no-previous-cell no-op keep
+    their existing behavior. The budget uses `BigInt`, so adversarial viewport
+    dimensions cannot wrap its product.
 
 ### App-layer notes (outside this package)
 

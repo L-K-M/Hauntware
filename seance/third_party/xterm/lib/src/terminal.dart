@@ -20,6 +20,7 @@ import 'package:xterm/src/core/state.dart';
 import 'package:xterm/src/core/tabs.dart';
 import 'package:xterm/src/utils/ascii.dart';
 import 'package:xterm/src/utils/circular_buffer.dart';
+import 'package:xterm/src/utils/unicode_v11.dart';
 
 /// [Terminal] is an interface to interact with command line applications. It
 /// translates escape sequences from the application into updates to the
@@ -500,8 +501,51 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
 
   @override
   void repeatPreviousCharacter(int count) {
-    if (_precedingCodepoint == 0) {
+    if (_precedingCodepoint == 0 || count <= 0) {
       return;
+    }
+
+    // [seance fork] REP is a completed control, so the parser's pending-input
+    // cap cannot protect this synchronous loop. Repeating beyond the active
+    // visible scrolling region only produces output that the same operation
+    // immediately scrolls away; cap that work while preserving ordinary REP.
+    final regionHeight = max(
+      0,
+      _buffer.marginBottom - _buffer.marginTop + 1,
+    );
+    var writeBudget = BigInt.from(viewWidth) * BigInt.from(regionHeight);
+
+    // A wrap inside a reduced margin (or the alternate buffer) copies every
+    // line in that region. Once the cursor reaches the bottom, cap REP before
+    // it can perform that linear scroll more than once. Otherwise a width-one
+    // terminal turns the region-sized write cap into quadratic work.
+    final hasLinearScroll = _buffer.isAltBuffer ||
+        _buffer.marginTop != 0 ||
+        _buffer.marginBottom != viewHeight - 1;
+    if (hasLinearScroll) {
+      final cursorY = _buffer.cursorY;
+      int? cheapWraps;
+      if (cursorY <= _buffer.marginBottom) {
+        cheapWraps = _buffer.marginBottom - cursorY;
+      } else if (_buffer.isAltBuffer) {
+        cheapWraps = viewHeight - 1 - cursorY;
+      }
+
+      if (cheapWraps != null) {
+        final scrollAwareBudget =
+            BigInt.from(viewWidth) * (BigInt.from(cheapWraps) + BigInt.one);
+        if (scrollAwareBudget < writeBudget) {
+          writeBudget = scrollAwareBudget;
+        }
+      }
+    }
+
+    final codepointWidth = max(1, unicodeV11.wcwidth(_precedingCodepoint));
+    final maxRepeats = writeBudget ~/ BigInt.from(codepointWidth);
+    if (BigInt.from(count) > maxRepeats) {
+      // A one-cell viewport cannot contain a wide character, but REP's
+      // default count of one still has to remain observable.
+      count = max(1, maxRepeats.toInt());
     }
 
     for (var i = 0; i < count; i++) {

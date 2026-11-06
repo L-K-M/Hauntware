@@ -118,6 +118,14 @@ final class KlabautermannAppearanceStrings extends GhostAppearanceStrings {
   @override
   String get accent => _l10n.appearanceAccent;
   @override
+  String get accentAdjusted => _l10n.appearanceAccentAdjusted;
+  @override
+  String get chosenAccentPreview => _l10n.appearanceChosenAccentPreview;
+  @override
+  String get adjustedAccentPreview => _l10n.appearanceAdjustedAccentPreview;
+  @override
+  String get useAdjustedAccent => _l10n.appearanceUseAdjustedAccent;
+  @override
   String slotLabel(ThemeSlot slot) => switch (slot) {
     ThemeSlot.surface => _l10n.appearanceSlotSurface,
     ThemeSlot.sidebar => _l10n.appearanceSlotSidebar,

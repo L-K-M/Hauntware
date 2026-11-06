@@ -180,6 +180,11 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
       final state = await (widget.initOverride ?? _init)();
       if (!mounted) return;
       setState(() => _state = state);
+      // Keep startup notices on the common path so initOverride exercises
+      // them without invoking platform channels in widget tests.
+      _warnIfSettingsWereRecovered(state);
+      _warnIfKeystoreUnavailable(state);
+      _warnIfAppLocked(state);
       // Bound only once the app's own window can carry the review.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -216,9 +221,6 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
     if (!kIsWeb && (Platform.isMacOS || Platform.isLinux || Platform.isWindows)) {
       settingsWindowHost = SettingsWindowHost(state);
     }
-    _warnIfSettingsWereRecovered(state);
-    _warnIfKeystoreUnavailable(state);
-    _warnIfAppLocked(state);
     // Fire-and-forget: don't let a slow/offline update check hold up startup.
     unawaited(_checkForUpdate(state));
     return state;
@@ -228,10 +230,10 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
     final error = state.credentialAccessError;
     if (error == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final context = navigatorKey.currentContext;
-      if (context == null) return;
+      final overlay = navigatorKey.currentState?.overlay;
+      if (overlay == null) return;
       showTopToast(
-        Overlay.of(context, rootOverlay: true),
+        overlay,
         message: error,
         actionLabel: 'Retry',
         onAction: () => unawaited(_retryAppLock(state)),
@@ -259,10 +261,10 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
     final masterKeys = state.services.masterKeys;
     if (masterKeys.keystoreStatus != KeystoreStatus.unavailable) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final context = navigatorKey.currentContext;
-      if (context == null) return;
+      final overlay = navigatorKey.currentState?.overlay;
+      if (overlay == null) return;
       showTopToast(
-        Overlay.of(context, rootOverlay: true),
+        overlay,
         message: 'The OS keyring is locked or unavailable '
             '(${masterKeys.lastKeystoreError ?? 'no details'}) — saved '
             'passwords, keys, and tokens are unreachable. Unlock the login '
@@ -289,13 +291,10 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
         _warnIfAppLocked(state);
         return;
       }
-      final context = navigatorKey.currentContext;
-      if (context == null) return;
+      final overlay = navigatorKey.currentState?.overlay;
+      if (overlay == null) return;
       showTopToast(
-        // navigatorKey's context is the root Navigator's — it outlives the
-        // awaits above; the lint can't see that this isn't widget-local.
-        // ignore: use_build_context_synchronously
-        Overlay.of(context, rootOverlay: true),
+        overlay,
         message: 'Keyring unlocked — saved secrets are available again.',
       );
     } else {
@@ -310,15 +309,18 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   void _warnIfSettingsWereRecovered(AppState state) {
     if (!state.services.settingsWereRecovered) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final context = navigatorKey.currentContext;
-      if (context == null) return;
+      final overlay = navigatorKey.currentState?.overlay;
+      if (overlay == null) return;
       showTopToast(
-        Overlay.of(context, rootOverlay: true),
+        overlay,
         message:
             'Your settings file could not be read and was reset. The previous '
             'one is kept as settings.json.corrupt — check Settings before '
             'syncing.',
-        duration: const Duration(seconds: 10),
+        dismissal: TopToastDismissal.persistent,
+        coalesceKey: 'settings-recovered',
+        actionLabel: 'Open Settings',
+        onAction: openSettings,
       );
     });
   }

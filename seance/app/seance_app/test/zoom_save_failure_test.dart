@@ -64,6 +64,12 @@ const _server = ServerConfig(
 const _diskFull = FileSystemException('disk full');
 const _menuChannel = MethodChannel('seance/menu');
 
+TargetPlatform get _hostPlatform {
+  if (Platform.isMacOS) return TargetPlatform.macOS;
+  if (Platform.isWindows) return TargetPlatform.windows;
+  return TargetPlatform.linux;
+}
+
 /// The zoom chords resize at once and save afterwards. A failed save says
 /// so, unless a newer zoom's save already carries the change.
 void main() {
@@ -119,9 +125,9 @@ void main() {
   Future<void> chord(
     WidgetTester tester,
     LogicalKeyboardKey key, {
+    required bool apple,
     required bool terminal,
   }) async {
-    final apple = Platform.isMacOS || Platform.isIOS;
     final modifiers = [
       apple ? LogicalKeyboardKey.metaLeft : LogicalKeyboardKey.controlLeft,
       if (terminal && !apple) LogicalKeyboardKey.shiftLeft,
@@ -149,13 +155,19 @@ void main() {
     state.activeTabId = tab.id;
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(platform: _hostPlatform),
         builder: (context, child) => AppScope(state: state, child: child!),
         home: TerminalPane(showAssistantAffordance: false, onBack: () {}),
       ),
     );
     await tester.pump();
 
-    await chord(tester, LogicalKeyboardKey.equal, terminal: true);
+    await chord(
+      tester,
+      LogicalKeyboardKey.equal,
+      apple: Platform.isMacOS || Platform.isIOS,
+      terminal: true,
+    );
     expect(services.settings.terminalFontSize, kDefaultTerminalFontSize + 1);
     services.saves.last.completeError(_diskFull);
     await tester.pump();
@@ -185,6 +197,7 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(platform: _hostPlatform),
         home: Scaffold(
           body: EditorTabView(tab: tab, state: state, isActive: true),
         ),
@@ -202,7 +215,17 @@ void main() {
     await tester.tap(find.byType(TextField));
     await tester.pump();
 
-    await chord(tester, LogicalKeyboardKey.equal, terminal: false);
+    final editorPlatform = Theme.of(
+      tester.element(find.byType(TextField)),
+    ).platform;
+    await chord(
+      tester,
+      LogicalKeyboardKey.equal,
+      apple:
+          editorPlatform == TargetPlatform.macOS ||
+          editorPlatform == TargetPlatform.iOS,
+      terminal: false,
+    );
     expect(services.settings.editorFontSize, 16);
     services.saves.last.completeError(_diskFull);
     await tester.pump();

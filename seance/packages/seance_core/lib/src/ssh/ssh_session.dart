@@ -12,6 +12,7 @@ import 'package:seance_protocol/seance_protocol.dart';
 import '../hostkey/tofu.dart';
 import '../terminal/session_transport.dart';
 import '../terminal/terminal_engine.dart';
+import 'bounded_open.dart';
 import 'byte_duplex.dart';
 import 'loopback_forward.dart';
 import 'remote_command.dart';
@@ -36,6 +37,26 @@ const _connectTimedOutCodes = {60, 110, 10060};
 
 Future<void> _discardCleanup(CleanupAction action) => runSequentialCleanup(
       [action],
+      actionTimeout: _cleanupActionTimeout,
+      failureMode: CleanupFailureMode.ignore,
+    );
+
+Future<void> _discardSessionChannel(SSHSession session) =>
+    runSequentialCleanup(
+      [session.close, () => session.channel.destroy()],
+      actionTimeout: _cleanupActionTimeout,
+      failureMode: CleanupFailureMode.ignore,
+    );
+
+Future<void> _discardForwardChannel(SSHForwardChannel channel) =>
+    runSequentialCleanup(
+      [channel.close, channel.destroy],
+      actionTimeout: _cleanupActionTimeout,
+      failureMode: CleanupFailureMode.ignore,
+    );
+
+Future<void> _discardSftpClient(SftpClient client) => runSequentialCleanup(
+      [client.close],
       actionTimeout: _cleanupActionTimeout,
       failureMode: CleanupFailureMode.ignore,
     );
@@ -691,6 +712,8 @@ class SshSession implements SessionTransport {
   final Completer<void> _stdoutDone = Completer<void>();
   final Completer<void> _stderrDone = Completer<void>();
   final SingleFlightCleanup _cleanup = SingleFlightCleanup();
+  final Completer<void> _closing = Completer<void>();
+  final Duration _channelTimeout;
   late final ExecCore _execCore = ExecCore(
     isDisconnected: () => _closed || client.isClosed,
     disconnectedMessage: 'The SSH session is disconnected.',
@@ -713,7 +736,7 @@ class SshSession implements SessionTransport {
   @override
   void Function()? get onClosed => _onClosed;
 
-  SshSession._(this.client, this.shell, this.engine);
+  SshSession._(this.client, this.shell, this.engine, this._channelTimeout);
 
   /// Pipe SSH stdout/stderr into the engine and the engine's user input back
   /// into the shell; forward resize events.
@@ -755,7 +778,23 @@ class SshSession implements SessionTransport {
     if (open != null) return open;
 
     final opening = _loopbackForwards[key] = LoopbackForward.bind(
-      () async => ChannelByteDuplex(await client.forwardLocal(host, port)),
+      () async {
+        final channel = await boundedOpen(
+          pending: client.forwardLocal(host, port),
+          timeout: _channelTimeout,
+          ownerClosed: _closing.future,
+          isOwnerClosed: () => _closed || client.isClosed,
+          ownerClosedError: () =>
+              StateError('The SSH session is disconnected.'),
+          discard: _discardForwardChannel,
+          timeoutMessage: 'SSH forwarding channel open timed out.',
+        );
+        if (_closed || client.isClosed) {
+          await _discardForwardChannel(channel);
+          throw StateError('The SSH session is disconnected.');
+        }
+        return ChannelByteDuplex(channel);
+      },
       // A port below 1024 is not taken here even when free: macOS and
       // Windows let any process bind one on loopback, and holding 80 or 443
       // for the session would keep this device's own server off it.
@@ -796,9 +835,33 @@ class SshSession implements SessionTransport {
   Future<RemoteFileSystem> _openRemoteFileSystem(Duration timeout) async {
     SftpClient? opening;
     try {
-      opening = await client.sftp().timeout(timeout);
-      final sftp = opening;
-      await sftp.handshake.timeout(timeout);
+      final sftp = await boundedOpen<SftpClient>(
+        pending: client.sftp(),
+        timeout: timeout,
+        ownerClosed: _closing.future,
+        isOwnerClosed: () => _closed || client.isClosed,
+        ownerClosedError: () => const RemoteFileException(
+          kind: RemoteFileErrorKind.disconnected,
+          operation: 'open SFTP',
+          message: 'The SSH session disconnected while SFTP was opening.',
+        ),
+        discard: _discardSftpClient,
+        timeoutMessage: 'SFTP channel open timed out.',
+      );
+      opening = sftp;
+      await boundedOpen<void>(
+        pending: sftp.handshake,
+        timeout: timeout,
+        ownerClosed: _closing.future,
+        isOwnerClosed: () => _closed || client.isClosed,
+        ownerClosedError: () => const RemoteFileException(
+          kind: RemoteFileErrorKind.disconnected,
+          operation: 'open SFTP',
+          message: 'The SSH session disconnected while SFTP was opening.',
+        ),
+        discard: (_) {},
+        timeoutMessage: 'SFTP handshake timed out.',
+      );
       if (_closed || client.isClosed) {
         throw const RemoteFileException(
           kind: RemoteFileErrorKind.disconnected,
@@ -816,9 +879,13 @@ class SshSession implements SessionTransport {
       _remoteFileSystem = null;
       if (opening != null) await _discardCleanup(opening.close);
       throw RemoteFileException(
-        kind: RemoteFileErrorKind.unsupported,
+        kind: e is TimeoutException
+            ? RemoteFileErrorKind.other
+            : RemoteFileErrorKind.unsupported,
         operation: 'open SFTP',
-        message: 'Could not open SFTP on this server: $e',
+        message: e is TimeoutException
+            ? 'SFTP did not open within ${timeout.inMilliseconds}ms.'
+            : 'Could not open SFTP on this server: $e',
         cause: e,
       );
     }
@@ -845,10 +912,27 @@ class SshSession implements SessionTransport {
   }) =>
       _execCore.run(
         command,
-        open: () => client.execute(command),
+        open: () => _openCommandChannel(command),
         timeout: timeout,
         maxOutputBytes: maxOutputBytes,
       );
+
+  Future<SSHSession> _openCommandChannel(String command) async {
+    final channel = await boundedOpen(
+      pending: client.execute(command),
+      timeout: _channelTimeout,
+      ownerClosed: _closing.future,
+      isOwnerClosed: () => _closed || client.isClosed,
+      ownerClosedError: () => StateError('The SSH session is disconnected.'),
+      discard: _discardSessionChannel,
+      timeoutMessage: 'SSH command channel open timed out.',
+    );
+    if (_closed || client.isClosed) {
+      await _discardSessionChannel(channel);
+      throw StateError('The SSH session is disconnected.');
+    }
+    return channel;
+  }
 
   @override
   void resize(TerminalSize size) {
@@ -897,6 +981,7 @@ class SshSession implements SessionTransport {
   Future<void> _finish() => _cleanup.run(_finishOnce);
 
   Future<void> _finishOnce() async {
+    if (!_closing.isCompleted) _closing.complete();
     _closed = true;
     final subscriptions = List<StreamSubscription<dynamic>>.of(_subs);
     final sftpClient = _sftpClient;
@@ -1019,8 +1104,7 @@ Future<(SSHClient, AuthKind)> openAuthenticatedClient({
       ((host, port, socketTimeout) =>
           SSHSocket.connect(host, port, timeout: socketTimeout));
   final forwardConnector = forward ??
-      ((client, host, port, channelTimeout) =>
-          client.forwardLocal(host, port).timeout(channelTimeout));
+      ((client, host, port, _) => client.forwardLocal(host, port));
 
   SSHClient? parent;
   AuthKind? authKind;
@@ -1062,11 +1146,21 @@ Future<(SSHClient, AuthKind)> openAuthenticatedClient({
       final jumpClient = parent;
       try {
         note('Forwarding through the jump route to $currentTarget …');
-        final forwarded = await forwardConnector(
+        final pending = forwardConnector(
           jumpClient,
           host.config.host,
           host.config.port,
           timeout,
+        );
+        final forwarded = await boundedOpen(
+          pending: pending,
+          timeout: timeout,
+          ownerClosed: jumpClient.done,
+          isOwnerClosed: () => jumpClient.isClosed,
+          ownerClosedError: () =>
+              StateError('The jump-host connection closed.'),
+          discard: (socket) => socket.destroy(),
+          timeoutMessage: 'SSH jump forwarding channel open timed out.',
         );
         socket = _OwnedJumpSocket(forwarded, jumpClient);
       } catch (error) {
@@ -1524,11 +1618,19 @@ class SshSessionManager {
     void note(String message) => log?.add(message);
 
     try {
-      final shell = await client.shell(
-        pty: SSHPtyConfig(width: engine.size.cols, height: engine.size.rows),
+      final shell = await boundedOpen(
+        pending: client.shell(
+          pty: SSHPtyConfig(width: engine.size.cols, height: engine.size.rows),
+        ),
+        timeout: timeout,
+        ownerClosed: client.done,
+        isOwnerClosed: () => client.isClosed,
+        ownerClosedError: () => StateError('The SSH client closed.'),
+        discard: _discardSessionChannel,
+        timeoutMessage: 'SSH shell channel open timed out.',
       );
       note('Authenticated. Shell session opened.');
-      final session = SshSession._(client, shell, engine).._wire();
+      final session = SshSession._(client, shell, engine, timeout).._wire();
       // After _wire(), so the script's echo and output are captured by the
       // engine from its very first bytes.
       _runLoginScript(shell, config, note);
@@ -1542,7 +1644,9 @@ class SshSessionManager {
         summary,
         e,
         log ?? SshConnectionLog(),
-        kind: SshConnectFailureKind.other,
+        kind: _isTimeout(e)
+            ? SshConnectFailureKind.timedOut
+            : SshConnectFailureKind.other,
       );
     }
   }

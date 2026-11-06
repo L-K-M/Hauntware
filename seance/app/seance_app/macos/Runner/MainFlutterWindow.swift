@@ -4,6 +4,17 @@ import UniformTypeIdentifiers
 import macos_window_utils
 import window_manager
 
+enum EditMenuDestination {
+  case terminal
+  case responderChain
+}
+
+enum EditMenuRouting {
+  static func destination(terminalFocused: Bool, windowIsKey: Bool) -> EditMenuDestination {
+    terminalFocused && windowIsKey ? .terminal : .responderChain
+  }
+}
+
 class MainFlutterWindow: NSWindow {
   private var menuChannel: FlutterMethodChannel?
   private var filesChannel: FlutterMethodChannel?
@@ -358,7 +369,11 @@ class MainFlutterWindow: NSWindow {
     }
   }
 
-  private var routesEditToTerminal: Bool { terminalFocused && isKeyWindow }
+  private var routesEditToTerminal: Bool {
+    EditMenuRouting.destination(
+      terminalFocused: terminalFocused,
+      windowIsKey: isKeyWindow) == .terminal
+  }
 
   @objc private func editCopy(_ sender: Any?) {
     if routesEditToTerminal {
