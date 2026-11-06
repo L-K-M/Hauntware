@@ -125,9 +125,9 @@ void main() {
   Future<void> chord(
     WidgetTester tester,
     LogicalKeyboardKey key, {
+    required bool apple,
     required bool terminal,
   }) async {
-    final apple = _hostPlatform == TargetPlatform.macOS;
     final modifiers = [
       apple ? LogicalKeyboardKey.metaLeft : LogicalKeyboardKey.controlLeft,
       if (terminal && !apple) LogicalKeyboardKey.shiftLeft,
@@ -162,7 +162,12 @@ void main() {
     );
     await tester.pump();
 
-    await chord(tester, LogicalKeyboardKey.equal, terminal: true);
+    await chord(
+      tester,
+      LogicalKeyboardKey.equal,
+      apple: Platform.isMacOS || Platform.isIOS,
+      terminal: true,
+    );
     expect(services.settings.terminalFontSize, kDefaultTerminalFontSize + 1);
     services.saves.last.completeError(_diskFull);
     await tester.pump();
@@ -210,7 +215,16 @@ void main() {
     await tester.tap(find.byType(TextField));
     await tester.pump();
 
-    await chord(tester, LogicalKeyboardKey.equal, terminal: false);
+    final editorPlatform = Theme.of(
+      tester.element(find.byType(TextField)),
+    ).platform;
+    await chord(
+      tester,
+      LogicalKeyboardKey.equal,
+      apple: editorPlatform == TargetPlatform.macOS ||
+          editorPlatform == TargetPlatform.iOS,
+      terminal: false,
+    );
     expect(services.settings.editorFontSize, 16);
     services.saves.last.completeError(_diskFull);
     await tester.pump();
