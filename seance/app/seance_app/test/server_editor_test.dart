@@ -495,6 +495,17 @@ void main() {
       expect(newRef, isNot('secret-box'));
       expect(await services!.vault.getSecret('secret-box'), isNull);
       expect((await services!.vault.getSecret(newRef))!.value, 'new password');
+      final withdrawals = await tester.runAsync(
+        () => services!.tombstoneStore.all(),
+      );
+      final withdrawal = withdrawals!.singleWhere(
+        (record) => record.id == 'secret:secret-box',
+      );
+      expect(withdrawal.deleted, isTrue);
+      expect(
+        withdrawal.updatedAt,
+        greaterThanOrEqualTo(state!.servers.single.updatedAt),
+      );
     });
 
     testWidgets('failed cleanup is queued, closes the saved editor, and retries',
@@ -542,6 +553,12 @@ void main() {
         {'secret-box'},
       );
       expect(await services!.vault.getSecret('secret-box'), isNotNull);
+      final withdrawals = await tester.runAsync(
+        () => services!.tombstoneStore.all(),
+      );
+      final withdrawal = withdrawals!.singleWhere(
+        (record) => record.id == 'secret:secret-box',
+      );
 
       store.deleteError = null;
       await tester.runAsync(
@@ -551,6 +568,16 @@ void main() {
       );
       expect(await services!.vault.getSecret('secret-box'), isNull);
       expect(services!.settings.pendingCredentialCleanup, isEmpty);
+      final retriedWithdrawals = await tester.runAsync(
+        () => services!.tombstoneStore.all(),
+      );
+      expect(
+        retriedWithdrawals!.singleWhere(
+          (record) => record.id == 'secret:secret-box',
+        ).updatedAt,
+        withdrawal.updatedAt,
+        reason: 'a cleanup retry retains the original withdrawal stamp',
+      );
     });
 
     testWidgets('save refuses a credential ref changed while the editor is open',
