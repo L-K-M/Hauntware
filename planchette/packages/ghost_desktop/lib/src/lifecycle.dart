@@ -45,9 +45,10 @@ enum GhostCoordinateSpace { logical, physicalOnWindows }
 enum MissingMonitorPolicy { rejectAndKeep, clampToNearest }
 
 /// Who owns the native close signal. [intercept] sets prevent-close so the
-/// lifecycle can run its guarded close path (Poltergeist, Planchette);
+/// lifecycle can run its guarded close path (Poltergeist, Planchette,
+/// Séance);
 /// [observe] leaves the close alone and treats the event as a last-chance
-/// persist (Séance — its close is not guarded).
+/// persist for a host that owns confirmation elsewhere.
 enum GhostClosePolicy { intercept, observe }
 
 /// Who makes the window visible on Windows and Linux, where the stock
@@ -63,7 +64,7 @@ enum GhostShowTrigger { service, runner }
 ///
 /// This one object merges what were Séance's `WindowStateService` (frame and
 /// presentation flags, missing-monitor fallback, physical-pixel Windows
-/// space, observed native close) and Poltergeist's `DesktopWindowLifecycle`
+/// space, native close) and Poltergeist's `DesktopWindowLifecycle`
 /// (serialized window operations, guarded intercepted close, content-size
 /// calibration, work-area clamping). Which half is active is configuration,
 /// so both hosts run the same code path end to end.
@@ -97,6 +98,7 @@ base class GhostWindowLifecycle extends GhostWindowListener {
     Future<bool> Function()? confirmClose,
     Future<bool> Function()? closeInstead,
     void Function(Object, StackTrace)? onError,
+    void Function(Object, StackTrace)? onCloseFailed,
   }) : _persistence = persistence,
        _window = window ?? WindowManagerGhostWindowAdapter(),
        _displays = displays ?? const ScreenRetrieverGhostDisplayAdapter(),
@@ -113,7 +115,8 @@ base class GhostWindowLifecycle extends GhostWindowListener {
        _onCloseFlush = onCloseFlush,
        _confirmClose = confirmClose,
        _closeInstead = closeInstead,
-       _onError = onError;
+       _onError = onError,
+       _onCloseFailed = onCloseFailed;
 
   final GhostWindowPersistence _persistence;
   final GhostWindowAdapter _window;
@@ -154,6 +157,11 @@ base class GhostWindowLifecycle extends GhostWindowListener {
   final Future<bool> Function()? _closeInstead;
   final void Function(Object, StackTrace)? _onError;
 
+  /// A close that threw left the native window and process alive. Hosts use
+  /// this narrower signal to retire approval that must not survive a failed
+  /// destroy; ordinary restore or persistence errors do not reach it.
+  final void Function(Object, StackTrace)? _onCloseFailed;
+
   final _windowReady = Completer<void>();
 
   /// Resolves once the platform window has finished
@@ -174,6 +182,8 @@ base class GhostWindowLifecycle extends GhostWindowListener {
   Size? _calibratedContentSize;
   var _prepared = false;
   var _closing = false;
+  var _listenerAttached = false;
+  var _closeInterceptionReady = false;
   var _calibrationRevision = 0;
 
   static GhostDesktopPlatform _currentPlatform() {
@@ -197,6 +207,19 @@ base class GhostWindowLifecycle extends GhostWindowListener {
     try {
       await _window.ensureInitialized();
       if (_closing) return;
+
+      // Install the destructive-close guard before optional titlebar work,
+      // persistence, or display discovery. Those restore steps may fail while
+      // the host deliberately keeps mounting a usable app; its close button
+      // must still reach confirmation in that degraded state.
+      if (_closePolicy == GhostClosePolicy.intercept) {
+        _attachListener();
+        if (!_closeInterceptionReady) {
+          await _window.setPreventClose(true);
+          _closeInterceptionReady = true;
+        }
+        if (_closing) return;
+      }
 
       if (_platform == GhostDesktopPlatform.macos) {
         await _onMacosPrepare?.call();
@@ -236,15 +259,16 @@ base class GhostWindowLifecycle extends GhostWindowListener {
         isFullScreen: saved?.isFullScreen ?? false,
       );
 
-      _window.addListener(this);
-      if (_closePolicy == GhostClosePolicy.intercept) {
-        await _window.setPreventClose(true);
-        if (_closing) return;
-      }
+      _attachListener();
 
       _prepared = true;
     } catch (error, stack) {
-      _window.removeListener(this);
+      // Once intercepted close is armed, retain it even if nonessential
+      // restore work failed. The host may swallow this error so its UI can
+      // still mount, and removing the listener here would turn red-close
+      // into an unguarded destructive exit. A failed interception setup is
+      // detached so a later prepare can retry from a known state.
+      if (!_closeInterceptionReady) _detachListener();
       // Reported here as well as rethrown: hosts may swallow the throw so
       // their UI still mounts, and the error must not vanish with it.
       _report(error, stack);
@@ -491,9 +515,14 @@ base class GhostWindowLifecycle extends GhostWindowListener {
     final bool closed;
     try {
       closed = await _enqueueWindowOperation(_close);
-    } catch (_) {
+    } catch (error, stackTrace) {
       _closing = false;
       _closeFuture = null;
+      try {
+        _onCloseFailed?.call(error, stackTrace);
+      } catch (_) {
+        // A recovery notification must not replace the close's real error.
+      }
       rethrow;
     }
     if (!closed) {
@@ -524,7 +553,7 @@ base class GhostWindowLifecycle extends GhostWindowListener {
     _cancelScheduledSave = null;
     _cancelFlagsBackstop?.call();
     _cancelFlagsBackstop = null;
-    _window.removeListener(this);
+    _detachListener();
   }
 
   // -- Window events ------------------------------------------------------
@@ -578,7 +607,11 @@ base class GhostWindowLifecycle extends GhostWindowListener {
   }
 
   void _scheduleSave() {
-    if (_closing) return;
+    // The listener is armed before optional restore work so close remains
+    // guarded when that work fails. Ignore geometry events until the restore
+    // has fully completed; otherwise a launch-time event could overwrite the
+    // last good snapshot with a half-restored frame.
+    if (!_prepared || _closing) return;
 
     _cancelScheduledSave?.call();
     _cancelScheduledSave = _scheduleDebounce(_geometrySaveDelay, () {
@@ -625,7 +658,10 @@ base class GhostWindowLifecycle extends GhostWindowListener {
     final guard = _confirmClose;
     if (guard != null && !await guard()) return false;
 
-    await _captureAndSave();
+    // A failed restore deliberately preserves the last known snapshot. The
+    // close guard is live in that degraded state, but its default/native
+    // frame is not authoritative persisted geometry.
+    if (_prepared) await _captureAndSave();
 
     // A wedged or failed flush reports and lets the window destroy —
     // the quit can never be held hostage by a session write.
@@ -643,8 +679,20 @@ base class GhostWindowLifecycle extends GhostWindowListener {
     // Only a successful destroy detaches us: a failed one throws past here,
     // leaving the native window alive and its close button on the retry
     // path.
-    _window.removeListener(this);
+    _detachListener();
     return true;
+  }
+
+  void _attachListener() {
+    if (_listenerAttached) return;
+    _window.addListener(this);
+    _listenerAttached = true;
+  }
+
+  void _detachListener() {
+    if (!_listenerAttached) return;
+    _window.removeListener(this);
+    _listenerAttached = false;
   }
 
   Future<T> _enqueueWindowOperation<T>(Future<T> Function() operation) {

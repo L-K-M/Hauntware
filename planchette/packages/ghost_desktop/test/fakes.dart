@@ -216,12 +216,16 @@ final class FakeDisplayAdapter implements GhostDisplayAdapter {
 
   GhostDisplay primary;
   List<GhostDisplay> all;
+  bool failDisplays = false;
 
   @override
   Future<GhostDisplay> primaryDisplay() async => primary;
 
   @override
-  Future<List<GhostDisplay>> displays() async => all;
+  Future<List<GhostDisplay>> displays() async {
+    if (failDisplays) throw StateError('display lookup failed');
+    return all;
+  }
 }
 
 /// In-memory persistence recording every snapshot it was asked to write.

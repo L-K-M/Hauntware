@@ -37,6 +37,8 @@ class SettingsWindowHost {
  private:
   // False when the window could not be created.
   bool Open();
+  bool YieldForQuitConfirmation();
+  void RestoreAfterQuitConfirmation();
   void OnWindowHidden();
 
   HWND main_window_;
@@ -45,6 +47,8 @@ class SettingsWindowHost {
 
   // The settings window, once opened: closing only hides it.
   std::unique_ptr<SettingsFlutterWindow> window_;
+  bool window_hidden_ = true;
+  bool quit_confirmation_suppressed_ = false;
 };
 
 #endif  // RUNNER_SETTINGS_WINDOW_H_
