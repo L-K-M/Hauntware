@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:seance_core/src/sync/local_record_store.dart';
@@ -118,6 +119,30 @@ class PushRaceApi implements SyncApi {
   }
 }
 
+class LocalEditDuringPushApi implements SyncApi {
+  LocalEditDuringPushApi(this.store, this.replacement);
+
+  final InMemoryLocalRecordStore store;
+  final EncryptedRecord replacement;
+  final List<int> sentTags = [];
+  int _pushes = 0;
+
+  @override
+  Future<PullResponse> pull({required int since}) async =>
+      const PullResponse(records: [], latestSeq: 0);
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) async {
+    final sent = records.single;
+    sentTags.add(sent.blob.single);
+    if (_pushes++ == 0) await store.putLocal(replacement);
+    return PushResponse(
+      results: [PushResult(id: sent.id, seq: _pushes, accepted: true)],
+      latestSeq: _pushes,
+    );
+  }
+}
+
 class PullRaceApi implements SyncApi {
   final EncryptedRecord initiallyUnseen;
   final List<int> requestedSince = [];
@@ -142,6 +167,77 @@ class PullRaceApi implements SyncApi {
   @override
   Future<PushResponse> push(List<EncryptedRecord> records) =>
       throw UnsupportedError('PullRaceApi does not accept pushes');
+}
+
+class RejectCursorOnceApi implements SyncApi {
+  RejectCursorOnceApi({
+    this.alwaysReject = false,
+    this.recordsAfterReset = const [],
+  }) {
+    for (final record in recordsAfterReset) {
+      final seq = record.seq ?? 0;
+      if (seq > _seq) _seq = seq;
+    }
+  }
+
+  final bool alwaysReject;
+  final List<EncryptedRecord> recordsAfterReset;
+  final List<int> requestedSince = [];
+  final List<EncryptedRecord> pushed = [];
+  bool _rejected = false;
+  int _seq = 0;
+
+  @override
+  Future<PullResponse> pull({required int since}) async {
+    requestedSince.add(since);
+    if (alwaysReject || !_rejected) {
+      _rejected = true;
+      throw const SyncCursorRejectedException('cursor is ahead of the server');
+    }
+    return PullResponse(
+      records: [
+        for (final record in recordsAfterReset)
+          if ((record.seq ?? 0) > since) record,
+      ],
+      latestSeq: _seq,
+    );
+  }
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) async {
+    pushed.addAll(records);
+    final results = <PushResult>[];
+    for (final record in records) {
+      results.add(PushResult(id: record.id, seq: ++_seq, accepted: true));
+    }
+    return PushResponse(results: results, latestSeq: _seq);
+  }
+}
+
+class InvalidWinnerRaceApi implements SyncApi {
+  InvalidWinnerRaceApi(this.invalidWinner);
+
+  final EncryptedRecord invalidWinner;
+
+  @override
+  Future<PullResponse> pull({required int since}) async => PullResponse(
+        records: since < invalidWinner.seq! ? [invalidWinner] : const [],
+        latestSeq: invalidWinner.seq!,
+      );
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) async =>
+      PushResponse(
+        results: [
+          for (final record in records)
+            PushResult(
+              id: record.id,
+              seq: invalidWinner.seq!,
+              accepted: false,
+            ),
+        ],
+        latestSeq: invalidWinner.seq!,
+      );
 }
 
 /// Fails from the [failFromPush]th push onwards, so a test can observe what the
@@ -219,6 +315,191 @@ class RejectEverythingApi implements SyncApi {
       );
 }
 
+class PagedFakeApi implements SyncApi, PagedSyncApi {
+  final List<EncryptedRecord> records;
+  final int pageSize;
+  final List<(int, int?)> requests = [];
+  final List<List<EncryptedRecord>> pushes = [];
+  int? failRequest;
+  int? rejectRequest;
+
+  PagedFakeApi(
+    this.records, {
+    this.pageSize = 1,
+    this.failRequest,
+    this.rejectRequest,
+  });
+
+  @override
+  Future<PullResponse> pull({required int since}) =>
+      throw UnsupportedError('the paged capability must be used');
+
+  @override
+  Future<PullResponse> pullPage({required int since, int? throughSeq}) async {
+    requests.add((since, throughSeq));
+    if (rejectRequest == requests.length) {
+      rejectRequest = null;
+      throw const SyncCursorRejectedException('server history rolled back');
+    }
+    if (failRequest == requests.length) {
+      failRequest = null;
+      throw const ApiError(code: 'storage_busy', message: 'retry');
+    }
+    final through = throughSeq ?? records.fold<int>(0, (value, record) {
+      final seq = record.seq ?? 0;
+      return seq > value ? seq : value;
+    });
+    final remaining = [
+      for (final record in records)
+        if (record.seq! > since && record.seq! <= through) record,
+    ];
+    final page = remaining.take(pageSize).toList();
+    return PullResponse(
+      records: page,
+      latestSeq: through,
+      throughSeq: through,
+      hasMore: remaining.length > page.length,
+    );
+  }
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) async {
+    pushes.add(records);
+    return PushResponse(
+      results: [
+        for (var i = 0; i < records.length; i++)
+          PushResult(id: records[i].id, seq: 100 + i, accepted: true),
+      ],
+      latestSeq: 100 + records.length,
+    );
+  }
+}
+
+class NonProgressingPagedApi implements SyncApi, PagedSyncApi {
+  @override
+  Future<PullResponse> pull({required int since}) =>
+      throw UnsupportedError('the paged capability must be used');
+
+  @override
+  Future<PullResponse> pullPage({required int since, int? throughSeq}) async =>
+      const PullResponse(
+        records: [],
+        latestSeq: 2,
+        throughSeq: 2,
+        hasMore: true,
+      );
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) async =>
+      const PushResponse(results: [], latestSeq: 0);
+}
+
+class GuardedLocalStore
+    implements PushSettlingRecordStore, RecoverableSyncCursorStore {
+  GuardedLocalStore(this.inner, this.localHeld);
+
+  final InMemoryLocalRecordStore inner;
+  final bool Function() localHeld;
+
+  void _check() => expect(localHeld(), isTrue,
+      reason: 'local record access must run inside the local phase');
+
+  @override
+  Future<List<EncryptedRecord>> allRecords() {
+    _check();
+    return inner.allRecords();
+  }
+
+  @override
+  Future<void> completeCursorRecovery() {
+    _check();
+    return inner.completeCursorRecovery();
+  }
+
+  @override
+  Future<bool> cursorRecoveryPending() {
+    _check();
+    return inner.cursorRecoveryPending();
+  }
+
+  @override
+  Future<List<EncryptedRecord>> dirtyRecords() {
+    _check();
+    return inner.dirtyRecords();
+  }
+
+  @override
+  Future<EncryptedRecord?> getRecord(String id) {
+    _check();
+    return inner.getRecord(id);
+  }
+
+  @override
+  Future<int> highWaterSeq() {
+    _check();
+    return inner.highWaterSeq();
+  }
+
+  @override
+  Future<void> markSynced(String id, int seq) {
+    _check();
+    return inner.markSynced(id, seq);
+  }
+
+  @override
+  Future<void> putLocal(EncryptedRecord record) {
+    _check();
+    return inner.putLocal(record);
+  }
+
+  @override
+  Future<void> putRemote(EncryptedRecord record) {
+    _check();
+    return inner.putRemote(record);
+  }
+
+  @override
+  Future<void> recoverFromRejectedCursor() {
+    _check();
+    return inner.recoverFromRejectedCursor();
+  }
+
+  @override
+  Future<void> setHighWaterSeq(int seq) {
+    _check();
+    return inner.setHighWaterSeq(seq);
+  }
+
+  @override
+  Future<EncryptedRecord?> settlePush(
+    EncryptedRecord sent,
+    PushResult result,
+  ) {
+    _check();
+    return inner.settlePush(sent, result);
+  }
+}
+
+class GuardedSyncApi extends FakeServer {
+  GuardedSyncApi(this.localHeld);
+
+  final bool Function() localHeld;
+
+  @override
+  Future<PullResponse> pull({required int since}) {
+    expect(localHeld(), isFalse,
+        reason: 'pull must not hold the local phase');
+    return super.pull(since: since);
+  }
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) {
+    expect(localHeld(), isFalse,
+        reason: 'push must not hold the local phase');
+    return super.push(records);
+  }
+}
+
 EncryptedRecord rec(String id, int updatedAt, String device,
         {bool deleted = false, int tag = 0}) =>
     EncryptedRecord(
@@ -232,6 +513,66 @@ EncryptedRecord rec(String id, int updatedAt, String device,
 
 void main() {
   group('SyncEngine', () {
+    test('keeps all mirror access local and all network access outside',
+        () async {
+      var localHeld = false;
+      final inner = InMemoryLocalRecordStore();
+      await inner.putLocal(rec('local', 20, 'A'));
+      final store = GuardedLocalStore(inner, () => localHeld);
+      final api = GuardedSyncApi(() => localHeld);
+      await api.push([rec('remote', 10, 'B')]);
+
+      Future<T> runLocal<T>(Future<T> Function() action) async {
+        expect(localHeld, isFalse);
+        localHeld = true;
+        try {
+          return await action();
+        } finally {
+          localHeld = false;
+        }
+      }
+
+      await SyncEngine(store).sync(
+        api,
+        runLocal: runLocal,
+        refreshLocal: (_) async => expect(localHeld, isTrue),
+      );
+
+      expect((await inner.allRecords()).map((record) => record.id).toSet(),
+          {'local', 'remote'});
+      expect(await inner.dirtyRecords(), isEmpty);
+    });
+
+    test('keeps cursor recovery and its callbacks in one local phase',
+        () async {
+      var localHeld = false;
+      final inner = InMemoryLocalRecordStore();
+      await inner.putRemote(rec('lost-history', 10, 'B').withSeq(42));
+      await inner.setHighWaterSeq(42);
+      final store = GuardedLocalStore(inner, () => localHeld);
+      final api = RejectCursorOnceApi();
+
+      Future<T> runLocal<T>(Future<T> Function() action) async {
+        expect(localHeld, isFalse);
+        localHeld = true;
+        try {
+          return await action();
+        } finally {
+          localHeld = false;
+        }
+      }
+
+      await SyncEngine(store).sync(
+        api,
+        runLocal: runLocal,
+        beforeCursorRecoveryPull: () async => expect(localHeld, isTrue),
+        afterCursorRecovery: () async => expect(localHeld, isTrue),
+      );
+
+      expect(api.requestedSince.take(2), [42, 0]);
+      expect(await inner.cursorRecoveryPending(), isFalse);
+    });
+
     test('pushes local records to an empty server', () async {
       final server = FakeServer();
       final store = InMemoryLocalRecordStore();
@@ -261,6 +602,22 @@ void main() {
 
       expect(await store.getRecord('concurrent'), isNotNull);
       expect(await store.highWaterSeq(), 2);
+    });
+
+    test('an accepted push never clears a newer in-flight local edit',
+        () async {
+      final store = InMemoryLocalRecordStore();
+      await store.putLocal(rec('shared', 10, 'A', tag: 1));
+      final api = LocalEditDuringPushApi(
+        store,
+        rec('shared', 20, 'A', tag: 2),
+      );
+
+      await SyncEngine(store).sync(api);
+
+      expect(api.sentTags, [1, 2]);
+      expect((await store.getRecord('shared'))!.updatedAt, 20);
+      expect(await store.dirtyRecords(), isEmpty);
     });
 
     test('rejected push adopts lexicographically larger device ID on a tie',
@@ -302,6 +659,53 @@ void main() {
       expect(await store.dirtyRecords(), isEmpty);
     });
 
+    test('an invalid future record cannot displace a dirty local edit',
+        () async {
+      final server = FakeServer();
+      await server.push([rec('shared', 1 << 50, 'forged', tag: 9)]);
+      final store = InMemoryLocalRecordStore();
+      await store.putLocal(rec('shared', 10, 'A', tag: 1));
+      var validated = 0;
+
+      await SyncEngine(
+        store,
+        remoteValidator: (record) async {
+          validated++;
+          return false;
+        },
+      ).sync(server);
+
+      final local = await store.getRecord('shared');
+      expect(validated, 1);
+      expect(local!.updatedAt, 10);
+      expect(local.blob, equals(Uint8List.fromList([1])));
+      expect(await store.dirtyRecords(), [same(local)]);
+      expect(await store.highWaterSeq(), 1);
+    });
+
+    test('a rejected push cannot restore an older displaced winner',
+        () async {
+      final store = InMemoryLocalRecordStore();
+      await store.putRemote(rec('shared', 20, 'remote', tag: 2).withSeq(5));
+      await store.putLocal(rec('shared', 30, 'local', tag: 3));
+      final api = InvalidWinnerRaceApi(
+        rec('shared', 40, 'invalid', tag: 4).withSeq(6),
+      );
+
+      await SyncEngine(
+        store,
+        maxRounds: 1,
+        remoteValidator: (record) async => false,
+      ).sync(api);
+
+      final local = await store.getRecord('shared');
+      expect(local!.updatedAt, 30);
+      expect(local.deviceId, 'local');
+      expect(local.blob, equals(Uint8List.fromList([3])));
+      expect(await store.dirtyRecords(), [same(local)]);
+      expect(await store.highWaterSeq(), 6);
+    });
+
     test(
       'pull latest sequence cannot skip an unseen snapshot record',
       () async {
@@ -326,6 +730,234 @@ void main() {
         expect(await store.highWaterSeq(), 2);
       },
     );
+
+    test('a rejected cursor re-queues mirror and re-sources domain data',
+        () async {
+      final store = InMemoryLocalRecordStore();
+      await store.putRemote(rec('lost-history', 10, 'peer').withSeq(42));
+      await store.setHighWaterSeq(42);
+      final api = RejectCursorOnceApi();
+      var recoveryCalls = 0;
+
+      await SyncEngine(store).sync(
+        api,
+        afterCursorRecovery: () async {
+          recoveryCalls++;
+          await store.putLocal(rec('current-domain-row', 20, 'local'));
+        },
+      );
+
+      expect(api.requestedSince, [42, 0]);
+      expect(recoveryCalls, 1);
+      expect((await store.getRecord('lost-history'))!.seq, isNotNull);
+      expect((await store.getRecord('current-domain-row'))!.seq, isNotNull);
+      expect(api.pushed.map((record) => record.id).toSet(),
+          {'lost-history', 'current-domain-row'});
+      expect(await store.dirtyRecords(), isEmpty);
+      expect(await store.highWaterSeq(), 0);
+      expect(await store.cursorRecoveryPending(), isFalse);
+    });
+
+    test('a failed recovery callback leaves the phase pending and pushes none',
+        () async {
+      final store = InMemoryLocalRecordStore();
+      await store.putRemote(rec('mirror-only', 10, 'peer').withSeq(42));
+      await store.setHighWaterSeq(42);
+      final api = RejectCursorOnceApi();
+      final engine = SyncEngine(store);
+
+      await expectLater(
+        engine.sync(
+          api,
+          afterCursorRecovery: () async {
+            throw const FileSystemException('domain store unavailable');
+          },
+        ),
+        throwsA(isA<FileSystemException>()),
+      );
+
+      expect(api.requestedSince, [42, 0]);
+      expect(api.pushed, isEmpty);
+      expect(await store.cursorRecoveryPending(), isTrue);
+      expect((await store.getRecord('mirror-only'))!.seq, isNull);
+
+      await engine.sync(api, afterCursorRecovery: () async {});
+
+      expect(api.pushed.map((record) => record.id), ['mirror-only']);
+      expect(await store.cursorRecoveryPending(), isFalse);
+      expect(await store.dirtyRecords(), isEmpty);
+    });
+
+    test('cursor recovery republishes a confirmed tombstone', () async {
+      final store = InMemoryLocalRecordStore();
+      final tombstone = rec(
+        'deleted-server',
+        20,
+        'local',
+        deleted: true,
+      ).withSeq(42);
+      await store.putRemote(tombstone);
+      await store.setHighWaterSeq(42);
+      final api = RejectCursorOnceApi(
+        recordsAfterReset: [rec('deleted-server', 10, 'peer').withSeq(1)],
+      );
+
+      await SyncEngine(store).sync(api);
+
+      expect(api.requestedSince.take(2), [42, 0]);
+      expect(api.pushed, hasLength(1));
+      expect(api.pushed.single.deleted, isTrue);
+      final recovered = await store.getRecord('deleted-server');
+      expect(recovered!.deleted, isTrue);
+      expect(recovered.updatedAt, 20);
+      expect(await store.dirtyRecords(), isEmpty);
+    });
+
+    test('cursor recovery adopts an identical sequenced tombstone', () async {
+      final store = InMemoryLocalRecordStore();
+      final tombstone = rec(
+        'deleted-server',
+        20,
+        'local',
+        deleted: true,
+      ).withSeq(42);
+      await store.putRemote(tombstone);
+      await store.setHighWaterSeq(100);
+      final api = RejectCursorOnceApi(recordsAfterReset: [tombstone]);
+
+      await SyncEngine(store).sync(api);
+
+      expect(api.pushed, isEmpty,
+          reason: 'the server already has the confirmed deletion');
+      expect((await store.getRecord('deleted-server'))!.seq, 42);
+      expect(await store.dirtyRecords(), isEmpty);
+    });
+
+    test('cursor recovery preserves a peer-authored equal-stamp winner',
+        () async {
+      final store = InMemoryLocalRecordStore();
+      final winner = rec('shared', 100, 'Z', tag: 9).withSeq(42);
+      await store.putRemote(winner);
+      await store.setHighWaterSeq(42);
+      final api = RejectCursorOnceApi(
+        recordsAfterReset: [rec('shared', 100, 'M', tag: 1).withSeq(1)],
+      );
+
+      await SyncEngine(store).sync(api);
+
+      expect(api.pushed, hasLength(1));
+      expect(api.pushed.single.deviceId, 'Z');
+      expect(api.pushed.single.blob, orderedEquals([9]));
+      final recovered = await store.getRecord('shared');
+      expect(recovered!.deviceId, 'Z');
+      expect(recovered.blob, orderedEquals([9]));
+      expect(await store.dirtyRecords(), isEmpty);
+    });
+
+    test('a server that rejects zero does not start a reset loop', () async {
+      final store = InMemoryLocalRecordStore();
+      await store.setHighWaterSeq(42);
+      final api = RejectCursorOnceApi(alwaysReject: true);
+
+      await expectLater(
+        SyncEngine(store).sync(api),
+        throwsA(isA<SyncCursorRejectedException>()),
+      );
+
+      expect(api.requestedSince, [42, 0]);
+      expect(await store.cursorRecoveryPending(), isTrue);
+    });
+
+    test('recovery waits for every pull page and resumes partial progress',
+        () async {
+      final store = InMemoryLocalRecordStore();
+      await store.putLocal(rec('local', 10, 'A'));
+      await store.setHighWaterSeq(42);
+      final api = PagedFakeApi(
+        [
+          rec('one', 1, 'B').withSeq(1),
+          rec('two', 2, 'B').withSeq(2),
+        ],
+        rejectRequest: 1,
+        failRequest: 3,
+      );
+      var recoveryCalls = 0;
+
+      await expectLater(
+        SyncEngine(store).sync(
+          api,
+          afterCursorRecovery: () async => recoveryCalls++,
+        ),
+        throwsA(isA<ApiError>()),
+      );
+
+      expect(api.requests, [(42, null), (0, null), (1, 2)]);
+      expect(await store.highWaterSeq(), 1);
+      expect(await store.cursorRecoveryPending(), isTrue);
+      expect(recoveryCalls, 0);
+      expect(api.pushes, isEmpty);
+
+      await SyncEngine(store).sync(
+        api,
+        afterCursorRecovery: () async {
+          recoveryCalls++;
+          expect((await store.allRecords()).map((record) => record.id),
+              containsAll(['one', 'two']));
+          expect(api.pushes, isEmpty,
+              reason: 'the recovery callback must precede every push');
+        },
+      );
+
+      expect(api.requests[3], (1, null));
+      expect(recoveryCalls, 1);
+      expect(await store.cursorRecoveryPending(), isFalse);
+      expect(api.pushes, hasLength(1));
+      expect(api.pushes.single.map((record) => record.id), ['local']);
+    });
+
+    test('bounded pages share a watermark and advance by observed seq',
+        () async {
+      final api = PagedFakeApi([
+        rec('one', 1, 'B').withSeq(1),
+        rec('two', 2, 'B').withSeq(2),
+      ]);
+      final store = InMemoryLocalRecordStore();
+
+      await SyncEngine(store).sync(api);
+
+      expect((await store.allRecords()).map((r) => r.id), ['one', 'two']);
+      expect(await store.highWaterSeq(), 2);
+      expect(api.requests.take(2), [(0, null), (1, 2)]);
+    });
+
+    test('a later page failure persists only completed page progress',
+        () async {
+      final api = PagedFakeApi([
+        rec('one', 1, 'B').withSeq(1),
+        rec('two', 2, 'B').withSeq(2),
+      ], failRequest: 2);
+      final store = InMemoryLocalRecordStore();
+      final engine = SyncEngine(store);
+
+      await expectLater(engine.sync(api), throwsA(isA<ApiError>()));
+      expect(await store.highWaterSeq(), 1);
+
+      await engine.sync(api);
+      expect(api.requests[2].$1, 1);
+      expect(await store.highWaterSeq(), 2);
+      expect((await store.allRecords()).map((r) => r.id), ['one', 'two']);
+    });
+
+    test('a non-progressing page fails before moving the cursor', () async {
+      final store = InMemoryLocalRecordStore();
+
+      await expectLater(
+        SyncEngine(store).sync(NonProgressingPagedApi()),
+        throwsFormatException,
+      );
+
+      expect(await store.highWaterSeq(), 0);
+    });
 
     test('two devices converge on the same records', () async {
       final server = FakeServer();

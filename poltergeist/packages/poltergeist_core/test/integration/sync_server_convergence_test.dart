@@ -67,8 +67,7 @@ final class _MemoryEnrollmentState implements SyncEnrollmentState {
   @override
   Future<bool> passphraseUnverified() async => unverified;
   @override
-  Future<void> setPassphraseUnverified(bool value) async =>
-      unverified = value;
+  Future<void> setPassphraseUnverified(bool value) async => unverified = value;
   @override
   Future<Set<String>> notices() async => Set.of(raised);
   @override
@@ -103,10 +102,12 @@ final class _Device {
   CatalogSnapshot? get catalog => _coordinator?.catalog;
   late final SyncTrackingServerStore? servers;
 
-  static Future<_Device> create(Directory parent, String name,
-      {bool shared = false}) async {
-    final device = _Device._()
-      ..clock = _Clock(_epochMs);
+  static Future<_Device> create(
+    Directory parent,
+    String name, {
+    bool shared = false,
+  }) async {
+    final device = _Device._()..clock = _Clock(_epochMs);
     device.dir = await Directory('${parent.path}/$name').create();
     device.records = PersistentLocalRecordStore(
       path: '${device.dir.path}/sync_records.json',
@@ -188,14 +189,14 @@ final class _ListConfigStore extends seance.ConfigStore {
 }
 
 Bookmark _bookmark(String id, {String? label}) => Bookmark(
-      id: id,
-      kind: BookmarkKind.localFolder,
-      label: label ?? id,
-      localPath: '/home/user/$id',
-      sortKey: 'm',
-      createdAt: _epoch,
-      updatedAt: _epoch,
-    );
+  id: id,
+  kind: BookmarkKind.localFolder,
+  label: label ?? id,
+  localPath: '/home/user/$id',
+  sortKey: 'm',
+  createdAt: _epoch,
+  updatedAt: _epoch,
+);
 
 Future<Bookmark> _save(_Device device, Bookmark bookmark) async {
   final saved = await device.bookmarks.save(bookmark);
@@ -210,30 +211,37 @@ Future<EncryptedRecord> _sealRaw(
   Map<String, dynamic> payload, {
   int updatedAt = 0,
   String deviceId = 'foreign-device',
-}) async =>
-    EncryptedRecord(
-      id: id,
-      updatedAt: updatedAt,
-      deviceId: deviceId,
-      deleted: false,
-      seq: null,
-      blob: await VaultCrypto.sealJson(vaultKey, payload),
-    );
+}) async => EncryptedRecord(
+  id: id,
+  updatedAt: updatedAt,
+  deviceId: deviceId,
+  deleted: false,
+  seq: null,
+  blob: await VaultCrypto.sealJson(vaultKey, {
+    'envelopeVersion': 2,
+    'purpose': 'seance.sync.record',
+    'id': id,
+    'updatedAt': updatedAt,
+    'deviceId': deviceId,
+    'deleted': false,
+    ...payload,
+  }),
+);
 
 Future<EncryptedRecord> _sealBookmark(
   List<int> vaultKey,
   Bookmark bookmark, {
   int? updatedAt,
   String deviceId = 'foreign-device',
-}) =>
-    RecordCrypto(RecordCodec(vaultKey)).seal(DecryptedRecord(
-      id: 'bookmark:${bookmark.id}',
-      kind: RecordKind.bookmark,
-      updatedAt:
-          updatedAt ?? bookmark.updatedAt.toUtc().millisecondsSinceEpoch,
-      deviceId: deviceId,
-      data: bookmark.toJson(),
-    ));
+}) => RecordCrypto(RecordCodec(vaultKey)).seal(
+  DecryptedRecord(
+    id: 'bookmark:${bookmark.id}',
+    kind: RecordKind.bookmark,
+    updatedAt: updatedAt ?? bookmark.updatedAt.toUtc().millisecondsSinceEpoch,
+    deviceId: deviceId,
+    data: bookmark.toJson(),
+  ),
+);
 
 /// The server-side truth for an id: the one record a full pull returns.
 Future<EncryptedRecord> _serverRecord(HttpSyncClient api, String id) async {
@@ -272,245 +280,237 @@ void main() {
       '$prefix-${DateTime.now().microsecondsSinceEpoch}-'
       '${secureRandomBytes(8).map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
 
-  test(
-    'create, edit, and delete converge through the real server; a winning '
-    'tombstone stays won',
-    () async {
-      final username = freshUser('convergence');
-      const password = 'correct horse battery staple';
-      final a = await _Device.create(tempDir, 'a');
-      final b = await _Device.create(tempDir, 'b');
-      final apiA = client();
-      final apiB = client();
+  test('create, edit, and delete converge through the real server; a winning '
+      'tombstone stays won', () async {
+    final username = freshUser('convergence');
+    const password = 'correct horse battery staple';
+    final a = await _Device.create(tempDir, 'a');
+    final b = await _Device.create(tempDir, 'b');
+    final apiA = client();
+    final apiB = client();
 
-      // A registers on the real server (the production enrollment path,
-      // Argon2 included), writes a bookmark, pushes it.
-      final enrolledA = await a.enrollment.registerSeparate(
-        api: apiA,
-        baseUrl: baseUrl!,
-        username: username,
-        password: password,
-        encryptionPassphrase: password,
-      );
-      final coordinatorA = a.coordinatorFor(enrolledA.vaultKey);
-      var saved = await _save(a, _bookmark('shared', label: 'v1'));
-      await coordinatorA.onBookmarkSaved(saved);
-      await coordinatorA.runRound(apiA);
+    // A registers on the real server (the production enrollment path,
+    // Argon2 included), writes a bookmark, pushes it.
+    final enrolledA = await a.enrollment.registerSeparate(
+      api: apiA,
+      baseUrl: baseUrl!,
+      username: username,
+      password: password,
+      encryptionPassphrase: password,
+    );
+    final coordinatorA = a.coordinatorFor(enrolledA.vaultKey);
+    var saved = await _save(a, _bookmark('shared', label: 'v1'));
+    await coordinatorA.onBookmarkSaved(saved);
+    await coordinatorA.runRound(apiA);
 
-      // B logs into the same account: the real trial-decrypt verifies its
-      // passphrase against A's record before enrollment persists.
-      final enrolledB = await b.enrollment.login(
-        api: apiB,
-        baseUrl: baseUrl,
-        username: username,
-        password: password,
-        encryptionPassphrase: password,
-        mode: SyncAccountMode.separate,
-      );
-      expect(enrolledB.passphraseUnverified, isFalse);
-      final coordinatorB = b.coordinatorFor(enrolledB.vaultKey);
-      await coordinatorB.runRound(apiB);
-      expect((await b.bookmarks.byId('shared'))!.label, 'v1');
+    // B logs into the same account: the real trial-decrypt verifies its
+    // passphrase against A's record before enrollment persists.
+    final enrolledB = await b.enrollment.login(
+      api: apiB,
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+      encryptionPassphrase: password,
+      mode: SyncAccountMode.separate,
+    );
+    expect(enrolledB.passphraseUnverified, isFalse);
+    final coordinatorB = b.coordinatorFor(enrolledB.vaultKey);
+    await coordinatorB.runRound(apiB);
+    expect((await b.bookmarks.byId('shared'))!.label, 'v1');
 
-      // An edit on B converges back to A.
-      b.clock.ms += 1000;
-      saved = await _save(b, _bookmark('shared', label: 'v2'));
-      await coordinatorB.onBookmarkSaved(saved);
-      await coordinatorB.runRound(apiB);
-      await coordinatorA.runRound(apiA);
-      expect((await a.bookmarks.byId('shared'))!.label, 'v2');
+    // An edit on B converges back to A.
+    b.clock.ms += 1000;
+    saved = await _save(b, _bookmark('shared', label: 'v2'));
+    await coordinatorB.onBookmarkSaved(saved);
+    await coordinatorB.runRound(apiB);
+    await coordinatorA.runRound(apiA);
+    expect((await a.bookmarks.byId('shared'))!.label, 'v2');
 
-      // A delete on A lands as a real tombstone on the server and
-      // converges on B.
-      a.clock.ms += 2000;
-      await a.bookmarks.remove('shared');
-      await coordinatorA.onBookmarkDeleted('shared');
-      await coordinatorA.runRound(apiA);
-      expect((await _serverRecord(apiA, 'bookmark:shared')).deleted, isTrue);
-      await coordinatorB.runRound(apiB);
-      expect(await b.bookmarks.byId('shared'), isNull);
+    // A delete on A lands as a real tombstone on the server and
+    // converges on B.
+    a.clock.ms += 2000;
+    await a.bookmarks.remove('shared');
+    await coordinatorA.onBookmarkDeleted('shared');
+    await coordinatorA.runRound(apiA);
+    expect((await _serverRecord(apiA, 'bookmark:shared')).deleted, isTrue);
+    await coordinatorB.runRound(apiB);
+    expect(await b.bookmarks.byId('shared'), isNull);
 
-      // A stale live copy pushed by a device that never saw the delete
-      // loses the same LWW compare on the real server — the tombstone
-      // stays won there and on both devices.
-      final stale = await _sealBookmark(
-        enrolledA.vaultKey,
-        _bookmark('shared', label: 'stale'),
-        updatedAt: 5,
-        deviceId: 'stale-device',
-      );
-      final rejected = await apiA.push([stale]);
-      expect(rejected.results.single.accepted, isFalse);
-      expect((await _serverRecord(apiA, 'bookmark:shared')).deleted, isTrue);
-      await coordinatorB.runRound(apiB);
-      await coordinatorA.runRound(apiA);
-      expect(await b.bookmarks.byId('shared'), isNull);
-      expect(await a.bookmarks.byId('shared'), isNull);
-      expect((await _serverRecord(apiA, 'bookmark:shared')).deleted, isTrue);
-    },
-    skip: enabled ? false : skipReason,
-  );
+    // A stale live copy pushed by a device that never saw the delete
+    // loses the same LWW compare on the real server — the tombstone
+    // stays won there and on both devices.
+    final stale = await _sealBookmark(
+      enrolledA.vaultKey,
+      _bookmark('shared', label: 'stale'),
+      updatedAt: 5,
+      deviceId: 'stale-device',
+    );
+    final rejected = await apiA.push([stale]);
+    expect(rejected.results.single.accepted, isFalse);
+    expect((await _serverRecord(apiA, 'bookmark:shared')).deleted, isTrue);
+    await coordinatorB.runRound(apiB);
+    await coordinatorA.runRound(apiA);
+    expect(await b.bookmarks.byId('shared'), isNull);
+    expect(await a.bookmarks.byId('shared'), isNull);
+    expect((await _serverRecord(apiA, 'bookmark:shared')).deleted, isTrue);
+  }, skip: enabled ? false : skipReason);
 
-  test(
-    'a flurb-kind record survives real rounds byte-identical; a malformed '
-    'known kind skips without aborting',
-    () async {
-      final username = freshUser('preserve');
-      const password = 'correct horse battery staple';
-      final device = await _Device.create(tempDir, 'c');
-      final api = client();
+  test('a flurb-kind record survives real rounds byte-identical; a malformed '
+      'known kind skips without aborting', () async {
+    final username = freshUser('preserve');
+    const password = 'correct horse battery staple';
+    final device = await _Device.create(tempDir, 'c');
+    final api = client();
 
-      final enrolled = await device.enrollment.registerSeparate(
-        api: api,
-        baseUrl: baseUrl!,
-        username: username,
-        password: password,
-        encryptionPassphrase: password,
-      );
-      final coordinator = device.coordinatorFor(enrolled.vaultKey);
+    final enrolled = await device.enrollment.registerSeparate(
+      api: api,
+      baseUrl: baseUrl!,
+      username: username,
+      password: password,
+      encryptionPassphrase: password,
+    );
+    final coordinator = device.coordinatorFor(enrolled.vaultKey);
 
-      // Foreign-authored records land on the real server first.
-      final flurb = await _sealRaw(
-        enrolled.vaultKey,
-        'flurb:x1',
-        {'kind': 'flurb', 'data': {'what': 'ever'}},
-        updatedAt: _epochMs + 1,
-      );
-      final malformed = await _sealRaw(
-        enrolled.vaultKey,
-        'bookmark:bad',
-        {'kind': 'bookmark', 'data': {'id': 'bad'}},
-        updatedAt: _epochMs + 2,
-      );
-      final good = await _sealBookmark(
-        enrolled.vaultKey,
-        _bookmark('good', label: 'ok'),
-        updatedAt: _epochMs + 3,
-      );
-      final seeded = await api.push([flurb, malformed, good]);
-      expect(seeded.results.every((r) => r.accepted), isTrue);
+    // Foreign-authored records land on the real server first.
+    final flurb = await _sealRaw(enrolled.vaultKey, 'flurb:x1', {
+      'kind': 'flurb',
+      'data': {'what': 'ever'},
+    }, updatedAt: _epochMs + 1);
+    final malformed = await _sealRaw(enrolled.vaultKey, 'bookmark:bad', {
+      'kind': 'bookmark',
+      'data': {'id': 'bad'},
+    }, updatedAt: _epochMs + 2);
+    final good = await _sealBookmark(
+      enrolled.vaultKey,
+      _bookmark('good', label: 'ok'),
+      updatedAt: _epochMs + 3,
+    );
+    final seeded = await api.push([flurb, malformed, good]);
+    expect(seeded.results.every((r) => r.accepted), isTrue);
 
-      // The round applies the good record, skips the malformed one with a
-      // tripwire, and preserves the flurb untouched — over real HTTP.
-      final result = await coordinator.runRound(api);
-      expect((await device.bookmarks.byId('good'))!.label, 'ok');
-      expect(result.report.appliedIds, contains('bookmark:good'));
-      expect(await device.tripwires.trippedIds(), contains('bookmark:bad'));
-      final localFlurb = await device.records.getRecord('flurb:x1');
-      expect(localFlurb!.blob, flurb.blob);
+    // The round applies the good record, skips the malformed one with a
+    // tripwire, and preserves the flurb untouched — over real HTTP.
+    final result = await coordinator.runRound(api);
+    expect((await device.bookmarks.byId('good'))!.label, 'ok');
+    expect(result.report.appliedIds, contains('bookmark:good'));
+    expect(await device.tripwires.trippedIds(), contains('bookmark:bad'));
+    final localFlurb = await device.records.getRecord('flurb:x1');
+    expect(localFlurb!.blob, flurb.blob);
 
-      // More rounds — including a push of this device's own write — never
-      // re-mint the flurb's server sequence number: it is never re-pushed,
-      // never tombstoned, never decoded.
-      final saved = await _save(device, _bookmark('mine'));
-      await coordinator.onBookmarkSaved(saved);
-      final flurbSeq = (await _serverRecord(api, 'flurb:x1')).seq;
-      await coordinator.runRound(api);
-      await coordinator.runRound(api);
-      final after = await _serverRecord(api, 'flurb:x1');
-      expect(after.seq, flurbSeq);
-      expect(after.blob, flurb.blob);
-      expect(await device.tripwires.trippedIds(),
-          isNot(contains('flurb:x1')));
-    },
-    skip: enabled ? false : skipReason,
-  );
+    // More rounds — including a push of this device's own write — never
+    // re-mint the flurb's server sequence number: it is never re-pushed,
+    // never tombstoned, never decoded.
+    final saved = await _save(device, _bookmark('mine'));
+    await coordinator.onBookmarkSaved(saved);
+    final flurbSeq = (await _serverRecord(api, 'flurb:x1')).seq;
+    await coordinator.runRound(api);
+    await coordinator.runRound(api);
+    final after = await _serverRecord(api, 'flurb:x1');
+    expect(after.seq, flurbSeq);
+    expect(after.blob, flurb.blob);
+    expect(await device.tripwires.trippedIds(), isNot(contains('flurb:x1')));
+  }, skip: enabled ? false : skipReason);
 
-  test(
-    'shared mode materializes a patched Séance\'s records: the catalog '
-    'renders and a synced pin pre-answers TOFU',
-    () async {
-      final username = freshUser('shared');
-      const password = 'correct horse battery staple';
+  test('shared mode materializes a patched Séance\'s records: the catalog '
+      'renders and a synced pin pre-answers TOFU', () async {
+    final username = freshUser('shared');
+    const password = 'correct horse battery staple';
 
-      // The account the "patched Séance" writes to — registered exactly as
-      // Séance's own enrollment does (the same derive SyncEnrollment runs).
-      final apiS = client();
-      final salt = secureRandomBytes(16);
-      const params = Argon2Params();
-      final keys = await VaultCrypto.deriveKeys(
-        passphrase: password,
-        salt: salt,
-        params: params,
-      );
-      await apiS.register(RegisterRequest(
+    // The account the "patched Séance" writes to — registered exactly as
+    // Séance's own enrollment does (the same derive SyncEnrollment runs).
+    final apiS = client();
+    final salt = secureRandomBytes(16);
+    const params = Argon2Params();
+    final keys = await VaultCrypto.deriveKeys(
+      passphrase: password,
+      salt: salt,
+      params: params,
+    );
+    await apiS.register(
+      RegisterRequest(
         username: username,
         authVerifier: base64.encode(keys.authVerifier),
         argonSalt: base64.encode(salt),
         argonParams: params,
-      ));
-      final vaultKey = keys.vaultKey;
+        vaultKeyCheck: await VaultKeyCheck.create(
+          keys.vaultKey,
+          username: username,
+        ),
+      ),
+    );
+    final vaultKey = keys.vaultKey;
 
-      // The patched Séance: the pinned seance_core SyncCoordinator itself,
-      // publishing a serverConfig and a hostkey pin to the real server.
-      final config = ServerConfig(
-        id: 'fleet-web',
-        label: 'Fleet web',
-        host: 'web.internal',
-        port: 22,
-        username: 'deploy',
-        createdAt: _epochMs,
-        updatedAt: _epochMs + 1,
-      );
-      final pin = HostKey(
-        host: 'web.internal',
-        port: 22,
-        type: 'ssh-ed25519',
-        fingerprintSha256: 'SHA256:fleetpin',
-        pinnedAt: _epochMs + 1,
-      );
-      final configStore = _ListConfigStore();
-      await configStore.putServer(config);
-      final seancePins = InMemoryHostKeyStore();
-      await seancePins.put(pin);
-      final seanceCoordinator = seance.SyncCoordinator(
-        configStore: configStore,
-        hostKeyStore: seancePins,
-        codec: RecordCodec(vaultKey),
-        local: seance.InMemoryLocalRecordStore(),
-        deviceId: 'seance-device',
-      );
-      await seanceCoordinator.run(apiS);
+    // The patched Séance: the pinned seance_core SyncCoordinator itself,
+    // publishing a serverConfig and a hostkey pin to the real server.
+    final config = ServerConfig(
+      id: 'fleet-web',
+      label: 'Fleet web',
+      host: 'web.internal',
+      port: 22,
+      username: 'deploy',
+      createdAt: _epochMs,
+      updatedAt: _epochMs + 1,
+    );
+    final pin = HostKey(
+      host: 'web.internal',
+      port: 22,
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:fleetpin',
+      pinnedAt: _epochMs + 1,
+    );
+    final configStore = _ListConfigStore();
+    await configStore.putServer(config);
+    final seancePins = InMemoryHostKeyStore();
+    await seancePins.put(pin);
+    final seanceCoordinator = seance.SyncCoordinator(
+      configStore: configStore,
+      hostKeyStore: seancePins,
+      codec: RecordCodec(vaultKey),
+      local: seance.InMemoryLocalRecordStore(),
+      deviceId: 'seance-device',
+    );
+    await seanceCoordinator.run(apiS);
 
-      // Poltergeist joins the shared account: the login's trial-decrypt
-      // proves the passphrase against Séance's own prefixless record.
-      final device = await _Device.create(tempDir, 'd', shared: true);
-      final apiD = client();
-      final enrolled = await device.enrollment.login(
-        api: apiD,
-        baseUrl: baseUrl!,
-        username: username,
-        password: password,
-        encryptionPassphrase: password,
-        mode: SyncAccountMode.shared,
-      );
-      expect(enrolled.passphraseUnverified, isFalse);
-      final coordinator = device.coordinatorFor(vaultKey);
-      await coordinator.runRound(apiD);
+    // Poltergeist joins the shared account: the login's trial-decrypt
+    // proves the passphrase against Séance's own prefixless record.
+    final device = await _Device.create(tempDir, 'd', shared: true);
+    final apiD = client();
+    final enrolled = await device.enrollment.login(
+      api: apiD,
+      baseUrl: baseUrl!,
+      username: username,
+      password: password,
+      encryptionPassphrase: password,
+      mode: SyncAccountMode.shared,
+    );
+    expect(enrolled.passphraseUnverified, isFalse);
+    final coordinator = device.coordinatorFor(vaultKey);
+    await coordinator.runRound(apiD);
 
-      // The catalog materializes the pulled serverConfig, and the synced
-      // pin pre-answers TOFU for a host presenting that fingerprint —
-      // connecting needs no first-use prompt.
-      expect(device.catalog!.servers.single.id, 'fleet-web');
-      final stored = await device.hostKeys.get('web.internal', 22);
-      expect(stored!.fingerprintSha256, 'SHA256:fleetpin');
-      final decision = await TofuVerifier(device.hostKeys).check(HostKey(
+    // The catalog materializes the pulled serverConfig, and the synced
+    // pin pre-answers TOFU for a host presenting that fingerprint —
+    // connecting needs no first-use prompt.
+    expect(device.catalog!.servers.single.id, 'fleet-web');
+    final stored = await device.hostKeys.get('web.internal', 22);
+    expect(stored!.fingerprintSha256, 'SHA256:fleetpin');
+    final decision = await TofuVerifier(device.hostKeys).check(
+      HostKey(
         host: 'web.internal',
         port: 22,
         type: 'ssh-ed25519',
         fingerprintSha256: 'SHA256:fleetpin',
         pinnedAt: 0,
-      ));
-      expect(decision.verdict, HostKeyVerdict.trusted);
+      ),
+    );
+    expect(decision.verdict, HostKeyVerdict.trusted);
 
-      // Séance's excludeFromSync retraction is a real tombstone; the next
-      // round removes the catalog entry.
-      await configStore.putServer(
-          config.copyWith(excludeFromSync: true, updatedAt: _epochMs + 2));
-      await seanceCoordinator.run(apiS);
-      await coordinator.runRound(apiD);
-      expect(device.catalog!.servers, isEmpty);
-    },
-    skip: enabled ? false : skipReason,
-  );
+    // Séance's excludeFromSync retraction is a real tombstone; the next
+    // round removes the catalog entry.
+    await configStore.putServer(
+      config.copyWith(excludeFromSync: true, updatedAt: _epochMs + 2),
+    );
+    await seanceCoordinator.run(apiS);
+    await coordinator.runRound(apiD);
+    expect(device.catalog!.servers, isEmpty);
+  }, skip: enabled ? false : skipReason);
 }

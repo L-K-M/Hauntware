@@ -31,12 +31,26 @@ typedef SyncTransportFactory = SyncTransport Function(
 /// without another login.
 final class HttpSyncTransport extends HttpSyncClient
     implements SyncTransport {
-  HttpSyncTransport({required super.baseUrl, String? token}) {
+  HttpSyncTransport({
+    required super.baseUrl,
+    String? token,
+    super.deviceId,
+    super.deviceName,
+  }) {
     this.token = token;
   }
 }
 
 /// The default [SyncTransportFactory] — the composition root's binding;
 /// tests substitute fakes.
-SyncTransport httpSyncTransport(String baseUrl, {String? token}) =>
-    HttpSyncTransport(baseUrl: baseUrl, token: token);
+SyncTransport httpSyncTransport(
+  String baseUrl, {
+  String? token,
+  String? deviceId,
+  String? deviceName,
+}) => HttpSyncTransport(
+  baseUrl: baseUrl,
+  token: token,
+  deviceId: deviceId,
+  deviceName: deviceName,
+);

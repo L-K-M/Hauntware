@@ -485,7 +485,7 @@ void main() {
     await server.seedSnippet('snippet:s-b', snippet('s-b', 'Disk'));
     await server.seedSnippet('snippet:s-a', snippet('s-a', 'backup'));
     await server.seedSnippet('snippet:s-c', snippet('s-c', 'Gone'));
-    server.seedTombstone('snippet:s-c', updatedAt: 2);
+    await server.seedTombstone('snippet:s-c', updatedAt: 2);
     final (client, events) = await spawn(
       entryPoint: (start) => engineMain(start, syncTransport: server.transport),
     );

@@ -15,6 +15,9 @@ int actualBodyBytes(PushRequest request) =>
 int actualRecordBytes(EncryptedRecord record) =>
     utf8.encode(jsonEncode(record.toJson())).length;
 
+int actualPullBytes(PullResponse response) =>
+    utf8.encode(jsonEncode(response.toJson())).length;
+
 EncryptedRecord record({
   String id = 'record-id',
   int updatedAt = 1,
@@ -213,6 +216,48 @@ void main() {
         expect(decoded.limits, isNull, reason: 'limits: $malformed');
         expect(decoded.latestSeq, 3);
       }
+    });
+  });
+
+  group('PullResponse body size', () {
+    test('matches a legacy response', () {
+      final response = PullResponse(
+        records: [record(seq: 3, blobBytes: 100)],
+        latestSeq: 3,
+      );
+      expect(response.encodedSizeBytes(), actualPullBytes(response));
+    });
+
+    test('matches a paged response with advertised limits', () {
+      final response = PullResponse(
+        records: [
+          record(id: 'a', seq: 4, blobBytes: 7),
+          record(id: 'b', seq: 9, blobBytes: 4096),
+        ],
+        latestSeq: 12,
+        throughSeq: 12,
+        hasMore: true,
+        limits: const PushLimits(
+          maxBodyBytes: 8192,
+          maxRecordsPerPush: 7,
+          maxBlobBytes: 1024,
+        ),
+      );
+      expect(response.encodedSizeBytes(), actualPullBytes(response));
+      expect(
+        PullResponse.bodyBytesFor(
+          recordCount: response.records.length,
+          recordBytes: response.records.fold(
+            0,
+            (sum, value) => sum + value.encodedJsonBytes(),
+          ),
+          latestSeq: response.latestSeq,
+          throughSeq: response.throughSeq,
+          hasMore: response.hasMore,
+          limits: response.limits,
+        ),
+        actualPullBytes(response),
+      );
     });
   });
 }

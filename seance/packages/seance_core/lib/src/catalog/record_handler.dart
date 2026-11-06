@@ -82,9 +82,10 @@ abstract interface class RecordHandler {
   /// Apply a pulled live record.
   Future<ApplyOutcome> applyLive(EncryptedRecord record, ApplyContext context);
 
-  /// Apply a pulled tombstone. Tombstones carry no sealed kind, so the
-  /// prefix alone routes them; a prefix whose tombstones must never strip
-  /// local state returns [ApplyOutcome.skipped].
+  /// Apply a pulled tombstone after the coordinator has authenticated its
+  /// envelope and verified that its sealed kind belongs to this handler. A
+  /// prefix whose tombstones must not strip local state returns
+  /// [ApplyOutcome.skipped].
   Future<ApplyOutcome> applyTombstone(
     EncryptedRecord record,
     ApplyContext context,

@@ -23,12 +23,106 @@ abstract class LocalRecordStore {
   Future<void> setHighWaterSeq(int seq);
 }
 
-/// In-memory implementation used by tests and as a reference; the Flutter app
-/// backs the same interface with SQLite.
-class InMemoryLocalRecordStore implements LocalRecordStore {
+/// A server advertised an older envelope floor than this account previously
+/// observed. Accepting it would make a server rollback silently re-enable
+/// unauthenticated conflict metadata.
+final class RecordEnvelopeFloorDowngradeException implements Exception {
+  const RecordEnvelopeFloorDowngradeException({
+    required this.observed,
+    required this.advertised,
+  });
+
+  final int observed;
+  final int advertised;
+
+  @override
+  String toString() =>
+      'Record envelope floor regressed from $observed to $advertised';
+}
+
+/// Durable, account-scoped memory of the strongest server envelope floor.
+///
+/// The value is monotone. A scoped store binds it to the same endpoint and
+/// username as the records and cursors, so one account cannot bless another.
+/// This detects a downgrade after the device has observed the stronger floor;
+/// a brand-new device cannot detect a complete, internally consistent rollback
+/// to an older floor-2 snapshot without a checkpoint outside that server.
+abstract interface class RecordEnvelopeFloorStore implements LocalRecordStore {
+  Future<int> recordEnvelopeFloor();
+
+  /// Persist [floor], or throw when it is below the value already observed.
+  Future<void> observeRecordEnvelopeFloor(int floor);
+}
+
+/// A mirror that can settle the exact operation a push sent.
+///
+/// A local edit may replace [sent] while the request is in flight. Settling by
+/// id alone would clear that newer edit, while a rejected stale write may need
+/// to restore a displaced server winner already below the pull cursor. A
+/// rejected push restores that copy only when its sequence matches the
+/// server's reported winner; otherwise the local edit remains dirty for a
+/// later pull to reconcile.
+abstract interface class PushSettlingRecordStore implements LocalRecordStore {
+  Future<EncryptedRecord?> settlePush(
+    EncryptedRecord sent,
+    PushResult result,
+  );
+}
+
+/// A durable mirror that can withdraw an unsent local publication.
+///
+/// Disabling an opt-in sync kind must not upload a dirty value left by an
+/// earlier offline round. Implementations restore the clean server copy the
+/// edit displaced, or remove a brand-new local value when there was none.
+abstract interface class LocalPublicationStore implements LocalRecordStore {
+  Future<void> cancelLocal(String id);
+}
+
+/// A mirror that can re-queue server-derived state after a rejected cursor.
+///
+/// Resetting only the cursor is unsafe after a server rollback: clean records
+/// from the lost history would never be offered back when a full pull no
+/// longer contains them. Recovery re-queues every mirrored record under its
+/// original conflict tuple and persists a pending phase. The owner must first
+/// complete a full pull and re-apply its domain policy before any remaining
+/// records are pushed. Persisting that phase keeps a crash from reverting to
+/// ordinary collection and mistaking an unreadable source for an opt-out.
+abstract interface class RecoverableSyncCursorStore
+    implements LocalRecordStore {
+  Future<void> recoverFromRejectedCursor();
+  Future<bool> cursorRecoveryPending();
+  Future<void> completeCursorRecovery();
+}
+
+/// In-memory implementation used by tests and lightweight embeddings; the
+/// Flutter app uses the account-scoped persistent implementation.
+class InMemoryLocalRecordStore
+    implements
+        PushSettlingRecordStore,
+        LocalPublicationStore,
+        RecoverableSyncCursorStore,
+        RecordEnvelopeFloorStore {
   final Map<String, EncryptedRecord> _records = {};
   final Set<String> _dirty = {};
+  final Map<String, EncryptedRecord> _displaced = {};
   int _highWater = 0;
+  bool _cursorRecoveryPending = false;
+  int _recordEnvelopeFloor = kLegacyRecordEnvelopeVersion;
+
+  @override
+  Future<int> recordEnvelopeFloor() async => _recordEnvelopeFloor;
+
+  @override
+  Future<void> observeRecordEnvelopeFloor(int floor) async {
+    _validateRecordEnvelopeFloor(floor);
+    if (floor < _recordEnvelopeFloor) {
+      throw RecordEnvelopeFloorDowngradeException(
+        observed: _recordEnvelopeFloor,
+        advertised: floor,
+      );
+    }
+    _recordEnvelopeFloor = floor;
+  }
 
   @override
   Future<List<EncryptedRecord>> allRecords() async => _records.values.toList();
@@ -38,6 +132,10 @@ class InMemoryLocalRecordStore implements LocalRecordStore {
 
   @override
   Future<void> putLocal(EncryptedRecord record) async {
+    final existing = _records[record.id];
+    if (existing != null && !_dirty.contains(record.id)) {
+      _displaced[record.id] = existing;
+    }
     _records[record.id] = record;
     _dirty.add(record.id);
   }
@@ -46,6 +144,7 @@ class InMemoryLocalRecordStore implements LocalRecordStore {
   Future<void> putRemote(EncryptedRecord record) async {
     _records[record.id] = record;
     _dirty.remove(record.id);
+    _displaced.remove(record.id);
   }
 
   @override
@@ -57,6 +156,44 @@ class InMemoryLocalRecordStore implements LocalRecordStore {
     final r = _records[id];
     if (r != null) _records[id] = r.withSeq(seq);
     _dirty.remove(id);
+    _displaced.remove(id);
+  }
+
+  @override
+  Future<EncryptedRecord?> settlePush(
+    EncryptedRecord sent,
+    PushResult result,
+  ) async {
+    if (result.id != sent.id) {
+      throw ArgumentError('push result must identify the sent record');
+    }
+    if (!identical(_records[sent.id], sent) || !_dirty.contains(sent.id)) {
+      return null;
+    }
+    if (result.accepted) {
+      _records[sent.id] = sent.withSeq(result.seq);
+      _dirty.remove(sent.id);
+      _displaced.remove(sent.id);
+    } else {
+      final restored = _displaced.remove(sent.id);
+      if (restored != null && restored.seq == result.seq) {
+        _records[sent.id] = restored;
+        _dirty.remove(sent.id);
+        return restored;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<void> cancelLocal(String id) async {
+    if (!_dirty.remove(id)) return;
+    final restored = _displaced.remove(id);
+    if (restored == null) {
+      _records.remove(id);
+    } else {
+      _records[id] = restored;
+    }
   }
 
   @override
@@ -65,5 +202,44 @@ class InMemoryLocalRecordStore implements LocalRecordStore {
   @override
   Future<void> setHighWaterSeq(int seq) async {
     if (seq > _highWater) _highWater = seq;
+  }
+
+  @override
+  Future<void> recoverFromRejectedCursor() async {
+    final cleanIds = <String>[
+      for (final entry in _records.entries)
+        if (!_dirty.contains(entry.key)) entry.key,
+    ];
+    for (final id in cleanIds) {
+      final record = _records[id]!;
+      _records[id] = EncryptedRecord(
+        envelopeVersion: record.envelopeVersion,
+        id: record.id,
+        updatedAt: record.updatedAt,
+        deviceId: record.deviceId,
+        deleted: record.deleted,
+        seq: null,
+        blob: record.blob,
+      );
+    }
+    _dirty.addAll(cleanIds);
+    _displaced.clear();
+    _highWater = 0;
+    _cursorRecoveryPending = true;
+  }
+
+  @override
+  Future<bool> cursorRecoveryPending() async => _cursorRecoveryPending;
+
+  @override
+  Future<void> completeCursorRecovery() async {
+    _cursorRecoveryPending = false;
+  }
+}
+
+void _validateRecordEnvelopeFloor(int floor) {
+  if (floor < kLegacyRecordEnvelopeVersion ||
+      floor > kCurrentRecordEnvelopeVersion) {
+    throw FormatException('Unsupported record envelope floor $floor');
   }
 }

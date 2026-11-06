@@ -33,6 +33,9 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
   var pullCalls = 0;
   var pushCalls = 0;
 
+  /// Existing accounts created before authenticated envelopes advertise one.
+  int recordEnvelopeFloor = kCurrentRecordEnvelopeVersion;
+
   /// When set, the next [pull] throws it — the 401 dead-account fixture.
   Object? nextPullError;
 
@@ -61,7 +64,7 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
   }
 
   @override
-  Future<void> register(RegisterRequest request) async {
+  Future<LoginResponse> register(RegisterRequest request) async {
     registerCalls++;
     if (registrationClosed) {
       throw const ApiError(
@@ -75,8 +78,14 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
       salt: base64.decode(request.argonSalt),
       params: request.argonParams,
       authVerifier: request.authVerifier,
+      vaultKeyCheck: request.vaultKeyCheck,
     );
     token = 'token-${++_tokenCounter}';
+    return LoginResponse(
+      token: token!,
+      vaultKeyCheck: request.vaultKeyCheck,
+      recordEnvelopeFloor: recordEnvelopeFloor,
+    );
   }
 
   @override
@@ -93,7 +102,7 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
   }
 
   @override
-  Future<void> login(LoginRequest request) async {
+  Future<LoginResponse> login(LoginRequest request) async {
     loginCalls++;
     final account = _accounts[request.username];
     if (account == null || account.authVerifier != request.authVerifier) {
@@ -101,6 +110,11 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
           code: 'invalid_credentials', message: 'Invalid credentials');
     }
     token = 'token-${++_tokenCounter}';
+    return LoginResponse(
+      token: token!,
+      vaultKeyCheck: account.vaultKeyCheck,
+      recordEnvelopeFloor: recordEnvelopeFloor,
+    );
   }
 
   /// Register an account the way a prior enrollment would have: the verifier
@@ -111,6 +125,7 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
     required String username,
     required String password,
     Argon2Params params = const Argon2Params(),
+    bool withVaultKeyCheck = false,
   }) async {
     final salt = secureRandomBytes(16);
     final keys = await VaultCrypto.deriveKeys(
@@ -119,6 +134,9 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
       salt: salt,
       params: params,
       authVerifier: base64.encode(keys.authVerifier),
+      vaultKeyCheck: withVaultKeyCheck
+          ? await VaultKeyCheck.create(keys.vaultKey, username: username)
+          : null,
     );
     return (salt: salt, keys: keys);
   }
@@ -136,7 +154,11 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
         .where((r) => (r.seq ?? 0) > since)
         .toList()
       ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
-    return PullResponse(records: list, latestSeq: _seq);
+    return PullResponse(
+      records: list,
+      latestSeq: _seq,
+      recordEnvelopeFloor: recordEnvelopeFloor,
+    );
   }
 
   @override
@@ -171,9 +193,11 @@ final class _FakeAccount {
     required this.salt,
     required this.params,
     required this.authVerifier,
+    this.vaultKeyCheck,
   });
 
   final List<int> salt;
   final Argon2Params params;
   final String authVerifier;
+  final String? vaultKeyCheck;
 }
