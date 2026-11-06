@@ -11,6 +11,9 @@ class _FakeInbox implements InboxApi {
   final Map<String, InboxItem> items = {};
   int _received = 0;
   int _itemSeq = 0;
+  int deleteAppCalls = 0;
+  Object? deleteAppError;
+  bool deleteAppReportsMissing = false;
 
   /// Answer newest first, as a server that does not sort might.
   bool reverse = false;
@@ -31,8 +34,11 @@ class _FakeInbox implements InboxApi {
 
   @override
   Future<bool> deleteApp(String appId) async {
+    deleteAppCalls++;
+    if (deleteAppError != null) throw deleteAppError!;
     items.removeWhere((_, item) => item.appId == appId);
-    return tokens.remove(appId) != null;
+    final removed = tokens.remove(appId) != null;
+    return deleteAppReportsMissing ? false : removed;
   }
 
   @override
@@ -114,6 +120,56 @@ class _PagedFakeInbox extends _FakeInbox implements PagedInboxApi {
       cursor = next;
     }
   }
+}
+
+final class _SensitiveFailure implements Exception {
+  final String secret;
+  int toStringCalls = 0;
+
+  _SensitiveFailure(this.secret);
+
+  @override
+  String toString() {
+    toStringCalls++;
+    return secret;
+  }
+}
+
+final class _FailingInboxAppStore implements InboxAppStore {
+  final Object error;
+  final StackTrace stackTrace;
+  InboxApp? attemptedApp;
+
+  _FailingInboxAppStore(this.error, this.stackTrace);
+
+  @override
+  Future<InboxApp?> getApp(String id) async => null;
+
+  @override
+  Future<List<InboxApp>> listApps() async => const [];
+
+  @override
+  Future<void> putApp(InboxApp app) {
+    attemptedApp = app;
+    return Future<void>.error(error, stackTrace);
+  }
+}
+
+Future<void> _expectSameFailure(
+  Future<Object?> operation,
+  Object expectedError,
+  StackTrace expectedStack,
+) async {
+  Object? caughtError;
+  StackTrace? caughtStack;
+  try {
+    await operation;
+  } catch (error, stackTrace) {
+    caughtError = error;
+    caughtStack = stackTrace;
+  }
+  expect(caughtError, same(expectedError));
+  expect(caughtStack, same(expectedStack));
 }
 
 /// A record sync server, as small as the coordinator needs.
@@ -226,6 +282,63 @@ void main() {
         name: 'bots',
         serverUrl: 'https://sync.example.com',
       );
+
+  InboxService serviceWith(InboxAppStore apps) => InboxService(
+    api: server,
+    apps: apps,
+    statuses: InMemoryInboxStatusStore(),
+    cache: InMemoryInboxCacheStore(),
+    now: () => _t0,
+  );
+
+  for (final reportsMissing in [false, true]) {
+    test('a failed local app write rolls back the server app'
+        '${reportsMissing ? ' when it is already absent' : ''}', () async {
+      final failure = _SensitiveFailure('local token/key secret');
+      final failureStack = StackTrace.current;
+      final apps = _FailingInboxAppStore(failure, failureStack);
+      server.deleteAppReportsMissing = reportsMissing;
+
+      await _expectSameFailure(
+        serviceWith(apps).addApp(
+          name: 'bots',
+          serverUrl: 'https://sync.example.com',
+        ),
+        failure,
+        failureStack,
+      );
+
+      expect(apps.attemptedApp, isNotNull);
+      expect(server.deleteAppCalls, 1);
+      expect(server.tokens, isEmpty);
+      expect(failure.toStringCalls, 0);
+    });
+  }
+
+  test(
+    'a rollback failure preserves the local write error and logs types only',
+    () async {
+      final failure = _SensitiveFailure('local token/key secret');
+      final failureStack = StackTrace.current;
+      final cleanupFailure = _SensitiveFailure('server token secret');
+      final apps = _FailingInboxAppStore(failure, failureStack);
+      server.deleteAppError = cleanupFailure;
+
+      await _expectSameFailure(
+        serviceWith(apps).addApp(
+          name: 'bots',
+          serverUrl: 'https://sync.example.com',
+        ),
+        failure,
+        failureStack,
+      );
+
+      expect(server.deleteAppCalls, 1);
+      expect(server.tokens, hasLength(1));
+      expect(failure.toStringCalls, 0);
+      expect(cleanupFailure.toStringCalls, 0);
+    },
+  );
 
   test('a proposal reaches every device and a run settles it on all', () async {
     final pairing = await connect(a);
