@@ -13,6 +13,28 @@ import 'package:seance_core/seance_core.dart';
 const _baseUrl = 'https://sync.test';
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
+MockClient _currentServerClient(
+  Future<http.Response> Function(http.Request) handler,
+) {
+  return MockClient((request) async {
+    if (request.method == 'GET' &&
+        request.url.path == '/v1/records/legacy') {
+      return http.Response(
+        jsonEncode(
+          const LegacyRecordPage(
+            records: [],
+            nextId: null,
+            hasMore: false,
+            recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
+          ).toJson(),
+        ),
+        HttpStatus.ok,
+      );
+    }
+    return handler(request);
+  });
+}
+
 /// A round whose pull holds a conflicting pin back and which *then* fails
 /// must still put the conflict in front of the user (Séance #56): the
 /// store keeps refusing the pulled key, so a push that keeps failing would
@@ -29,6 +51,7 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
     services = await AppServices.initialize();
     services.settings.syncBaseUrl = _baseUrl;
+    services.settings.syncUsername = 'user';
     await services.masterKeys.putApiKey('sync.token', 'session-token');
   });
 
@@ -56,6 +79,19 @@ void main() {
         pinnedAt: 20,
       );
       await services.hostKeyStore.put(local);
+      // Pins are deliberately account-visible only while a synced server
+      // names their address. Keep alpha eligible so this test exercises the
+      // conflict path rather than the orphan-pin privacy filter.
+      await services.configStore.putServer(
+        const ServerConfig(
+          id: 'eligible-server',
+          label: 'alpha',
+          host: 'alpha.example.com',
+          username: 'me',
+          createdAt: 10,
+          updatedAt: 10,
+        ),
+      );
       // A server this device keeps off the account: the copy arriving for it
       // is outranked and re-dated, which sends the coordinator back for a
       // pass that fails here, after the pin was held back.
@@ -92,7 +128,7 @@ void main() {
         ),
       ];
       var gets = 0;
-      final transport = MockClient((request) async {
+      final transport = _currentServerClient((request) async {
         if (request.method == 'GET') {
           gets++;
           if (gets >= 3) {

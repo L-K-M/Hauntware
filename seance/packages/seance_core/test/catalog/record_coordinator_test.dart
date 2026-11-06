@@ -332,13 +332,15 @@ void main() {
     Future<EncryptedRecord> pinRecord(
       HostKey key, {
       String deviceId = 'foreign-device',
+      bool deleted = false,
     }) => RecordCrypto(RecordCodec(_key)).seal(
       DecryptedRecord(
         id: key.recordId,
         kind: RecordKind.hostKey,
         updatedAt: key.pinnedAt,
         deviceId: deviceId,
-        data: key.toJson(),
+        deleted: deleted,
+        data: deleted ? const {} : key.toJson(),
       ),
     );
 
@@ -509,16 +511,11 @@ void main() {
     test('a hostkey tombstone never deletes a local pin', () async {
       final device = await _Device.create(tempDir, 'a');
       await device.hostKeys.put(pin('h.example.com', 'SHA256:LOCAL'));
-      server.seed(
-        EncryptedRecord(
-          id: 'hostkey:h.example.com:22',
-          updatedAt: 99999,
-          deviceId: 'anyone',
-          deleted: true,
-          seq: null,
-          blob: Uint8List(0),
-        ),
-      );
+      server.seed(await pinRecord(
+        pin('h.example.com', 'SHA256:IGNORED', pinnedAt: 99999),
+        deviceId: 'anyone',
+        deleted: true,
+      ));
       await device.coordinator.runRound(server);
       expect(
         (await device.hostKeys.get('h.example.com', 22))!.fingerprintSha256,
@@ -606,18 +603,52 @@ void main() {
       expect(device.catalog!.servers, hasLength(1));
 
       server.seed(
-        EncryptedRecord(
-          id: 'srv-uuid-1',
-          updatedAt: 2,
-          deviceId: 'seance-device',
-          deleted: true,
-          seq: null,
-          blob: Uint8List(0),
+        await RecordCrypto(RecordCodec(_key)).seal(
+          const DecryptedRecord(
+            id: 'srv-uuid-1',
+            kind: RecordKind.serverConfig,
+            updatedAt: 2,
+            deviceId: 'seance-device',
+            deleted: true,
+          ),
         ),
       );
       await device.coordinator.runRound(server);
       expect(device.catalog!.servers, isEmpty);
     });
+
+    test(
+      'an unsealed serverConfig tombstone cannot delete a catalog row',
+      () async {
+        final device = await _Device.create(tempDir, 'a', shared: true);
+        server.seed(
+          await RecordCrypto(RecordCodec(_key)).seal(
+            DecryptedRecord(
+              id: 'srv-uuid-1',
+              kind: RecordKind.serverConfig,
+              updatedAt: 1,
+              deviceId: 'seance-device',
+              data: config('srv-uuid-1', 'web').toJson(),
+            ),
+          ),
+        );
+        await device.coordinator.runRound(server);
+        expect(device.catalog!.servers, hasLength(1));
+
+        server.seed(
+          EncryptedRecord(
+            id: 'srv-uuid-1',
+            updatedAt: 2,
+            deviceId: 'seance-device',
+            deleted: true,
+            seq: null,
+            blob: Uint8List(0),
+          ),
+        );
+        await device.coordinator.runRound(server);
+        expect(device.catalog!.servers.single.id, 'srv-uuid-1');
+      },
+    );
 
     test('separate mode never decrypts prefixless ids', () async {
       final device = await _Device.create(tempDir, 'a');
@@ -633,6 +664,31 @@ void main() {
   });
 
   group('serverConfig write path (04 §4.2, amended)', () {
+    test('an unauthenticated future tombstone cannot settle a dirty edit',
+        () async {
+      final device = await _Device.create(tempDir, 'a', shared: true);
+      await _saveServer(device, _server('web', label: 'local edit'));
+
+      server.seed(
+        EncryptedRecord(
+          id: 'web',
+          updatedAt: 1 << 50,
+          deviceId: 'forged-device',
+          deleted: true,
+          seq: null,
+          blob: Uint8List(0),
+        ),
+      );
+
+      await device.coordinator.runRound(server);
+
+      final dirty = await device.records.dirtyRecords();
+      expect(dirty, hasLength(1));
+      expect(dirty.single.id, 'web');
+      expect(dirty.single.deleted, isFalse);
+      expect(device.catalog!.servers.single.label, 'local edit');
+    });
+
     test('a delete the store could not tombstone still outranks its live '
         'tuple', () async {
       final a = await _Device.create(tempDir, 'a', shared: true);
@@ -823,13 +879,11 @@ void main() {
       // tombstone; the user re-included locally, so the live row must
       // win — re-dated past the tombstone and re-sealed for the push.
       server.seed(
-        EncryptedRecord(
-          id: 'web',
+        await _sealServer(
+          _server('web'),
           updatedAt: _epochMs + 500,
           deviceId: a.deviceId,
           deleted: true,
-          seq: null,
-          blob: Uint8List(0),
         ),
       );
       await a.coordinator.runRound(server);
@@ -883,13 +937,11 @@ void main() {
         // This device's old retraction, dated between the two: nothing to
         // revive, and re-dating the row to its stamp + 1 would regress it.
         server.seed(
-          EncryptedRecord(
-            id: 'web',
+          await _sealServer(
+            _server('web'),
             updatedAt: _epochMs + 500,
             deviceId: a.deviceId,
             deleted: true,
-            seq: null,
-            blob: Uint8List(0),
           ),
         );
         await a.coordinator.runRound(server);
@@ -1225,13 +1277,11 @@ void main() {
         syncSecrets: true,
       );
       server.seed(
-        EncryptedRecord(
-          id: 'secret:s1',
+        await _sealSecret(
+          _secret('s1'),
           updatedAt: _epochMs + 5000,
           deviceId: 'other-device',
           deleted: true,
-          seq: null,
-          blob: Uint8List(0),
         ),
       );
       await a.coordinator.runRound(server);
@@ -1291,13 +1341,11 @@ void main() {
       );
       await device.secrets!.putLocalSecret(_secret('s1'), updatedAt: _epochMs);
       server.seed(
-        EncryptedRecord(
-          id: 'secret:s1',
+        await _sealSecret(
+          _secret('s1'),
           updatedAt: _epochMs + 99999,
           deviceId: 'anyone',
           deleted: true,
-          seq: null,
-          blob: Uint8List(0),
         ),
       );
       await device.coordinator.runRound(server);

@@ -259,13 +259,17 @@ final class FakeSyncTransport implements SyncTransport {
   }
 
   @override
-  Future<void> register(RegisterRequest request) async {
+  Future<LoginResponse> register(RegisterRequest request) async {
     server.registerCalls++;
     if (server.registrationClosed) {
       throw const ApiError(
           code: 'registration_closed', message: 'registration closed');
     }
     _token = 'token-${request.username}';
+    return LoginResponse(
+      token: _token!,
+      vaultKeyCheck: request.vaultKeyCheck,
+    );
   }
 
   @override
@@ -274,10 +278,11 @@ final class FakeSyncTransport implements SyncTransport {
           argonSalt: server.argonSalt, argonParams: server.argonParams);
 
   @override
-  Future<void> login(LoginRequest request) async {
+  Future<LoginResponse> login(LoginRequest request) async {
     server.loginCalls++;
     _requireAuth();
     _token = 'token-${request.username}';
+    return LoginResponse(token: _token!);
   }
 
   @override

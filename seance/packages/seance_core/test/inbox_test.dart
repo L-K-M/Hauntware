@@ -78,6 +78,43 @@ class _FakeInbox implements InboxApi {
     return id;
   }
 }
+class _PagedFakeInbox extends _FakeInbox implements PagedInboxApi {
+  _PagedFakeInbox({this.pageSize = 1});
+
+  final int pageSize;
+  int pageRequests = 0;
+  int? failAfterPages;
+
+  @override
+  Stream<InboxPage> listItemPages({required int since}) async* {
+    final through = _received;
+    var cursor = since;
+    while (true) {
+      pageRequests++;
+      if (failAfterPages != null && pageRequests > failAfterPages!) {
+        throw StateError('page failed');
+      }
+      final pageItems =
+          items.values
+              .where(
+                (item) => item.received > cursor && item.received <= through,
+              )
+              .toList()
+            ..sort((a, b) => a.received.compareTo(b.received));
+      final selected = pageItems.take(pageSize).toList();
+      final next = selected.isEmpty ? cursor : selected.last.received;
+      final hasMore = pageItems.length > selected.length;
+      yield InboxPage(
+        items: selected,
+        throughReceived: through,
+        nextReceived: next,
+        hasMore: hasMore,
+      );
+      if (!hasMore) return;
+      cursor = next;
+    }
+  }
+}
 
 /// A record sync server, as small as the coordinator needs.
 class _FakeRecords implements SyncApi {
@@ -343,6 +380,36 @@ void main() {
     expect((await b.inbox.refresh()).single.proposal.id, 'p1');
   });
 
+  test('paged refresh checkpoints each completed page', () async {
+    final paged = _PagedFakeInbox(pageSize: 1);
+    final device = _Device('paged', paged, codec);
+    final pairing = await connect(device);
+    await paged.deposit(pairing, _proposal('p1'));
+    await paged.deposit(pairing, _proposal('p2'));
+    paged.failAfterPages = 1;
+
+    await expectLater(device.inbox.refresh(), throwsStateError);
+
+    final saved = await device.cache.load();
+    expect(saved.cursor, 1);
+    expect(saved.proposals.single.proposal.id, 'p1');
+  });
+
+  test('paged refresh stops after a page blocked by an unknown app', () async {
+    final paged = _PagedFakeInbox(pageSize: 1);
+    final source = _Device('source', paged, codec);
+    final reader = _Device('reader', paged, codec);
+    final unknown = await connect(source);
+    final known = await connect(reader);
+    await paged.deposit(unknown, _proposal('unknown'));
+    await paged.deposit(known, _proposal('known'));
+
+    expect(await reader.inbox.refresh(), isEmpty);
+
+    expect(paged.pageRequests, 1);
+    expect((await reader.cache.load()).cursor, 0);
+  });
+
   test('expired proposals drop out and cannot be claimed', () async {
     final pairing = await connect(a);
     await server.deposit(pairing, {..._proposal('p1'), 'expires': _t0s + 60});
@@ -439,7 +506,10 @@ void main() {
       updatedAt: _t0.millisecondsSinceEpoch + 365 * 86400000,
       deviceId: 'server',
     ));
-    await b.sync.run(records);
+    await expectLater(
+      b.sync.run(records),
+      throwsA(isA<FormatException>()),
+    );
     expect((await b.apps.getApp(pairing.appId))?.key, pairing.key);
   });
 

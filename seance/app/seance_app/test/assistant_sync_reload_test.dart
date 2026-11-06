@@ -13,6 +13,28 @@ import 'package:seance_core/seance_core.dart';
 const _baseUrl = 'https://sync.test';
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
+MockClient _currentServerClient(
+  Future<http.Response> Function(http.Request) handler,
+) {
+  return MockClient((request) async {
+    if (request.method == 'GET' &&
+        request.url.path == '/v1/records/legacy') {
+      return http.Response(
+        jsonEncode(
+          const LegacyRecordPage(
+            records: [],
+            nextId: null,
+            hasMore: false,
+            recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
+          ).toJson(),
+        ),
+        HttpStatus.ok,
+      );
+    }
+    return handler(request);
+  });
+}
+
 /// A round that adopts the assistant record and *then* fails must still
 /// rebuild the chat provider.
 ///
@@ -34,6 +56,7 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
     services = await AppServices.initialize();
     services.settings.syncBaseUrl = _baseUrl;
+    services.settings.syncUsername = 'user';
     services.settings.syncAssistant = true;
     await services.masterKeys.putApiKey('sync.token', 'session-token');
   });
@@ -103,7 +126,7 @@ void main() {
     // the expectation reshapes it, which is not a property this file should
     // depend on.
     final sentAuth = <String?>[];
-    final transport = MockClient((request) async {
+    final transport = _currentServerClient((request) async {
       // These records carry the assistant's API keys, and every mock in this
       // file answers whatever it is asked — so without this, a round that
       // stopped sending the session token would pass the whole suite.
@@ -204,7 +227,7 @@ void main() {
     ));
     var gets = 0;
     var seq = 1;
-    final transport = MockClient((request) async {
+    final transport = _currentServerClient((request) async {
       if (request.method == 'GET') {
         gets++;
         return http.Response(
@@ -263,7 +286,7 @@ void main() {
     services.settings.syncAssistant = false;
     services.settings.assistantUpdatedAt = 5;
     var requests = 0;
-    final transport = MockClient((request) async {
+    final transport = _currentServerClient((request) async {
       requests++;
       return http.Response(
         jsonEncode(const PullResponse(records: [], latestSeq: 0).toJson()),
@@ -334,7 +357,7 @@ void main() {
     // thing these tests are about, and a stamp that only ever moves in
     // `settings` cannot be told from one that also moves on the record.
     MockClient emptyAccount(void Function(EncryptedRecord record) onPushed) =>
-        MockClient(
+        _currentServerClient(
           (request) async {
             if (request.method == 'GET') {
               return http.Response(
@@ -482,7 +505,7 @@ void main() {
       // account that already holds a record, and shadowing the counter that
       // `setUp` resets makes it look as though that reset applied here.
       var pushSeq = 1;
-      final transport = MockClient((request) async {
+      final transport = _currentServerClient((request) async {
         if (request.method == 'GET') {
           return http.Response(
             jsonEncode(PullResponse(

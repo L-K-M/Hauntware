@@ -57,10 +57,25 @@ void main() {
   });
 
   PersistentLocalRecordStore open({
+    SyncAccountScope? scope,
+    bool adoptLegacy = false,
+    bool resetExisting = false,
     DateTime Function()? now,
     void Function(Object, StackTrace)? onError,
   }) =>
-      PersistentLocalRecordStore(path: path, now: now, onError: onError);
+      PersistentLocalRecordStore(
+        path: path,
+        scope: scope,
+        adoptLegacy: adoptLegacy,
+        resetExisting: resetExisting,
+        now: now,
+        onError: onError,
+      );
+
+  final alice = SyncAccountScope(
+    baseUrl: 'https://sync.example',
+    username: 'alice',
+  );
 
   group('mutation and reload', () {
     test('persists records, dirty flags, and both cursors across reload',
@@ -104,6 +119,7 @@ void main() {
 
     test('resetSyncCursors zeroes both cursors for a full resync', () async {
       final store = open();
+      await store.putRemote(_record('bookmark:clean', seq: 8));
       await store.setHighWaterSeq(10);
       await store.setLastAppliedSeq(9);
       await store.resetSyncCursors();
@@ -114,6 +130,43 @@ void main() {
       final reloaded = open();
       expect(await reloaded.highWaterSeq(), 0);
       expect(await reloaded.lastAppliedSeq(), 0);
+      expect(await reloaded.getRecord('bookmark:clean'), isNotNull,
+          reason: 'a deliberate apply rescan keeps the server mirror');
+    });
+
+    test('rejected cursor recovery re-queues mirror and preserves local edits',
+        () async {
+      final store = open();
+      await store.putRemote(_record('bookmark:clean', seq: 8));
+      await store.putRemote(_record('bookmark:edited', seq: 9));
+      await store.putLocal(_record('bookmark:edited', updatedAt: 110));
+      await store.putRemote(_tombstone('bookmark:deleted', seq: 10));
+      await store.setHighWaterSeq(10);
+      await store.setLastAppliedSeq(9);
+
+      await store.recoverFromRejectedCursor();
+
+      final reloaded = open();
+      expect((await reloaded.getRecord('bookmark:clean'))!.seq, isNull);
+      expect(
+        (await reloaded.dirtyRecords()).map((record) => record.id),
+        unorderedEquals([
+          'bookmark:clean',
+          'bookmark:edited',
+          'bookmark:deleted',
+        ]),
+      );
+      expect((await reloaded.getRecord('bookmark:deleted'))!.deleted, isTrue);
+      expect((await reloaded.getRecord('bookmark:deleted'))!.seq, isNull,
+          reason: 'the current server copy must be able to settle the retry');
+      expect(await reloaded.displacedRecords(), isEmpty);
+      expect(await reloaded.highWaterSeq(), 0);
+      expect(await reloaded.lastAppliedSeq(), 0);
+      expect(await reloaded.cursorRecoveryPending(), isTrue);
+
+      await reloaded.completeCursorRecovery();
+
+      expect(await open().cursorRecoveryPending(), isFalse);
     });
   });
 
@@ -173,7 +226,10 @@ void main() {
       // through disk, since the pull cursor has already moved past its seq.
       final reloaded = open();
       final sent = (await reloaded.dirtyRecords()).single;
-      final restored = await reloaded.settlePush(sent, rejected);
+      final restored = await reloaded.settlePush(
+        sent,
+        const PushResult(id: 'bookmark:a', seq: 4, accepted: false),
+      );
       expect(restored, isNotNull);
       expect(restored!.updatedAt, 20);
       expect(restored.seq, 4);
@@ -195,7 +251,10 @@ void main() {
       final reloaded = open();
       final sent = (await reloaded.dirtyRecords()).single;
       expect(sent.updatedAt, 100);
-      final restored = await reloaded.settlePush(sent, rejected);
+      final restored = await reloaded.settlePush(
+        sent,
+        const PushResult(id: 'bookmark:a', seq: 5, accepted: false),
+      );
       expect(restored!.updatedAt, 200);
       expect(restored.seq, 5);
       expect(await reloaded.getRecord('bookmark:a'), same(restored));
@@ -214,7 +273,10 @@ void main() {
       // behind it on the same queue.
       final local = _record('bookmark:a', updatedAt: 100);
       final put = store.putLocal(local);
-      final restored = await store.settlePush(local, rejected);
+      final restored = await store.settlePush(
+        local,
+        const PushResult(id: 'bookmark:a', seq: 5, accepted: false),
+      );
       expect(restored, isNotNull);
       expect(restored!.updatedAt, 200);
       expect(restored.seq, 5);
@@ -230,6 +292,25 @@ void main() {
       await store.putLocal(local);
       expect(await store.settlePush(local, rejected), isNull);
       expect((await store.dirtyRecords()).single, same(local));
+    });
+
+    test('a rejection for a newer winner drops a stale displaced copy',
+        () async {
+      final store = open();
+      await store.putRemote(_record('bookmark:a', updatedAt: 200, seq: 5));
+      await store.putLocal(_record('bookmark:a', updatedAt: 100));
+      final sent = (await store.dirtyRecords()).single;
+
+      final restored = await store.settlePush(
+        sent,
+        const PushResult(id: 'bookmark:a', seq: 6, accepted: false),
+      );
+
+      expect(restored, isNull);
+      expect(await store.getRecord('bookmark:a'), same(sent));
+      expect(await store.dirtyRecords(), [same(sent)]);
+      expect(await store.displacedRecords(), isEmpty);
+      expect(await open().displacedRecords(), isEmpty);
     });
 
     test('markSynced drops a populated displaced stash', () async {
@@ -258,6 +339,45 @@ void main() {
       expect(await store.displacedRecords(), isEmpty);
       expect((await store.getRecord('bookmark:a'))!.seq, 9);
       expect(await store.dirtyRecords(), isEmpty);
+    });
+
+    test('cancelling a brand-new local publication removes it durably',
+        () async {
+      final store = open();
+      await store.putLocal(_record('bookmark:new'));
+
+      await store.cancelLocal('bookmark:new');
+
+      expect(await store.getRecord('bookmark:new'), isNull);
+      expect(await store.dirtyRecords(), isEmpty);
+      expect(await open().getRecord('bookmark:new'), isNull);
+    });
+
+    test('cancelling a local edit restores the clean server copy', () async {
+      final store = open();
+      final remote = _record(
+        'bookmark:a',
+        updatedAt: 10,
+        deviceId: 'remote',
+        seq: 5,
+        blob: [8, 9],
+      );
+      await store.putRemote(remote);
+      await store.putLocal(_record(
+        'bookmark:a',
+        updatedAt: 20,
+        deviceId: 'local',
+        blob: [1, 2],
+      ));
+
+      final reopened = open();
+      await reopened.cancelLocal('bookmark:a');
+
+      final restored = await reopened.getRecord('bookmark:a');
+      expect(restored!.seq, 5);
+      expect(restored.blob, [8, 9]);
+      expect(await reopened.dirtyRecords(), isEmpty);
+      expect((await open().getRecord('bookmark:a'))!.blob, [8, 9]);
     });
 
     test('tombstone wins over an older pulled edit and stays in the store',
@@ -388,6 +508,188 @@ void main() {
       final store = open(now: () => _fixedNow);
       await expectLater(store.allRecords(), throwsFormatException);
       // The unreadable newer file stays put rather than being moved aside.
+      expect(File(path).readAsStringSync(), contains('"version":2'));
+    });
+  });
+
+  group('account scope', () {
+    test('persists an envelope floor and rejects a rollback after reopen',
+        () async {
+      final store = open(scope: alice);
+      await store.initialize();
+      expect(await store.recordEnvelopeFloor(), 1);
+
+      await store.observeRecordEnvelopeFloor(2);
+      final reopened = open(scope: alice);
+      expect(await reopened.recordEnvelopeFloor(), 2);
+      await expectLater(
+        reopened.observeRecordEnvelopeFloor(1),
+        throwsA(isA<RecordEnvelopeFloorDowngradeException>()),
+      );
+      expect(await reopened.recordEnvelopeFloor(), 2);
+    });
+
+    test('a missing scoped store is bound eagerly', () async {
+      final store = open(scope: alice);
+      await store.initialize();
+
+      final doc = jsonDecode(File(path).readAsStringSync()) as Map;
+      expect(doc['version'], 2);
+      expect(doc['account'], {
+        'baseUrl': 'https://sync.example',
+        'username': 'alice',
+      });
+      expect(doc['records'], isEmpty);
+    });
+
+    test('adopts a legacy store once and preserves all durable state',
+        () async {
+      final legacy = open();
+      await legacy.putRemote(
+        _record('bookmark:a', updatedAt: 200, seq: 5, blob: [8, 9]),
+      );
+      await legacy.putLocal(
+        _record('bookmark:a', updatedAt: 100, blob: [1, 2]),
+      );
+      await legacy.setHighWaterSeq(12);
+      await legacy.setLastAppliedSeq(11);
+
+      final scoped = open(scope: alice, adoptLegacy: true);
+      await scoped.initialize();
+
+      expect(await scoped.highWaterSeq(), 12);
+      expect(await scoped.lastAppliedSeq(), 11);
+      expect((await scoped.dirtyRecords()).single.blob, [1, 2]);
+      expect((await scoped.displacedRecords()).single.blob, [8, 9]);
+      final doc = jsonDecode(File(path).readAsStringSync()) as Map;
+      expect(doc['version'], 2);
+      expect(doc['account'], {
+        'baseUrl': 'https://sync.example',
+        'username': 'alice',
+      });
+
+      final reopened = open(scope: alice);
+      expect(await reopened.highWaterSeq(), 12);
+      expect(await reopened.lastAppliedSeq(), 11);
+      expect((await reopened.dirtyRecords()).single.blob, [1, 2]);
+      expect((await reopened.displacedRecords()).single.blob, [8, 9]);
+    });
+
+    test('does not assign an unclaimed legacy store to an account', () async {
+      final legacy = open();
+      await legacy.putLocal(_record('bookmark:a'));
+      await legacy.setHighWaterSeq(9);
+
+      final scoped = open(scope: alice);
+      await scoped.initialize();
+
+      expect(await scoped.allRecords(), isEmpty);
+      expect(await scoped.highWaterSeq(), 0);
+      expect(await scoped.lastAppliedSeq(), 0);
+      final doc = jsonDecode(File(path).readAsStringSync()) as Map;
+      expect(doc['version'], 2);
+      expect(doc['account'], {
+        'baseUrl': 'https://sync.example',
+        'username': 'alice',
+      });
+    });
+
+    test('endpoint or username changes reset records and both cursors',
+        () async {
+      final first = open(scope: alice);
+      await first.putLocal(_record('bookmark:a'));
+      await first.setHighWaterSeq(9);
+      await first.setLastAppliedSeq(8);
+
+      final endpointChanged = open(
+        scope: SyncAccountScope(
+          baseUrl: 'https://other.example',
+          username: 'alice',
+        ),
+      );
+      await endpointChanged.initialize();
+      expect(await endpointChanged.allRecords(), isEmpty);
+      expect(await endpointChanged.highWaterSeq(), 0);
+      expect(await endpointChanged.lastAppliedSeq(), 0);
+
+      await endpointChanged.putLocal(_record('bookmark:b'));
+      await endpointChanged.setHighWaterSeq(4);
+      final usernameChanged = open(
+        scope: SyncAccountScope(
+          baseUrl: 'https://other.example',
+          username: 'bob',
+        ),
+      );
+      await usernameChanged.initialize();
+      expect(await usernameChanged.allRecords(), isEmpty);
+      expect(await usernameChanged.highWaterSeq(), 0);
+    });
+
+    test('resetExisting clears a recreated account with the same name',
+        () async {
+      final first = open(scope: alice);
+      await first.putLocal(_record('bookmark:a'));
+      await first.setHighWaterSeq(9);
+      await first.recoverFromRejectedCursor();
+      expect(await first.cursorRecoveryPending(), isTrue);
+
+      final recreated = open(scope: alice, resetExisting: true);
+      await recreated.initialize();
+
+      expect(await recreated.allRecords(), isEmpty);
+      expect(await recreated.dirtyRecords(), isEmpty);
+      expect(await recreated.highWaterSeq(), 0);
+      expect(await recreated.lastAppliedSeq(), 0);
+      expect(await recreated.cursorRecoveryPending(), isFalse);
+    });
+
+    test('malformed scoped account is quarantined and rebound', () async {
+      File(path).writeAsStringSync(
+        '{"version":2,"account":{"baseUrl":7,"username":"alice"},'
+        '"highWaterSeq":0,"lastAppliedSeq":0,"records":[]}',
+      );
+      final errors = <Object>[];
+      final store = open(
+        scope: alice,
+        now: () => _fixedNow,
+        onError: (error, _) => errors.add(error),
+      );
+
+      await store.initialize();
+
+      expect(errors, hasLength(1));
+      expect(store.quarantinedPath, isNotNull);
+      expect(await store.allRecords(), isEmpty);
+      final doc = jsonDecode(File(path).readAsStringSync()) as Map;
+      expect(doc['version'], 2);
+      expect(doc['account'], {
+        'baseUrl': 'https://sync.example',
+        'username': 'alice',
+      });
+    });
+
+    test('future scoped versions fail closed in place', () async {
+      File(path).writeAsStringSync(
+        '{"version":3,"account":{"baseUrl":"https://sync.example",'
+        '"username":"alice"},"highWaterSeq":0,"lastAppliedSeq":0,'
+        '"records":[]}',
+      );
+      final store = open(scope: alice, resetExisting: true);
+
+      await expectLater(store.initialize(), throwsFormatException);
+      expect(File(path).readAsStringSync(), contains('"version":3'));
+      expect(
+        tempDir
+            .listSync()
+            .where((e) => _basenameOf(e.path).contains('.corrupt-')),
+        isEmpty,
+      );
+    });
+
+    test('an unscoped consumer cannot open a scoped document', () async {
+      await open(scope: alice).initialize();
+
+      await expectLater(open().allRecords(), throwsFormatException);
       expect(File(path).readAsStringSync(), contains('"version":2'));
     });
   });

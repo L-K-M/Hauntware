@@ -4,6 +4,11 @@ import 'package:seance_protocol/seance_protocol.dart';
 /// applied in `bin/`). TLS is intentionally not handled here — run behind a
 /// reverse proxy, the same shape as Atuin's deployment guidance.
 class ServerSettings {
+  static const int defaultMaxRecordsPerPull = kDefaultMaxRecordsPerPush;
+  static const int defaultMaxPullBodyBytes = kDefaultMaxPushBodyBytes;
+  static const int defaultMaxRecordsPerAccount = 5 * kDefaultMaxRecordsPerPush;
+  static const int defaultMaxAccountBytes = 5 * kDefaultMaxPushBodyBytes;
+
   final String bindAddress;
   final int port;
 
@@ -17,6 +22,11 @@ class ServerSettings {
   final int loginMaxAttempts;
   final Duration loginWindow;
 
+  /// Bearer sessions expire and each account keeps only its newest sessions.
+  /// Defaults to 30 days and 20 devices/browser sessions.
+  final Duration sessionDuration;
+  final int maxSessionsPerAccount;
+
   /// Hard cap on a single request body, which in practice sizes pushes: the
   /// unauthenticated routes read at most 16 KiB, or this if it is lower.
   /// Default 8 MiB.
@@ -27,14 +37,28 @@ class ServerSettings {
   final int maxRecordsPerPush;
   final int maxBlobBytes;
 
+  /// Bounds one explicitly paged record or inbox response. Legacy record
+  /// pulls remain whole-account for older clients, but the account quotas
+  /// below put a hard ceiling on those responses too.
+  final int maxRecordsPerPull;
+  final int maxPullBodyBytes;
+
+  /// Durable storage ceilings per account. The byte ceiling is enforced
+  /// independently for sync records and pending inbox items, so a producer
+  /// token cannot consume the space needed for the user's record catalog.
+  final int maxRecordsPerAccount;
+  final int maxAccountBytes;
+
   /// The push caps as the client sees them. Advertised in every pull response
   /// so a client can split a large dirty set into pushes this deployment
-  /// accepts instead of guessing at env-tuned values.
+  /// accepts instead of guessing at env-tuned values. The server may
+  /// advertise a smaller body cap when required by [maxPullBodyBytes], while
+  /// preserving the configured request ceiling here.
   PushLimits get pushLimits => PushLimits(
-        maxBodyBytes: maxBodyBytes,
-        maxRecordsPerPush: maxRecordsPerPush,
-        maxBlobBytes: maxBlobBytes,
-      );
+    maxBodyBytes: maxBodyBytes,
+    maxRecordsPerPush: maxRecordsPerPush,
+    maxBlobBytes: maxBlobBytes,
+  );
 
   const ServerSettings({
     this.bindAddress = '0.0.0.0',
@@ -43,9 +67,15 @@ class ServerSettings {
     this.dbPath,
     this.loginMaxAttempts = 10,
     this.loginWindow = const Duration(minutes: 1),
+    this.sessionDuration = const Duration(days: 30),
+    this.maxSessionsPerAccount = 20,
     this.maxBodyBytes = kDefaultMaxPushBodyBytes,
     this.maxRecordsPerPush = kDefaultMaxRecordsPerPush,
     this.maxBlobBytes = kDefaultMaxBlobBytes,
+    this.maxRecordsPerPull = defaultMaxRecordsPerPull,
+    this.maxPullBodyBytes = defaultMaxPullBodyBytes,
+    this.maxRecordsPerAccount = defaultMaxRecordsPerAccount,
+    this.maxAccountBytes = defaultMaxAccountBytes,
   });
 
   factory ServerSettings.fromEnvironment(Map<String, String> env) {
@@ -85,13 +115,46 @@ class ServerSettings {
       loginMaxAttempts:
           int.tryParse(env['SEANCE_LOGIN_MAX_ATTEMPTS'] ?? '') ?? 10,
       loginWindow: Duration(
-          seconds: int.tryParse(env['SEANCE_LOGIN_WINDOW_SECONDS'] ?? '') ?? 60),
-      maxBodyBytes:
-          positiveLimit('SEANCE_MAX_BODY_BYTES', kDefaultMaxPushBodyBytes),
+        seconds: int.tryParse(env['SEANCE_LOGIN_WINDOW_SECONDS'] ?? '') ?? 60,
+      ),
+      sessionDuration: Duration(
+        seconds: positiveLimit(
+          'SEANCE_SESSION_TTL_SECONDS',
+          const Duration(days: 30).inSeconds,
+        ),
+      ),
+      maxSessionsPerAccount: positiveLimit(
+        'SEANCE_MAX_SESSIONS_PER_ACCOUNT',
+        20,
+      ),
+      maxBodyBytes: positiveLimit(
+        'SEANCE_MAX_BODY_BYTES',
+        kDefaultMaxPushBodyBytes,
+      ),
       maxRecordsPerPush: positiveLimit(
-          'SEANCE_MAX_RECORDS_PER_PUSH', kDefaultMaxRecordsPerPush),
-      maxBlobBytes:
-          positiveLimit('SEANCE_MAX_BLOB_BYTES', kDefaultMaxBlobBytes),
+        'SEANCE_MAX_RECORDS_PER_PUSH',
+        kDefaultMaxRecordsPerPush,
+      ),
+      maxBlobBytes: positiveLimit(
+        'SEANCE_MAX_BLOB_BYTES',
+        kDefaultMaxBlobBytes,
+      ),
+      maxRecordsPerPull: positiveLimit(
+        'SEANCE_MAX_RECORDS_PER_PULL',
+        defaultMaxRecordsPerPull,
+      ),
+      maxPullBodyBytes: positiveLimit(
+        'SEANCE_MAX_PULL_BODY_BYTES',
+        defaultMaxPullBodyBytes,
+      ),
+      maxRecordsPerAccount: positiveLimit(
+        'SEANCE_MAX_RECORDS_PER_ACCOUNT',
+        defaultMaxRecordsPerAccount,
+      ),
+      maxAccountBytes: positiveLimit(
+        'SEANCE_MAX_ACCOUNT_BYTES',
+        defaultMaxAccountBytes,
+      ),
     );
   }
 
@@ -100,16 +163,21 @@ class ServerSettings {
     int? port,
     bool? openRegistration,
     String? dbPath,
-  }) =>
-      ServerSettings(
-        bindAddress: bindAddress ?? this.bindAddress,
-        port: port ?? this.port,
-        openRegistration: openRegistration ?? this.openRegistration,
-        dbPath: dbPath ?? this.dbPath,
-        loginMaxAttempts: loginMaxAttempts,
-        loginWindow: loginWindow,
-        maxBodyBytes: maxBodyBytes,
-        maxRecordsPerPush: maxRecordsPerPush,
-        maxBlobBytes: maxBlobBytes,
-      );
+  }) => ServerSettings(
+    bindAddress: bindAddress ?? this.bindAddress,
+    port: port ?? this.port,
+    openRegistration: openRegistration ?? this.openRegistration,
+    dbPath: dbPath ?? this.dbPath,
+    loginMaxAttempts: loginMaxAttempts,
+    loginWindow: loginWindow,
+    sessionDuration: sessionDuration,
+    maxSessionsPerAccount: maxSessionsPerAccount,
+    maxBodyBytes: maxBodyBytes,
+    maxRecordsPerPush: maxRecordsPerPush,
+    maxBlobBytes: maxBlobBytes,
+    maxRecordsPerPull: maxRecordsPerPull,
+    maxPullBodyBytes: maxPullBodyBytes,
+    maxRecordsPerAccount: maxRecordsPerAccount,
+    maxAccountBytes: maxAccountBytes,
+  );
 }

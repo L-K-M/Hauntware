@@ -17,6 +17,7 @@ Future<String> _seed(
   await storage.createAccount(
     Account(
       username: username,
+      generation: 'generation-$username',
       authVerifierHash: 'hash',
       verifierSalt: 'salt',
       argonSalt: 'argon',

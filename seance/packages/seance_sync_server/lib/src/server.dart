@@ -12,6 +12,7 @@ import 'package:shelf_router/shelf_router.dart';
 import 'config.dart';
 import 'favicon.dart';
 import 'inbox_docs.dart';
+import 'legacy_migration_validation.dart';
 import 'rate_limiter.dart';
 import 'storage.dart';
 
@@ -21,6 +22,11 @@ part 'inbox_handlers.dart';
 /// devices, stores end-to-end encrypted records, and resolves conflicts with
 /// the same last-write-wins rule the client uses. It can decrypt nothing.
 class SyncServer {
+  /// SQLite sequence values are signed 64-bit integers. Size probes use the
+  /// widest value a stored row can acquire so a write accepted today remains
+  /// pullable after the account has accumulated more revisions.
+  static const int _maxStorageSequence = 0x7fffffffffffffff;
+
   /// Cap on a body read before any authentication (register, prelogin,
   /// login). The largest of them, a register body, is under 1 KiB; without
   /// this they inherited the push cap, so anyone could make the server buffer
@@ -53,6 +59,7 @@ class SyncServer {
   final Storage storage;
   final ServerSettings settings;
   final RateLimiter loginLimiter;
+  late final PushLimits _advertisedPushLimits;
 
   /// Deposits per inbox app, keyed by app id (docs/INBOX.md: 30 a minute).
   final RateLimiter inboxLimiter;
@@ -79,7 +86,105 @@ class SyncServer {
              maxAttempts: _inboxDepositsPerWindow,
              window: _inboxDepositWindow,
              now: now,
-           );
+           ) {
+    _advertisedPushLimits = _deriveAdvertisedPushLimits();
+    _validatePullPageSettings();
+  }
+
+  PushLimits _deriveAdvertisedPushLimits() {
+    final configured = settings.pushLimits;
+    final withoutSequence = EncryptedRecord(
+      id: '',
+      updatedAt: 0,
+      deviceId: '',
+      deleted: false,
+      seq: null,
+      blob: Uint8List(0),
+    );
+    final sequenceGrowth =
+        withoutSequence.withSeq(_maxStorageSequence).encodedJsonBytes() -
+        withoutSequence.encodedJsonBytes();
+    final fixedPullBytes = PullResponse.bodyBytesFor(
+      recordCount: 1,
+      recordBytes: sequenceGrowth,
+      latestSeq: _maxStorageSequence,
+      recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
+      throughSeq: _maxStorageSequence,
+      hasMore: false,
+      limits: configured,
+    );
+    final pullSafeRecordBytes = settings.maxPullBodyBytes - fixedPullBytes;
+    final pullSafeBodyBytes = pullSafeRecordBytes <= 0
+        ? 1
+        : PushRequest.bodyBytesFor(
+            recordCount: 1,
+            recordBytes: pullSafeRecordBytes,
+          );
+    return PushLimits(
+      maxBodyBytes: min(configured.maxBodyBytes, pullSafeBodyBytes),
+      maxRecordsPerPush: configured.maxRecordsPerPush,
+      maxBlobBytes: configured.maxBlobBytes,
+    );
+  }
+
+  void _validatePullPageSettings() {
+    final emptyRecordPage = PullResponse.bodyBytesFor(
+      recordCount: 0,
+      recordBytes: 0,
+      latestSeq: _maxStorageSequence,
+      throughSeq: _maxStorageSequence,
+      hasMore: false,
+      limits: _advertisedPushLimits,
+    );
+    final emptyInboxPage = InboxPage.bodyBytesFor(
+      itemCount: 0,
+      itemBytes: 0,
+      throughReceived: _maxStorageSequence,
+      nextReceived: _maxStorageSequence,
+      hasMore: false,
+    );
+    final minimum = emptyRecordPage > emptyInboxPage
+        ? emptyRecordPage
+        : emptyInboxPage;
+    if (settings.maxPullBodyBytes < minimum) {
+      throw ArgumentError.value(
+        settings.maxPullBodyBytes,
+        'settings.maxPullBodyBytes',
+        'must be at least $minimum bytes so an empty page fits',
+      );
+    }
+  }
+
+  bool _recordFitsPullPage(EncryptedRecord incoming) {
+    final stored = incoming.withSeq(_maxStorageSequence);
+    return PullResponse.bodyBytesFor(
+          recordCount: 1,
+          recordBytes: stored.encodedJsonBytes(),
+          latestSeq: _maxStorageSequence,
+          recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
+          throughSeq: _maxStorageSequence,
+          hasMore: false,
+          limits: _advertisedPushLimits,
+        ) <=
+        settings.maxPullBodyBytes;
+  }
+
+  bool _inboxItemFitsPullPage(String appId, String itemId, Uint8List blob) {
+    final item = InboxItem(
+      appId: appId,
+      itemId: itemId,
+      received: _maxStorageSequence,
+      blob: blob,
+    );
+    return InboxPage.bodyBytesFor(
+          itemCount: 1,
+          itemBytes: item.encodedJsonBytes(),
+          throughReceived: _maxStorageSequence,
+          nextReceived: _maxStorageSequence,
+          hasMore: false,
+        ) <=
+        settings.maxPullBodyBytes;
+  }
 
   Handler get handler {
     final router = Router()
@@ -103,6 +208,11 @@ class SyncServer {
       ..post('/v1/login', _login)
       ..get('/v1/sync', _sync)
       ..put('/v1/records', _push)
+      ..get('/v1/records/legacy', _legacyRecords)
+      ..put('/v1/records/legacy', _migrateLegacyRecords)
+      ..delete('/v1/session', _revokeSession)
+      ..delete('/v1/sessions', _revokeAllSessions)
+      ..put('/v1/account/vault-key-check', _initializeVaultKeyCheck)
       ..delete('/v1/account', _deleteAccount)
       // The command inbox (docs/INBOX.md). The producer's only route is the
       // POST; every other inbox route needs a session, so a deposit token
@@ -178,30 +288,43 @@ class SyncServer {
     // Decoded with the same decoder a client uses at prelogin, so a salt
     // stored here is one every client can read back.
     final argonSalt = _tryBase64Decode(r.argonSalt);
+    final vaultKeyCheck = _tryBase64Decode(r.vaultKeyCheck);
     if (authVerifier == null ||
         authVerifier.length != _authVerifierBytes ||
         argonSalt == null ||
-        argonSalt.length < _minArgonSaltBytes) {
+        argonSalt.length < _minArgonSaltBytes ||
+        vaultKeyCheck == null ||
+        vaultKeyCheck.length < 40 ||
+        vaultKeyCheck.length > 1024) {
       return _error(400, 'bad_request', 'Invalid register payload');
-    }
-    // After every check that needs no storage, so a malformed request costs
-    // no lookup and learns nothing about which names are taken.
-    if (await storage.getAccount(r.username) != null) {
-      return _error(409, 'account_exists', 'Username already registered');
     }
     final verifierSalt = secureRandomBytes(16);
     final hash = VaultCrypto.hashAuthVerifier(authVerifier, verifierSalt);
-    await storage.createAccount(
+    final now = _nowMs;
+    final token = await storage.registerAccount(
       Account(
         username: r.username,
+        generation: base64Url.encode(secureRandomBytes(16)),
         authVerifierHash: hash,
         verifierSalt: base64.encode(verifierSalt),
         argonSalt: r.argonSalt,
         argonParams: r.argonParams,
+        vaultKeyCheck: r.vaultKeyCheck,
       ),
+      issuedAt: now,
+      expiresAt: now + settings.sessionDuration.inMilliseconds,
+      maxSessions: settings.maxSessionsPerAccount,
     );
-    final token = await storage.createToken(r.username);
-    return _json(LoginResponse(token: token).toJson());
+    if (token == null) {
+      return _error(409, 'account_exists', 'Username already registered');
+    }
+    return _json(
+      LoginResponse(
+        token: token,
+        vaultKeyCheck: r.vaultKeyCheck,
+        recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
+      ).toJson(),
+    );
   }
 
   Future<Response> _prelogin(Request req) async {
@@ -262,26 +385,86 @@ class SyncServer {
     if (account == null || !_constantTimeEquals(provided, expected)) {
       return _error(401, 'invalid_credentials', 'Invalid credentials');
     }
-    final token = await storage.createToken(r.username);
+    final now = _nowMs;
+    final token = await storage.createTokenFor(
+      account,
+      issuedAt: now,
+      expiresAt: now + settings.sessionDuration.inMilliseconds,
+      maxSessions: settings.maxSessionsPerAccount,
+    );
+    if (token == null) {
+      return _error(401, 'invalid_credentials', 'Invalid credentials');
+    }
     loginLimiter.reset('login:${r.username}');
-    return _json(LoginResponse(token: token).toJson());
+    return _json(
+      LoginResponse(
+        token: token,
+        vaultKeyCheck: account.vaultKeyCheck,
+        recordEnvelopeFloor: account.recordEnvelopeFloor,
+      ).toJson(),
+    );
   }
 
-  Future<Response> _sync(Request req) => _withAuth(req, (username) async {
-    final since = int.tryParse(req.url.queryParameters['since'] ?? '0') ?? 0;
-    final snapshot = await storage.pullSnapshot(username, since);
+  Future<Response> _sync(Request req) => _withAuth(req, (principal) async {
+    final protocolVersion = int.tryParse(
+      req.headers['x-seance-protocol-version'] ?? '',
+    );
+    if (protocolVersion != kProtocolVersion) {
+      return _error(
+        400,
+        'protocol_version',
+        'Client protocol v${protocolVersion ?? 'missing'} != server '
+            'v$kProtocolVersion',
+      );
+    }
+    final since = int.tryParse(req.url.queryParameters['since'] ?? '0');
+    if (since == null || since < 0) {
+      return _error(400, 'bad_request', 'Invalid sync cursor');
+    }
+    final page = req.url.queryParameters['page'];
+    if (page != null && page != '1') {
+      return _error(400, 'bad_request', 'Invalid sync page flag');
+    }
+    final throughText = req.url.queryParameters['through'];
+    final through = throughText == null ? null : int.tryParse(throughText);
+    if (throughText != null && (through == null || through < 0)) {
+      return _error(400, 'bad_request', 'Invalid sync watermark');
+    }
+    final snapshot = await storage.pullPageFor(
+      principal,
+      since,
+      throughSeq: page == '1' ? through : null,
+      limits: PullPageLimits(
+        maxRecords: settings.maxRecordsPerPull,
+        maxBodyBytes: settings.maxPullBodyBytes,
+      ),
+      advertisedLimits: _advertisedPushLimits,
+    );
+    // A request without the page flag predates pagination: its response shape
+    // has no field that could announce a cut, so an answer too large for one
+    // page is refused rather than silently truncated.
+    if (page != '1' && snapshot.hasMore) {
+      return _error(
+        400,
+        'pagination_required',
+        'The account no longer fits one response; retry with page=1',
+      );
+    }
     // Every round pulls before it pushes, so this is where a client learns how
     // to size the push it is about to make — see [PushLimits].
     return _json(
       PullResponse(
         records: snapshot.records,
         latestSeq: snapshot.latestSeq,
-        limits: settings.pushLimits,
+        recordEnvelopeFloor: snapshot.recordEnvelopeFloor,
+        throughSeq: page == '1' ? snapshot.throughSeq : null,
+        hasMore: snapshot.hasMore,
+        limits: _advertisedPushLimits,
       ).toJson(),
     );
   });
 
-  Future<Response> _push(Request req) => _withAuth(req, (username) async {
+  Future<Response> _push(Request req) => _withAuth(req, (principal) async {
     final body = await _readJson(req, settings.maxBodyBytes);
     if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
     final PushRequest r;
@@ -294,22 +477,159 @@ class SyncServer {
       return _error(400, 'protocol_version', 'Protocol version mismatch');
     }
     if (r.records.length > settings.maxRecordsPerPush) {
-      return _error(413, 'payload_too_large',
-          'Too many records in one push (max ${settings.maxRecordsPerPush})');
+      return _error(
+        413,
+        'payload_too_large',
+        'Too many records in one push (max ${settings.maxRecordsPerPush})',
+      );
     }
     for (final incoming in r.records) {
+      if (incoming.envelopeVersion != 2) {
+        return _error(
+          400,
+          'record_envelope_version',
+          'Only authenticated record envelope v2 is accepted',
+        );
+      }
       if (incoming.blob.length > settings.maxBlobBytes) {
-        return _error(413, 'payload_too_large',
-            'A record blob exceeds the ${settings.maxBlobBytes}-byte limit');
+        return _error(
+          413,
+          'payload_too_large',
+          'A record blob exceeds the ${settings.maxBlobBytes}-byte limit',
+        );
+      }
+      if (!_recordFitsPullPage(incoming)) {
+        return _error(
+          413,
+          'payload_too_large',
+          'A stored record would exceed the configured pull page limit',
+        );
       }
     }
-    final pushed = await storage.pushRecords(username, r.records);
+    final pushed = await storage.pushRecordsFor(
+      principal,
+      r.records,
+      quota: AccountQuota(
+        maxRecords: settings.maxRecordsPerAccount,
+        maxBytes: settings.maxAccountBytes,
+      ),
+    );
     return _json(pushed.toJson());
   });
 
+  Future<Response> _legacyRecords(Request req) =>
+      _withAuth(req, (principal) async {
+        final protocolVersion = int.tryParse(
+          req.headers['x-seance-protocol-version'] ?? '',
+        );
+        if (protocolVersion != kProtocolVersion) {
+          return _error(
+            400,
+            'protocol_version',
+            'Protocol version mismatch',
+          );
+        }
+        final afterId = req.url.queryParameters['after'];
+        final page = await storage.legacyRecordPageFor(
+          principal,
+          afterId: afterId,
+          limits: PullPageLimits(
+            maxRecords: settings.maxRecordsPerPull,
+            maxBodyBytes: settings.maxPullBodyBytes,
+          ),
+        );
+        return _json(page.toJson());
+      });
+
+  Future<Response> _migrateLegacyRecords(Request req) =>
+      _withAuth(req, (principal) async {
+        final body = await _readJson(
+          req,
+          settings.maxBodyBytes + settings.maxPullBodyBytes,
+        );
+        if (body == null) {
+          return _error(400, 'bad_request', 'Malformed JSON');
+        }
+        final LegacyMigrationRequest migration;
+        try {
+          migration = LegacyMigrationRequest.fromJson(body);
+          validateLegacyMigrationBatch(migration.migrations);
+        } catch (_) {
+          return _error(400, 'bad_request', 'Invalid migration payload');
+        }
+        if (migration.protocolVersion != kProtocolVersion) {
+          return _error(
+            400,
+            'protocol_version',
+            'Protocol version mismatch',
+          );
+        }
+        if (migration.migrations.length > settings.maxRecordsPerPush) {
+          return _error(
+            413,
+            'payload_too_large',
+            'Too many records in one migration batch',
+          );
+        }
+        for (final candidate in migration.migrations) {
+          if (candidate.replacement.blob.length > settings.maxBlobBytes ||
+              !_recordFitsPullPage(candidate.replacement)) {
+            return _error(
+              413,
+              'payload_too_large',
+              'A replacement record exceeds the configured limit',
+            );
+          }
+        }
+        final result = await storage.migrateLegacyRecordsFor(
+          principal,
+          migration.migrations,
+          finalize: migration.finalize,
+          quota: AccountQuota(
+            maxRecords: settings.maxRecordsPerAccount,
+            maxBytes: settings.maxAccountBytes,
+          ),
+        );
+        return _json(result.toJson());
+      });
+
+  Future<Response> _revokeSession(Request req) =>
+      _withAuth(req, (principal) async {
+        if (!await storage.revokeSession(principal)) {
+          throw const StalePrincipalException();
+        }
+        return Response(204);
+      });
+
+  Future<Response> _revokeAllSessions(Request req) =>
+      _withAuth(req, (principal) async {
+        if (!await storage.revokeAllSessions(principal)) {
+          throw const StalePrincipalException();
+        }
+        return Response(204);
+      });
+
+  Future<Response> _initializeVaultKeyCheck(Request req) => _withAuth(req, (
+    principal,
+  ) async {
+    final body = await _readJson(req, _authBodyCap);
+    final encoded = body?['vaultKeyCheck'];
+    if (encoded is! String) {
+      return _error(400, 'bad_request', 'Invalid vault key check');
+    }
+    final decoded = _tryBase64Decode(encoded);
+    if (decoded == null || decoded.length < 40 || decoded.length > 1024) {
+      return _error(400, 'bad_request', 'Invalid vault key check');
+    }
+    final stored = await storage.initializeVaultKeyCheckFor(principal, encoded);
+    return _json({'vaultKeyCheck': stored});
+  });
+
   Future<Response> _deleteAccount(Request req) =>
-      _withAuth(req, (username) async {
-        await storage.deleteAccount(username);
+      _withAuth(req, (principal) async {
+        if (!await storage.deleteAccountFor(principal)) {
+          throw const StalePrincipalException();
+        }
         return _json({'ok': true});
       });
 
@@ -317,18 +637,23 @@ class SyncServer {
 
   Future<Response> _withAuth(
     Request req,
-    Future<Response> Function(String username) fn,
+    Future<Response> Function(AuthPrincipal principal) fn,
   ) async {
     final auth = req.headers['authorization'];
     if (auth == null || !auth.startsWith('Bearer ')) {
       return _error(401, 'unauthorized', 'Missing bearer token');
     }
-    final username = await storage.usernameForToken(auth.substring(7));
-    if (username == null) {
+    final principal = await storage.principalForToken(
+      auth.substring(7),
+      now: _nowMs,
+    );
+    if (principal == null) {
       return _error(401, 'unauthorized', 'Invalid token');
     }
-    return fn(username);
+    return fn(principal);
   }
+
+  int get _nowMs => _now().millisecondsSinceEpoch;
 
   int get _authBodyCap => min(settings.maxBodyBytes, _maxAuthBodyBytes);
 
@@ -401,10 +726,44 @@ class SyncServer {
         return await inner(req);
       } on StorageUnavailableException catch (e) {
         return _error(
-            HttpStatus.serviceUnavailable, 'storage_unavailable', e.toString());
+          HttpStatus.serviceUnavailable,
+          'storage_unavailable',
+          e.toString(),
+        );
       } on StorageBusyException {
-        return _error(HttpStatus.serviceUnavailable, 'storage_busy',
-            'Storage is busy; retry shortly.');
+        return _error(
+          HttpStatus.serviceUnavailable,
+          'storage_busy',
+          'Storage is busy; retry shortly.',
+        );
+      } on StorageCursorRejectedException {
+        return _error(409, 'cursor_rejected', 'Sync cursor is no longer valid');
+      } on StoragePageTooSmallException {
+        return _error(
+          500,
+          'pull_limit_too_small',
+          'The configured pull body limit cannot hold one stored item',
+        );
+      } on StorageEnvelopeFloorViolationException {
+        return _error(
+          500,
+          'record_envelope_floor_violation',
+          'The record envelope checkpoint is inconsistent',
+        );
+      } on AccountQuotaExceededException {
+        return _error(
+          413,
+          'account_quota_exceeded',
+          'The account has reached its record storage quota',
+        );
+      } on StalePrincipalException {
+        return _error(401, 'unauthorized', 'Invalid token');
+      } on VaultKeyCheckInitializationException {
+        return _error(
+          409,
+          'account_not_empty',
+          'A non-empty legacy account must verify its existing records first',
+        );
       } on _PayloadTooLarge {
         return _error(413, 'payload_too_large', 'Request body too large');
       } on FormatException {

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:seance_app/app_state.dart';
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/inbox_stores.dart';
 import 'package:seance_app/ui/inbox_view.dart';
+import 'package:seance_core/catalog.dart' show SyncAccountScope;
 import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
@@ -97,6 +99,106 @@ void main() {
         [for (final a in await store.listApps()) a.id],
         [app.id],
       );
+    });
+  });
+
+  group('FileInboxCacheStore', () {
+    late Directory directory;
+    late File file;
+    final account = SyncAccountScope(
+      baseUrl: 'https://sync.example',
+      username: 'alice',
+    );
+
+    setUp(() async {
+      directory = await Directory.systemTemp.createTemp('seance-inbox-cache-');
+      file = File('${directory.path}/inbox_cache.json');
+    });
+
+    tearDown(() => directory.delete(recursive: true));
+
+    test('discards a legacy cache whose account cannot be proven',
+        () async {
+      await file.writeAsString(jsonEncode(const InboxCache(
+        cursor: 7,
+        failures: {'app': 2},
+      ).toJson()));
+      final store = FileInboxCacheStore(
+        file,
+        scope: account,
+      );
+
+      final loaded = await store.load();
+      final document = jsonDecode(await file.readAsString()) as Map;
+
+      expect(loaded.cursor, 0);
+      expect(loaded.failures, isEmpty);
+      expect(document['version'], 1);
+      expect(document['account'], account.toJson());
+      expect((document['cache'] as Map)['cursor'], 0);
+    });
+
+    test('a different account clears cursor, proposals, and failures',
+        () async {
+      final first = FileInboxCacheStore(file, scope: account);
+      await first.initialize();
+      final app = _app();
+      await first.save(InboxCache(
+        cursor: 9,
+        proposals: [_cached(app)],
+        failures: const {'app': 3},
+      ));
+
+      final switched = FileInboxCacheStore(
+        file,
+        scope: SyncAccountScope(
+          baseUrl: 'https://sync.example',
+          username: 'bob',
+        ),
+      );
+      final loaded = await switched.load();
+
+      expect(loaded.cursor, 0);
+      expect(loaded.proposals, isEmpty);
+      expect(loaded.failures, isEmpty);
+      expect(
+        (jsonDecode(await file.readAsString()) as Map)['account'],
+        {'baseUrl': 'https://sync.example', 'username': 'bob'},
+      );
+    });
+
+    test('does not assign a disconnected legacy cache during enrollment',
+        () async {
+      await file.writeAsString(jsonEncode(const InboxCache(
+        cursor: 11,
+        failures: {'old': 4},
+      ).toJson()));
+
+      final enrolled = FileInboxCacheStore(
+        file,
+        scope: account,
+        resetExisting: true,
+      );
+      final loaded = await enrolled.load();
+
+      expect(loaded.cursor, 0);
+      expect(loaded.failures, isEmpty);
+    });
+
+    test('a future cache version fails closed without rewriting it', () async {
+      const original = '{"version":2,"account":{'
+          '"baseUrl":"https://sync.example","username":"alice"},'
+          '"cache":{"cursor":9,"proposals":[]}}';
+      await file.writeAsString(original);
+      final store = FileInboxCacheStore(
+        file,
+        scope: account,
+        resetExisting: true,
+      );
+
+      await expectLater(store.load(), throwsFormatException);
+
+      expect(await file.readAsString(), original);
     });
   });
 
