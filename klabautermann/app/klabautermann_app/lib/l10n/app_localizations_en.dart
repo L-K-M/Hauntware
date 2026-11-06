@@ -4424,6 +4424,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get hostKeyChangedReviewInstruction =>
+      'Review the new and previously trusted fingerprints, then read the warning below.';
+
+  @override
+  String hostKeyTypeChanged(String previousType, String presentedType) {
+    return 'Key algorithm changed from $previousType to $presentedType.';
+  }
+
+  @override
   String promptEndpoint(String host, int port) {
     return '$host:$port';
   }

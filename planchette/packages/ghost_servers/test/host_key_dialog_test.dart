@@ -14,14 +14,19 @@ void main() {
     fingerprintSha256: 'SHA256:$fp',
   );
 
-  GhostHostKeyPrompt changedKey(String fp, {required String pinned}) =>
-      GhostHostKeyPrompt(
-        host: 'example.com',
-        port: 22,
-        keyType: 'ssh-ed25519',
-        fingerprintSha256: 'SHA256:$fp',
-        pinnedFingerprintSha256: 'SHA256:$pinned',
-      );
+  GhostHostKeyPrompt changedKey(
+    String fp, {
+    required String pinned,
+    String keyType = 'ssh-ed25519',
+    String? pinnedKeyType,
+  }) => GhostHostKeyPrompt(
+    host: 'example.com',
+    port: 22,
+    keyType: keyType,
+    fingerprintSha256: 'SHA256:$fp',
+    pinnedFingerprintSha256: 'SHA256:$pinned',
+    pinnedKeyType: pinnedKeyType,
+  );
 
   Future<bool?> pumpAndOpen(
     WidgetTester tester,
@@ -263,6 +268,14 @@ void main() {
     expect(find.text('Unknown host key'), findsOneWidget);
     expect(find.textContaining('SHA256:AAA'), findsOneWidget);
     expect(find.text('Trust and connect'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Trust and connect'),
+          )
+          .onPressed,
+      isNotNull,
+    );
 
     await tester.tap(find.text('Trust and connect'));
     await tester.pumpAndSettle();
@@ -279,6 +292,15 @@ void main() {
     expect(find.textContaining('SHA256:NEW'), findsOneWidget);
     expect(find.textContaining('SHA256:OLD'), findsOneWidget);
     expect(find.text('Trust the new key'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Trust the new key'),
+          )
+          .onPressed,
+      isNotNull,
+      reason: 'a review that already fits is complete after layout',
+    );
     // A changed-key prompt must not be dismissable by tapping outside.
     expect(find.text('Cancel'), findsOneWidget);
   });
@@ -308,32 +330,45 @@ void main() {
     // pixels at this size.
     expect(tester.takeException(), isNull);
 
-    // The previously trusted fingerprint starts below the fold — asserted,
-    // so this test cannot silently stop exercising the scroll path if a
-    // future layout change ever makes the review fit without scrolling.
-    // Scrolling must bring it on screen so the comparison the decision
-    // rests on can actually be made.
+    final trustFinder = find.widgetWithText(FilledButton, 'Trust the new key');
+    expect(
+      tester.widget<FilledButton>(trustFinder).onPressed,
+      isNull,
+      reason: 'trust stays disabled until the entire review has been read',
+    );
+
+    // The previously trusted fingerprint starts below the fold. Scrolling
+    // must bring it on screen so the comparison the decision rests on can
+    // actually be made, but seeing only it is not enough to enable trust.
     final oldPrint = find.textContaining('SHA256:br9jFZ');
     expect(oldPrint, findsOneWidget);
     expect(onScreen(tester, oldPrint), isFalse);
     await scrollUntil(tester, done: () => onScreen(tester, oldPrint));
+    expect(tester.widget<FilledButton>(trustFinder).onPressed, isNull);
 
     // The pinned actions must stay reachable even at the deepest scroll.
     expect(onScreen(tester, find.text('Cancel')), isTrue);
     expect(onScreen(tester, find.text('Trust the new key')), isTrue);
 
-    // And the scroll travels back: the warning and the new fingerprint
-    // return into view from below.
+    // The warning follows both fingerprints. Reaching its end completes the
+    // review and only then enables the destructive trust action.
     final warning = find.textContaining('man-in-the-middle');
     final newPrint = find.textContaining('SHA256:nThbg');
     await scrollUntil(
       tester,
-      delta: const Offset(0, 80),
-      done: () => onScreen(tester, warning) && onScreen(tester, newPrint),
+      done: () => tester.widget<FilledButton>(trustFinder).onPressed != null,
+    );
+    expect(onScreen(tester, warning), isTrue);
+    expect(
+      tester.getTopLeft(newPrint).dy,
+      lessThan(tester.getTopLeft(oldPrint).dy),
+    );
+    expect(
+      tester.getTopLeft(oldPrint).dy,
+      lessThan(tester.getTopLeft(warning).dy),
     );
 
-    // The buttons never leave the screen: trust stays one tap away at every
-    // scroll position, and the explicit answer still comes back.
+    // The buttons never leave the screen, and the explicit answer comes back.
     expect(onScreen(tester, find.text('Cancel')), isTrue);
     expect(onScreen(tester, find.text('Trust the new key')), isTrue);
     await tester.tap(find.text('Trust the new key'));
@@ -385,6 +420,9 @@ void main() {
       unknownTitle: 'unknown',
       changedTitle: 'changed',
       changedWarning: (host) => 'warning about $host',
+      changedReviewInstruction: 'review everything',
+      keyTypeChanged: (previous, presented) =>
+          'algorithm changed: $previous to $presented',
       endpoint: (host, port) => '$host port $port',
       fingerprintLabel: 'fingerprint',
       newKeyLabel: 'new',
@@ -395,7 +433,12 @@ void main() {
     );
     await pumpAndOpen(
       tester,
-      changedKey('NEW', pinned: 'OLD'),
+      changedKey(
+        'NEW',
+        pinned: 'OLD',
+        keyType: 'new-algorithm',
+        pinnedKeyType: 'old-algorithm',
+      ),
       strings: strings,
       dialogKey: dialogKey,
     );
@@ -404,6 +447,8 @@ void main() {
     for (final text in [
       'changed',
       'warning about example.com',
+      'review everything',
+      'algorithm changed: old-algorithm to new-algorithm',
       'example.com port 22',
       'new',
       'previous',
@@ -416,8 +461,8 @@ void main() {
       find.byType(SelectableText),
     );
     expect(prints.map((print) => print.data), [
-      'ssh-ed25519\nSHA256:NEW',
-      'ssh-ed25519\nSHA256:OLD',
+      'new-algorithm\nSHA256:NEW',
+      'old-algorithm\nSHA256:OLD',
     ]);
     for (final print in prints) {
       expect(print.style?.fontFamily, 'Host Mono');
@@ -454,5 +499,29 @@ void main() {
           .map((print) => print.data),
       ['ssh-ed25519\nSHA256:NEW', 'ssh-rsa\nSHA256:OLD'],
     );
+    expect(
+      find.text('Key algorithm changed from ssh-rsa to ssh-ed25519.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the algorithm warning appears only for known differing types', (
+    tester,
+  ) async {
+    await pumpAndOpen(
+      tester,
+      changedKey(
+        'NEW',
+        pinned: 'OLD',
+        keyType: 'ssh-ed25519',
+        pinnedKeyType: 'ssh-ed25519',
+      ),
+    );
+    expect(find.textContaining('Key algorithm changed'), findsNothing);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    await pumpAndOpen(tester, changedKey('NEW', pinned: 'OLD'));
+    expect(find.textContaining('Key algorithm changed'), findsNothing);
   });
 }
