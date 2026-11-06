@@ -140,6 +140,24 @@ void main() {
 
   Finder copyButton() => find.text('Copy');
 
+  testWidgets('a plain click moves the shell caret to that cell', (
+    tester,
+  ) async {
+    await pumpTerminal(tester);
+    final terminal = state!.activeSession!.engine.terminal;
+    terminal.write(r'$ abcdef');
+    await settle(tester);
+    shellInput.clear();
+
+    await tester.tapAt(
+      cell(tester, 4, terminal.buffer.absoluteCursorY),
+      kind: PointerDeviceKind.mouse,
+    );
+    await settle(tester);
+
+    expect(shellInput.join(), '\x1b[D\x1b[D\x1b[D\x1b[D');
+  });
+
   testWidgets('a long-press selection offers Copy, Paste and Select all; '
       'Copy takes the selection and closes the toolbar', (tester) async {
     await pumpTerminal(tester);

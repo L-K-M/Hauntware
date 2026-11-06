@@ -205,6 +205,101 @@ void main() {
   });
 
   test(
+    'moveCaretTo follows soft wraps and counts wide characters once',
+    () async {
+      final e = XtermTerminalEngine();
+      addTearDown(e.dispose);
+      e.terminal.resize(6, 3);
+      final got = <int>[];
+      final sub = e.userInput.listen(got.addAll);
+      addTearDown(sub.cancel);
+
+      e.feed(Uint8List.fromList(utf8.encode(r'$ 12界45')));
+      e.moveCaretTo(const CellOffset(4, 0));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(utf8.decode(got), '\x1b[D\x1b[D\x1b[D');
+    },
+  );
+
+  test('moveCaretTo moves right to a later character', () async {
+    final e = XtermTerminalEngine();
+    addTearDown(e.dispose);
+    final got = <int>[];
+    final sub = e.userInput.listen(got.addAll);
+    addTearDown(sub.cancel);
+
+    e.feed(Uint8List.fromList(utf8.encode(r'$ abcdef')));
+    e.feed(Uint8List.fromList(utf8.encode('\x1b[3D')));
+    e.moveCaretTo(CellOffset(8, e.terminal.buffer.absoluteCursorY));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(utf8.decode(got), '\x1b[C\x1b[C\x1b[C');
+  });
+
+  test('moveCaretTo refuses mouse-reporting programs', () async {
+    final e = XtermTerminalEngine();
+    addTearDown(e.dispose);
+    final got = <int>[];
+    final sub = e.userInput.listen(got.addAll);
+    addTearDown(sub.cancel);
+
+    e.feed(Uint8List.fromList(utf8.encode(r'$ abcdef')));
+    e.feed(Uint8List.fromList(utf8.encode('\x1b[?9h')));
+    e.moveCaretTo(const CellOffset(2, 0));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(got, isEmpty);
+  });
+
+  test(
+    'moveCaretTo refuses hard lines, alternate screens, and programs',
+    () async {
+      final e = XtermTerminalEngine();
+      addTearDown(e.dispose);
+      final got = <int>[];
+      final sub = e.userInput.listen(got.addAll);
+      addTearDown(sub.cancel);
+
+      e.feed(
+        Uint8List.fromList(
+          utf8.encode(
+            r'$ abc'
+            '\r\noutput',
+          ),
+        ),
+      );
+      e.moveCaretTo(const CellOffset(2, 0));
+      await Future<void>.delayed(Duration.zero);
+      expect(got, isEmpty);
+
+      e.feed(Uint8List.fromList(utf8.encode('\x1b[?1049hfull screen')));
+      e.moveCaretTo(CellOffset(0, e.terminal.buffer.absoluteCursorY));
+      await Future<void>.delayed(Duration.zero);
+      expect(got, isEmpty);
+
+      e.feed(Uint8List.fromList(utf8.encode('\x1b[?1049l')));
+      e.feed(
+        Uint8List.fromList(
+          utf8.encode(
+            '\x1b]1337;ShellIntegrationVersion=1;bash\x07'
+            '\x1b]133;A\x07\x1b]133;B\x07'
+            r'$ running',
+          ),
+        ),
+      );
+      e.sendKey([0x0d]);
+      await Future<void>.delayed(Duration.zero);
+      got.clear();
+
+      e.moveCaretTo(CellOffset(2, e.terminal.buffer.absoluteCursorY));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(got, isEmpty);
+    },
+  );
+
+  test(
     'an armed Ctrl converts the next typed char to its control code',
     () async {
       final e = XtermTerminalEngine();
