@@ -12210,6 +12210,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Redo'**
   String get editorRedoLabel;
+
+  /// Device label shown in the account's synced-device list, identifying this installation by its operating system.
+  ///
+  /// In en, this message translates to:
+  /// **'Poltergeist on {platform}'**
+  String syncSessionDeviceName(String platform);
 }
 
 class _AppLocalizationsDelegate

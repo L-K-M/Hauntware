@@ -8658,4 +8658,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editorRedoLabel => 'Redo';
+
+  @override
+  String syncSessionDeviceName(String platform) {
+    return 'Poltergeist on $platform';
+  }
 }

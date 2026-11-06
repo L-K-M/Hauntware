@@ -10835,5 +10835,14 @@
     "description": "Disabled-command reason for Open Terminal in Séance when the active tab has no remote server."
   },
   "editorUndoLabel": "Undo",
-  "editorRedoLabel": "Redo"
+  "editorRedoLabel": "Redo",
+  "syncSessionDeviceName": "Poltergeist on {platform}",
+  "@syncSessionDeviceName": {
+    "description": "Device label shown in the account's synced-device list, identifying this installation by its operating system.",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  }
 }
