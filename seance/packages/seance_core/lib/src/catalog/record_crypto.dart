@@ -10,9 +10,9 @@ library;
 import 'package:seance_protocol/seance_protocol.dart';
 
 /// The one crypto consumer the task permits: Séance's own [RecordCodec]
-/// (XChaCha20-Poly1305 under the HKDF-SHA256-derived vault key,
-/// `{kind, data}` payloads, unknown kind names preserved as
-/// [RecordKind.unknown]).
+/// (XChaCha20-Poly1305 under the HKDF-SHA256-derived vault key). Current
+/// payloads authenticate the routing and conflict envelope as well as kind and
+/// data; legacy `{kind, data}` live payloads remain readable during migration.
 ///
 /// [open] is deliberately throw-only: a decrypt or JSON failure surfaces,
 /// and the caller decides whether that means "not for our vault key,
@@ -22,10 +22,17 @@ final class RecordCrypto {
 
   final RecordCodec _codec;
 
-  /// Decrypt and unwrap `{'kind': ..., 'data': ...}`. Throws on any
-  /// failure — no fallback decode, no defaults.
+  /// Decrypt and validate the sealed record envelope. Throws on any failure —
+  /// no unauthenticated fallback decode or defaults.
   Future<DecryptedRecord> open(EncryptedRecord record) =>
       _codec.decrypt(record);
+
+  /// Open only the authenticated `{kind, data}` from a legacy live envelope.
+  /// Callers must match it to independent current local state before sealing.
+  Future<LegacyRecordPayload> openLegacyForMigration(
+    EncryptedRecord record,
+  ) =>
+      _codec.decryptLegacyForMigration(record);
 
   /// Wrap and encrypt a [DecryptedRecord] for this vault key.
   Future<EncryptedRecord> seal(DecryptedRecord record) =>

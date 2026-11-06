@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/managed_remote_file.dart';
@@ -11,6 +14,28 @@ import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+
+MockClient _currentServerClient(
+  Future<http.Response> Function(http.Request) handler,
+) {
+  return MockClient((request) async {
+    if (request.method == 'GET' &&
+        request.url.path == '/v1/records/legacy') {
+      return http.Response(
+        jsonEncode(
+          const LegacyRecordPage(
+            records: [],
+            nextId: null,
+            hasMore: false,
+            recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
+          ).toJson(),
+        ),
+        HttpStatus.ok,
+      );
+    }
+    return handler(request);
+  });
+}
 
 /// The mutation queue's re-entrancy guard: it must catch the one shape of
 /// call that deadlocks the queue, and nothing else.
@@ -150,6 +175,84 @@ void main() {
       ]);
       expect(state.servers.map((s) => s.id).toSet(), {'a', 'b', 'c'});
     },
+  );
+
+  test(
+    'slow sync and queued recovery do not hold the mutation queue',
+    () async {
+      services.settings.syncBaseUrl = 'https://sync.test';
+      services.settings.syncUsername = 'user';
+      await services.masterKeys.putApiKey('sync.token', 'session-token');
+      await services.saveSettings();
+
+      final pullStarted = Completer<void>();
+      final releasePull = Completer<void>();
+      final remote = <EncryptedRecord>[];
+      var sequence = 0;
+      final transport = _currentServerClient((request) async {
+        if (request.method == 'GET') {
+          if (!pullStarted.isCompleted) {
+            pullStarted.complete();
+            await releasePull.future;
+          }
+          final since = int.parse(request.url.queryParameters['since']!);
+          return http.Response(
+            jsonEncode(PullResponse(
+              records: [
+                for (final record in remote)
+                  if (record.seq! > since) record,
+              ],
+              latestSeq: sequence,
+            ).toJson()),
+            HttpStatus.ok,
+          );
+        }
+        final pushed = PushRequest.fromJson(
+          jsonDecode(request.body) as Map<String, dynamic>,
+        ).records;
+        final results = <PushResult>[];
+        for (final record in pushed) {
+          final accepted = record.withSeq(++sequence);
+          remote.add(accepted);
+          results.add(
+            PushResult(id: record.id, seq: accepted.seq!, accepted: true),
+          );
+        }
+        return http.Response(
+          jsonEncode(PushResponse(
+            results: results,
+            latestSeq: sequence,
+          ).toJson()),
+          HttpStatus.ok,
+        );
+      });
+
+      final sync = http.runWithClient(state.syncNow, () => transport);
+      await pullStarted.future;
+      final recovery = state.saveRecoveryCode(state.newRecoveryCode());
+      await Future<void>.delayed(Duration.zero);
+      final save = state.saveServer(server('during-sync'));
+      final saveCompleted = await Future.any([
+        save.then((_) => true),
+        Future<bool>.delayed(const Duration(seconds: 2), () => false),
+      ]);
+
+      releasePull.complete();
+      await sync;
+      await recovery;
+      await save;
+
+      expect(
+        saveCompleted,
+        isTrue,
+        reason: 'network and a queued account operation must not own _mutate',
+      );
+      expect(
+        (await services.configStore.getServer('during-sync'))?.label,
+        'during-sync',
+      );
+    },
+    timeout: const Timeout(Duration(minutes: 1)),
   );
 
   group('editor tabs', () {

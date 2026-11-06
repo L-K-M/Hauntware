@@ -143,9 +143,13 @@ Responses (errors are JSON `{"error": "<code>", "message": "..."}`):
 - `401 unauthorized`: unknown app or wrong token (the server does not say
   which). The app may have been removed; ask the user for a new pairing.
 - `413 payload_too_large`: body over 96 KiB.
+- `413 item_too_large_for_pull`: the sealed item cannot fit this server's
+  configured inbox page. Ask the operator to raise the pull-body limit.
 - `429 rate_limited`: more than 30 proposals a minute. Wait and retry.
 - `429 inbox_full`: the app has 100 proposals the user has not handled.
   Do not retry in a loop; wait for the user.
+- `429 inbox_account_full`: all of the account's apps have reached the shared
+  pending-item quota. Wait for the user to handle proposals.
 
 Nothing flows back: you do not learn whether the proposal ran, and never
 its output. The server drops unhandled proposals 7 days after receiving
@@ -218,7 +222,7 @@ const String inboxOpenApiJson = r'''{
     },
     "responses": {
       "Error": {
-        "description": "400 bad_request: body under 40 bytes. 401 unauthorized: unknown app or wrong token, indistinguishable. 413 payload_too_large: body over 96 KiB. 429 rate_limited: over 30 a minute; 429 inbox_full: 100 proposals pending.",
+        "description": "400 bad_request: body under 40 bytes. 401 unauthorized: unknown app or wrong token, indistinguishable. 413 payload_too_large: body over 96 KiB; 413 item_too_large_for_pull: stored item cannot fit the configured page. 429 rate_limited: over 30 a minute; 429 inbox_full: 100 proposals pending for this app; 429 inbox_account_full: the account pending-item quota is full.",
         "content": {
           "application/json": {
             "schema": {

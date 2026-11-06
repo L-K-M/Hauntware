@@ -88,6 +88,23 @@ Future<void> quarantineCorruptFile(File file) async {
   }
 }
 
+File _syncCollectionMarker(File file) => File('${file.path}.sync-recovery');
+
+/// Persist that [file] was quarantined and its empty replacement is not proof
+/// that previously published domain rows were deleted deliberately.
+Future<void> markSyncCollectionRecovery(File file) =>
+    writeStringAtomically(_syncCollectionMarker(file), 'pending\n');
+
+Future<bool> hasSyncCollectionRecovery(File file) =>
+    _syncCollectionMarker(file).exists();
+
+/// Clear the quarantine provenance only after the coordinator has applied and
+/// recollected the durable mirror successfully.
+Future<void> clearSyncCollectionRecovery(File file) async {
+  final marker = _syncCollectionMarker(file);
+  if (await marker.exists()) await marker.delete();
+}
+
 /// [writeStringAtomically] with owner-only privacy: the rewrite the
 /// identity audit log rotates through.
 Future<void> writeOwnerOnlyAtomically(File file, String contents) =>

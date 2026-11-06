@@ -194,7 +194,15 @@ Future<EncryptedRecord> _sealRaw(
   deviceId: deviceId,
   deleted: false,
   seq: null,
-  blob: await VaultCrypto.sealJson(_key, payload),
+  blob: await VaultCrypto.sealJson(_key, {
+    'envelopeVersion': 2,
+    'purpose': 'seance.sync.record',
+    'id': id,
+    'updatedAt': updatedAt,
+    'deviceId': deviceId,
+    'deleted': false,
+    ...payload,
+  }),
 );
 
 Future<EncryptedRecord> _sealBookmark(
@@ -300,20 +308,20 @@ void main() {
       expect(Bookmark.fromJson(dec.data, recordId: dec.id).label, 'b1');
     });
 
-    test(
-      'onBookmarkDeleted writes a real tombstone (empty blob, deleted)',
-      () async {
-        final device = await _Device.create(tempDir, 'a');
-        await _save(device, _bookmark('b1'));
-        await _delete(device, 'b1');
+    test('onBookmarkDeleted writes an authenticated typed tombstone', () async {
+      final device = await _Device.create(tempDir, 'a');
+      await _save(device, _bookmark('b1'));
+      await _delete(device, 'b1');
 
-        final record = await device.records.getRecord('bookmark:b1');
-        expect(record, isNotNull);
-        expect(record!.deleted, isTrue);
-        expect(record.blob, isEmpty);
-        expect(await device.records.dirtyRecords(), isNotEmpty);
-      },
-    );
+      final record = await device.records.getRecord('bookmark:b1');
+      expect(record, isNotNull);
+      expect(record!.deleted, isTrue);
+      expect(record.blob, isNotEmpty);
+      final opened = await device.crypto.open(record);
+      expect(opened.deleted, isTrue);
+      expect(opened.kind, RecordKind.bookmark);
+      expect(await device.records.dirtyRecords(), isNotEmpty);
+    });
   });
 
   group('two-device convergence', () {
@@ -496,14 +504,12 @@ void main() {
       expect(await device.bookmarks.byId('sneaky'), isNull);
       expect(await device.bookmarks.load(), isEmpty);
       expect(await device.tripwires.trippedIds(), contains('bookmark:sneaky'));
-      expect(
-        (await device.records.getRecord('bookmark:sneaky'))!.blob,
-        relabeled.blob,
-      );
+      expect(await device.records.getRecord('bookmark:sneaky'), isNull);
+      expect(server.records['bookmark:sneaky']!.blob, relabeled.blob);
     });
 
     test(
-      'an undecryptable bookmark record is preserved without tripping',
+      'an undecryptable bookmark stays on the server without entering the mirror',
       () async {
         final device = await _Device.create(tempDir, 'a');
         final foreignKey = List<int>.generate(32, (i) => 255 - i);
@@ -519,7 +525,8 @@ void main() {
         );
 
         await device.coordinator.runRound(server);
-        expect(await device.records.getRecord('bookmark:sealed'), isNotNull);
+        expect(await device.records.getRecord('bookmark:sealed'), isNull);
+        expect(server.records['bookmark:sealed'], isNotNull);
         expect(await device.tripwires.trippedIds(), isEmpty);
         expect(await device.bookmarks.load(), isEmpty);
       },
@@ -594,6 +601,40 @@ void main() {
   });
 
   group('delta bookkeeping', () {
+    test('a round drains every stable-fence page', () async {
+      final device = await _Device.create(tempDir, 'a');
+      server.seed(await _sealBookmark(_bookmark('page-1'), updatedAt: 1));
+      server.seed(await _sealBookmark(_bookmark('page-2'), updatedAt: 2));
+      server.pullPageSize = 1;
+
+      await device.coordinator.runRound(server);
+
+      expect(await device.bookmarks.byId('page-1'), isNotNull);
+      expect(await device.bookmarks.byId('page-2'), isNotNull);
+      expect(server.pullCursors.take(2), [0, 1]);
+      expect(server.pullFences.take(2), [null, 2]);
+      expect(await device.records.highWaterSeq(), 2);
+    });
+
+    test(
+      'a rejected continuation restarts from zero without the old fence',
+      () async {
+        final device = await _Device.create(tempDir, 'a');
+        server.seed(await _sealBookmark(_bookmark('page-1'), updatedAt: 1));
+        server.seed(await _sealBookmark(_bookmark('page-2'), updatedAt: 2));
+        server.pullPageSize = 1;
+        server.failPullCall = 2;
+
+        await device.coordinator.runRound(server);
+
+        expect(server.pullCursors.take(4), [0, 1, 0, 1]);
+        expect(server.pullFences.take(4), [null, 2, null, 2]);
+        expect(await device.bookmarks.byId('page-1'), isNotNull);
+        expect(await device.bookmarks.byId('page-2'), isNotNull);
+        expect(await device.records.highWaterSeq(), 2);
+      },
+    );
+
     test(
       'pulls are deltas off highWaterSeq and the apply cursor persists',
       () async {
@@ -662,6 +703,32 @@ void main() {
       expect(server.pushCalls, 1);
       expect((await device.records.dirtyRecords()).single.id, 'bookmark:stuck');
     });
+    test(
+      'an account quota error is not converted to a refused record',
+      () async {
+        final device = await _Device.create(tempDir, 'a');
+        await _save(device, _bookmark('quota'));
+        server.nextPushError = const ApiError(
+          code: 'account_quota_exceeded',
+          message: 'account full',
+        );
+
+        await expectLater(
+          device.coordinator.runRound(server),
+          throwsA(
+            isA<ApiError>().having(
+              (error) => error.code,
+              'code',
+              'account_quota_exceeded',
+            ),
+          ),
+        );
+        expect(
+          (await device.records.dirtyRecords()).single.id,
+          'bookmark:quota',
+        );
+      },
+    );
   });
 
   group('corruption recovery', () {

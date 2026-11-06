@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:seance_core/catalog.dart' show SyncAccountScope;
 import 'package:seance_core/seance_core.dart';
 
 import 'atomic_file.dart';
@@ -98,15 +99,17 @@ class FileInboxAppStore implements InboxAppStore {
 }
 
 /// JSON-file [InboxStatusStore].
-class FileInboxStatusStore implements InboxStatusStore {
+class FileInboxStatusStore implements InboxStatusStore, SyncCollectionHealth {
   final File file;
   final Map<String, InboxStatus> _cache = {};
   bool _loaded = false;
+  bool _syncCollectionFailed = false;
 
   FileInboxStatusStore(this.file);
 
   Future<void> _load() async {
     if (_loaded) return;
+    _syncCollectionFailed = await hasSyncCollectionRecovery(file);
     if (await file.exists()) {
       try {
         for (final j in jsonDecode(await file.readAsString()) as List) {
@@ -115,6 +118,8 @@ class FileInboxStatusStore implements InboxStatusStore {
         }
       } catch (_) {
         _cache.clear();
+        await markSyncCollectionRecovery(file);
+        _syncCollectionFailed = true;
         await quarantineCorruptFile(file);
       }
     }
@@ -128,6 +133,17 @@ class FileInboxStatusStore implements InboxStatusStore {
         jsonEncode([for (final s in _cache.values) s.toJson()]),
         privacy: AtomicFilePrivacy.ownerOnly,
       );
+
+  @override
+  bool get syncCollectionFailed => _syncCollectionFailed;
+
+  @override
+  Future<void> markSyncCollectionRecovered() async {
+    await _load();
+    await _flush();
+    await clearSyncCollectionRecovery(file);
+    _syncCollectionFailed = false;
+  }
 
   @override
   Future<List<InboxStatus>> listStatuses() async {
@@ -161,33 +177,115 @@ class FileInboxStatusStore implements InboxStatusStore {
 /// user's servers, the same class of content as their shell history.
 class FileInboxCacheStore implements InboxCacheStore {
   final File file;
-  InboxCache? _cache;
+  final SyncAccountScope scope;
+  final bool resetExisting;
 
-  FileInboxCacheStore(this.file);
+  InboxCache? _cache;
+  bool _loaded = false;
+
+  FileInboxCacheStore(
+    this.file, {
+    required this.scope,
+    this.resetExisting = false,
+  });
+
+  static const _version = 1;
+
+  /// Bind the file to [scope] before the account becomes active.
+  Future<void> initialize() => _load();
+
+  Future<void> _load() async {
+    if (_loaded) return;
+    final account = scope;
+    if (!await file.exists()) {
+      _cache = const InboxCache();
+      await _flush();
+      _loaded = true;
+      return;
+    }
+
+    Object? decoded;
+    try {
+      decoded = jsonDecode(await file.readAsString());
+    } catch (_) {
+      await _recoverCorrupt();
+      return;
+    }
+    if (decoded is! Map) {
+      await _recoverCorrupt();
+      return;
+    }
+
+    final document = decoded.cast<String, dynamic>();
+    final version = document['version'];
+    if (version is int && version != _version) {
+      throw FormatException('inbox cache version $version');
+    }
+    if (version == null) {
+      // The legacy cache had no account owner and the old app did not clear
+      // it on account switches. It is disposable server data, so claiming it
+      // could expose another account's scripts and carry a cursor that skips
+      // this account's queue. Bind an empty cache and refetch instead.
+      _cache = const InboxCache();
+      await _flush();
+      _loaded = true;
+      return;
+    }
+    if (version is! int) {
+      await _recoverCorrupt();
+      return;
+    }
+
+    late final SyncAccountScope storedScope;
+    late final InboxCache storedCache;
+    try {
+      storedScope = SyncAccountScope.fromJson(
+        (document['account'] as Map).cast<String, dynamic>(),
+      );
+      storedCache = InboxCache.fromJson(
+        (document['cache'] as Map).cast<String, dynamic>(),
+      );
+    } catch (_) {
+      await _recoverCorrupt();
+      return;
+    }
+    if (resetExisting || storedScope != account) {
+      _cache = const InboxCache();
+      await _flush();
+    } else {
+      _cache = storedCache;
+    }
+    _loaded = true;
+  }
+
+  Future<void> _recoverCorrupt() async {
+    await quarantineCorruptFile(file);
+    _cache = const InboxCache();
+    await _flush();
+    _loaded = true;
+  }
 
   @override
   Future<InboxCache> load() async {
-    final cached = _cache;
-    if (cached != null) return cached;
-    var loaded = const InboxCache();
-    if (await file.exists()) {
-      try {
-        loaded = InboxCache.fromJson(
-          (jsonDecode(await file.readAsString()) as Map).cast(),
-        );
-      } catch (_) {
-        await quarantineCorruptFile(file);
-      }
-    }
-    return _cache = loaded;
+    await _load();
+    return _cache!;
   }
 
   @override
   Future<void> save(InboxCache cache) async {
+    await _load();
     _cache = cache;
-    await writeStringAtomically(
+    await _flush();
+  }
+
+  Future<void> _flush() {
+    return writeStringAtomically(
       file,
-      jsonEncode(cache.toJson()),
+      jsonEncode({
+        'version': _version,
+        'account': scope.toJson(),
+        'cache': (_cache ?? const InboxCache()).toJson(),
+      }),
       privacy: AtomicFilePrivacy.ownerOnly,
     );
   }

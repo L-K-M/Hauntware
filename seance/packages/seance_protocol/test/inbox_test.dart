@@ -280,6 +280,42 @@ void main() {
     );
   });
 
+  test('inbox page sizes match jsonEncode', () {
+    final items = [
+      InboxItem(
+        appId: 'app-é',
+        itemId: 'item-1',
+        received: 4,
+        blob: Uint8List.fromList(List<int>.generate(47, (i) => i)),
+      ),
+      InboxItem(
+        appId: 'app-2',
+        itemId: 'item-"-2',
+        received: 9,
+        blob: Uint8List.fromList([1, 2]),
+      ),
+    ];
+    final page = InboxPage(
+      items: items,
+      throughReceived: 12,
+      nextReceived: 9,
+      hasMore: true,
+    );
+    final actual = utf8.encode(jsonEncode(page.toJson())).length;
+    expect(page.encodedSizeBytes(), actual);
+    expect(
+      InboxPage.bodyBytesFor(
+        itemCount: items.length,
+        itemBytes:
+            items.fold(0, (sum, item) => sum + item.encodedJsonBytes()),
+        throughReceived: 12,
+        nextReceived: 9,
+        hasMore: true,
+      ),
+      actual,
+    );
+  });
+
   test('record kinds resolve by name', () {
     expect(recordKindFromName('inboxApp'), RecordKind.inboxApp);
     expect(recordKindFromName('inboxStatus'), RecordKind.inboxStatus);
