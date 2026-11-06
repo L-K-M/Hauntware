@@ -88,6 +88,7 @@ void main() {
     _ListFileSystem remote, {
     double textScale = 1,
     double? paneWidth,
+    Iterable<RemoteTransferItem> initialTransfers = const [],
   }) async {
     late final RemoteFilesController files;
     final session = TerminalSession(
@@ -117,6 +118,7 @@ void main() {
         editSessionId: session.editSessionId,
       );
       await files.initialize();
+      files.transfers.addAll(initialTransfers);
     });
     session
       ..session = _OpenSshSession(session.engine)
@@ -404,6 +406,96 @@ void main() {
       expect(find.byType(ListTile), findsNothing);
       expect(find.text('Name'), findsOneWidget);
       expect(find.text('Date Modified'), findsOneWidget);
+    },
+  );
+
+  platformTest(
+    'every running transfer stays reachable above recent history',
+    TargetPlatform.linux,
+    (tester) async {
+      RemoteTransferItem transfer(String id, RemoteTransferStatus status) {
+        final item =
+            RemoteTransferItem(
+                id: id,
+                name: id,
+                direction: RemoteTransferDirection.download,
+                total: 100,
+                cancellation: RemoteTransferCancellation(),
+              )
+              ..transferred = 50
+              ..status = status;
+        if (status == RemoteTransferStatus.failed) item.error = 'failed';
+        return item;
+      }
+
+      final transfers = [
+        transfer('running-1', RemoteTransferStatus.running),
+        transfer('completed-old-1', RemoteTransferStatus.completed),
+        transfer('failed-old', RemoteTransferStatus.failed),
+        transfer('completed-old-2', RemoteTransferStatus.completed),
+        transfer('running-2', RemoteTransferStatus.running),
+        transfer('completed-old-3', RemoteTransferStatus.completed),
+        transfer('cancelled-old', RemoteTransferStatus.cancelled),
+        transfer('completed-recent-1', RemoteTransferStatus.completed),
+        transfer('running-3', RemoteTransferStatus.running),
+        transfer('failed-new', RemoteTransferStatus.failed),
+        transfer('completed-recent-2', RemoteTransferStatus.completed),
+        transfer('running-4', RemoteTransferStatus.running),
+        transfer('completed-recent-3', RemoteTransferStatus.completed),
+      ];
+      await tester.binding.setSurfaceSize(const Size(900, 600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpFilesPane(
+        tester,
+        _ListFileSystem(),
+        paneWidth: 340,
+        initialTransfers: transfers,
+      );
+
+      final listFinder = find.byKey(const ValueKey('files.transfers.list'));
+      expect(listFinder, findsOneWidget);
+      expect(tester.getSize(listFinder).height, lessThanOrEqualTo(216));
+
+      final list = tester.widget<ListView>(listFinder);
+      final delegate = list.childrenDelegate as SliverChildBuilderDelegate;
+      expect(delegate.childCount, 10);
+      final rows = [
+        for (var index = 0; index < delegate.childCount!; index++)
+          delegate.builder(tester.element(listFinder), index)! as ListTile,
+      ];
+      expect(rows.map((row) => row.key), const [
+        ValueKey('files.transfer.running-4'),
+        ValueKey('files.transfer.running-3'),
+        ValueKey('files.transfer.running-2'),
+        ValueKey('files.transfer.running-1'),
+        ValueKey('files.transfer.failed-new'),
+        ValueKey('files.transfer.cancelled-old'),
+        ValueKey('files.transfer.failed-old'),
+        ValueKey('files.transfer.completed-recent-3'),
+        ValueKey('files.transfer.completed-recent-2'),
+        ValueKey('files.transfer.completed-recent-1'),
+      ]);
+      expect(rows.take(4).every((row) => row.trailing is IconButton), isTrue);
+      expect(rows.skip(4).every((row) => row.trailing is Icon), isTrue);
+      expect(find.text('completed-old-1'), findsNothing);
+      expect(find.text('completed-old-2'), findsNothing);
+      expect(find.text('completed-old-3'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.drag(listFinder, const Offset(0, -160));
+      await tester.pumpAndSettle();
+      final oldestRunning = find.byKey(
+        const ValueKey('files.transfer.running-1'),
+      );
+      expect(oldestRunning, findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: oldestRunning,
+          matching: find.byTooltip('Cancel transfer'),
+        ),
+      );
+      await tester.pump();
+      expect(transfers.first.cancellation.isCancelled, isTrue);
     },
   );
 

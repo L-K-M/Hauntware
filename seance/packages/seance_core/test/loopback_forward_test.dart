@@ -117,4 +117,29 @@ void main() {
       throwsA(isA<SocketException>()),
     );
   });
+
+  test('close ends a client whose remote open is still pending', () async {
+    final opening = Completer<ByteDuplex>();
+    final accepted = Completer<void>();
+    final forward = await LoopbackForward.bind(() {
+      accepted.complete();
+      return opening.future;
+    });
+    addTearDown(forward.close);
+    final socket = await Socket.connect(
+      InternetAddress.loopbackIPv4,
+      forward.port,
+    );
+    addTearDown(socket.destroy);
+    final ended = socket.drain<void>();
+    await accepted.future;
+
+    await forward.close();
+    await ended.timeout(const Duration(seconds: 1));
+
+    final late = _ShoutingDuplex();
+    opening.complete(late);
+    await Future<void>.delayed(Duration.zero);
+    expect(late.closed, isTrue);
+  });
 }

@@ -1067,6 +1067,32 @@ void main() {
       expect(utf8.decode(await _collect(process.stdout)), 'root:*:1::::::\n');
     });
 
+    test('bounds stderr retained for a late listener', () async {
+      const chunkSize = 16 * 1024;
+      const chunkCount = 6 * 1024 * 1024 ~/ chunkSize;
+      const retainedChunkCount = 4 * 1024 * 1024 ~/ chunkSize;
+      final remote = _ScriptedProcess();
+      final executor = ElevatedExecutor(_OneProcessLink(remote), _nopasswdSudo);
+      final process = await executor.start(['noisy']);
+
+      for (var chunk = 0; chunk < chunkCount; chunk++) {
+        remote.stderrController.add(List<int>.filled(chunkSize, chunk & 0xff));
+      }
+      remote.exitCompleter.complete(const RemoteExit(exitCode: 0));
+      await remote.stderrController.close();
+      await remote.stdoutController.close();
+
+      expect((await process.exit).exitCode, 0);
+      final stderr = await process.stderr.expand((chunk) => chunk).toList();
+      expect(stderr, hasLength(retainedChunkCount * chunkSize));
+      for (var offset = 0; offset < stderr.length; offset += chunkSize) {
+        final sourceChunk =
+            chunkCount - retainedChunkCount + offset ~/ chunkSize;
+        expect(stderr[offset], sourceChunk & 0xff);
+        expect(stderr[offset + chunkSize - 1], sourceChunk & 0xff);
+      }
+    });
+
     test('the command\'s own stderr is not held back', () async {
       final link = await quietLink();
       final executor = ElevatedExecutor(link.link, _passwordSudo);

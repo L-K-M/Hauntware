@@ -6,9 +6,9 @@ import 'package:xterm/xterm.dart';
 /// stray `ESC ]` in shell output — a log with captured escapes, a binary, a
 /// program killed mid-title — opened a sequence that never finished. Every
 /// later byte was pinned on the parser's queue and the whole run re-parsed on
-/// every write: quadratic time, ~26x memory, and nothing rendered. 8 MiB of
-/// output after one took two minutes at 100% CPU, and the session never
-/// recovered.
+/// every write: quadratic time and unbounded memory. The incremental parser
+/// now retains at most one bounded OSC and quarantines overflow through BEL or
+/// ST, so remote payload cannot become executable terminal text.
 ///
 /// These live in the app rather than in `third_party/xterm/test/` (which has
 /// its own, finer-grained cases) because CI runs the app's suite and does not
@@ -28,10 +28,8 @@ void main() {
     terminal.write('\x1b]0;');
 
     writeChunked(terminal, kMaxPendingSequenceLength * 4);
-    terminal.write('\r\nrecovered\r\n');
+    terminal.write('\x07\r\nrecovered\r\n');
 
-    // Before the fix the parser was still holding the whole run and had
-    // rendered nothing at all.
     expect(terminal.buffer.getText(), contains('recovered'));
   });
 
@@ -39,15 +37,16 @@ void main() {
     final terminal = Terminal();
     // Digits and `;` are the only bytes that keep a CSI open, so a runaway CSI
     // is far harder to hit than a runaway OSC — but it accumulated the same
-    // way. Uncapped, this run was held until the `r` of the text below closed
-    // it as a set-margins command, eating that letter with it.
+    // way. The explicit final byte is swallowed with the oversized sequence;
+    // text after it must resume normally.
     terminal.write('\x1b[${'1;' * kMaxPendingSequenceLength}');
+    terminal.write('m');
     terminal.write('\r\nrecovered\r\n');
 
     expect(terminal.buffer.getText(), contains('recovered'));
   });
 
-  test('the bell that finally arrives is still delivered', () {
+  test('an over-cap OSC swallows its terminator, then resumes normally', () {
     final terminal = Terminal();
     var bells = 0;
     terminal.onBell = () => bells++;
@@ -56,8 +55,9 @@ void main() {
     writeChunked(terminal, kMaxPendingSequenceLength * 2);
     terminal.write('\x07');
 
-    // The sequence it was meant to terminate is long gone, so the BEL reads as
-    // an ordinary bell rather than being swallowed.
+    expect(bells, 0);
+
+    terminal.write('\x07');
     expect(bells, 1);
   });
 
@@ -73,5 +73,32 @@ void main() {
 
     terminal.write('tle\x07');
     expect(title, 'my title');
+  });
+
+  test(
+    'unsupported control strings cannot execute embedded terminal input',
+    () {
+      final terminal = Terminal();
+      var bells = 0;
+      terminal.onBell = () => bells++;
+
+      terminal.write('\x1bPdiscarded\x07\r\n\x1b[31m\x1b');
+      terminal.write('\\visible');
+
+      expect(bells, 0);
+      expect(terminal.buffer.getText(), contains('visible'));
+      expect(terminal.buffer.getText(), isNot(contains('discarded')));
+    },
+  );
+
+  test('remote resize is ignored but local resize and size query remain', () {
+    final output = <String>[];
+    final terminal = Terminal(onOutput: output.add)..resize(80, 24);
+
+    terminal.write('\x1b[8;10;20t');
+    expect((terminal.viewWidth, terminal.viewHeight), (80, 24));
+
+    terminal.write('\x1b[18t');
+    expect(output, ['\x1b[8;24;80t']);
   });
 }
