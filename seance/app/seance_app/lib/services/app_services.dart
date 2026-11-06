@@ -933,6 +933,7 @@ class AppServices {
     required String username,
     required String password,
     required String encryptionPassphrase,
+    SyncLocalRunner? runLocal,
   }) => _serializeSyncOperation(() async {
     final salt = secureRandomBytes(16);
     final keys = await _deriveSyncKeys(
@@ -959,12 +960,15 @@ class AppServices {
         registered.vaultKeyCheck ?? '',
         username: username,
       );
-      await _completeSyncEnrollment(
-        baseUrl: baseUrl,
-        username: username,
-        token: client.token!,
-        key: keys.vaultKey,
-        recordEnvelopeFloor: registered.recordEnvelopeFloor,
+      await _runSyncLocal(
+        runLocal,
+        () => _completeSyncEnrollment(
+          baseUrl: baseUrl,
+          username: username,
+          token: client.token!,
+          key: keys.vaultKey,
+          recordEnvelopeFloor: registered.recordEnvelopeFloor,
+        ),
       );
     });
   });
@@ -975,6 +979,7 @@ class AppServices {
     required String username,
     required String password,
     required String encryptionPassphrase,
+    SyncLocalRunner? runLocal,
   }) => _serializeSyncOperation(() async {
     final sameEnrollment =
         settings.syncUsername == username &&
@@ -1092,12 +1097,15 @@ class AppServices {
           }
         }
       }
-      await _completeSyncEnrollment(
-        baseUrl: baseUrl,
-        username: username,
-        token: client.token!,
-        key: keys.vaultKey,
-        recordEnvelopeFloor: recordEnvelopeFloor,
+      await _runSyncLocal(
+        runLocal,
+        () => _completeSyncEnrollment(
+          baseUrl: baseUrl,
+          username: username,
+          token: client.token!,
+          key: keys.vaultKey,
+          recordEnvelopeFloor: recordEnvelopeFloor,
+        ),
       );
     });
   });

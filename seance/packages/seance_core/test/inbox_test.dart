@@ -17,6 +17,8 @@ class _FakeInbox implements InboxApi {
 
   /// Answer newest first, as a server that does not sort might.
   bool reverse = false;
+  Future<void> Function()? beforeList;
+  Future<void> Function()? beforeDelete;
 
   @override
   Future<void> createApp(CreateInboxAppRequest request) async {
@@ -28,9 +30,9 @@ class _FakeInbox implements InboxApi {
 
   @override
   Future<List<InboxAppInfo>> listApps() async => [
-        for (final id in tokens.keys)
-          InboxAppInfo(appId: id, name: '', created: 0, pending: 0),
-      ];
+    for (final id in tokens.keys)
+      InboxAppInfo(appId: id, name: '', created: 0, pending: 0),
+  ];
 
   @override
   Future<bool> deleteApp(String appId) async {
@@ -43,6 +45,7 @@ class _FakeInbox implements InboxApi {
 
   @override
   Future<List<InboxItem>> listItems({required int since}) async {
+    await beforeList?.call();
     final out = items.values.where((i) => i.received > since).toList()
       ..sort((a, b) => a.received.compareTo(b.received));
     return reverse ? out.reversed.toList() : out;
@@ -52,6 +55,7 @@ class _FakeInbox implements InboxApi {
   Future<bool> deleteItem(String appId, String itemId) async {
     final item = items[itemId];
     if (item == null || item.appId != appId) return false;
+    await beforeDelete?.call();
     items.remove(itemId);
     return true;
   }
@@ -84,6 +88,7 @@ class _FakeInbox implements InboxApi {
     return id;
   }
 }
+
 class _PagedFakeInbox extends _FakeInbox implements PagedInboxApi {
   _PagedFakeInbox({this.pageSize = 1});
 
@@ -172,8 +177,6 @@ Future<void> _expectSameFailure(
   expect(caughtStack, same(expectedStack));
 }
 
-
-
 final class _FaultingStatusStore implements InboxStatusStore {
   final InboxStatusStore delegate;
   final List<String> events;
@@ -225,10 +228,10 @@ class _FakeRecords implements SyncApi {
 
   @override
   Future<PullResponse> pull({required int since}) async => PullResponse(
-        records: _store.values.where((r) => (r.seq ?? 0) > since).toList()
-          ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0)),
-        latestSeq: _seq,
-      );
+    records: _store.values.where((r) => (r.seq ?? 0) > since).toList()
+      ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0)),
+    latestSeq: _seq,
+  );
 
   @override
   Future<PushResponse> push(List<EncryptedRecord> records) async {
@@ -240,11 +243,9 @@ class _FakeRecords implements SyncApi {
         _store[incoming.id] = incoming.withSeq(++_seq);
         results.add(PushResult(id: incoming.id, seq: _seq, accepted: true));
       } else {
-        results.add(PushResult(
-          id: incoming.id,
-          seq: existing.seq ?? 0,
-          accepted: false,
-        ));
+        results.add(
+          PushResult(id: incoming.id, seq: existing.seq ?? 0, accepted: false),
+        );
       }
     }
     return PushResponse(results: results, latestSeq: _seq);
@@ -259,14 +260,14 @@ final DateTime _t0 = DateTime.utc(2026, 9, 29, 12);
 final int _t0s = _t0.millisecondsSinceEpoch ~/ 1000;
 
 Map<String, dynamic> _proposal(String id, {String host = 'prod-db-1'}) => {
-      'v': 1,
-      'id': id,
-      'host': host,
-      'title': 'Restart worker',
-      'reason': 'Backlog',
-      'script': 'systemctl restart worker\nsystemctl status worker',
-      'created': _t0s,
-    };
+  'v': 1,
+  'id': id,
+  'host': host,
+  'title': 'Restart worker',
+  'reason': 'Backlog',
+  'script': 'systemctl restart worker\nsystemctl status worker',
+  'created': _t0s,
+};
 
 class _Device {
   final String id;
@@ -301,13 +302,13 @@ class _Device {
 }
 
 ServerConfig _server(String id, String label, {String? host}) => ServerConfig(
-      id: id,
-      label: label,
-      host: host ?? '$label.example.com',
-      username: 'u',
-      createdAt: 1,
-      updatedAt: 1,
-    );
+  id: id,
+  label: label,
+  host: host ?? '$label.example.com',
+  username: 'u',
+  createdAt: 1,
+  updatedAt: 1,
+);
 
 void main() {
   late _FakeInbox server;
@@ -324,10 +325,8 @@ void main() {
     b = _Device('B', server, codec);
   });
 
-  Future<InboxPairing> connect(_Device device) => device.inbox.addApp(
-        name: 'bots',
-        serverUrl: 'https://sync.example.com',
-      );
+  Future<InboxPairing> connect(_Device device) =>
+      device.inbox.addApp(name: 'bots', serverUrl: 'https://sync.example.com');
 
   InboxService serviceWith(InboxAppStore apps) => InboxService(
     api: server,
@@ -346,10 +345,9 @@ void main() {
       server.deleteAppReportsMissing = reportsMissing;
 
       await _expectSameFailure(
-        serviceWith(apps).addApp(
-          name: 'bots',
-          serverUrl: 'https://sync.example.com',
-        ),
+        serviceWith(
+          apps,
+        ).addApp(name: 'bots', serverUrl: 'https://sync.example.com'),
         failure,
         failureStack,
       );
@@ -371,10 +369,9 @@ void main() {
       server.deleteAppError = cleanupFailure;
 
       await _expectSameFailure(
-        serviceWith(apps).addApp(
-          name: 'bots',
-          serverUrl: 'https://sync.example.com',
-        ),
+        serviceWith(
+          apps,
+        ).addApp(name: 'bots', serverUrl: 'https://sync.example.com'),
         failure,
         failureStack,
       );
@@ -439,8 +436,10 @@ void main() {
       );
       expect(server.items, isEmpty);
       expect(events, ['status', 'cache']);
-      final status =
-          await a.statuses.getStatus(pending.app.id, pending.proposal.id);
+      final status = await a.statuses.getStatus(
+        pending.app.id,
+        pending.proposal.id,
+      );
       expect(status?.state, InboxStatusState.ran);
       expect(failure.toStringCalls, 0);
     },
@@ -482,6 +481,90 @@ void main() {
     expect(server.items, isEmpty);
     expect(events, ['status']);
   });
+
+  test('claim HTTP releases the local gate and rechecks removal', () async {
+    final pending = await pendingOnA();
+    var active = false;
+    Future<T> phase<T>(Future<T> Function() action) async {
+      expect(active, isFalse);
+      active = true;
+      try {
+        return await action();
+      } finally {
+        active = false;
+      }
+    }
+
+    final inbox = InboxService(
+      api: server,
+      apps: a.apps,
+      statuses: a.statuses,
+      cache: a.cache,
+      now: () => a.clock,
+      localPhaseGate: phase,
+    );
+    server.beforeDelete = () async {
+      expect(active, isFalse, reason: 'HTTP must not hold the mutation phase');
+      await phase(
+        () => a.apps.putApp(
+          pending.app.asRemoved(updatedAt: a.clock.millisecondsSinceEpoch + 1),
+        ),
+      );
+    };
+    expect(await inbox.claim(pending), InboxClaim.unavailable);
+    expect(
+      await a.statuses.getStatus(pending.app.id, pending.proposal.id),
+      isNull,
+    );
+  });
+
+  test(
+    'refresh HTTP releases the gate and preserves an in-flight settlement',
+    () async {
+      final pending = await pendingOnA();
+      var active = false;
+      Future<T> phase<T>(Future<T> Function() action) async {
+        expect(active, isFalse);
+        active = true;
+        try {
+          return await action();
+        } finally {
+          active = false;
+        }
+      }
+
+      final inbox = InboxService(
+        api: server,
+        apps: a.apps,
+        statuses: a.statuses,
+        cache: a.cache,
+        now: () => a.clock,
+        localPhaseGate: phase,
+      );
+      // Re-read an already cached item after another device handled it.
+      await a.cache.save(const InboxCache());
+      server.beforeList = () async {
+        expect(
+          active,
+          isFalse,
+          reason: 'HTTP must not hold the mutation phase',
+        );
+        await phase(
+          () => a.statuses.putStatus(
+            InboxStatus(
+              appId: pending.app.id,
+              proposalId: pending.proposal.id,
+              state: InboxStatusState.ran,
+              updatedAt: 99,
+            ),
+          ),
+        );
+      };
+      expect(await inbox.refresh(), isEmpty);
+      expect((await a.cache.load()).proposals, isEmpty);
+      expect(server.items, isEmpty);
+    },
+  );
 
   test('a proposal reaches every device and a run settles it on all', () async {
     final pairing = await connect(a);
@@ -563,37 +646,39 @@ void main() {
     expect(status?.state, InboxStatusState.dismissed);
   });
 
-  test('refused items are deleted and counted; the key and app are bound',
-      () async {
-    final pairing = await connect(a);
-    final other = await connect(a);
-    // Sealed for another app: a server moving blobs between apps.
-    await server.depositBlob(
-      pairing.appId,
-      pairing.token,
-      InboxCrypto.seal(
-        other.key,
-        other.appId,
-        utf8.encode(jsonEncode(_proposal('p1'))),
-      ),
-    );
-    // Right key, invalid content.
-    await server.deposit(pairing, {..._proposal('p2'), 'title': ''});
-    // Forged by someone with only the token.
-    await server.depositBlob(
-      pairing.appId,
-      pairing.token,
-      InboxCrypto.seal(
-        newInboxKey(),
+  test(
+    'refused items are deleted and counted; the key and app are bound',
+    () async {
+      final pairing = await connect(a);
+      final other = await connect(a);
+      // Sealed for another app: a server moving blobs between apps.
+      await server.depositBlob(
         pairing.appId,
-        utf8.encode(jsonEncode(_proposal('p3'))),
-      ),
-    );
+        pairing.token,
+        InboxCrypto.seal(
+          other.key,
+          other.appId,
+          utf8.encode(jsonEncode(_proposal('p1'))),
+        ),
+      );
+      // Right key, invalid content.
+      await server.deposit(pairing, {..._proposal('p2'), 'title': ''});
+      // Forged by someone with only the token.
+      await server.depositBlob(
+        pairing.appId,
+        pairing.token,
+        InboxCrypto.seal(
+          newInboxKey(),
+          pairing.appId,
+          utf8.encode(jsonEncode(_proposal('p3'))),
+        ),
+      );
 
-    expect(await a.inbox.refresh(), isEmpty);
-    expect(server.items, isEmpty);
-    expect((await a.inbox.failures())[pairing.appId], 3);
-  });
+      expect(await a.inbox.refresh(), isEmpty);
+      expect(server.items, isEmpty);
+      expect((await a.inbox.failures())[pairing.appId], 3);
+    },
+  );
 
   test('a replayed proposal id is not announced again', () async {
     final pairing = await connect(a);
@@ -608,8 +693,7 @@ void main() {
     expect(server.items, hasLength(1));
   });
 
-  test('an unsorted listing never skips an item waiting for its app',
-      () async {
+  test('an unsorted listing never skips an item waiting for its app', () async {
     final known = await connect(b);
     final unknown = await connect(a);
     await server.deposit(known, _proposal('k1'));
@@ -617,8 +701,10 @@ void main() {
     await server.deposit(known, _proposal('k2'));
     server.reverse = true;
 
-    expect([for (final p in await b.inbox.refresh()) p.proposal.id]..sort(),
-        ['k1', 'k2']);
+    expect([for (final p in await b.inbox.refresh()) p.proposal.id]..sort(), [
+      'k1',
+      'k2',
+    ]);
     await a.sync.run(records);
     await b.sync.run(records);
     final ids = [for (final p in await b.inbox.refresh()) p.proposal.id];
@@ -707,13 +793,17 @@ void main() {
     final live = (await a.apps.getApp(pairing.appId))!;
     await a.inbox.removeApp(pairing.appId);
     // A copy dated after the removal, as a peer with a fast clock could send.
-    records.plant(await codec.encrypt(DecryptedRecord(
-      id: live.recordId,
-      kind: RecordKind.inboxApp,
-      updatedAt: live.updatedAt + 1000000,
-      deviceId: 'B',
-      data: live.copyWith(updatedAt: live.updatedAt + 1000000).toJson(),
-    )));
+    records.plant(
+      await codec.encrypt(
+        DecryptedRecord(
+          id: live.recordId,
+          kind: RecordKind.inboxApp,
+          updatedAt: live.updatedAt + 1000000,
+          deviceId: 'B',
+          data: live.copyWith(updatedAt: live.updatedAt + 1000000).toJson(),
+        ),
+      ),
+    );
     await a.sync.run(records);
     expect((await a.apps.getApp(pairing.appId))?.removed, isTrue);
   });
@@ -726,13 +816,17 @@ void main() {
     final removedAt = (await a.apps.getApp(pairing.appId))!.updatedAt;
     // The envelope outranks the removal so the record is applied; the app
     // it carries is older than the removal.
-    records.plant(await codec.encrypt(DecryptedRecord(
-      id: live.recordId,
-      kind: RecordKind.inboxApp,
-      updatedAt: removedAt + 1000000,
-      deviceId: 'B',
-      data: live.toJson(),
-    )));
+    records.plant(
+      await codec.encrypt(
+        DecryptedRecord(
+          id: live.recordId,
+          kind: RecordKind.inboxApp,
+          updatedAt: removedAt + 1000000,
+          deviceId: 'B',
+          data: live.toJson(),
+        ),
+      ),
+    );
     await a.sync.run(records);
     final after = (await a.apps.getApp(pairing.appId))!;
     expect(after.removed, isTrue);
@@ -762,16 +856,15 @@ void main() {
     final pairing = await connect(a);
     await a.sync.run(records);
     await b.sync.run(records);
-    records.plant(EncryptedRecord.tombstone(
-      id: 'inboxapp:${pairing.appId}',
-      // Far past anything the devices' clock has stamped.
-      updatedAt: _t0.millisecondsSinceEpoch + 365 * 86400000,
-      deviceId: 'server',
-    ));
-    await expectLater(
-      b.sync.run(records),
-      throwsA(isA<FormatException>()),
+    records.plant(
+      EncryptedRecord.tombstone(
+        id: 'inboxapp:${pairing.appId}',
+        // Far past anything the devices' clock has stamped.
+        updatedAt: _t0.millisecondsSinceEpoch + 365 * 86400000,
+        deviceId: 'server',
+      ),
     );
+    await expectLater(b.sync.run(records), throwsA(isA<FormatException>()));
     expect((await b.apps.getApp(pairing.appId))?.key, pairing.key);
   });
 

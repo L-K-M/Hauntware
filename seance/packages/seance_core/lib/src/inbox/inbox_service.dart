@@ -372,14 +372,11 @@ class InboxService {
       return InboxClaim.handledElsewhere;
     }
     try {
-      await localPhaseGate(() async {
-        // A peer status arriving in flight remains authoritative too.
-        if (await statuses.getStatus(cached.appId, cached.proposal.id) ==
-            null) {
-          await _settle(cached, InboxStatusState.ran);
-        } else {
-          await _forget(cached);
-        }
+      return await localPhaseGate(() async {
+        final changed = await _claimLocalState(cached);
+        if (changed != null) return changed;
+        await _settle(cached, InboxStatusState.ran);
+        return InboxClaim.claimed;
       });
     } catch (error) {
       developer.log(

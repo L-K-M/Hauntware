@@ -108,6 +108,12 @@ Omit `--db` for an ephemeral in-memory store.
 | `SEANCE_OPEN_REGISTRATION` | `--open-registration` | `false` | Allow `/v1/register` |
 | `SEANCE_LOGIN_MAX_ATTEMPTS` | — | `10` | Login attempts per window |
 | `SEANCE_LOGIN_WINDOW_SECONDS` | — | `60` | Rate-limit window |
+| `SEANCE_AUTH_GLOBAL_MAX_ATTEMPTS` | — | `1000` | Auth requests across all sources per global window |
+| `SEANCE_AUTH_GLOBAL_WINDOW_SECONDS` | — | `60` | Global auth window |
+| `SEANCE_AUTH_SOURCE_MAX_ATTEMPTS` | — | `60` | Auth requests per network source per source window |
+| `SEANCE_AUTH_SOURCE_WINDOW_SECONDS` | — | `60` | Source auth window |
+| `SEANCE_RATE_LIMIT_MAX_BUCKETS` | — | `4096` | Maximum keyed buckets per limiter before overflow sharing |
+| `SEANCE_TRUSTED_PROXIES` | — | *(empty)* | Exact comma-separated proxy IPs allowed to supply `X-Forwarded-For` |
 | `SEANCE_SESSION_TTL_SECONDS` | — | `2592000` | Bearer-session lifetime (30 days) |
 | `SEANCE_MAX_SESSIONS_PER_ACCOUNT` | — | `20` | Newest sessions retained per account |
 | `SEANCE_MAX_RECORDS_PER_PULL` | — | `1000` | Records or inbox items returned per page |
@@ -115,7 +121,7 @@ Omit `--db` for an ephemeral in-memory store.
 | `SEANCE_MAX_RECORDS_PER_ACCOUNT` | — | `5000` | Current records and, separately, pending inbox items per account |
 | `SEANCE_MAX_ACCOUNT_BYTES` | — | `41943040` | Encoded record and, separately, inbox-item bytes per account |
 
-## API (protocol v3)
+## API (protocol v4)
 
 Request and response bodies are JSON. Registration, login, and push carry a
 `protocolVersion`, so an old client and new server reject a breaking account or
@@ -130,6 +136,8 @@ record write before changing storage.
 | `GET /v1/sync?since=<seq>` | Bearer | Legacy full pull of records newer than a sequence number |
 | `GET /v1/sync?since=<seq>&page=1[&through=<seq>]` | Bearer | Bounded pull from a stable watermark |
 | `PUT /v1/records` | Bearer | Push a batch of encrypted records (LWW) |
+| `GET /v1/records/legacy[?after=<id>]` | Bearer | Read a bounded page of legacy rows for migration |
+| `PUT /v1/records/legacy` | Bearer | Replace exact observed legacy rows and finalize the account envelope floor |
 | `DELETE /v1/session` | Bearer | Revoke the current session |
 | `DELETE /v1/sessions` | Bearer | Revoke every session for the account |
 | `PUT /v1/account/vault-key-check` | Bearer | Initialize an empty legacy account's encrypted key check once |
@@ -144,6 +152,16 @@ account without the registration-time encrypted vault-key check.
 An already enrolled device may initialize that check for an empty legacy
 account; the official client requires its locally persisted vault key to match
 before calling the set-once endpoint. New devices cannot silently choose one.
+
+Current clients write authenticated v2 record envelopes. Protocol v4 migrates
+legacy rows by exact compare-and-swap using independently authenticated local
+state. Unmatched legacy rows remain held; an unauthenticated old tombstone
+cannot authorize deletion. The account floor advances only when no legacy row
+remains, and clients persist that floor to reject downgrade or replay.
+
+Pending inbox items also have a 32 MiB raw-blob cap and a 5,000-item cap across
+all apps, in addition to the encoded-byte quota above and each app's 100-item
+cap. The 50-app registration cap is checked atomically with insertion.
 
 Register, prelogin and login run before any authentication, so they read at
 most 16 KiB of request body (less if `SEANCE_MAX_BODY_BYTES` is lower) and
@@ -233,7 +251,15 @@ DTOs and the database schema are unchanged; this is not an account migration.
   login (the raw verifier is needed and cannot be recovered from the hash).
 - Record payloads are sealed client-side with XChaCha20-Poly1305. The server
   stores `nonce ‖ ciphertext ‖ mac` and never holds a key.
-- Login is rate-limited to blunt online guessing.
+- Registration, prelogin and login have global and network-source limits.
+  Failed logins also have an account limit; a correct verifier remains usable.
+  Forwarded addresses are accepted only from configured exact-IP proxies,
+  including equivalent IPv4-mapped IPv6 addresses. Malformed or oversized
+  forwarding chains fall back to the immediate peer.
+- Active limiter buckets are never evicted. When all keyed buckets are active,
+  unseen keys share a bounded overflow bucket, so saturation can temporarily
+  throttle new clients. Set the global/source budgets and bucket capacity for
+  your deployment; refusals return `Retry-After`.
 - Conflict resolution is deterministic last-write-wins keyed by
   `(updatedAt, deviceId)`, identical to the client, so both sides agree.
 

@@ -151,6 +151,7 @@ export 'package:seance_core/seance_core.dart'
         RecordKind,
         RegisterRequest,
         SyncApi,
+        PagedSyncApi,
         SyncEnrollmentIssue,
         SyncEnrollmentMode,
         Lww,

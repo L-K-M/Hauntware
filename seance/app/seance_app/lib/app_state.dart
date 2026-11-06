@@ -1997,6 +1997,7 @@ class AppState extends ChangeNotifier {
     username: username,
     password: password,
     encryptionPassphrase: encryptionPassphrase,
+    runLocal: _mutate,
   );
 
   Future<void> loginSync({
@@ -2009,6 +2010,7 @@ class AppState extends ChangeNotifier {
     username: username,
     password: password,
     encryptionPassphrase: encryptionPassphrase,
+    runLocal: _mutate,
   );
 
   /// One sync round + refresh of the domain lists from the (possibly updated)

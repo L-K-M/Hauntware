@@ -37,10 +37,7 @@ final class SyncAccountScope {
   final String baseUrl;
   final String username;
 
-  Map<String, dynamic> toJson() => {
-        'baseUrl': baseUrl,
-        'username': username,
-      };
+  Map<String, dynamic> toJson() => {'baseUrl': baseUrl, 'username': username};
 
   factory SyncAccountScope.fromJson(Map<String, dynamic> json) {
     if (json.length != 2 ||
@@ -77,10 +74,7 @@ abstract interface class SyncRecordStore implements LocalRecordStore {
   /// holds, so it is the true winner and the losing edit must not keep its
   /// slot (04 §3.2's "re-evaluation when the pending local rival next pushes
   /// — including the push-ties-or-LOSES case").
-  Future<EncryptedRecord?> settlePush(
-    EncryptedRecord sent,
-    PushResult result,
-  );
+  Future<EncryptedRecord?> settlePush(EncryptedRecord sent, PushResult result);
 
   /// The highest server seq already materialized into the domain stores.
   /// `RecordCoordinator.applyPulled` advances it only past records that
@@ -160,8 +154,7 @@ final class PersistentLocalRecordStore
   }) : // Keep the filesystem path immutable and private.
        // ignore: prefer_initializing_formals
        _file = File(path),
-       _atomicWriter =
-           atomicWriter ?? const AtomicFileWriter().write,
+       _atomicWriter = atomicWriter ?? const AtomicFileWriter().write,
        _now = now ?? DateTime.now,
        // ignore: prefer_initializing_formals
        _onError = onError {
@@ -244,15 +237,14 @@ final class PersistentLocalRecordStore
   /// copy, that copy is stashed in [_displaced]. A rejection or publication
   /// opt-out can then restore the server state already below the pull cursor.
   @override
-  Future<void> putLocal(EncryptedRecord record) =>
-      _mutate((candidate) {
-        final existing = candidate.records[record.id];
-        if (existing != null && !candidate.dirty.contains(record.id)) {
-          candidate.displaced[record.id] = existing;
-        }
-        candidate.records[record.id] = record;
-        candidate.dirty.add(record.id);
-      });
+  Future<void> putLocal(EncryptedRecord record) => _mutate((candidate) {
+    final existing = candidate.records[record.id];
+    if (existing != null && !candidate.dirty.contains(record.id)) {
+      candidate.displaced[record.id] = existing;
+    }
+    candidate.records[record.id] = record;
+    candidate.dirty.add(record.id);
+  });
 
   /// A pulled record: stored clean. Never overwrites a dirty local that
   /// beats it — and a remote that loses to a pending local becomes the
@@ -261,29 +253,28 @@ final class PersistentLocalRecordStore
   /// dirty flag: the unpushed edit is discarded without reaching the
   /// server — the LWW semantics 04 §3.1 pins on the shared tuple.
   @override
-  Future<void> putRemote(EncryptedRecord record) =>
-      _mutate((candidate) {
-        final existing = candidate.records[record.id];
-        if (existing != null) {
-          final winner = Lww.resolve(existing, record);
-          assert(
-            identical(winner, existing) || identical(winner, record),
-            'Lww.resolve must return one of its arguments — '
-            'displaced-winner tracking relies on reference identity',
-          );
-          if (!identical(winner, record)) {
-            if (candidate.dirty.contains(record.id)) {
-              candidate.displaced[record.id] = record;
-            }
-            return;
-          }
+  Future<void> putRemote(EncryptedRecord record) => _mutate((candidate) {
+    final existing = candidate.records[record.id];
+    if (existing != null) {
+      final winner = Lww.resolve(existing, record);
+      assert(
+        identical(winner, existing) || identical(winner, record),
+        'Lww.resolve must return one of its arguments — '
+        'displaced-winner tracking relies on reference identity',
+      );
+      if (!identical(winner, record)) {
+        if (candidate.dirty.contains(record.id)) {
+          candidate.displaced[record.id] = record;
         }
-        candidate.records[record.id] = record;
-        candidate.dirty.remove(record.id);
-        // The just-pulled record is the server's current winner: any
-        // stashed rival predates it and can never resurface.
-        candidate.displaced.remove(record.id);
-      });
+        return;
+      }
+    }
+    candidate.records[record.id] = record;
+    candidate.dirty.remove(record.id);
+    // The just-pulled record is the server's current winner: any
+    // stashed rival predates it and can never resurface.
+    candidate.displaced.remove(record.id);
+  });
 
   @override
   Future<List<EncryptedRecord>> dirtyRecords() async {
@@ -296,11 +287,11 @@ final class PersistentLocalRecordStore
   /// and drop any displaced rival — it can never win now.
   @override
   Future<void> markSynced(String id, int seq) => _mutate((candidate) {
-        final record = candidate.records[id];
-        if (record != null) candidate.records[id] = record.withSeq(seq);
-        candidate.dirty.remove(id);
-        candidate.displaced.remove(id);
-      });
+    final record = candidate.records[id];
+    if (record != null) candidate.records[id] = record.withSeq(seq);
+    candidate.dirty.remove(id);
+    candidate.displaced.remove(id);
+  });
 
   @override
   Future<EncryptedRecord?> settlePush(
@@ -336,14 +327,14 @@ final class PersistentLocalRecordStore
 
   @override
   Future<void> cancelLocal(String id) => _mutate((candidate) {
-        if (!candidate.dirty.remove(id)) return;
-        final restored = candidate.displaced.remove(id);
-        if (restored == null) {
-          candidate.records.remove(id);
-        } else {
-          candidate.records[id] = restored;
-        }
-      });
+    if (!candidate.dirty.remove(id)) return;
+    final restored = candidate.displaced.remove(id);
+    if (restored == null) {
+      candidate.records.remove(id);
+    } else {
+      candidate.records[id] = restored;
+    }
+  });
 
   @override
   Future<int> highWaterSeq() async {
@@ -354,8 +345,8 @@ final class PersistentLocalRecordStore
 
   @override
   Future<void> setHighWaterSeq(int seq) => _mutate((candidate) {
-        if (seq > candidate.highWaterSeq) candidate.highWaterSeq = seq;
-      });
+    if (seq > candidate.highWaterSeq) candidate.highWaterSeq = seq;
+  });
 
   @override
   Future<int> lastAppliedSeq() async {
@@ -366,39 +357,39 @@ final class PersistentLocalRecordStore
 
   @override
   Future<void> setLastAppliedSeq(int seq) => _mutate((candidate) {
-        if (seq > candidate.lastAppliedSeq) candidate.lastAppliedSeq = seq;
-      });
+    if (seq > candidate.lastAppliedSeq) candidate.lastAppliedSeq = seq;
+  });
 
   @override
   Future<void> resetSyncCursors() => _mutate((candidate) {
-        candidate.highWaterSeq = 0;
-        candidate.lastAppliedSeq = 0;
-      });
+    candidate.highWaterSeq = 0;
+    candidate.lastAppliedSeq = 0;
+  });
 
   @override
   Future<void> recoverFromRejectedCursor() => _mutate((candidate) {
-        final cleanIds = <String>[
-          for (final entry in candidate.records.entries)
-            if (!candidate.dirty.contains(entry.key)) entry.key,
-        ];
-        for (final id in cleanIds) {
-          final record = candidate.records[id]!;
-          candidate.records[id] = EncryptedRecord(
-            envelopeVersion: record.envelopeVersion,
-            id: record.id,
-            updatedAt: record.updatedAt,
-            deviceId: record.deviceId,
-            deleted: record.deleted,
-            seq: null,
-            blob: record.blob,
-          );
-        }
-        candidate.dirty.addAll(cleanIds);
-        candidate.displaced.clear();
-        candidate.highWaterSeq = 0;
-        candidate.lastAppliedSeq = 0;
-        candidate.cursorRecoveryPending = true;
-      });
+    final cleanIds = <String>[
+      for (final entry in candidate.records.entries)
+        if (!candidate.dirty.contains(entry.key)) entry.key,
+    ];
+    for (final id in cleanIds) {
+      final record = candidate.records[id]!;
+      candidate.records[id] = EncryptedRecord(
+        envelopeVersion: record.envelopeVersion,
+        id: record.id,
+        updatedAt: record.updatedAt,
+        deviceId: record.deviceId,
+        deleted: record.deleted,
+        seq: null,
+        blob: record.blob,
+      );
+    }
+    candidate.dirty.addAll(cleanIds);
+    candidate.displaced.clear();
+    candidate.highWaterSeq = 0;
+    candidate.lastAppliedSeq = 0;
+    candidate.cursorRecoveryPending = true;
+  });
 
   @override
   Future<bool> cursorRecoveryPending() async {
@@ -409,8 +400,8 @@ final class PersistentLocalRecordStore
 
   @override
   Future<void> completeCursorRecovery() => _mutate((candidate) {
-        candidate.cursorRecoveryPending = false;
-      });
+    candidate.cursorRecoveryPending = false;
+  });
 
   @override
   Future<int> recordEnvelopeFloor() async {
@@ -452,15 +443,7 @@ final class PersistentLocalRecordStore
   Future<T> _mutate<T>(T Function(_CandidateState candidate) edit) {
     final operation = _writeTail.then((_) async {
       await _ensureLoaded();
-      final candidate = _CandidateState(
-        records: Map.of(_records),
-        dirty: Set.of(_dirty),
-        displaced: Map.of(_displaced),
-        highWaterSeq: _highWaterSeq,
-        lastAppliedSeq: _lastAppliedSeq,
-        cursorRecoveryPending: _cursorRecoveryPending,
-        recordEnvelopeFloor: _recordEnvelopeFloor,
-      );
+      final candidate = _snapshot();
       final result = edit(candidate);
       final contents = _encode(candidate);
       try {
@@ -590,7 +573,8 @@ final class PersistentLocalRecordStore
     if (activeScope == null) return;
 
     final adoptingLegacy = version == _legacyStoreVersion && adoptLegacy;
-    final mustReset = resetExisting ||
+    final mustReset =
+        resetExisting ||
         (version == _legacyStoreVersion && !adoptingLegacy) ||
         (version == _scopedStoreVersion && storedScope != activeScope);
     if (mustReset) _clear();
@@ -621,8 +605,9 @@ final class PersistentLocalRecordStore
     }
     if (displaced is List) {
       for (final entry in displaced) {
-        final record =
-            EncryptedRecord.fromJson((entry as Map).cast<String, dynamic>());
+        final record = EncryptedRecord.fromJson(
+          (entry as Map).cast<String, dynamic>(),
+        );
         _displaced[record.id] = record;
       }
     }
@@ -663,55 +648,45 @@ final class PersistentLocalRecordStore
   }
 
   String _encode(_CandidateState candidate) => jsonEncode({
-        'version': scope == null
-            ? _legacyStoreVersion
-            : _scopedStoreVersion,
-        if (scope != null) 'account': scope!.toJson(),
-        'highWaterSeq': candidate.highWaterSeq,
-        'lastAppliedSeq': candidate.lastAppliedSeq,
-        if (candidate.recordEnvelopeFloor > kLegacyRecordEnvelopeVersion)
-          'recordEnvelopeFloor': candidate.recordEnvelopeFloor,
-        if (candidate.cursorRecoveryPending) 'cursorRecoveryPending': true,
-        'records': [
-          for (final record in candidate.records.values)
-            {...record.toJson(), 'dirty': candidate.dirty.contains(record.id)},
-        ],
-        if (candidate.displaced.isNotEmpty)
-          'displaced': [
-            for (final record in candidate.displaced.values) record.toJson(),
-          ],
-      });
+    'version': scope == null ? _legacyStoreVersion : _scopedStoreVersion,
+    if (scope != null) 'account': scope!.toJson(),
+    'highWaterSeq': candidate.highWaterSeq,
+    'lastAppliedSeq': candidate.lastAppliedSeq,
+    if (candidate.recordEnvelopeFloor > kLegacyRecordEnvelopeVersion)
+      'recordEnvelopeFloor': candidate.recordEnvelopeFloor,
+    if (candidate.cursorRecoveryPending) 'cursorRecoveryPending': true,
+    'records': [
+      for (final record in candidate.records.values)
+        {...record.toJson(), 'dirty': candidate.dirty.contains(record.id)},
+    ],
+    if (candidate.displaced.isNotEmpty)
+      'displaced': [
+        for (final record in candidate.displaced.values) record.toJson(),
+      ],
+  });
 
   /// Write the current live state. Used by [_load] to bind a scoped store
   /// or persist a reset before any mutation can race a restart.
   Future<void> _write() => _atomicWriter(_file, _encodeLive());
 
-  String _encodeLive() => jsonEncode({
-        'version': scope == null
-            ? _legacyStoreVersion
-            : _scopedStoreVersion,
-        if (scope != null) 'account': scope!.toJson(),
-        'highWaterSeq': _highWaterSeq,
-        'lastAppliedSeq': _lastAppliedSeq,
-        if (_recordEnvelopeFloor > kLegacyRecordEnvelopeVersion)
-          'recordEnvelopeFloor': _recordEnvelopeFloor,
-        if (_cursorRecoveryPending) 'cursorRecoveryPending': true,
-        'records': [
-          for (final record in _records.values)
-            {...record.toJson(), 'dirty': _dirty.contains(record.id)},
-        ],
-        if (_displaced.isNotEmpty)
-          'displaced': [
-            for (final record in _displaced.values) record.toJson(),
-          ],
-      });
+  String _encodeLive() => _encode(_snapshot());
+
+  _CandidateState _snapshot() => _CandidateState(
+    records: Map.of(_records),
+    dirty: Set.of(_dirty),
+    displaced: Map.of(_displaced),
+    highWaterSeq: _highWaterSeq,
+    lastAppliedSeq: _lastAppliedSeq,
+    cursorRecoveryPending: _cursorRecoveryPending,
+    recordEnvelopeFloor: _recordEnvelopeFloor,
+  );
 
   /// Moves a corrupt store aside under a unique `corrupt-<stamp>-<n>` name
   /// so a repeated corruption can never overwrite the first rescue copy.
   /// Throws when the file cannot be moved: starting empty over bytes this
   /// version could not read would let the next write destroy them.
   Future<void> _quarantine() async {
-    for (var n = 0;; n++) {
+    for (var n = 0; ; n++) {
       final target = recordStoreQuarantinePath(_file.path, _now(), n);
       if (File(target).existsSync()) continue;
       await _file.rename(target);

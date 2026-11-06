@@ -6,9 +6,8 @@ const int _inboxMaxPendingPerApp = 100;
 
 /// Apps one account may register. Without it the per-app pending cap bounds
 /// nothing: a session could keep adding apps, and every one's queue lands in
-/// each `GET /v1/inbox`. The check and the insert are not atomic, so two
-/// concurrent registrations can pass it by one; it bounds growth, it is not
-/// an exact quota.
+/// each `GET /v1/inbox`. Storage checks the cap and inserts in one transaction,
+/// so concurrent registrations cannot exceed it.
 const int _inboxMaxAppsPerAccount = 50;
 
 const int _inboxDepositsPerWindow = 30;

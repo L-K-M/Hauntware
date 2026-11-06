@@ -173,8 +173,8 @@ extension BookmarkRecordWrites on RecordCoordinator {
     ),
   );
 
-  /// A local delete: a real tombstone (empty blob, `deleted: true`) dated
-  /// at the deletion — fixing the resurrection gap Séance's ephemeral
+  /// A local delete: an authenticated tombstone dated at the deletion,
+  /// fixing the resurrection gap Séance's ephemeral
   /// store has. Tombstones are retained indefinitely: no GC window is safe
   /// while a long-offline device could still push the old row.
   Future<WriteOutcome> onBookmarkDeleted(String bookmarkId) => writer.sealLocal(

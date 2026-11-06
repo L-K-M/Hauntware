@@ -4,7 +4,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 /// is the same [Lww.resolve] both ends share (04 §3.2 pins the server's
 /// tie-break identical to the client's), and accepted pushes mint a
 /// monotonically increasing `seq` like `pushRecords` in seance_sync_server.
-final class FakeSyncApi implements SyncApi {
+final class FakeSyncApi implements SyncApi, PagedSyncApi {
   /// Server-held records. Prefer [seed] / [seedWithSeq]: inserting directly
   /// skips seq assignment, and a record with a null seq is never returned
   /// by [pull].
@@ -14,6 +14,9 @@ final class FakeSyncApi implements SyncApi {
   /// When set, the next [pull] throws it (the cursor-rejected signal that
   /// triggers the full-resync fallback).
   Object? nextPullError;
+  int? pullPageSize;
+  int? failPullCall;
+  Object? scheduledPullError;
 
   /// When set, the next [push] throws it (transport failure — no results).
   Object? nextPushError;
@@ -28,6 +31,7 @@ final class FakeSyncApi implements SyncApi {
   /// Every `since` cursor a [pull] was called with, in order — lets a test
   /// prove the resync retry pulled from zero.
   final pullCursors = <int>[];
+  final pullFences = <int?>[];
 
   /// Seed a record the way the server would store an incoming push: LWW
   /// against what is already held, seq assigned on a win, ignored on a loss.
@@ -55,19 +59,38 @@ final class FakeSyncApi implements SyncApi {
   }
 
   @override
-  Future<PullResponse> pull({required int since}) async {
+  Future<PullResponse> pull({required int since}) => pullPage(since: since);
+
+  @override
+  Future<PullResponse> pullPage({required int since, int? throughSeq}) async {
     pullCalls++;
     pullCursors.add(since);
+    pullFences.add(throughSeq);
+    if (failPullCall == pullCalls) {
+      final error = scheduledPullError ?? const SyncCursorRejectedException();
+      failPullCall = null;
+      scheduledPullError = null;
+      throw error;
+    }
     final error = nextPullError;
     if (error != null) {
       nextPullError = null;
       throw error;
     }
-    final list = records.values
-        .where((r) => (r.seq ?? 0) > since)
-        .toList()
-      ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
-    return PullResponse(records: list, latestSeq: _seq);
+    final fence = throughSeq ?? _seq;
+    final list =
+        records.values
+            .where((r) => (r.seq ?? 0) > since && (r.seq ?? 0) <= fence)
+            .toList()
+          ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
+    final pageSize = pullPageSize;
+    final page = pageSize == null ? list : list.take(pageSize).toList();
+    return PullResponse(
+      records: page,
+      latestSeq: fence,
+      throughSeq: fence,
+      hasMore: page.length < list.length,
+    );
   }
 
   @override
@@ -83,7 +106,8 @@ final class FakeSyncApi implements SyncApi {
       final existing = records[incoming.id];
       if (rejectPushes) {
         results.add(
-            PushResult(id: incoming.id, seq: existing?.seq ?? 0, accepted: false));
+          PushResult(id: incoming.id, seq: existing?.seq ?? 0, accepted: false),
+        );
         continue;
       }
       if (existing != null) {
@@ -93,8 +117,13 @@ final class FakeSyncApi implements SyncApi {
           'Lww.resolve must return one of its arguments',
         );
         if (!identical(winner, incoming)) {
-          results.add(PushResult(
-              id: incoming.id, seq: existing.seq ?? 0, accepted: false));
+          results.add(
+            PushResult(
+              id: incoming.id,
+              seq: existing.seq ?? 0,
+              accepted: false,
+            ),
+          );
           continue;
         }
       }
