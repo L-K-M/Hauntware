@@ -1,7 +1,8 @@
-import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:http/http.dart' as http;
+
+import 'bounded_http.dart';
 
 class SearchResult {
   final String title;
@@ -21,30 +22,70 @@ abstract class SearchProvider {
   Future<List<SearchResult>> search(String query, {int limit = 5});
 }
 
+/// A search provider that owns resources which its caller must release.
+abstract interface class ClosableSearchProvider {
+  void close();
+}
+
+void closeSearchProvider(SearchProvider provider) {
+  if (provider is ClosableSearchProvider) {
+    (provider as ClosableSearchProvider).close();
+  }
+}
+
 /// Search via a self-hosted SearXNG instance (`/search?format=json`). Fits the
 /// same "run it in Docker yourself" story as the sync server.
-class SearxngSearch implements SearchProvider {
+class SearxngSearch implements SearchProvider, ClosableSearchProvider {
   final String baseUrl;
   final Duration timeout;
+  final Duration headerTimeout;
+  final Duration idleTimeout;
+  final Duration totalTimeout;
+  final int maxResponseBytes;
   final http.Client _client;
+  final bool _ownsClient;
+  bool _closed = false;
 
   SearxngSearch({
     required this.baseUrl,
     http.Client? client,
-    this.timeout = const Duration(seconds: 20),
-  }) : _client = client ?? http.Client();
+    Duration timeout = const Duration(seconds: 20),
+    Duration? headerTimeout,
+    Duration? idleTimeout,
+    Duration? totalTimeout,
+    this.maxResponseBytes = maxAssistantResponseBytes,
+    http.Client Function()? clientFactory,
+  }) : timeout = timeout,
+       headerTimeout = headerTimeout ?? timeout,
+       idleTimeout = idleTimeout ?? timeout,
+       totalTimeout = totalTimeout ?? timeout,
+       _client = _searchClient(client, clientFactory),
+       _ownsClient = client == null;
+
+  @override
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    if (_ownsClient) _client.close();
+  }
 
   @override
   Future<List<SearchResult>> search(String query, {int limit = 5}) async {
+    if (_closed) throw StateError('SearXNG search provider is closed.');
     final uri = Uri.parse('$baseUrl/search').replace(queryParameters: {
       'q': query,
       'format': 'json',
     });
-    final res = await _client.get(uri).timeout(timeout);
-    if (res.statusCode >= 400) {
-      throw http.ClientException('SearXNG error HTTP ${res.statusCode}');
-    }
-    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    final body = await _sendSearchJson(
+      _client,
+      http.Request('GET', uri),
+      operation: 'SearXNG search',
+      headerTimeout: headerTimeout,
+      idleTimeout: idleTimeout,
+      totalTimeout: totalTimeout,
+      maxResponseBytes: maxResponseBytes,
+    );
+    if (_closed) throw StateError('SearXNG search provider is closed.');
     final results = (body['results'] as List?) ?? const [];
     return results
         .cast<Map<String, dynamic>>()
@@ -59,31 +100,61 @@ class SearxngSearch implements SearchProvider {
 }
 
 /// Search via the Brave Search API (hosted alternative to self-hosting).
-class BraveSearch implements SearchProvider {
+class BraveSearch implements SearchProvider, ClosableSearchProvider {
   final String apiKey;
   final String baseUrl;
   final Duration timeout;
+  final Duration headerTimeout;
+  final Duration idleTimeout;
+  final Duration totalTimeout;
+  final int maxResponseBytes;
   final http.Client _client;
+  final bool _ownsClient;
+  bool _closed = false;
 
   BraveSearch({
     required this.apiKey,
     this.baseUrl = 'https://api.search.brave.com',
     http.Client? client,
-    this.timeout = const Duration(seconds: 20),
-  }) : _client = client ?? http.Client();
+    Duration timeout = const Duration(seconds: 20),
+    Duration? headerTimeout,
+    Duration? idleTimeout,
+    Duration? totalTimeout,
+    this.maxResponseBytes = maxAssistantResponseBytes,
+    http.Client Function()? clientFactory,
+  }) : timeout = timeout,
+       headerTimeout = headerTimeout ?? timeout,
+       idleTimeout = idleTimeout ?? timeout,
+       totalTimeout = totalTimeout ?? timeout,
+       _client = _searchClient(client, clientFactory),
+       _ownsClient = client == null;
+
+  @override
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    if (_ownsClient) _client.close();
+  }
 
   @override
   Future<List<SearchResult>> search(String query, {int limit = 5}) async {
+    if (_closed) throw StateError('Brave search provider is closed.');
     final uri = Uri.parse('$baseUrl/res/v1/web/search')
         .replace(queryParameters: {'q': query, 'count': '$limit'});
-    final res = await _client.get(uri, headers: {
+    final request = http.Request('GET', uri)..headers.addAll({
       'accept': 'application/json',
       'x-subscription-token': apiKey,
-    }).timeout(timeout);
-    if (res.statusCode >= 400) {
-      throw http.ClientException('Brave Search error HTTP ${res.statusCode}');
-    }
-    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    });
+    final body = await _sendSearchJson(
+      _client,
+      request,
+      operation: 'Brave Search',
+      headerTimeout: headerTimeout,
+      idleTimeout: idleTimeout,
+      totalTimeout: totalTimeout,
+      maxResponseBytes: maxResponseBytes,
+    );
+    if (_closed) throw StateError('Brave search provider is closed.');
     final web = (body['web'] as Map<String, dynamic>?)?['results'] as List?;
     return ((web) ?? const [])
         .cast<Map<String, dynamic>>()
@@ -148,13 +219,27 @@ String _dedupKey(String url) {
 /// Results are interleaved round-robin rather than concatenated, so a fast
 /// backend cannot fill the whole limit before a slower one is heard from, and
 /// deduplicated by URL because two web indexes agreeing is one result, not two.
-class CompositeSearch implements SearchProvider {
+final Expando<bool> _closedCompositeSearches = Expando<bool>();
+
+class CompositeSearch implements SearchProvider, ClosableSearchProvider {
   final List<SearchProvider> providers;
 
   const CompositeSearch(this.providers);
 
   @override
+  void close() {
+    if (_closedCompositeSearches[this] ?? false) return;
+    _closedCompositeSearches[this] = true;
+    for (final provider in providers) {
+      closeSearchProvider(provider);
+    }
+  }
+
+  @override
   Future<List<SearchResult>> search(String query, {int limit = 5}) async {
+    if (_closedCompositeSearches[this] ?? false) {
+      throw StateError('Composite search provider is closed.');
+    }
     // Each backend is asked for the full limit: after deduplication the union
     // is usually smaller than the sum, and a short answer from one is exactly
     // when the other's results are wanted.
@@ -194,6 +279,9 @@ class CompositeSearch implements SearchProvider {
         }
       }),
     );
+    if (_closedCompositeSearches[this] ?? false) {
+      throw StateError('Composite search provider is closed.');
+    }
     final lists = answers.whereType<List<SearchResult>>().toList();
     if (lists.isEmpty) {
       // Every backend failed. Re-raise the first failure rather than reporting
@@ -236,6 +324,47 @@ class CompositeSearch implements SearchProvider {
     }
     return merged;
   }
+}
+
+http.Client _searchClient(
+  http.Client? client,
+  http.Client Function()? clientFactory,
+) {
+  if (client != null && clientFactory != null) {
+    throw ArgumentError('client and clientFactory cannot both be supplied.');
+  }
+  return client ?? clientFactory?.call() ?? http.Client();
+}
+
+Future<Map<String, dynamic>> _sendSearchJson(
+  http.Client client,
+  http.Request request, {
+  required String operation,
+  required Duration headerTimeout,
+  required Duration idleTimeout,
+  required Duration totalTimeout,
+  required int maxResponseBytes,
+}) async {
+  final started = await sendWithResponseDeadlines(
+    client,
+    request,
+    headerTimeout: headerTimeout,
+    totalTimeout: totalTimeout,
+    operation: operation,
+  );
+  await requireSuccessfulResponse(
+    started.response,
+    operation: operation,
+    abort: started.abort,
+  );
+  return readBoundedJsonObject(
+    started.response.stream,
+    maxBytes: maxResponseBytes,
+    idleTimeout: idleTimeout,
+    totalTimeout: started.remaining,
+    operation: operation,
+    abort: started.abort,
+  );
 }
 
 /// [text] cut to [max] UTF-16 code units and closed with an ellipsis, or

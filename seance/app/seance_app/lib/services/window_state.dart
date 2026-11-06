@@ -59,8 +59,7 @@ final class WindowStateStore implements GhostWindowPersistence {
 /// the entry point because Séance's contract is distinctive: restoration runs
 /// in `main()` before `runApp` while the runner's hidden-at-launch window
 /// waits, the saved file stores physical pixels on Windows, and the native
-/// close is observed — never intercepted — so the window always closes
-/// itself.
+/// close is intercepted so dirty buffers and active sessions can veto it.
 ///
 /// Wiring contract (macOS): `MainFlutterWindow` hides the window at launch
 /// (`hiddenWindowAtLaunch()` in its `order` override) so the saved frame can
@@ -77,7 +76,10 @@ final class WindowStateService {
   static bool get _isDesktop =>
       !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
 
-  static Future<void> restoreAndTrack() async {
+  static Future<void> restoreAndTrack({
+    required Future<bool> Function() confirmClose,
+    VoidCallback? onCloseFailed,
+  }) async {
     if (!_isDesktop || _instance != null) return;
     try {
       // First: the catch's macOS fallback shows the window through this
@@ -86,14 +88,16 @@ final class WindowStateService {
       final dir = await getApplicationSupportDirectory();
       final lifecycle = GhostWindowLifecycle(
         persistence: WindowStateStore(File('${dir.path}/window_state.json')),
-        closePolicy: GhostClosePolicy.observe,
+        closePolicy: GhostClosePolicy.intercept,
         missingMonitor: MissingMonitorPolicy.rejectAndKeep,
         coordinates: GhostCoordinateSpace.physicalOnWindows,
         // The runners show the window on the first Flutter frame; asking for
         // it earlier would show it unpainted.
         showTrigger: GhostShowTrigger.runner,
         geometrySaveDelay: const Duration(milliseconds: 500),
-        onError: (error, _) => debugPrint('Window state save failed: $error'),
+        confirmClose: confirmClose,
+        onError: (error, _) => debugPrint('Window lifecycle failed: $error'),
+        onCloseFailed: (_, _) => onCloseFailed?.call(),
       );
       _instance = lifecycle;
       await lifecycle.prepare();
@@ -110,4 +114,9 @@ final class WindowStateService {
       }
     }
   }
+
+  /// Persists the final frame for an accepted OS exit such as Cmd-Q, which
+  /// may not produce the native close event used by the intercepted path.
+  static Future<void> saveBounds() =>
+      _instance?.saveBounds() ?? Future<void>.value();
 }

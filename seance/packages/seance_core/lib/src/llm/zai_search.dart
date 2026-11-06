@@ -23,7 +23,7 @@ import 'search.dart';
 /// `search_query` and requires a `search_engine` today; asking the server what
 /// it wants costs one round trip already spent on the handshake and means a
 /// renamed or newly-required parameter is not a silent empty result set.
-class ZaiSearch implements SearchProvider {
+class ZaiSearch implements SearchProvider, ClosableSearchProvider {
   /// The published Streamable-HTTP endpoint. Overridable for tests.
   static const String defaultEndpoint =
       'https://api.z.ai/api/mcp/web_search_prime/mcp';
@@ -50,6 +50,8 @@ class ZaiSearch implements SearchProvider {
   final String endpoint;
   final Duration timeout;
   final http.Client _client;
+  final bool _ownsClient;
+  bool _closed = false;
 
   /// Headers the session has accumulated: the negotiated protocol version and,
   /// once the server issues one, its session id. Replaced wholesale by a
@@ -70,6 +72,7 @@ class ZaiSearch implements SearchProvider {
     required String apiKey,
     this.endpoint = defaultEndpoint,
     http.Client? client,
+    http.Client Function()? clientFactory,
     // Per request, not per search: one search is a handshake, a listing of
     // up to [maxToolPages] pages and the call, doubled once if the session
     // is retired mid-way — so the worst case is a multiple of this.
@@ -85,10 +88,21 @@ class ZaiSearch implements SearchProvider {
         // the gateway echoed back without the stray whitespace, so an
         // untrimmed key silently disarms its own redaction.
         apiKey = apiKey.trim(),
-        _client = client ?? http.Client();
+        _client = _searchClient(client, clientFactory),
+        _ownsClient = client == null;
+
+  @override
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    _session = const {};
+    _handshake = null;
+    if (_ownsClient) _client.close();
+  }
 
   @override
   Future<List<SearchResult>> search(String query, {int limit = 5}) async {
+    if (_closed) throw StateError('Z.AI search provider is closed.');
     try {
       return await _attempt(query, limit);
     } on _SessionExpired {
@@ -293,6 +307,7 @@ class ZaiSearch implements SearchProvider {
     for (final name in toolNames) {
       for (final tool in tools) {
         if (tool['name'] == name) {
+          _ensureOpen();
           _session = Map.unmodifiable(staged);
           return (tool: tool.cast<String, dynamic>(), session: _session);
         }
@@ -318,6 +333,7 @@ class ZaiSearch implements SearchProvider {
       'method': method,
       'params': params,
     }, id: id, session: session, stageIssuedId: stageIssuedId);
+    _ensureOpen();
     return readRpcResult(message, method: method, id: id);
   }
 
@@ -329,6 +345,7 @@ class ZaiSearch implements SearchProvider {
     Map<String, String>? session,
     bool stageIssuedId = false,
   }) async {
+    _ensureOpen();
     final headers = session ?? _session;
     final request = http.Request('POST', Uri.parse(endpoint))
       ..headers.addAll({
@@ -537,6 +554,10 @@ class ZaiSearch implements SearchProvider {
       throw http.ClientException('Z.AI returned an unexpected search reply.');
     }
     return decoded;
+  }
+
+  void _ensureOpen() {
+    if (_closed) throw StateError('Z.AI search provider is closed.');
   }
 
   Future<String> _readBounded(Stream<List<int>> bytes) async {
@@ -1212,6 +1233,16 @@ class ZaiSearch implements SearchProvider {
       _collect(entry.value, out, seen, depth + 1);
     }
   }
+}
+
+http.Client _searchClient(
+  http.Client? client,
+  http.Client Function()? clientFactory,
+) {
+  if (client != null && clientFactory != null) {
+    throw ArgumentError('client and clientFactory cannot both be supplied.');
+  }
+  return client ?? clientFactory?.call() ?? http.Client();
 }
 
 /// The server retired our session id (MCP answers 404). Internal: [ZaiSearch]

@@ -47,9 +47,9 @@ format, close guards, and native hooks kept in its own thin adapter.
   monitor's ratio while screen_retriever scales per display, so no single
   logical space survives a relaunch); `logical` elsewhere.
 - **Close policy.** `GhostClosePolicy.intercept` installs `setPreventClose`
-  and routes the close through confirm/flush hooks (Poltergeist, and
-  Planchette's `confirmQuit`); `GhostClosePolicy.observe` leaves native close
-  alone and just saves the final frame (Séance).
+  and routes the close through confirm/flush hooks (Poltergeist, Planchette,
+  and Séance); `GhostClosePolicy.observe` leaves native close alone and just
+  saves the final frame for hosts that own confirmation elsewhere.
 - **Hooks.** macOS titlebar setup, "close this window instead" for multi-
   window shells, readiness futures, and error reporting all arrive as
   constructor callbacks — the lifecycle stays ignorant of product surface.

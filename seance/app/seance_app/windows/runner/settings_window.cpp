@@ -46,10 +46,12 @@ void Forward(flutter::BinaryMessenger* destination, const uint8_t* message,
 class SettingsFlutterWindow : public Win32Window {
  public:
   SettingsFlutterWindow(flutter::BinaryMessenger* main_messenger,
-                        std::function<void()> on_hidden)
+                        std::function<void()> on_hidden,
+                        std::function<bool()> should_show)
       : project_(L"data"),
         main_messenger_(main_messenger),
-        on_hidden_(std::move(on_hidden)) {
+        on_hidden_(std::move(on_hidden)),
+        should_show_(std::move(should_show)) {
     project_.set_dart_entrypoint_arguments({kWindowArgument});
   }
 
@@ -80,7 +82,9 @@ class SettingsFlutterWindow : public Win32Window {
     SetChildContent(controller_->view()->GetNativeWindow());
     // Shown on its first frame, like the app's window, so it never flashes
     // an empty frame before Flutter has drawn.
-    controller_->engine()->SetNextFrameCallback([this]() { Show(); });
+    controller_->engine()->SetNextFrameCallback([this]() {
+      if (should_show_()) Show();
+    });
     controller_->ForceRedraw();
     return true;
   }
@@ -119,6 +123,7 @@ class SettingsFlutterWindow : public Win32Window {
   flutter::DartProject project_;
   flutter::BinaryMessenger* main_messenger_;
   std::function<void()> on_hidden_;
+  std::function<bool()> should_show_;
   std::unique_ptr<flutter::FlutterViewController> controller_;
 };
 
@@ -132,16 +137,26 @@ SettingsWindowHost::SettingsWindowHost(HWND main_window,
       [this](const flutter::MethodCall<flutter::EncodableValue>& call,
              std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
                  result) {
-        if (call.method_name() != "open") {
-          result->NotImplemented();
+        if (call.method_name() == "open") {
+          if (Open()) {
+            result->Success();
+          } else {
+            // Dart falls back to the in-app Settings.
+            result->Error("open_failed", "The Settings window was not created");
+          }
           return;
         }
-        if (Open()) {
-          result->Success();
-        } else {
-          // Dart falls back to the in-app Settings.
-          result->Error("open_failed", "The Settings window was not created");
+        if (call.method_name() == "yieldForQuitConfirmation") {
+          result->Success(
+              flutter::EncodableValue(YieldForQuitConfirmation()));
+          return;
         }
+        if (call.method_name() == "restoreAfterQuitConfirmation") {
+          RestoreAfterQuitConfirmation();
+          result->Success();
+          return;
+        }
+        result->NotImplemented();
       });
   main_messenger_->SetMessageHandler(
       kLinkChannel, [this](const uint8_t* message, size_t message_size,
@@ -166,14 +181,20 @@ SettingsWindowHost::~SettingsWindowHost() {
 bool SettingsWindowHost::Open() {
   if (window_ && window_->GetHandle() != nullptr) {
     // Shows it again if it was closed, and brings it forward either way.
+    window_hidden_ = false;
+    if (quit_confirmation_suppressed_) return true;
     HWND handle = window_->GetHandle();
     ShowWindow(handle, IsIconic(handle) ? SW_RESTORE : SW_SHOW);
     SetForegroundWindow(handle);
     return true;
   }
 
+  window_hidden_ = false;
   window_ = std::make_unique<SettingsFlutterWindow>(
-      main_messenger_, [this]() { OnWindowHidden(); });
+      main_messenger_, [this]() { OnWindowHidden(); },
+      [this]() {
+        return !window_hidden_ && !quit_confirmation_suppressed_;
+      });
   // Near the app's window, on its monitor: Create takes the origin in
   // logical pixels and picks the monitor from it.
   RECT main_frame;
@@ -189,6 +210,7 @@ bool SettingsWindowHost::Open() {
   if (!window_->Create(kWindowTitle, origin,
                        Win32Window::Size(kDefaultWidth, kDefaultHeight))) {
     window_ = nullptr;
+    window_hidden_ = true;
     return false;
   }
   // Then placed in physical pixels, which the unsigned logical origin
@@ -204,6 +226,25 @@ bool SettingsWindowHost::Open() {
   return true;
 }
 
+bool SettingsWindowHost::YieldForQuitConfirmation() {
+  if (!window_ || window_->GetHandle() == nullptr || window_hidden_) {
+    return false;
+  }
+  quit_confirmation_suppressed_ = true;
+  ShowWindow(window_->GetHandle(), SW_HIDE);
+  return true;
+}
+
+void SettingsWindowHost::RestoreAfterQuitConfirmation() {
+  quit_confirmation_suppressed_ = false;
+  if (!window_ || window_->GetHandle() == nullptr || window_hidden_) return;
+  HWND handle = window_->GetHandle();
+  ShowWindow(handle, IsIconic(handle) ? SW_RESTORE : SW_SHOW);
+  SetForegroundWindow(handle);
+}
+
 void SettingsWindowHost::OnWindowHidden() {
+  window_hidden_ = true;
+  quit_confirmation_suppressed_ = false;
   control_->InvokeMethod("closed", nullptr);
 }
