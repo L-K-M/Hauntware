@@ -4,13 +4,11 @@ import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
 import '../family_hues.dart';
-import '../services/chat_session.dart';
 import '../main.dart';
+import '../services/chat_session.dart';
 import '../theme.dart' show SeanceTheme;
 
-/// The always-available assistant. It sees the active session's recent output
-/// (redacted) by default, can search the web, and can place a command in the
-/// prompt for review — it never runs anything itself.
+/// The assistant view over explicitly selected, isolated conversations.
 class ChatSidebar extends StatefulWidget {
   const ChatSidebar({super.key});
 
@@ -21,82 +19,153 @@ class ChatSidebar extends StatefulWidget {
 class _ChatSidebarState extends State<ChatSidebar> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
+  ChatSession? _draftSession;
+  bool _bindingDraft = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    AppScope.of(context).chats.initializeSelection();
+  }
 
   @override
   void dispose() {
+    _input.removeListener(_saveDraft);
     _input.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
-  Future<ChatController> _ensureController(AppState state, int turn) async {
-    // Rebuild if the provider settings changed since we last built (new key,
-    // model, or base URL) — otherwise edits in Settings wouldn't take effect.
+  void _bindDraft(ChatSession chat) {
+    if (!identical(_draftSession, chat)) {
+      _input.removeListener(_saveDraft);
+      _draftSession = chat;
+    } else if (_input.text == chat.draft) {
+      return;
+    }
+    _bindingDraft = true;
+    _input.value = TextEditingValue(
+      text: chat.draft,
+      selection: TextSelection.collapsed(offset: chat.draft.length),
+    );
+    _bindingDraft = false;
+    _input.removeListener(_saveDraft);
+    _input.addListener(_saveDraft);
+  }
+
+  void _saveDraft() {
+    if (!_bindingDraft) _draftSession?.updateDraft(_input.text);
+  }
+
+  Future<ChatController> _ensureController(
+    AppState state,
+    ChatSession chat,
+    int turn,
+  ) async {
     final version = state.llmConfigVersion;
-    final existing = state.chat.controllerFor(version);
+    final existing = chat.controllerFor(version);
     if (existing != null) return existing;
     final provider = await state.services.buildLlmProvider();
-    final search = await state.services.buildSearchProvider();
-    if (!state.chat.isCurrentTurn(turn) || version != state.llmConfigVersion) {
-      throw StateError('The assistant settings or conversation changed. Retry.');
+    SearchProvider? search;
+    ChatController? controller;
+    try {
+      if (!chat.isCurrentTurn(turn) || version != state.llmConfigVersion) {
+        throw StateError(
+          'The assistant settings or conversation changed. Retry.',
+        );
+      }
+      search = await state.services.buildSearchProvider();
+      if (!chat.isCurrentTurn(turn) || version != state.llmConfigVersion) {
+        throw StateError(
+          'The assistant settings or conversation changed. Retry.',
+        );
+      }
+      controller = ChatController(
+        provider: provider,
+        searchProvider: search,
+        redactor: SecretRedactor(
+          enabled: state.services.settings.redactionEnabled,
+        ),
+        onPaste: (_) {},
+      );
+      chat.adoptController(controller, version);
+      return controller;
+    } catch (_) {
+      if (controller != null) {
+        controller.close();
+      } else {
+        closeLlmProvider(provider);
+        if (search != null) closeSearchProvider(search);
+      }
+      rethrow;
     }
-    final controller = ChatController(
-      provider: provider,
-      searchProvider: search,
-      // Honor the "Redact secrets before sending" toggle (default on).
-      redactor: SecretRedactor(
-        enabled: state.services.settings.redactionEnabled,
-      ),
-      // The target is supplied per turn; this controller outlives the sidebar.
-      onPaste: (_) {},
-    );
-    state.chat.adoptController(controller, version);
-    return controller;
   }
 
   Future<void> _send(AppState state) async {
-    final chat = state.chat;
-    final text = _input.text.trim();
+    // Everything target-dependent is captured before provider/search creation
+    // can yield. Focus changes cannot redirect this turn afterward.
+    final store = state.chats;
+    final target = store.selectedTarget;
+    final chat = store.conversationFor(target);
+    final text = chat.draft.trim();
     if (text.isEmpty || chat.sending) return;
-    final turn = chat.addUserMessage(text);
-    _input.clear();
+    final selectionEpoch = store.selectionEpoch;
+    final terminal = target is TerminalChatTarget
+        ? state.sessionForChatTarget(target)
+        : null;
+    final context = terminal != null && state.includeTerminalContext
+        ? terminal.engine.recentText(maxLines: 200)
+        : null;
+    final targetDescription = terminal == null
+        ? null
+        : terminal.isLocal
+        ? 'a local shell — ${target.description}'
+        : target.description;
+    late final int turn;
+    void paste(String command) {
+      if (!chat.isCurrentTurn(turn) ||
+          store.selectionEpoch != selectionEpoch ||
+          terminal == null ||
+          !identical(
+            state.sessionForChatTarget(target as TerminalChatTarget),
+            terminal,
+          ) ||
+          !identical(state.tabById(terminal.id), terminal) ||
+          !terminal.isConnected) {
+        throw StateError(
+          'The selected terminal changed or disconnected before the command '
+          'could be placed. Nothing was pasted.',
+        );
+      }
+      terminal.engine.injectInput(command);
+    }
+
+    turn = chat.addUserMessage(text);
+    chat.updateDraft('');
+    if (identical(_draftSession, chat)) {
+      _bindingDraft = true;
+      _input.clear();
+      _bindingDraft = false;
+    }
     _scrollToEnd();
 
     try {
-      final targetSession = state.activeSession;
-      final controller = await _ensureController(state, turn);
+      final controller = await _ensureController(state, chat, turn);
       if (!chat.isCurrentTurn(turn)) return;
-      final context = state.includeTerminalContext
-          ? targetSession?.engine.recentText(maxLines: 200)
-          : null;
-      chat.addReply(
-        turn,
-        await controller.send(
-          text,
-          terminalContext: context,
-          // Which machine a pasted command would land on.
-          sessionTarget: targetSession == null
-              ? null
-              : targetSession.isLocal
-              ? 'a local shell — ${targetSession.displayTarget}'
-              : targetSession.displayTarget,
-          onPaste: (command) {
-            if (!chat.isCurrentTurn(turn) ||
-                targetSession == null ||
-                !identical(state.tabById(targetSession.id), targetSession) ||
-                !targetSession.isConnected) {
-              return;
-            }
-            targetSession.engine.injectInput(command);
-          },
-        ),
+      final result = await controller.send(
+        text,
+        terminalContext: context,
+        sessionTarget: targetDescription,
+        onPaste: terminal == null ? null : paste,
+        toolScope: terminal == null
+            ? ChatToolScope.general
+            : ChatToolScope.terminal,
       );
-    } catch (e) {
-      chat.failed(turn, e);
+      chat.addReply(turn, result);
+    } catch (error) {
+      chat.failed(turn, error);
     } finally {
       chat.finishSending(turn);
-      // The transcript outlives this widget by design, but the scroll
-      // controller does not: the drawer may have closed during the await.
       if (mounted) _scrollToEnd();
     }
   }
@@ -116,40 +185,43 @@ class _ChatSidebarState extends State<ChatSidebar> {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
-    // The transcript lives on AppState, so this rebuilds from it rather than
-    // owning it — which is what lets the narrow-layout drawer close without
-    // taking the conversation with it.
     return ListenableBuilder(
-      listenable: state.chat,
+      listenable: state.chats,
       builder: (context, _) {
-        final chat = state.chat;
+        final target = state.chats.selectedTarget;
+        final chat = state.chats.selectedSession;
+        final entries = chat.entries;
+        _bindDraft(chat);
         return SafeArea(
           child: Column(
             children: [
-              _header(context, chat),
+              _header(context, state, target, chat),
               const Divider(height: 1),
               Expanded(
-                child: chat.isEmpty
-                    ? const _ChatEmpty()
+                child: entries.isEmpty
+                    ? _ChatEmpty(hasTerminal: target.hasTerminal)
                     : ListView.builder(
                         controller: _scroll,
                         padding: const EdgeInsets.all(12),
-                        itemCount: chat.entries.length,
-                        itemBuilder: (context, i) =>
-                            _bubble(context, chat.entries[i]),
+                        itemCount: entries.length,
+                        itemBuilder: (context, index) =>
+                            _bubble(context, entries[index]),
                       ),
               ),
               if (chat.error != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(
-                    chat.error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                Semantics(
+                  liveRegion: true,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      chat.error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   ),
                 ),
-              _composer(context, state, chat),
+              _composer(context, state, target, chat),
             ],
           ),
         );
@@ -157,52 +229,101 @@ class _ChatSidebarState extends State<ChatSidebar> {
     );
   }
 
-  Widget _header(BuildContext context, ChatSession chat) {
+  Widget _header(
+    BuildContext context,
+    AppState state,
+    ChatTarget target,
+    ChatSession chat,
+  ) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(16, 10, 8, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.auto_awesome,
-            size: 20,
-            color: FamilyPalette.of(context).glyph(FamilyHue.purple),
+          Row(
+            children: [
+              Icon(
+                Icons.auto_awesome,
+                size: 20,
+                color: FamilyPalette.of(context).glyph(FamilyHue.purple),
+              ),
+              const SizedBox(width: 8),
+              Text('Assistant', style: Theme.of(context).textTheme.titleMedium),
+              const Spacer(),
+              IconButton(
+                tooltip: 'New chat',
+                icon: const Icon(Icons.refresh),
+                onPressed: chat.isEmpty && chat.draft.isEmpty
+                    ? null
+                    : chat.reset,
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Text('Assistant', style: Theme.of(context).textTheme.titleMedium),
-          const Spacer(),
-          IconButton(
-            tooltip: 'New chat',
-            icon: const Icon(Icons.refresh),
-            onPressed: chat.isEmpty ? null : chat.reset,
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String>(
+            key: ValueKey('assistant.target.${target.key}'),
+            initialValue: target.key,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Conversation target',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: [
+              for (final option in state.chats.targets)
+                DropdownMenuItem(
+                  value: option.key,
+                  child: Text(
+                    option.hasTerminal
+                        ? '${option.label} — ${option.description}'
+                        : option.label,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: (key) {
+              if (key != null) state.chats.select(key);
+            },
+          ),
+          const SizedBox(height: 4),
+          Text(
+            target.hasTerminal
+                ? 'Selected: ${target.description}'
+                : 'General: no terminal is selected. Commands cannot be '
+                      'placed in a prompt.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),
     );
   }
 
-  Widget _composer(BuildContext context, AppState state, ChatSession chat) {
+  Widget _composer(
+    BuildContext context,
+    AppState state,
+    ChatTarget target,
+    ChatSession chat,
+  ) {
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Listens itself: this widget is a const child, so the app's
-          // rebuilds stop above it, and the command generator can change the
-          // shared choice while the wide layout keeps this chip on screen.
           ListenableBuilder(
             listenable: state,
             builder: (context, _) => FilterChip(
-              selected: state.includeTerminalContext,
+              selected: target.hasTerminal && state.includeTerminalContext,
               label: const Text('Include terminal output'),
               avatar: const Icon(Icons.article_outlined, size: 16),
-              onSelected: state.setIncludeTerminalContext,
+              onSelected: target.hasTerminal
+                  ? state.setIncludeTerminalContext
+                  : null,
             ),
           ),
           const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
-                // Enter inserts a newline (multiline); Cmd/Ctrl+Return sends.
                 child: CallbackShortcuts(
                   bindings: {
                     const SingleActivator(
@@ -231,15 +352,25 @@ class _ChatSidebarState extends State<ChatSidebar> {
                 ),
               ),
               const SizedBox(width: 8),
-              IconButton.filled(
-                onPressed: chat.sending ? null : () => _send(state),
-                icon: chat.sending
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.send),
+              Tooltip(
+                message: chat.sending
+                    ? 'Waiting for assistant'
+                    : 'Send message',
+                child: Semantics(
+                  label: chat.sending ? 'Sending message' : 'Send message',
+                  liveRegion: chat.sending,
+                  button: true,
+                  child: IconButton.filled(
+                    onPressed: chat.sending ? null : () => _send(state),
+                    icon: chat.sending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send),
+                  ),
+                ),
               ),
             ],
           ),
@@ -248,20 +379,19 @@ class _ChatSidebarState extends State<ChatSidebar> {
     );
   }
 
-  Widget _bubble(BuildContext context, ChatEntry m) {
+  Widget _bubble(BuildContext context, ChatEntry entry) {
     final scheme = Theme.of(context).colorScheme;
-    // Proportional to the pane, not a fixed 300: the utility pane is draggable
-    // to 680, and a pinned width meant widening the assistant bought nothing
-    // but margin. The 0.9 keeps the alignment readable as a left/right split.
     return LayoutBuilder(
       builder: (context, constraints) => Align(
-        alignment: m.fromUser ? Alignment.centerRight : Alignment.centerLeft,
+        alignment: entry.fromUser
+            ? Alignment.centerRight
+            : Alignment.centerLeft,
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.all(10),
           constraints: BoxConstraints(maxWidth: constraints.maxWidth * 0.9),
           decoration: BoxDecoration(
-            color: m.fromUser
+            color: entry.fromUser
                 ? scheme.primaryContainer
                 : scheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(10),
@@ -269,8 +399,8 @@ class _ChatSidebarState extends State<ChatSidebar> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SelectableText(m.text),
-              for (final q in m.searches)
+              SelectableText(entry.text),
+              for (final query in entry.searches)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Row(
@@ -279,14 +409,15 @@ class _ChatSidebarState extends State<ChatSidebar> {
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          'searched: $q',
+                          'searched: $query',
                           style: Theme.of(context).textTheme.labelSmall,
                         ),
                       ),
                     ],
                   ),
                 ),
-              for (final cmd in m.staged) _StagedCommand(command: cmd),
+              for (final command in entry.staged)
+                _StagedCommand(command: command),
             ],
           ),
         ),
@@ -295,9 +426,6 @@ class _ChatSidebarState extends State<ChatSidebar> {
   }
 }
 
-/// A command the assistant placed in the prompt, with an independent danger-
-/// linter check surfaced inline — the chat path used to stage commands without
-/// any warning, unlike the command generator.
 class _StagedCommand extends StatelessWidget {
   final String command;
   const _StagedCommand({required this.command});
@@ -360,7 +488,9 @@ class _StagedCommand extends StatelessWidget {
 }
 
 class _ChatEmpty extends StatelessWidget {
-  const _ChatEmpty();
+  final bool hasTerminal;
+  const _ChatEmpty({required this.hasTerminal});
+
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -382,10 +512,13 @@ class _ChatEmpty extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Type a task in plain language — e.g. "find the 10 largest files '
-              'under /var" — and I\'ll draft the command and place it in your '
-              'terminal for you to review and run. I can also search the web. '
-              'I never run anything myself.',
+              hasTerminal
+                  ? 'Ask about the selected terminal, draft a command for its '
+                        'prompt, or search the web. Commands are never run '
+                        'automatically.'
+                  : 'Ask a general question or search the web. Select an open '
+                        'terminal above to share its output or place a command '
+                        'in its prompt.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),

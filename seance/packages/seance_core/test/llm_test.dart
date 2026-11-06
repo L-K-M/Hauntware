@@ -52,9 +52,52 @@ class FakeSearch implements SearchProvider {
   }
 }
 
+class _CloseTrackingClient extends http.BaseClient {
+  int closeCalls = 0;
+  int sends = 0;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    sends++;
+    return http.StreamedResponse(const Stream.empty(), 200);
+  }
+
+  @override
+  void close() => closeCalls++;
+}
+
 void main() {
   group('AnthropicProvider', () {
     final p = AnthropicProvider(apiKey: 'k', model: 'claude-haiku-4-5-20251001');
+
+    test('close leaves a borrowed HTTP client open', () {
+      final client = _CloseTrackingClient();
+      final provider = AnthropicProvider(apiKey: 'k', client: client);
+      provider.close();
+      provider.close();
+      expect(client.closeCalls, 0);
+    });
+
+    test('close is idempotent for an owned HTTP client', () {
+      final client = _CloseTrackingClient();
+      final provider = AnthropicProvider(
+        apiKey: 'k',
+        clientFactory: () => client,
+      );
+      provider.close();
+      provider.close();
+      expect(client.closeCalls, 1);
+    });
+
+    test('a closed provider starts no more requests', () async {
+      final client = _CloseTrackingClient();
+      final provider = AnthropicProvider(apiKey: 'k', client: client)..close();
+      await expectLater(
+        provider.chat(messages: [const LlmMessage.user('hi')]),
+        throwsStateError,
+      );
+      expect(client.sends, 0);
+    });
 
     test('buildBody splits system from turns and maps tools', () {
       final body = p.buildBody(messages: [
@@ -114,11 +157,36 @@ void main() {
     });
 
     test('surfaces API errors', () async {
+      const secret = 'server-echoed-secret';
       final client =
-          MockClient((req) async => http.Response('nope', 429));
+          MockClient((req) async => http.Response(secret, 429));
       final prov = AnthropicProvider(apiKey: 'k', client: client);
-      expect(() => prov.chat(messages: [const LlmMessage.user('hi')]),
-          throwsA(isA<http.ClientException>()));
+      expect(
+        () => prov.chat(messages: [const LlmMessage.user('hi')]),
+        throwsA(
+          isA<http.ClientException>().having(
+            (error) => error.message,
+            'message',
+            isNot(contains(secret)),
+          ),
+        ),
+      );
+    });
+
+    test('refuses an oversized response body', () async {
+      final client = MockClient((req) async => http.Response(
+            jsonEncode({
+              'content': [
+                {'type': 'text', 'text': 'x' * (2 * 1024 * 1024 + 1)},
+              ],
+            }),
+            200,
+          ));
+      final prov = AnthropicProvider(apiKey: 'k', client: client);
+      expect(
+        () => prov.chat(messages: [const LlmMessage.user('hi')]),
+        throwsA(isA<http.ClientException>()),
+      );
     });
 
     test('listModels GETs /v1/models with the api key', () async {
@@ -146,6 +214,28 @@ void main() {
   });
 
   group('OpenAiCompatibleProvider', () {
+    test('close leaves a borrowed HTTP client open', () {
+      final client = _CloseTrackingClient();
+      final provider = OpenAiCompatibleProvider(
+          baseUrl: 'http://localhost:11434/v1', client: client);
+      provider.close();
+      provider.close();
+      expect(client.closeCalls, 0);
+    });
+
+    test('a closed provider starts no more requests', () async {
+      final client = _CloseTrackingClient();
+      final provider = OpenAiCompatibleProvider(
+        baseUrl: 'http://localhost:11434/v1',
+        client: client,
+      )..close();
+      await expectLater(
+        provider.listModels(),
+        throwsStateError,
+      );
+      expect(client.sends, 0);
+    });
+
     test('omits auth header when keyless (local Ollama)', () {
       final p = OpenAiCompatibleProvider(baseUrl: 'http://localhost:11434/v1');
       final body = p.buildBody(messages: [const LlmMessage.user('hi')]);
@@ -224,6 +314,60 @@ void main() {
       expect(seen, Uri.parse('http://localhost:11434/v1/models'));
       expect(models, ['llama3.1', 'qwen2.5']);
     });
+
+    test('streamChat uses the bounded incremental SSE parser', () async {
+      final client = MockClient((req) async => http.Response(
+            'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n'
+            'data: {"choices":[{"delta":{"content":"lo"}}]}\n\n'
+            'data: [DONE]\n\n',
+            200,
+            headers: {'content-type': 'text/event-stream'},
+          ));
+      final provider = OpenAiCompatibleProvider(
+        baseUrl: 'https://api.example/v1',
+        client: client,
+      );
+      expect(await provider.streamChat(messages: const []).toList(), [
+        'Hel',
+        'lo',
+      ]);
+    });
+
+    test('streamChat rejects a split oversized SSE line', () async {
+      final client = MockClient((req) async => http.Response(
+            'data: {"choices":[{"delta":{"content":"too long"}}]}\n\n',
+            200,
+            headers: {'content-type': 'text/event-stream'},
+          ));
+      final provider = OpenAiCompatibleProvider(
+        baseUrl: 'https://api.example/v1',
+        client: client,
+        maxSseLineBytes: 12,
+      );
+      await expectLater(
+        provider.streamChat(messages: const []).drain<void>(),
+        throwsA(isA<http.ClientException>()),
+      );
+    });
+
+    test('API errors do not echo an untrusted response body', () async {
+      const secret = 'server-echoed-secret';
+      final client = MockClient((req) async => http.Response(secret, 500));
+      final provider = OpenAiCompatibleProvider(
+        baseUrl: 'https://api.example/v1',
+        client: client,
+      );
+      await expectLater(
+        provider.listModels(),
+        throwsA(
+          isA<http.ClientException>().having(
+            (error) => error.message,
+            'message',
+            isNot(contains(secret)),
+          ),
+        ),
+      );
+    });
   });
 
   group('parseCommandJson', () {
@@ -243,9 +387,13 @@ void main() {
     test('extracts JSON data lines and skips [DONE]', () async {
       final raw = [
         'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"He"}}',
+        '',
         'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"llo"}}',
+        '',
         ': keep-alive comment',
+        '',
         'data: [DONE]',
+        '',
       ].join('\n');
       final events =
           await parseSseJson(Stream.value(utf8.encode(raw))).toList();

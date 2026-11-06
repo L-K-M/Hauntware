@@ -16,16 +16,30 @@ Future<void> showCommandGenerator(BuildContext context, AppState state) {
     showTopToastIn(context, message: 'Open a connected session first.');
     return Future.value();
   }
+  final dialogKey = GlobalKey<_CommandGeneratorDialogState>();
   return showDialog<void>(
     context: context,
-    builder: (_) => _CommandGeneratorDialog(state: state, session: active),
+    builder: (_) => PopScope<void>(
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) dialogKey.currentState?._invalidateOperation();
+      },
+      child: _CommandGeneratorDialog(
+        key: dialogKey,
+        state: state,
+        session: active,
+      ),
+    ),
   );
 }
 
 class _CommandGeneratorDialog extends StatefulWidget {
   final AppState state;
   final TerminalSession session;
-  const _CommandGeneratorDialog({required this.state, required this.session});
+  const _CommandGeneratorDialog({
+    super.key,
+    required this.state,
+    required this.session,
+  });
 
   @override
   State<_CommandGeneratorDialog> createState() =>
@@ -34,8 +48,11 @@ class _CommandGeneratorDialog extends StatefulWidget {
 
 class _CommandGeneratorDialogState extends State<_CommandGeneratorDialog> {
   late final TextEditingController _input;
+  final Set<LlmProvider> _closedProviders = Set.identity();
   bool _busy = false;
   String? _error;
+  int _operation = 0;
+  LlmProvider? _activeProvider;
 
   @override
   void initState() {
@@ -52,23 +69,56 @@ class _CommandGeneratorDialogState extends State<_CommandGeneratorDialog> {
 
   @override
   void dispose() {
+    _invalidateOperation();
     _input.dispose();
     super.dispose();
+  }
+
+  bool _isCurrent(int operation) => mounted && operation == _operation;
+
+  bool get _sessionCanReceiveCommand =>
+      widget.session.isConnected &&
+      identical(widget.state.tabById(widget.session.id), widget.session);
+
+  void _closeProvider(LlmProvider provider) {
+    if (!_closedProviders.add(provider)) return;
+    closeLlmProvider(provider);
+    if (identical(_activeProvider, provider)) _activeProvider = null;
+  }
+
+  void _invalidateOperation() {
+    _operation++;
+    final provider = _activeProvider;
+    if (provider != null) _closeProvider(provider);
+  }
+
+  void _cancelAndDismiss() {
+    _invalidateOperation();
+    Navigator.of(context).pop();
   }
 
   Future<void> _generate() async {
     final request = _input.text.trim();
     if (request.isEmpty || _busy) return;
+    final operation = ++_operation;
     // Capture the root overlay now: it outlives this dialog, so the "inserted"
     // toast can show at the top after the dialog closes (a SnackBar would cover
     // the prompt the command was just inserted into).
     final overlay = Overlay.of(context, rootOverlay: true);
+    final navigator = Navigator.of(context);
     setState(() {
       _busy = true;
       _error = null;
     });
+    LlmProvider? provider;
     try {
-      final provider = await widget.state.services.buildLlmProvider();
+      provider = await widget.state.services.buildLlmProvider();
+      if (!_isCurrent(operation)) return;
+      _activeProvider = provider;
+      if (!_sessionCanReceiveCommand) {
+        setState(() => _error = 'The target session is no longer connected.');
+        return;
+      }
       final redactor = SecretRedactor(
           enabled: widget.state.services.settings.redactionEnabled);
       var prompt = request;
@@ -84,6 +134,11 @@ class _CommandGeneratorDialogState extends State<_CommandGeneratorDialog> {
       final suggestion = await provider.generateCommand(
         prompt: redactor.redact(prompt),
       );
+      if (!_isCurrent(operation)) return;
+      if (!_sessionCanReceiveCommand) {
+        setState(() => _error = 'The target session is no longer connected.');
+        return;
+      }
 
       if (suggestion.command.isEmpty) {
         // The model declined — stay open and explain why.
@@ -103,14 +158,15 @@ class _CommandGeneratorDialogState extends State<_CommandGeneratorDialog> {
       );
 
       widget.session.engine.injectInput(command);
-      if (mounted) Navigator.of(context).pop();
       _showInsertedToast(overlay, safeSuggestion);
+      navigator.pop();
     } on UnsafePasteException catch (e) {
-      setState(() => _error = e.reason);
+      if (_isCurrent(operation)) setState(() => _error = e.reason);
     } catch (e) {
-      setState(() => _error = '$e');
+      if (_isCurrent(operation)) setState(() => _error = '$e');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (provider != null) _closeProvider(provider);
+      if (_isCurrent(operation)) setState(() => _busy = false);
     }
   }
 
@@ -205,7 +261,7 @@ class _CommandGeneratorDialogState extends State<_CommandGeneratorDialog> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: _busy ? null : () => Navigator.of(context).pop(),
+                    onPressed: _cancelAndDismiss,
                     child: const Text('Cancel'),
                   ),
                   const SizedBox(width: 8),

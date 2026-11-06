@@ -19,7 +19,7 @@ dependencies:
   # lib/src/ssh/ssh_session.dart are written against this version. Re-check
   # all three on any bump.
   dartssh2: 4.1.0
-  http: ^1.2.0
+  http: ^1.5.0
   crypto: ^3.0.0
   ffi: ^2.1.0
   meta: ^1.15.0
