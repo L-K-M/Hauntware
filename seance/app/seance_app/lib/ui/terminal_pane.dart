@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -1276,6 +1277,8 @@ class _SessionView extends StatefulWidget {
 }
 
 class _SessionViewState extends State<_SessionView> {
+  static _SessionViewState? _reportedFocusOwner;
+
   /// Zoom keys. `equal` covers the unshifted key that carries "+" on most
   /// layouts, and the numpad variants cover the keypad, so ⌘+ works whether or
   /// not the user reaches for Shift. `static final`, not `const`:
@@ -1355,6 +1358,7 @@ class _SessionViewState extends State<_SessionView> {
 
   @override
   void dispose() {
+    _releaseTerminalFocus();
     _focus.removeListener(_reportTerminalFocus);
     _focus.removeListener(_hideSelectionToolbarOnBlur);
     _terminalController.removeListener(_hideSelectionToolbarWithoutSelection);
@@ -1372,11 +1376,30 @@ class _SessionViewState extends State<_SessionView> {
   /// Tell the macOS shell whether a terminal is focused, so the native Edit
   /// menu routes ⌘C/⌘V/⌘A to the terminal rather than a focused text field.
   void _reportTerminalFocus() {
-    if (Platform.isMacOS) {
+    if (!_canReportTerminalFocus) return;
+    if (_focus.hasFocus) {
+      _reportedFocusOwner = this;
+      _setNativeTerminalFocus(true);
+      return;
+    }
+    _releaseTerminalFocus();
+  }
+
+  bool get _canReportTerminalFocus =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+
+  void _releaseTerminalFocus() {
+    if (!identical(_reportedFocusOwner, this)) return;
+    _reportedFocusOwner = null;
+    _setNativeTerminalFocus(false);
+  }
+
+  static void _setNativeTerminalFocus(bool focused) {
+    unawaited(
       const MethodChannel(
         'seance/menu',
-      ).invokeMethod('setTerminalFocused', _focus.hasFocus);
-    }
+      ).invokeMethod<void>('setTerminalFocused', focused),
+    );
   }
 
   @override
