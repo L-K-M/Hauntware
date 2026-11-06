@@ -20,6 +20,7 @@ import 'services/app_settings.dart';
 import 'services/assistant_settings_sync.dart';
 import 'services/background_keep_alive.dart';
 import 'services/chat_session.dart';
+import 'services/credential_retirement.dart';
 import 'services/default_snippets.dart';
 import 'services/managed_remote_file.dart';
 import 'services/missing_credential.dart';
@@ -508,10 +509,9 @@ final class ServerCredentialChanged implements Exception {
 /// ref by hand. Dropping it out from under a server that still names it is
 /// silent credential loss the survivor only discovers at connect time.
 ///
-/// The sync coordinator no longer honours a `secret:` tombstone at all (an
-/// unsealed one is the sync server's to forge), so this is the only place the
-/// rule lives. A top-level function so it can be asserted on its own, apart
-/// from the delete that applies it.
+/// A synced credential tombstone withdraws publication without deleting local
+/// vault material, so the local delete must enforce this sharing rule too.
+/// A top-level function so it can be asserted apart from the delete.
 bool secretStillReferenced(
   String secretRef,
   Iterable<ServerConfig> servers, {
@@ -934,14 +934,29 @@ class AppState extends ChangeNotifier {
   /// Delete queued entries that no saved server still names. Deletion is
   /// idempotent, so a settings write failing after the vault write merely
   /// causes the next launch to confirm the already-completed cleanup again.
-  Future<void> _retryPendingCredentialCleanups({String? reportFailureFor}) async {
+  Future<void> _retryPendingCredentialCleanups({
+    String? reportFailureFor,
+    int? updatedAt,
+  }) async {
+    // Startup and unrelated saves must not prompt merely to retry old cleanup.
+    // An explicit credential save already owns its unlock and reports failure.
+    if (reportFailureFor == null && services.appLock.requiresAuthentication) {
+      return;
+    }
     Object? reportedCause;
     StackTrace? reportedStack;
     var changed = false;
     for (final id in services.settings.pendingCredentialCleanup.toList()) {
-      if (servers.any((server) => server.secretRef == id)) continue;
       try {
-        await services.vault.deleteSecret(id);
+        final result = await retireCredential(
+          vault: services.vault,
+          tombstones: services.tombstoneStore,
+          credentialId: id,
+          deviceId: services.settings.deviceId,
+          servers: servers,
+          updatedAt: updatedAt ?? DateTime.now().millisecondsSinceEpoch,
+        );
+        if (result == CredentialRetirement.stillReferenced) continue;
         services.settings.pendingCredentialCleanup.remove(id);
         changed = true;
       } catch (error, stackTrace) {
@@ -1101,6 +1116,7 @@ class AppState extends ChangeNotifier {
     try {
       await _retryPendingCredentialCleanups(
         reportFailureFor: clearSecretRef,
+        updatedAt: config.updatedAt,
       );
     } catch (error, stackTrace) {
       cleanupError = error;

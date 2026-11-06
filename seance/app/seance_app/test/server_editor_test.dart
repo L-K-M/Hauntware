@@ -439,7 +439,10 @@ void main() {
       await scrollTo(tester, find.widgetWithText(FilledButton, 'Save'));
       await tester.runAsync(() async {
         await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-        await waitUntil(() => state!.servers.single.secretRef == null);
+        await waitUntil(
+          () => state!.servers.single.secretRef == null &&
+              services!.settings.pendingCredentialCleanup.isEmpty,
+        );
       });
       await tester.pumpAndSettle();
 
@@ -486,7 +489,8 @@ void main() {
       await tester.runAsync(() async {
         await tester.tap(find.widgetWithText(FilledButton, 'Save'));
         await waitUntil(
-          () => state!.servers.single.secretRef != 'secret-box',
+          () => state!.servers.single.secretRef != 'secret-box' &&
+              services!.settings.pendingCredentialCleanup.isEmpty,
         );
       });
       await tester.pumpAndSettle();
@@ -543,7 +547,9 @@ void main() {
       await scrollTo(tester, find.widgetWithText(FilledButton, 'Save'));
       await tester.runAsync(() async {
         await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-        await waitUntil(() => state!.servers.single.secretRef == null);
+        await waitUntil(
+          () => state!.servers.single.secretRef == null && store.deleteCalls > 0,
+        );
       });
       await tester.pumpAndSettle();
 
