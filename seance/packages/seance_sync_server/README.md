@@ -40,6 +40,23 @@ happens only after the candidate is ready; the previous tagged image is retained
 for manual rollback too. The updater refuses concurrent runs and keeps its
 recovery bundle whenever manual recovery is required.
 
+An uncatchable interruption such as power loss or `SIGKILL` can leave the
+updater lock behind. A later run prints the recorded PID, host, user ID and
+recovery-bundle path and stops. Check the recorded host and confirm that the
+updater and its Docker operations have stopped before removing the lock;
+a PID may have been reused, so a failed local PID lookup alone is not proof.
+Inspect the running deployment and the bundle's `update-state.txt`, preserved
+Compose configuration and snapshots first. A `candidate-may-have-writes`
+phase means the candidate could have migrated the database or accepted writes;
+preserve the live volume and do not restore an older snapshot automatically.
+
+After completing recovery, remove only `pid`, `host`, `uid` and `recovery-dir`
+from the printed lock directory, then remove that empty directory with
+`rmdir`. Keep the recovery bundle until its data is no longer needed. Older
+locks may contain only `pid`; inspect the deployment and any retained bundles
+before removing those too. The default lock is
+`${TMPDIR:-/tmp}/seance-sync-update.lock`; `SEANCE_UPDATE_LOCK_DIR` overrides it.
+
 ### Moving from a standalone Séance clone
 
 The standalone `L-K-M/Seance` repository is archived, and its `./update.sh`

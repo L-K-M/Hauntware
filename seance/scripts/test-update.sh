@@ -314,6 +314,11 @@ assert_has 'No older image was started' "$tmp/production_fail/out"
     fail 'production failure did not model a write after candidate start'
 compgen -G "$tmp/production_fail/tmp/seance-update.*" >/dev/null ||
     fail 'live-database rollback discarded its recovery bundle'
+recovery_state="$(find "$tmp/production_fail/tmp" -name update-state.txt -print)"
+[[ -n "$recovery_state" ]] || fail 'manual recovery has no persisted update state'
+assert_has '^phase=candidate-may-have-writes$' "$recovery_state"
+assert_has '^data_volume=data-volume$' "$recovery_state"
+assert_has '^compose_project=seance-project$' "$recovery_state"
 
 log="$(run_case rollback_stop_fail failure)"
 assert_lacks 'run .*data-volume:/data .*:/backup:ro' "$log"
@@ -384,6 +389,12 @@ for _ in {1..100}; do
     sleep 0.05
 done
 [[ -f "$concurrent/hold" ]] || fail 'first updater did not reach its hold point'
+lock="$concurrent/tmp/seance-sync-update.lock"
+[[ -f "$lock/host" && -f "$lock/uid" && -f "$lock/recovery-dir" ]] ||
+    fail 'active updater did not persist lock owner and recovery metadata'
+recovery_bundle="$(cat "$lock/recovery-dir")"
+[[ -f "$recovery_bundle/update-state.txt" ]] ||
+    fail 'lock does not identify an inspectable recovery bundle'
 second_status=0
 PATH="$bin:/usr/bin:/bin" TEST_SCENARIO=hold_build \
 TEST_LOG="$concurrent/second.log" TEST_STATE="$concurrent/second-state" \
@@ -391,10 +402,30 @@ TEST_HOLD_MARKER="$concurrent/second-hold" TEST_RELEASE_MARKER="$concurrent/rele
 TMPDIR="$concurrent/tmp" SEANCE_UPDATE_PROBE_SECONDS=1 \
     "$ROOT/update.sh" main >"$concurrent/second.out" 2>&1 || second_status=$?
 [[ "$second_status" -ne 0 ]] || fail 'concurrent updater acquired the same lock'
-assert_has 'Another Séance update is already running' "$concurrent/second.out"
+assert_has 'A Séance updater lock already exists' "$concurrent/second.out"
+assert_has 'Recovery bundle:' "$concurrent/second.out"
 assert_lacks ' inspect ' "$concurrent/second.log"
 : >"$concurrent/release"
 wait "$first_pid" || fail 'first updater failed after lock test release'
+[[ ! -d "$lock" ]] || fail 'successful updater left its lock metadata behind'
+
+# A lock left by an uncatchable interruption must preserve recovery evidence
+# and explain the required checks instead of claiming a live owner exists.
+stale="$tmp/stale"
+mkdir -p "$stale/tmp/seance-sync-update.lock" "$stale/bundle"
+printf '%s\n' 99999999 >"$stale/tmp/seance-sync-update.lock/pid"
+printf '%s\n' "$stale/bundle" >"$stale/tmp/seance-sync-update.lock/recovery-dir"
+: >"$stale/bundle/evidence"
+stale_status=0
+PATH="$bin:/usr/bin:/bin" TEST_SCENARIO=success \
+TEST_LOG="$stale/log" TEST_STATE="$stale/state" \
+TMPDIR="$stale/tmp" SEANCE_UPDATE_PROBE_SECONDS=1 \
+    "$ROOT/update.sh" main >"$stale/out" 2>&1 || stale_status=$?
+[[ "$stale_status" -ne 0 ]] || fail 'updater silently removed a stale lock'
+assert_has 'Recovery bundle:' "$stale/out"
+assert_has 'confirm that no updater is running' "$stale/out"
+[[ -f "$stale/bundle/evidence" && -d "$stale/tmp/seance-sync-update.lock" ]] ||
+    fail 'stale-lock handling removed recovery evidence'
 
 assert_lacks 'chown -R' "$ROOT/update.sh"
 echo 'update.sh regression tests passed'

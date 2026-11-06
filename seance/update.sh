@@ -52,22 +52,51 @@ cleanup() {
         rm -rf -- "$recovery_dir"
     fi
     if [[ -n "$lock_owned" ]]; then
-        rm -f -- "$lock_dir/pid"
+        rm -f -- "$lock_dir/pid" "$lock_dir/host" "$lock_dir/uid" \
+            "$lock_dir/recovery-dir"
         rmdir -- "$lock_dir" 2>/dev/null || true
     fi
 }
 trap cleanup EXIT
 
 acquire_lock() {
-    if ! mkdir -- "$lock_dir"; then
-        echo "Another Séance update is already running." >&2
+    if ! mkdir -m 700 -- "$lock_dir"; then
+        echo "A Séance updater lock already exists." >&2
         if [[ -f "$lock_dir/pid" ]]; then
             echo "Updater PID: $(<"$lock_dir/pid")" >&2
         fi
+        if [[ -f "$lock_dir/host" ]]; then
+            echo "Updater host: $(<"$lock_dir/host")" >&2
+        fi
+        if [[ -f "$lock_dir/uid" ]]; then
+            echo "Updater user ID: $(<"$lock_dir/uid")" >&2
+        fi
+        if [[ -f "$lock_dir/recovery-dir" ]]; then
+            echo "Recovery bundle: $(<"$lock_dir/recovery-dir")" >&2
+        fi
+        echo "Before removing this lock, confirm that no updater is running" >&2
+        echo "on its recorded host and inspect the deployment and recovery bundle." >&2
+        echo "Follow the stale-lock recovery procedure in the sync server README." >&2
+        echo "Lock directory: $lock_dir" >&2
         return 1
     fi
     lock_owned=1
     printf '%s\n' "$$" >"$lock_dir/pid"
+    hostname >"$lock_dir/host"
+    id -u >"$lock_dir/uid"
+}
+
+# Persist the phase before operations that can stop production or migrate its
+# database. An uncatchable interruption loses shell variables, so manual
+# recovery needs this evidence even when no signal/EXIT trap could run.
+record_recovery_state() {
+    local phase="$1"
+    printf 'run_id=%s\nphase=%s\nold_commit=%s\nnew_commit=%s\ncompose_project=%s\ndata_volume=%s\nold_image=%s\nrollback_tag=%s\ncandidate_tag=%s\n' \
+        "$run_id" "$phase" "${old_commit:-}" "${new_commit:-}" \
+        "${old_project:-}" "$data_volume" "$old_image" "$rollback_tag" \
+        "$candidate_tag" >"$recovery_dir/update-state.tmp"
+    chmod 600 "$recovery_dir/update-state.tmp"
+    mv -- "$recovery_dir/update-state.tmp" "$recovery_dir/update-state.txt"
 }
 
 normalize_endpoint() {
@@ -384,6 +413,8 @@ main() {
     acquire_lock
     recovery_dir="$(mktemp -d "${TMPDIR:-/tmp}/seance-update.XXXXXX")"
     chmod 700 "$recovery_dir"
+    printf '%s\n' "$recovery_dir" >"$lock_dir/recovery-dir"
+    record_recovery_state locked
 
     local branch old_commit old_container old_project new_commit endpoint
     branch="${1:-$(git rev-parse --abbrev-ref HEAD)}"
@@ -405,6 +436,12 @@ main() {
         echo "Could not identify the running image, Compose project, or /data volume." >&2
         return 1
     fi
+    # Keep addressing the discovered production project even if the fetched
+    # Compose file changes its name or project-name environment defaults.
+    compose=(docker compose --project-name "$old_project" -f "$COMPOSE_FILE")
+    if [[ -f "$ENV_FILE" ]]; then
+        compose+=(--env-file "$ENV_FILE")
+    fi
     rollback_tag="seance-sync:rollback-$run_id"
     docker image tag "$old_image" "$rollback_tag"
     old_compose_file="$recovery_dir/rollback-compose.yml"
@@ -425,15 +462,20 @@ main() {
     fi
     new_commit="$(git rev-parse HEAD)"
     candidate_tag="seance-sync:candidate-${new_commit:0:12}-$run_id"
+    record_recovery_state building
 
     echo "==> Building candidate ${candidate_tag}…"
     SEANCE_IMAGE="$candidate_tag" "${compose[@]}" build --pull
 
+    record_recovery_state preflight-snapshot
     snapshot_for_preflight
+    record_recovery_state preflight
     preflight_candidate
+    record_recovery_state replacement-snapshot
     snapshot_for_replacement
 
     echo "==> Creating candidate deployment…"
+    record_recovery_state replacing
     replacement_started=1
     SEANCE_IMAGE="$candidate_tag" "${compose[@]}" up \
         --no-start --remove-orphans --no-build
@@ -448,6 +490,7 @@ main() {
         return 1
     fi
     docker image tag "$candidate_tag" seance-sync:latest
+    record_recovery_state candidate-may-have-writes
     candidate_live=1
     SEANCE_IMAGE="$candidate_tag" "${compose[@]}" start "$SERVICE"
     endpoint="$(published_endpoint)"
