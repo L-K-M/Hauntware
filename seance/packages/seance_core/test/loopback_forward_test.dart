@@ -41,14 +41,23 @@ Future<String> _ask(int port, String text, {bool resetIsEmpty = false}) async {
     await socket.close();
     return utf8.decode(await socket.expand((bytes) => bytes).toList());
   } on SocketException catch (error) {
-    // Darwin reports the forward destroying an accepted-but-refused relay as
-    // ECONNRESET (error code 54), while other hosts surface the same outcome
-    // as an empty EOF. Socket.connect already succeeded, so this cannot hide
-    // a dead listener.
-    if (resetIsEmpty && Platform.isMacOS && error.osError?.errorCode == 54) {
+    // Destroying an accepted-but-refused relay can surface as ECONNRESET
+    // instead of EOF. Accept only that platform's reset code after connect
+    // has succeeded; other socket errors still fail the test.
+    final resetCode = switch (Platform.operatingSystem) {
+      'macos' || 'ios' => 54,
+      'linux' || 'android' => 104,
+      'windows' => 10054,
+      _ => null,
+    };
+    if (resetIsEmpty &&
+        resetCode != null &&
+        error.osError?.errorCode == resetCode) {
       return '';
     }
     rethrow;
+  } finally {
+    socket.destroy();
   }
 }
 
