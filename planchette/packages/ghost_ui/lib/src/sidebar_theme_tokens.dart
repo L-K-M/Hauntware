@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 ///   hoverFill: chrome.hoverFill,
 ///   capsuleFill: chrome.capsuleFill,
 ///   inactiveSelectionFill: chrome.inactiveSelectionFill,
+///   indicator: chrome.sidebarIndicator,
 ///   secondaryText: chrome.secondaryText,
 ///   sidebarRowExtent: chrome.sidebarRowExtent,
 ///   cornerScale: chrome.cornerScale,
@@ -39,6 +40,7 @@ final class SidebarThemeTokens extends ThemeExtension<SidebarThemeTokens> {
     required this.hoverFill,
     required this.capsuleFill,
     required this.inactiveSelectionFill,
+    this.indicator,
     required this.secondaryText,
     required this.sidebarRowExtent,
     this.cornerScale = 1,
@@ -59,6 +61,10 @@ final class SidebarThemeTokens extends ThemeExtension<SidebarThemeTokens> {
 
   /// The selected row's pill and the density switch's chosen half.
   final Color inactiveSelectionFill;
+
+  /// Section accents, focus rings and drop indicators on the rail. Null
+  /// preserves the original contract and falls back to ColorScheme.primary.
+  final Color? indicator;
 
   /// Captions: item counts, chevrons, subtitles, icons at rest.
   final Color secondaryText;
@@ -121,6 +127,7 @@ final class SidebarThemeTokens extends ThemeExtension<SidebarThemeTokens> {
     Color? hoverFill,
     Color? capsuleFill,
     Color? inactiveSelectionFill,
+    Color? indicator,
     Color? secondaryText,
     double? sidebarRowExtent,
     double? cornerScale,
@@ -132,6 +139,7 @@ final class SidebarThemeTokens extends ThemeExtension<SidebarThemeTokens> {
       capsuleFill: capsuleFill ?? this.capsuleFill,
       inactiveSelectionFill:
           inactiveSelectionFill ?? this.inactiveSelectionFill,
+      indicator: indicator ?? this.indicator,
       secondaryText: secondaryText ?? this.secondaryText,
       sidebarRowExtent: sidebarRowExtent ?? this.sidebarRowExtent,
       cornerScale: cornerScale ?? this.cornerScale,
@@ -155,6 +163,7 @@ final class SidebarThemeTokens extends ThemeExtension<SidebarThemeTokens> {
         other.inactiveSelectionFill,
         t,
       )!,
+      indicator: Color.lerp(indicator, other.indicator, t),
       secondaryText: Color.lerp(secondaryText, other.secondaryText, t)!,
       // Linear like the colours: a stepped extent would snap mid-way
       // through MaterialApp's theme animation while everything fades.

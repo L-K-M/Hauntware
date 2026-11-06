@@ -910,6 +910,7 @@ class _EditorTabChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final chrome = SeanceChrome.of(context, seanceThemeStyle);
     final config = tab.server;
     final dirty = tab.dirty.value;
     return _ChipShell(
@@ -926,7 +927,7 @@ class _EditorTabChip extends StatelessWidget {
       leading: Icon(
         Icons.edit_document,
         size: 13,
-        color: dirty ? scheme.primary : scheme.onSurfaceVariant,
+        color: dirty ? chrome.headerIndicator : scheme.onSurfaceVariant,
       ),
       dirty: dirty,
     );

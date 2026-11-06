@@ -8211,6 +8211,22 @@
   "@appearanceAccent": {
     "description": "Appearance tab: the accent colour row."
   },
+  "appearanceAccentAdjusted": "Low contrast: links and indicators use an adjusted colour.",
+  "@appearanceAccentAdjusted": {
+    "description": "Appearance tab: notice that a chosen accent needs contrast-safe functional tones."
+  },
+  "appearanceChosenAccentPreview": "Chosen accent",
+  "@appearanceChosenAccentPreview": {
+    "description": "Appearance tab: accessible label for the chosen accent preview."
+  },
+  "appearanceAdjustedAccentPreview": "Adjusted interface colour",
+  "@appearanceAdjustedAccentPreview": {
+    "description": "Appearance tab: accessible label for the adjusted functional accent preview."
+  },
+  "appearanceUseAdjustedAccent": "Use adjusted colour",
+  "@appearanceUseAdjustedAccent": {
+    "description": "Appearance tab: replaces a low-contrast accent with the suggested accessible colour."
+  },
   "appearanceSlotSurface": "Surface",
   "@appearanceSlotSurface": {
     "description": "Appearance tab: name of a colour slot."
