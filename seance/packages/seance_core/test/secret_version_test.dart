@@ -31,6 +31,8 @@ void main() {
     original.copyWith(value: 'other PEM'),
     original.copyWith(kind: SecretKind.password),
     original.copyWith(keyPassphrase: 'other phrase'),
+    original.copyWith(identityFilePath: '/keys/deploy'),
+    original.copyWith(identityFilePassphrase: 'file phrase'),
     const Secret(id: 'secret', kind: SecretKind.privateKey, value: 'PEM'),
   ]) {
     test('changing credential material advances a timestamp behind its peer '

@@ -20,6 +20,7 @@ import 'services/app_settings.dart';
 import 'services/assistant_settings_sync.dart';
 import 'services/background_keep_alive.dart';
 import 'services/chat_session.dart';
+import 'services/credential_retirement.dart';
 import 'services/default_snippets.dart';
 import 'services/managed_remote_file.dart';
 import 'services/missing_credential.dart';
@@ -458,6 +459,49 @@ class SourceServerChanged implements Exception {
       'deleted, or it now holds a different credential. Nothing was created.';
 }
 
+/// The config no longer references a credential, but removing the now-unused
+/// vault entry failed. The server save is durable and the entry remains in a
+/// device-local pending-cleanup set that startup and later saves retry.
+final class CredentialCleanupException implements Exception {
+  const CredentialCleanupException(this.credentialId, this.cause);
+
+  final String credentialId;
+  final Object cause;
+
+  @override
+  String toString() =>
+      'The server was saved, but its old credential could not be removed: '
+      '$cause';
+}
+
+/// The credential reference an editor observed before starting an asynchronous
+/// save. Checked inside the mutation queue, immediately before any vault or
+/// config write, so a concurrent sync or editor cannot be overwritten after
+/// the UI's earlier conflict check has already passed.
+final class ServerCredentialPrecondition {
+  const ServerCredentialPrecondition({
+    required this.serverId,
+    required this.secretRef,
+    required this.secret,
+  });
+
+  final String serverId;
+  final String? secretRef;
+
+  /// The exact entry read while planning the save. Checking only [secretRef]
+  /// cannot see a sync or older editor replacing material under the same id.
+  final Secret? secret;
+}
+
+final class ServerCredentialChanged implements Exception {
+  const ServerCredentialChanged();
+
+  @override
+  String toString() =>
+      'This server\'s credential changed while it was being saved. Close and '
+      'reopen the editor; nothing from this save was written.';
+}
+
 /// Whether any server other than [excludingId] still points at [secretRef].
 ///
 /// Deleting a server drops its vault entry, and nothing stops two configs
@@ -466,15 +510,29 @@ class SourceServerChanged implements Exception {
 /// ref by hand. Dropping it out from under a server that still names it is
 /// silent credential loss the survivor only discovers at connect time.
 ///
-/// The sync coordinator no longer honours a `secret:` tombstone at all (an
-/// unsealed one is the sync server's to forge), so this is the only place the
-/// rule lives. A top-level function so it can be asserted on its own, apart
-/// from the delete that applies it.
+/// A synced credential tombstone withdraws publication without deleting local
+/// vault material, so the local delete must enforce this sharing rule too.
+/// A top-level function so it can be asserted apart from the delete.
 bool secretStillReferenced(
   String secretRef,
   Iterable<ServerConfig> servers, {
   required String excludingId,
 }) => servers.any((s) => s.id != excludingId && s.secretRef == secretRef);
+
+/// Exact equality for a credential snapshot used as a write precondition.
+/// [Secret] deliberately has identity equality so plaintext is never folded
+/// into a generic value object's logs or diagnostics.
+bool sameSecretSnapshot(Secret? left, Secret? right) {
+  if (identical(left, right)) return true;
+  if (left == null || right == null) return false;
+  return left.id == right.id &&
+      left.kind == right.kind &&
+      left.value == right.value &&
+      left.updatedAt == right.updatedAt &&
+      left.keyPassphrase == right.keyPassphrase &&
+      left.identityFilePath == right.identityFilePath &&
+      left.identityFilePassphrase == right.identityFilePassphrase;
+}
 
 /// Opens a terminal's SSH session through [manager]. The app connects for
 /// real ([SshSessionManager.connect]); a test replays a handshake instead,
@@ -699,6 +757,8 @@ class AppState extends ChangeNotifier {
     String? draftPrivateKey,
     String? draftKeyPassphrase,
     IdentityFileBookmark? draftIdentityBookmark,
+    CredentialEditAction? draftCredentialAction,
+    KeyPassphraseAction? draftPassphraseAction,
     SshConnectionLog? log,
   }) {
     return runConnectionTest(
@@ -709,6 +769,8 @@ class AppState extends ChangeNotifier {
         draftPrivateKey: draftPrivateKey,
         draftKeyPassphrase: draftKeyPassphrase,
         draftIdentityBookmark: draftIdentityBookmark,
+        draftCredentialAction: draftCredentialAction,
+        draftPassphraseAction: draftPassphraseAction,
       ),
       authenticate: liveHostAuthenticator(
         // Not a verifier: liveHostAuthenticator wraps this in an
@@ -805,6 +867,7 @@ class AppState extends ChangeNotifier {
     // app can be backgrounded mid-handshake right after opening a tab.
     _keepAlive.setEnabled(services.settings.keepSessionsAliveInBackground);
     servers = await services.configStore.listServers();
+    await _retryPendingCredentialCleanups();
     // Managed edits are a side feature: a checkout folder the store cannot
     // read costs the restored edit tabs, never startup. The local copies stay
     // on disk, and the store retries on its next use.
@@ -856,6 +919,83 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Persist a cleanup intention before the config can stop naming [id].
+  /// If settings cannot be made durable, the edit has not started and is
+  /// refused rather than risking an orphan that no later launch knows about.
+  Future<void> _queueCredentialCleanup(String id) async {
+    if (!services.settings.pendingCredentialCleanup.add(id)) return;
+    try {
+      await services.saveSettings();
+    } catch (_) {
+      services.settings.pendingCredentialCleanup.remove(id);
+      rethrow;
+    }
+  }
+
+  /// Delete queued entries that no saved server still names. Deletion is
+  /// idempotent, so a settings write failing after the vault write merely
+  /// causes the next launch to confirm the already-completed cleanup again.
+  Future<void> _retryPendingCredentialCleanups({
+    String? reportFailureFor,
+    int? updatedAt,
+  }) async {
+    // Startup and unrelated saves must not prompt merely to retry old cleanup.
+    // An explicit credential save already owns its unlock and reports failure.
+    if (reportFailureFor == null && services.appLock.requiresAuthentication) {
+      return;
+    }
+    Object? reportedCause;
+    StackTrace? reportedStack;
+    var changed = false;
+    for (final id in services.settings.pendingCredentialCleanup.toList()) {
+      try {
+        final result = await retireCredential(
+          vault: services.vault,
+          tombstones: services.tombstoneStore,
+          credentialId: id,
+          deviceId: services.settings.deviceId,
+          servers: servers,
+          updatedAt: updatedAt ?? DateTime.now().millisecondsSinceEpoch,
+        );
+        if (result == CredentialRetirement.stillReferenced) continue;
+        services.settings.pendingCredentialCleanup.remove(id);
+        changed = true;
+      } catch (error, stackTrace) {
+        developer.log(
+          'Could not remove unreferenced credential $id; cleanup remains '
+          'queued',
+          name: 'seance.app',
+          level: 900,
+          error: error,
+          stackTrace: stackTrace,
+        );
+        if (id == reportFailureFor) {
+          reportedCause = error;
+          reportedStack = stackTrace;
+        }
+      }
+    }
+    if (changed) {
+      try {
+        await services.saveSettings();
+      } catch (error, stackTrace) {
+        developer.log(
+          'Could not persist completed credential cleanup',
+          name: 'seance.app',
+          level: 900,
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+    if (reportedCause != null) {
+      Error.throwWithStackTrace(
+        CredentialCleanupException(reportFailureFor!, reportedCause),
+        reportedStack!,
+      );
+    }
+  }
+
   /// Recompute whether the assistant is usable: a key-based provider needs a
   /// stored API key; a local OpenAI-compatible endpoint (Ollama, LM Studio)
   /// works keyless as long as a base URL is set. Keystore errors read as
@@ -888,14 +1028,21 @@ class AppState extends ChangeNotifier {
   /// [identityFileBookmark] is the final, device-local security-scope grant
   /// for the server's identity file: a value stores it, null clears any stored
   /// one (the editor owns the keep-or-drop decision, so this always applies).
+  /// [clearSecretRef] removes an old entry after the config is durable and no
+  /// other server references it. [credentialPrecondition] makes an editor's
+  /// copy-on-write save conditional on the ref it originally observed.
   Future<void> saveServer(
     ServerConfig config, {
     Secret? secret,
+    String? clearSecretRef,
+    ServerCredentialPrecondition? credentialPrecondition,
     IdentityFileBookmark? identityFileBookmark,
   }) => _mutate(
     () => _saveServerNow(
       config,
       secret: secret,
+      clearSecretRef: clearSecretRef,
+      credentialPrecondition: credentialPrecondition,
       identityFileBookmark: identityFileBookmark,
     ),
   );
@@ -904,8 +1051,36 @@ class AppState extends ChangeNotifier {
   Future<void> _saveServerNow(
     ServerConfig config, {
     Secret? secret,
+    String? clearSecretRef,
+    ServerCredentialPrecondition? credentialPrecondition,
     IdentityFileBookmark? identityFileBookmark,
   }) async {
+    if (clearSecretRef != null && clearSecretRef == config.secretRef) {
+      throw ArgumentError.value(
+        clearSecretRef,
+        'clearSecretRef',
+        'cannot remove the credential the saved server still references',
+      );
+    }
+    if (credentialPrecondition != null) {
+      final current = await services.configStore.getServer(
+        credentialPrecondition.serverId,
+      );
+      if (current == null ||
+          current.secretRef != credentialPrecondition.secretRef) {
+        throw const ServerCredentialChanged();
+      }
+      final ref = credentialPrecondition.secretRef;
+      final currentSecret = ref == null
+          ? null
+          : await services.vault.getSecret(ref);
+      if (!sameSecretSnapshot(currentSecret, credentialPrecondition.secret)) {
+        throw const ServerCredentialChanged();
+      }
+    }
+    if (clearSecretRef != null) {
+      await _queueCredentialCleanup(clearSecretRef);
+    }
     if (secret != null) {
       await services.vault.putLocalSecret(secret, updatedAt: config.updatedAt);
     }
@@ -937,9 +1112,26 @@ class AppState extends ChangeNotifier {
       await services.saveSettings();
     }
     servers = await services.configStore.listServers();
+    Object? cleanupError;
+    StackTrace? cleanupStack;
+    try {
+      await _retryPendingCredentialCleanups(
+        reportFailureFor: clearSecretRef,
+        updatedAt: config.updatedAt,
+      );
+    } catch (error, stackTrace) {
+      cleanupError = error;
+      cleanupStack = stackTrace;
+    }
     services.probe.updateServers(servers);
     notifyListeners();
     _scheduleAutoSync();
+    if (cleanupError != null) {
+      Error.throwWithStackTrace(
+        cleanupError,
+        cleanupStack!,
+      );
+    }
   }
 
   /// Duplicate [source] as a new server and return the copy.

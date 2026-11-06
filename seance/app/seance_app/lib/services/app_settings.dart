@@ -207,6 +207,12 @@ class AppSettings {
   /// fall back to the server's identity file *path*.
   Map<String, IdentityFileBookmark> identityFileBookmarks;
 
+  /// Vault entries a completed server edit no longer needs, but whose delete
+  /// has not yet been confirmed. Device-local and persisted before the config
+  /// changes, so a locked keyring or process exit cannot turn a failed cleanup
+  /// into a permanent invisible credential.
+  Set<String> pendingCredentialCleanup;
+
   /// Server-list group sections the user has folded away, by
   /// [serverGroupKey]. Device-local for the same reason the pane widths are:
   /// which sections are folded is a property of the window in front of you,
@@ -330,6 +336,7 @@ class AppSettings {
     Map<String, List<String>>? remotePathBookmarks,
     Map<String, bool>? remoteShowHidden,
     Map<String, IdentityFileBookmark>? identityFileBookmarks,
+    Set<String>? pendingCredentialCleanup,
     Set<String>? collapsedServerGroups,
     Set<String>? pinnedServerIds,
     Set<String>? untrustedPinLocators,
@@ -358,6 +365,7 @@ class AppSettings {
        remotePathBookmarks = remotePathBookmarks ?? {},
        remoteShowHidden = remoteShowHidden ?? {},
        identityFileBookmarks = identityFileBookmarks ?? {},
+       pendingCredentialCleanup = pendingCredentialCleanup ?? {},
        collapsedServerGroups = collapsedServerGroups ?? {},
        pinnedServerIds = pinnedServerIds ?? {},
        untrustedPinLocators = untrustedPinLocators ?? {},
@@ -401,6 +409,7 @@ class AppSettings {
     'remoteShowHidden': remoteShowHidden,
     'identityFileBookmarks': identityFileBookmarks
         .map((id, entry) => MapEntry(id, entry.toJson())),
+    'pendingCredentialCleanup': pendingCredentialCleanup.toList()..sort(),
     // Sorted so an unchanged set writes byte-identical JSON — the settings
     // file is rewritten on every save, and a set's iteration order would
     // otherwise make each one look like a change.
@@ -466,6 +475,7 @@ class AppSettings {
     remotePathBookmarks: _bookmarkMap(json['remotePathBookmarks']),
     remoteShowHidden: _boolMap(json['remoteShowHidden']),
     identityFileBookmarks: _identityBookmarkMap(json['identityFileBookmarks']),
+    pendingCredentialCleanup: _stringSet(json['pendingCredentialCleanup']),
     collapsedServerGroups: _stringSet(json['collapsedServerGroups']),
     pinnedServerIds: _stringSet(json['pinnedServerIds']),
     untrustedPinLocators: _stringSet(json['untrustedPinLocators']),

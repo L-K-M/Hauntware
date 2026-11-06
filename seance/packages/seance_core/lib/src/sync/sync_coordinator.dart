@@ -816,18 +816,11 @@ class SyncCoordinator {
   /// way — one millisecond past the retraction, a deterministic function of a
   /// date already on the record, so it settles instead of bidding.
   ///
-  /// [servers] is the list [applyToStores] already read, not a second read of
-  /// the same store: publishing eligibility must be the rule [collectLocal]
-  /// applies, and two reads could straddle a write and disagree with it.
-  ///
-  /// What that costs, accepted rather than left to be rediscovered: a peer's
-  /// config tombstone applied earlier in the same batch has already deleted a
-  /// server that is still in this list, so its credential can be revived and
-  /// published once as an orphan no config names. It is the same one-round
-  /// view [collectLocal] published under a moment earlier, it corrects itself
-  /// on the next round's read, and the alternative — re-reading the store
-  /// here — buys that at the price of the two rules disagreeing, which is the
-  /// failure this list exists to prevent.
+  /// [servers] is the effective list [applyToStores] maintains while applying
+  /// this batch. It includes live config writes and excludes config
+  /// tombstones without a second store read that could straddle another
+  /// mutation. A credential therefore revives only when a config survives the
+  /// same batch and [collectLocal] would publish it on the next round.
   Future<int> _reviveSecrets(
     List<(String, int)> refs,
     List<ServerConfig> servers,
@@ -917,6 +910,7 @@ class SyncCoordinator {
     // is still pushing because it has not seen that tombstone yet. Its
     // credential is shielded on the same grounds, in [_applySecretRecords].
     final servers = await configStore.listServers();
+    final effectiveServers = {for (final server in servers) server.id: server};
     final excluded = <String>{
       for (final server in servers)
         if (server.excludeFromSync) server.id,
@@ -1034,23 +1028,18 @@ class SyncCoordinator {
               continue;
             }
             await configStore.deleteServer(dec.id);
+            effectiveServers.remove(dec.id);
             continue;
           }
-          // Our own retraction of a credential: the mirror of the config
-          // revival above, and the other half of it — re-including a server
-          // republishes its config, but the credential record stays withdrawn
-          // from the account behind a tombstone the credential's own stamp
-          // cannot beat. The vault still holds it (a `secret:` tombstone is
-          // never honoured against the vault — see the routing comment
-          // above), so this is about the copy peers can reach, not about this
-          // device's own.
-          //
-          // Only this device's own retraction, exactly as for a config and
-          // for the same reason: a peer's tombstone says a server *they*
-          // excluded shared this credential, which is not a decision this
-          // device can read as reversed. What that leaves is the documented
-          // orphan residual, not a credential this device loses.
-          if (dec.id.startsWith(_secretIdPrefix) && dec.deviceId == deviceId) {
+          // A credential retraction yields when this device still publishes a
+          // config that names the entry. That includes peer tombstones: a
+          // concurrent peer edit can retire the old credential while this
+          // device's newer config still wins LWW with the old reference. If
+          // the surviving vault material could not outbid that tombstone, the
+          // converged config would name a credential no new device can fetch.
+          // [_reviveSecrets] checks publishability, so a true orphan remains
+          // withdrawn and no tombstone reaches the vault.
+          if (dec.id.startsWith(_secretIdPrefix)) {
             revivedSecrets.add((
               dec.id.substring(_secretIdPrefix.length),
               dec.updatedAt,
@@ -1112,6 +1101,7 @@ class SyncCoordinator {
               continue;
             }
             await configStore.putServer(pulled);
+            effectiveServers[pulled.id] = pulled;
           case RecordKind.hostKey:
             hostKeyRecords.add(dec);
           case RecordKind.secret:
@@ -1302,7 +1292,11 @@ class SyncCoordinator {
     final redated = redatedRemovals +
         await rescheduleOutranked(outranked, skip) +
         await _revive(revived, skip) +
-        await _reviveSecrets(revivedSecrets, servers, skip);
+        await _reviveSecrets(
+          revivedSecrets,
+          effectiveServers.values.toList(growable: false),
+          skip,
+        );
     if (skippedIds.isNotEmpty) {
       developer.log(
         'Skipped synced records: ${skippedIds.join(', ')}',

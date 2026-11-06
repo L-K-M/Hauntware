@@ -16,6 +16,8 @@ void main() {
       kind: SecretKind.privateKey,
       value: 'PEM',
       keyPassphrase: 'phrase',
+      identityFilePath: '/keys/deploy',
+      identityFilePassphrase: 'file phrase',
       updatedAt: 42,
     );
     final rekeyed = original.copyWith(id: 'copy');
@@ -24,6 +26,14 @@ void main() {
     // field the fixture sets. Pin that for the nullable one, which is the
     // field a serializer is most likely to omit.
     expect(original.toJson(), containsPair('keyPassphrase', 'phrase'));
+    expect(
+      original.toJson(),
+      containsPair('identityFilePath', '/keys/deploy'),
+    );
+    expect(
+      original.toJson(),
+      containsPair('identityFilePassphrase', 'file phrase'),
+    );
     expect(original.toJson(), containsPair('updatedAt', 42));
     expect({...rekeyed.toJson(), 'id': original.id}, original.toJson());
     // Directly too, which survives a serializer omission: a field dropped from
@@ -33,6 +43,11 @@ void main() {
     expect(rekeyed.kind, original.kind);
     expect(rekeyed.value, original.value);
     expect(rekeyed.keyPassphrase, original.keyPassphrase);
+    expect(rekeyed.identityFilePath, original.identityFilePath);
+    expect(
+      rekeyed.identityFilePassphrase,
+      original.identityFilePassphrase,
+    );
     expect(rekeyed.updatedAt, original.updatedAt);
     expect(Secret.fromJson(original.toJson()).updatedAt, 42);
     // And the other half of the contract: a parameter that is passed has to
@@ -49,6 +64,20 @@ void main() {
     expect(original.copyWith(kind: otherKind).kind, otherKind);
     expect(original.copyWith(keyPassphrase: 'rekeyed').keyPassphrase,
         'rekeyed');
+    expect(
+      original.copyWith(clearKeyPassphrase: true).keyPassphrase,
+      isNull,
+    );
+    expect(
+      original
+          .copyWith(clearIdentityFilePassphrase: true)
+          .identityFilePassphrase,
+      isNull,
+    );
+    expect(
+      original.copyWith(clearIdentityFilePath: true).identityFilePath,
+      isNull,
+    );
     expect(original.copyWith(updatedAt: 43).updatedAt, 43);
   });
 

@@ -24,16 +24,14 @@ abstract class SnippetStore {
   Future<void> deleteSnippet(String id);
 }
 
-/// Durable list of deletion tombstones awaiting propagation to the sync server.
+/// Durable local deletion intents awaiting propagation to the sync server.
 ///
-/// [SyncCoordinator] rebuilds its record mirror from a full pull each round, so
-/// a deleted domain object leaves nothing for the next round to notice — its
-/// still-live record simply returns from the server and is re-adopted, which is
-/// the "deleted servers reappear" bug. An entry recorded here (an
-/// [EncryptedRecord] with `deleted: true` and an empty blob) is republished as a
-/// dirty record each round so the delete is pushed and last-write-wins carries
-/// it to every device, then dropped once the server holds it. Keyed by record
-/// id.
+/// Dropping a domain object does not itself record an intended sync deletion.
+/// An entry here ([EncryptedRecord] with `deleted: true` and an empty blob)
+/// makes that intent durable before its server, snippet, or retired credential
+/// disappears locally. [SyncCoordinator] seals the intent under the account
+/// key and stages it in its durable mirror, then prunes the intent once the
+/// server has accepted the deletion. Keyed by record id.
 ///
 /// [add] is monotonic: re-adding an id keeps whichever tombstone has the higher
 /// `updatedAt`, so a retry or double-delete that recomputes an older stamp
@@ -208,7 +206,9 @@ class SecretVault {
     if (existing != null &&
         existing.kind == secret.kind &&
         existing.value == secret.value &&
-        existing.keyPassphrase == secret.keyPassphrase) {
+        existing.keyPassphrase == secret.keyPassphrase &&
+        existing.identityFilePath == secret.identityFilePath &&
+        existing.identityFilePassphrase == secret.identityFilePassphrase) {
       return;
     }
     final stamp = existing != null && existing.updatedAt >= updatedAt

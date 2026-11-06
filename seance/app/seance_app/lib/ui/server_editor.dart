@@ -128,6 +128,12 @@ class _ServerEditorState extends State<_ServerEditor> {
   late bool _syncSecret;
   late bool _excludeFromSync;
   bool _busy = false;
+  late CredentialEditAction _credentialAction;
+  KeyPassphraseAction _passphraseAction = KeyPassphraseAction.clear;
+  Secret? _storedCredential;
+  Object? _storedCredentialError;
+  bool _storedCredentialLoaded = false;
+  bool _credentialIntentTouched = false;
 
   /// The id a *new* server will be saved under, minted once rather than per
   /// save so a test connection and the save that follows describe one server,
@@ -172,6 +178,11 @@ class _ServerEditorState extends State<_ServerEditor> {
     _auth = e?.authMethod ?? AuthMethod.agent;
     _keyPath.text = e?.identityFilePath ?? '';
     _referenceKeyFile = e?.identityFilePath != null;
+    _credentialAction = e?.secretRef == null
+        ? (_auth == AuthMethod.agent
+              ? CredentialEditAction.clear
+              : CredentialEditAction.replace)
+        : CredentialEditAction.keep;
     _loginScript.text = e?.loginScript ?? '';
     if (e != null) {
       // Load the stored grant with the path it was actually minted for (which
@@ -186,9 +197,165 @@ class _ServerEditorState extends State<_ServerEditor> {
     // passwords & keys" is on); existing servers keep their stored choice.
     _syncSecret = e?.syncSecret ?? true;
     _excludeFromSync = e?.excludeFromSync ?? false;
+    if (e?.secretRef == null) {
+      _storedCredentialLoaded = true;
+    } else {
+      _loadStoredCredential(e!.secretRef!);
+    }
     for (final field in _connectionFields) {
       field.addListener(_dropTestResult);
     }
+  }
+
+  Future<void> _loadStoredCredential(String ref) async {
+    try {
+      final secret = await widget.state.services.vault.getSecret(ref);
+      if (!mounted) return;
+      setState(() {
+        _storedCredential = secret;
+        _storedCredentialLoaded = true;
+        if (secret?.kind == SecretKind.privateKey &&
+            !_credentialIntentTouched) {
+          _passphraseAction = KeyPassphraseAction.keep;
+        }
+        if (secret == null &&
+            _credentialAction == CredentialEditAction.keep &&
+            !_credentialIntentTouched) {
+          _credentialAction = _auth == AuthMethod.agent
+              ? CredentialEditAction.clear
+              : CredentialEditAction.replace;
+        }
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _storedCredentialError = error;
+        _storedCredentialLoaded = true;
+      });
+    }
+  }
+
+  static String _secretKindLabel(SecretKind kind) => switch (kind) {
+    SecretKind.password => 'password',
+    SecretKind.privateKey => 'private key',
+  };
+
+  SecretKind? get _expectedSecretKind => switch (_auth) {
+    AuthMethod.password => SecretKind.password,
+    AuthMethod.privateKey => SecretKind.privateKey,
+    AuthMethod.agent => null,
+  };
+
+  String? _validateCredentialAction(CredentialEditAction? action) {
+    if (action == null) return 'Choose what to do with the saved credential.';
+    if (action == CredentialEditAction.replace && _auth == AuthMethod.agent) {
+      return 'ssh-agent authentication has no credential to replace.';
+    }
+    if (action != CredentialEditAction.keep) return null;
+    if (!_storedCredentialLoaded) {
+      return 'Wait for the saved credential to load.';
+    }
+    if (_storedCredentialError != null) {
+      return 'The saved credential could not be read.';
+    }
+    final stored = _storedCredential;
+    if (stored == null) {
+      return 'The saved credential is missing on this device.';
+    }
+    final expected = _expectedSecretKind;
+    if (expected == null) {
+      return 'ssh-agent authentication cannot keep a saved credential.';
+    }
+    if (stored.kind != expected) {
+      final expectedLabel = expected == SecretKind.privateKey
+          ? 'private-key'
+          : _secretKindLabel(expected);
+      return 'A saved ${_secretKindLabel(stored.kind)} cannot be kept for '
+          '$expectedLabel auth.';
+    }
+    if (expected == SecretKind.privateKey) {
+      if (!_referenceKeyFile && stored.value.isEmpty) {
+        return 'There is no saved pasted private key to keep.';
+      }
+      if (_referenceKeyFile) {
+        final path = _keyPath.text.trim();
+        final sourceBound = stored.identityFilePath != null ||
+            stored.identityFilePassphrase != null;
+        final savedPath = sourceBound
+            ? stored.identityFilePath
+            : widget.existing?.identityFilePath;
+        if (savedPath != path) {
+          return 'The saved passphrase belongs to a different identity file.';
+        }
+      }
+    }
+    return null;
+  }
+
+  List<Widget> _credentialEditFields() {
+    if (widget.existing?.secretRef == null) return const [];
+    final String status;
+    if (!_storedCredentialLoaded) {
+      status = 'Reading saved credential…';
+    } else if (_storedCredentialError != null) {
+      status = 'Saved credential: unavailable';
+    } else if (_storedCredential == null) {
+      status = 'Saved credential: missing on this device';
+    } else {
+      status =
+          'Saved credential: '
+          '${_secretKindLabel(_storedCredential!.kind)}';
+    }
+    return [
+      Text(
+        status,
+        style: Theme.of(context).textTheme.bodySmall
+            ?.copyWith(color: Theme.of(context).hintColor),
+      ),
+      const SizedBox(height: 8),
+      KeyedSubtree(
+        key: const ValueKey('credential-edit-action'),
+        child: DropdownButtonFormField<CredentialEditAction>(
+          // Recreate the FormField when code changes the intent. FormField's
+          // initialValue is otherwise a one-time seed, leaving the visible
+          // selection different from what Test and Save consume.
+          key: ValueKey(_credentialAction),
+          initialValue: _credentialAction,
+          decoration: const InputDecoration(labelText: 'Saved credential'),
+          items: const [
+            DropdownMenuItem(
+              value: CredentialEditAction.keep,
+              child: Text('Keep saved credential'),
+            ),
+            DropdownMenuItem(
+              value: CredentialEditAction.replace,
+              child: Text('Replace saved credential'),
+            ),
+            DropdownMenuItem(
+              value: CredentialEditAction.clear,
+              child: Text('Clear saved credential'),
+            ),
+          ],
+          validator: _validateCredentialAction,
+          onChanged: (action) {
+            if (action == null) return;
+            setState(() {
+              _credentialIntentTouched = true;
+              _credentialAction = action;
+              if (action == CredentialEditAction.replace &&
+                  _auth == AuthMethod.privateKey &&
+                  _storedCredential?.kind == SecretKind.privateKey) {
+                _passphraseAction = KeyPassphraseAction.keep;
+              } else if (action != CredentialEditAction.keep) {
+                _passphraseAction = KeyPassphraseAction.clear;
+              }
+            });
+            _dropTestResult();
+          },
+        ),
+      ),
+      const SizedBox(height: 8),
+    ];
   }
 
   /// Every text field in the form, so [dispose] releases them all.
@@ -380,11 +547,24 @@ class _ServerEditorState extends State<_ServerEditor> {
               // flight is describing a credential the form no longer holds —
               // and would otherwise land looking current.
               onChanged: (v) {
-                setState(() => _auth = v ?? AuthMethod.agent);
+                setState(() {
+                  _credentialIntentTouched = true;
+                  _auth = v ?? AuthMethod.agent;
+                  if (widget.existing?.secretRef == null) {
+                    _credentialAction = _auth == AuthMethod.agent
+                        ? CredentialEditAction.clear
+                        : CredentialEditAction.replace;
+                  }
+                  if (_auth == AuthMethod.privateKey &&
+                      _storedCredential?.kind == SecretKind.privateKey) {
+                    _passphraseAction = KeyPassphraseAction.keep;
+                  }
+                });
                 _dropTestResult();
               },
             ),
             const SizedBox(height: 8),
+            ..._credentialEditFields(),
             ..._authFields(),
             const SizedBox(height: 20),
             ..._syncFields(),
@@ -483,12 +663,21 @@ class _ServerEditorState extends State<_ServerEditor> {
         ];
       case AuthMethod.password:
         return [
-          TextFormField(
-            controller: _password,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Password'),
-          ),
-          _syncSecretToggle(),
+          if (_credentialAction == CredentialEditAction.replace) ...[
+            TextFormField(
+              controller: _password,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Password'),
+              validator: _required,
+            ),
+            _syncSecretToggle(),
+          ] else if (_credentialAction == CredentialEditAction.keep) ...[
+            const Text('The saved password will be kept.'),
+            _syncSecretToggle(),
+          ] else
+            const Text(
+              'The saved password will be removed from this device.',
+            ),
         ];
       case AuthMethod.privateKey:
         return [
@@ -501,7 +690,10 @@ class _ServerEditorState extends State<_ServerEditor> {
             // key on disk and the pasted one, so an attempt already running
             // is about the other of the two.
             onChanged: (v) {
-              setState(() => _referenceKeyFile = v);
+              setState(() {
+                _privateKeySourceChanged();
+                _referenceKeyFile = v;
+              });
               _dropTestResult();
             },
           ),
@@ -513,8 +705,16 @@ class _ServerEditorState extends State<_ServerEditor> {
                   child: TextFormField(
                     controller: _keyPath,
                     decoration: const InputDecoration(
-                        labelText: 'Identity file path',
-                        hintText: '~/.ssh/id_ed25519'),
+                      labelText: 'Identity file path',
+                      hintText: '~/.ssh/id_ed25519',
+                    ),
+                    validator: _required,
+                    onChanged: (_) {
+                      if (!_credentialIntentTouched ||
+                          _credentialAction == CredentialEditAction.keep) {
+                        setState(_privateKeySourceChanged);
+                      }
+                    },
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -524,26 +724,103 @@ class _ServerEditorState extends State<_ServerEditor> {
                 ),
               ],
             )
-          else
+          else if (_credentialAction == CredentialEditAction.replace)
             TextFormField(
               controller: _keyPem,
               maxLines: 5,
               style: SeanceTheme.mono.copyWith(fontSize: 12),
               decoration: const InputDecoration(
-                  labelText: 'Private key (PEM/OpenSSH)',
-                  border: OutlineInputBorder()),
+                labelText: 'Private key (PEM/OpenSSH)',
+                border: OutlineInputBorder(),
+              ),
+              validator: _required,
+            )
+          else if (_credentialAction == CredentialEditAction.keep)
+            const Text('The saved private key will be kept.')
+          else
+            const Text('The saved private key will be removed.'),
+          if (_credentialAction == CredentialEditAction.replace) ...[
+            const SizedBox(height: 8),
+            KeyedSubtree(
+              key: const ValueKey('key-passphrase-action'),
+              child: DropdownButtonFormField<KeyPassphraseAction>(
+                key: ValueKey(_passphraseAction),
+                initialValue: _passphraseAction,
+                decoration: const InputDecoration(labelText: 'Key passphrase'),
+                items: const [
+                  DropdownMenuItem(
+                    value: KeyPassphraseAction.keep,
+                    child: Text('Keep saved passphrase'),
+                  ),
+                  DropdownMenuItem(
+                    value: KeyPassphraseAction.replace,
+                    child: Text('Replace saved passphrase'),
+                  ),
+                  DropdownMenuItem(
+                    value: KeyPassphraseAction.clear,
+                    child: Text('Use no saved passphrase'),
+                  ),
+                ],
+                validator: _validatePassphraseAction,
+                onChanged: (action) {
+                  if (action == null) return;
+                  setState(() {
+                    _credentialIntentTouched = true;
+                    _passphraseAction = action;
+                  });
+                  _dropTestResult();
+                },
+              ),
             ),
-          TextFormField(
-            controller: _keyPassphrase,
-            obscureText: true,
-            decoration: const InputDecoration(
-                labelText: 'Key passphrase (optional)'),
-          ),
-          // Only the stored key (not the referenced-file case) is a secret that
-          // could sync.
-          if (!_referenceKeyFile) _syncSecretToggle(),
+            if (_passphraseAction == KeyPassphraseAction.replace)
+              TextFormField(
+                controller: _keyPassphrase,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'New key passphrase',
+                ),
+                validator: _required,
+              ),
+            _syncSecretToggle(),
+          ] else if (_credentialAction == CredentialEditAction.keep)
+            _syncSecretToggle(),
         ];
     }
+  }
+
+  String? _validatePassphraseAction(KeyPassphraseAction? action) {
+    if (_credentialAction != CredentialEditAction.replace) return null;
+    if (action == null) return 'Choose what to do with the saved passphrase.';
+    if (action != KeyPassphraseAction.keep) return null;
+    final stored = _storedCredential;
+    if (stored == null || stored.kind != SecretKind.privateKey) {
+      return 'There is no saved key passphrase to keep.';
+    }
+    if (_referenceKeyFile) {
+      final path = _keyPath.text.trim();
+      final legacy =
+          stored.identityFilePath == null &&
+          stored.identityFilePassphrase == null;
+      if (legacy) {
+        if (widget.existing?.identityFilePath != path) {
+          return 'The saved passphrase belongs to a different identity file.';
+        }
+      } else if (stored.identityFilePath != path) {
+        return 'The saved passphrase belongs to a different identity file.';
+      }
+    } else if (stored.value != _keyPem.text) {
+      return 'Keep is available only when the pasted key is unchanged.';
+    }
+    return null;
+  }
+
+  void _privateKeySourceChanged() {
+    _credentialIntentTouched = true;
+    if (_credentialAction != CredentialEditAction.keep) return;
+    _credentialAction = CredentialEditAction.replace;
+    _passphraseAction = _storedCredential?.kind == SecretKind.privateKey
+        ? KeyPassphraseAction.keep
+        : KeyPassphraseAction.clear;
   }
 
   /// An optional command to run in this server's shell once it opens. Typed
@@ -772,6 +1049,7 @@ class _ServerEditorState extends State<_ServerEditor> {
     final picked = await widget.state.services.identityBookmarks.pick();
     if (picked == null || !mounted) return;
     setState(() {
+      _privateKeySourceChanged();
       _keyPath.text = picked.path;
       _keyBookmark = picked.bookmark;
       _keyBookmarkPath = picked.bookmark == null ? null : picked.path;
@@ -863,8 +1141,12 @@ class _ServerEditorState extends State<_ServerEditor> {
     });
 
     final log = SshConnectionLog();
+    final credentialAction = _credentialAction;
+    final passphraseAction = _passphraseAction;
     final config = _formConfig(
-      secretRef: widget.existing?.secretRef,
+      secretRef: credentialAction == CredentialEditAction.clear
+          ? null
+          : widget.existing?.secretRef,
       now: DateTime.now().millisecondsSinceEpoch,
     );
     final ConnectionTestResult result;
@@ -882,9 +1164,12 @@ class _ServerEditorState extends State<_ServerEditor> {
         draftPrivateKey: _auth == AuthMethod.privateKey && !_referenceKeyFile
             ? _keyPem.text
             : null,
-        draftKeyPassphrase:
-            _auth == AuthMethod.privateKey ? _keyPassphrase.text : null,
+        draftKeyPassphrase: _auth == AuthMethod.privateKey
+            ? _keyPassphrase.text
+            : null,
         draftIdentityBookmark: _bookmarkFor(config.identityFilePath),
+        draftCredentialAction: credentialAction,
+        draftPassphraseAction: passphraseAction,
         log: log,
       );
     } catch (error) {
@@ -922,15 +1207,34 @@ class _ServerEditorState extends State<_ServerEditor> {
     if (!_form.currentState!.validate()) return;
     setState(() => _busy = true);
     final existing = widget.existing;
+    ServerConfig? latestConfig;
+    if (existing != null) {
+      for (final server in widget.state.servers) {
+        if (server.id == existing.id) {
+          latestConfig = server;
+          break;
+        }
+      }
+      if (latestConfig == null ||
+          latestConfig.secretRef != existing.secretRef) {
+        if (!mounted) return;
+        setState(() => _busy = false);
+        showTopToastIn(
+          context,
+          message: latestConfig == null
+              ? 'Could not save: this server was deleted while it was open.'
+              : 'Could not save: this server\'s credential changed while it '
+                    'was open. Close and reopen the editor.',
+        );
+        return;
+      }
+    }
     // Against the freshest copy this device holds, not the one captured when
     // the editor opened: a round that pulled a newer record meanwhile is
     // exactly the record this stamp has to outrank.
     final latest = existing == null
         ? null
-        : widget.state.servers
-            .where((s) => s.id == existing.id)
-            .map((s) => s.updatedAt)
-            .fold<int>(existing.updatedAt, math.max);
+        : math.max(existing.updatedAt, latestConfig!.updatedAt);
     final now = nextUpdatedAt(
       latest,
       now: DateTime.now().millisecondsSinceEpoch,
@@ -955,6 +1259,8 @@ class _ServerEditorState extends State<_ServerEditor> {
     // corruption the carry-over logic exists to prevent.
     final auth = _auth;
     final referenceKeyFile = _referenceKeyFile;
+    final credentialAction = _credentialAction;
+    final passphraseAction = _passphraseAction;
     // The config too, and not only the credential fields: it reads seven more
     // controllers. Its `secretRef` is the one thing that cannot be known yet
     // — whether a credential is written depends on what the vault answers —
@@ -966,15 +1272,12 @@ class _ServerEditorState extends State<_ServerEditor> {
     // matched against a path from a different moment and silently dropped,
     // leaving a saved config whose identity file has no grant to open it.
     final identityFileBookmark = _bookmarkFor(formConfig.identityFilePath);
-    // Only when a referenced key's passphrase is about to be written over an
-    // entry that may hold a PEM: every other branch replaces the entry whole.
+    // Read the exact entry this save is planned against. Even branches that
+    // replace it whole need the snapshot: a sync or older editor can update
+    // material under the same ref while this save waits for the mutation
+    // queue, and deleting that newer entry would lose a credential.
     Secret? stored;
-    if (existingRef != null &&
-        plannedCredentialReadsStored(
-          auth: auth,
-          referenceKeyFile: referenceKeyFile,
-          keyPassphrase: keyPassphrase,
-        )) {
+    if (existingRef != null) {
       try {
         stored = await widget.state.services.vault.getSecret(existingRef);
       } catch (e) {
@@ -986,39 +1289,72 @@ class _ServerEditorState extends State<_ServerEditor> {
         return;
       }
     }
-    final secretId = existingRef ?? _draftSecretId;
-    final secret = plannedCredential(
-      auth: auth,
-      referenceKeyFile: referenceKeyFile,
-      password: password,
-      keyPem: keyPem,
-      keyPassphrase: keyPassphrase,
-      secretId: secretId,
-      stored: stored,
-    );
+    final CredentialEditPlan plan;
+    try {
+      plan = planCredentialEdit(
+        action: credentialAction,
+        passphraseAction: passphraseAction,
+        auth: auth,
+        referenceKeyFile: referenceKeyFile,
+        password: password,
+        keyPem: keyPem,
+        keyPassphrase: keyPassphrase,
+        identityFilePath: formConfig.identityFilePath,
+        // Replacements are copy-on-write. If another config happens to share
+        // the old ref, it keeps the credential it named; cleanup below deletes
+        // only an entry no other server still references.
+        secretId: credentialAction == CredentialEditAction.replace
+            ? _draftSecretId
+            : existingRef ?? _draftSecretId,
+        stored: stored,
+      );
+    } on ArgumentError catch (error) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      showTopToastIn(context, message: 'Could not save: ${error.message}');
+      return;
+    }
 
-    final config = secret != null && secretId != existingRef
-        // `updatedAt` is not restated here: `_formConfig` already stamped it
-        // with the same `now`, and repeating it reads as though a save that
-        // reuses its secret entry keeps an older one.
-        ? formConfig.copyWith(secretRef: secretId)
-        : formConfig;
+    final config = switch (plan.action) {
+      CredentialEditAction.keep => formConfig,
+      CredentialEditAction.clear => formConfig.copyWith(clearSecretRef: true),
+      CredentialEditAction.replace => formConfig.copyWith(
+        secretRef: plan.replacement!.id,
+      ),
+    };
+    final clearSecretRef =
+        existingRef != null && config.secretRef != existingRef
+        ? existingRef
+        : null;
     try {
       // The vault write inside throws (VaultLockedException) when the OS
       // keyring is unavailable — tell the user instead of wedging the editor
       // with _busy stuck on.
       await widget.state.saveServer(
         config,
-        secret: secret,
+        secret: plan.replacement,
+        clearSecretRef: clearSecretRef,
+        credentialPrecondition: existing == null
+            ? null
+            : ServerCredentialPrecondition(
+                serverId: existing.id,
+                secretRef: existingRef,
+                secret: stored,
+              ),
         identityFileBookmark: identityFileBookmark,
       );
+    } on CredentialCleanupException catch (error) {
+      if (!mounted) return;
+      showTopToastIn(context, message: '$error');
+      Navigator.of(context).pop(plan.replacement != null);
+      return;
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
       showTopToastIn(context, message: 'Could not save: $e');
       return;
     }
-    if (mounted) Navigator.of(context).pop(secret != null);
+    if (mounted) Navigator.of(context).pop(plan.replacement != null);
   }
 }
 

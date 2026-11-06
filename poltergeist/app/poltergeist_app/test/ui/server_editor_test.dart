@@ -234,6 +234,43 @@ void main() {
       expect(config.secretRef, 'sec-1');
     });
 
+    testWidgets('a referenced-key edit preserves the pasted-key slot', (
+      tester,
+    ) async {
+      final existing = _server(
+        'web',
+        authMethod: AuthMethod.privateKey,
+        secretRef: 'sec-1',
+      ).copyWith(identityFilePath: '/keys/old-file');
+      delegate.serverList = [existing];
+      delegate.storedSecret = const Secret(
+        id: 'sec-1',
+        kind: SecretKind.privateKey,
+        value: 'PASTED PEM',
+        keyPassphrase: 'pasted phrase',
+        identityFilePath: '/keys/old-file',
+        identityFilePassphrase: 'old file phrase',
+      );
+      await openEditor(tester, existing: existing);
+
+      await scrollTo(tester, field('Identity file path'));
+      await tester.enterText(field('Identity file path'), '/keys/new-file');
+      await tester.enterText(
+        field('Key passphrase (optional)'),
+        'new file phrase',
+      );
+      await scrollTo(tester, find.widgetWithText(FilledButton, 'Save'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final (config, secret) = delegate.saved!;
+      expect(config.identityFilePath, '/keys/new-file');
+      expect(secret?.value, 'PASTED PEM');
+      expect(secret?.keyPassphrase, 'pasted phrase');
+      expect(secret?.identityFilePath, '/keys/new-file');
+      expect(secret?.identityFilePassphrase, 'new file phrase');
+    });
+
     testWidgets('an edit stamps updatedAt past the freshest pulled copy', (
       tester,
     ) async {

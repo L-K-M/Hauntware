@@ -11,6 +11,212 @@ import 'dart:math' show max;
 import 'secret.dart';
 import 'server_config.dart';
 
+/// What an editor explicitly does with the vault entry a server references.
+/// Unlike the legacy blank-field rules below, every state is unambiguous.
+enum CredentialEditAction { keep, replace, clear }
+
+/// What a private-key edit does with the passphrase owned by that key source.
+enum KeyPassphraseAction { keep, replace, clear }
+
+/// The explicit vault mutation planned for one Save.
+final class CredentialEditPlan {
+  const CredentialEditPlan({required this.action, this.replacement});
+
+  final CredentialEditAction action;
+
+  /// Non-null only for [CredentialEditAction.replace].
+  final Secret? replacement;
+}
+
+/// Plan an editor whose keep/replace/clear choices are explicit.
+///
+/// A pasted PEM and a referenced identity file own separate passphrase slots.
+/// Keeping a passphrase is accepted only when the key source is unchanged;
+/// this prevents a blank field from attaching one key's passphrase to another.
+CredentialEditPlan planCredentialEdit({
+  required CredentialEditAction action,
+  required KeyPassphraseAction passphraseAction,
+  required AuthMethod auth,
+  required bool referenceKeyFile,
+  required String password,
+  required String keyPem,
+  required String keyPassphrase,
+  required String? identityFilePath,
+  required String secretId,
+  Secret? stored,
+}) {
+  if (action == CredentialEditAction.clear) {
+    return const CredentialEditPlan(action: CredentialEditAction.clear);
+  }
+  if (auth == AuthMethod.agent) {
+    throw ArgumentError(
+      'SSH agent authentication has no saved credential to '
+      '${action.name}',
+    );
+  }
+  if (action == CredentialEditAction.keep) {
+    final expected = switch (auth) {
+      AuthMethod.password => SecretKind.password,
+      AuthMethod.privateKey => SecretKind.privateKey,
+      AuthMethod.agent => null,
+    };
+    if (expected != null) {
+      if (stored == null) {
+        throw ArgumentError('There is no saved credential to keep');
+      }
+      if (stored.kind != expected) {
+        throw ArgumentError(
+          'The saved ${stored.kind.name} credential cannot be kept for '
+          '${auth.name} authentication',
+        );
+      }
+      if (expected == SecretKind.privateKey) {
+        if (!referenceKeyFile && stored.value.isEmpty) {
+          throw ArgumentError('There is no saved pasted private key to keep');
+        }
+        if (referenceKeyFile) {
+          final path = identityFilePath;
+          if (path == null || path.isEmpty) {
+            throw ArgumentError(
+              'A referenced private key requires an identity file path',
+            );
+          }
+          final sourceBound = stored.identityFilePath != null ||
+              stored.identityFilePassphrase != null;
+          if (sourceBound && stored.identityFilePath != path) {
+            throw ArgumentError(
+              'The saved passphrase belongs to a different identity file',
+            );
+          }
+        }
+      }
+    }
+    return const CredentialEditPlan(action: CredentialEditAction.keep);
+  }
+
+  if (auth == AuthMethod.password) {
+    if (password.isEmpty) {
+      throw ArgumentError.value(password, 'password', 'must not be empty');
+    }
+    return CredentialEditPlan(
+      action: CredentialEditAction.replace,
+      replacement: Secret(
+        id: secretId,
+        kind: SecretKind.password,
+        value: password,
+      ),
+    );
+  }
+
+  final storedKey = stored?.kind == SecretKind.privateKey ? stored : null;
+  if (referenceKeyFile) {
+    final path = identityFilePath;
+    if (path == null || path.isEmpty) {
+      throw ArgumentError.value(
+        path,
+        'identityFilePath',
+        'must not be empty for a referenced key',
+      );
+    }
+    final String? filePassphrase;
+    switch (passphraseAction) {
+      case KeyPassphraseAction.keep:
+        if (storedKey == null) {
+          throw ArgumentError('There is no referenced-key passphrase to keep');
+        }
+        final legacy =
+            storedKey.identityFilePath == null &&
+            storedKey.identityFilePassphrase == null;
+        if (!legacy && storedKey.identityFilePath != path) {
+          throw ArgumentError(
+            'The saved passphrase belongs to a different identity file',
+          );
+        }
+        filePassphrase = legacy
+            ? storedKey.keyPassphrase
+            : storedKey.identityFilePassphrase;
+      case KeyPassphraseAction.replace:
+        if (keyPassphrase.isEmpty) {
+          throw ArgumentError.value(
+            keyPassphrase,
+            'keyPassphrase',
+            'must not be empty when replacing a passphrase',
+          );
+        }
+        filePassphrase = keyPassphrase;
+      case KeyPassphraseAction.clear:
+        filePassphrase = null;
+    }
+    final replacement = Secret(
+      id: secretId,
+      kind: SecretKind.privateKey,
+      value: storedKey?.value ?? '',
+      // A legacy referenced-key entry kept its file passphrase in the pasted
+      // slot. Preserve that slot only when there is actually a pasted PEM it
+      // could belong to; otherwise clearing the file passphrase can remove the
+      // now-empty vault entry entirely.
+      keyPassphrase: storedKey?.value.isNotEmpty == true
+          ? storedKey!.keyPassphrase
+          : null,
+      identityFilePath: path,
+      identityFilePassphrase: filePassphrase,
+    );
+    if (replacement.value.isEmpty &&
+        replacement.keyPassphrase == null &&
+        replacement.identityFilePassphrase == null) {
+      return const CredentialEditPlan(action: CredentialEditAction.clear);
+    }
+    return CredentialEditPlan(
+      action: CredentialEditAction.replace,
+      replacement: replacement,
+    );
+  }
+
+  if (keyPem.isEmpty) {
+    throw ArgumentError.value(keyPem, 'keyPem', 'must not be empty');
+  }
+  final String? pemPassphrase;
+  switch (passphraseAction) {
+    case KeyPassphraseAction.keep:
+      if (storedKey == null || storedKey.value != keyPem) {
+        throw ArgumentError(
+          'A passphrase can be kept only when the pasted key is unchanged',
+        );
+      }
+      pemPassphrase = storedKey.keyPassphrase;
+    case KeyPassphraseAction.replace:
+      if (keyPassphrase.isEmpty) {
+        throw ArgumentError.value(
+          keyPassphrase,
+          'keyPassphrase',
+          'must not be empty when replacing a passphrase',
+        );
+      }
+      pemPassphrase = keyPassphrase;
+    case KeyPassphraseAction.clear:
+      pemPassphrase = null;
+  }
+  return CredentialEditPlan(
+    action: CredentialEditAction.replace,
+    replacement: Secret(
+      id: secretId,
+      kind: SecretKind.privateKey,
+      value: keyPem,
+      keyPassphrase: pemPassphrase,
+      identityFilePath: storedKey?.identityFilePath,
+      identityFilePassphrase: storedKey?.identityFilePassphrase,
+    ),
+  );
+}
+
+/// Whether [planCredentialEdit] needs the current vault entry.
+bool planCredentialEditReadsStored({
+  required CredentialEditAction action,
+  required AuthMethod auth,
+}) =>
+    action == CredentialEditAction.keep ||
+    (action == CredentialEditAction.replace && auth == AuthMethod.privateKey);
+
 /// The credential this Save writes, or null when the form describes none and
 /// the stored one should stay as it is.
 ///
@@ -24,14 +230,10 @@ import 'server_config.dart';
 /// because a newly pasted key brings its own — so re-pasting the same
 /// encrypted key and leaving the passphrase alone drops the stored one.
 ///
-/// Known gap, pre-existing and not closed here: when the auth *method*
-/// changed and nothing was typed, "what is stored" is a credential of the old
-/// kind. Nothing is written, so the config keeps its `secretRef` — now
-/// pointing at, say, a password under a server set to key auth, until a
-/// credential for the new method is entered. Clearing the ref instead would
-/// throw away a working credential on a method switch the user may undo in
-/// the same sitting, which is the worse of the two. `docs/STATUS.md`
-/// follow-up 17 tracks it.
+/// Legacy blank-field callers still have one gap: when the auth *method*
+/// changes and nothing is typed, "what is stored" is a credential of the old
+/// kind. Nothing is written, so the config keeps its `secretRef`. Explicit
+/// callers use [planCredentialEdit] and reject that mismatch instead.
 ///
 /// A *referenced* key is the case this exists for. Its passphrase is the only
 /// credential that mode has, and it used to be dropped — the box was shown,
@@ -46,6 +248,7 @@ Secret? plannedCredential({
   required String password,
   required String keyPem,
   required String keyPassphrase,
+  required String? identityFilePath,
   required String secretId,
   Secret? stored,
 }) {
@@ -61,6 +264,12 @@ Secret? plannedCredential({
       kind: SecretKind.privateKey,
       value: keyPem,
       keyPassphrase: keyPassphrase.isEmpty ? null : keyPassphrase,
+      identityFilePath: stored?.kind == SecretKind.privateKey
+          ? stored!.identityFilePath
+          : null,
+      identityFilePassphrase: stored?.kind == SecretKind.privateKey
+          ? stored!.identityFilePassphrase
+          : null,
     );
   }
   if (keyPassphrase.isEmpty) return null;
@@ -73,14 +282,14 @@ Secret? plannedCredential({
     // before would otherwise have that password stored as its PEM — read back
     // as one the next time the key is typed rather than referenced.
     value: stored?.kind == SecretKind.privateKey ? stored!.value : '',
-    // The typed passphrase belongs to the key *file*, and it lands beside the
-    // PEM carried above — which was stored with a passphrase of its own. One
-    // entry holds one passphrase, so the pair can end up mismatched, and
-    // switching back to a pasted key without re-pasting finds a PEM that no
-    // longer decrypts. Carrying the old passphrase instead would break the
-    // referenced key, which is the one the server is set to use. STATUS
-    // follow-up 17 has both halves of the single-slot problem.
-    keyPassphrase: keyPassphrase,
+    // Preserve the inactive pasted key's own passphrase, and bind the typed
+    // passphrase to the referenced source instead of overwriting that slot.
+    keyPassphrase:
+        stored?.kind == SecretKind.privateKey && stored!.value.isNotEmpty
+        ? stored.keyPassphrase
+        : null,
+    identityFilePath: identityFilePath,
+    identityFilePassphrase: keyPassphrase,
   );
 }
 
@@ -96,11 +305,11 @@ Secret? plannedCredential({
 bool plannedCredentialReadsStored({
   required AuthMethod auth,
   required bool referenceKeyFile,
+  required String keyPem,
   required String keyPassphrase,
 }) =>
     auth == AuthMethod.privateKey &&
-    referenceKeyFile &&
-    keyPassphrase.isNotEmpty;
+    (referenceKeyFile ? keyPassphrase.isNotEmpty : keyPem.isNotEmpty);
 
 /// The timestamp a save should carry: the wall clock, but never one this
 /// config has already passed.

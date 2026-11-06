@@ -1347,13 +1347,12 @@ class AppServices {
   /// The `draft…` arguments are the server editor's own fields, for testing a
   /// connection before saving. Material typed into the form is not in the
   /// vault yet, so resolving from storage alone would quietly test the *old*
-  /// credential — or an empty one for a server being added. A blank draft
-  /// field falls back to the vault, which is how an unchanged credential is
-  /// re-tested, and matches what saving does with a blank field — with one
-  /// exception the blanket claim was hiding: a typed draft PEM is new key
-  /// material by construction (the editor passes null whenever the key is
-  /// referenced from disk or held in the vault), so a blank passphrase beside
-  /// one means "no passphrase" rather than "the stored one".
+  /// credential — or an empty one for a server being added. The editor also
+  /// passes explicit keep, replace, or clear intent, plus the equivalent
+  /// passphrase intent for a private key. Test and Save therefore resolve the
+  /// same choice without assigning two meanings to an empty field. Null
+  /// intent retains the older blank-field rules for callers that have not yet
+  /// adopted the explicit editor model.
   ///
   /// Precedence, since it is not obvious from the branches: a configured
   /// [ServerConfig.identityFilePath] wins over [draftPrivateKey]. The editor
@@ -1367,21 +1366,10 @@ class AppServices {
   /// written to settings until save, so without it a key outside `~/.ssh`
   /// would fall back to the raw path and fail with EPERM.
   ///
-  /// A *newly picked* identity file is not carved out the way a typed PEM is,
-  /// and the asymmetry is deliberate. Save keeps the stored passphrase when
-  /// the box is blank (the editor writes no secret in referenced-key mode
-  /// without one), so falling back to it here is what makes the test faithful
-  /// to the save — the property this whole method is built on. Treating the
-  /// pick as new key material instead would need a way to tell "a different
-  /// key" from "the same key re-picked", and the only signal available is the
-  /// bookmark: a macOS-only blob that is re-minted per grant, so it differs
-  /// for the same file and is null everywhere else. That would drop a correct
-  /// stored passphrase on every re-pick on one platform and never fire on the
-  /// others. The cost is that rotating to an unprotected key cannot be
-  /// expressed — the box is already blank — so the test reports a decrypt
-  /// failure for a configuration that is correct, and saving would store the
-  /// same stale passphrase. `docs/STATUS.md` follow-up 16 tracks the explicit
-  /// "no passphrase" affordance that closes it in both places at once.
+  /// Saved private-key passphrases have separate slots for a pasted PEM and a
+  /// referenced file. The latter is bound to its exact path; changing the
+  /// source requires an explicit passphrase choice rather than silently
+  /// applying the old file's passphrase to the new one.
   ///
   /// The decision table lives in the shared [CredentialResolver]; this app
   /// supplies only its vault and identity-file reads ([_AppCredentialSource]).
@@ -1391,6 +1379,8 @@ class AppServices {
     String? draftPrivateKey,
     String? draftKeyPassphrase,
     IdentityFileBookmark? draftIdentityBookmark,
+    CredentialEditAction? draftCredentialAction,
+    KeyPassphraseAction? draftPassphraseAction,
   }) => _credentialResolver.resolve(
     config,
     draft: CredentialDraft(
@@ -1398,6 +1388,8 @@ class AppServices {
       privateKeyPem: draftPrivateKey,
       keyPassphrase: draftKeyPassphrase,
       identityBookmark: draftIdentityBookmark,
+      credentialAction: draftCredentialAction,
+      passphraseAction: draftPassphraseAction,
     ),
   );
 

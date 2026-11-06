@@ -556,7 +556,7 @@ final class EngineSync {
 
   /// The vault entry [entry]'s boxes plan for [draft] under [secretId],
   /// or null when they plan none (`plannedCredential`): reading the stored
-  /// entry only where the plan carries part of it over.
+  /// entry only where the plan carries the inactive key source over.
   Future<Secret?> _plannedSecret(
     ServerDraft draft,
     ServerCredentialEntry? entry,
@@ -568,6 +568,7 @@ final class EngineSync {
     final readsStored = plannedCredentialReadsStored(
       auth: auth,
       referenceKeyFile: entry.referenceKeyFile,
+      keyPem: entry.keyPem,
       keyPassphrase: entry.keyPassphrase,
     );
     return plannedCredential(
@@ -576,6 +577,7 @@ final class EngineSync {
       password: entry.password,
       keyPem: entry.keyPem,
       keyPassphrase: entry.keyPassphrase,
+      identityFilePath: draft.identityFilePath,
       secretId: secretId,
       stored: readsStored ? await vault.getSecret(secretId) : null,
     );

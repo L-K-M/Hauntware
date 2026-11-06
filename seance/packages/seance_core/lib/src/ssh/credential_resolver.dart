@@ -18,22 +18,28 @@ abstract interface class CredentialSource {
 }
 
 /// Credential material a server editor holds before saving, so a connection
-/// test uses what was typed rather than what is stored. A null or empty field
-/// means "not typed"; see [CredentialResolver.resolve] for when that falls
-/// back to storage (a blank passphrase beside a typed PEM means none) and
-/// when a configured key file wins over a typed PEM. Each field is read only
-/// under its own auth method.
+/// test uses what was typed rather than what is stored. Without explicit
+/// actions, a null or empty field means "not typed" and keeps the legacy
+/// fallback rules. Explicit actions make keep, replace, and clear
+/// unambiguous. Each field is read only under its own auth method.
 final class CredentialDraft {
   const CredentialDraft({
     this.password,
     this.privateKeyPem,
     this.keyPassphrase,
     this.identityBookmark,
+    this.credentialAction,
+    this.passphraseAction,
   });
 
   final String? password;
   final String? privateKeyPem;
   final String? keyPassphrase;
+
+  /// Explicit editor intent. Null preserves the legacy blank-field rules for
+  /// callers that have not adopted keep/replace/clear yet.
+  final CredentialEditAction? credentialAction;
+  final KeyPassphraseAction? passphraseAction;
 
   /// A host-specific grant for the referenced key file (Séance's macOS
   /// security-scoped bookmark). Opaque here: the resolver checks only its
@@ -98,10 +104,9 @@ final class CredentialResolver {
   /// it: an absent entry there means no passphrase under either policy.
   final MissingSecretPolicy missingSecretPolicy;
 
-  /// Resolves [config]'s credential, preferring [draft] fields typed under
-  /// the auth method in force. A configured [ServerConfig.identityFilePath]
-  /// wins over a draft PEM, and a blank passphrase beside a typed PEM means
-  /// "no passphrase" because a typed PEM is new key material.
+  /// Resolves [config]'s credential from an explicit draft action when one is
+  /// present, otherwise with the legacy typed-field precedence. A configured
+  /// [ServerConfig.identityFilePath] wins over a draft PEM.
   ///
   /// Throws [ArgumentError] for an identity bookmark under key auth with
   /// neither a path nor a typed PEM, and [CredentialMissingException] under
@@ -144,6 +149,9 @@ final class CredentialResolver {
             'grant is dropped and the vault credential is tested instead',
       );
     }
+    if (draft?.credentialAction != null) {
+      return _resolveExplicit(config, draft!);
+    }
     switch (config.authMethod) {
       case AuthMethod.agent:
         return const SshCredentials.agent();
@@ -156,16 +164,16 @@ final class CredentialResolver {
         // "Reference, don't store": read the key from disk at connect time.
         if (config.identityFilePath != null) {
           final pem = await _source.identityFile(config, draft);
+          final typedPassphrase = typed(draft?.keyPassphrase);
+          final stored = typedPassphrase != null || config.secretRef == null
+              ? null
+              : await _source.storedSecret(config.secretRef!);
           return SshCredentials.privateKey(
             pem,
             // A typed passphrase needs no stored-passphrase read or unlock.
             keyPassphrase:
-                typed(draft?.keyPassphrase) ??
-                (config.secretRef == null
-                    ? null
-                    : (await _source.storedSecret(
-                        config.secretRef!,
-                      ))?.keyPassphrase),
+                typedPassphrase ??
+                _identityFilePassphrase(stored, config.identityFilePath!),
           );
         }
         final typedPem = typed(draft?.privateKeyPem);
@@ -181,6 +189,152 @@ final class CredentialResolver {
           keyPassphrase: typed(draft?.keyPassphrase) ?? secret?.keyPassphrase,
         );
     }
+  }
+
+  Future<SshCredentials> _resolveExplicit(
+    ServerConfig config,
+    CredentialDraft draft,
+  ) async {
+    String? typed(String? value) =>
+        (value == null || value.isEmpty) ? null : value;
+    final action = draft.credentialAction!;
+    switch (config.authMethod) {
+      case AuthMethod.agent:
+        return const SshCredentials.agent();
+      case AuthMethod.password:
+        switch (action) {
+          case CredentialEditAction.clear:
+            return const SshCredentials.password('');
+          case CredentialEditAction.replace:
+            final password = typed(draft.password);
+            if (password == null) {
+              throw ArgumentError.value(
+                draft.password,
+                'draft.password',
+                'must not be empty when replacing a password',
+              );
+            }
+            return SshCredentials.password(password);
+          case CredentialEditAction.keep:
+            final secret = await _savedSecret(config);
+            _requireKind(secret, SecretKind.password, config);
+            return SshCredentials.password(secret?.value ?? '');
+        }
+      case AuthMethod.privateKey:
+        final path = config.identityFilePath;
+        if (path != null) {
+          final pem = await _source.identityFile(config, draft);
+          if (action == CredentialEditAction.clear) {
+            return SshCredentials.privateKey(pem);
+          }
+          Secret? stored;
+          final passphraseAction = draft.passphraseAction;
+          if (action == CredentialEditAction.keep ||
+              passphraseAction == KeyPassphraseAction.keep) {
+            stored = await _savedSecret(config);
+            _requireKind(stored, SecretKind.privateKey, config);
+          }
+          final passphrase = switch (action) {
+            CredentialEditAction.keep => _identityFilePassphrase(stored, path),
+            CredentialEditAction.replace => switch (passphraseAction) {
+              KeyPassphraseAction.keep => _identityFilePassphrase(stored, path),
+              KeyPassphraseAction.replace =>
+                typed(draft.keyPassphrase) ??
+                    (throw ArgumentError.value(
+                      draft.keyPassphrase,
+                      'draft.keyPassphrase',
+                      'must not be empty when replacing a passphrase',
+                    )),
+              KeyPassphraseAction.clear => null,
+              null => throw ArgumentError(
+                'passphraseAction is required for an explicit key edit',
+              ),
+            },
+            CredentialEditAction.clear => null,
+          };
+          return SshCredentials.privateKey(pem, keyPassphrase: passphrase);
+        }
+
+        if (action == CredentialEditAction.clear) {
+          return const SshCredentials.privateKey('');
+        }
+        if (action == CredentialEditAction.keep) {
+          final secret = await _savedSecret(config);
+          _requireKind(secret, SecretKind.privateKey, config);
+          if (secret != null && secret.value.isEmpty) {
+            throw ArgumentError('There is no saved pasted private key to keep');
+          }
+          return SshCredentials.privateKey(
+            secret?.value ?? '',
+            keyPassphrase: secret?.keyPassphrase,
+          );
+        }
+
+        final pem = typed(draft.privateKeyPem);
+        if (pem == null) {
+          throw ArgumentError.value(
+            draft.privateKeyPem,
+            'draft.privateKeyPem',
+            'must not be empty when replacing a private key',
+          );
+        }
+        final passphraseAction = draft.passphraseAction;
+        final String? passphrase;
+        switch (passphraseAction) {
+          case KeyPassphraseAction.keep:
+            final secret = await _savedSecret(config);
+            _requireKind(secret, SecretKind.privateKey, config);
+            if (secret?.value != pem) {
+              throw ArgumentError(
+                'A passphrase can be kept only when the pasted key is '
+                'unchanged',
+              );
+            }
+            passphrase = secret?.keyPassphrase;
+          case KeyPassphraseAction.replace:
+            passphrase = typed(draft.keyPassphrase);
+            if (passphrase == null) {
+              throw ArgumentError.value(
+                draft.keyPassphrase,
+                'draft.keyPassphrase',
+                'must not be empty when replacing a passphrase',
+              );
+            }
+          case KeyPassphraseAction.clear:
+            passphrase = null;
+          case null:
+            throw ArgumentError(
+              'passphraseAction is required for an explicit key edit',
+            );
+        }
+        return SshCredentials.privateKey(pem, keyPassphrase: passphrase);
+    }
+  }
+
+  static String? _identityFilePassphrase(Secret? secret, String path) {
+    if (secret == null) return null;
+    final legacy =
+        secret.identityFilePath == null &&
+        secret.identityFilePassphrase == null;
+    if (legacy) return secret.keyPassphrase;
+    if (secret.identityFilePath != path) {
+      throw ArgumentError(
+        'The saved passphrase belongs to a different identity file',
+      );
+    }
+    return secret.identityFilePassphrase;
+  }
+
+  static void _requireKind(
+    Secret? secret,
+    SecretKind expected,
+    ServerConfig config,
+  ) {
+    if (secret == null || secret.kind == expected) return;
+    throw ArgumentError(
+      'The saved ${secret.kind.name} credential for ${config.id} cannot be '
+      'used as ${expected.name}',
+    );
   }
 
   /// An [SshJumpHostResolver] that looks a saved hop up with [lookup] and

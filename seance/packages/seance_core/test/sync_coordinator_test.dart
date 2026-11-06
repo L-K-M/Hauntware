@@ -1711,7 +1711,7 @@ void main() {
     expect(api.latestSeq, settled, reason: 'a restore only advances once');
   });
 
-  test('a peer\'s credential retraction is not revived by this device',
+  test('a peer credential retraction yields to a live synced reference',
       () async {
     final api = FakeServer();
     final key = secureRandomBytes(32);
@@ -1725,10 +1725,9 @@ void main() {
       kind: SecretKind.password,
       value: 'password',
     ), updatedAt: 10);
-    // Device B excluded its own server sharing this credential. That is not a
-    // decision this device can read as reversed, so the revival pass leaves
-    // it alone — the documented residual is an orphan credential, never a
-    // credential this device loses.
+    // Device B retired the credential while this device concurrently kept a
+    // newer config that still names it. The config can win LWW only if the
+    // surviving material is allowed to outbid B's tombstone too.
     await api.push([
       await codec.encrypt(DecryptedRecord(
         id: 'secret:secret',
@@ -1749,12 +1748,58 @@ void main() {
       secretVault: vault,
     ).run(api);
 
-    expect(api.stored('secret:secret')!.deleted, isTrue);
-    // The tombstone is never honoured against the vault, so the credential is
-    // still here: withdrawn from the account, not lost on this device.
+    expect(api.stored('secret:secret')!.deleted, isFalse);
     expect((await vault.getSecret('secret'))!.value, 'password');
+    expect((await vault.getSecret('secret'))!.updatedAt, 21,
+        reason: 'the referenced material must outrank the peer tombstone');
+  });
+
+  test('a config deleted in the same batch cannot revive its old credential',
+      () async {
+    final api = FakeServer();
+    final key = secureRandomBytes(32);
+    final codec = RecordCodec(key);
+    final configs = InMemoryConfigStore();
+    final vault = SecretVault(InMemoryVaultStore(), key);
+    await configs.putServer(server('s1', 'server', 10)
+        .copyWith(secretRef: 'secret', syncSecret: true));
+    await vault.putSecret(const Secret(
+      id: 'secret',
+      kind: SecretKind.password,
+      value: 'password',
+      updatedAt: 10,
+    ));
+    await api.push([
+      await codec.encrypt(DecryptedRecord(
+        id: 's1',
+        kind: RecordKind.serverConfig,
+        updatedAt: 20,
+        deviceId: 'B',
+        deleted: true,
+      )),
+      await codec.encrypt(DecryptedRecord(
+        id: 'secret:secret',
+        kind: RecordKind.secret,
+        updatedAt: 20,
+        deviceId: 'A',
+        deleted: true,
+      )),
+    ]);
+
+    await SyncCoordinator(
+      configStore: configs,
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: codec,
+      local: InMemoryLocalRecordStore(),
+      deviceId: 'A',
+      syncSecrets: true,
+      secretVault: vault,
+    ).run(api);
+
+    expect(await configs.getServer('s1'), isNull);
+    expect(api.stored('secret:secret')!.deleted, isTrue);
     expect((await vault.getSecret('secret'))!.updatedAt, 10,
-        reason: 'a retraction this device did not make moves no stamp');
+        reason: 'a retired orphan remains withdrawn');
   });
 
   for (final scenario in [
@@ -3635,6 +3680,60 @@ void main() {
           reason: 'the tombstone authenticates its routing metadata');
       expect(await tombstones.all(), isEmpty,
           reason: 'a tombstone the server has taken is pruned');
+    });
+
+    test('a retired credential is not restored from the sync mirror',
+        () async {
+      final api = FakeServer();
+      final vaultKey = secureRandomBytes(32);
+      final codec = RecordCodec(vaultKey);
+      final cfg = InMemoryConfigStore();
+      final vault = SecretVault(InMemoryVaultStore(), vaultKey);
+      final tombstones = InMemoryTombstoneStore();
+
+      SyncCoordinator withSecrets() => SyncCoordinator(
+            configStore: cfg,
+            hostKeyStore: InMemoryHostKeyStore(),
+            codec: codec,
+            local: InMemoryLocalRecordStore(),
+            deviceId: 'A',
+            syncSecrets: true,
+            secretVault: vault,
+            tombstoneStore: tombstones,
+          );
+
+      await vault.putSecret(const Secret(
+        id: 'old',
+        kind: SecretKind.password,
+        value: 'old-password',
+        updatedAt: 10,
+      ));
+      await cfg.putServer(server('s1', 'alpha', 10).copyWith(
+            secretRef: 'old',
+            syncSecret: true,
+          ));
+      await withSecrets().run(api);
+      expect(api.stored('secret:old')!.deleted, isFalse);
+
+      await vault.putSecret(const Secret(
+        id: 'new',
+        kind: SecretKind.password,
+        value: 'new-password',
+        updatedAt: 30,
+      ));
+      await cfg.putServer(server('s1', 'alpha', 30).copyWith(
+            secretRef: 'new',
+            syncSecret: true,
+          ));
+      await tombstones.add(tombstoneFor('secret:old', 'A', 30));
+      await vault.deleteSecret('old');
+
+      await withSecrets().run(api);
+
+      expect(await vault.getSecret('old'), isNull,
+          reason: 'the pulled live record must not recreate retired material');
+      expect(api.stored('secret:old')!.deleted, isTrue);
+      expect(api.stored('secret:new')!.deleted, isFalse);
     });
 
     test('a server rollback cannot resurrect a confirmed deletion', () async {
