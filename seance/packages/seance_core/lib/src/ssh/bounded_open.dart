@@ -1,5 +1,10 @@
 import 'dart:async';
 
+// A close future lives as long as its owner. Keep only one listener on it;
+// per-open listeners would retain every completed resource until owner close.
+// Expando keys do not prolong the future's lifetime.
+final _ownerWaiters = Expando<_OwnerCloseWaiters>();
+
 /// Awaits a resource open for no longer than [timeout] or [ownerClosed].
 ///
 /// Futures cannot be cancelled in Dart. If the caller has already given up,
@@ -37,10 +42,15 @@ Future<T> boundedOpen<T>({
     );
   }
 
-  ownerClosed?.then<void>(
-    (_) => closeOwner(),
-    onError: (Object _, StackTrace __) => closeOwner(),
-  );
+  final void Function()? stopWaiting;
+  if (ownerClosed == null) {
+    stopWaiting = null;
+  } else {
+    final waiters = _ownerWaiters[ownerClosed] ??= _OwnerCloseWaiters(
+      ownerClosed,
+    );
+    stopWaiting = waiters.add(closeOwner);
+  }
 
   pending.then<void>(
     (value) {
@@ -63,9 +73,46 @@ Future<T> boundedOpen<T>({
       StackTrace.current,
     );
   });
+  void settled() {
+    timer.cancel();
+    stopWaiting?.call();
+  }
+
   result.future.then<void>(
-    (_) => timer.cancel(),
-    onError: (Object _, StackTrace __) => timer.cancel(),
+    (_) => settled(),
+    onError: (Object _, StackTrace __) => settled(),
   );
   return result.future;
+}
+
+/// Owner-scoped callbacks only for opens still awaiting a result. Removing a
+/// settled waiter releases its completer and the resource held by that result.
+final class _OwnerCloseWaiters {
+  _OwnerCloseWaiters(Future<void> ownerClosed) {
+    ownerClosed.then<void>(
+      (_) => _close(),
+      onError: (Object _, StackTrace __) => _close(),
+    );
+  }
+
+  final _pending = <void Function()>{};
+  var _closed = false;
+
+  void Function() add(void Function() callback) {
+    if (_closed) {
+      callback();
+      return () {};
+    }
+    _pending.add(callback);
+    return () => _pending.remove(callback);
+  }
+
+  void _close() {
+    _closed = true;
+    final pending = _pending.toList();
+    _pending.clear();
+    for (final callback in pending) {
+      callback();
+    }
+  }
 }
