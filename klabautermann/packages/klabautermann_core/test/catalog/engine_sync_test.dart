@@ -964,7 +964,7 @@ void main() {
           contains('snippet:s-x'),
         );
 
-        server.seedTombstone('snippet:s-a', updatedAt: 2);
+        await server.seedTombstone('snippet:s-a', updatedAt: 2);
         await server.seedSnippet('snippet:s-b', snippet('s-b', 'Disk'));
         final removal = await sync.runRound();
         expect(removal.phase, SyncPhase.succeeded, reason: removal.detail);

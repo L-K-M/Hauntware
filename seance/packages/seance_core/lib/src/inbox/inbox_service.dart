@@ -8,6 +8,14 @@ import 'inbox_stores.dart';
 const String _inboxLoggerName = 'seance.inbox';
 const int _warningLogLevel = 900;
 
+/// Runs one phase that reads or writes this device's inbox stores.
+///
+/// The app supplies its local mutation queue here. Inbox HTTP deliberately
+/// stays outside the phase, so an unavailable server cannot hold that queue.
+typedef InboxLocalPhaseGate = Future<T> Function<T>(Future<T> Function() phase);
+
+Future<T> _runInboxPhaseDirectly<T>(Future<T> Function() phase) => phase();
+
 /// How long a handled status is kept and published. Proposals live at most
 /// [kInboxRetention], so a status older than this names nothing any server
 /// still holds; the margin covers a device that was offline for a while.
@@ -101,6 +109,7 @@ class InboxService {
   final InboxStatusStore statuses;
   final InboxCacheStore cache;
   final DateTime Function() now;
+  final InboxLocalPhaseGate localPhaseGate;
 
   InboxService({
     required this.api,
@@ -108,6 +117,7 @@ class InboxService {
     required this.statuses,
     required this.cache,
     DateTime Function()? now,
+    this.localPhaseGate = _runInboxPhaseDirectly,
   }) : now = now ?? DateTime.now;
 
   int get _nowMs => now().millisecondsSinceEpoch;
@@ -134,15 +144,32 @@ class InboxService {
     await api.createApp(
       CreateInboxAppRequest(appId: id, name: trimmed, token: token),
     );
-    final stamp = _nowMs;
-    await apps.putApp(InboxApp(
-      id: id,
-      name: trimmed,
-      key: key,
-      allowedServerIds: allowedServerIds,
-      createdAt: stamp,
-      updatedAt: stamp,
-    ));
+    try {
+      await localPhaseGate(() async {
+        final stamp = _nowMs;
+        await apps.putApp(
+          InboxApp(
+            id: id,
+            name: trimmed,
+            key: key,
+            allowedServerIds: allowedServerIds,
+            createdAt: stamp,
+            updatedAt: stamp,
+          ),
+        );
+      });
+    } catch (error, stackTrace) {
+      try {
+        await api.deleteApp(id);
+      } catch (cleanupError) {
+        developer.log(
+          'Could not roll back inbox app registration: ${cleanupError.runtimeType}',
+          name: _inboxLoggerName,
+          level: _warningLogLevel,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
     return InboxPairing(url: serverUrl, appId: id, token: token, key: key);
   }
 
@@ -160,13 +187,17 @@ class InboxService {
         'must be 1 to $kInboxMaxNameChars characters',
       );
     }
-    final app = await apps.getApp(appId);
-    if (app == null || app.removed) return;
-    await apps.putApp(app.copyWith(
-      name: trimmed,
-      allowedServerIds: allowedServerIds,
-      updatedAt: _nowMs > app.updatedAt ? _nowMs : app.updatedAt + 1,
-    ));
+    await localPhaseGate(() async {
+      final app = await apps.getApp(appId);
+      if (app == null || app.removed) return;
+      await apps.putApp(
+        app.copyWith(
+          name: trimmed,
+          allowedServerIds: allowedServerIds,
+          updatedAt: _nowMs > app.updatedAt ? _nowMs : app.updatedAt + 1,
+        ),
+      );
+    });
   }
 
   /// Revoke an app: the server drops its token and pending items, and the
@@ -178,21 +209,31 @@ class InboxService {
   /// Settings to remove it from.
   Future<void> removeApp(String appId) async {
     await api.deleteApp(appId);
-    final app = await apps.getApp(appId);
-    if (app != null && !app.removed) {
-      await apps.putApp(app.asRemoved(
-        updatedAt: _nowMs > app.updatedAt ? _nowMs : app.updatedAt + 1,
-      ));
-    }
-    final current = await cache.load();
-    await cache.save(InboxCache(
-      cursor: current.cursor,
-      proposals: [
-        for (final p in current.proposals)
-          if (p.appId != appId) p,
-      ],
-      failures: {...current.failures}..remove(appId),
-    ));
+    await localPhaseGate(() async {
+      // Re-read after the request: an edit or pulled copy may have landed while
+      // the server was revoking the token, and the removal must outrank that
+      // copy rather than being built from the stale pre-request value.
+      final app = await apps.getApp(appId);
+      if (app != null && !app.removed) {
+        await apps.putApp(
+          app.asRemoved(
+            updatedAt: _nowMs > app.updatedAt ? _nowMs : app.updatedAt + 1,
+          ),
+        );
+      }
+      final current = await cache.load();
+      await cache.save(
+        InboxCache(
+          cursor: current.cursor,
+          scanCursor: current.scanCursor,
+          proposals: [
+            for (final p in current.proposals)
+              if (p.appId != appId) p,
+          ],
+          failures: {...current.failures}..remove(appId),
+        ),
+      );
+    });
   }
 
   /// Fetch new items, open and validate them, and return what is pending.
@@ -203,77 +244,104 @@ class InboxService {
   /// does not know yet is left alone, and the cursor stops before it, because
   /// the app record may simply not have synced here yet.
   Future<List<PendingProposal>> refresh() async {
-    final current = await cache.load();
-    // Sorted here rather than trusted: the cursor logic below is only sound
-    // in `received` order, and an item skipped past is never fetched again.
-    final items = [...await api.listItems(since: current.cursor)]
-      ..sort((a, b) => a.received.compareTo(b.received));
-    final proposals = [...current.proposals];
-    final failures = {...current.failures};
-    var cursor = current.cursor;
-    var blocked = false;
+    final initial = await localPhaseGate(() => cache.load());
+    final since = initial.scanCursor < initial.cursor
+        ? initial.cursor
+        : initial.scanCursor;
+    final pages = api is PagedInboxApi
+        ? (api as PagedInboxApi).listItemPages(since: since)
+        : Stream<InboxPage>.fromFuture(
+            api
+                .listItems(since: initial.cursor)
+                .then((items) => InboxPage(items: items)),
+          );
+    await for (final page in pages) {
+      final deleteAfterCommit = <(String, String)>{};
+      final blocked = await localPhaseGate(() async {
+        final current = await cache.load();
+        final proposals = [...current.proposals];
+        final failures = {...current.failures};
+        var cursor = current.cursor;
+        var blocked = since > current.cursor;
+        final items = [...page.items]
+          ..sort((a, b) => a.received.compareTo(b.received));
+        for (final item in items) {
+          final app = await apps.getApp(item.appId);
+          if (app == null) {
+            blocked = true;
+            continue;
+          }
+          if (!blocked && item.received > cursor) cursor = item.received;
+          if (proposals.any((p) => p.itemId == item.itemId)) continue;
 
-    for (final item in items) {
-      final app = await apps.getApp(item.appId);
-      if (app == null) {
-        blocked = true;
-        continue;
-      }
-      if (!blocked && item.received > cursor) cursor = item.received;
-      if (proposals.any((p) => p.itemId == item.itemId)) continue;
+          if (app.removed) {
+            deleteAfterCommit.add((item.appId, item.itemId));
+            continue;
+          }
+          final CachedProposal cached;
+          try {
+            final clear = await InboxCrypto.open(app.key!, app.id, item.blob);
+            cached = CachedProposal(
+              appId: app.id,
+              itemId: item.itemId,
+              received: item.received,
+              proposal: InboxProposal.parse(clear, now: now()),
+            );
+          } catch (error) {
+            // The type only: the message of a validation error can quote the
+            // producer's input, which is not for the log.
+            developer.log(
+              'Inbox item ${item.itemId} from app ${app.id} refused: '
+              '${error.runtimeType}',
+              name: _inboxLoggerName,
+              level: _warningLogLevel,
+            );
+            failures[app.id] = (failures[app.id] ?? 0) + 1;
+            deleteAfterCommit.add((item.appId, item.itemId));
+            continue;
+          }
+          // A proposal id is unique per app. A repeat is a replay (or a
+          // producer bug) and must not re-announce something already handled.
+          final handled =
+              await statuses.getStatus(app.id, cached.proposal.id) != null;
+          final duplicate = proposals.any(
+            (p) => p.appId == app.id && p.proposal.id == cached.proposal.id,
+          );
+          if (handled || duplicate) {
+            deleteAfterCommit.add((item.appId, item.itemId));
+            continue;
+          }
+          proposals.add(cached);
+        }
 
-      if (app.removed) {
-        await _deleteQuietly(item.appId, item.itemId);
-        continue;
-      }
-      final CachedProposal cached;
-      try {
-        final clear = await InboxCrypto.open(app.key!, app.id, item.blob);
-        cached = CachedProposal(
-          appId: app.id,
-          itemId: item.itemId,
-          received: item.received,
-          proposal: InboxProposal.parse(clear, now: now()),
+        final next =
+            page.nextReceived ?? (items.isEmpty ? since : items.last.received);
+        await cache.save(
+          InboxCache(
+            cursor: cursor,
+            scanCursor: page.hasMore ? next : cursor,
+            proposals: await _live(proposals),
+            failures: failures,
+          ),
         );
-      } catch (error) {
-        // The type only: the message of a validation error can quote the
-        // producer's input, which is not for the log.
-        developer.log(
-          'Inbox item ${item.itemId} from app ${app.id} refused: '
-          '${error.runtimeType}',
-          name: _inboxLoggerName,
-          level: _warningLogLevel,
-        );
-        failures[app.id] = (failures[app.id] ?? 0) + 1;
-        await _deleteQuietly(item.appId, item.itemId);
-        continue;
+        return blocked;
+      });
+      for (final (appId, itemId) in deleteAfterCommit) {
+        await _deleteQuietly(appId, itemId);
       }
-      // A proposal id is unique per app. A repeat is a replay (or a
-      // producer bug) and must not re-announce something already handled.
-      final handled =
-          await statuses.getStatus(app.id, cached.proposal.id) != null;
-      final duplicate = proposals.any(
-        (p) => p.appId == app.id && p.proposal.id == cached.proposal.id,
-      );
-      if (handled || duplicate) {
-        await _deleteQuietly(item.appId, item.itemId);
-        continue;
-      }
-      proposals.add(cached);
+      // Keep transport progress separately while an unsynced key pins the
+      // processing cursor. The next refresh can reach known apps on later pages.
+      if (blocked) break;
     }
-
-    await cache.save(InboxCache(
-      cursor: cursor,
-      proposals: await _live(proposals),
-      failures: failures,
-    ));
     return pending();
   }
 
   /// The proposals still waiting for the user, newest first. Reads only local
   /// state, so it reflects statuses another device synced in since the last
   /// [refresh].
-  Future<List<PendingProposal>> pending() async {
+  Future<List<PendingProposal>> pending() => localPhaseGate(_pending);
+
+  Future<List<PendingProposal>> _pending() async {
     final current = await cache.load();
     final out = <PendingProposal>[];
     for (final cached in await _live(current.proposals)) {
@@ -286,7 +354,8 @@ class InboxService {
   }
 
   /// Items refused per app since it was connected on this device.
-  Future<Map<String, int>> failures() async => (await cache.load()).failures;
+  Future<Map<String, int>> failures() =>
+      localPhaseGate(() async => (await cache.load()).failures);
 
   /// Take a proposal before running it. Records `ran` only once the server
   /// has confirmed this device removed the item, so two devices cannot both
@@ -294,20 +363,31 @@ class InboxService {
   /// from running, but cannot make one run.
   Future<InboxClaim> claim(PendingProposal pending) async {
     final cached = pending.cached;
-    final app = await apps.getApp(cached.appId);
-    if (app == null || app.removed || cached.proposal.isExpiredAt(now())) {
-      return InboxClaim.unavailable;
-    }
-    if (await statuses.getStatus(cached.appId, cached.proposal.id) != null) {
-      await _forget(cached);
-      return InboxClaim.handledElsewhere;
-    }
+    final beforeRequest = await localPhaseGate(() => _claimLocalState(cached));
+    if (beforeRequest != null) return beforeRequest;
+
     final removed = await api.deleteItem(cached.appId, cached.itemId);
     if (!removed) {
-      await _forget(cached);
+      await localPhaseGate(() => _forget(cached));
       return InboxClaim.handledElsewhere;
     }
-    await _settle(cached, InboxStatusState.ran);
+    try {
+      await localPhaseGate(() async {
+        // A peer status arriving in flight remains authoritative too.
+        if (await statuses.getStatus(cached.appId, cached.proposal.id) ==
+            null) {
+          await _settle(cached, InboxStatusState.ran);
+        } else {
+          await _forget(cached);
+        }
+      });
+    } catch (error) {
+      developer.log(
+        'Could not persist claimed inbox settlement: ${error.runtimeType}',
+        name: _inboxLoggerName,
+        level: _warningLogLevel,
+      );
+    }
     return InboxClaim.claimed;
   }
 
@@ -322,52 +402,92 @@ class InboxService {
   /// finds the status and deletes it.
   Future<InboxClaim> dismiss(PendingProposal pending) async {
     final cached = pending.cached;
+    var requestFailed = false;
+    var removed = false;
     try {
-      if (!await api.deleteItem(cached.appId, cached.itemId)) {
-        await _forget(cached);
-        return InboxClaim.handledElsewhere;
-      }
+      removed = await api.deleteItem(cached.appId, cached.itemId);
     } catch (error) {
+      requestFailed = true;
       developer.log(
         'Could not delete inbox item ${cached.itemId}: ${error.runtimeType}',
         name: _inboxLoggerName,
         level: _warningLogLevel,
       );
     }
-    await _settle(cached, InboxStatusState.dismissed);
-    return InboxClaim.claimed;
+    return localPhaseGate(() async {
+      // A sync commit can install a handled status while the delete is in
+      // flight. It wins; replacing `ran` with a newer local `dismissed` status
+      // would make every device say a command that ran did not.
+      if (await statuses.getStatus(cached.appId, cached.proposal.id) != null) {
+        await _forget(cached);
+        return InboxClaim.handledElsewhere;
+      }
+      final app = await apps.getApp(cached.appId);
+      if (app == null || app.removed) {
+        await _forget(cached);
+        return InboxClaim.unavailable;
+      }
+      if (!requestFailed && !removed) {
+        await _forget(cached);
+        return InboxClaim.handledElsewhere;
+      }
+      // Preserve offline dismissal: a failed request still writes the status,
+      // and another device that later fetches the item removes it on sight.
+      await _settle(cached, InboxStatusState.dismissed);
+      return InboxClaim.claimed;
+    });
   }
 
   /// Drop statuses too old to name anything a server still holds.
-  Future<void> pruneStatuses() async {
+  Future<void> pruneStatuses() => localPhaseGate(() async {
     final cutoff = _nowMs - kInboxStatusRetention.inMilliseconds;
     for (final status in await statuses.listStatuses()) {
       if (status.updatedAt < cutoff) {
         await statuses.deleteStatus(status.appId, status.proposalId);
       }
     }
+  });
+
+  /// A claim's local answer, both before and after its request. Null means the
+  /// proposal is still claimable. Called only inside [localPhaseGate].
+  Future<InboxClaim?> _claimLocalState(CachedProposal cached) async {
+    final app = await apps.getApp(cached.appId);
+    if (app == null || app.removed || cached.proposal.isExpiredAt(now())) {
+      await _forget(cached);
+      return InboxClaim.unavailable;
+    }
+    if (await statuses.getStatus(cached.appId, cached.proposal.id) != null) {
+      await _forget(cached);
+      return InboxClaim.handledElsewhere;
+    }
+    return null;
   }
 
   Future<void> _settle(CachedProposal cached, InboxStatusState state) async {
-    await statuses.putStatus(InboxStatus(
-      appId: cached.appId,
-      proposalId: cached.proposal.id,
-      state: state,
-      updatedAt: _nowMs,
-    ));
+    await statuses.putStatus(
+      InboxStatus(
+        appId: cached.appId,
+        proposalId: cached.proposal.id,
+        state: state,
+        updatedAt: _nowMs,
+      ),
+    );
     await _forget(cached);
   }
 
   Future<void> _forget(CachedProposal cached) async {
     final current = await cache.load();
-    await cache.save(InboxCache(
-      cursor: current.cursor,
-      proposals: [
-        for (final p in current.proposals)
-          if (p.itemId != cached.itemId) p,
-      ],
-      failures: current.failures,
-    ));
+    await cache.save(
+      InboxCache(
+        cursor: current.cursor,
+        scanCursor: current.scanCursor,
+        proposals: [
+          for (final p in current.proposals)
+            if (p.itemId != cached.itemId) p,
+        ],
+        failures: current.failures,
+      ),
+    );
   }
 
   /// Cached proposals that are neither expired nor handled.

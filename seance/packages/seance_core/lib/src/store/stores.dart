@@ -255,7 +255,7 @@ class SecretVault {
     if (blob == null) return null;
     try {
       return Secret.fromJson(await VaultCrypto.openJson(vaultKey, blob));
-    } on Exception catch (error, stackTrace) {
+    } catch (error, stackTrace) {
       // The one place that knows an entry is damaged, and damage rarely stops
       // at one: whatever the caller does next, a reader chasing "why is this
       // credential different now" should not have to infer this from silence.

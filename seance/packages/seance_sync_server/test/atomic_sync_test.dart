@@ -93,6 +93,7 @@ Future<HttpSyncClient> _connect(Storage storage) async {
       authVerifier: base64Encode(secureRandomBytes(32)),
       argonSalt: base64Encode(secureRandomBytes(16)),
       argonParams: const Argon2Params(),
+      vaultKeyCheck: base64Encode(secureRandomBytes(64)),
     ),
   );
   return client;

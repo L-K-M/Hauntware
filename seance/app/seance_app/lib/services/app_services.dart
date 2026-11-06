@@ -6,7 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:ghost_keystore/app_lock.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:seance_core/catalog.dart'
-    show ConflictAwareHostKeyStore, HostKeyConflict;
+    show
+        ConflictAwareHostKeyStore,
+        HostKeyConflict,
+        PersistentLocalRecordStore,
+        SyncAccountScope;
 import 'package:seance_core/seance_core.dart';
 
 import 'atomic_file.dart';
@@ -109,8 +113,8 @@ class AppServices {
   final SnippetStore snippetStore;
 
   /// Durable record of deletions awaiting sync (see [TombstoneStore]). Without
-  /// it a deleted server returns on the next full pull, since the sync mirror
-  /// is rebuilt each round.
+  /// it a deletion made before the durable mirror was staged could be lost
+  /// before reaching the server.
   final TombstoneStore tombstoneStore;
   // Mutable so sync enrolment can re-key the vault to the shared encryption key.
   SecretVault vault;
@@ -135,9 +139,15 @@ class AppServices {
   /// and this device's copy of the server queue. See docs/INBOX.md.
   final InboxAppStore inboxApps;
   final InboxStatusStore inboxStatuses;
-  final InboxCacheStore inboxCache;
+  InboxCacheStore get inboxCache => _inboxCache;
+  InboxCacheStore _inboxCache;
   final IdentityAuditLog identityAudit;
   final LocalShellService localShell;
+
+  final String _syncRecordsPath;
+  final File _inboxCacheFile;
+  PersistentLocalRecordStore? _syncRecords;
+  SyncAccountScope? _syncScope;
 
   /// Null while the vault is locked (keystore unavailable at bootstrap — see
   /// [LockedSecretVault] and [unlockVaultFromKeystore]).
@@ -149,15 +159,14 @@ class AppServices {
   /// key only takes effect if somebody rebuilds it.
   ///
   /// True from the end of a round that adopted until the start of the next
-  /// one, which resets it first thing. Read it right after the round that set
-  /// it, in the same call: rounds are serialized behind `AppState._mutate`,
-  /// but a reader that awaits something else in between can find the next
-  /// round has already begun and cleared it.
+  /// one, which resets it first thing. Code that needs a particular round's
+  /// answer must use [runSync]'s `onAssistantSettingsChanged` callback: it is
+  /// invoked before the serialized account operation is released, whereas a
+  /// reader of this compatibility getter can see a following round's reset.
   ///
   /// Raised in a `finally`, so a round that applied the record and *then*
   /// failed still reports the adoption — which is the case it was put there
-  /// for. Read it from a `finally` around [runSync] rather than only on the
-  /// success path, or that round's adoption is the one that goes unseen.
+  /// for.
   /// Read-only to everything but [runSync], which owns both writes. The
   /// field was public and settable, and its whole correctness argument is
   /// about *when* it is written relative to the round — so a second writer
@@ -188,16 +197,19 @@ class AppServices {
   Future<PulledPinResolution> resolvePinConflict(
     HostKeyConflict conflict, {
     required bool keepLocal,
-  }) => _serializeSyncOperation(() async {
-    final resolution = keepLocal
-        ? await _pinResolver.keepLocal(conflict)
-        : await _pinResolver.acceptPulled(conflict);
-    _pinConflicts = [
-      for (final other in _pinConflicts)
-        if (other.locator != conflict.locator) other,
-    ];
-    return resolution;
-  });
+    SyncLocalRunner? runLocal,
+  }) => _serializeSyncOperation(
+    () => _runSyncLocal(runLocal, () async {
+      final resolution = keepLocal
+          ? await _pinResolver.keepLocal(conflict)
+          : await _pinResolver.acceptPulled(conflict);
+      _pinConflicts = [
+        for (final other in _pinConflicts)
+          if (other.locator != conflict.locator) other,
+      ];
+      return resolution;
+    }),
+  );
   bool _assistantSettingsChanged = false;
 
   AppServices._({
@@ -217,13 +229,22 @@ class AppServices {
     required this.identityBookmarks,
     required this.inboxApps,
     required this.inboxStatuses,
-    required this.inboxCache,
+    required InboxCacheStore inboxCache,
+    required String syncRecordsPath,
+    required File inboxCacheFile,
     required this.identityAudit,
     required this.localShell,
     required this.vaultKey,
     required this.settings,
     required this._rekeyJournal,
-  });
+  }) : // Keep the constructor's internal parameter names readable at its
+       // single bootstrap call site.
+       // ignore: prefer_initializing_formals
+       _inboxCache = inboxCache,
+       // ignore: prefer_initializing_formals
+       _syncRecordsPath = syncRecordsPath,
+       // ignore: prefer_initializing_formals
+       _inboxCacheFile = inboxCacheFile;
 
   /// [masterKeyManager] is for tests that need the OS keystore to misbehave
   /// (a locked keyring refusing the re-key's install, say); production passes
@@ -354,7 +375,9 @@ class AppServices {
         () => services.vault,
       ),
       inboxStatuses: FileInboxStatusStore(File(p('inbox_statuses.json'))),
-      inboxCache: FileInboxCacheStore(File(p('inbox_cache.json'))),
+      inboxCache: InMemoryInboxCacheStore(),
+      syncRecordsPath: p('sync_records.json'),
+      inboxCacheFile: File(p('inbox_cache.json')),
       identityAudit: IdentityAuditLog(
         File(p('identity_reads.jsonl')),
         rewriteOwnerOnly: writeOwnerOnlyAtomically,
@@ -368,6 +391,10 @@ class AppServices {
       AppLockVaultStore(vaultStore, appLock),
       vaultKey,
     );
+    final syncScope = services._configuredSyncScope();
+    if (syncScope != null) {
+      await services._activateSyncStores(syncScope, adoptLegacy: true);
+    }
     return services;
   }
 
@@ -393,16 +420,19 @@ class AppServices {
 
   /// The mutation queue owns this transition; a rejected auth writes nothing.
   Future<void> setAppLock(AppLockMode mode) async {
-    await appLock.changeMode(mode, persist: () async {
-      final previous = settings.appLock;
-      settings.appLock = mode;
-      try {
-        await saveSettings();
-      } catch (_) {
-        settings.appLock = previous;
-        rethrow;
-      }
-    });
+    await appLock.changeMode(
+      mode,
+      persist: () async {
+        final previous = settings.appLock;
+        settings.appLock = mode;
+        try {
+          await saveSettings();
+        } catch (_) {
+          settings.appLock = previous;
+          rethrow;
+        }
+      },
+    );
     vault = _credentialVault(vault.store, vaultKey);
   }
 
@@ -509,9 +539,7 @@ class AppServices {
     try {
       final decoded = jsonDecode(await file.readAsString());
       if (decoded is! Map) return true;
-      return decoded.keys.any(
-        (id) => id is! String || !isReservedVaultId(id),
-      );
+      return decoded.keys.any((id) => id is! String || !isReservedVaultId(id));
     } catch (_) {
       return true;
     }
@@ -527,11 +555,60 @@ class AppServices {
 
   Future<void> saveCommandStats() => commandStatsStore.save(commandStats);
 
-  /// Whether sync enrolment has happened on this device (a server URL is set).
+  /// Whether sync enrolment has happened on this device.
   /// The bearer token check in [runSync] is the authoritative gate; this is the
   /// cheap synchronous check the auto-sync scheduler uses.
-  bool get isSyncConfigured =>
-      settings.syncBaseUrl != null && settings.syncBaseUrl!.isNotEmpty;
+  bool get isSyncConfigured => _configuredSyncScope() != null;
+
+  SyncAccountScope? _configuredSyncScope() {
+    final baseUrl = settings.syncBaseUrl;
+    final username = settings.syncUsername;
+    if (baseUrl == null ||
+        baseUrl.trim().isEmpty ||
+        username == null ||
+        username.trim().isEmpty) {
+      return null;
+    }
+    return SyncAccountScope(
+      baseUrl: HttpSyncClient.normalizeBaseUrl(baseUrl),
+      username: username,
+    );
+  }
+
+  Future<void> _activateSyncStores(
+    SyncAccountScope scope, {
+    bool adoptLegacy = false,
+    bool resetExisting = false,
+  }) async {
+    final records = PersistentLocalRecordStore(
+      path: _syncRecordsPath,
+      scope: scope,
+      adoptLegacy: adoptLegacy,
+      resetExisting: resetExisting,
+    );
+    final inbox = FileInboxCacheStore(
+      _inboxCacheFile,
+      scope: scope,
+      resetExisting: resetExisting,
+    );
+    await records.initialize();
+    await inbox.initialize();
+    _syncRecords = records;
+    _inboxCache = inbox;
+    _syncScope = scope;
+  }
+
+  Future<SyncAccountScope> _requireSyncStores() async {
+    final scope = _configuredSyncScope();
+    if (scope == null) throw StateError('Sync is not set up');
+    if (_syncScope != scope || _syncRecords == null) {
+      // A setting changed outside enrollment (tests, recovery, or an older
+      // build). Never claim an unscoped legacy file for that newly observed
+      // account; only startup with a durable configured account may adopt it.
+      await _activateSyncStores(scope);
+    }
+    return scope;
+  }
 
   /// Re-key the vault to [newKey], the shared key sync enrolment derives from
   /// the encryption passphrase, so the OS keystore and the vault file agree on
@@ -612,20 +689,25 @@ class AppServices {
   /// Keeps what an export needs of [code] (never the code itself), replacing
   /// an earlier one; exports made with that one still open with it.
   /// Serialized with enrolment, whose re-key re-seals the entry.
-  Future<void> saveRecoveryCode(String code) => _serializeSyncOperation(() async {
-    await _resolveCredentialVault();
-    final key = vaultKey;
-    if (key == null) throw const VaultLockedException();
-    final wrap = await RecoveryWrapKey.derive(RecoveryKey.decode(code));
-    await vault.store.putSecretBlob(
-      recoveryWrapKeyId,
-      await VaultCrypto.sealJson(key, wrap.toJson()),
-    );
-  });
+  Future<void> saveRecoveryCode(String code, {SyncLocalRunner? runLocal}) =>
+      _serializeSyncOperation(
+        () => _runSyncLocal(runLocal, () async {
+          await _resolveCredentialVault();
+          final key = vaultKey;
+          if (key == null) throw const VaultLockedException();
+          final wrap = await RecoveryWrapKey.derive(RecoveryKey.decode(code));
+          await vault.store.putSecretBlob(
+            recoveryWrapKeyId,
+            await VaultCrypto.sealJson(key, wrap.toJson()),
+          );
+        }),
+      );
 
   /// The vault, encrypted, as an export the recovery code opens anywhere.
-  Future<Uint8List> exportSecrets() =>
-      _serializeSyncOperation(() => appLock.read(_exportSecrets));
+  Future<Uint8List> exportSecrets({SyncLocalRunner? runLocal}) =>
+      _serializeSyncOperation(
+        () => _runSyncLocal(runLocal, () => appLock.read(_exportSecrets)),
+      );
 
   Future<Uint8List> _exportSecrets() async {
     await _resolveCredentialVault();
@@ -661,33 +743,36 @@ class AppServices {
     Uint8List export,
     String code, {
     required RestoreConflictPolicy policy,
-  }) => _serializeSyncOperation(() async {
-    await _resolveCredentialVault();
-    if (vaultKey == null) throw const VaultLockedException();
-    final opened = await SecretsExport.open(export, code);
-    final toWrite = <Secret>[];
-    var added = 0;
-    var replaced = 0;
-    var kept = 0;
-    for (final secret in opened.secrets.values) {
-      if (await vault.readableSecret(secret.id) == null) {
-        added++;
-      } else if (policy == RestoreConflictPolicy.keepExisting) {
-        kept++;
-        continue;
-      } else {
-        replaced++;
+    SyncLocalRunner? runLocal,
+  }) => _serializeSyncOperation(
+    () => _runSyncLocal(runLocal, () async {
+      await _resolveCredentialVault();
+      if (vaultKey == null) throw const VaultLockedException();
+      final opened = await SecretsExport.open(export, code);
+      final toWrite = <Secret>[];
+      var added = 0;
+      var replaced = 0;
+      var kept = 0;
+      for (final secret in opened.secrets.values) {
+        if (await vault.readableSecret(secret.id) == null) {
+          added++;
+        } else if (policy == RestoreConflictPolicy.keepExisting) {
+          kept++;
+          continue;
+        } else {
+          replaced++;
+        }
+        toWrite.add(secret);
       }
-      toWrite.add(secret);
-    }
-    await vault.putSecrets(toWrite);
-    return SecretsRestoreSummary(
-      added: added,
-      replaced: replaced,
-      kept: kept,
-      unreadable: opened.unreadable.length,
-    );
-  });
+      await vault.putSecrets(toWrite);
+      return SecretsRestoreSummary(
+        added: added,
+        replaced: replaced,
+        kept: kept,
+        unreadable: opened.unreadable.length,
+      );
+    }),
+  );
 
   /// Settle the staged re-key against the key the OS keystore really holds,
   /// and adopt it — after a failed install, and at the head of a retry.
@@ -781,6 +866,13 @@ class AppServices {
     return result;
   }
 
+  Future<T> _runSyncLocal<T>(
+    SyncLocalRunner? runLocal,
+    Future<T> Function() operation,
+  ) => runLocal == null ? operation() : runLocal(operation);
+
+  Future<T> _directSyncLocal<T>(Future<T> Function() operation) => operation();
+
   /// Publish an authenticated account only once its key and token are durable.
   /// A failed local step leaves sync disconnected; sign in to finish enrolling
   /// the account already accepted by the server. Clearing the old endpoint
@@ -791,7 +883,14 @@ class AppServices {
     required String username,
     required String token,
     required List<int> key,
+    required int recordEnvelopeFloor,
   }) async {
+    if (recordEnvelopeFloor < kLegacyRecordEnvelopeVersion ||
+        recordEnvelopeFloor > kCurrentRecordEnvelopeVersion) {
+      throw FormatException(
+        'Unsupported record envelope floor $recordEnvelopeFloor',
+      );
+    }
     final previousUrl = settings.syncBaseUrl;
     final previousUsername = settings.syncUsername;
     settings.syncBaseUrl = null;
@@ -807,6 +906,14 @@ class AppServices {
 
     await _rekeyVault(key);
     await masterKeys.putApiKey(syncTokenKeyName, token);
+    await _activateSyncStores(
+      SyncAccountScope(
+        baseUrl: HttpSyncClient.normalizeBaseUrl(baseUrl),
+        username: username,
+      ),
+      resetExisting: true,
+    );
+    await _syncRecords!.observeRecordEnvelopeFloor(recordEnvelopeFloor);
     settings.syncBaseUrl = baseUrl;
     settings.syncUsername = username;
     try {
@@ -835,19 +942,29 @@ class AppServices {
       params: const Argon2Params(),
     );
     await _withSyncClient(baseUrl, (client) async {
-      await client.register(
+      final registered = await client.register(
         RegisterRequest(
           username: username,
           authVerifier: base64.encode(keys.authVerifier),
           argonSalt: base64.encode(salt),
           argonParams: const Argon2Params(),
+          vaultKeyCheck: await VaultKeyCheck.create(
+            keys.vaultKey,
+            username: username,
+          ),
         ),
+      );
+      await VaultKeyCheck.verify(
+        keys.vaultKey,
+        registered.vaultKeyCheck ?? '',
+        username: username,
       );
       await _completeSyncEnrollment(
         baseUrl: baseUrl,
         username: username,
         token: client.token!,
         key: keys.vaultKey,
+        recordEnvelopeFloor: registered.recordEnvelopeFloor,
       );
     });
   });
@@ -858,8 +975,16 @@ class AppServices {
     required String username,
     required String password,
     required String encryptionPassphrase,
-  }) => _serializeSyncOperation(
-    () => _withSyncClient(baseUrl, (client) async {
+  }) => _serializeSyncOperation(() async {
+    final sameEnrollment =
+        settings.syncUsername == username &&
+        settings.syncBaseUrl != null &&
+        HttpSyncClient.normalizeBaseUrl(settings.syncBaseUrl!) ==
+            HttpSyncClient.normalizeBaseUrl(baseUrl);
+    final trustedExistingKey = sameEnrollment && vaultKey != null
+        ? List<int>.of(vaultKey!)
+        : null;
+    return _withSyncClient(baseUrl, (client) async {
       final pre = await client.prelogin(username);
       // Refuse a KDF downgrade: the Argon2 parameters come from the server, so a
       // malicious/compromised one could return weak factors to make the vault key
@@ -877,114 +1002,235 @@ class AppServices {
         salt: base64.decode(pre.argonSalt),
         params: pre.argonParams,
       );
-      await client.login(
+      final login = await client.login(
         LoginRequest(
           username: username,
           authVerifier: base64.encode(keys.authVerifier),
         ),
       );
-      // Authentication cannot prove that the separate encryption passphrase is
-      // correct. Verify it against one remote payload before changing the local
-      // vault or persisting enrollment, so a typo cannot overwrite synced data.
-      final remote = await client.pull(since: 0);
-      for (final record in remote.records) {
-        if (record.deleted || record.blob.isEmpty) continue;
+      if (sameEnrollment) {
+        await _requireSyncStores();
+        await _syncRecords!.observeRecordEnvelopeFloor(
+          login.recordEnvelopeFloor,
+        );
+      }
+      var recordEnvelopeFloor = login.recordEnvelopeFloor;
+      final keyCheck = login.vaultKeyCheck;
+      if (keyCheck != null) {
         try {
-          await RecordCodec(keys.vaultKey).decrypt(record);
+          await VaultKeyCheck.verify(
+            keys.vaultKey,
+            keyCheck,
+            username: username,
+          );
         } catch (_) {
           throw StateError(
             'The vault encryption passphrase could not decrypt this account. '
             'Check it and try again.',
           );
         }
-        break;
+      }
+      // Authentication cannot prove that the separate encryption passphrase is
+      // correct. Verify it against one remote payload before changing the local
+      // vault or persisting enrollment, so a typo cannot overwrite synced data.
+      if (keyCheck == null) {
+        final remote = await client.pull(since: 0);
+        if (remote.recordEnvelopeFloor < recordEnvelopeFloor) {
+          throw RecordEnvelopeFloorDowngradeException(
+            observed: recordEnvelopeFloor,
+            advertised: remote.recordEnvelopeFloor,
+          );
+        }
+        recordEnvelopeFloor = remote.recordEnvelopeFloor;
+        var verified = false;
+        for (final record in remote.records) {
+          if (record.deleted || record.blob.isEmpty) continue;
+          try {
+            final codec = RecordCodec(keys.vaultKey);
+            if (record.envelopeVersion == kLegacyRecordEnvelopeVersion) {
+              // A v1 payload authenticates only kind and data. That is enough
+              // to prove the vault key during enrollment, but never enough to
+              // merge its public id or conflict tuple into local state.
+              await codec.decryptLegacyForMigration(record);
+            } else {
+              await codec.decrypt(record);
+            }
+          } catch (_) {
+            throw StateError(
+              'The vault encryption passphrase could not decrypt this account. '
+              'Check it and try again.',
+            );
+          }
+          verified = true;
+          break;
+        }
+        if (!verified) {
+          if (trustedExistingKey != null) {
+            if (!_sameBytes(trustedExistingKey, keys.vaultKey)) {
+              throw StateError(
+                'The vault encryption passphrase does not match this '
+                'device’s existing enrollment.',
+              );
+            }
+            final proposed = await VaultKeyCheck.create(
+              trustedExistingKey,
+              username: username,
+            );
+            final stored = await client.initializeVaultKeyCheck(proposed);
+            await VaultKeyCheck.verify(
+              trustedExistingKey,
+              stored,
+              username: username,
+            );
+          } else {
+            throw StateError(
+              'This empty legacy account or account containing only deleted '
+              'records has no vault key check. Sign in '
+              'from an already enrolled device to initialize it, or '
+              'recreate the empty account.',
+            );
+          }
+        }
       }
       await _completeSyncEnrollment(
         baseUrl: baseUrl,
         username: username,
         token: client.token!,
         key: keys.vaultKey,
+        recordEnvelopeFloor: recordEnvelopeFloor,
       );
-    }),
-  );
+    });
+  });
+
+  static bool _sameBytes(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    var difference = 0;
+    for (var i = 0; i < a.length; i++) {
+      difference |= a[i] ^ b[i];
+    }
+    return difference == 0;
+  }
 
   /// Run one synchronization round against the configured server.
-  Future<SyncOutcome> runSync() => _serializeSyncOperation(_runSync);
+  Future<SyncOutcome> runSync({
+    SyncLocalRunner? runLocal,
+    void Function(bool changed)? onAssistantSettingsChanged,
+    void Function()? onAssistantSettingsApplied,
+  }) => _serializeSyncOperation(
+    () => _runSync(
+      runLocal: runLocal ?? _directSyncLocal,
+      onAssistantSettingsChanged: onAssistantSettingsChanged,
+      onAssistantSettingsApplied: onAssistantSettingsApplied,
+    ),
+  );
 
-  Future<SyncOutcome> _runSync() async {
+  Future<SyncOutcome> _runSync({
+    required SyncLocalRunner runLocal,
+    void Function(bool changed)? onAssistantSettingsChanged,
+    void Function()? onAssistantSettingsApplied,
+  }) async {
     // First statement, above every guard. The guards below all throw today,
     // so nothing can read a stale answer — but placing the reset after them
     // means that stays true only while they keep throwing, and a guard that
     // is one day changed to return a failure outcome would hand the caller
     // the previous round's "adopted" answer with nothing to show for it.
     _assistantSettingsChanged = false;
-    final baseUrl = settings.syncBaseUrl;
-    final token = await masterKeys.getApiKey(syncTokenKeyName);
-    if (baseUrl == null || token == null) {
-      // A configured account that suddenly reads as "not set up" means the
-      // keystore (which holds the token) is down — say that, not "set up sync".
-      if (baseUrl != null &&
-          masterKeys.keystoreStatus == KeystoreStatus.unavailable) {
-        throw StateError(
-          'Sync is configured, but the OS keyring is locked or unavailable '
-          '(${masterKeys.lastKeystoreError ?? 'no details'}) — the sync token '
-          'and the vault key live there. Unlock the keyring and sync again.',
-        );
+    String? baseUrl;
+    String? token;
+    AssistantSettingsSync? assistant;
+    SyncCoordinator? coordinator;
+    var reportedApplications = 0;
+    Future<T> trackLocal<T>(Future<T> Function() phase) => runLocal(() async {
+      try {
+        return await phase();
+      } finally {
+        final count = assistant?.applicationCount ?? 0;
+        while (reportedApplications < count) {
+          reportedApplications++;
+          onAssistantSettingsApplied?.call();
+        }
       }
-      throw StateError('Sync is not set up');
-    }
-    // The keystore answered for the token; the vault key may still be missing
-    // if the keystore was down at bootstrap — retry it now.
-    if (vaultKey == null) await unlockVaultFromKeystore();
-    final key = vaultKey;
-    if (key == null) {
-      throw StateError(
-        'The vault is locked: the OS keyring is unavailable '
-        '(${masterKeys.lastKeystoreError ?? 'no details'}). Unlock the keyring '
-        'and sync again.',
-      );
-    }
-    // Null unless opted in, which is what makes the assistant record neither
-    // pushed nor applied on a device that has not asked for it.
-    final assistant = settings.syncAssistant
-        ? AssistantSettingsSync(
-            settings: settings,
-            masterKeys: masterKeys,
-            saveSettings: saveSettings,
-          )
-        : null;
-    final coordinator = SyncCoordinator(
-      configStore: configStore,
-      hostKeyStore: hostKeyStore,
-      pinVerdicts: _pinVerdicts,
-      snippetStore: snippetStore,
-      assistantStore: assistant,
-      codec: RecordCodec(key),
-      local: InMemoryLocalRecordStore(),
-      deviceId: settings.deviceId,
-      syncSecrets: settings.syncSecrets,
-      secretVault: settings.syncSecrets ? vault : null,
-      tombstoneStore: tombstoneStore,
-      inboxAppStore: inboxApps,
-      inboxStatusStore: inboxStatuses,
-    );
+    });
     try {
-      final outcome = await _withSyncClient(baseUrl, (client) {
-        client.token = token;
-        return coordinator.run(client);
+      await runLocal(() async {
+        final configuredScope = _configuredSyncScope();
+        final configuredBaseUrl = configuredScope?.baseUrl;
+        final configuredToken = await masterKeys.getApiKey(syncTokenKeyName);
+        if (configuredBaseUrl == null || configuredToken == null) {
+          // A configured account that suddenly reads as "not set up" means the
+          // keystore (which holds the token) is down — say that, not "set up sync".
+          if (configuredBaseUrl != null &&
+              masterKeys.keystoreStatus == KeystoreStatus.unavailable) {
+            throw StateError(
+              'Sync is configured, but the OS keyring is locked or unavailable '
+              '(${masterKeys.lastKeystoreError ?? 'no details'}) — the sync token '
+              'and the vault key live there. Unlock the keyring and sync again.',
+            );
+          }
+          throw StateError('Sync is not set up');
+        }
+        baseUrl = configuredBaseUrl;
+        token = configuredToken;
+        await _requireSyncStores();
+        // The keystore answered for the token; the vault key may still be missing
+        // if the keystore was down at bootstrap — retry it now.
+        if (vaultKey == null) await unlockVaultFromKeystore();
+        final key = vaultKey;
+        if (key == null) {
+          throw StateError(
+            'The vault is locked: the OS keyring is unavailable '
+            '(${masterKeys.lastKeystoreError ?? 'no details'}). Unlock the keyring '
+            'and sync again.',
+          );
+        }
+        // Null unless opted in, which is what makes the assistant record neither
+        // pushed nor applied on a device that has not asked for it.
+        assistant = settings.syncAssistant
+            ? AssistantSettingsSync(
+                settings: settings,
+                masterKeys: masterKeys,
+                saveSettings: saveSettings,
+              )
+            : null;
+        coordinator = SyncCoordinator(
+          configStore: configStore,
+          hostKeyStore: hostKeyStore,
+          pinVerdicts: _pinVerdicts,
+          snippetStore: snippetStore,
+          assistantStore: assistant,
+          codec: RecordCodec(key),
+          local: _syncRecords!,
+          deviceId: settings.deviceId,
+          syncSecrets: settings.syncSecrets,
+          secretVault: settings.syncSecrets ? vault : null,
+          tombstoneStore: tombstoneStore,
+          inboxAppStore: inboxApps,
+          inboxStatusStore: inboxStatuses,
+        );
       });
-      _pinConflicts = coordinator.pinConflicts;
+      final activeCoordinator = coordinator!;
+      final outcome = await _withSyncClient(baseUrl!, (client) {
+        client.token = token!;
+        return activeCoordinator.runStaged(client, runLocal: trackLocal);
+      });
+      await runLocal(() async {
+        _pinConflicts = activeCoordinator.pinConflicts;
+      });
       return outcome;
     } on SyncRecordsRefused {
       // Thrown after everything else was applied.
-      _pinConflicts = coordinator.pinConflicts;
+      await runLocal(() async {
+        _pinConflicts = coordinator!.pinConflicts;
+      });
       rethrow;
     } on Object {
       // A push can fail after the pull applied and held keys back; those
       // conflicts still need the user. A round that failed before it held
       // anything back keeps the previous list.
-      if (coordinator.pinConflicts.isNotEmpty) {
-        _pinConflicts = coordinator.pinConflicts;
+      if (coordinator?.pinConflicts.isNotEmpty ?? false) {
+        await runLocal(() async {
+          _pinConflicts = coordinator!.pinConflicts;
+        });
       }
       rethrow;
     } finally {
@@ -996,7 +1242,20 @@ class AppServices {
       // `applied` was false again, and the chat provider kept answering with
       // the old model and key until some unrelated edit happened to rebuild
       // it.
-      _assistantSettingsChanged = assistant?.applied ?? false;
+      await runLocal(() async {
+        _assistantSettingsChanged = (assistant?.applicationCount ?? 0) > 0;
+        try {
+          onAssistantSettingsChanged?.call(_assistantSettingsChanged);
+        } catch (error, stackTrace) {
+          developer.log(
+            'The sync adoption callback failed',
+            name: 'seance.app',
+            level: 1000,
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      });
     }
   }
 
@@ -1004,28 +1263,44 @@ class AppServices {
   /// [StateError] when sync is not set up or the vault is locked, the same
   /// conditions [runSync] refuses on: the inbox rides the sync account, and
   /// app keys live in the vault.
-  Future<T> withInbox<T>(Future<T> Function(InboxService inbox) action) async {
-    final baseUrl = settings.syncBaseUrl;
-    final token = await masterKeys.getApiKey(syncTokenKeyName);
-    if (baseUrl == null || baseUrl.isEmpty || token == null) {
-      throw StateError('Sync is not set up');
-    }
-    if (vaultKey == null) await unlockVaultFromKeystore();
-    if (vaultKey == null) {
-      throw StateError(
-        'The vault is locked: the OS keyring is unavailable. Unlock the '
-        'keyring and try again.',
-      );
-    }
+  ///
+  /// Local store phases use [runLocal]; inbox HTTP runs outside that queue.
+  /// Account serialization is acquired first, preserving the shared lock order.
+  Future<T> withInbox<T>(
+    Future<T> Function(InboxService inbox) action, {
+    SyncLocalRunner? runLocal,
+  }) => _serializeSyncOperation(() => _withInbox(action, runLocal: runLocal));
+
+  Future<T> _withInbox<T>(
+    Future<T> Function(InboxService inbox) action, {
+    SyncLocalRunner? runLocal,
+  }) async {
+    final connection = await _runSyncLocal(runLocal, () async {
+      final scope = _configuredSyncScope();
+      final token = await masterKeys.getApiKey(syncTokenKeyName);
+      if (scope == null || token == null) {
+        throw StateError('Sync is not set up');
+      }
+      await _requireSyncStores();
+      if (vaultKey == null) await unlockVaultFromKeystore();
+      if (vaultKey == null) {
+        throw StateError(
+          'The vault is locked: the OS keyring is unavailable. Unlock the '
+          'keyring and try again.',
+        );
+      }
+      return (scope: scope, token: token);
+    });
     try {
-      return await _withSyncClient(baseUrl, (client) {
-        client.token = token;
+      return await _withSyncClient(connection.scope.baseUrl, (client) {
+        client.token = connection.token;
         return action(
           InboxService(
             api: client,
             apps: inboxApps,
             statuses: inboxStatuses,
             cache: inboxCache,
+            localPhaseGate: runLocal ?? _directSyncLocal,
           ),
         );
       });

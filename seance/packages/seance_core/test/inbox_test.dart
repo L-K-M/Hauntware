@@ -11,6 +11,9 @@ class _FakeInbox implements InboxApi {
   final Map<String, InboxItem> items = {};
   int _received = 0;
   int _itemSeq = 0;
+  int deleteAppCalls = 0;
+  Object? deleteAppError;
+  bool deleteAppReportsMissing = false;
 
   /// Answer newest first, as a server that does not sort might.
   bool reverse = false;
@@ -31,8 +34,11 @@ class _FakeInbox implements InboxApi {
 
   @override
   Future<bool> deleteApp(String appId) async {
+    deleteAppCalls++;
+    if (deleteAppError != null) throw deleteAppError!;
     items.removeWhere((_, item) => item.appId == appId);
-    return tokens.remove(appId) != null;
+    final removed = tokens.remove(appId) != null;
+    return deleteAppReportsMissing ? false : removed;
   }
 
   @override
@@ -76,6 +82,139 @@ class _FakeInbox implements InboxApi {
       blob: await blob,
     );
     return id;
+  }
+}
+class _PagedFakeInbox extends _FakeInbox implements PagedInboxApi {
+  _PagedFakeInbox({this.pageSize = 1});
+
+  final int pageSize;
+  int pageRequests = 0;
+  int? failAfterPages;
+
+  @override
+  Stream<InboxPage> listItemPages({required int since}) async* {
+    final through = _received;
+    var cursor = since;
+    while (true) {
+      pageRequests++;
+      if (failAfterPages != null && pageRequests > failAfterPages!) {
+        throw StateError('page failed');
+      }
+      final pageItems =
+          items.values
+              .where(
+                (item) => item.received > cursor && item.received <= through,
+              )
+              .toList()
+            ..sort((a, b) => a.received.compareTo(b.received));
+      final selected = pageItems.take(pageSize).toList();
+      final next = selected.isEmpty ? cursor : selected.last.received;
+      final hasMore = pageItems.length > selected.length;
+      yield InboxPage(
+        items: selected,
+        throughReceived: through,
+        nextReceived: next,
+        hasMore: hasMore,
+      );
+      if (!hasMore) return;
+      cursor = next;
+    }
+  }
+}
+
+final class _SensitiveFailure implements Exception {
+  final String secret;
+  int toStringCalls = 0;
+
+  _SensitiveFailure(this.secret);
+
+  @override
+  String toString() {
+    toStringCalls++;
+    return secret;
+  }
+}
+
+final class _FailingInboxAppStore implements InboxAppStore {
+  final Object error;
+  final StackTrace stackTrace;
+  InboxApp? attemptedApp;
+
+  _FailingInboxAppStore(this.error, this.stackTrace);
+
+  @override
+  Future<InboxApp?> getApp(String id) async => null;
+
+  @override
+  Future<List<InboxApp>> listApps() async => const [];
+
+  @override
+  Future<void> putApp(InboxApp app) {
+    attemptedApp = app;
+    return Future<void>.error(error, stackTrace);
+  }
+}
+
+Future<void> _expectSameFailure(
+  Future<Object?> operation,
+  Object expectedError,
+  StackTrace expectedStack,
+) async {
+  Object? caughtError;
+  StackTrace? caughtStack;
+  try {
+    await operation;
+  } catch (error, stackTrace) {
+    caughtError = error;
+    caughtStack = stackTrace;
+  }
+  expect(caughtError, same(expectedError));
+  expect(caughtStack, same(expectedStack));
+}
+
+
+
+final class _FaultingStatusStore implements InboxStatusStore {
+  final InboxStatusStore delegate;
+  final List<String> events;
+  Object? putError;
+
+  _FaultingStatusStore(this.delegate, this.events);
+
+  @override
+  Future<void> deleteStatus(String appId, String proposalId) =>
+      delegate.deleteStatus(appId, proposalId);
+
+  @override
+  Future<InboxStatus?> getStatus(String appId, String proposalId) =>
+      delegate.getStatus(appId, proposalId);
+
+  @override
+  Future<List<InboxStatus>> listStatuses() => delegate.listStatuses();
+
+  @override
+  Future<void> putStatus(InboxStatus status) async {
+    events.add('status');
+    if (putError != null) throw putError!;
+    await delegate.putStatus(status);
+  }
+}
+
+final class _FaultingCacheStore implements InboxCacheStore {
+  final InboxCacheStore delegate;
+  final List<String> events;
+  Object? saveError;
+
+  _FaultingCacheStore(this.delegate, this.events);
+
+  @override
+  Future<InboxCache> load() => delegate.load();
+
+  @override
+  Future<void> save(InboxCache cache) async {
+    events.add('cache');
+    if (saveError != null) throw saveError!;
+    await delegate.save(cache);
   }
 }
 
@@ -189,6 +328,160 @@ void main() {
         name: 'bots',
         serverUrl: 'https://sync.example.com',
       );
+
+  InboxService serviceWith(InboxAppStore apps) => InboxService(
+    api: server,
+    apps: apps,
+    statuses: InMemoryInboxStatusStore(),
+    cache: InMemoryInboxCacheStore(),
+    now: () => _t0,
+  );
+
+  for (final reportsMissing in [false, true]) {
+    test('a failed local app write rolls back the server app'
+        '${reportsMissing ? ' when it is already absent' : ''}', () async {
+      final failure = _SensitiveFailure('local token/key secret');
+      final failureStack = StackTrace.current;
+      final apps = _FailingInboxAppStore(failure, failureStack);
+      server.deleteAppReportsMissing = reportsMissing;
+
+      await _expectSameFailure(
+        serviceWith(apps).addApp(
+          name: 'bots',
+          serverUrl: 'https://sync.example.com',
+        ),
+        failure,
+        failureStack,
+      );
+
+      expect(apps.attemptedApp, isNotNull);
+      expect(server.deleteAppCalls, 1);
+      expect(server.tokens, isEmpty);
+      expect(failure.toStringCalls, 0);
+    });
+  }
+
+  test(
+    'a rollback failure preserves the local write error and logs types only',
+    () async {
+      final failure = _SensitiveFailure('local token/key secret');
+      final failureStack = StackTrace.current;
+      final cleanupFailure = _SensitiveFailure('server token secret');
+      final apps = _FailingInboxAppStore(failure, failureStack);
+      server.deleteAppError = cleanupFailure;
+
+      await _expectSameFailure(
+        serviceWith(apps).addApp(
+          name: 'bots',
+          serverUrl: 'https://sync.example.com',
+        ),
+        failure,
+        failureStack,
+      );
+
+      expect(server.deleteAppCalls, 1);
+      expect(server.tokens, hasLength(1));
+      expect(failure.toStringCalls, 0);
+      expect(cleanupFailure.toStringCalls, 0);
+    },
+  );
+
+  Future<PendingProposal> pendingOnA() async {
+    final pairing = await connect(a);
+    await server.deposit(pairing, _proposal('p1'));
+    return (await a.inbox.refresh()).single;
+  }
+
+  InboxService faultingService({
+    required _FaultingStatusStore statuses,
+    required _FaultingCacheStore cache,
+  }) => InboxService(
+    api: server,
+    apps: a.apps,
+    statuses: statuses,
+    cache: cache,
+    now: () => a.clock,
+  );
+
+  test(
+    'a claimed item stays claimed when writing its ran status fails',
+    () async {
+      final pending = await pendingOnA();
+      final events = <String>[];
+      final failure = _SensitiveFailure('status secret');
+      final statuses = _FaultingStatusStore(a.statuses, events)
+        ..putError = failure;
+      final cache = _FaultingCacheStore(a.cache, events);
+
+      expect(
+        await faultingService(statuses: statuses, cache: cache).claim(pending),
+        InboxClaim.claimed,
+      );
+      expect(server.items, isEmpty);
+      expect(events, ['status']);
+      expect((await a.cache.load()).proposals, hasLength(1));
+      expect(failure.toStringCalls, 0);
+    },
+  );
+
+  test(
+    'a claimed item keeps its ran status when cache settlement fails',
+    () async {
+      final pending = await pendingOnA();
+      final events = <String>[];
+      final failure = _SensitiveFailure('cache secret');
+      final statuses = _FaultingStatusStore(a.statuses, events);
+      final cache = _FaultingCacheStore(a.cache, events)..saveError = failure;
+
+      expect(
+        await faultingService(statuses: statuses, cache: cache).claim(pending),
+        InboxClaim.claimed,
+      );
+      expect(server.items, isEmpty);
+      expect(events, ['status', 'cache']);
+      final status =
+          await a.statuses.getStatus(pending.app.id, pending.proposal.id);
+      expect(status?.state, InboxStatusState.ran);
+      expect(failure.toStringCalls, 0);
+    },
+  );
+
+  test(
+    'a delete-false claim still reports a cache settlement failure',
+    () async {
+      final pending = await pendingOnA();
+      expect(
+        await server.deleteItem(pending.app.id, pending.cached.itemId),
+        isTrue,
+      );
+      final events = <String>[];
+      final failure = _SensitiveFailure('cache secret');
+      final statuses = _FaultingStatusStore(a.statuses, events);
+      final cache = _FaultingCacheStore(a.cache, events)..saveError = failure;
+
+      await expectLater(
+        faultingService(statuses: statuses, cache: cache).claim(pending),
+        throwsA(same(failure)),
+      );
+      expect(events, ['cache']);
+    },
+  );
+
+  test('dismiss still reports a status write failure', () async {
+    final pending = await pendingOnA();
+    final events = <String>[];
+    final failure = _SensitiveFailure('status secret');
+    final statuses = _FaultingStatusStore(a.statuses, events)
+      ..putError = failure;
+    final cache = _FaultingCacheStore(a.cache, events);
+
+    await expectLater(
+      faultingService(statuses: statuses, cache: cache).dismiss(pending),
+      throwsA(same(failure)),
+    );
+    expect(server.items, isEmpty);
+    expect(events, ['status']);
+  });
 
   test('a proposal reaches every device and a run settles it on all', () async {
     final pairing = await connect(a);
@@ -343,6 +636,42 @@ void main() {
     expect((await b.inbox.refresh()).single.proposal.id, 'p1');
   });
 
+  test('paged refresh checkpoints each completed page', () async {
+    final paged = _PagedFakeInbox(pageSize: 1);
+    final device = _Device('paged', paged, codec);
+    final pairing = await connect(device);
+    await paged.deposit(pairing, _proposal('p1'));
+    await paged.deposit(pairing, _proposal('p2'));
+    paged.failAfterPages = 1;
+
+    await expectLater(device.inbox.refresh(), throwsStateError);
+
+    final saved = await device.cache.load();
+    expect(saved.cursor, 1);
+    expect(saved.proposals.single.proposal.id, 'p1');
+  });
+
+  test('paged refresh stops after a page blocked by an unknown app', () async {
+    final paged = _PagedFakeInbox(pageSize: 1);
+    final source = _Device('source', paged, codec);
+    final reader = _Device('reader', paged, codec);
+    final unknown = await connect(source);
+    final known = await connect(reader);
+    await paged.deposit(unknown, _proposal('unknown'));
+    await paged.deposit(known, _proposal('known'));
+
+    expect(await reader.inbox.refresh(), isEmpty);
+
+    expect(paged.pageRequests, 1);
+    expect((await reader.cache.load()).cursor, 0);
+    expect((await reader.inbox.refresh()).single.proposal.id, 'known');
+    expect((await reader.cache.load()).cursor, 0);
+    await source.sync.run(records);
+    await reader.sync.run(records);
+    final restored = await reader.inbox.refresh();
+    expect(restored.map((p) => p.proposal.id).toSet(), {'unknown', 'known'});
+  });
+
   test('expired proposals drop out and cannot be claimed', () async {
     final pairing = await connect(a);
     await server.deposit(pairing, {..._proposal('p1'), 'expires': _t0s + 60});
@@ -439,7 +768,10 @@ void main() {
       updatedAt: _t0.millisecondsSinceEpoch + 365 * 86400000,
       deviceId: 'server',
     ));
-    await b.sync.run(records);
+    await expectLater(
+      b.sync.run(records),
+      throwsA(isA<FormatException>()),
+    );
     expect((await b.apps.getApp(pairing.appId))?.key, pairing.key);
   });
 

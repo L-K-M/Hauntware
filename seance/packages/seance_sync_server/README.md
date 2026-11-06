@@ -108,11 +108,18 @@ Omit `--db` for an ephemeral in-memory store.
 | `SEANCE_OPEN_REGISTRATION` | `--open-registration` | `false` | Allow `/v1/register` |
 | `SEANCE_LOGIN_MAX_ATTEMPTS` | — | `10` | Login attempts per window |
 | `SEANCE_LOGIN_WINDOW_SECONDS` | — | `60` | Rate-limit window |
+| `SEANCE_SESSION_TTL_SECONDS` | — | `2592000` | Bearer-session lifetime (30 days) |
+| `SEANCE_MAX_SESSIONS_PER_ACCOUNT` | — | `20` | Newest sessions retained per account |
+| `SEANCE_MAX_RECORDS_PER_PULL` | — | `1000` | Records or inbox items returned per page |
+| `SEANCE_MAX_PULL_BODY_BYTES` | — | `8388608` | Maximum encoded JSON bytes per record or inbox page |
+| `SEANCE_MAX_RECORDS_PER_ACCOUNT` | — | `5000` | Current records and, separately, pending inbox items per account |
+| `SEANCE_MAX_ACCOUNT_BYTES` | — | `41943040` | Encoded record and, separately, inbox-item bytes per account |
 
-## API (protocol v1)
+## API (protocol v3)
 
-All request/response bodies are JSON; every request carries a `protocolVersion`
-so an old client and new server detect a mismatch instead of corrupting data.
+Request and response bodies are JSON. Registration, login, and push carry a
+`protocolVersion`, so an old client and new server reject a breaking account or
+record write before changing storage.
 
 | Method & path | Auth | Purpose |
 |---|---|---|
@@ -120,9 +127,23 @@ so an old client and new server detect a mismatch instead of corrupting data.
 | `POST /v1/register` | — | Create an account, returns a bearer token |
 | `POST /v1/prelogin` | — | Return the KDF salt/params for a username |
 | `POST /v1/login` | — | Exchange the auth verifier for a token |
-| `GET /v1/sync?since=<seq>` | Bearer | Pull records newer than a sequence number |
+| `GET /v1/sync?since=<seq>` | Bearer | Legacy full pull of records newer than a sequence number |
+| `GET /v1/sync?since=<seq>&page=1[&through=<seq>]` | Bearer | Bounded pull from a stable watermark |
 | `PUT /v1/records` | Bearer | Push a batch of encrypted records (LWW) |
+| `DELETE /v1/session` | Bearer | Revoke the current session |
+| `DELETE /v1/sessions` | Bearer | Revoke every session for the account |
+| `PUT /v1/account/vault-key-check` | Bearer | Initialize an empty legacy account's encrypted key check once |
 | `DELETE /v1/account` | Bearer | Delete the account and all its data |
+
+The server returns a raw bearer token only once and stores its SHA-256 digest.
+Sessions expire after the configured lifetime and issuing a session beyond the
+per-account cap revokes the oldest one. Upgrading from protocol v1 deliberately
+invalidates legacy plaintext token rows, so each device must sign in once. The
+protocol bump prevents an older client or server from partly creating an
+account without the registration-time encrypted vault-key check.
+An already enrolled device may initialize that check for an empty legacy
+account; the official client requires its locally persisted vault key to match
+before calling the set-once endpoint. New devices cannot silently choose one.
 
 Register, prelogin and login run before any authentication, so they read at
 most 16 KiB of request body (less if `SEANCE_MAX_BODY_BYTES` is lower) and
@@ -166,9 +187,26 @@ back to the default; an unset or empty variable still means "use the default".
 A database failure rolls back the batch and its sequence changes. A lost HTTP
 reply can still follow a successful commit; clients must reconcile by pulling.
 
-Pull records and `latestSeq` come from one snapshot: every returned sequence is
-`since < seq <= latestSeq`. Later writes belong to the next pull. This does not
-yet provide pagination, client-side durable revisions or authenticated metadata.
+An explicit `page=1` pull is capped by both `SEANCE_MAX_RECORDS_PER_PULL` and
+the exact compact-JSON size in `SEANCE_MAX_PULL_BODY_BYTES`. Its first response
+captures `throughSeq`; continuations send that value as `through`, advance
+`since` only to the last record they observed, and use `hasMore` to decide
+whether to continue. Records written after the captured watermark wait for the
+next sync window. A single stored row that cannot fit the configured page is a
+rejected before it is committed; an incompatible row left by an older build is
+reported as a server configuration error rather than returned without a bound.
+Omitting `page=1` retains the full-response shape for already enrolled clients.
+If the pull-page cap is tighter than the request cap, the server advertises a
+smaller effective push-body limit. Current clients then send a record that
+cannot fit a page by itself, so its `413` does not hold back valid neighbours.
+
+Record pushes enforce the per-account count and encoded-byte ceilings in the
+same transaction as LWW resolution and sequence allocation. Inbox deposits use
+the same configured ceilings independently, so producer traffic cannot consume
+the record catalog's budget; inbox listing returns the same stable page
+metadata. A write that would exceed either ceiling changes nothing. An account
+already beyond a newly lowered ceiling may replace or delete data only when the
+over-limit dimension does not grow, allowing it to shrink back under the cap.
 
 SQLite uses `BEGIN IMMEDIATE` for writes and a read transaction for snapshots.
 Transaction lock contention returns `503 storage_busy` without committing the

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/services/app_services.dart';
+import 'package:seance_app/services/assistant_settings_sync.dart';
 import 'package:seance_app/services/external_file_opener.dart';
 import 'package:seance_app/services/local_settings_backend.dart';
 import 'package:seance_app/services/secure_master_key.dart';
@@ -20,7 +22,17 @@ const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 /// a locked keyring refuses them.
 class _Keystore extends FlutterSecureStorage {
   final Map<String, String> values = {};
+  final Set<String> refuseReads = {};
   final Set<String> refuseWrites = {};
+  String? blockedWrite;
+  Completer<void>? blockedWriteStarted;
+  Completer<void>? releaseBlockedWrite;
+
+  void blockNextWrite(String key) {
+    blockedWrite = key;
+    blockedWriteStarted = Completer<void>();
+    releaseBlockedWrite = Completer<void>();
+  }
 
   @override
   Future<String?> read({
@@ -31,7 +43,12 @@ class _Keystore extends FlutterSecureStorage {
     WebOptions? webOptions,
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
-  }) async => values[key];
+  }) async {
+    if (refuseReads.contains(key)) {
+      throw PlatformException(code: 'KeyringLocked', message: 'KeyringLocked');
+    }
+    return values[key];
+  }
 
   @override
   Future<void> write({
@@ -46,6 +63,11 @@ class _Keystore extends FlutterSecureStorage {
   }) async {
     if (refuseWrites.contains(key)) {
       throw PlatformException(code: 'KeyringLocked', message: 'KeyringLocked');
+    }
+    if (blockedWrite == key) {
+      blockedWrite = null;
+      blockedWriteStarted!.complete();
+      await releaseBlockedWrite!.future;
     }
     if (value == null) {
       values.remove(key);
@@ -180,6 +202,44 @@ void main() {
     );
 
     test(
+      'does not stamp a pull that lands while a key is being stored',
+      () async {
+        keystore.blockNextWrite('seance.apikey.openai');
+        final saving = backend.saveAssistant(
+          draft(model: 'local-model', llmKey: 'sk-local'),
+        );
+        await keystore.blockedWriteStarted!.future;
+
+        final pulled = AssistantSettingsSync(
+          settings: services.settings,
+          masterKeys: services.masterKeys,
+          saveSettings: services.saveSettings,
+        );
+        await pulled.putAssistantSettings(
+          const AssistantSettings(
+            providerKind: 'openaiCompatible',
+            baseUrl: 'https://remote.example/v1',
+            model: 'remote-model',
+            llmApiKeyRef: 'openai',
+            redactSecrets: false,
+            apiKeys: {},
+            updatedAt: 500,
+          ),
+        );
+        keystore.releaseBlockedWrite!.complete();
+
+        final result = await saving;
+
+        expect(result.status, AssistantSaveStatus.adoptedBeforeSave);
+        expect(backend.settings.llmModel, 'remote-model');
+        expect(backend.settings.assistantUpdatedAt, 500);
+        // The staged key is rolled back with the refused edit, so the pulled
+        // record cannot be republished with a key from a different snapshot.
+        expect(keystore.values, isNot(contains('seance.apikey.openai')));
+      },
+    );
+
+    test(
       'a key the keystore refuses stops the save before the settings',
       () async {
         keystore.refuseWrites.add('seance.apikey.openai');
@@ -193,6 +253,38 @@ void main() {
         expect(backend.settings.toJson(), before);
       },
     );
+
+    test(
+      'a failed rollback snapshot does not guess that a key is absent',
+      () async {
+        keystore.values['seance.apikey.openai'] = 'sk-existing';
+        keystore.refuseReads.add('seance.apikey.openai');
+        final before = backend.settings.toJson();
+
+        final result = await backend.saveAssistant(
+          draft(llmKey: 'sk-replacement'),
+        );
+
+        expect(result.status, AssistantSaveStatus.keystoreFailed);
+        expect(result.failedKey, AssistantKey.llm);
+        expect(keystore.values['seance.apikey.openai'], 'sk-existing');
+        expect(backend.settings.toJson(), before);
+      },
+    );
+
+    test('a later key failure rolls the earlier key back', () async {
+      keystore.refuseWrites.add('seance.apikey.openai');
+      final before = backend.settings.toJson();
+
+      final result = await backend.saveAssistant(
+        draft(zai: true, zaiKey: 'zai-typed', llmKey: 'sk-typed'),
+      );
+
+      expect(result.status, AssistantSaveStatus.keystoreFailed);
+      expect(result.failedKey, AssistantKey.llm);
+      expect(keystore.values, isNot(contains('seance.apikey.zai')));
+      expect(backend.settings.toJson(), before);
+    });
 
     test('names the Z.AI key when that is the write that failed', () async {
       keystore.refuseWrites.add('seance.apikey.zai');
@@ -232,9 +324,15 @@ void main() {
     test(
       'a failed settings write throws rather than reporting a save',
       () async {
+        final before = backend.settings.toJson();
         await breakSettingsWrites();
 
-        await expectLater(backend.saveAssistant(draft()), throwsA(anything));
+        await expectLater(
+          backend.saveAssistant(draft(llmKey: 'sk-typed')),
+          throwsA(anything),
+        );
+        expect(backend.settings.toJson(), before);
+        expect(keystore.values, isNot(contains('seance.apikey.openai')));
       },
     );
   });
@@ -281,6 +379,7 @@ void main() {
         // Enrolled with a server that cannot answer: the round that adopts or
         // publishes fails (a widget test answers every HTTP request with 400).
         services.settings.syncBaseUrl = 'https://sync.invalid';
+        services.settings.syncUsername = 'user';
         await services.masterKeys.putApiKey('sync.token', 'session-token');
         final result = await backend.setSyncPrefs(
           autoSync: backend.settings.autoSync,

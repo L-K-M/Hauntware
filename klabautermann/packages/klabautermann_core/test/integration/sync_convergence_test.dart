@@ -46,6 +46,7 @@ import 'package:seance_core/seance_core.dart'
         ServerConfig,
         SyncCoordinator,
         VaultCrypto,
+        VaultKeyCheck,
         secureRandomBytes;
 import 'package:test/test.dart';
 
@@ -107,6 +108,10 @@ void main() {
         authVerifier: base64.encode(keys.authVerifier),
         argonSalt: base64.encode(salt),
         argonParams: params,
+        vaultKeyCheck: await VaultKeyCheck.create(
+          keys.vaultKey,
+          username: username,
+        ),
       ),
     );
     final seance = _Seance(username, api, keys.vaultKey);

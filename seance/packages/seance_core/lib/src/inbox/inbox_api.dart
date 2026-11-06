@@ -24,3 +24,14 @@ abstract class InboxApi {
   /// would drop a proposal nobody ran.
   Future<bool> deleteItem(String appId, String itemId);
 }
+
+/// Optional paged form of the inbox listing endpoint.
+///
+/// Kept separate from [InboxApi] so existing embeddings and test fakes that
+/// implement that interface do not gain a new required member. Callers may
+/// detect this interface at runtime and otherwise fall back to [InboxApi.listItems].
+/// Implementations keep one server watermark across the stream and validate
+/// that every yielded page makes monotonic progress.
+abstract interface class PagedInboxApi {
+  Stream<InboxPage> listItemPages({required int since});
+}

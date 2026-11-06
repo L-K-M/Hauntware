@@ -766,6 +766,7 @@ void main() {
     testWidgets('the sync chip says what sync is doing', (tester) async {
       await boot(tester, [server('alpha')]);
       services!.settings.syncBaseUrl = 'https://sync.example.com';
+      services!.settings.syncUsername = 'user';
       state!.lastSyncAt = DateTime.now().subtract(const Duration(minutes: 2));
       await pumpRail(tester);
       expect(find.text('Synced · 2 min'), findsOneWidget);
