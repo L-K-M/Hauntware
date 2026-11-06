@@ -467,7 +467,17 @@ Future<void> main(List<String> args) async {
     hostKeys: pinStore,
     pinVerdicts: SettingsPinVerdictStore(store: settingsStore),
     tripwires: SettingsSyncTripwireStore(store: settingsStore),
-    transportFactory: httpSyncTransport,
+    transportFactory: (baseUrl, {token}) {
+      final deviceId = syncEnrollmentState.cachedDeviceId;
+      return httpSyncTransport(
+        baseUrl,
+        token: token,
+        deviceId: deviceId,
+        deviceName: deviceId == null
+            ? null
+            : 'Poltergeist on ${Platform.operatingSystem}',
+      );
+    },
     vaultKey: masterKeys.probeKeystore,
     servers: servers,
     vaultStore: vaultStore,

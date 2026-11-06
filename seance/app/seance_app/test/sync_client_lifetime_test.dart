@@ -650,6 +650,36 @@ void main() {
     });
   });
 
+  test('enrollment sends the existing installation id and product device name',
+      () async {
+    http.Request? registration;
+    final transport = _TrackedClient((request) async {
+      registration = request;
+      final body = jsonDecode(request.body) as Map;
+      return http.Response(jsonEncode({
+        'token': 'new-token',
+        'vaultKeyCheck': body['vaultKeyCheck'],
+        'recordEnvelopeFloor': kCurrentRecordEnvelopeVersion,
+      }), HttpStatus.ok);
+    });
+    final stableId = services.settings.deviceId;
+
+    await http.runWithClient(
+      () => services.registerSync(
+        baseUrl: _baseUrl,
+        username: 'new-user',
+        password: 'password',
+        encryptionPassphrase: 'password',
+      ),
+      () => transport,
+    );
+
+    expect(registration, isNotNull);
+    expect(registration!.headers['x-seance-device-id'], stableId);
+    expect(registration!.headers['x-seance-device-name'],
+        'Seance on ${Platform.operatingSystem}');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
   test('failed sync closes its client', () async {
     final transport = _TrackedClient((_) async =>
         http.Response('unavailable', HttpStatus.serviceUnavailable));

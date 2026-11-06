@@ -1322,7 +1322,11 @@ class AppServices {
     String baseUrl,
     Future<T> Function(HttpSyncClient client) action,
   ) async {
-    final client = HttpSyncClient(baseUrl: baseUrl);
+    final client = HttpSyncClient(
+      baseUrl: baseUrl,
+      deviceId: settings.deviceId,
+      deviceName: 'Seance on ${Platform.operatingSystem}',
+    );
     try {
       return await action(client);
     } finally {

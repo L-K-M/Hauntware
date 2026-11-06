@@ -116,12 +116,50 @@ class SqliteStorage implements Storage {
       _db.execute('''
       CREATE TABLE IF NOT EXISTS tokens (
         token_digest TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL UNIQUE,
         username TEXT NOT NULL,
         account_generation TEXT NOT NULL,
         issued_at INTEGER NOT NULL,
-        expires_at INTEGER NOT NULL
+        expires_at INTEGER NOT NULL,
+        last_used_at INTEGER NOT NULL,
+        device_id TEXT,
+        device_name TEXT NOT NULL DEFAULT 'Unknown device'
       );
     ''');
+      final sessionColumns = _db
+          .select('PRAGMA table_info(tokens)')
+          .map((row) => row['name'])
+          .toSet();
+      for (final column in {
+        'session_id': 'TEXT',
+        'last_used_at': 'INTEGER',
+        'device_id': 'TEXT',
+        'device_name': "TEXT NOT NULL DEFAULT 'Unknown device'",
+      }.entries) {
+        if (!sessionColumns.contains(column.key)) {
+          _db.execute(
+            'ALTER TABLE tokens ADD COLUMN ${column.key} ${column.value}',
+          );
+        }
+      }
+      // Existing hashed sessions remain valid but have no installation label.
+      // Plaintext rows were invalidated above, never grandfathered here.
+      while (true) {
+        final rows = _db.select(
+          "SELECT token_digest FROM tokens WHERE session_id IS NULL OR session_id = '' LIMIT 1",
+        );
+        if (rows.isEmpty) break;
+        _db.execute('UPDATE tokens SET session_id = ? WHERE token_digest = ?', [
+          newSessionId(),
+          rows.single['token_digest'],
+        ]);
+      }
+      _db.execute(
+        'UPDATE tokens SET last_used_at = issued_at WHERE last_used_at IS NULL',
+      );
+      _db.execute(
+        'CREATE UNIQUE INDEX IF NOT EXISTS tokens_session_id ON tokens(session_id)',
+      );
       _db.execute(
         'CREATE INDEX IF NOT EXISTS tokens_account_issued '
         'ON tokens(username, account_generation, issued_at);',
@@ -366,11 +404,13 @@ class SqliteStorage implements Storage {
     required int issuedAt,
     required int expiresAt,
     required int maxSessions,
+    SessionDevice? device,
   }) async {
     validateSessionPolicy(
       issuedAt: issuedAt,
       expiresAt: expiresAt,
       maxSessions: maxSessions,
+      device: device,
     );
     return _transaction(_TransactionMode.write, () {
       if (_accountGeneration(account.username) != null) return null;
@@ -381,6 +421,7 @@ class SqliteStorage implements Storage {
         issuedAt: issuedAt,
         expiresAt: expiresAt,
         maxSessions: maxSessions,
+        device: device,
       );
     });
   }
@@ -413,11 +454,13 @@ class SqliteStorage implements Storage {
     required int issuedAt,
     required int expiresAt,
     required int maxSessions,
+    SessionDevice? device,
   }) async {
     validateSessionPolicy(
       issuedAt: issuedAt,
       expiresAt: expiresAt,
       maxSessions: maxSessions,
+      device: device,
     );
     return _transaction(_TransactionMode.write, () {
       if (_accountGeneration(account.username) != account.generation) {
@@ -428,6 +471,7 @@ class SqliteStorage implements Storage {
         issuedAt: issuedAt,
         expiresAt: expiresAt,
         maxSessions: maxSessions,
+        device: device,
       );
     });
   }
@@ -437,15 +481,22 @@ class SqliteStorage implements Storage {
     required int issuedAt,
     required int expiresAt,
     required int maxSessions,
+    SessionDevice? device,
   }) {
     _db.execute(
       'DELETE FROM tokens WHERE username = ? AND account_generation = ? '
       'AND expires_at <= ?',
       [account.username, account.generation, issuedAt],
     );
+    if (device != null) {
+      _db.execute(
+        'DELETE FROM tokens WHERE username = ? AND account_generation = ? AND device_id = ?',
+        [account.username, account.generation, device.id],
+      );
+    }
     final sessions = _db.select(
       'SELECT token_digest FROM tokens WHERE username = ? '
-      'AND account_generation = ? ORDER BY issued_at ASC, token_digest ASC',
+      'AND account_generation = ? ORDER BY last_used_at ASC, issued_at ASC, session_id ASC',
       [account.username, account.generation],
     );
     for (var i = 0; i <= sessions.length - maxSessions; i++) {
@@ -458,8 +509,19 @@ class SqliteStorage implements Storage {
       final digest = digestBearerToken(token);
       _db.execute(
         'INSERT OR IGNORE INTO tokens (token_digest, username, '
-        'account_generation, issued_at, expires_at) VALUES (?, ?, ?, ?, ?)',
-        [digest, account.username, account.generation, issuedAt, expiresAt],
+        'account_generation, issued_at, expires_at, session_id, last_used_at, '
+        'device_id, device_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          digest,
+          account.username,
+          account.generation,
+          issuedAt,
+          expiresAt,
+          newSessionId(),
+          issuedAt,
+          device?.id,
+          device?.name ?? 'Unknown device',
+        ],
       );
       if (_db.updatedRows == 1) return token;
     }
@@ -472,12 +534,22 @@ class SqliteStorage implements Storage {
   }) async {
     final digest = digestBearerToken(token);
     final rows = _db.select(
-      'SELECT t.username, t.account_generation, t.expires_at '
+      'SELECT t.username, t.account_generation, t.expires_at, t.last_used_at '
       'FROM tokens t JOIN accounts a ON a.username = t.username '
       'AND a.generation = t.account_generation WHERE t.token_digest = ?',
       [digest],
     );
     if (rows.isEmpty || (rows.first['expires_at'] as int) <= now) return null;
+    if ((rows.first['last_used_at'] as int) <=
+        now - const Duration(hours: 1).inMilliseconds) {
+      _transaction(_TransactionMode.write, () {
+        _db.execute(
+          'UPDATE tokens SET last_used_at = ? WHERE token_digest = ? '
+          'AND account_generation = ? AND expires_at > ?',
+          [now, digest, rows.first['account_generation'], now],
+        );
+      });
+    }
     return AuthPrincipal(
       username: rows.first['username'] as String,
       accountGeneration: rows.first['account_generation'] as String,
@@ -545,6 +617,70 @@ class SqliteStorage implements Storage {
         );
         return true;
       });
+
+  void _requireSessionAt(AuthPrincipal principal, int now) {
+    _requireCurrent(principal);
+    final rows = _db.select(
+      'SELECT expires_at FROM tokens WHERE token_digest = ?',
+      [principal.tokenDigest],
+    );
+    if ((rows.single['expires_at'] as int) <= now) {
+      throw const StalePrincipalException();
+    }
+  }
+
+  @override
+  Future<List<SyncSessionInfo>> listSessionsFor(
+    AuthPrincipal principal, {
+    required int now,
+  }) async => _transaction(_TransactionMode.write, () {
+    _requireSessionAt(principal, now);
+    _db.execute(
+      'DELETE FROM tokens WHERE username = ? AND account_generation = ? AND expires_at <= ?',
+      [principal.username, principal.accountGeneration, now],
+    );
+    final rows = _db.select(
+      'SELECT * FROM tokens WHERE username = ? AND account_generation = ? '
+      'ORDER BY last_used_at DESC, issued_at DESC, session_id ASC',
+      [principal.username, principal.accountGeneration],
+    );
+    return [
+      for (final row in rows)
+        SyncSessionInfo(
+          id: row['session_id'] as String,
+          deviceId: row['device_id'] as String?,
+          deviceName: row['device_name'] as String,
+          createdAt: row['issued_at'] as int,
+          expiresAt: row['expires_at'] as int,
+          lastUsedAt: row['last_used_at'] as int,
+          legacy: row['device_id'] == null,
+          current: row['token_digest'] == principal.tokenDigest,
+        ),
+    ];
+  });
+
+  @override
+  Future<RevokeSessionResponse> revokeSessionByIdFor(
+    AuthPrincipal principal,
+    String sessionId, {
+    required int now,
+  }) async => _transaction(_TransactionMode.write, () {
+    _requireSessionAt(principal, now);
+    final rows = _db.select(
+      'SELECT token_digest FROM tokens WHERE session_id = ? '
+      'AND username = ? AND account_generation = ? AND expires_at > ?',
+      [sessionId, principal.username, principal.accountGeneration, now],
+    );
+    if (rows.isEmpty) {
+      return const RevokeSessionResponse(revoked: false, current: false);
+    }
+    final digest = rows.single['token_digest'] as String;
+    _db.execute('DELETE FROM tokens WHERE token_digest = ?', [digest]);
+    return RevokeSessionResponse(
+      revoked: true,
+      current: digest == principal.tokenDigest,
+    );
+  });
 
   @override
   Future<bool> deleteAccountFor(AuthPrincipal principal) async =>

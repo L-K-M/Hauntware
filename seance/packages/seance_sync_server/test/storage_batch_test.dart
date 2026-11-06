@@ -118,7 +118,11 @@ void main() {
             Request(
               method,
               Uri.parse('http://localhost$path'),
-              headers: {'authorization': 'Bearer unused'},
+              // A malformed token is rejected before reaching the disabled
+              // backend; use the normal bearer shape to test its failure.
+              headers: {
+                'authorization': 'Bearer ${base64Url.encode(List<int>.filled(32, 0))}',
+              },
             ),
           );
           expect(response.statusCode, HttpStatus.serviceUnavailable);
