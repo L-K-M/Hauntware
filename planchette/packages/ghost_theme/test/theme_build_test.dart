@@ -311,6 +311,24 @@ void main() {
   });
 
   group('custom accent contrast', () {
+    test('adjusted accent remains safe at stored colour precision', () {
+      const accent = Color(0xFFB846C1);
+      const surface = Color(0xFFFFFFFF);
+      final palette = ThemePalette(accent: accent, surface: surface);
+      final resolved = GhostTheme.resolveAccent(
+        seanceStyle,
+        palette,
+        Brightness.light,
+      );
+      final storedForeground = Color(resolved.paneIndicator.toARGB32());
+
+      expect(storedForeground, isNot(accent));
+      expect(
+        contrastRatio(storedForeground, surface),
+        greaterThanOrEqualTo(4.5),
+      );
+    });
+
     for (final accent in const [
       Color(0xFFFFD600),
       Color(0xFF3949AB),

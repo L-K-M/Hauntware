@@ -572,7 +572,9 @@ class _TerminalTabStripState extends State<TerminalTabStrip> {
                           value: widget.tabs[i].id,
                           checked: widget.tabs[i].id == widget.activeTabId,
                           child: Text(
-                            '${labels[i]}, ${_tabSemanticState(widget.tabs[i])}',
+                            '${labels[i]}, '
+                            '${widget.tabs[i] is EditorTab ? 'File' : 'Terminal'}, '
+                            '${_tabSemanticState(widget.tabs[i])}',
                           ),
                         ),
                     ],

@@ -79,6 +79,24 @@ class _ConnectedTransport implements SessionTransport {
   void resize(TerminalSize size) {}
 }
 
+Finder _tabViewport() => find.descendant(
+  of: find.byType(TerminalTabStrip),
+  matching: find.byType(SingleChildScrollView),
+);
+
+ScrollPosition _tabScrollPosition(WidgetTester tester) => tester
+    .state<ScrollableState>(
+      find.descendant(of: _tabViewport(), matching: find.byType(Scrollable)),
+    )
+    .position;
+
+void _expectInsideViewport(WidgetTester tester, Finder label) {
+  final viewport = tester.getRect(_tabViewport());
+  final visible = tester.getRect(label);
+  expect(visible.left, greaterThanOrEqualTo(viewport.left - 0.5));
+  expect(visible.right, lessThanOrEqualTo(viewport.right + 0.5));
+}
+
 void main() {
   testWidgets('a single session keeps tab actions reachable at phone width', (
     tester,
@@ -199,6 +217,139 @@ void main() {
     update(() => activeId = tabs.last.id);
     await tester.pumpAndSettle();
     expect(position.pixels, offset);
+  });
+
+  testWidgets('overflow reveals the active tab and keeps actions fixed', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final tabs = [
+      for (var i = 1; i <= 6; i++) _session(server, 'tab-$i', name: 'Tab $i'),
+    ];
+    var newTabCalls = 0;
+    var generateCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TerminalTabStrip(
+            tabs: tabs,
+            activeTabId: tabs.last.id,
+            onFocus: (_) {},
+            onClose: (_) {},
+            onNewTab: () => newTabCalls++,
+            onGenerateCommand: () => generateCalls++,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    _expectInsideViewport(tester, find.text('Tab 6'));
+    expect(find.byTooltip('All tabs'), findsOneWidget);
+    expect(find.byTooltip('New tab'), findsOneWidget);
+    expect(find.byTooltip('Generate command'), findsOneWidget);
+    // Action buttons must stay within the strip width, not pushed off-screen.
+    expect(
+      tester.getRect(find.byTooltip('New tab')).right,
+      lessThanOrEqualTo(420),
+    );
+    expect(
+      tester.getRect(find.byTooltip('Generate command')).right,
+      lessThanOrEqualTo(420),
+    );
+    await tester.tap(find.byTooltip('New tab'));
+    await tester.tap(find.byTooltip('Generate command'));
+    expect(newTabCalls, 1);
+    expect(generateCalls, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('label growth keeps the active tab in view', (tester) async {
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final tabs = [
+      for (var i = 1; i <= 5; i++) _session(server, 'tab-$i', name: 'Tab $i'),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TerminalTabStrip(
+            tabs: tabs,
+            activeTabId: tabs.last.id,
+            onFocus: (_) {},
+            onClose: (_) {},
+            onNewTab: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    _expectInsideViewport(tester, find.text('Tab 5'));
+
+    // Growing a non-active tab's label must not push the active tab out.
+    tabs.first.customName.value = 'a much wider workspace label';
+    await tester.pumpAndSettle();
+    _expectInsideViewport(tester, find.text('Tab 5'));
+  });
+
+  testWidgets('the overflow menu disappears after tabs shrink to fit', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final allTabs = [
+      for (var i = 1; i <= 6; i++)
+        _session(server, 'tab-$i', name: 'a wide workspace $i'),
+    ];
+    List<PaneTab> shownTabs = [...allTabs];
+    late StateSetter rebuild;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              rebuild = setState;
+              return TerminalTabStrip(
+                tabs: shownTabs,
+                activeTabId: shownTabs.first.id,
+                onFocus: (_) {},
+                onClose: (_) {},
+                onNewTab: () {},
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('All tabs'), findsOneWidget);
+
+    // Shorten labels and remove tabs so everything fits.
+    for (var i = 0; i < 3; i++) {
+      allTabs[i].customName.value = String.fromCharCodes(
+        List.filled(3, 'a'.codeUnitAt(0) + i),
+      );
+    }
+    rebuild(() => shownTabs = allTabs.take(3).toList());
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byTooltip('All tabs'),
+      findsNothing,
+      reason:
+          'remaining overflow: ${_tabScrollPosition(tester).maxScrollExtent}',
+    );
+    expect(_tabScrollPosition(tester).maxScrollExtent, 0);
   });
 
   testWidgets('a vertical wheel scrolls overflowed tabs horizontally', (
@@ -323,6 +474,55 @@ void main() {
     expect(responses, [true]);
   });
 
+  testWidgets('reduced-motion jumps to the active tab without animating', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final tabs = [
+      for (var i = 0; i < 8; i++)
+        _session(server, 'tab-$i', name: 'Tab ${i + 1}'),
+    ];
+    var activeId = tabs.first.id;
+    late StateSetter update;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return MediaQuery(
+                data: const MediaQueryData(disableAnimations: true),
+                child: TerminalTabStrip(
+                  tabs: tabs,
+                  activeTabId: activeId,
+                  onFocus: (_) {},
+                  onClose: (_) {},
+                  onNewTab: () {},
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final position = _tabScrollPosition(tester);
+    expect(position.pixels, 0);
+
+    // Switching to the last tab should jump immediately when animations
+    // are disabled, not animate over a duration.
+    update(() => activeId = tabs.last.id);
+    await tester.pump();
+    // With reduced-motion the scroll is instantaneous: one frame suffices.
+    expect(position.pixels, greaterThan(0));
+    _expectInsideViewport(tester, find.text('Tab 8'));
+  });
+
   testWidgets('the overflow menu focuses every tab', (tester) async {
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1;
@@ -351,21 +551,87 @@ void main() {
 
     await tester.tap(find.byTooltip('All tabs'));
     await tester.pumpAndSettle();
-    expect(find.text('Tab 8, Disconnected'), findsOneWidget);
+    expect(find.text('Tab 8, Terminal, Disconnected'), findsOneWidget);
     final checked = tester.widget<CheckedPopupMenuItem<String>>(
-      find.widgetWithText(CheckedPopupMenuItem<String>, 'Tab 1, Disconnected'),
+      find.widgetWithText(
+        CheckedPopupMenuItem<String>,
+        'Tab 1, Terminal, Disconnected',
+      ),
     );
     expect(checked.checked, isTrue);
 
     final lastItem = find.widgetWithText(
       CheckedPopupMenuItem<String>,
-      'Tab 8, Disconnected',
+      'Tab 8, Terminal, Disconnected',
     );
     await tester.ensureVisible(lastItem);
     await tester.pumpAndSettle();
     await tester.tap(lastItem);
     await tester.pumpAndSettle();
     expect(focused, tabs.last.id);
+  });
+
+  testWidgets('the overflow menu identifies and reveals every tab kind', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final terminals = [
+      for (var i = 1; i <= 4; i++)
+        _session(server, 'tab-$i', name: 'Workspace $i'),
+    ];
+    final editor = EditorTab(
+      id: 'editor',
+      serverId: server.id,
+      config: server,
+      remotePath: '/var/log/notes.txt',
+      localPath: 'notes.txt',
+      ownerEditSessionId: terminals.first.editSessionId,
+    )..dirty.value = true;
+    addTearDown(editor.dispose);
+    final tabs = <PaneTab>[...terminals, editor];
+    var active = terminals.first.id;
+    var focused = '';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) => TerminalTabStrip(
+              tabs: tabs,
+              activeTabId: active,
+              onFocus: (id) => setState(() {
+                focused = id;
+                active = id;
+              }),
+              onClose: (_) {},
+              onNewTab: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('All tabs'));
+    await tester.pumpAndSettle();
+
+    for (var i = 1; i <= 4; i++) {
+      expect(find.text('Workspace $i, Terminal, Disconnected'), findsOneWidget);
+    }
+    final editorItem = find.widgetWithText(
+      CheckedPopupMenuItem<String>,
+      'notes.txt, File, Unsaved changes',
+    );
+    expect(editorItem, findsOneWidget);
+
+    // Selecting a menu item focuses the tab and reveals it in the strip.
+    await tester.ensureVisible(editorItem);
+    await tester.tap(editorItem);
+    await tester.pumpAndSettle();
+    expect(focused, editor.id);
+    _expectInsideViewport(tester, find.text('notes.txt'));
   });
 
   testWidgets('same-place tabs get disambiguating suffixes', (tester) async {
