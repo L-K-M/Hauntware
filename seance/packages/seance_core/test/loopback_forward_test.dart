@@ -34,11 +34,31 @@ final class _ShoutingDuplex implements ByteDuplex {
   }
 }
 
-Future<String> _ask(int port, String text) async {
+Future<String> _ask(int port, String text, {bool resetIsEmpty = false}) async {
   final socket = await Socket.connect(InternetAddress.loopbackIPv4, port);
-  socket.add(utf8.encode(text));
-  await socket.close();
-  return utf8.decode(await socket.expand((bytes) => bytes).toList());
+  try {
+    socket.add(utf8.encode(text));
+    await socket.close();
+    return utf8.decode(await socket.expand((bytes) => bytes).toList());
+  } on SocketException catch (error) {
+    // Destroying an accepted-but-refused relay can surface as ECONNRESET
+    // instead of EOF. Accept only that platform's reset code after connect
+    // has succeeded; other socket errors still fail the test.
+    final resetCode = switch (Platform.operatingSystem) {
+      'macos' || 'ios' => 54,
+      'linux' || 'android' => 104,
+      'windows' => 10054,
+      _ => null,
+    };
+    if (resetIsEmpty &&
+        resetCode != null &&
+        error.osError?.errorCode == resetCode) {
+      return '';
+    }
+    rethrow;
+  } finally {
+    socket.destroy();
+  }
 }
 
 void main() {
@@ -91,7 +111,7 @@ void main() {
     });
     addTearDown(forward.close);
 
-    expect(await _ask(forward.port, 'lost'), isEmpty);
+    expect(await _ask(forward.port, 'lost', resetIsEmpty: true), isEmpty);
     expect(await _ask(forward.port, 'kept'), 'KEPT');
   });
 

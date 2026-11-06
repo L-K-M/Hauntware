@@ -62,6 +62,56 @@ void main() {
     },
   );
 
+  test('keeps a matching Apple Development identity', () async {
+    final result = await fixture.run(['app']);
+
+    expect(result.exitCode, 0, reason: _output(result));
+    expect(result.stdout, isNot(contains('temporary ad-hoc signing')));
+    fixture.expectRestored();
+    fixture.expectBuildUsedGeneratedConfig();
+  });
+
+  for (final identity in ['missing', 'wrong-team', 'security-failure']) {
+    test('uses temporary ad-hoc signing for $identity identity', () async {
+      final result = await fixture.run(
+        ['app'],
+        identity: identity,
+        expectedSigning: 'ad-hoc',
+      );
+
+      expect(result.exitCode, 0, reason: _output(result));
+      expect(result.stdout, contains('temporary ad-hoc signing'));
+      fixture.expectRestored();
+      fixture.expectBuildUsedGeneratedConfig();
+    });
+  }
+
+  test('leaves an already ad-hoc project unchanged', () async {
+    final result = await fixture.run(
+      ['app'],
+      identity: 'missing',
+      projectSigning: 'ad-hoc',
+    );
+
+    expect(result.exitCode, 0, reason: _output(result));
+    expect(result.stdout, isNot(contains('temporary ad-hoc signing')));
+    fixture.expectRestored();
+    fixture.expectBuildUsedGeneratedConfig();
+  });
+
+  test('never downgrades Developer ID signing', () async {
+    final result = await fixture.run(
+      ['app'],
+      identity: 'missing',
+      projectSigning: 'developer-id',
+    );
+
+    expect(result.exitCode, 0, reason: _output(result));
+    expect(result.stdout, isNot(contains('temporary ad-hoc signing')));
+    fixture.expectRestored();
+    fixture.expectBuildUsedGeneratedConfig();
+  });
+
   test('preserves exact dirty bytes and existing untracked Podfiles', () async {
     // No Git repository exists in this fixture. Restoration must preserve the
     // actual working files, including their custom line endings and bytes.
@@ -194,6 +244,8 @@ class _BuildFixture {
     _writeTool('uname', '#!/usr/bin/env bash\necho Darwin\n');
     _writeTool('pod', '#!/usr/bin/env bash\nexit 0\n');
     _writeTool('open', '#!/usr/bin/env bash\nexit 0\n');
+    _writeTool('security', _fakeSecurity);
+    _writeTool('openssl', _fakeOpenSsl);
     _writeTool('flutter', _fakeFlutter);
   }
 
@@ -222,7 +274,13 @@ exec /bin/rm "$@"
 ''');
   }
 
-  Future<ProcessResult> run(List<String> arguments, {String failure = ''}) {
+  Future<ProcessResult> run(
+    List<String> arguments, {
+    String failure = '',
+    String identity = 'matching',
+    String projectSigning = 'automatic',
+    String? expectedSigning,
+  }) {
     return Process.run(
       'bash',
       [
@@ -239,7 +297,15 @@ exec /bin/rm "$@"
         'TMPDIR': sandbox.path,
         'FAKE_COCOAPODS_FILES': _cocoaPodsFiles.join('\n'),
         'FAKE_FAILURE': failure,
+        'FAKE_IDENTITY': identity,
         'FAKE_LOG': flutterLog.path,
+        'FAKE_PROJECT': switch (projectSigning) {
+          'automatic' => _automaticSigningProject,
+          'ad-hoc' => _adHocSigningProject,
+          'developer-id' => _developerIdSigningProject,
+          _ => throw ArgumentError.value(projectSigning, 'projectSigning'),
+        },
+        'FAKE_EXPECT_SIGNING': expectedSigning ?? projectSigning,
         'FAKE_BUILD_VERIFIED': p.join(sandbox.path, 'build-verified'),
       },
     );
@@ -301,7 +367,11 @@ printf '%s\n' "$*" >> "$FAKE_LOG"
 if [[ "$1" == pub && "$2" == get ]]; then
   while IFS= read -r file; do
     mkdir -p "$(dirname "$file")"
-    printf 'generated config\n' > "$file"
+    if [[ "$file" == macos/Runner.xcodeproj/project.pbxproj ]]; then
+      printf '%s' "$FAKE_PROJECT" > "$file"
+    else
+      printf 'generated config\n' > "$file"
+    fi
   done <<< "$FAKE_COCOAPODS_FILES"
   mkdir -p build macos/Flutter/ephemeral
   printf 'keep cache' > build/cache-marker
@@ -313,8 +383,30 @@ if [[ "$1" == pub && "$2" == get ]]; then
   [[ "$FAKE_FAILURE" != pub ]] || exit 23
 elif [[ "$1" == build ]]; then
   while IFS= read -r file; do
+    [[ "$file" != macos/Runner.xcodeproj/project.pbxproj ]] || continue
     grep -qx 'generated config' "$file" || exit 96
   done <<< "$FAKE_COCOAPODS_FILES"
+  project=macos/Runner.xcodeproj/project.pbxproj
+  case "$FAKE_EXPECT_SIGNING" in
+    automatic)
+      grep -Fq '"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";' "$project"
+      grep -Fq 'CODE_SIGN_STYLE = Automatic;' "$project"
+      grep -Fq 'DEVELOPMENT_TEAM = 293A48LC7B;' "$project"
+      ;;
+    ad-hoc)
+      grep -Fq '"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";' "$project"
+      grep -Fq 'CODE_SIGN_STYLE = Manual;' "$project"
+      grep -Fq 'DEVELOPMENT_TEAM = "";' "$project"
+      ! grep -Fq 'Apple Development' "$project"
+      ! grep -Fq 'CODE_SIGN_STYLE = Automatic;' "$project"
+      ;;
+    developer-id)
+      grep -Fq '"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";' "$project"
+      grep -Fq 'DEVELOPMENT_TEAM = 293A48LC7B;' "$project"
+      ! grep -Fq '"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";' "$project"
+      ;;
+    *) exit 95 ;;
+  esac
   printf yes > "$FAKE_BUILD_VERIFIED"
   [[ "$FAKE_FAILURE" != build ]] || exit 24
   case "$2" in
@@ -331,4 +423,61 @@ elif [[ "$1" == build ]]; then
 else
   exit 98
 fi
+''';
+
+const _fakeSecurity = r'''#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  find-identity)
+    case "$FAKE_IDENTITY" in
+      matching|wrong-team)
+        printf '  1) 0123456789ABCDEF0123456789ABCDEF01234567 "Apple Development: Fixture Developer (PERSONAL1)"\n'
+        printf '     1 valid identities found\n'
+        ;;
+      missing)
+        printf '     0 valid identities found\n'
+        ;;
+      security-failure) exit 44 ;;
+      *) exit 45 ;;
+    esac
+    ;;
+  find-certificate)
+    printf '%s\n' '-----BEGIN CERTIFICATE-----' fixture '-----END CERTIFICATE-----'
+    ;;
+  *) exit 46 ;;
+esac
+''';
+
+const _fakeOpenSsl = r'''#!/usr/bin/env bash
+set -euo pipefail
+cat >/dev/null
+if [[ "$FAKE_IDENTITY" == wrong-team ]]; then
+  printf 'subject=C=US,O=Fixture,OU=WRONGTEAM1,CN=Apple Development: Fixture Developer (PERSONAL1)\n'
+else
+  printf 'subject=C=US,O=Fixture,OU=293A48LC7B,CN=Apple Development: Fixture Developer (PERSONAL1)\n'
+fi
+''';
+
+const _automaticSigningProject = '''
+buildSettings = {
+  "CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+  CODE_SIGN_STYLE = Automatic;
+  DEVELOPMENT_TEAM = 293A48LC7B;
+};
+''';
+
+const _adHocSigningProject = '''
+buildSettings = {
+  "CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+  CODE_SIGN_STYLE = Manual;
+  DEVELOPMENT_TEAM = "";
+};
+''';
+
+const _developerIdSigningProject = '''
+buildSettings = {
+  "CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+  CODE_SIGN_STYLE = Manual;
+  DEVELOPMENT_TEAM = 293A48LC7B;
+};
 ''';
