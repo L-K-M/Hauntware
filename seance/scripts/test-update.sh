@@ -103,12 +103,17 @@ if [[ "$args" == *" compose "*" config "* ]]; then
     exit 0
 fi
 
-if [[ "$args" == *" compose "*" ps -q "* ]]; then
+if [[ "$args" == *" compose "*" ps -q "* ||
+      "$args" == *" compose "*" ps -a -q "* ]]; then
     if [[ "$args" == *"--project-name seance-preflight-"* ]]; then
+        # Compose's default ps view excludes a just-created, stopped service.
+        [[ "$args" == *" ps -a -q "* ]] || exit 0
         echo preflight-container
     elif [[ "$args" == *"rollback-compose.yml"* ]]; then
+        [[ "$args" == *" ps -a -q "* ]] || exit 0
         echo old-container
     elif [[ -f "$TEST_STATE.production" ]]; then
+        [[ "$args" == *" ps -a -q "* || -f "$TEST_STATE.production_started" ]] || exit 0
         echo candidate-container
     else
         echo old-container
@@ -261,6 +266,8 @@ log="$(run_case success success)"
 [[ "$(grep -c 'run .*data-volume:/data:ro' "$log")" -eq 2 ]] ||
     fail 'success did not take two isolated snapshots'
 assert_has 'publish=0 compose --project-name seance-preflight-.* create seance-sync' "$log"
+assert_has 'compose --project-name seance-preflight-.* ps -a -q seance-sync' "$log"
+assert_has 'compose --project-name seance-project .* ps -a -q seance-sync' "$log"
 assert_has 'compose --project-name seance-project -f .*rollback-compose.yml stop seance-sync' "$log"
 assert_has 'compose .* up --no-start .*--no-build' "$log"
 assert_has 'image tag .*seance-sync:latest' "$log"

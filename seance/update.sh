@@ -250,7 +250,7 @@ preflight_candidate() {
 
     local candidate_container candidate_volume
     candidate_container="$(SEANCE_IMAGE="$candidate_tag" SEANCE_PUBLISH_PORT=0 \
-        "${preflight_compose[@]}" ps -q "$SERVICE")"
+        "${preflight_compose[@]}" ps -a -q "$SERVICE")"
     candidate_volume="$(docker inspect -f \
         '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}' \
         "$candidate_container")"
@@ -284,7 +284,7 @@ preflight_candidate() {
 stop_candidate_safely() {
     local deployed_container running
     deployed_container="$(SEANCE_IMAGE="$candidate_tag" \
-        "${compose[@]}" ps -q "$SERVICE")" || return 1
+        "${compose[@]}" ps -a -q "$SERVICE")" || return 1
     if ! SEANCE_IMAGE="$candidate_tag" "${compose[@]}" stop "$SERVICE"; then
         echo "!!! Could not stop the candidate; refusing further recovery changes." >&2
         return 1
@@ -316,7 +316,7 @@ restore_previous_release() {
     stop_candidate_safely || return 1
     seed_volume_from_snapshot "$data_volume" "$rollback_tag" || return 1
     "${old_compose[@]}" up --no-start --remove-orphans --no-build || return 1
-    rollback_container="$("${old_compose[@]}" ps -q "$SERVICE")" || return 1
+    rollback_container="$("${old_compose[@]}" ps -a -q "$SERVICE")" || return 1
     [[ -n "$rollback_container" ]] || return 1
     rollback_image="$(docker inspect -f '{{.Image}}' "$rollback_container")" || return 1
     rollback_volume="$(docker inspect -f \
@@ -481,7 +481,7 @@ main() {
         --no-start --remove-orphans --no-build
     local candidate_container candidate_data_volume
     candidate_container="$(SEANCE_IMAGE="$candidate_tag" \
-        "${compose[@]}" ps -q "$SERVICE")"
+        "${compose[@]}" ps -a -q "$SERVICE")"
     candidate_data_volume="$(docker inspect -f \
         '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}' \
         "$candidate_container")"
