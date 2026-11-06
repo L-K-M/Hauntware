@@ -104,7 +104,11 @@ void main() {
 
   Future<List<String>> menuFor(WidgetTester tester, String label) async {
     final row = find.ancestor(
-      of: find.text(label),
+      // MiddleEllipsisText keeps the complete value in semantics while its
+      // visible Text can be shortened to fit a narrow test window.
+      of: find.byWidgetPredicate(
+        (widget) => widget is Text && widget.semanticsLabel == label,
+      ),
       matching: find.byType(ListTile),
     );
     await tester.tap(
