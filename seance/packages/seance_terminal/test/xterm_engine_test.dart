@@ -6,6 +6,10 @@ import 'package:seance_terminal/seance_terminal.dart';
 import 'package:xterm/xterm.dart';
 
 void main() {
+  const integratedPrompt =
+      '\x1b]1337;ShellIntegrationVersion=1;bash\x07'
+      '\x1b]133;A\x07\x1b]133;B\x07';
+
   test(
     'pendingInput tracks typing, backspace, submit, and ignores escapes',
     () {
@@ -38,23 +42,28 @@ void main() {
     },
   );
 
-  test(
-    'onCommand fires with the completed line on Enter, not on interrupt',
-    () {
-      final commands = <String>[];
-      final e = XtermTerminalEngine(onCommand: commands.add);
+  test('onCommand fires for an integrated command, not on interrupt', () {
+    final commands = <String>[];
+    final e = XtermTerminalEngine(onCommand: commands.add);
+    e.feed(Uint8List.fromList(utf8.encode(integratedPrompt)));
 
-      e.injectInput('echo hi');
-      e.injectInput('\r');
-      expect(commands, ['echo hi']);
+    e.injectInput('echo hi');
+    e.injectInput('\r');
+    expect(commands, ['echo hi']);
 
-      // A line abandoned with Ctrl-C is not reported as a command.
-      e.injectInput('secret');
-      e.sendKey([0x03]); // Ctrl-C
-      expect(e.pendingInput, '');
-      expect(commands, ['echo hi']);
-    },
-  );
+    // A line abandoned with Ctrl-C is not reported as a command.
+    e.feed(
+      Uint8List.fromList(
+        utf8.encode(
+          '\x1b]133;C\x07\x1b]133;D;0\x07\x1b]133;A\x07\x1b]133;B\x07',
+        ),
+      ),
+    );
+    e.injectInput('secret');
+    e.sendKey([0x03]); // Ctrl-C
+    expect(e.pendingInput, '');
+    expect(commands, ['echo hi']);
+  });
 
   test('input typed into a running program is not reported', () {
     final commands = <String>[];
@@ -93,36 +102,47 @@ void main() {
     expect(commands, ['sudo ls', 'ls']);
   });
 
-  test('a line typed before the next prompt arrives is reported', () {
+  test('capture waits for the next prompt after command completion', () {
     final commands = <String>[];
     final e = XtermTerminalEngine(onCommand: commands.add);
-    e.feed(
-      Uint8List.fromList(
-        utf8.encode(
-          '\x1b]1337;ShellIntegrationVersion=1;bash\x07'
-          '\x1b]133;A\x07\x1b]133;B\x07',
-        ),
-      ),
-    );
+    e.feed(Uint8List.fromList(utf8.encode(integratedPrompt)));
     e.injectInput('make');
     e.injectInput('\r');
     e.feed(Uint8List.fromList(utf8.encode('\x1b]133;C\x07\x1b]133;D;0\x07')));
 
     // `133;A` and `133;B` are still in flight.
+    e.injectInput('typed too soon');
+    e.injectInput('\r');
+    expect(commands, ['make']);
+
+    e.feed(Uint8List.fromList(utf8.encode('\x1b]133;A\x07\x1b]133;B\x07')));
     e.injectInput('ls');
     e.injectInput('\r');
     expect(commands, ['make', 'ls']);
   });
 
-  test('without shell integration every line is reported', () {
+  test('without shell integration no input is reported', () {
     final commands = <String>[];
     final e = XtermTerminalEngine(onCommand: commands.add);
 
-    e.injectInput('ls');
+    e.injectInput('sudo ls');
     e.injectInput('\r');
-    e.injectInput('pwd');
+    e.feed(Uint8List.fromList(utf8.encode('Password: ')));
+    e.injectInput('hunter2');
     e.injectInput('\r');
-    expect(commands, ['ls', 'pwd']);
+    e.injectInput('ordinary line');
+    e.injectInput('\r');
+    expect(commands, isEmpty);
+  });
+
+  test('an unpaired OSC 133 B marker does not enable capture', () {
+    final commands = <String>[];
+    final e = XtermTerminalEngine(onCommand: commands.add);
+
+    e.feed(Uint8List.fromList(utf8.encode('\x1b]133;B\x07')));
+    e.injectInput('not a validated prompt');
+    e.injectInput('\r');
+    expect(commands, isEmpty);
   });
 
   test('shellMayHaveMoved ticks on every Enter, empty or recalled', () async {
@@ -203,6 +223,101 @@ void main() {
     expect(got, [0x1b, 0x5b, 0x41]);
     await sub.cancel();
   });
+
+  test(
+    'moveCaretTo follows soft wraps and counts wide characters once',
+    () async {
+      final e = XtermTerminalEngine();
+      addTearDown(e.dispose);
+      e.terminal.resize(6, 3);
+      final got = <int>[];
+      final sub = e.userInput.listen(got.addAll);
+      addTearDown(sub.cancel);
+
+      e.feed(Uint8List.fromList(utf8.encode(r'$ 12界45')));
+      e.moveCaretTo(const CellOffset(4, 0));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(utf8.decode(got), '\x1b[D\x1b[D\x1b[D');
+    },
+  );
+
+  test('moveCaretTo moves right to a later character', () async {
+    final e = XtermTerminalEngine();
+    addTearDown(e.dispose);
+    final got = <int>[];
+    final sub = e.userInput.listen(got.addAll);
+    addTearDown(sub.cancel);
+
+    e.feed(Uint8List.fromList(utf8.encode(r'$ abcdef')));
+    e.feed(Uint8List.fromList(utf8.encode('\x1b[3D')));
+    e.moveCaretTo(CellOffset(8, e.terminal.buffer.absoluteCursorY));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(utf8.decode(got), '\x1b[C\x1b[C\x1b[C');
+  });
+
+  test('moveCaretTo refuses mouse-reporting programs', () async {
+    final e = XtermTerminalEngine();
+    addTearDown(e.dispose);
+    final got = <int>[];
+    final sub = e.userInput.listen(got.addAll);
+    addTearDown(sub.cancel);
+
+    e.feed(Uint8List.fromList(utf8.encode(r'$ abcdef')));
+    e.feed(Uint8List.fromList(utf8.encode('\x1b[?9h')));
+    e.moveCaretTo(const CellOffset(2, 0));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(got, isEmpty);
+  });
+
+  test(
+    'moveCaretTo refuses hard lines, alternate screens, and programs',
+    () async {
+      final e = XtermTerminalEngine();
+      addTearDown(e.dispose);
+      final got = <int>[];
+      final sub = e.userInput.listen(got.addAll);
+      addTearDown(sub.cancel);
+
+      e.feed(
+        Uint8List.fromList(
+          utf8.encode(
+            r'$ abc'
+            '\r\noutput',
+          ),
+        ),
+      );
+      e.moveCaretTo(const CellOffset(2, 0));
+      await Future<void>.delayed(Duration.zero);
+      expect(got, isEmpty);
+
+      e.feed(Uint8List.fromList(utf8.encode('\x1b[?1049hfull screen')));
+      e.moveCaretTo(CellOffset(0, e.terminal.buffer.absoluteCursorY));
+      await Future<void>.delayed(Duration.zero);
+      expect(got, isEmpty);
+
+      e.feed(Uint8List.fromList(utf8.encode('\x1b[?1049l')));
+      e.feed(
+        Uint8List.fromList(
+          utf8.encode(
+            '\x1b]1337;ShellIntegrationVersion=1;bash\x07'
+            '\x1b]133;A\x07\x1b]133;B\x07'
+            r'$ running',
+          ),
+        ),
+      );
+      e.sendKey([0x0d]);
+      await Future<void>.delayed(Duration.zero);
+      got.clear();
+
+      e.moveCaretTo(CellOffset(2, e.terminal.buffer.absoluteCursorY));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(got, isEmpty);
+    },
+  );
 
   test(
     'an armed Ctrl converts the next typed char to its control code',

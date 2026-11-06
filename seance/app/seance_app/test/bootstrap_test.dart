@@ -12,6 +12,7 @@ import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/local_settings_backend.dart';
 import 'package:seance_app/theme/app_appearance.dart';
 import 'package:seance_app/theme/theme_presets.dart';
+import 'package:seance_app/ui/settings_screen.dart';
 
 import 'support/device_authenticator.dart';
 
@@ -98,6 +99,47 @@ void main() {
     final scope = routeContext.dependOnInheritedWidgetOfExactType<AppScope>();
     expect(scope, isNotNull,
         reason: 'AppScope must wrap the Navigator so pushed routes see it');
+  });
+
+  testWidgets('recovered settings warning persists and opens Settings', (
+    tester,
+  ) async {
+    late Directory directory;
+    late AppServices services;
+    late AppState state;
+    await tester.runAsync(() async {
+      directory = await Directory.systemTemp.createTemp('seance-recovered-');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(_pathChannel, (_) async => directory.path);
+      await File('${directory.path}/settings.json').writeAsString('{broken');
+      FlutterSecureStorage.setMockInitialValues({});
+      services = await AppServices.initialize();
+      state = AppState(services);
+    });
+    expect(services.settingsWereRecovered, isTrue);
+    settingsWindowHost = null;
+    addTearDown(() async {
+      settingsWindowHost = null;
+      state.dispose();
+      await services.probe.dispose();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(_pathChannel, null);
+      await directory.delete(recursive: true);
+    });
+
+    await tester.pumpWidget(SeanceApp(initOverride: () async => state));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('settings file could not be read'), findsOne);
+    expect(find.text('Open Settings'), findsOneWidget);
+
+    await tester.pump(const Duration(minutes: 1));
+    expect(find.textContaining('settings file could not be read'), findsOne);
+
+    await tester.tap(find.text('Open Settings'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsScreen), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 
   // AppState notifies for every connection, probe and tab change; the

@@ -218,8 +218,9 @@ class TerminalSession extends PaneTab {
 
   /// Tab labels are chrome: a secret pasted into a command line must never be
   /// rendered in the strip. Always on — unlike the assistant's redaction
-  /// toggle there is nothing being *sent* here to opt out of, and the engine's
-  /// capture is keystroke-level so it sees passwords typed at flag prompts.
+  /// toggle there is nothing being *sent* here to opt out of. The engine only
+  /// captures validated shell prompts, but command arguments can still contain
+  /// secrets.
   static final SecretRedactor _redactor = SecretRedactor();
 
   Timer? _commandReveal;

@@ -61,6 +61,8 @@ final class GhostHostKeyStrings {
     this.unknownTitle = 'Unknown host key',
     this.changedTitle = 'HOST KEY CHANGED',
     this.changedWarning = _changedWarning,
+    this.changedReviewInstruction = _changedReviewInstruction,
+    this.keyTypeChanged = _keyTypeChanged,
     this.endpoint = _endpoint,
     this.fingerprintLabel = 'Fingerprint',
     this.newKeyLabel = 'New key',
@@ -78,6 +80,12 @@ final class GhostHostKeyStrings {
 
   /// The changed-key warning about `host`.
   final String Function(String host) changedWarning;
+
+  /// The instruction that explains why trust starts disabled.
+  final String changedReviewInstruction;
+
+  /// The notice shown when both key algorithms are known and differ.
+  final String Function(String previous, String presented) keyTypeChanged;
 
   /// The endpoint line, from the host as configured (no IPv6 brackets) and
   /// the port.
@@ -103,6 +111,13 @@ String _changedWarning(String host) =>
     'one you previously trusted. This can mean a man-in-the-middle '
     'attack. Only continue if you know why the key changed.';
 
+const _changedReviewInstruction =
+    'Review the new and previously trusted fingerprints, then read the '
+    'warning below.';
+
+String _keyTypeChanged(String previous, String presented) =>
+    'Key algorithm changed from $previous to $presented.';
+
 String _endpoint(String host, int port) => '$host:$port';
 
 /// Shows the trust-on-first-use prompt. On a *changed* key this is a hard,
@@ -119,87 +134,174 @@ Future<bool> showGhostHostKeyDialog(
   GlobalKey? dialogKey,
   required TextStyle monoStyle,
 }) async {
-  final changed = prompt.isChanged;
   final result = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
-    builder: (context) {
-      final scheme = Theme.of(context).colorScheme;
-      // Only the dialog's own route may be popped: a rapid second activation
-      // during the exit animation — or a callback from a dialog obscured by a
-      // newer route — would otherwise pop whatever sits below instead.
-      void close(bool accepted) {
-        if (ModalRoute.of(context)?.isCurrent != true) return;
-        Navigator.pop(context, accepted);
-      }
-
-      return AlertDialog(
-        key: dialogKey,
-        // The changed-key review (warning + two fingerprints) must stay
-        // reachable when height is scarce — small windows, split screens, or
-        // accessibility text scaling — instead of overflowing the dialog.
-        scrollable: true,
-        icon: Icon(
-          changed ? Icons.gpp_bad : Icons.verified_user_outlined,
-          color: changed ? scheme.error : null,
-        ),
-        title: Text(changed ? strings.changedTitle : strings.unknownTitle),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (changed)
-              Container(
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: scheme.errorContainer,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  strings.changedWarning(prompt.host),
-                  style: TextStyle(color: scheme.onErrorContainer),
-                ),
-              ),
-            Text(strings.endpoint(prompt.host, prompt.port)),
-            const SizedBox(height: 8),
-            _Fingerprint(
-              label: changed ? strings.newKeyLabel : strings.fingerprintLabel,
-              type: prompt.keyType,
-              value: prompt.fingerprintSha256,
-              monoStyle: monoStyle,
-            ),
-            if (changed) ...[
-              const SizedBox(height: 8),
-              _Fingerprint(
-                label: strings.previousLabel,
-                type: prompt.pinnedKeyType ?? prompt.keyType,
-                value: prompt.pinnedFingerprintSha256!,
-                monoStyle: monoStyle,
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => close(false),
-            child: Text(strings.cancel),
-          ),
-          FilledButton(
-            style: changed
-                ? FilledButton.styleFrom(
-                    backgroundColor: scheme.error,
-                    foregroundColor: scheme.onError,
-                  )
-                : null,
-            onPressed: () => close(true),
-            child: Text(changed ? strings.trustNewKey : strings.trustConnect),
-          ),
-        ],
-      );
-    },
+    builder: (context) => _HostKeyDialog(
+      prompt: prompt,
+      strings: strings,
+      dialogKey: dialogKey,
+      monoStyle: monoStyle,
+    ),
   );
   return result ?? false;
+}
+
+class _HostKeyDialog extends StatefulWidget {
+  const _HostKeyDialog({
+    required this.prompt,
+    required this.strings,
+    required this.dialogKey,
+    required this.monoStyle,
+  });
+
+  final GhostHostKeyPrompt prompt;
+  final GhostHostKeyStrings strings;
+  final GlobalKey? dialogKey;
+  final TextStyle monoStyle;
+
+  @override
+  State<_HostKeyDialog> createState() => _HostKeyDialogState();
+}
+
+class _HostKeyDialogState extends State<_HostKeyDialog> {
+  static const _endTolerance = 1.0;
+
+  late bool _reviewed = !widget.prompt.isChanged;
+  bool _reviewScheduled = false;
+
+  void _considerReviewComplete(ScrollMetrics metrics) {
+    if (_reviewed || metrics.extentAfter > _endTolerance) return;
+    if (_reviewScheduled) return;
+
+    // Scroll notifications arrive after layout. Update in the following frame
+    // so a dialog that already fits can enable trust without mutating its tree
+    // during layout, and reaching the end while scrolling latches the review.
+    _reviewScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _reviewScheduled = false;
+      if (!mounted || _reviewed) return;
+      setState(() => _reviewed = true);
+    });
+  }
+
+  void _close(bool accepted) {
+    if (accepted && widget.prompt.isChanged && !_reviewed) return;
+    // Only the dialog's own route may be popped: a rapid second activation
+    // during the exit animation — or a callback from a dialog obscured by a
+    // newer route — would otherwise pop whatever sits below instead.
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+    Navigator.pop(context, accepted);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final prompt = widget.prompt;
+    final strings = widget.strings;
+    final changed = prompt.isChanged;
+    final scheme = Theme.of(context).colorScheme;
+    final previousType = prompt.pinnedKeyType;
+    final algorithmChanged =
+        changed && previousType != null && previousType != prompt.keyType;
+
+    return NotificationListener<ScrollMetricsNotification>(
+      onNotification: (notification) {
+        if (notification.depth == 0 &&
+            axisDirectionToAxis(notification.metrics.axisDirection) ==
+                Axis.vertical) {
+          _considerReviewComplete(notification.metrics);
+        }
+        return false;
+      },
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification.depth == 0 &&
+              axisDirectionToAxis(notification.metrics.axisDirection) ==
+                  Axis.vertical) {
+            _considerReviewComplete(notification.metrics);
+          }
+          return false;
+        },
+        child: AlertDialog(
+          key: widget.dialogKey,
+          // The changed-key review must stay reachable when height is scarce
+          // instead of overflowing the dialog. Its pinned actions remain in
+          // place while the review itself scrolls.
+          scrollable: true,
+          icon: Icon(
+            changed ? Icons.gpp_bad : Icons.verified_user_outlined,
+            color: changed ? scheme.error : null,
+          ),
+          title: Text(changed ? strings.changedTitle : strings.unknownTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(strings.endpoint(prompt.host, prompt.port)),
+              if (changed) ...[
+                const SizedBox(height: 8),
+                Text(strings.changedReviewInstruction),
+              ],
+              const SizedBox(height: 8),
+              _Fingerprint(
+                label: changed ? strings.newKeyLabel : strings.fingerprintLabel,
+                type: prompt.keyType,
+                value: prompt.fingerprintSha256,
+                monoStyle: widget.monoStyle,
+              ),
+              if (changed) ...[
+                const SizedBox(height: 8),
+                _Fingerprint(
+                  label: strings.previousLabel,
+                  type: previousType ?? prompt.keyType,
+                  value: prompt.pinnedFingerprintSha256!,
+                  monoStyle: widget.monoStyle,
+                ),
+                if (algorithmChanged) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    strings.keyTypeChanged(previousType, prompt.keyType),
+                    style: TextStyle(
+                      color: scheme.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(top: 12),
+                  decoration: BoxDecoration(
+                    color: scheme.errorContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    strings.changedWarning(prompt.host),
+                    style: TextStyle(color: scheme.onErrorContainer),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => _close(false),
+              child: Text(strings.cancel),
+            ),
+            FilledButton(
+              style: changed
+                  ? FilledButton.styleFrom(
+                      backgroundColor: scheme.error,
+                      foregroundColor: scheme.onError,
+                    )
+                  : null,
+              onPressed: !changed || _reviewed ? () => _close(true) : null,
+              child: Text(changed ? strings.trustNewKey : strings.trustConnect),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _Fingerprint extends StatelessWidget {

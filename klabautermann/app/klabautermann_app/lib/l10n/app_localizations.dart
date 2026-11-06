@@ -5634,11 +5634,23 @@ abstract class AppLocalizations {
   /// **'HOST KEY CHANGED'**
   String get hostKeyChangedTitle;
 
-  /// Warning at the top of the changed-key review; host is the server's host name or address as configured.
+  /// Warning after the fingerprints in the changed-key review; host is the server's host name or address as configured.
   ///
   /// In en, this message translates to:
   /// **'The key for {host} does not match the one you previously trusted. This can mean a man-in-the-middle attack. Only continue if you know why the key changed.'**
   String hostKeyChangedWarning(String host);
+
+  /// Explains why trust starts disabled in the changed-key review.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the new and previously trusted fingerprints, then read the warning below.'**
+  String get hostKeyChangedReviewInstruction;
+
+  /// Warning in a changed-key review when the trusted and newly presented SSH key algorithms differ.
+  ///
+  /// In en, this message translates to:
+  /// **'Key algorithm changed from {previousType} to {presentedType}.'**
+  String hostKeyTypeChanged(String previousType, String presentedType);
 
   /// The machine a prompt comes from: the server or one of its jump hosts. An IPv6 host arrives in brackets.
   ///
@@ -8661,6 +8673,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Accent'**
   String get appearanceAccent;
+
+  /// Appearance tab: notice that a chosen accent needs contrast-safe functional tones.
+  ///
+  /// In en, this message translates to:
+  /// **'Low contrast: links and indicators use an adjusted colour.'**
+  String get appearanceAccentAdjusted;
+
+  /// Appearance tab: accessible label for the chosen accent preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Chosen accent'**
+  String get appearanceChosenAccentPreview;
+
+  /// Appearance tab: accessible label for the adjusted functional accent preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjusted interface colour'**
+  String get appearanceAdjustedAccentPreview;
+
+  /// Appearance tab: replaces a low-contrast accent with the suggested accessible colour.
+  ///
+  /// In en, this message translates to:
+  /// **'Use adjusted colour'**
+  String get appearanceUseAdjustedAccent;
 
   /// Appearance tab: name of a colour slot.
   ///

@@ -123,6 +123,13 @@ void main() {
 
     expect(find.text('HOST KEY CHANGED'), findsOneWidget);
     expect(find.textContaining('man-in-the-middle'), findsOneWidget);
+    expect(
+      find.text(
+        'Review the new and previously trusted fingerprints, then read the '
+        'warning below.',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('New key'), findsOneWidget);
     expect(find.text('Previously trusted'), findsOneWidget);
     expect(find.textContaining('SHA256:changed'), findsOneWidget);
