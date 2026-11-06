@@ -57,6 +57,25 @@ locks may contain only `pid`; inspect the deployment and any retained bundles
 before removing those too. The default lock is
 `${TMPDIR:-/tmp}/seance-sync-update.lock`; `SEANCE_UPDATE_LOCK_DIR` overrides it.
 
+For a real Docker integration check, prebuild a protocol-v1 runtime image, its
+`build` stage (with Python3 and SQLite), and the candidate runtime. Then run:
+
+```bash
+python3 scripts/test-update-docker.py \
+  --old-image seance-updater-old \
+  --helper-image seance-updater-old-helper \
+  --candidate-image seance-updater-candidate \
+  --candidate-ref "$(git rev-parse HEAD)"
+```
+
+The harness uses private temporary directories, unique Compose projects and
+volumes, loopback-only ephemeral ports, and test-owned image tags. Repository
+synchronization and Compose build are intercepted to use those prebuilt images;
+server starts, probes, snapshots and SQLite migration are real. It checks a
+successful migration and a failure after readiness plus a durable concurrent
+write. It retains fixture logs and recovery evidence and removes only its own
+Docker resources; it never prunes or changes an existing deployment's image tag.
+
 ### Moving from a standalone Séance clone
 
 The standalone `L-K-M/Seance` repository is archived, and its `./update.sh`
