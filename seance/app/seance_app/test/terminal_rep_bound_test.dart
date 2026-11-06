@@ -18,10 +18,10 @@ void main() {
   });
 
   test('remote REP cannot repeatedly copy a tall scrolling region', () {
-    final terminal = Terminal(maxLines: 512);
+    final terminal = Terminal(maxLines: 512)..resize(1, 512);
 
+    // The host owns viewport sizing; remote resize controls are ignored.
     terminal.write(
-      '\x1b[8;512;1t'
       '\x1b[2;512r'
       '\x1b[3;1HB'
       '\x1b[512;1H'

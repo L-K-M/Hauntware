@@ -127,10 +127,10 @@ void main() {
     });
 
     test('does not repeatedly copy a tall reduced scrolling region', () {
-      final terminal = Terminal(maxLines: 1000);
+      final terminal = Terminal(maxLines: 1000)..resize(1, 1000);
 
+      // The host owns viewport sizing; remote resize controls are ignored.
       terminal.write(
-        '\x1b[8;1000;1t'
         '\x1b[2;1000r'
         '\x1b[3;1HB'
         '\x1b[1000;1H'
