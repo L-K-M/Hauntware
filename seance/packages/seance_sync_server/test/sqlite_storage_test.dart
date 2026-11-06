@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:seance_protocol/seance_protocol.dart';
 import 'package:seance_sync_server/seance_sync_server.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
 /// Exercises the real SQLite storage backend (libsqlite3 is available in CI and
@@ -11,10 +12,12 @@ import 'package:test/test.dart';
 void main() {
   Account account(String user) => Account(
         username: user,
+        generation: 'generation-$user',
         authVerifierHash: 'hash',
         verifierSalt: 'salt',
         argonSalt: 'asalt',
         argonParams: const Argon2Params(),
+        vaultKeyCheck: 'opaque-check',
       );
 
   EncryptedRecord rec(String id, int seq, int updatedAt) => EncryptedRecord(
@@ -31,6 +34,7 @@ void main() {
     await s.checkReady();
     await s.createAccount(account('alice'));
     expect((await s.getAccount('alice'))!.argonSalt, 'asalt');
+    expect((await s.getAccount('alice'))!.vaultKeyCheck, 'opaque-check');
 
     final token = await s.createToken('alice');
     expect(await s.usernameForToken(token), 'alice');
@@ -85,6 +89,37 @@ void main() {
       // Sequence counter also survived.
       expect(await s2.latestSeq('carol'), 1);
       s2.close();
+    } finally {
+      dir.deleteSync(recursive: true);
+    }
+  });
+
+  test('existing record rows migrate explicitly as legacy v1', () async {
+    final dir = Directory.systemTemp.createTempSync('seance_sqlite_legacy');
+    final path = '${dir.path}/seance.sqlite';
+    try {
+      final legacy = sqlite3.open(path);
+      legacy.execute('''
+        CREATE TABLE records (
+          username TEXT NOT NULL,
+          id TEXT NOT NULL,
+          updated_at INTEGER NOT NULL,
+          device_id TEXT NOT NULL,
+          deleted INTEGER NOT NULL,
+          seq INTEGER NOT NULL,
+          blob BLOB NOT NULL,
+          PRIMARY KEY (username, id)
+        )
+      ''');
+      legacy.execute(
+        'INSERT INTO records VALUES (?, ?, ?, ?, ?, ?, ?)',
+        ['alice', 'old', 1, 'device', 0, 1, Uint8List.fromList([1])],
+      );
+      legacy.dispose();
+
+      final storage = SqliteStorage.open(path);
+      expect((await storage.getRecord('alice', 'old'))!.envelopeVersion, 1);
+      storage.close();
     } finally {
       dir.deleteSync(recursive: true);
     }

@@ -137,13 +137,19 @@ final class FakeSyncServer {
     _records[id] = sealed.withSeq(++_seq);
   }
 
-  /// Seeds the deletion of [id] from a Séance device, stamped [updatedAt].
-  void seedTombstone(String id, {required int updatedAt}) {
-    _records[id] = EncryptedRecord.tombstone(
-      id: id,
-      updatedAt: updatedAt,
-      deviceId: 'seance-device',
-    ).withSeq(++_seq);
+  /// Seals the deletion of snippet [id] from a Séance device, stamped
+  /// [updatedAt].
+  Future<void> seedTombstone(String id, {required int updatedAt}) async {
+    final sealed = await RecordCrypto(RecordCodec(keys.vaultKey)).seal(
+      DecryptedRecord(
+        id: id,
+        kind: RecordKind.snippet,
+        updatedAt: updatedAt,
+        deviceId: 'seance-device',
+        deleted: true,
+      ),
+    );
+    _records[id] = sealed.withSeq(++_seq);
   }
 
   /// The [SyncTransportFactory] over this server.
@@ -178,7 +184,7 @@ final class _FakeTransport implements SyncTransport {
   }
 
   @override
-  Future<void> register(RegisterRequest request) =>
+  Future<LoginResponse> register(RegisterRequest request) =>
       throw UnsupportedError('Klabautermann never registers');
 
   @override
@@ -191,7 +197,7 @@ final class _FakeTransport implements SyncTransport {
   }
 
   @override
-  Future<void> login(LoginRequest request) async {
+  Future<LoginResponse> login(LoginRequest request) async {
     _reach();
     if (request.username != fakeSyncUser ||
         request.authVerifier != base64.encode(_server.keys.authVerifier)) {
@@ -201,6 +207,7 @@ final class _FakeTransport implements SyncTransport {
       );
     }
     token = 'token-1';
+    return LoginResponse(token: token!);
   }
 
   @override

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:seance_core/seance_core.dart';
@@ -194,11 +196,16 @@ class ProposalReview extends StatefulWidget {
     required this.state,
     required this.pending,
     required this.onBack,
+    this._runProposal,
   });
 
   final AppState state;
   final PendingProposal pending;
   final VoidCallback onBack;
+
+  /// A narrow seam for testing result presentation without an SSH transport.
+  final Future<ProposalRunResult> Function(PendingProposal, ServerConfig)?
+  _runProposal;
 
   @override
   State<ProposalReview> createState() => _ProposalReviewState();
@@ -217,17 +224,30 @@ class _ProposalReviewState extends State<ProposalReview> {
     final navigator = Navigator.of(context);
     final overlay = Overlay.of(context, rootOverlay: true);
     try {
-      final result = await widget.state.runProposal(widget.pending, server);
-      if (!mounted) return;
-      if (result.ok) {
-        navigator.pop();
-        showTopToast(
-          overlay,
-          message: 'Placed in the prompt on ${server.label}. Press Enter to '
-              'run it.',
-        );
-      } else {
-        showTopToast(overlay, message: result.error!);
+      final result = await (widget._runProposal ?? widget.state.runProposal)(
+        widget.pending,
+        server,
+      );
+      switch (result) {
+        case ProposalPlaced():
+          if (!mounted) return;
+          navigator.pop();
+          showTopToast(
+            overlay,
+            message:
+                'Placed in the prompt on ${server.label}. Press Enter '
+                'to run it.',
+          );
+        case ProposalNeedsRecovery(:final commandLine):
+          if (mounted) navigator.pop();
+          _showProposalRecovery(
+            overlay,
+            serverLabel: server.label,
+            commandLine: commandLine,
+          );
+        case ProposalRunFailed(:final error):
+          if (!mounted) return;
+          showTopToast(overlay, message: error);
       }
     } catch (e) {
       if (mounted) showTopToast(overlay, message: 'Could not run: $e');
@@ -399,6 +419,121 @@ class _ProposalReviewState extends State<ProposalReview> {
           ),
         ),
       ],
+    );
+  }
+}
+
+void _showProposalRecovery(
+  OverlayState overlay, {
+  required String serverLabel,
+  required String commandLine,
+}) {
+  if (!overlay.mounted) return;
+  unawaited(
+    showDialog<void>(
+      context: overlay.context,
+      useRootNavigator: true,
+      barrierDismissible: false,
+      builder: (_) => _ProposalRecoveryDialog(
+        serverLabel: serverLabel,
+        commandLine: commandLine,
+      ),
+    ),
+  );
+}
+
+class _ProposalRecoveryDialog extends StatefulWidget {
+  const _ProposalRecoveryDialog({
+    required this.serverLabel,
+    required this.commandLine,
+  });
+
+  final String serverLabel;
+  final String commandLine;
+
+  @override
+  State<_ProposalRecoveryDialog> createState() =>
+      _ProposalRecoveryDialogState();
+}
+
+class _ProposalRecoveryDialogState extends State<_ProposalRecoveryDialog> {
+  bool _copying = false;
+  bool _copyFailed = false;
+  String? _copyStatus;
+
+  Future<void> _copy() async {
+    if (_copying) return;
+    setState(() {
+      _copying = true;
+      _copyStatus = null;
+    });
+    try {
+      await Clipboard.setData(ClipboardData(text: widget.commandLine));
+      if (!mounted) return;
+      setState(() {
+        _copyFailed = false;
+        _copyStatus = 'Copied.';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _copyFailed = true;
+        _copyStatus = 'Could not copy the command. Select it above and copy '
+            'it manually.';
+      });
+    } finally {
+      if (mounted) setState(() => _copying = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        key: const ValueKey('inbox.recovery.dialog'),
+        title: const Text('Recover claimed command'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'The terminal changed after this proposal was claimed. '
+                'Reconnect to ${widget.serverLabel}, paste this command, '
+                'then press Enter.',
+              ),
+              const SizedBox(height: 12),
+              SelectableText(
+                widget.commandLine,
+                key: const ValueKey('inbox.recovery.command'),
+                style: SeanceTheme.mono,
+              ),
+              if (_copyStatus != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _copyStatus!,
+                  key: const ValueKey('inbox.recovery.copyStatus'),
+                  style: TextStyle(
+                    color: _copyFailed ? scheme.error : scheme.primary,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            onPressed: _copying ? null : _copy,
+            child: Text(_copying ? 'Copying…' : 'Copy command'),
+          ),
+        ],
+      ),
     );
   }
 }

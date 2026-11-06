@@ -190,6 +190,7 @@ void main() {
       await state!.toggleServerPin('db-primary');
       await state!.toggleServerGroup(serverGroupKey('Staging'));
       services!.settings.syncBaseUrl = 'https://sync.example.com';
+      services!.settings.syncUsername = 'user';
     });
     if (empty) return;
     ServerConfig config(String id) =>

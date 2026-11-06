@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:seance_core/catalog.dart';
 import 'package:seance_core/seance_core.dart';
+import 'package:seance_core/src/catalog/atomic_file_writer.dart';
 import 'package:test/test.dart';
 
 final _fixedNow = DateTime.utc(2026, 9, 20, 12);
@@ -43,6 +44,95 @@ EncryptedRecord _tombstone(
       blob: Uint8List(0),
     );
 
+/// A fault-injecting stand-in around the real atomic writer: records
+/// every document handed to it and deterministically fails the next
+/// write after [failNext] is set.
+final class _FaultInjectingWriter {
+  final List<String> requested = [];
+  bool failNext = false;
+  bool failAfterWriteNext = false;
+
+  Future<void> call(File target, String contents) async {
+    requested.add(contents);
+    if (failNext) {
+      failNext = false;
+      throw const FileSystemException('injected write failure');
+    }
+    await const AtomicFileWriter().write(target, contents);
+    if (failAfterWriteNext) {
+      failAfterWriteNext = false;
+      throw const FileSystemException('injected post-rename failure');
+    }
+  }
+}
+
+/// A record whose serialization throws: the deterministic way to make
+/// the write path itself fail between the edit and the state swap.
+final class _PoisonedRecord extends EncryptedRecord {
+  _PoisonedRecord(String id)
+      : super(
+          id: id,
+          updatedAt: 50,
+          deviceId: 'device-a',
+          deleted: false,
+          seq: null,
+          blob: Uint8List.fromList(const [1, 2, 3]),
+        );
+
+  @override
+  Map<String, dynamic> toJson() => throw StateError('poisoned');
+}
+
+/// The seven live state components read through the store's public
+/// reads. `EncryptedRecord` has no `==`, so record lists compare by
+/// instance identity — exactly what "unchanged" must mean after a
+/// failed write.
+final class _LiveState {
+  _LiveState({
+    required this.records,
+    required this.dirty,
+    required this.displaced,
+    required this.highWater,
+    required this.lastApplied,
+    required this.cursorRecoveryPending,
+    required this.recordEnvelopeFloor,
+  });
+
+  final List<EncryptedRecord> records;
+  final List<EncryptedRecord> dirty;
+  final List<EncryptedRecord> displaced;
+  final int highWater;
+  final int lastApplied;
+  final bool cursorRecoveryPending;
+  final int recordEnvelopeFloor;
+}
+
+Future<_LiveState> _liveStateOf(PersistentLocalRecordStore store) async =>
+    _LiveState(
+      records: await store.allRecords(),
+      dirty: await store.dirtyRecords(),
+      displaced: await store.displacedRecords(),
+      highWater: await store.highWaterSeq(),
+      lastApplied: await store.lastAppliedSeq(),
+      cursorRecoveryPending: await store.cursorRecoveryPending(),
+      recordEnvelopeFloor: await store.recordEnvelopeFloor(),
+    );
+
+void _expectUnchanged(_LiveState actual, _LiveState expected) {
+  expect(actual.records, equals(expected.records));
+  expect(actual.dirty, equals(expected.dirty));
+  expect(actual.displaced, equals(expected.displaced));
+  expect(actual.highWater, expected.highWater);
+  expect(actual.lastApplied, expected.lastApplied);
+  expect(actual.cursorRecoveryPending, expected.cursorRecoveryPending);
+  expect(actual.recordEnvelopeFloor, expected.recordEnvelopeFloor);
+}
+
+String _diskDoc(String path) => File(path).readAsStringSync();
+
+List<String> _siblings(Directory dir) =>
+    dir.listSync().map((entity) => _basenameOf(entity.path)).toList()..sort();
+
 void main() {
   late Directory tempDir;
   late String path;
@@ -57,10 +147,27 @@ void main() {
   });
 
   PersistentLocalRecordStore open({
+    SyncAccountScope? scope,
+    bool adoptLegacy = false,
+    bool resetExisting = false,
     DateTime Function()? now,
     void Function(Object, StackTrace)? onError,
+    Future<void> Function(File target, String contents)? atomicWriter,
   }) =>
-      PersistentLocalRecordStore(path: path, now: now, onError: onError);
+      PersistentLocalRecordStore(
+        path: path,
+        scope: scope,
+        adoptLegacy: adoptLegacy,
+        resetExisting: resetExisting,
+        now: now,
+        onError: onError,
+        atomicWriter: atomicWriter,
+      );
+
+  final alice = SyncAccountScope(
+    baseUrl: 'https://sync.example',
+    username: 'alice',
+  );
 
   group('mutation and reload', () {
     test('persists records, dirty flags, and both cursors across reload',
@@ -104,6 +211,7 @@ void main() {
 
     test('resetSyncCursors zeroes both cursors for a full resync', () async {
       final store = open();
+      await store.putRemote(_record('bookmark:clean', seq: 8));
       await store.setHighWaterSeq(10);
       await store.setLastAppliedSeq(9);
       await store.resetSyncCursors();
@@ -114,7 +222,494 @@ void main() {
       final reloaded = open();
       expect(await reloaded.highWaterSeq(), 0);
       expect(await reloaded.lastAppliedSeq(), 0);
+      expect(await reloaded.getRecord('bookmark:clean'), isNotNull,
+          reason: 'a deliberate apply rescan keeps the server mirror');
     });
+
+    test('rejected cursor recovery re-queues mirror and preserves local edits',
+        () async {
+      final store = open();
+      await store.putRemote(_record('bookmark:clean', seq: 8));
+      await store.putRemote(_record('bookmark:edited', seq: 9));
+      await store.putLocal(_record('bookmark:edited', updatedAt: 110));
+      await store.putRemote(_tombstone('bookmark:deleted', seq: 10));
+      await store.setHighWaterSeq(10);
+      await store.setLastAppliedSeq(9);
+
+      await store.recoverFromRejectedCursor();
+
+      final reloaded = open();
+      expect((await reloaded.getRecord('bookmark:clean'))!.seq, isNull);
+      expect(
+        (await reloaded.dirtyRecords()).map((record) => record.id),
+        unorderedEquals([
+          'bookmark:clean',
+          'bookmark:edited',
+          'bookmark:deleted',
+        ]),
+      );
+      expect((await reloaded.getRecord('bookmark:deleted'))!.deleted, isTrue);
+      expect((await reloaded.getRecord('bookmark:deleted'))!.seq, isNull,
+          reason: 'the current server copy must be able to settle the retry');
+      expect(await reloaded.displacedRecords(), isEmpty);
+      expect(await reloaded.highWaterSeq(), 0);
+      expect(await reloaded.lastAppliedSeq(), 0);
+      expect(await reloaded.cursorRecoveryPending(), isTrue);
+
+      await reloaded.completeCursorRecovery();
+
+      expect(await open().cursorRecoveryPending(), isFalse);
+    });
+  });
+
+  group('failed writes leave live state and disk untouched', () {
+    // Every mutation kind must edit candidate state only: a failed
+    // atomic write can leave neither the seven live components mutated
+    // in memory nor any trace in a later successful write or a reopen.
+    test('a failed putLocal changes neither memory nor disk', () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.putRemote(_record('bookmark:b', updatedAt: 60, seq: 7));
+      await store.setHighWaterSeq(7);
+      await store.setLastAppliedSeq(7);
+
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+      writer.failNext = true;
+      await expectLater(
+        store.putLocal(_record('bookmark:a', updatedAt: 50)),
+        throwsA(isA<FileSystemException>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+      expect(_siblings(tempDir), ['sync_records.json']);
+
+      // Nothing from the failed edit rides the next successful write.
+      await store.putLocal(_record('bookmark:z', updatedAt: 80));
+      final reloaded = open();
+      expect(
+        (await reloaded.allRecords()).map((r) => r.id).toList(),
+        ['bookmark:b', 'bookmark:z'],
+      );
+      expect(
+        (await reloaded.dirtyRecords()).map((r) => r.id),
+        ['bookmark:z'],
+      );
+      expect(await reloaded.highWaterSeq(), 7);
+      expect(await reloaded.lastAppliedSeq(), 7);
+    });
+
+    test('a failed putRemote parks no displaced loser', () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.putLocal(_record('bookmark:a', updatedAt: 30));
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+
+      writer.failNext = true;
+      await expectLater(
+        store.putRemote(_record('bookmark:a', updatedAt: 20, seq: 4)),
+        throwsA(isA<FileSystemException>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+
+      // A loser stashed only in memory must not ride along with a later
+      // successful write and resurrect as a durable displaced entry.
+      await store.setHighWaterSeq(4);
+      final reloaded = open();
+      expect(await reloaded.displacedRecords(), isEmpty);
+      expect((await reloaded.dirtyRecords()).single.updatedAt, 30);
+      expect(await reloaded.highWaterSeq(), 4);
+    });
+
+    test('a failed putRemote replaces nothing when the pull would win',
+        () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.putRemote(_record('bookmark:a', updatedAt: 200, seq: 5));
+      await store.putLocal(_record('bookmark:a', updatedAt: 100));
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+
+      writer.failNext = true;
+      await expectLater(
+        store.putRemote(_record('bookmark:a', updatedAt: 300, seq: 6)),
+        throwsA(isA<FileSystemException>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+
+      // The losing edit stays put: still dirty, stash still parked.
+      await store.putLocal(_record('bookmark:z', updatedAt: 80));
+      final reloaded = open();
+      final reloadedA = await reloaded.getRecord('bookmark:a');
+      expect(reloadedA!.updatedAt, 100);
+      expect(reloadedA.seq, isNull);
+      expect(
+        (await reloaded.dirtyRecords()).map((r) => r.id).toList(),
+        ['bookmark:a', 'bookmark:z'],
+      );
+      expect((await reloaded.displacedRecords()).single.updatedAt, 200);
+    });
+
+    test('a failed markSynced keeps the edit dirty and the stash parked',
+        () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.putRemote(_record('bookmark:a', updatedAt: 200, seq: 5));
+      await store.putLocal(_record('bookmark:a', updatedAt: 100));
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+
+      writer.failNext = true;
+      await expectLater(
+        store.markSynced('bookmark:a', 9),
+        throwsA(isA<FileSystemException>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+
+      await store.putLocal(_record('bookmark:z', updatedAt: 80));
+      final reloaded = open();
+      expect((await reloaded.getRecord('bookmark:a'))!.seq, isNull);
+      expect(
+        (await reloaded.dirtyRecords()).map((r) => r.id).toList(),
+        ['bookmark:a', 'bookmark:z'],
+      );
+      expect((await reloaded.displacedRecords()).single.updatedAt, 200);
+    });
+
+    test('a failed settlePush of an accepted result settles nothing',
+        () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.putRemote(_record('bookmark:a', updatedAt: 200, seq: 5));
+      await store.putLocal(_record('bookmark:a', updatedAt: 100));
+      final sent = (await store.dirtyRecords()).single;
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+
+      writer.failNext = true;
+      await expectLater(
+        store.settlePush(
+          sent,
+          const PushResult(id: 'bookmark:a', seq: 9, accepted: true),
+        ),
+        throwsA(isA<FileSystemException>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+
+      await store.putLocal(_record('bookmark:z', updatedAt: 80));
+      final reloaded = open();
+      expect((await reloaded.getRecord('bookmark:a'))!.seq, isNull);
+      expect(
+        (await reloaded.dirtyRecords()).map((r) => r.id).toList(),
+        ['bookmark:a', 'bookmark:z'],
+      );
+      expect((await reloaded.displacedRecords()).single.updatedAt, 200);
+    });
+
+    test('a failed settlePush of a rejection restores nothing', () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.putRemote(_record('bookmark:a', updatedAt: 200, seq: 5));
+      await store.putLocal(_record('bookmark:a', updatedAt: 100));
+      final sent = (await store.dirtyRecords()).single;
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+
+      writer.failNext = true;
+      await expectLater(
+        store.settlePush(
+          sent,
+          const PushResult(id: 'bookmark:a', seq: 0, accepted: false),
+        ),
+        throwsA(isA<FileSystemException>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+
+      await store.putLocal(_record('bookmark:z', updatedAt: 80));
+      final reloaded = open();
+      expect((await reloaded.getRecord('bookmark:a'))!.updatedAt, 100);
+      expect(
+        (await reloaded.dirtyRecords()).map((r) => r.id).toList(),
+        ['bookmark:a', 'bookmark:z'],
+      );
+      expect((await reloaded.displacedRecords()).single.updatedAt, 200);
+    });
+
+    test('a failed setHighWaterSeq does not advance the cursor', () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.putRemote(_record('bookmark:b', updatedAt: 60, seq: 7));
+      await store.setHighWaterSeq(7);
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+
+      writer.failNext = true;
+      await expectLater(
+        store.setHighWaterSeq(12),
+        throwsA(isA<FileSystemException>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+
+      // A cursor that advanced only in memory would let the next
+      // successful write persist a skip point past unread records.
+      await store.putLocal(_record('bookmark:z'));
+      final reloaded = open();
+      expect(await reloaded.highWaterSeq(), 7);
+      expect(
+        (await reloaded.allRecords()).map((r) => r.id).toList(),
+        ['bookmark:b', 'bookmark:z'],
+      );
+    });
+
+    test('a failed setLastAppliedSeq does not advance the cursor', () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.putRemote(_record('bookmark:b', updatedAt: 60, seq: 7));
+      await store.setLastAppliedSeq(7);
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+
+      writer.failNext = true;
+      await expectLater(
+        store.setLastAppliedSeq(12),
+        throwsA(isA<FileSystemException>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+
+      await store.putLocal(_record('bookmark:z'));
+      final reloaded = open();
+      expect(await reloaded.lastAppliedSeq(), 7);
+      expect(
+        (await reloaded.dirtyRecords()).map((r) => r.id),
+        ['bookmark:z'],
+      );
+    });
+
+    test('a failed resetSyncCursors keeps both cursors', () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.setHighWaterSeq(7);
+      await store.setLastAppliedSeq(6);
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+
+      writer.failNext = true;
+      await expectLater(
+        store.resetSyncCursors(),
+        throwsA(isA<FileSystemException>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+
+      // A reset that landed only in memory would zero the cursors on
+      // the next successful write and force a spurious full resync.
+      await store.putLocal(_record('bookmark:z'));
+      final reloaded = open();
+      expect(await reloaded.highWaterSeq(), 7);
+      expect(await reloaded.lastAppliedSeq(), 6);
+    });
+
+    test('a failed cancelLocal restores nothing', () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.putRemote(_record('bookmark:a', updatedAt: 200, seq: 5));
+      await store.putLocal(_record('bookmark:a', updatedAt: 100));
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+
+      writer.failNext = true;
+      await expectLater(
+        store.cancelLocal('bookmark:a'),
+        throwsA(isA<FileSystemException>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+
+      await store.putLocal(_record('bookmark:z', updatedAt: 80));
+      final reloaded = open();
+      expect((await reloaded.getRecord('bookmark:a'))!.updatedAt, 100);
+      expect(
+        (await reloaded.dirtyRecords()).map((r) => r.id).toList(),
+        ['bookmark:a', 'bookmark:z'],
+      );
+      expect((await reloaded.displacedRecords()).single.updatedAt, 200);
+    });
+
+    test('a failed recoverFromRejectedCursor changes nothing', () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.putRemote(_record('bookmark:a', updatedAt: 200, seq: 5));
+      await store.setHighWaterSeq(5);
+      await store.setLastAppliedSeq(4);
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+
+      writer.failNext = true;
+      await expectLater(
+        store.recoverFromRejectedCursor(),
+        throwsA(isA<FileSystemException>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+
+      // cursorRecoveryPending must remain false; cursors must not be zeroed.
+      expect(await store.cursorRecoveryPending(), isFalse);
+      expect(await store.highWaterSeq(), 5);
+      expect(await store.lastAppliedSeq(), 4);
+    });
+
+    test('a failed completeCursorRecovery keeps the flag', () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.recoverFromRejectedCursor();
+      expect(await store.cursorRecoveryPending(), isTrue);
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+
+      writer.failNext = true;
+      await expectLater(
+        store.completeCursorRecovery(),
+        throwsA(isA<FileSystemException>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+      expect(await store.cursorRecoveryPending(), isTrue);
+    });
+
+    test('a failed observeRecordEnvelopeFloor does not raise the floor',
+        () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(scope: alice, atomicWriter: writer.call);
+      await store.initialize();
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+
+      writer.failNext = true;
+      await expectLater(
+        store.observeRecordEnvelopeFloor(2),
+        throwsA(isA<FileSystemException>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+      expect(await store.recordEnvelopeFloor(), 1);
+    });
+
+    test('a write queued behind a failed one starts from clean state',
+        () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.putRemote(_record('bookmark:b', updatedAt: 60, seq: 7));
+
+      writer.failNext = true;
+      final failed = store.putLocal(_record('bookmark:a', updatedAt: 50));
+      final queued = store.putLocal(_record('bookmark:z', updatedAt: 80));
+      await expectLater(failed, throwsA(isA<FileSystemException>()));
+      await queued;
+
+      expect(
+        (await store.allRecords()).map((r) => r.id).toList(),
+        ['bookmark:b', 'bookmark:z'],
+      );
+      expect(
+        (await store.dirtyRecords()).map((r) => r.id),
+        ['bookmark:z'],
+      );
+      expect(_siblings(tempDir), ['sync_records.json']);
+
+      final reloaded = open();
+      expect(
+        (await reloaded.allRecords()).map((r) => r.id).toList(),
+        ['bookmark:b', 'bookmark:z'],
+      );
+      expect(
+        (await reloaded.dirtyRecords()).map((r) => r.id),
+        ['bookmark:z'],
+      );
+    });
+
+    test('a record whose serialization throws is discarded whole', () async {
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.putRemote(_record('bookmark:b', updatedAt: 60, seq: 7));
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+
+      await expectLater(
+        store.putLocal(_PoisonedRecord('bookmark:a')),
+        throwsA(isA<StateError>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+
+      // The serializer walks every stored record, so discarding the
+      // candidate whole is what keeps later writes alive at all.
+      await store.putLocal(_record('bookmark:z', updatedAt: 80));
+      final reloaded = open();
+      expect(
+        (await reloaded.allRecords()).map((r) => r.id).toList(),
+        ['bookmark:b', 'bookmark:z'],
+      );
+    });
+
+    test('a failed putLocal after rename keeps pre-rename state', () async {
+      // A rename-then-fail scenario: the edit changes a record, then the
+      // write fails. The subsequent read must not see the renamed value.
+      final writer = _FaultInjectingWriter();
+      final store = open(atomicWriter: writer.call);
+      await store.putLocal(_record('bookmark:a', updatedAt: 50));
+      final before = await _liveStateOf(store);
+      final bytes = _diskDoc(path);
+
+      writer.failNext = true;
+      await expectLater(
+        store.putLocal(_record('bookmark:a', updatedAt: 999)),
+        throwsA(isA<FileSystemException>()),
+      );
+      _expectUnchanged(await _liveStateOf(store), before);
+      expect(_diskDoc(path), bytes);
+
+      // The original updatedAt must still be 50, not 999.
+      expect((await store.getRecord('bookmark:a'))!.updatedAt, 50);
+    });
+  });
+
+  test('a post-rename failure reconciles the committed document', () async {
+    final writer = _FaultInjectingWriter();
+    final store = open(atomicWriter: writer.call);
+    await store.putRemote(_record('bookmark:b', updatedAt: 60, seq: 7));
+
+    writer.failAfterWriteNext = true;
+    await expectLater(
+      store.putLocal(_record('bookmark:a', updatedAt: 50)),
+      throwsA(isA<FileSystemException>()),
+    );
+
+    // AtomicFileWriter can report a directory-sync failure after rename.
+    // The live instance must reload that already-committed candidate before
+    // another mutation can overwrite it from stale memory.
+    expect(
+      (await store.allRecords()).map((r) => r.id).toList(),
+      ['bookmark:b', 'bookmark:a'],
+    );
+    await store.putLocal(_record('bookmark:z', updatedAt: 80));
+
+    final reloaded = open();
+    expect(
+      (await reloaded.allRecords()).map((r) => r.id).toList(),
+      ['bookmark:b', 'bookmark:a', 'bookmark:z'],
+    );
+    expect(
+      (await reloaded.dirtyRecords()).map((r) => r.id).toList(),
+      ['bookmark:a', 'bookmark:z'],
+    );
   });
 
   group('atomic writes', () {
@@ -173,7 +768,10 @@ void main() {
       // through disk, since the pull cursor has already moved past its seq.
       final reloaded = open();
       final sent = (await reloaded.dirtyRecords()).single;
-      final restored = await reloaded.settlePush(sent, rejected);
+      final restored = await reloaded.settlePush(
+        sent,
+        const PushResult(id: 'bookmark:a', seq: 4, accepted: false),
+      );
       expect(restored, isNotNull);
       expect(restored!.updatedAt, 20);
       expect(restored.seq, 4);
@@ -195,7 +793,10 @@ void main() {
       final reloaded = open();
       final sent = (await reloaded.dirtyRecords()).single;
       expect(sent.updatedAt, 100);
-      final restored = await reloaded.settlePush(sent, rejected);
+      final restored = await reloaded.settlePush(
+        sent,
+        const PushResult(id: 'bookmark:a', seq: 5, accepted: false),
+      );
       expect(restored!.updatedAt, 200);
       expect(restored.seq, 5);
       expect(await reloaded.getRecord('bookmark:a'), same(restored));
@@ -214,7 +815,10 @@ void main() {
       // behind it on the same queue.
       final local = _record('bookmark:a', updatedAt: 100);
       final put = store.putLocal(local);
-      final restored = await store.settlePush(local, rejected);
+      final restored = await store.settlePush(
+        local,
+        const PushResult(id: 'bookmark:a', seq: 5, accepted: false),
+      );
       expect(restored, isNotNull);
       expect(restored!.updatedAt, 200);
       expect(restored.seq, 5);
@@ -230,6 +834,25 @@ void main() {
       await store.putLocal(local);
       expect(await store.settlePush(local, rejected), isNull);
       expect((await store.dirtyRecords()).single, same(local));
+    });
+
+    test('a rejection for a newer winner drops a stale displaced copy',
+        () async {
+      final store = open();
+      await store.putRemote(_record('bookmark:a', updatedAt: 200, seq: 5));
+      await store.putLocal(_record('bookmark:a', updatedAt: 100));
+      final sent = (await store.dirtyRecords()).single;
+
+      final restored = await store.settlePush(
+        sent,
+        const PushResult(id: 'bookmark:a', seq: 6, accepted: false),
+      );
+
+      expect(restored, isNull);
+      expect(await store.getRecord('bookmark:a'), same(sent));
+      expect(await store.dirtyRecords(), [same(sent)]);
+      expect(await store.displacedRecords(), isEmpty);
+      expect(await open().displacedRecords(), isEmpty);
     });
 
     test('markSynced drops a populated displaced stash', () async {
@@ -258,6 +881,45 @@ void main() {
       expect(await store.displacedRecords(), isEmpty);
       expect((await store.getRecord('bookmark:a'))!.seq, 9);
       expect(await store.dirtyRecords(), isEmpty);
+    });
+
+    test('cancelling a brand-new local publication removes it durably',
+        () async {
+      final store = open();
+      await store.putLocal(_record('bookmark:new'));
+
+      await store.cancelLocal('bookmark:new');
+
+      expect(await store.getRecord('bookmark:new'), isNull);
+      expect(await store.dirtyRecords(), isEmpty);
+      expect(await open().getRecord('bookmark:new'), isNull);
+    });
+
+    test('cancelling a local edit restores the clean server copy', () async {
+      final store = open();
+      final remote = _record(
+        'bookmark:a',
+        updatedAt: 10,
+        deviceId: 'remote',
+        seq: 5,
+        blob: [8, 9],
+      );
+      await store.putRemote(remote);
+      await store.putLocal(_record(
+        'bookmark:a',
+        updatedAt: 20,
+        deviceId: 'local',
+        blob: [1, 2],
+      ));
+
+      final reopened = open();
+      await reopened.cancelLocal('bookmark:a');
+
+      final restored = await reopened.getRecord('bookmark:a');
+      expect(restored!.seq, 5);
+      expect(restored.blob, [8, 9]);
+      expect(await reopened.dirtyRecords(), isEmpty);
+      expect((await open().getRecord('bookmark:a'))!.blob, [8, 9]);
     });
 
     test('tombstone wins over an older pulled edit and stays in the store',
@@ -388,6 +1050,188 @@ void main() {
       final store = open(now: () => _fixedNow);
       await expectLater(store.allRecords(), throwsFormatException);
       // The unreadable newer file stays put rather than being moved aside.
+      expect(File(path).readAsStringSync(), contains('"version":2'));
+    });
+  });
+
+  group('account scope', () {
+    test('persists an envelope floor and rejects a rollback after reopen',
+        () async {
+      final store = open(scope: alice);
+      await store.initialize();
+      expect(await store.recordEnvelopeFloor(), 1);
+
+      await store.observeRecordEnvelopeFloor(2);
+      final reopened = open(scope: alice);
+      expect(await reopened.recordEnvelopeFloor(), 2);
+      await expectLater(
+        reopened.observeRecordEnvelopeFloor(1),
+        throwsA(isA<RecordEnvelopeFloorDowngradeException>()),
+      );
+      expect(await reopened.recordEnvelopeFloor(), 2);
+    });
+
+    test('a missing scoped store is bound eagerly', () async {
+      final store = open(scope: alice);
+      await store.initialize();
+
+      final doc = jsonDecode(File(path).readAsStringSync()) as Map;
+      expect(doc['version'], 2);
+      expect(doc['account'], {
+        'baseUrl': 'https://sync.example',
+        'username': 'alice',
+      });
+      expect(doc['records'], isEmpty);
+    });
+
+    test('adopts a legacy store once and preserves all durable state',
+        () async {
+      final legacy = open();
+      await legacy.putRemote(
+        _record('bookmark:a', updatedAt: 200, seq: 5, blob: [8, 9]),
+      );
+      await legacy.putLocal(
+        _record('bookmark:a', updatedAt: 100, blob: [1, 2]),
+      );
+      await legacy.setHighWaterSeq(12);
+      await legacy.setLastAppliedSeq(11);
+
+      final scoped = open(scope: alice, adoptLegacy: true);
+      await scoped.initialize();
+
+      expect(await scoped.highWaterSeq(), 12);
+      expect(await scoped.lastAppliedSeq(), 11);
+      expect((await scoped.dirtyRecords()).single.blob, [1, 2]);
+      expect((await scoped.displacedRecords()).single.blob, [8, 9]);
+      final doc = jsonDecode(File(path).readAsStringSync()) as Map;
+      expect(doc['version'], 2);
+      expect(doc['account'], {
+        'baseUrl': 'https://sync.example',
+        'username': 'alice',
+      });
+
+      final reopened = open(scope: alice);
+      expect(await reopened.highWaterSeq(), 12);
+      expect(await reopened.lastAppliedSeq(), 11);
+      expect((await reopened.dirtyRecords()).single.blob, [1, 2]);
+      expect((await reopened.displacedRecords()).single.blob, [8, 9]);
+    });
+
+    test('does not assign an unclaimed legacy store to an account', () async {
+      final legacy = open();
+      await legacy.putLocal(_record('bookmark:a'));
+      await legacy.setHighWaterSeq(9);
+
+      final scoped = open(scope: alice);
+      await scoped.initialize();
+
+      expect(await scoped.allRecords(), isEmpty);
+      expect(await scoped.highWaterSeq(), 0);
+      expect(await scoped.lastAppliedSeq(), 0);
+      final doc = jsonDecode(File(path).readAsStringSync()) as Map;
+      expect(doc['version'], 2);
+      expect(doc['account'], {
+        'baseUrl': 'https://sync.example',
+        'username': 'alice',
+      });
+    });
+
+    test('endpoint or username changes reset records and both cursors',
+        () async {
+      final first = open(scope: alice);
+      await first.putLocal(_record('bookmark:a'));
+      await first.setHighWaterSeq(9);
+      await first.setLastAppliedSeq(8);
+
+      final endpointChanged = open(
+        scope: SyncAccountScope(
+          baseUrl: 'https://other.example',
+          username: 'alice',
+        ),
+      );
+      await endpointChanged.initialize();
+      expect(await endpointChanged.allRecords(), isEmpty);
+      expect(await endpointChanged.highWaterSeq(), 0);
+      expect(await endpointChanged.lastAppliedSeq(), 0);
+
+      await endpointChanged.putLocal(_record('bookmark:b'));
+      await endpointChanged.setHighWaterSeq(4);
+      final usernameChanged = open(
+        scope: SyncAccountScope(
+          baseUrl: 'https://other.example',
+          username: 'bob',
+        ),
+      );
+      await usernameChanged.initialize();
+      expect(await usernameChanged.allRecords(), isEmpty);
+      expect(await usernameChanged.highWaterSeq(), 0);
+    });
+
+    test('resetExisting clears a recreated account with the same name',
+        () async {
+      final first = open(scope: alice);
+      await first.putLocal(_record('bookmark:a'));
+      await first.setHighWaterSeq(9);
+      await first.recoverFromRejectedCursor();
+      expect(await first.cursorRecoveryPending(), isTrue);
+
+      final recreated = open(scope: alice, resetExisting: true);
+      await recreated.initialize();
+
+      expect(await recreated.allRecords(), isEmpty);
+      expect(await recreated.dirtyRecords(), isEmpty);
+      expect(await recreated.highWaterSeq(), 0);
+      expect(await recreated.lastAppliedSeq(), 0);
+      expect(await recreated.cursorRecoveryPending(), isFalse);
+    });
+
+    test('malformed scoped account is quarantined and rebound', () async {
+      File(path).writeAsStringSync(
+        '{"version":2,"account":{"baseUrl":7,"username":"alice"},'
+        '"highWaterSeq":0,"lastAppliedSeq":0,"records":[]}',
+      );
+      final errors = <Object>[];
+      final store = open(
+        scope: alice,
+        now: () => _fixedNow,
+        onError: (error, _) => errors.add(error),
+      );
+
+      await store.initialize();
+
+      expect(errors, hasLength(1));
+      expect(store.quarantinedPath, isNotNull);
+      expect(await store.allRecords(), isEmpty);
+      final doc = jsonDecode(File(path).readAsStringSync()) as Map;
+      expect(doc['version'], 2);
+      expect(doc['account'], {
+        'baseUrl': 'https://sync.example',
+        'username': 'alice',
+      });
+    });
+
+    test('future scoped versions fail closed in place', () async {
+      File(path).writeAsStringSync(
+        '{"version":3,"account":{"baseUrl":"https://sync.example",'
+        '"username":"alice"},"highWaterSeq":0,"lastAppliedSeq":0,'
+        '"records":[]}',
+      );
+      final store = open(scope: alice, resetExisting: true);
+
+      await expectLater(store.initialize(), throwsFormatException);
+      expect(File(path).readAsStringSync(), contains('"version":3'));
+      expect(
+        tempDir
+            .listSync()
+            .where((e) => _basenameOf(e.path).contains('.corrupt-')),
+        isEmpty,
+      );
+    });
+
+    test('an unscoped consumer cannot open a scoped document', () async {
+      await open(scope: alice).initialize();
+
+      await expectLater(open().allRecords(), throwsFormatException);
       expect(File(path).readAsStringSync(), contains('"version":2'));
     });
   });
