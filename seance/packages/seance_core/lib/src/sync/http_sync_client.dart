@@ -22,6 +22,11 @@ class HttpSyncClient
   final bool _ownsClient;
   bool _closed = false;
 
+  /// Descriptive installation metadata for newly issued sessions. Omit both
+  /// fields when communicating for a client without a stable installation id.
+  final String? deviceId;
+  final String? deviceName;
+
   /// Per-request timeout. Without one, a hung connection would leave
   /// `AppState.syncing` stuck true forever (spinner frozen, auto-sync wedged
   /// because it early-returns while a round is "in progress").
@@ -35,9 +40,11 @@ class HttpSyncClient
     required String baseUrl,
     http.Client? client,
     this.timeout = const Duration(seconds: 30),
-  })  : baseUrl = normalizeBaseUrl(baseUrl),
-        _client = client ?? http.Client(),
-        _ownsClient = client == null;
+    this.deviceId,
+    this.deviceName,
+  }) : baseUrl = normalizeBaseUrl(baseUrl),
+       _client = client ?? http.Client(),
+       _ownsClient = client == null;
 
   /// Release owned connections. Injected clients remain caller-owned.
   /// Repeated calls are harmless; this wrapper cannot be reused afterwards.
@@ -62,6 +69,12 @@ class HttpSyncClient
         'x-seance-protocol-version': '$kProtocolVersion',
         if (token != null) 'authorization': 'Bearer $token',
       };
+
+  Map<String, String> get _enrollmentHeaders => {
+    'content-type': 'application/json',
+    if (deviceId != null) 'x-seance-device-id': deviceId!,
+    if (deviceName != null) 'x-seance-device-name': deviceName!,
+  };
 
   Uri _uri(String path, [Map<String, String>? query]) {
     if (_closed) throw StateError('Sync client is closed');
@@ -121,13 +134,16 @@ class HttpSyncClient
   /// Create an account and receive a session token.
   Future<LoginResponse> register(RegisterRequest request) async {
     final res = await _client
-        .post(_uri('/v1/register'),
-            headers: {'content-type': 'application/json'},
-            body: jsonEncode(request.toJson()))
+        .post(
+          _uri('/v1/register'),
+          headers: _enrollmentHeaders,
+          body: jsonEncode(request.toJson()),
+        )
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
-    final response =
-        LoginResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    final response = LoginResponse.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
     token = response.token;
     return response;
   }
@@ -147,13 +163,16 @@ class HttpSyncClient
   /// Exchange the auth verifier for a session token.
   Future<LoginResponse> login(LoginRequest request) async {
     final res = await _client
-        .post(_uri('/v1/login'),
-            headers: {'content-type': 'application/json'},
-            body: jsonEncode(request.toJson()))
+        .post(
+          _uri('/v1/login'),
+          headers: _enrollmentHeaders,
+          body: jsonEncode(request.toJson()),
+        )
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
-    final response =
-        LoginResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    final response = LoginResponse.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
     token = response.token;
     return response;
   }
@@ -182,6 +201,41 @@ class HttpSyncClient
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
     token = null;
+  }
+
+  Future<List<SyncSessionInfo>> listSessions() async {
+    final res = await _client
+        .get(_uri('/v1/sessions'), headers: _authHeaders)
+        .timeout(timeout);
+    if (res.statusCode >= 400) _fail(res);
+    return SyncSessionsResponse.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    ).sessions;
+  }
+
+  /// Revoke an opaque session id. Only a successful revocation of this
+  /// client's own session clears the local bearer; an absent target is false.
+  Future<bool> revokeSessionById(String sessionId) async {
+    final res = await _client
+        .delete(
+          _uri('/v1/sessions/${Uri.encodeComponent(sessionId)}'),
+          headers: _authHeaders,
+        )
+        .timeout(timeout);
+    if (res.statusCode == 404) {
+      try {
+        _fail(res);
+      } on ApiError catch (error) {
+        if (error.code == _notFound) return false;
+        rethrow;
+      }
+    }
+    if (res.statusCode >= 400) _fail(res);
+    final result = RevokeSessionResponse.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
+    if (result.current && result.revoked) token = null;
+    return result.revoked;
   }
 
   /// Initialize the authenticated marker for an empty legacy account.

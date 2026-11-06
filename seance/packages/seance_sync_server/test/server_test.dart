@@ -58,6 +58,7 @@ class ThrowingStorage extends InMemoryStorage {
     required int issuedAt,
     required int expiresAt,
     required int maxSessions,
+    SessionDevice? device,
   }) async {
     throw StateError('database password is hunter2');
   }

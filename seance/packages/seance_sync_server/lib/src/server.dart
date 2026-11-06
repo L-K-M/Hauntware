@@ -57,6 +57,7 @@ class SyncServer {
   /// anyone could sign in to with an empty one.
   static const _authVerifierBytes = 32;
   static const _minArgonSaltBytes = 16;
+  static const _sessionTokenBytes = 32;
 
   final Storage storage;
   final ServerSettings settings;
@@ -250,7 +251,10 @@ class SyncServer {
       ..get('/v1/records/legacy', _legacyRecords)
       ..put('/v1/records/legacy', _migrateLegacyRecords)
       ..delete('/v1/session', _revokeSession)
+      ..get('/v1/sessions', _listSessions)
+      ..delete('/v1/sessions/current', _revokeSession)
       ..delete('/v1/sessions', _revokeAllSessions)
+      ..delete('/v1/sessions/<sessionId>', _revokeSessionById)
       ..put('/v1/account/vault-key-check', _initializeVaultKeyCheck)
       ..delete('/v1/account', _deleteAccount)
       // The command inbox (docs/INBOX.md). The producer's only route is the
@@ -340,6 +344,7 @@ class SyncServer {
         'Client protocol v${r.protocolVersion} != server v$kProtocolVersion',
       );
     }
+    final device = _deviceFromRequest(req);
     if (!settings.openRegistration) {
       return _error(403, 'registration_closed', 'Registration is disabled');
     }
@@ -381,6 +386,7 @@ class SyncServer {
       issuedAt: now,
       expiresAt: now + settings.sessionDuration.inMilliseconds,
       maxSessions: settings.maxSessionsPerAccount,
+      device: device,
     );
     if (token == null) {
       return _error(409, 'account_exists', 'Username already registered');
@@ -430,6 +436,7 @@ class SyncServer {
     if (r.protocolVersion != kProtocolVersion) {
       return _error(400, 'protocol_version', 'Protocol version mismatch');
     }
+    final device = _deviceFromRequest(req);
     // Before the limiter, whose keys outlive this request by a whole window.
     if (!_usernameInBounds(r.username)) return _usernameOutOfBounds();
     final account = await storage.getAccount(r.username);
@@ -461,6 +468,7 @@ class SyncServer {
       issuedAt: now,
       expiresAt: now + settings.sessionDuration.inMilliseconds,
       maxSessions: settings.maxSessionsPerAccount,
+      device: device,
     );
     if (token == null) {
       return _error(401, 'invalid_credentials', 'Invalid credentials');
@@ -663,6 +671,23 @@ class SyncServer {
         return Response(204);
       });
 
+  Future<Response> _listSessions(Request req) =>
+      _withAuth(req, (principal) async {
+        final sessions = await storage.listSessionsFor(principal, now: _nowMs);
+        return _json(SyncSessionsResponse(sessions: sessions).toJson());
+      });
+
+  Future<Response> _revokeSessionById(Request req, String sessionId) =>
+      _withAuth(req, (principal) async {
+        final result = await storage.revokeSessionByIdFor(
+          principal,
+          sessionId,
+          now: _nowMs,
+        );
+        if (!result.revoked) return _error(404, 'not_found', 'No such session');
+        return _json(result.toJson());
+      });
+
   Future<Response> _revokeAllSessions(Request req) =>
       _withAuth(req, (principal) async {
         if (!await storage.revokeAllSessions(principal)) {
@@ -696,6 +721,20 @@ class SyncServer {
       });
 
   // --- Helpers ---
+
+  SessionDevice? _deviceFromRequest(Request req) {
+    final id = req.headers['x-seance-device-id'];
+    final name = req.headers['x-seance-device-name'];
+    // Older clients can still enroll without metadata. A supplied partial or
+    // malformed pair must be refused, rather than silently changing identity.
+    if (id == null && name == null) return null;
+    if (id == null || name == null) {
+      throw const _InvalidDevice();
+    }
+    final device = SessionDevice(id: id, name: name);
+    if (!device.isValid) throw const _InvalidDevice();
+    return device;
+  }
 
   Response? _limitAuthentication(Request request) {
     final source = authSourceLimiter.check('source:${_sourceFor(request)}');
@@ -731,14 +770,28 @@ class SyncServer {
     if (auth == null || !auth.startsWith('Bearer ')) {
       return _error(401, 'unauthorized', 'Missing bearer token');
     }
-    final principal = await storage.principalForToken(
-      auth.substring(7),
-      now: _nowMs,
-    );
+    final token = auth.substring(7);
+    if (!_isCanonicalSessionToken(token)) {
+      return _error(401, 'unauthorized', 'Invalid token');
+    }
+    final principal = await storage.principalForToken(token, now: _nowMs);
     if (principal == null) {
       return _error(401, 'unauthorized', 'Invalid token');
     }
     return fn(principal);
+  }
+
+  static bool _isCanonicalSessionToken(String token) {
+    // Bound before decoding or hashing. Session bearers are exactly the
+    // canonical padded base64url representation of 32 random bytes.
+    if (token.length != 44) return false;
+    try {
+      final bytes = base64Url.decode(token);
+      return bytes.length == _sessionTokenBytes &&
+          base64Url.encode(bytes) == token;
+    } on FormatException {
+      return false;
+    }
   }
 
   int get _nowMs => _now().millisecondsSinceEpoch;
@@ -854,6 +907,12 @@ class SyncServer {
         );
       } on _PayloadTooLarge {
         return _error(413, 'payload_too_large', 'Request body too large');
+      } on _InvalidDevice {
+        return _error(
+          400,
+          'bad_device',
+          'Valid device id and name headers must be supplied together',
+        );
       } on FormatException {
         return _error(400, 'bad_request', 'Invalid request payload');
       } catch (e) {
@@ -907,6 +966,10 @@ Configure this server's URL in the app's sync settings.</p>
     }
     return diff == 0;
   }
+}
+
+class _InvalidDevice implements Exception {
+  const _InvalidDevice();
 }
 
 /// Signals that a request body exceeded its route's cap. Mapped to HTTP 413 by

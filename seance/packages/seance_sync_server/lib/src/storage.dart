@@ -59,6 +59,29 @@ class AuthPrincipal {
   });
 }
 
+/// Descriptive installation metadata, never an authentication factor.
+class SessionDevice {
+  static const _maxBytes = 128;
+  static final _idPattern = RegExp(r'^[A-Za-z0-9._:-]+$');
+  static final _invalidName = RegExp(
+    '[\u0000-\u001f\u007f-\u009f\u00ad\u200b-\u200f'
+    '\u2028-\u202e\u2060-\u206f\ufeff]',
+  );
+  final String id;
+  final String name;
+
+  const SessionDevice({required this.id, required this.name});
+
+  bool get isValid =>
+      id.isNotEmpty &&
+      utf8.encode(id).length <= _maxBytes &&
+      _idPattern.hasMatch(id) &&
+      name.isNotEmpty &&
+      name.trim() == name &&
+      utf8.encode(name).length <= _maxBytes &&
+      !_invalidName.hasMatch(name);
+}
+
 class StalePrincipalException implements Exception {
   const StalePrincipalException();
 }
@@ -187,6 +210,7 @@ abstract class Storage {
     required int issuedAt,
     required int expiresAt,
     required int maxSessions,
+    SessionDevice? device,
   });
 
   /// Compatibility helper for tests and maintenance code. Production login
@@ -200,6 +224,7 @@ abstract class Storage {
     required int issuedAt,
     required int expiresAt,
     required int maxSessions,
+    SessionDevice? device,
   });
 
   /// Resolve a non-expired raw bearer token to its immutable principal.
@@ -207,6 +232,21 @@ abstract class Storage {
 
   Future<bool> revokeSession(AuthPrincipal principal);
   Future<bool> revokeAllSessions(AuthPrincipal principal);
+
+  /// Public metadata from the caller's current account generation. The caller
+  /// must still hold a live session when this snapshot is taken.
+  Future<List<SyncSessionInfo>> listSessionsFor(
+    AuthPrincipal principal, {
+    required int now,
+  });
+
+  /// Selectively revoke an opaque session id in the same transaction that
+  /// revalidates the caller's generation and still-live bearer session.
+  Future<RevokeSessionResponse> revokeSessionByIdFor(
+    AuthPrincipal principal,
+    String sessionId, {
+    required int now,
+  });
   Future<bool> deleteAccountFor(AuthPrincipal principal);
 
   /// Set an empty legacy account's key check exactly once. A concurrent
@@ -424,32 +464,73 @@ class _MemoryInboxItem {
 }
 
 class _MemorySession {
+  final String id;
   final String username;
   final String accountGeneration;
   final int issuedAt;
   final int expiresAt;
+  final int lastUsedAt;
+  final SessionDevice? device;
 
   const _MemorySession({
+    required this.id,
     required this.username,
     required this.accountGeneration,
     required this.issuedAt,
     required this.expiresAt,
+    required this.lastUsedAt,
+    this.device,
   });
+
+  _MemorySession touched(int now) => _MemorySession(
+    id: id,
+    username: username,
+    accountGeneration: accountGeneration,
+    issuedAt: issuedAt,
+    expiresAt: expiresAt,
+    lastUsedAt: now,
+    device: device,
+  );
+
+  SyncSessionInfo info({required bool current}) => SyncSessionInfo(
+    id: id,
+    deviceId: device?.id,
+    deviceName: device?.name ?? 'Unknown device',
+    createdAt: issuedAt,
+    expiresAt: expiresAt,
+    lastUsedAt: lastUsedAt,
+    legacy: device == null,
+    current: current,
+  );
 }
 
 String digestBearerToken(String token) =>
     VaultCrypto.hashAuthVerifier(utf8.encode(token), const []);
 
+String newSessionId() =>
+    base64Url.encode(secureRandomBytes(16)).replaceAll('=', '');
+
+int compareSessionsNewestFirst(SyncSessionInfo a, SyncSessionInfo b) {
+  final byUse = b.lastUsedAt.compareTo(a.lastUsedAt);
+  if (byUse != 0) return byUse;
+  final byTime = b.createdAt.compareTo(a.createdAt);
+  return byTime != 0 ? byTime : a.id.compareTo(b.id);
+}
+
 void validateSessionPolicy({
   required int issuedAt,
   required int expiresAt,
   required int maxSessions,
+  SessionDevice? device,
 }) {
   if (expiresAt <= issuedAt) {
     throw ArgumentError.value(expiresAt, 'expiresAt', 'must follow issuedAt');
   }
   if (maxSessions <= 0) {
     throw ArgumentError.value(maxSessions, 'maxSessions', 'must be positive');
+  }
+  if (device != null && !device.isValid) {
+    throw ArgumentError.value(device, 'device', 'invalid device metadata');
   }
 }
 
@@ -489,11 +570,13 @@ class InMemoryStorage implements Storage {
     required int issuedAt,
     required int expiresAt,
     required int maxSessions,
+    SessionDevice? device,
   }) async {
     validateSessionPolicy(
       issuedAt: issuedAt,
       expiresAt: expiresAt,
       maxSessions: maxSessions,
+      device: device,
     );
     if (_accounts.containsKey(account.username)) return null;
     final username = account.username;
@@ -509,6 +592,7 @@ class InMemoryStorage implements Storage {
       issuedAt: issuedAt,
       expiresAt: expiresAt,
       maxSessions: maxSessions,
+      device: device,
     );
   }
 
@@ -537,6 +621,7 @@ class InMemoryStorage implements Storage {
     required int issuedAt,
     required int expiresAt,
     required int maxSessions,
+    SessionDevice? device,
   }) async {
     if (_accounts[account.username]?.generation != account.generation) {
       return null;
@@ -546,6 +631,7 @@ class InMemoryStorage implements Storage {
       issuedAt: issuedAt,
       expiresAt: expiresAt,
       maxSessions: maxSessions,
+      device: device,
     );
   }
 
@@ -554,13 +640,22 @@ class InMemoryStorage implements Storage {
     required int issuedAt,
     required int expiresAt,
     required int maxSessions,
+    SessionDevice? device,
   }) {
     validateSessionPolicy(
       issuedAt: issuedAt,
       expiresAt: expiresAt,
       maxSessions: maxSessions,
+      device: device,
     );
-    _tokens.removeWhere((_, session) => session.expiresAt <= issuedAt);
+    _tokens.removeWhere(
+      (_, session) =>
+          session.expiresAt <= issuedAt ||
+          (device != null &&
+              session.username == account.username &&
+              session.accountGeneration == account.generation &&
+              session.device?.id == device.id),
+    );
     final own =
         _tokens.entries
             .where(
@@ -570,8 +665,10 @@ class InMemoryStorage implements Storage {
             )
             .toList()
           ..sort((a, b) {
+            final byUse = a.value.lastUsedAt.compareTo(b.value.lastUsedAt);
+            if (byUse != 0) return byUse;
             final byTime = a.value.issuedAt.compareTo(b.value.issuedAt);
-            return byTime != 0 ? byTime : a.key.compareTo(b.key);
+            return byTime != 0 ? byTime : a.value.id.compareTo(b.value.id);
           });
     while (own.length >= maxSessions) {
       final oldest = own.removeAt(0);
@@ -579,10 +676,13 @@ class InMemoryStorage implements Storage {
     }
     final token = base64Url.encode(secureRandomBytes(32));
     _tokens[digestBearerToken(token)] = _MemorySession(
+      id: newSessionId(),
       username: account.username,
       accountGeneration: account.generation,
       issuedAt: issuedAt,
       expiresAt: expiresAt,
+      lastUsedAt: issuedAt,
+      device: device,
     );
     return token;
   }
@@ -593,12 +693,16 @@ class InMemoryStorage implements Storage {
     required int now,
   }) async {
     final digest = digestBearerToken(token);
-    final session = _tokens[digest];
+    var session = _tokens[digest];
     if (session == null) return null;
     if (session.expiresAt <= now ||
         _accounts[session.username]?.generation != session.accountGeneration) {
       _tokens.remove(digest);
       return null;
+    }
+    if (session.lastUsedAt <= now - const Duration(hours: 1).inMilliseconds) {
+      session = session.touched(now);
+      _tokens[digest] = session;
     }
     return AuthPrincipal(
       username: session.username,
@@ -622,6 +726,54 @@ class InMemoryStorage implements Storage {
           session.accountGeneration == principal.accountGeneration,
     );
     return true;
+  }
+
+  void _requireSessionAt(AuthPrincipal principal, int now) {
+    _requireCurrent(principal);
+    if (_tokens[principal.tokenDigest]!.expiresAt <= now) {
+      throw const StalePrincipalException();
+    }
+  }
+
+  @override
+  Future<List<SyncSessionInfo>> listSessionsFor(
+    AuthPrincipal principal, {
+    required int now,
+  }) async {
+    _requireSessionAt(principal, now);
+    _tokens.removeWhere((_, session) => session.expiresAt <= now);
+    final sessions = [
+      for (final entry in _tokens.entries)
+        if (entry.value.username == principal.username &&
+            entry.value.accountGeneration == principal.accountGeneration)
+          entry.value.info(current: entry.key == principal.tokenDigest),
+    ]..sort(compareSessionsNewestFirst);
+    return sessions;
+  }
+
+  @override
+  Future<RevokeSessionResponse> revokeSessionByIdFor(
+    AuthPrincipal principal,
+    String sessionId, {
+    required int now,
+  }) async {
+    _requireSessionAt(principal, now);
+    final matches = _tokens.entries.where(
+      (entry) =>
+          entry.value.id == sessionId &&
+          entry.value.username == principal.username &&
+          entry.value.accountGeneration == principal.accountGeneration &&
+          entry.value.expiresAt > now,
+    );
+    if (matches.isEmpty) {
+      return const RevokeSessionResponse(revoked: false, current: false);
+    }
+    final digest = matches.single.key;
+    _tokens.remove(digest);
+    return RevokeSessionResponse(
+      revoked: true,
+      current: digest == principal.tokenDigest,
+    );
   }
 
   @override

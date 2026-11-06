@@ -115,7 +115,7 @@ Omit `--db` for an ephemeral in-memory store.
 | `SEANCE_RATE_LIMIT_MAX_BUCKETS` | — | `4096` | Maximum keyed buckets per limiter before overflow sharing |
 | `SEANCE_TRUSTED_PROXIES` | — | *(empty)* | Exact comma-separated proxy IPs allowed to supply `X-Forwarded-For` |
 | `SEANCE_SESSION_TTL_SECONDS` | — | `2592000` | Bearer-session lifetime (30 days) |
-| `SEANCE_MAX_SESSIONS_PER_ACCOUNT` | — | `20` | Newest sessions retained per account |
+| `SEANCE_MAX_SESSIONS_PER_ACCOUNT` | — | `20` | Active sessions retained per account, evicting least recently used |
 | `SEANCE_MAX_RECORDS_PER_PULL` | — | `1000` | Records or inbox items returned per page |
 | `SEANCE_MAX_PULL_BODY_BYTES` | — | `8388608` | Maximum encoded JSON bytes per record or inbox page |
 | `SEANCE_MAX_RECORDS_PER_ACCOUNT` | — | `5000` | Current records and, separately, pending inbox items per account |
@@ -139,13 +139,17 @@ record write before changing storage.
 | `GET /v1/records/legacy[?after=<id>]` | Bearer | Read a bounded page of legacy rows for migration |
 | `PUT /v1/records/legacy` | Bearer | Replace exact observed legacy rows and finalize the account envelope floor |
 | `DELETE /v1/session` | Bearer | Revoke the current session |
+| `GET /v1/sessions` | Bearer | List active sessions and public device metadata |
+| `DELETE /v1/sessions/current` | Bearer | Alias for revoking the current session |
 | `DELETE /v1/sessions` | Bearer | Revoke every session for the account |
+| `DELETE /v1/sessions/<id>` | Bearer | Revoke one opaque session id owned by this account |
 | `PUT /v1/account/vault-key-check` | Bearer | Initialize an empty legacy account's encrypted key check once |
 | `DELETE /v1/account` | Bearer | Delete the account and all its data |
 
 The server returns a raw bearer token only once and stores its SHA-256 digest.
 Sessions expire after the configured lifetime and issuing a session beyond the
-per-account cap revokes the oldest one. Upgrading from protocol v1 deliberately
+per-account cap revokes the least recently used one. Last-use timestamps update
+at most hourly and never extend expiry. Upgrading from protocol v1 deliberately
 invalidates legacy plaintext token rows, so each device must sign in once. The
 protocol bump prevents an older client or server from partly creating an
 account without the registration-time encrypted vault-key check.
@@ -162,6 +166,22 @@ remains, and clients persist that floor to reject downgrade or replay.
 Pending inbox items also have a 32 MiB raw-blob cap and a 5,000-item cap across
 all apps, in addition to the encoded-byte quota above and each app's 100-item
 cap. The 50-app registration cap is checked atomically with insertion.
+
+Registration and login may supply `X-Seance-Device-Id` and
+`X-Seance-Device-Name` together. Both are limited to 128 UTF-8 bytes; ids use
+ASCII letters, digits, `.`, `_`, `:`, or `-`, and names cannot contain control
+or invisible formatting characters or surrounding whitespace. A malformed pair
+returns `400 bad_device`. Older clients may omit both and receive an unlabeled
+session. Signing in again with the same device id rotates that device's earlier
+session within this account generation.
+
+Session listings contain opaque ids, device labels, creation/expiry/last-use
+timestamps, and `legacy`/`current` flags. They expose no bearer token or digest.
+Selective revocation returns `{"revoked":true,"current":false}` (or `true` for
+the current flag when revoking yourself); a missing or foreign id is
+`404 not_found`. Listing and revocation revalidate the caller's account
+generation and live session inside the storage transaction. Existing current
+and all-session revocation endpoints retain their `204` responses.
 
 Register, prelogin and login run before any authentication, so they read at
 most 16 KiB of request body (less if `SEANCE_MAX_BODY_BYTES` is lower) and

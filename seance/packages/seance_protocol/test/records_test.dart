@@ -985,5 +985,125 @@ void main() {
       expect(back.results[1].accepted, isFalse);
       expect(back.latestSeq, 6);
     });
+
+    test('SyncSessionInfo round-trips with current flags', () {
+      final info = const SyncSessionInfo(
+        id: 'sess-1',
+        deviceId: 'dev-a',
+        deviceName: 'laptop',
+        createdAt: 1000,
+        expiresAt: 2000,
+        lastUsedAt: 1500,
+        legacy: false,
+        current: true,
+      );
+      final back = SyncSessionInfo.fromJson(info.toJson());
+      expect(back.id, 'sess-1');
+      expect(back.deviceId, 'dev-a');
+      expect(back.deviceName, 'laptop');
+      expect(back.createdAt, 1000);
+      expect(back.expiresAt, 2000);
+      expect(back.lastUsedAt, 1500);
+      expect(back.legacy, isFalse);
+      expect(back.current, isTrue);
+      // Round-trip equality
+      expect(back.toJson(), equals(info.toJson()));
+    });
+
+    test('SyncSessionInfo tolerates legacy missing deviceId', () {
+      final json = {
+        'id': 'sess-legacy',
+        'deviceName': 'old-device',
+        'createdAt': 100,
+        'expiresAt': 200,
+        'lastUsedAt': 150,
+      };
+      final info = SyncSessionInfo.fromJson(json);
+      expect(info.id, 'sess-legacy');
+      expect(info.deviceId, isNull);
+      expect(info.deviceName, 'old-device');
+      expect(info.legacy, isFalse);
+      expect(info.current, isFalse);
+      // deviceId omitted in output when null
+      expect(info.toJson().containsKey('deviceId'), isFalse);
+      // Round-trip through toJson/fromJson preserves null deviceId
+      final back = SyncSessionInfo.fromJson(info.toJson());
+      expect(back.deviceId, isNull);
+    });
+
+    test('SyncSessionInfo public field shape has no token or hash', () {
+      final info = const SyncSessionInfo(
+        id: 'sess-1',
+        deviceId: 'dev-a',
+        deviceName: 'laptop',
+        createdAt: 1000,
+        expiresAt: 2000,
+        lastUsedAt: 1500,
+        legacy: false,
+        current: true,
+      );
+      final json = info.toJson();
+      // Explicitly verify no auth secret fields appear
+      expect(json.containsKey('token'), isFalse);
+      expect(json.containsKey('tokenHash'), isFalse);
+      expect(json.containsKey('hash'), isFalse);
+      // Only the declared public metadata fields
+      expect(
+        json.keys,
+        unorderedEquals([
+          'id',
+          'deviceId',
+          'deviceName',
+          'createdAt',
+          'expiresAt',
+          'lastUsedAt',
+          'legacy',
+          'current',
+        ]),
+      );
+    });
+
+    test('SyncSessionsResponse round-trips', () {
+      final resp = SyncSessionsResponse(
+        sessions: const [
+          SyncSessionInfo(
+            id: 's1',
+            deviceId: 'd1',
+            deviceName: 'laptop',
+            createdAt: 100,
+            expiresAt: 200,
+            lastUsedAt: 150,
+            legacy: false,
+            current: true,
+          ),
+          SyncSessionInfo(
+            id: 's2',
+            deviceId: null,
+            deviceName: 'legacy',
+            createdAt: 50,
+            expiresAt: 100,
+            lastUsedAt: 75,
+            legacy: true,
+            current: false,
+          ),
+        ],
+      );
+      final back = SyncSessionsResponse.fromJson(resp.toJson());
+      expect(back.sessions.length, 2);
+      expect(back.sessions[0].current, isTrue);
+      expect(back.sessions[1].deviceId, isNull);
+      expect(back.sessions[1].legacy, isTrue);
+    });
+
+    test('RevokeSessionResponse round-trips', () {
+      final resp = const RevokeSessionResponse(
+        revoked: true,
+        current: false,
+      );
+      final back = RevokeSessionResponse.fromJson(resp.toJson());
+      expect(back.revoked, isTrue);
+      expect(back.current, isFalse);
+      expect(back.toJson(), equals(resp.toJson()));
+    });
   });
 }
