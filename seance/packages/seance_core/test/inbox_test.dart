@@ -172,6 +172,52 @@ Future<void> _expectSameFailure(
   expect(caughtStack, same(expectedStack));
 }
 
+
+
+final class _FaultingStatusStore implements InboxStatusStore {
+  final InboxStatusStore delegate;
+  final List<String> events;
+  Object? putError;
+
+  _FaultingStatusStore(this.delegate, this.events);
+
+  @override
+  Future<void> deleteStatus(String appId, String proposalId) =>
+      delegate.deleteStatus(appId, proposalId);
+
+  @override
+  Future<InboxStatus?> getStatus(String appId, String proposalId) =>
+      delegate.getStatus(appId, proposalId);
+
+  @override
+  Future<List<InboxStatus>> listStatuses() => delegate.listStatuses();
+
+  @override
+  Future<void> putStatus(InboxStatus status) async {
+    events.add('status');
+    if (putError != null) throw putError!;
+    await delegate.putStatus(status);
+  }
+}
+
+final class _FaultingCacheStore implements InboxCacheStore {
+  final InboxCacheStore delegate;
+  final List<String> events;
+  Object? saveError;
+
+  _FaultingCacheStore(this.delegate, this.events);
+
+  @override
+  Future<InboxCache> load() => delegate.load();
+
+  @override
+  Future<void> save(InboxCache cache) async {
+    events.add('cache');
+    if (saveError != null) throw saveError!;
+    await delegate.save(cache);
+  }
+}
+
 /// A record sync server, as small as the coordinator needs.
 class _FakeRecords implements SyncApi {
   final Map<String, EncryptedRecord> _store = {};
@@ -339,6 +385,103 @@ void main() {
       expect(cleanupFailure.toStringCalls, 0);
     },
   );
+
+  Future<PendingProposal> pendingOnA() async {
+    final pairing = await connect(a);
+    await server.deposit(pairing, _proposal('p1'));
+    return (await a.inbox.refresh()).single;
+  }
+
+  InboxService faultingService({
+    required _FaultingStatusStore statuses,
+    required _FaultingCacheStore cache,
+  }) => InboxService(
+    api: server,
+    apps: a.apps,
+    statuses: statuses,
+    cache: cache,
+    now: () => a.clock,
+  );
+
+  test(
+    'a claimed item stays claimed when writing its ran status fails',
+    () async {
+      final pending = await pendingOnA();
+      final events = <String>[];
+      final failure = _SensitiveFailure('status secret');
+      final statuses = _FaultingStatusStore(a.statuses, events)
+        ..putError = failure;
+      final cache = _FaultingCacheStore(a.cache, events);
+
+      expect(
+        await faultingService(statuses: statuses, cache: cache).claim(pending),
+        InboxClaim.claimed,
+      );
+      expect(server.items, isEmpty);
+      expect(events, ['status']);
+      expect((await a.cache.load()).proposals, hasLength(1));
+      expect(failure.toStringCalls, 0);
+    },
+  );
+
+  test(
+    'a claimed item keeps its ran status when cache settlement fails',
+    () async {
+      final pending = await pendingOnA();
+      final events = <String>[];
+      final failure = _SensitiveFailure('cache secret');
+      final statuses = _FaultingStatusStore(a.statuses, events);
+      final cache = _FaultingCacheStore(a.cache, events)..saveError = failure;
+
+      expect(
+        await faultingService(statuses: statuses, cache: cache).claim(pending),
+        InboxClaim.claimed,
+      );
+      expect(server.items, isEmpty);
+      expect(events, ['status', 'cache']);
+      final status =
+          await a.statuses.getStatus(pending.app.id, pending.proposal.id);
+      expect(status?.state, InboxStatusState.ran);
+      expect(failure.toStringCalls, 0);
+    },
+  );
+
+  test(
+    'a delete-false claim still reports a cache settlement failure',
+    () async {
+      final pending = await pendingOnA();
+      expect(
+        await server.deleteItem(pending.app.id, pending.cached.itemId),
+        isTrue,
+      );
+      final events = <String>[];
+      final failure = _SensitiveFailure('cache secret');
+      final statuses = _FaultingStatusStore(a.statuses, events);
+      final cache = _FaultingCacheStore(a.cache, events)..saveError = failure;
+
+      await expectLater(
+        faultingService(statuses: statuses, cache: cache).claim(pending),
+        throwsA(same(failure)),
+      );
+      expect(events, ['cache']);
+    },
+  );
+
+  test('dismiss still reports a status write failure', () async {
+    final pending = await pendingOnA();
+    final events = <String>[];
+    final failure = _SensitiveFailure('status secret');
+    final statuses = _FaultingStatusStore(a.statuses, events)
+      ..putError = failure;
+    final cache = _FaultingCacheStore(a.cache, events);
+
+    await expectLater(
+      faultingService(statuses: statuses, cache: cache).dismiss(pending),
+      throwsA(same(failure)),
+    );
+    expect(server.items, isEmpty);
+    expect(events, ['status']);
+  });
 
   test('a proposal reaches every device and a run settles it on all', () async {
     final pairing = await connect(a);

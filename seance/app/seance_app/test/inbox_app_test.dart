@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -44,6 +47,121 @@ CachedProposal _cached(
     ),
   );
 }
+
+final class _ProposalFileSystem implements RemoteFileSystem {
+  final Map<String, List<int>> files = {};
+  final Set<String> directories = {'/home/deploy'};
+  final List<String> deleted = [];
+
+  RemoteFileEntry _entry(String path, RemoteFileType type, [List<int>? data]) =>
+      RemoteFileEntry(
+        path: path,
+        name: remoteBasename(path),
+        type: type,
+        size: data?.length,
+        contentSha256: data == null ? null : sha256.convert(data).toString(),
+      );
+
+  @override
+  Future<String> canonicalize(String path) async => '/home/deploy';
+
+  @override
+  Future<void> createDirectory(String path) async => directories.add(path);
+
+  @override
+  Future<void> delete(RemoteFileEntry entry) async {
+    deleted.add(entry.path);
+    files.remove(entry.path);
+  }
+
+  @override
+  Future<void> setMode(String path, int permissions) async {}
+
+  @override
+  Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) async {
+    if (directories.contains(path)) {
+      return _entry(path, RemoteFileType.directory);
+    }
+    final data = files[path];
+    if (data != null) return _entry(path, RemoteFileType.file, data);
+    throw RemoteFileException(
+      kind: RemoteFileErrorKind.notFound,
+      operation: 'stat',
+      message: 'not found',
+      path: path,
+    );
+  }
+
+  @override
+  Future<RemoteFileEntry> upload(
+    String path,
+    Stream<List<int>> content, {
+    int? length,
+    bool overwrite = false,
+    int? preserveMode,
+    RemoteFileEntry? expectedTarget,
+    RemoteTransferProgress? onProgress,
+    RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
+  }) async {
+    final data = [for (final chunk in await content.toList()) ...chunk];
+    files[path] = data;
+    return _entry(path, RemoteFileType.file, data);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _ProposalSshSession implements SshSession {
+  @override
+  final TerminalEngine engine;
+  final _ProposalFileSystem fs;
+  final BytesBuilder input = BytesBuilder();
+  late final StreamSubscription<List<int>> _inputSubscription;
+  bool _closed = false;
+
+  _ProposalSshSession(this.engine, this.fs) {
+    _inputSubscription = engine.userInput.listen(input.add);
+  }
+
+  String get inputText => utf8.decode(input.toBytes());
+
+  @override
+  bool get isClosed => _closed;
+
+  @override
+  void Function()? onClosed;
+
+  @override
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    await engine.dispose();
+    await _inputSubscription.cancel();
+    onClosed?.call();
+  }
+
+  @override
+  Future<RemoteFileSystem> openRemoteFileSystem({
+    Duration timeout = const Duration(seconds: 15),
+  }) async => fs;
+
+  @override
+  void resize(TerminalSize size) {}
+
+  @override
+  Future<RemoteCommandResult> runCommand(
+    String command, {
+    Duration? timeout,
+    int maxOutputBytes = 256 * 1024,
+  }) async => const RemoteCommandResult(exitCode: 1);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+enum _ClaimSessionChange { unchanged, closed, disconnected, reconnected }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -226,6 +344,7 @@ void main() {
     Future<(InboxApp, CachedProposal)> seed({
       String host = 'prod-db-1',
       String script = 'systemctl restart worker',
+      AppState Function(AppServices services)? buildState,
     }) async {
       services = await AppServices.initialize();
       final app = _app();
@@ -242,7 +361,7 @@ void main() {
         createdAt: 1,
         updatedAt: 1,
       ));
-      state = AppState(services);
+      state = buildState?.call(services) ?? AppState(services);
       await state.load();
       return (app, cached);
     }
@@ -250,6 +369,57 @@ void main() {
     Future<void> disposeState() async {
       state.dispose();
       await services.probe.dispose();
+    }
+
+    Future<(ProposalRunResult, _ProposalFileSystem, _ProposalSshSession)>
+    runWithSessionChange(_ClaimSessionChange change) async {
+      final sessions = <_ProposalSshSession>[];
+      late AppState built;
+      await seed(
+        buildState: (services) {
+          built = AppState(
+            services,
+            openSshSession:
+                (
+                  manager, {
+                  required config,
+                  required credentials,
+                  required engine,
+                  log,
+                }) async {
+                  final session = _ProposalSshSession(
+                    engine,
+                    _ProposalFileSystem(),
+                  );
+                  sessions.add(session);
+                  return session;
+                },
+            claimInboxProposal: (_) async {
+              final tab = built.activeSession!;
+              switch (change) {
+                case _ClaimSessionChange.unchanged:
+                  break;
+                case _ClaimSessionChange.closed:
+                  await built.closeTab(tab.id);
+                case _ClaimSessionChange.disconnected:
+                  await built.disconnect(tab.id);
+                case _ClaimSessionChange.reconnected:
+                  await built.reconnect(tab.id);
+              }
+              return InboxClaim.claimed;
+            },
+          );
+          return built;
+        },
+      );
+      await state.newTab(state.servers.single);
+      final original = sessions.single;
+      final result = await state.runProposal(
+        state.inboxPending.single,
+        state.servers.single,
+      );
+      await Future<void>.delayed(Duration.zero);
+      return (result, original.fs, original);
     }
 
     test('load shows what was fetched, and a status hides it', () async {
@@ -355,8 +525,8 @@ void main() {
         state.inboxPending.single,
         other,
       );
-      expect(result.ok, isFalse);
-      expect(result.error, contains('may not run'));
+      expect(result, isA<ProposalRunFailed>());
+      expect((result as ProposalRunFailed).error, contains('may not run'));
 
       // Limited to another server after the proposal arrived.
       await services.inboxApps.putApp(
@@ -367,8 +537,208 @@ void main() {
         state.inboxPending.single,
         state.servers.single,
       );
-      expect(limited.ok, isFalse);
+      expect(limited, isA<ProposalRunFailed>());
     });
+
+    for (final change in _ClaimSessionChange.values) {
+      test(
+        'a ${change.name} session after claim returns the right placement',
+        () async {
+          final (result, fs, original) = await runWithSessionChange(change);
+          addTearDown(disposeState);
+          final path = fs.files.keys.single;
+          final commandLine = "sh '$path'";
+
+          if (change == _ClaimSessionChange.unchanged) {
+            expect(result, isA<ProposalPlaced>());
+            expect((result as ProposalPlaced).commandLine, commandLine);
+            expect(original.inputText, commandLine);
+          } else {
+            expect(result, isA<ProposalNeedsRecovery>());
+            expect((result as ProposalNeedsRecovery).commandLine, commandLine);
+            expect(original.inputText, isEmpty);
+            expect(fs.deleted, isEmpty);
+            expect(fs.files, hasLength(1));
+          }
+        },
+      );
+    }
+
+    test('a handled-elsewhere retry preserves the shared staged script',
+        () async {
+      final sessions = <_ProposalSshSession>[];
+      var claims = 0;
+      await seed(
+        buildState: (services) => AppState(
+          services,
+          openSshSession:
+              (
+                manager, {
+                required config,
+                required credentials,
+                required engine,
+                log,
+              }) async {
+                final session = _ProposalSshSession(
+                  engine,
+                  _ProposalFileSystem(),
+                );
+                sessions.add(session);
+                return session;
+              },
+          claimInboxProposal: (_) async => switch (claims++) {
+            0 => InboxClaim.claimed,
+            1 => InboxClaim.handledElsewhere,
+            _ => throw StateError('Unexpected extra claim'),
+          },
+        ),
+      );
+      addTearDown(disposeState);
+      await state.newTab(state.servers.single);
+      final pending = state.inboxPending.single;
+      final original = sessions.single;
+
+      final first = await state.runProposal(pending, state.servers.single);
+      await Future<void>.delayed(Duration.zero);
+      expect(first, isA<ProposalPlaced>());
+      expect(state.inboxPending, isEmpty);
+      final path = original.fs.files.keys.single;
+      final bytes = List<int>.of(original.fs.files[path]!);
+      final commandLine = "sh '$path'";
+      expect((first as ProposalPlaced).commandLine, commandLine);
+      expect(original.inputText, commandLine);
+
+      final retry = await state.runProposal(pending, state.servers.single);
+      expect(retry, isA<ProposalRunFailed>());
+      expect(
+        (retry as ProposalRunFailed).error,
+        contains('Another device already ran or dismissed'),
+      );
+      expect(original.inputText, commandLine);
+      expect(original.fs.deleted, isEmpty);
+      expect(original.fs.files[path], orderedEquals(bytes));
+    });
+
+    testWidgets(
+      'recovery survives review close and clipboard failure',
+      (tester) async {
+        await tester.runAsync(() => seed());
+        addTearDown(() => tester.runAsync(disposeState));
+        const commandLine =
+            "sh '/home/deploy/.seance/inbox/proposal-item-1.sh'";
+        final result = Completer<ProposalRunResult>();
+        final navigatorKey = GlobalKey<NavigatorState>();
+
+        String? copied;
+        var failCopy = true;
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async {
+            if (call.method == 'Clipboard.setData') {
+              if (failCopy) {
+                throw PlatformException(code: 'clipboard-unavailable');
+              }
+              copied = (call.arguments as Map)['text'] as String?;
+            }
+            return null;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            SystemChannels.platform,
+            null,
+          ),
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            navigatorKey: navigatorKey,
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => FilledButton(
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (dialogContext) => Dialog(
+                      child: ProposalReview(
+                        state: state,
+                        pending: state.inboxPending.single,
+                        onBack: () => Navigator.pop(dialogContext),
+                        runProposal: (_, __) => result.future,
+                      ),
+                    ),
+                  ),
+                  child: const Text('Review proposal'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Review proposal'));
+        await tester.pumpAndSettle();
+        expect(find.byType(ProposalReview), findsOneWidget);
+
+        await tester.tap(find.byKey(const ValueKey('inbox.run')));
+        await tester.pump();
+        navigatorKey.currentState!.pop();
+        await tester.pumpAndSettle();
+        expect(find.byType(ProposalReview), findsNothing);
+        expect(
+          find.byKey(const ValueKey('inbox.recovery.dialog')),
+          findsNothing,
+        );
+
+        result.complete(
+          const ProposalRunResult.needsRecovery(commandLine),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(ProposalReview), findsNothing);
+        expect(
+          find.byKey(const ValueKey('inbox.recovery.dialog')),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Reconnect to prod-db-1'), findsOneWidget);
+        expect(find.textContaining('paste this command'), findsOneWidget);
+        expect(find.textContaining('press Enter'), findsOneWidget);
+        final command = tester.widget<SelectableText>(
+          find.byKey(const ValueKey('inbox.recovery.command')),
+        );
+        expect(command.data, commandLine);
+        expect(find.textContaining('Placed in the prompt'), findsNothing);
+        expect(find.text('Copy command'), findsOneWidget);
+
+        await tester.tap(find.text('Copy command'));
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('Could not copy the command'),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('inbox.recovery.dialog')),
+          findsOneWidget,
+        );
+        expect(command.data, commandLine);
+        expect(copied, isNull);
+
+        failCopy = false;
+        await tester.tap(find.text('Copy command'));
+        await tester.pumpAndSettle();
+        expect(copied, commandLine);
+        expect(find.text('Copied.'), findsOneWidget);
+        await tester.pump(const Duration(minutes: 1));
+        expect(
+          find.byKey(const ValueKey('inbox.recovery.dialog')),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.text('Close'));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('inbox.recovery.dialog')),
+          findsNothing,
+        );
+      },
+    );
 
     testWidgets('the banner counts what waits', (tester) async {
       await tester.runAsync(() => seed());
