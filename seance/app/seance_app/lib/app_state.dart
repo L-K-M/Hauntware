@@ -2328,10 +2328,15 @@ class AppState extends ChangeNotifier {
     // today; not depending on that costs one `||`, and the flag can only be
     // true here if a round adopted inside the keystore read above, which is
     // exactly when this device must not stamp.
-    if (_mustNotStampOnSwitchOn()) {
-      return;
-    }
-    await assistantSettingsEdited();
+    final stamped = await _mutate(() async {
+      // An opt-out, account detach or adoption may already be queued ahead
+      // of this mutation. Recheck beside the write so none can land between
+      // the guard and the new stamp.
+      if (_mustNotStampOnSwitchOn()) return false;
+      await _assistantSettingsEditedNow();
+      return true;
+    });
+    if (!stamped) return;
     // That hands the publish to the auto-sync debounce, which does not run
     // with auto-sync off — and this switch is an explicit ask to sync, made
     // by a user who just watched one round run. Published now in that case;
