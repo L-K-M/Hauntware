@@ -137,54 +137,61 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('outside the centered card remains interactive and unpaused', (
-    tester,
-  ) async {
-    late OverlayState overlay;
-    var underlyingTaps = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) {
-            overlay = Overlay.of(context);
-            return Scaffold(
-              body: Align(
-                alignment: Alignment.topLeft,
-                child: SizedBox(
-                  width: 120,
-                  height: 60,
-                  child: ElevatedButton(
-                    onPressed: () => underlyingTaps += 1,
-                    child: const Text('underlying'),
+  testWidgets(
+    'outside the centered card remains interactive and unpaused',
+    (tester) async {
+      late OverlayState overlay;
+      var underlyingTaps = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              overlay = Overlay.of(context);
+              return Scaffold(
+                body: Align(
+                  alignment: Alignment.topLeft,
+                  child: SizedBox(
+                    width: 120,
+                    height: 60,
+                    child: ElevatedButton(
+                      onPressed: () => underlyingTaps += 1,
+                      child: const Text('underlying'),
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
-      ),
-    );
-    showTopToast(
-      overlay,
-      message: 'centered toast',
-      duration: const Duration(seconds: 1),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+      );
+      showTopToast(
+        overlay,
+        message: 'centered toast',
+        duration: const Duration(seconds: 1),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
 
-    final underlying = find.text('underlying');
-    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await mouse.addPointer();
-    await mouse.moveTo(tester.getCenter(underlying));
-    await tester.pump();
-    await tester.tap(underlying);
-    await tester.pump();
-    expect(underlyingTaps, 1);
+      final underlying = find.text('underlying');
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer();
+      await mouse.moveTo(tester.getCenter(underlying));
+      await tester.pump();
+      await tester.tap(underlying);
+      await tester.pump();
+      expect(underlyingTaps, 1);
 
-    await tester.pump(const Duration(seconds: 2));
-    await tester.pumpAndSettle();
-    expect(find.text('centered toast'), findsNothing);
-  });
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.text('centered toast'), findsNothing);
+    },
+    variant: TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.linux,
+      TargetPlatform.macOS,
+      TargetPlatform.windows,
+    }),
+  );
 
   testWidgets('safe coalescing refreshes lifetime but keeps actions distinct', (
     tester,

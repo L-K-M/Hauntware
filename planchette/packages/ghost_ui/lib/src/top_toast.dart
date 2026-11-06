@@ -362,21 +362,28 @@ class _ToastColumn extends StatelessWidget {
           constraints: BoxConstraints(
             maxHeight: MediaQuery.sizeOf(context).height * 0.5,
           ),
-          child: SingleChildScrollView(
-            hitTestBehavior: HitTestBehavior.deferToChild,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final toast in toasts)
-                  _TopToast(
-                    key: ValueKey(toast.id),
-                    toast: toast,
-                    onDismissStarted: () => onDismissStarted(toast.id),
-                    onDismiss: () => onDismiss(toast.id),
-                  ),
-                if (hiddenCount > 0)
-                  _ToastHistoryButton(history: history, count: hiddenCount),
-              ],
+          // Desktop scrollbars install a pointer region over the full strip,
+          // including the transparent space beside the centered cards.
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(
+              context,
+            ).copyWith(scrollbars: false),
+            child: SingleChildScrollView(
+              hitTestBehavior: HitTestBehavior.deferToChild,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final toast in toasts)
+                    _TopToast(
+                      key: ValueKey(toast.id),
+                      toast: toast,
+                      onDismissStarted: () => onDismissStarted(toast.id),
+                      onDismiss: () => onDismiss(toast.id),
+                    ),
+                  if (hiddenCount > 0)
+                    _ToastHistoryButton(history: history, count: hiddenCount),
+                ],
+              ),
             ),
           ),
         ),
