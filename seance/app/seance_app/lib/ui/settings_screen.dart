@@ -587,8 +587,9 @@ class _SettingsScreenState extends State<SettingsScreen>
         'Snippets',
         helpTitle: 'Command suggestions',
         help:
-            'Command capture is keystroke-based and local. It cannot always '
-            'distinguish a shell command from text entered at a hidden prompt.',
+            'Command capture is local and requires OSC 133 shell integration. '
+            'Input without integration or while a program is running is never '
+            'recorded.',
       ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,

@@ -71,9 +71,10 @@ class XtermTerminalEngine implements TerminalEngine {
   TerminalSize _size;
   bool _feedingOutput = false;
 
-  /// Fired with each completed command line the user submits (Enter). Best
-  /// effort — see [_pendingInput] — and used to suggest frequently-run
-  /// commands as snippets. Never leaves the device on its own.
+  /// Fired with each non-empty line submitted at a validated OSC 133 prompt.
+  /// Input without shell integration, or while a program is running, is never
+  /// reported. Used to suggest frequently-run commands as snippets and never
+  /// leaves the device on its own.
   final void Function(String command)? onCommand;
 
   /// Current shell directory reported through standard OSC 7 metadata. Null
@@ -104,9 +105,9 @@ class XtermTerminalEngine implements TerminalEngine {
   /// recalled history entry included, and when a full-screen program hands
   /// the terminal back (a picker whose choice the shell then `cd`s to). An
   /// Enter on the alternate screen (an editor, a pager) or known to go to a
-  /// running program does not tick. [activeCommand] needs OSC 133, and
-  /// [onCommand] skips lines it could not reconstruct, so a shell that
-  /// reports no directory is re-read on this instead.
+  /// running program does not tick. [activeCommand] and [onCommand] need OSC
+  /// 133, and [onCommand] skips lines it could not reconstruct, so a shell
+  /// that reports no directory is re-read on this instead.
   Listenable get shellMayHaveMoved => _shellMoves;
   final ValueNotifier<int> _shellMoves = ValueNotifier<int>(0);
 
@@ -299,15 +300,13 @@ class XtermTerminalEngine implements TerminalEngine {
         // already executing is input to that program, not a new command.
         final phase = shellIntegration.value.phase;
         final atPrompt = phase == TerminalPromptPhase.acceptingInput;
-        // Once the shell has shown an integrated prompt, `executing` is
-        // known rather than assumed: the line goes to a running program (a
-        // password prompt, a REPL) and is no command to suggest. That also
-        // covers a nested `ssh` or `su` without integration, whose own
-        // password prompt cannot be told from its commands, and a PS2
-        // continuation line, which was only ever a fragment. A line typed
-        // after `133;D` is not dropped: that marker leaves the phase `done`.
-        // Without integration every Enter leaves the phase `executing`, so
-        // that case keeps reporting.
+        // Once the shell has shown an integrated prompt, `executing` is known
+        // rather than assumed: the line goes to a running program (a password
+        // prompt, a REPL) and is no command to suggest. That also covers a
+        // nested `ssh` or `su` without integration, whose own password prompt
+        // cannot be told from its commands, and a PS2 continuation line,
+        // which was only ever a fragment. `done` and `unknown` do not prove a
+        // prompt either; capture resumes only after a validated A/B pair.
         final toProgram =
             _hasAcceptedPrompt && phase == TerminalPromptPhase.executing;
         _submittedSincePrompt = true;
@@ -315,7 +314,7 @@ class XtermTerminalEngine implements TerminalEngine {
           phase: TerminalPromptPhase.executing,
           inputSincePrompt: true,
         );
-        _submitPending(atPrompt: atPrompt, toProgram: toProgram);
+        _submitPending(atPrompt: atPrompt);
         if (!toProgram && !terminal.isUsingAltBuffer) _shellMoves.value++;
       } else if (r == 0x7f || r == 0x08) {
         if (_pendingInput.isNotEmpty) {
@@ -336,13 +335,11 @@ class XtermTerminalEngine implements TerminalEngine {
   /// Enter arrived. Only then is the line a command (see [activeCommand]);
   /// `acceptingInput` is only ever set from a `133;B` marker, so this gate
   /// also implies the integration that will later deliver the clearing `D`.
-  /// [toProgram] — the line was typed into a running program, so it is not
-  /// reported at all.
-  void _submitPending({required bool atPrompt, required bool toProgram}) {
+  void _submitPending({required bool atPrompt}) {
     final line = _pendingInput.trim();
-    if (line.isNotEmpty && !toProgram) {
+    if (line.isNotEmpty && atPrompt) {
       onCommand?.call(line);
-      if (atPrompt) activeCommand.value = line;
+      activeCommand.value = line;
     }
     _pendingInput = '';
   }

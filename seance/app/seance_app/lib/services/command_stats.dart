@@ -29,7 +29,7 @@ class CommandStats {
         };
 
   // Filter before persistence, independent of the assistant's redaction toggle.
-  // Unmarked no-echo passwords remain undetectable: capture stays opt-in.
+  // An integrated command line can still contain an unmarked secret.
   static final _redactor = SecretRedactor();
   static bool _safeToRetain(String command) => !_redactor.wouldRedact(command);
 
@@ -103,8 +103,7 @@ class CommandStats {
 }
 
 /// JSON-file store for [CommandStats]. Kept out of the sync record set on
-/// purpose: raw command history can contain material typed at no-echo prompts,
-/// so it stays local.
+/// purpose: real command lines can contain secret arguments, so it stays local.
 class CommandStatsStore {
   final File file;
   CommandStatsStore(this.file);

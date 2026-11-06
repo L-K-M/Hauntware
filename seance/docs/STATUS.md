@@ -2060,11 +2060,12 @@ revocation and concurrent login/deletion lifecycle work remain separate.
    `terminal.onResize` → `session.resize` → `engine.resize` → `terminal.resize`
    → … — which left the grid stuck at 80 cols; `XtermTerminalEngine.resize` now
    only records the size. Regression: `test/terminal_resize_test.dart`.)
-9. **Command suggestions are keystroke-based.** Capture reconstructs the
-   command line from outbound keystrokes, so it can't tell a shell command from
-   text typed at a no-echo prompt (a password). That's why the feature is
-   opt-in and the stats stay local — only a snippet the user explicitly saves
-   syncs. A precise version needs OSC 133 command-block marks (see item 6).
+9. **Command suggestions require shell integration.** Capture reconstructs a
+   command line from outbound keystrokes only while a validated OSC 133 `A`/`B`
+   prompt is accepting input. Input without integration, while a program is
+   running, or after `D` and before the next prompt is never recorded. The
+   feature stays opt-in and local because real command lines can still contain
+   secrets; only a snippet the user explicitly saves syncs.
 10. **Mobile keyboard reflow** relies on `resizeToAvoidBottomInset` +
     `adjustResize`; the on-screen key row reserves space above the keyboard, and
     with the resize loop fixed the terminal now re-fits its rows/cols as the
