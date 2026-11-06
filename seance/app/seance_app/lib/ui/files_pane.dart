@@ -2377,7 +2377,21 @@ class _TransfersPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = FamilyPalette.of(context);
-    final visible = controller.transfers.reversed.take(3).toList();
+    final running = <RemoteTransferItem>[];
+    final unsuccessful = <RemoteTransferItem>[];
+    final recentCompleted = <RemoteTransferItem>[];
+    for (final transfer in controller.transfers.reversed) {
+      if (transfer.status == RemoteTransferStatus.running) {
+        running.add(transfer);
+      } else if (transfer.status == RemoteTransferStatus.completed) {
+        if (recentCompleted.length < 3) recentCompleted.add(transfer);
+      } else {
+        // Failures and cancellations stay visible until explicitly cleared;
+        // unlike successful history, they may still need the user's attention.
+        unsuccessful.add(transfer);
+      }
+    }
+    final visible = [...running, ...unsuccessful, ...recentCompleted];
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       child: Column(
@@ -2398,54 +2412,68 @@ class _TransfersPanel extends StatelessWidget {
               ),
             ],
           ),
-          for (final transfer in visible)
-            ListTile(
-              dense: true,
-              leading: Icon(
-                transfer.direction == RemoteTransferDirection.upload
-                    ? Icons.upload
-                    : Icons.download,
-                size: 19,
-                color: palette.glyph(FamilyHue.cyan),
-              ),
-              title: Text(
-                transfer.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: transfer.status == RemoteTransferStatus.running
-                  ? LinearProgressIndicator(value: transfer.progress)
-                  : Text(
-                      switch (transfer.status) {
-                        RemoteTransferStatus.completed => 'Complete',
-                        RemoteTransferStatus.failed =>
-                          transfer.error ?? 'Failed',
-                        RemoteTransferStatus.cancelled => 'Cancelled',
-                        RemoteTransferStatus.running => '',
-                      },
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-              trailing: transfer.status == RemoteTransferStatus.running
-                  ? IconButton(
-                      tooltip: 'Cancel transfer',
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () => controller.cancelTransfer(transfer.id),
-                    )
-                  // A finished transfer says how it went by colour too:
-                  // done in the go green, failed or cancelled in the red.
-                  : transfer.status == RemoteTransferStatus.completed
-                  ? Icon(
-                      Icons.check_circle,
-                      size: 18,
-                      color: palette.glyph(FamilyHue.green),
-                    )
-                  : Icon(
-                      Icons.error,
-                      size: 18,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 216),
+            child: ListView.builder(
+              key: const ValueKey('files.transfers.list'),
+              primary: false,
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: visible.length,
+              itemBuilder: (context, index) {
+                final transfer = visible[index];
+                return ListTile(
+                  key: ValueKey('files.transfer.${transfer.id}'),
+                  dense: true,
+                  leading: Icon(
+                    transfer.direction == RemoteTransferDirection.upload
+                        ? Icons.upload
+                        : Icons.download,
+                    size: 19,
+                    color: palette.glyph(FamilyHue.cyan),
+                  ),
+                  title: Text(
+                    transfer.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: transfer.status == RemoteTransferStatus.running
+                      ? LinearProgressIndicator(value: transfer.progress)
+                      : Text(
+                          switch (transfer.status) {
+                            RemoteTransferStatus.completed => 'Complete',
+                            RemoteTransferStatus.failed =>
+                              transfer.error ?? 'Failed',
+                            RemoteTransferStatus.cancelled => 'Cancelled',
+                            RemoteTransferStatus.running => '',
+                          },
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                  trailing: transfer.status == RemoteTransferStatus.running
+                      ? IconButton(
+                          tooltip: 'Cancel transfer',
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () =>
+                              controller.cancelTransfer(transfer.id),
+                        )
+                      // A finished transfer says how it went by colour too:
+                      // done in the go green, failed or cancelled in the red.
+                      : transfer.status == RemoteTransferStatus.completed
+                      ? Icon(
+                          Icons.check_circle,
+                          size: 18,
+                          color: palette.glyph(FamilyHue.green),
+                        )
+                      : Icon(
+                          Icons.error,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                );
+              },
             ),
+          ),
         ],
       ),
     );

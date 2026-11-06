@@ -241,6 +241,20 @@ printf '%s\\n' "\$*" >> "${flutterLog.path}"
         final root = Directory(p.join(sandbox.path, '$product-real'));
         final app = p.join(root.path, 'app', appDir);
         Directory(p.join(app, 'macos')).createSync(recursive: true);
+        // Seed a minimal ad-hoc signing project so the missing-project guard
+        // passes; the test focuses on bundle cleanup, not signing.
+        File(
+          p.join(app, 'macos', 'Runner.xcodeproj', 'project.pbxproj'),
+        ).parent.createSync(recursive: true);
+        File(
+          p.join(app, 'macos', 'Runner.xcodeproj', 'project.pbxproj'),
+        ).writeAsStringSync('''
+buildSettings = {
+  "CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+  CODE_SIGN_STYLE = Manual;
+  DEVELOPMENT_TEAM = "";
+};
+''');
         final products = p.join(app, 'build', 'macos', 'Build', 'Products');
         Directory(
           p.join(products, 'Release', bundle, 'Contents'),

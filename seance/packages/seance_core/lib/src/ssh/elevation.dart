@@ -20,6 +20,7 @@ import 'dart:typed_data';
 import 'package:meta/meta.dart';
 
 import '../terminal/shell_command.dart';
+import 'byte_duplex.dart';
 import 'remote_command.dart';
 import 'remote_process.dart';
 import 'ssh_link.dart';
@@ -403,9 +404,16 @@ final class ElevatedExecutor {
 ///
 /// stderr reaches [stderr] as it arrives, except while the current rung
 /// may still fall back: only lines asking for a password are held then,
-/// so a command's own diagnostics are not delayed.
+/// so a command's own diagnostics are not delayed. It always drains the
+/// current process and replays at most the newest 4 MiB to a late or paused
+/// listener.
 final class ElevatedProcess implements RemoteProcess {
   ElevatedProcess._(this._executor, this._argv, this._password, this._rungs) {
+    _stderrReplay = InboundReplay(
+      _stderrSource.stream,
+      maxBufferedBytes: inboundReplayBufferLimit,
+      overflow: InboundReplayOverflow.discardOldest,
+    );
     _stdoutController
       ..onListen = _drainStdout
       ..onResume = _drainStdout
@@ -438,7 +446,8 @@ final class ElevatedProcess implements RemoteProcess {
   final List<ElevationStrategy> _rungs;
 
   final _stdoutController = StreamController<List<int>>();
-  final _stderrController = StreamController<List<int>>();
+  final _stderrSource = StreamController<List<int>>(sync: true);
+  late final InboundReplay _stderrReplay;
   final _stdinController = StreamController<List<int>>();
   final _exitCompleter = Completer<RemoteExit>();
   final _refusalCompleter = Completer<ElevationException?>();
@@ -494,7 +503,7 @@ final class ElevatedProcess implements RemoteProcess {
   Stream<List<int>> get stdout => _stdoutController.stream;
 
   @override
-  Stream<List<int>> get stderr => _stderrController.stream;
+  Stream<List<int>> get stderr => _stderrReplay.stream;
 
   @override
   StreamSink<List<int>> get stdin => _stdinController.sink;
@@ -596,8 +605,8 @@ final class ElevatedProcess implements RemoteProcess {
     process.stderr.listen(
       _onStderr,
       onError: (Object error, StackTrace stackTrace) {
-        if (!_stderrController.isClosed) {
-          _stderrController.addError(error, stackTrace);
+        if (!_stderrSource.isClosed) {
+          _stderrSource.addError(error, stackTrace);
         }
       },
       onDone: () {
@@ -659,9 +668,9 @@ final class ElevatedProcess implements RemoteProcess {
     }
     // After [_fail] the stream is closed while the channel may still
     // deliver; what arrives then has nowhere to go.
-    if (_stderrController.isClosed) return;
+    if (_stderrSource.isClosed) return;
     if (!_mayFallBack) {
-      _stderrController.add(data);
+      _stderrSource.add(data);
       return;
     }
     _heldStderr.add(data);
@@ -683,7 +692,7 @@ final class ElevatedProcess implements RemoteProcess {
     if (!_mayFallBack) return;
     _mayFallBack = false;
     for (final data in _heldStderr) {
-      _stderrController.add(data);
+      _stderrSource.add(data);
     }
     _heldStderr.clear();
     if (_process != null) _replay = null;
@@ -789,7 +798,7 @@ final class ElevatedProcess implements RemoteProcess {
     _seenStderr.clear();
     _exitCompleter.complete(ended);
     if (!_started) _endStdout();
-    _stderrController.close().ignore();
+    _stderrSource.close().ignore();
   }
 
   void _fail(Object error, StackTrace stackTrace) {
@@ -802,7 +811,7 @@ final class ElevatedProcess implements RemoteProcess {
       _exitCompleter.completeError(error, stackTrace);
     }
     _endStdout();
-    _stderrController.close().ignore();
+    _stderrSource.close().ignore();
   }
 }
 
