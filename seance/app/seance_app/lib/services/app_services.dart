@@ -237,14 +237,14 @@ class AppServices {
     required this.vaultKey,
     required this.settings,
     required this._rekeyJournal,
-  })  : // Keep the constructor's internal parameter names readable at its
-        // single bootstrap call site.
-        // ignore: prefer_initializing_formals
-        _inboxCache = inboxCache,
-        // ignore: prefer_initializing_formals
-        _syncRecordsPath = syncRecordsPath,
-        // ignore: prefer_initializing_formals
-        _inboxCacheFile = inboxCacheFile;
+  }) : // Keep the constructor's internal parameter names readable at its
+       // single bootstrap call site.
+       // ignore: prefer_initializing_formals
+       _inboxCache = inboxCache,
+       // ignore: prefer_initializing_formals
+       _syncRecordsPath = syncRecordsPath,
+       // ignore: prefer_initializing_formals
+       _inboxCacheFile = inboxCacheFile;
 
   /// [masterKeyManager] is for tests that need the OS keystore to misbehave
   /// (a locked keyring refusing the re-key's install, say); production passes
@@ -420,16 +420,19 @@ class AppServices {
 
   /// The mutation queue owns this transition; a rejected auth writes nothing.
   Future<void> setAppLock(AppLockMode mode) async {
-    await appLock.changeMode(mode, persist: () async {
-      final previous = settings.appLock;
-      settings.appLock = mode;
-      try {
-        await saveSettings();
-      } catch (_) {
-        settings.appLock = previous;
-        rethrow;
-      }
-    });
+    await appLock.changeMode(
+      mode,
+      persist: () async {
+        final previous = settings.appLock;
+        settings.appLock = mode;
+        try {
+          await saveSettings();
+        } catch (_) {
+          settings.appLock = previous;
+          rethrow;
+        }
+      },
+    );
     vault = _credentialVault(vault.store, vaultKey);
   }
 
@@ -536,9 +539,7 @@ class AppServices {
     try {
       final decoded = jsonDecode(await file.readAsString());
       if (decoded is! Map) return true;
-      return decoded.keys.any(
-        (id) => id is! String || !isReservedVaultId(id),
-      );
+      return decoded.keys.any((id) => id is! String || !isReservedVaultId(id));
     } catch (_) {
       return true;
     }
@@ -562,8 +563,10 @@ class AppServices {
   SyncAccountScope? _configuredSyncScope() {
     final baseUrl = settings.syncBaseUrl;
     final username = settings.syncUsername;
-    if (baseUrl == null || baseUrl.trim().isEmpty ||
-        username == null || username.trim().isEmpty) {
+    if (baseUrl == null ||
+        baseUrl.trim().isEmpty ||
+        username == null ||
+        username.trim().isEmpty) {
       return null;
     }
     return SyncAccountScope(
@@ -686,21 +689,19 @@ class AppServices {
   /// Keeps what an export needs of [code] (never the code itself), replacing
   /// an earlier one; exports made with that one still open with it.
   /// Serialized with enrolment, whose re-key re-seals the entry.
-  Future<void> saveRecoveryCode(
-    String code, {
-    SyncLocalRunner? runLocal,
-  }) => _serializeSyncOperation(
-    () => _runSyncLocal(runLocal, () async {
-      await _resolveCredentialVault();
-      final key = vaultKey;
-      if (key == null) throw const VaultLockedException();
-      final wrap = await RecoveryWrapKey.derive(RecoveryKey.decode(code));
-      await vault.store.putSecretBlob(
-        recoveryWrapKeyId,
-        await VaultCrypto.sealJson(key, wrap.toJson()),
+  Future<void> saveRecoveryCode(String code, {SyncLocalRunner? runLocal}) =>
+      _serializeSyncOperation(
+        () => _runSyncLocal(runLocal, () async {
+          await _resolveCredentialVault();
+          final key = vaultKey;
+          if (key == null) throw const VaultLockedException();
+          final wrap = await RecoveryWrapKey.derive(RecoveryKey.decode(code));
+          await vault.store.putSecretBlob(
+            recoveryWrapKeyId,
+            await VaultCrypto.sealJson(key, wrap.toJson()),
+          );
+        }),
       );
-    }),
-  );
 
   /// The vault, encrypted, as an export the recovery code opens anywhere.
   Future<Uint8List> exportSecrets({SyncLocalRunner? runLocal}) =>
@@ -975,7 +976,8 @@ class AppServices {
     required String password,
     required String encryptionPassphrase,
   }) => _serializeSyncOperation(() async {
-    final sameEnrollment = settings.syncUsername == username &&
+    final sameEnrollment =
+        settings.syncUsername == username &&
         settings.syncBaseUrl != null &&
         HttpSyncClient.normalizeBaseUrl(settings.syncBaseUrl!) ==
             HttpSyncClient.normalizeBaseUrl(baseUrl);
@@ -1113,16 +1115,19 @@ class AppServices {
   Future<SyncOutcome> runSync({
     SyncLocalRunner? runLocal,
     void Function(bool changed)? onAssistantSettingsChanged,
+    void Function()? onAssistantSettingsApplied,
   }) => _serializeSyncOperation(
     () => _runSync(
       runLocal: runLocal ?? _directSyncLocal,
       onAssistantSettingsChanged: onAssistantSettingsChanged,
+      onAssistantSettingsApplied: onAssistantSettingsApplied,
     ),
   );
 
   Future<SyncOutcome> _runSync({
     required SyncLocalRunner runLocal,
     void Function(bool changed)? onAssistantSettingsChanged,
+    void Function()? onAssistantSettingsApplied,
   }) async {
     // First statement, above every guard. The guards below all throw today,
     // so nothing can read a stale answer — but placing the reset after them
@@ -1134,6 +1139,18 @@ class AppServices {
     String? token;
     AssistantSettingsSync? assistant;
     SyncCoordinator? coordinator;
+    var reportedApplications = 0;
+    Future<T> trackLocal<T>(Future<T> Function() phase) => runLocal(() async {
+      try {
+        return await phase();
+      } finally {
+        final count = assistant?.applicationCount ?? 0;
+        while (reportedApplications < count) {
+          reportedApplications++;
+          onAssistantSettingsApplied?.call();
+        }
+      }
+    });
     try {
       await runLocal(() async {
         final configuredScope = _configuredSyncScope();
@@ -1194,7 +1211,7 @@ class AppServices {
       final activeCoordinator = coordinator!;
       final outcome = await _withSyncClient(baseUrl!, (client) {
         client.token = token!;
-        return activeCoordinator.runStaged(client, runLocal: runLocal);
+        return activeCoordinator.runStaged(client, runLocal: trackLocal);
       });
       await runLocal(() async {
         _pinConflicts = activeCoordinator.pinConflicts;
@@ -1226,7 +1243,7 @@ class AppServices {
       // the old model and key until some unrelated edit happened to rebuild
       // it.
       await runLocal(() async {
-        _assistantSettingsChanged = assistant?.applied ?? false;
+        _assistantSettingsChanged = (assistant?.applicationCount ?? 0) > 0;
         try {
           onAssistantSettingsChanged?.call(_assistantSettingsChanged);
         } catch (error, stackTrace) {
@@ -1247,43 +1264,43 @@ class AppServices {
   /// conditions [runSync] refuses on: the inbox rides the sync account, and
   /// app keys live in the vault.
   ///
-  /// When [runLocal] is supplied, the inbox action remains one local phase,
-  /// including its request. Inbox operations interleave remote claims with
-  /// local app/status writes and do not yet expose the staged boundary that
-  /// sync rounds do. Acquiring account serialization before that phase keeps
-  /// the global lock order consistent without changing inbox atomicity.
+  /// Local store phases use [runLocal]; inbox HTTP runs outside that queue.
+  /// Account serialization is acquired first, preserving the shared lock order.
   Future<T> withInbox<T>(
     Future<T> Function(InboxService inbox) action, {
     SyncLocalRunner? runLocal,
-  }) => _serializeSyncOperation(
-    () => _runSyncLocal(runLocal, () => _withInbox(action)),
-  );
+  }) => _serializeSyncOperation(() => _withInbox(action, runLocal: runLocal));
 
   Future<T> _withInbox<T>(
-    Future<T> Function(InboxService inbox) action,
-  ) async {
-    final scope = _configuredSyncScope();
-    final token = await masterKeys.getApiKey(syncTokenKeyName);
-    if (scope == null || token == null) {
-      throw StateError('Sync is not set up');
-    }
-    await _requireSyncStores();
-    if (vaultKey == null) await unlockVaultFromKeystore();
-    if (vaultKey == null) {
-      throw StateError(
-        'The vault is locked: the OS keyring is unavailable. Unlock the '
-        'keyring and try again.',
-      );
-    }
+    Future<T> Function(InboxService inbox) action, {
+    SyncLocalRunner? runLocal,
+  }) async {
+    final connection = await _runSyncLocal(runLocal, () async {
+      final scope = _configuredSyncScope();
+      final token = await masterKeys.getApiKey(syncTokenKeyName);
+      if (scope == null || token == null) {
+        throw StateError('Sync is not set up');
+      }
+      await _requireSyncStores();
+      if (vaultKey == null) await unlockVaultFromKeystore();
+      if (vaultKey == null) {
+        throw StateError(
+          'The vault is locked: the OS keyring is unavailable. Unlock the '
+          'keyring and try again.',
+        );
+      }
+      return (scope: scope, token: token);
+    });
     try {
-      return await _withSyncClient(scope.baseUrl, (client) {
-        client.token = token;
+      return await _withSyncClient(connection.scope.baseUrl, (client) {
+        client.token = connection.token;
         return action(
           InboxService(
             api: client,
             apps: inboxApps,
             statuses: inboxStatuses,
             cache: inboxCache,
+            localPhaseGate: runLocal ?? _directSyncLocal,
           ),
         );
       });

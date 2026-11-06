@@ -664,6 +664,12 @@ void main() {
 
     expect(paged.pageRequests, 1);
     expect((await reader.cache.load()).cursor, 0);
+    expect((await reader.inbox.refresh()).single.proposal.id, 'known');
+    expect((await reader.cache.load()).cursor, 0);
+    await source.sync.run(records);
+    await reader.sync.run(records);
+    final restored = await reader.inbox.refresh();
+    expect(restored.map((p) => p.proposal.id).toSet(), {'unknown', 'known'});
   });
 
   test('expired proposals drop out and cannot be claimed', () async {

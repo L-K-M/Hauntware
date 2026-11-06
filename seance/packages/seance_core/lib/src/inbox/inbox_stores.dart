@@ -33,11 +33,11 @@ class CachedProposal {
   });
 
   Map<String, dynamic> toJson() => {
-        'app': appId,
-        'item': itemId,
-        'received': received,
-        'proposal': proposal.toJson(),
-      };
+    'app': appId,
+    'item': itemId,
+    'received': received,
+    'proposal': proposal.toJson(),
+  };
 
   /// Re-validated on load like on arrival, but against the proposal's own
   /// creation time: a cached proposal was valid when fetched, and expiry is
@@ -58,27 +58,33 @@ class CachedProposal {
   }
 }
 
-/// This device's view of the server queue: the fetched proposals, the
-/// `since` cursor, and per-app counts of items that could not be opened.
+/// This device's view of the server queue: the fetched proposals, the durable
+/// processing [cursor], a bounded transport [scanCursor], and per-app counts
+/// of items that could not be opened.
 class InboxCache {
   final int cursor;
+  final int scanCursor;
   final List<CachedProposal> proposals;
   final Map<String, int> failures;
 
   const InboxCache({
-    this.cursor = 0,
+    int cursor = 0,
+    int? scanCursor,
     this.proposals = const [],
     this.failures = const {},
-  });
+  }) : cursor = cursor,
+       scanCursor = scanCursor ?? cursor;
 
   Map<String, dynamic> toJson() => {
-        'cursor': cursor,
-        'proposals': [for (final p in proposals) p.toJson()],
-        if (failures.isNotEmpty) 'failures': failures,
-      };
+    'cursor': cursor,
+    if (scanCursor != cursor) 'scanCursor': scanCursor,
+    'proposals': [for (final p in proposals) p.toJson()],
+    if (failures.isNotEmpty) 'failures': failures,
+  };
 
   /// A damaged entry costs only itself.
   factory InboxCache.fromJson(Map<String, dynamic> json) {
+    final cursor = (json['cursor'] as num?)?.toInt() ?? 0;
     final proposals = <CachedProposal>[];
     for (final raw in json['proposals'] as List? ?? const []) {
       try {
@@ -90,11 +96,11 @@ class InboxCache {
       }
     }
     return InboxCache(
-      cursor: (json['cursor'] as num?)?.toInt() ?? 0,
+      cursor: cursor,
+      scanCursor: (json['scanCursor'] as num?)?.toInt() ?? cursor,
       proposals: proposals,
       failures: {
-        for (final e
-            in ((json['failures'] as Map?) ?? const {}).entries)
+        for (final e in ((json['failures'] as Map?) ?? const {}).entries)
           if (e.key is String && e.value is num)
             e.key as String: (e.value as num).toInt(),
       },
@@ -111,8 +117,9 @@ class InMemoryInboxAppStore implements InboxAppStore {
   final Map<String, InboxApp> _apps = {};
 
   @override
-  Future<List<InboxApp>> listApps() async => _apps.values.toList()
-    ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  Future<List<InboxApp>> listApps() async =>
+      _apps.values.toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
   @override
   Future<InboxApp?> getApp(String id) async => _apps[id];

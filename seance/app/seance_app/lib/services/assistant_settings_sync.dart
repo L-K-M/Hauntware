@@ -58,6 +58,11 @@ class AssistantSettingsSync implements AssistantSettingsStore {
   /// already-constructed one.
   bool applied = false;
 
+  /// Number of distinct applications by this adapter. A coordinator may
+  /// commit more than once in one logical run; each application invalidates
+  /// settings forms that loaded the previous configuration.
+  int applicationCount = 0;
+
   /// Keystore entries this device adopted a *reference* to but could not
   /// store, because the keyring was locked when the record arrived.
   ///
@@ -101,8 +106,7 @@ class AssistantSettingsSync implements AssistantSettingsStore {
   /// account.
   Iterable<String> get _referencedKeys => <String>{
     if (settings.llmApiKeyRef.isNotEmpty) settings.llmApiKeyRef,
-    if (settings.braveApiKeyRef != null &&
-        settings.braveApiKeyRef!.isNotEmpty)
+    if (settings.braveApiKeyRef != null && settings.braveApiKeyRef!.isNotEmpty)
       settings.braveApiKeyRef!,
     if (settings.zaiApiKeyRef != null && settings.zaiApiKeyRef!.isNotEmpty)
       settings.zaiApiKeyRef!,
@@ -166,13 +170,12 @@ class AssistantSettingsSync implements AssistantSettingsStore {
       return null;
     }
 
-    // Snapshotted before the first await, not read back after it. An
-    // assistant edit stamps `settings` from the UI path without taking the
-    // mutation queue (see `AppState.assistantSettingsEdited`), so it can land
-    // in any of the keystore reads below — and a record built afterwards
-    // would carry the new stamp and the new refs beside keys gathered for the
-    // old ones. That is the keyless-record hazard every guard in this method
-    // is written against, reached by interleaving rather than by failure.
+    // Snapshotted before the first await, not read back after it. AppState
+    // serializes its UI and sync paths, but this adapter is also used directly
+    // by tests and other embeddings; a record built from live fields after
+    // the keystore reads could carry a new stamp and refs beside keys gathered
+    // for the old ones. That is the keyless-record hazard every guard in this
+    // method is written against, reached by interleaving rather than failure.
     final providerKind = settings.llmKind.name;
     final baseUrl = settings.llmBaseUrl;
     final model = settings.llmModel;
@@ -462,6 +465,7 @@ class AssistantSettingsSync implements AssistantSettingsStore {
     // same stamp with the same fingerprint, so `contentChanged` is false and
     // nothing rebuilds the chat provider again before a restart.
     applied = contentChanged;
+    if (contentChanged) applicationCount++;
     if (contentChanged ||
         unwrittenChanged ||
         heldChanged ||

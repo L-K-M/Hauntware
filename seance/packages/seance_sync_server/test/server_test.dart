@@ -10,6 +10,7 @@ import 'package:test/test.dart';
 class TestClient {
   final Handler handler;
   String? token;
+  Map<String, String> lastHeaders = const {};
   TestClient(this.handler);
 
   Future<(int, Map<String, dynamic>)> send(
@@ -18,6 +19,7 @@ class TestClient {
     Object? body,
     bool auth = false,
     Map<String, String> query = const {},
+    Map<String, String> headers = const {},
     int? protocolVersion = kProtocolVersion,
   }) async {
     final uri = Uri.parse(
@@ -28,6 +30,7 @@ class TestClient {
       uri,
       headers: {
         'content-type': 'application/json',
+        ...headers,
         if (protocolVersion != null)
           'x-seance-protocol-version': '$protocolVersion',
         if (auth && token != null) 'authorization': 'Bearer $token',
@@ -35,6 +38,7 @@ class TestClient {
       body: body == null ? null : jsonEncode(body),
     );
     final res = await handler(req);
+    lastHeaders = res.headers;
     final text = await res.readAsString();
     Map<String, dynamic> json;
     try {
@@ -65,9 +69,9 @@ class RecordingRateLimiter extends RateLimiter {
   final keys = <String>[];
 
   @override
-  bool allow(String key) {
+  RateLimitDecision check(String key) {
     keys.add(key);
-    return super.allow(key);
+    return super.check(key);
   }
 }
 

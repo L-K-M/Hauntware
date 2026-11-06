@@ -5,109 +5,94 @@ void main() {
   group('RateLimiter', () {
     late DateTime now;
 
-    setUp(() {
-      now = DateTime.utc(2026, 1, 1);
+    setUp(() => now = DateTime.utc(2026, 1, 1));
+
+    test('bounds keyed buckets and shares overflow for rotating keys', () {
+      final limiter = RateLimiter(
+        maxAttempts: 2,
+        maxBuckets: 2,
+        now: () => now,
+      );
+
+      expect(limiter.allow('a'), isTrue);
+      expect(limiter.allow('b'), isTrue);
+      expect(limiter.allow('overflow-1'), isTrue);
+      expect(limiter.allow('overflow-2'), isTrue);
+      expect(limiter.allow('overflow-3'), isFalse);
+      expect(limiter.bucketCount, 2);
     });
 
-    test('globally removes stale unrelated buckets after the sweep cadence', () {
-      const sweepInterval = 64;
-      final startedAt = now;
+    test('never evicts an active keyed bucket', () {
+      final limiter = RateLimiter(
+        maxAttempts: 1,
+        maxBuckets: 1,
+        now: () => now,
+      );
+
+      expect(limiter.allow('target'), isTrue);
+      expect(limiter.allow('rotating'), isTrue);
+      expect(limiter.allow('target'), isFalse);
+      expect(limiter.bucketCount, 1);
+    });
+
+    test('expired oldest buckets make room without a global scan', () {
+      final limiter = RateLimiter(
+        maxAttempts: 1,
+        maxBuckets: 2,
+        window: const Duration(minutes: 1),
+        now: () => now,
+      );
+      expect(limiter.allow('old-a'), isTrue);
+      expect(limiter.allow('old-b'), isTrue);
+
+      now = now.add(const Duration(minutes: 1));
+      expect(limiter.allow('new'), isTrue);
+      expect(limiter.bucketCount, 1);
+    });
+
+    test('reports retry delay and expires at the inclusive cutoff', () {
       final limiter = RateLimiter(
         maxAttempts: 1,
         window: const Duration(minutes: 1),
         now: () => now,
       );
+      expect(limiter.check('alice').allowed, isTrue);
+      now = now.add(const Duration(seconds: 10));
+      final blocked = limiter.check('alice');
+      expect(blocked.allowed, isFalse);
+      expect(blocked.retryAfter, const Duration(seconds: 50));
 
-      expect(limiter.allow('stale'), isTrue);
-      now = now.add(const Duration(minutes: 1));
-      for (var i = 0; i < sweepInterval - 1; i++) {
-        expect(limiter.allow('unrelated-$i'), isTrue);
-      }
-
-      // Rewinding makes removal observable without exposing limiter internals.
-      now = startedAt;
-      expect(limiter.allow('stale'), isTrue);
+      now = now.add(const Duration(seconds: 50));
+      expect(limiter.check('alice').allowed, isTrue);
     });
 
-    test('does not perform a global sweep on every call', () {
-      final startedAt = now;
-      final limiter = RateLimiter(
-        maxAttempts: 1,
-        window: const Duration(minutes: 1),
-        now: () => now,
-      );
-
-      expect(limiter.allow('stale'), isTrue);
-      now = now.add(const Duration(minutes: 1));
-      expect(limiter.allow('unrelated'), isTrue);
-
-      // The stale bucket remains before the cadence, so at its original clock
-      // value its consumed attempt is still enforced.
-      now = startedAt;
-      expect(limiter.allow('stale'), isFalse);
-    });
-
-    test('expires the requested key without waiting for a sweep', () {
-      final limiter = RateLimiter(
-        maxAttempts: 1,
-        window: const Duration(minutes: 1),
-        now: () => now,
-      );
-
-      expect(limiter.allow('alice'), isTrue);
-      expect(limiter.allow('alice'), isFalse);
-      now = now.add(const Duration(minutes: 1));
-      expect(limiter.allow('alice'), isTrue);
-    });
-
-    test('never blocks new keys because other keys are active', () {
-      final limiter = RateLimiter(maxAttempts: 1, now: () => now);
-
-      expect(limiter.allow('known'), isTrue);
-      expect(limiter.allow('known'), isFalse);
-      for (var i = 0; i < 10001; i++) {
-        expect(limiter.allow('new-$i'), isTrue);
-      }
-    });
-
-    test('uses a sliding window with an inclusive expiry cutoff', () {
+    test('uses a sliding window', () {
       final limiter = RateLimiter(
         maxAttempts: 2,
         window: const Duration(minutes: 1),
         now: () => now,
       );
-
       expect(limiter.allow('alice'), isTrue);
       now = now.add(const Duration(seconds: 59));
       expect(limiter.allow('alice'), isTrue);
       expect(limiter.allow('alice'), isFalse);
-
-      // At t=60 the t=0 hit expires, but the t=59 hit still counts.
       now = now.add(const Duration(seconds: 1));
       expect(limiter.allow('alice'), isTrue);
       expect(limiter.allow('alice'), isFalse);
     });
 
-    test('reset removes attempts', () {
+    test('reset removes keyed attempts', () {
       final limiter = RateLimiter(maxAttempts: 1, now: () => now);
-
       expect(limiter.allow('alice'), isTrue);
       expect(limiter.allow('alice'), isFalse);
       limiter.reset('alice');
       expect(limiter.allow('alice'), isTrue);
     });
 
-    test('rejects invalid maxAttempts', () {
+    test('rejects invalid configuration', () {
       expect(() => RateLimiter(maxAttempts: 0), throwsArgumentError);
-      expect(() => RateLimiter(maxAttempts: -1), throwsArgumentError);
-    });
-
-    test('rejects invalid window', () {
       expect(() => RateLimiter(window: Duration.zero), throwsArgumentError);
-      expect(
-        () => RateLimiter(window: const Duration(seconds: -1)),
-        throwsArgumentError,
-      );
+      expect(() => RateLimiter(maxBuckets: 0), throwsArgumentError);
     });
   });
 }

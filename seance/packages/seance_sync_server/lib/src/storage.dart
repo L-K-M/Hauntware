@@ -32,16 +32,16 @@ class Account {
   });
 
   Account withRecordEnvelopeFloor(int floor, {int? atSeq}) => Account(
-        username: username,
-        generation: generation,
-        authVerifierHash: authVerifierHash,
-        verifierSalt: verifierSalt,
-        argonSalt: argonSalt,
-        argonParams: argonParams,
-        vaultKeyCheck: vaultKeyCheck,
-        recordEnvelopeFloor: floor,
-        recordEnvelopeFloorSeq: atSeq ?? recordEnvelopeFloorSeq,
-      );
+    username: username,
+    generation: generation,
+    authVerifierHash: authVerifierHash,
+    verifierSalt: verifierSalt,
+    argonSalt: argonSalt,
+    argonParams: argonParams,
+    vaultKeyCheck: vaultKeyCheck,
+    recordEnvelopeFloor: floor,
+    recordEnvelopeFloorSeq: atSeq ?? recordEnvelopeFloorSeq,
+  );
 }
 
 /// One authenticated session, bound to the exact account incarnation that
@@ -143,6 +143,11 @@ class StoredInboxApp {
     required this.tokenSalt,
     required this.created,
   });
+}
+
+/// The account already owns its maximum number of producer registrations.
+final class InboxAppLimitException implements Exception {
+  const InboxAppLimitException();
 }
 
 enum InboxAddStatus {
@@ -296,7 +301,10 @@ abstract class Storage {
   /// by any account.
   Future<bool> createInboxApp(StoredInboxApp app);
   Future<bool> createInboxAppFor(
-      AuthPrincipal principal, StoredInboxApp app);
+    AuthPrincipal principal,
+    StoredInboxApp app, {
+    int maxApps = 50,
+  });
 
   /// The app with [appId] in any account, for checking a deposit token.
   Future<StoredInboxApp?> getInboxApp(String appId);
@@ -320,10 +328,17 @@ abstract class Storage {
     required int storedAt,
     required int maxPending,
     AccountQuota? quota,
+    String? expectedGeneration,
+    int maxAccountPendingItems = 5000,
+    int maxAccountPendingBytes = 32 * 1024 * 1024,
   });
 
   /// [username]'s items with `received` greater than [since], ascending.
-  Future<List<InboxItem>> inboxItemsSince(String username, int since);
+  Future<List<InboxItem>> inboxItemsSince(
+    String username,
+    int since, {
+    int? limit,
+  });
 
   /// One bounded page of pending items under a stable per-account received
   /// watermark.
@@ -334,7 +349,9 @@ abstract class Storage {
     required PullPageLimits limits,
   });
   Future<List<InboxItem>> inboxItemsSinceFor(
-      AuthPrincipal principal, int since);
+    AuthPrincipal principal,
+    int since,
+  );
   Future<InboxPage> inboxPageFor(
     AuthPrincipal principal,
     int since, {
@@ -346,7 +363,10 @@ abstract class Storage {
   /// which is how a device learns another one claimed it first.
   Future<bool> deleteInboxItem(String username, String appId, String itemId);
   Future<bool> deleteInboxItemFor(
-      AuthPrincipal principal, String appId, String itemId);
+    AuthPrincipal principal,
+    String appId,
+    String itemId,
+  );
 
   /// Drop every item stored before [storedBefore] (ms since the epoch), in
   /// all accounts. Returns how many were dropped.
@@ -390,11 +410,17 @@ class _MemoryInboxItem {
   final Uint8List blob;
   final int storedAt;
 
-  _MemoryInboxItem(this.username, this.appId, this.itemId, this.received,
-      this.blob, this.storedAt);
+  _MemoryInboxItem(
+    this.username,
+    this.appId,
+    this.itemId,
+    this.received,
+    this.blob,
+    this.storedAt,
+  );
 
-  InboxItem toItem() => InboxItem(
-      appId: appId, itemId: itemId, received: received, blob: blob);
+  InboxItem toItem() =>
+      InboxItem(appId: appId, itemId: itemId, received: received, blob: blob);
 }
 
 class _MemorySession {
@@ -470,6 +496,11 @@ class InMemoryStorage implements Storage {
       maxSessions: maxSessions,
     );
     if (_accounts.containsKey(account.username)) return null;
+    final username = account.username;
+    _tokens.removeWhere((_, session) => session.username == username);
+    _inboxApps.removeWhere((_, app) => app.username == username);
+    _inboxItems.removeWhere((item) => item.username == username);
+    _inboxReceived.remove(username);
     _accounts[account.username] = account;
     _records[account.username] = {};
     _seq[account.username] = 0;
@@ -495,8 +526,10 @@ class InMemoryStorage implements Storage {
 
   @override
   Future<String?> usernameForToken(String token) async =>
-      (await principalForToken(token, now: DateTime.now().millisecondsSinceEpoch))
-          ?.username;
+      (await principalForToken(
+        token,
+        now: DateTime.now().millisecondsSinceEpoch,
+      ))?.username;
 
   @override
   Future<String?> createTokenFor(
@@ -528,15 +561,18 @@ class InMemoryStorage implements Storage {
       maxSessions: maxSessions,
     );
     _tokens.removeWhere((_, session) => session.expiresAt <= issuedAt);
-    final own = _tokens.entries
-        .where((entry) =>
-            entry.value.username == account.username &&
-            entry.value.accountGeneration == account.generation)
-        .toList()
-      ..sort((a, b) {
-        final byTime = a.value.issuedAt.compareTo(b.value.issuedAt);
-        return byTime != 0 ? byTime : a.key.compareTo(b.key);
-      });
+    final own =
+        _tokens.entries
+            .where(
+              (entry) =>
+                  entry.value.username == account.username &&
+                  entry.value.accountGeneration == account.generation,
+            )
+            .toList()
+          ..sort((a, b) {
+            final byTime = a.value.issuedAt.compareTo(b.value.issuedAt);
+            return byTime != 0 ? byTime : a.key.compareTo(b.key);
+          });
     while (own.length >= maxSessions) {
       final oldest = own.removeAt(0);
       _tokens.remove(oldest.key);
@@ -552,7 +588,10 @@ class InMemoryStorage implements Storage {
   }
 
   @override
-  Future<AuthPrincipal?> principalForToken(String token, {required int now}) async {
+  Future<AuthPrincipal?> principalForToken(
+    String token, {
+    required int now,
+  }) async {
     final digest = digestBearerToken(token);
     final session = _tokens[digest];
     if (session == null) return null;
@@ -577,9 +616,11 @@ class InMemoryStorage implements Storage {
   @override
   Future<bool> revokeAllSessions(AuthPrincipal principal) async {
     if (!_isCurrent(principal)) return false;
-    _tokens.removeWhere((_, session) =>
-        session.username == principal.username &&
-        session.accountGeneration == principal.accountGeneration);
+    _tokens.removeWhere(
+      (_, session) =>
+          session.username == principal.username &&
+          session.accountGeneration == principal.accountGeneration,
+    );
     return true;
   }
 
@@ -687,10 +728,11 @@ class InMemoryStorage implements Storage {
   Future<PullResponse> pullSnapshot(String username, int since) async {
     // Copy the rows and watermark in one synchronous turn.
     final watermark = _seq[username] ?? 0;
-    final records = (_records[username]?.values ?? const <EncryptedRecord>[])
-        .where((r) => (r.seq ?? 0) > since && (r.seq ?? 0) <= watermark)
-        .toList()
-      ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
+    final records =
+        (_records[username]?.values ?? const <EncryptedRecord>[])
+            .where((r) => (r.seq ?? 0) > since && (r.seq ?? 0) <= watermark)
+            .toList()
+          ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
     return PullResponse(
       records: records,
       latestSeq: watermark,
@@ -794,12 +836,15 @@ class InMemoryStorage implements Storage {
     required PullPageLimits limits,
   }) async {
     final floor = _recordEnvelopeFloor(username);
-    final candidates = (_records[username]?.values ?? const <EncryptedRecord>[])
-        .where((record) =>
-            record.envelopeVersion == kLegacyRecordEnvelopeVersion &&
-            (afterId == null || record.id.compareTo(afterId) > 0))
-        .toList()
-      ..sort((a, b) => a.id.compareTo(b.id));
+    final candidates =
+        (_records[username]?.values ?? const <EncryptedRecord>[])
+            .where(
+              (record) =>
+                  record.envelopeVersion == kLegacyRecordEnvelopeVersion &&
+                  (afterId == null || record.id.compareTo(afterId) > 0),
+            )
+            .toList()
+          ..sort((a, b) => a.id.compareTo(b.id));
     if (floor == kCurrentRecordEnvelopeVersion && candidates.isNotEmpty) {
       throw const StorageEnvelopeFloorViolationException();
     }
@@ -808,7 +853,8 @@ class InMemoryStorage implements Storage {
     for (final candidate in candidates) {
       if (records.length == limits.maxRecords) break;
       final nextBytes = recordBytes + candidate.encodedJsonBytes();
-      final fits = LegacyRecordPage.bodyBytesFor(
+      final fits =
+          LegacyRecordPage.bodyBytesFor(
             recordCount: records.length + 1,
             recordBytes: nextBytes,
             nextId: candidate.id,
@@ -894,8 +940,9 @@ class InMemoryStorage implements Storage {
     var floor = _recordEnvelopeFloor(username);
     if (finalize &&
         floor < kCurrentRecordEnvelopeVersion &&
-        !staged.values.any((record) =>
-            record.envelopeVersion != kCurrentRecordEnvelopeVersion)) {
+        !staged.values.any(
+          (record) => record.envelopeVersion != kCurrentRecordEnvelopeVersion,
+        )) {
       final account = _accounts[username];
       if (account != null) {
         floor = kCurrentRecordEnvelopeVersion;
@@ -967,10 +1014,19 @@ class InMemoryStorage implements Storage {
 
   @override
   Future<bool> createInboxAppFor(
-      AuthPrincipal principal, StoredInboxApp app) {
+    AuthPrincipal principal,
+    StoredInboxApp app, {
+    int maxApps = 50,
+  }) {
     _requireCurrent(principal);
     if (app.username != principal.username) {
       throw ArgumentError.value(app.username, 'app.username');
+    }
+    if (_inboxApps.values
+            .where((entry) => entry.username == principal.username)
+            .length >=
+        maxApps) {
+      throw const InboxAppLimitException();
     }
     return createInboxApp(app);
   }
@@ -1008,8 +1064,7 @@ class InMemoryStorage implements Storage {
   }
 
   @override
-  Future<bool> deleteInboxAppFor(
-      AuthPrincipal principal, String appId) {
+  Future<bool> deleteInboxAppFor(AuthPrincipal principal, String appId) {
     _requireCurrent(principal);
     return deleteInboxApp(principal.username, appId);
   }
@@ -1022,11 +1077,28 @@ class InMemoryStorage implements Storage {
     required int storedAt,
     required int maxPending,
     AccountQuota? quota,
+    String? expectedGeneration,
+    int maxAccountPendingItems = 5000,
+    int maxAccountPendingBytes = 32 * 1024 * 1024,
   }) async {
     final app = _inboxApps[appId];
-    if (app == null) return const InboxAddResult(InboxAddStatus.unknownApp);
+    if (app == null ||
+        (expectedGeneration != null && app.tokenSalt != expectedGeneration)) {
+      return const InboxAddResult(InboxAddStatus.unknownApp);
+    }
     if (_inboxItems.where((i) => i.appId == appId).length >= maxPending) {
       return const InboxAddResult(InboxAddStatus.full);
+    }
+    final accountItems = _inboxItems.where(
+      (item) => item.username == app.username,
+    );
+    final accountBytes = accountItems.fold<int>(
+      0,
+      (total, item) => total + item.blob.length,
+    );
+    if (accountItems.length >= maxAccountPendingItems ||
+        accountBytes + blob.length > maxAccountPendingBytes) {
+      return const InboxAddResult(InboxAddStatus.accountFull);
     }
     final received = (_inboxReceived[app.username] ?? 0) + 1;
     if (quota != null) {
@@ -1047,17 +1119,29 @@ class InMemoryStorage implements Storage {
       }
     }
     _inboxReceived[app.username] = received;
-    _inboxItems.add(_MemoryInboxItem(
-        app.username, appId, itemId, received, blob, storedAt));
+    _inboxItems.add(
+      _MemoryInboxItem(app.username, appId, itemId, received, blob, storedAt),
+    );
     return InboxAddResult(InboxAddStatus.added, received);
   }
 
   @override
-  Future<List<InboxItem>> inboxItemsSince(String username, int since) async => [
-        for (final item in _inboxItems)
-          if (item.username == username && item.received > since)
-            item.toItem(),
-      ];
+  Future<List<InboxItem>> inboxItemsSince(
+    String username,
+    int since, {
+    int? limit,
+  }) async {
+    if (limit != null && limit < 1) {
+      throw ArgumentError.value(limit, 'limit', 'must be positive');
+    }
+    final result = <InboxItem>[];
+    for (final item in _inboxItems) {
+      if (item.username != username || item.received <= since) continue;
+      result.add(item.toItem());
+      if (limit != null && result.length == limit) break;
+    }
+    return result;
+  }
 
   @override
   Future<InboxPage> inboxPage(
@@ -1111,7 +1195,9 @@ class InMemoryStorage implements Storage {
 
   @override
   Future<List<InboxItem>> inboxItemsSinceFor(
-      AuthPrincipal principal, int since) {
+    AuthPrincipal principal,
+    int since,
+  ) {
     _requireCurrent(principal);
     return inboxItemsSince(principal.username, since);
   }
@@ -1134,16 +1220,23 @@ class InMemoryStorage implements Storage {
 
   @override
   Future<bool> deleteInboxItem(
-      String username, String appId, String itemId) async {
+    String username,
+    String appId,
+    String itemId,
+  ) async {
     final before = _inboxItems.length;
-    _inboxItems.removeWhere((i) =>
-        i.username == username && i.appId == appId && i.itemId == itemId);
+    _inboxItems.removeWhere(
+      (i) => i.username == username && i.appId == appId && i.itemId == itemId,
+    );
     return _inboxItems.length != before;
   }
 
   @override
   Future<bool> deleteInboxItemFor(
-      AuthPrincipal principal, String appId, String itemId) {
+    AuthPrincipal principal,
+    String appId,
+    String itemId,
+  ) {
     _requireCurrent(principal);
     return deleteInboxItem(principal.username, appId, itemId);
   }

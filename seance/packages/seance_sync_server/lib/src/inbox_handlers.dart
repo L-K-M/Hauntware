@@ -67,17 +67,26 @@ extension _InboxHandlers on SyncServer {
         // Stored like the auth verifier: a copied database yields no token
         // that could fill the inbox.
         final salt = secureRandomBytes(16);
-        final created = await storage.createInboxAppFor(
-          principal,
-          StoredInboxApp(
-            username: principal.username,
-            appId: r.appId,
-            name: name,
-            tokenHash: _hashDepositToken(r.token, salt),
-            tokenSalt: base64.encode(salt),
-            created: _now().millisecondsSinceEpoch,
-          ),
-        );
+        final bool created;
+        try {
+          created = await storage.createInboxAppFor(
+            principal,
+            StoredInboxApp(
+              username: principal.username,
+              appId: r.appId,
+              name: name,
+              tokenHash: _hashDepositToken(r.token, salt),
+              tokenSalt: base64.encode(salt),
+              created: _now().millisecondsSinceEpoch,
+            ),
+          );
+        } on InboxAppLimitException {
+          return _error(
+            429,
+            'too_many_apps',
+            'Remove an inbox app before adding another',
+          );
+        }
         if (!created) {
           return _error(409, 'app_exists', 'App id already registered');
         }
@@ -162,8 +171,9 @@ extension _InboxHandlers on SyncServer {
     final declared = req.contentLength;
     if (declared != null && declared > cap) throw const _PayloadTooLarge();
 
-    if (!await _producerAuthorized(req, appId)) return _depositUnauthorized();
-    if (!inboxLimiter.allow('inbox:$appId')) {
+    final producer = await _authorizedProducer(req, appId);
+    if (producer == null) return _depositUnauthorized();
+    if (!inboxLimiter.allow('inbox:$appId:${producer.tokenSalt}')) {
       return _error(429, 'rate_limited', 'Too many proposals; slow down');
     }
 
@@ -191,6 +201,7 @@ extension _InboxHandlers on SyncServer {
       blob,
       storedAt: _now().millisecondsSinceEpoch,
       maxPending: _inboxMaxPendingPerApp,
+      expectedGeneration: producer.tokenSalt,
       quota: AccountQuota(
         maxRecords: settings.maxRecordsPerAccount,
         maxBytes: settings.maxAccountBytes,
@@ -224,7 +235,7 @@ extension _InboxHandlers on SyncServer {
   /// all end in the same 401, so a caller learns nothing about which apps
   /// exist. (The ids are 128 random bits, so the lookup's own timing gives
   /// away nothing guessable either.)
-  Future<bool> _producerAuthorized(Request req, String appId) async {
+  Future<StoredInboxApp?> _authorizedProducer(Request req, String appId) async {
     final auth = req.headers['authorization'];
     // The scheme is case-insensitive (RFC 9110 11.1); hand-written producer
     // clients are the ones likely to send `bearer`.
@@ -243,7 +254,7 @@ extension _InboxHandlers on SyncServer {
     final provided = _hashDepositToken(token, salt);
     final expected = app?.tokenHash ?? _unknownAppHash;
     final matches = SyncServer._constantTimeEquals(provided, expected);
-    return app != null && matches;
+    return app != null && matches ? app : null;
   }
 
   Response _depositUnauthorized() =>

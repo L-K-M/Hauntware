@@ -374,6 +374,7 @@ class SqliteStorage implements Storage {
     );
     return _transaction(_TransactionMode.write, () {
       if (_accountGeneration(account.username) != null) return null;
+      _deleteAccountRows(account.username);
       _insertAccount(account);
       return _issueToken(
         account,
@@ -679,8 +680,7 @@ class SqliteStorage implements Storage {
     return PullResponse(
       records: _recordsSince(principal.username, since, through: watermark),
       latestSeq: watermark,
-      recordEnvelopeFloor:
-          _recordEnvelopeFloor(principal.username, watermark),
+      recordEnvelopeFloor: _recordEnvelopeFloor(principal.username, watermark),
     );
   });
 
@@ -837,7 +837,8 @@ class SqliteStorage implements Storage {
           break;
         }
         final nextBytes = recordBytes + candidate.encodedJsonBytes();
-        final fits = LegacyRecordPage.bodyBytesFor(
+        final fits =
+            LegacyRecordPage.bodyBytesFor(
               recordCount: records.length + 1,
               recordBytes: nextBytes,
               nextId: candidate.id,
@@ -913,10 +914,10 @@ class SqliteStorage implements Storage {
         continue;
       }
 
-      _db.execute(
-        'DELETE FROM records WHERE username = ? AND id = ?',
-        [username, migration.expected.id],
-      );
+      _db.execute('DELETE FROM records WHERE username = ? AND id = ?', [
+        username,
+        migration.expected.id,
+      ]);
       final replacement = migration.replacement;
       final target = _getRecord(username, replacement.id);
       if (target == null ||
@@ -1166,12 +1167,19 @@ class SqliteStorage implements Storage {
   @override
   Future<bool> createInboxAppFor(
     AuthPrincipal principal,
-    StoredInboxApp app,
-  ) async => _transaction(_TransactionMode.write, () {
+    StoredInboxApp app, {
+    int maxApps = 50,
+  }) async => _transaction(_TransactionMode.write, () {
     _requireCurrent(principal);
     if (app.username != principal.username) {
       throw ArgumentError.value(app.username, 'app.username');
     }
+    final count =
+        _db.select('SELECT COUNT(*) AS n FROM inbox_apps WHERE username = ?', [
+              principal.username,
+            ]).single['n']
+            as int;
+    if (count >= maxApps) throw const InboxAppLimitException();
     return _createInboxApp(app);
   });
 
@@ -1258,13 +1266,17 @@ class SqliteStorage implements Storage {
     required int storedAt,
     required int maxPending,
     AccountQuota? quota,
+    String? expectedGeneration,
+    int maxAccountPendingItems = 5000,
+    int maxAccountPendingBytes = 32 * 1024 * 1024,
   }) async =>
       // One write transaction, so two concurrent deposits cannot both pass
       // the pending cap or draw the same `received` number.
       _transaction(_TransactionMode.write, () {
         final apps = _db.select(
-          'SELECT username FROM inbox_apps WHERE app_id = ?',
-          [appId],
+          'SELECT username FROM inbox_apps WHERE app_id = ? '
+          'AND (? IS NULL OR token_salt = ?)',
+          [appId, expectedGeneration, expectedGeneration],
         );
         if (apps.isEmpty) {
           return const InboxAddResult(InboxAddStatus.unknownApp);
@@ -1278,6 +1290,14 @@ class SqliteStorage implements Storage {
                 as int;
         if (pending >= maxPending) {
           return const InboxAddResult(InboxAddStatus.full);
+        }
+        final usage = _db.select(
+          'SELECT COUNT(*) AS n, COALESCE(SUM(length(blob)), 0) AS bytes FROM inbox_items WHERE username = ?',
+          [username],
+        ).single;
+        if ((usage['n'] as int) >= maxAccountPendingItems ||
+            (usage['bytes'] as int) + blob.length > maxAccountPendingBytes) {
+          return const InboxAddResult(InboxAddStatus.accountFull);
         }
         final sequenceRows = _db.select(
           'SELECT value FROM inbox_seqs WHERE username = ?',
@@ -1330,15 +1350,23 @@ class SqliteStorage implements Storage {
   }
 
   @override
-  Future<List<InboxItem>> inboxItemsSince(String username, int since) async {
-    return _inboxItemsSince(username, since);
+  Future<List<InboxItem>> inboxItemsSince(
+    String username,
+    int since, {
+    int? limit,
+  }) async {
+    return _inboxItemsSince(username, since, limit: limit);
   }
 
-  List<InboxItem> _inboxItemsSince(String username, int since) {
+  List<InboxItem> _inboxItemsSince(String username, int since, {int? limit}) {
+    if (limit != null && limit < 1) {
+      throw ArgumentError.value(limit, 'limit', 'must be positive');
+    }
     final rows = _db.select(
       'SELECT app_id, item_id, received, blob FROM inbox_items '
-      'WHERE username = ? AND received > ? ORDER BY received ASC',
-      [username, since],
+      'WHERE username = ? AND received > ? ORDER BY received ASC'
+      '${limit == null ? '' : ' LIMIT ?'}',
+      [username, since, if (limit != null) limit],
     );
     return [
       for (final r in rows)
