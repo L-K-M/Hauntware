@@ -31,6 +31,7 @@ void main() {
 
   test('account, token, and record round-trips in :memory:', () async {
     final s = SqliteStorage.open(':memory:');
+    await s.checkReady();
     await s.createAccount(account('alice'));
     expect((await s.getAccount('alice'))!.argonSalt, 'asalt');
     expect((await s.getAccount('alice'))!.vaultKeyCheck, 'opaque-check');
@@ -72,6 +73,7 @@ void main() {
     final path = '${dir.path}/seance.sqlite';
     try {
       final s1 = SqliteStorage.open(path);
+      await s1.checkReady();
       await s1.createAccount(account('carol'));
       final seq = await s1.nextSeq('carol'); // advance the counter like _push
       await s1.putRecord('carol', rec('r', seq, 42));
@@ -79,6 +81,7 @@ void main() {
 
       // Reopen the same file in a fresh instance.
       final s2 = SqliteStorage.open(path);
+      await s2.checkReady();
       expect((await s2.getAccount('carol'))!.username, 'carol');
       final records = await s2.recordsSince('carol', 0);
       expect(records.single.id, 'r');

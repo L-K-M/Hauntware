@@ -26,10 +26,55 @@ then set it back to `false` and restart. Put a TLS-terminating reverse proxy
 The compose file and `docker run` example bind the host port to loopback only;
 publish it more broadly only behind TLS or on a trusted private network.
 
-To update a running deployment (pull the latest code, rebuild the image,
-recreate the container in one step), run `./update.sh` from `seance/`. It
-probes the published `/healthz` after the recreate and fails with the
-container's logs when the server doesn't answer.
+To update a running deployment, run `./update.sh` from `seance/`. It builds a
+versioned candidate, snapshots the stopped SQLite/WAL files, restarts the old
+service, and preflights the candidate against a temporary copy. Only then does
+it stop the old service again for a fresh rollback snapshot, replace production,
+and require `/readyz`. A failure before candidate startup restores both that
+final snapshot and the tagged previous image with its preserved Compose
+configuration. Once the candidate may have accepted writes, automatic recovery
+instead stops it and retains the unchanged live database plus snapshot for
+explicit recovery. It does not start an older image against a potentially
+migrated schema or erase writes accepted during the readiness probe. Cleanup
+happens only after the candidate is ready; the previous tagged image is retained
+for manual rollback too. The updater refuses concurrent runs and keeps its
+recovery bundle whenever manual recovery is required.
+
+An uncatchable interruption such as power loss or `SIGKILL` can leave the
+updater lock behind. A later run prints the recorded PID, host, user ID and
+recovery-bundle path and stops. Check the recorded host and confirm that the
+updater and its Docker operations have stopped before removing the lock;
+a PID may have been reused, so a failed local PID lookup alone is not proof.
+Inspect the running deployment and the bundle's `update-state.txt`, preserved
+Compose configuration and snapshots first. A `candidate-may-have-writes`
+phase means the candidate could have migrated the database or accepted writes;
+preserve the live volume and do not restore an older snapshot automatically.
+
+After completing recovery, remove only `pid`, `host`, `uid` and `recovery-dir`
+from the printed lock directory, then remove that empty directory with
+`rmdir`. Keep the recovery bundle until its data is no longer needed. Older
+locks may contain only `pid`; inspect the deployment and any retained bundles
+before removing those too. The default lock is
+`${TMPDIR:-/tmp}/seance-sync-update.lock`; `SEANCE_UPDATE_LOCK_DIR` overrides it.
+
+For a real Docker integration check, prebuild a protocol-v1 runtime image, its
+`build` stage (with Python3 and SQLite), and the candidate runtime. Then run:
+
+```bash
+python3 scripts/test-update-docker.py \
+  --old-image seance-updater-old \
+  --helper-image seance-updater-old-helper \
+  --candidate-image seance-updater-candidate \
+  --candidate-ref "$(git rev-parse HEAD)"
+```
+
+The harness uses private temporary directories, unique Compose projects and
+volumes, loopback-only ephemeral ports, and test-owned image tags. Repository
+synchronization and Compose build are intercepted to use those prebuilt images;
+server starts, probes, snapshots and SQLite migration are real. It checks a
+successful migration and a failure after readiness plus a durable concurrent
+write. It retains fixture logs and recovery evidence and removes only its own
+Docker resources; it never prunes or changes an existing deployment's image tag.
 
 ### Moving from a standalone Séance clone
 
@@ -130,6 +175,7 @@ record write before changing storage.
 | Method & path | Auth | Purpose |
 |---|---|---|
 | `GET /healthz` | — | Liveness check |
+| `GET /readyz` | — | Storage readiness check |
 | `POST /v1/register` | — | Create an account, returns a bearer token |
 | `POST /v1/prelogin` | — | Return the KDF salt/params for a username |
 | `POST /v1/login` | — | Exchange the auth verifier for a token |
@@ -254,8 +300,10 @@ If transaction cleanup itself fails, SQLite storage fails closed and returns
 Diagnostics retain the original cause and log only exception types/SQLite numeric
 codes—not messages, SQL, parameters or blobs. Restart after investigating the
 database failure; automatic reopen could
-silently replace an injected or in-memory database. `/healthz` remains liveness,
-not storage readiness. Closing the disabled connection is safe to repeat.
+silently replace an injected or in-memory database. `/healthz` reports only
+process liveness; `/readyz` performs a real storage access and returns 503 when
+the backend is busy or unavailable. Deployment health checks use `/readyz`.
+Closing the disabled connection is safe to repeat.
 The memory backend stages batches without yielding, then swaps state together.
 
 Custom server `Storage` implementations must implement `pushRecords` and

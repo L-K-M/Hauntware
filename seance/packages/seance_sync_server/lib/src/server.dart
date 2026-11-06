@@ -229,6 +229,10 @@ class SyncServer {
   Handler get handler {
     final router = Router()
       ..get('/healthz', (Request r) => Response.ok('ok'))
+      ..get('/readyz', (Request r) async {
+        await storage.checkReady();
+        return Response.ok('ready');
+      })
       // A browser hitting the server sees what it is instead of a 404 (the
       // API itself lives under /v1/); the favicon is embedded in the binary.
       ..get(

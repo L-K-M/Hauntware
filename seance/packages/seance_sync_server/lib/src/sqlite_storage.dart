@@ -30,6 +30,18 @@ class SqliteStorage implements Storage {
   /// Open (or create) the database at [path]. Use `:memory:` for ephemeral.
   factory SqliteStorage.open(String path) => SqliteStorage(sqlite3.open(path));
 
+  @override
+  Future<void> checkReady() async {
+    try {
+      _db.select('PRAGMA schema_version');
+    } on StorageUnavailableException {
+      rethrow;
+    } catch (error) {
+      if (_isBusy(error)) throw const StorageBusyException();
+      throw StorageUnavailableException(cause: error);
+    }
+  }
+
   void _migrate() {
     _db.execute('PRAGMA journal_mode=WAL;');
     _db.execute('BEGIN IMMEDIATE;');

@@ -199,6 +199,13 @@ class InboxAddResult {
 /// (their `blob` is end-to-end encrypted and their `seq` is server-assigned).
 /// Implemented in memory (tests) and over SQLite (production).
 abstract class Storage {
+  /// Verify that this backend can serve storage-backed requests.
+  ///
+  /// Memory and simple custom implementations need no probe. Persistent
+  /// backends override this with a cheap real access so readiness cannot claim
+  /// success after the connection has failed closed.
+  Future<void> checkReady() async {}
+
   Future<Account?> getAccount(String username);
   Future<void> createAccount(Account account);
   Future<void> deleteAccount(String username);
@@ -541,6 +548,9 @@ class InMemoryStorage implements Storage {
   final Map<String, int> _seq = {};
   final Map<String, StoredInboxApp> _inboxApps = {}; // appId -> app
   final List<_MemoryInboxItem> _inboxItems = []; // in received order
+
+  @override
+  Future<void> checkReady() async {}
   final Map<String, int> _inboxReceived = {}; // username -> last received
 
   @override

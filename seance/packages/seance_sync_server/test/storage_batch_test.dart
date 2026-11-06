@@ -111,6 +111,7 @@ void main() {
           settings: const ServerSettings(),
         ).handler;
         for (final (method, path) in [
+          ('GET', '/readyz'),
           ('GET', '/v1/sync'),
           ('PUT', '/v1/records'),
         ]) {
