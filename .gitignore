@@ -27,3 +27,6 @@ local.properties
 **/android/local.properties
 
 .DS_Store
+
+# Local Claude Code approvals can contain secrets.
+**/.claude/settings.local.json
