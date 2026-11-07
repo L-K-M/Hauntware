@@ -20,7 +20,7 @@ Future<ProcessResult> runFixtureProcess(
 
   // uutils timeout can leave grandchildren running when asked to send KILL.
   // Keep the monitor outside Dart so a blocked test isolate cannot postpone
-  // the deadline. Popen establishes the child's session before returning.
+  // the deadline. The monitor creates and owns the command's process group.
   // Isolate monitor imports from the command's cwd and Python environment.
   final seconds = timeout.inMicroseconds / Duration.microsecondsPerSecond;
   return Process.run(
@@ -38,8 +38,16 @@ import signal
 import subprocess
 import sys
 
+os.setsid()
+
+def stop_group(*_):
+    os.killpg(os.getpgrp(), signal.SIGKILL)
+
+for signum in (signal.SIGHUP, signal.SIGINT, signal.SIGQUIT, signal.SIGTERM):
+    signal.signal(signum, stop_group)
+
 try:
-    child = subprocess.Popen(sys.argv[2:], start_new_session=True)
+    child = subprocess.Popen(sys.argv[2:])
 except OSError as error:
     print(error, file=sys.stderr)
     sys.exit(127 if error.errno == errno.ENOENT else 126)
@@ -47,12 +55,7 @@ except OSError as error:
 try:
     status = child.wait(timeout=float(sys.argv[1]))
 except subprocess.TimeoutExpired:
-    try:
-        os.killpg(child.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    child.wait()
-    os.kill(os.getpid(), signal.SIGKILL)
+    stop_group()
 
 if status < 0:
     signum = -status

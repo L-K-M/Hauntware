@@ -46,7 +46,7 @@ void main() {
   test('the deadline does not depend on the Dart event loop', () async {
     final command = await _HangingCommand._create(_TermBehavior.exit);
     final pending = command._run();
-    final childPid = await command._waitForChildPid();
+    final childPid = await command._waitForPid('child');
 
     sleep(_deadline * 2);
     final stoppedDuringPause = !_isRunning(childPid);
@@ -55,6 +55,26 @@ void main() {
     await command._expectStopped();
     expect(result, isA<ProcessResult>());
     expect(stoppedDuringPause, isTrue);
+  });
+
+  test('terminating the monitor stops its process group', () async {
+    final command = await _HangingCommand._create(_TermBehavior.exit);
+    final pending = command._run();
+    final monitorPid = await command._waitForPid('monitor');
+    expect(
+      await File('/proc/$monitorPid/cmdline').readAsString(),
+      contains('subprocess.Popen'),
+    );
+
+    Process.killPid(monitorPid, ProcessSignal.sigterm);
+    final result = await pending;
+
+    await command._expectStopped();
+    expect(result, isA<ProcessResult>());
+    expect(
+      (result as ProcessResult).exitCode,
+      -ProcessSignal.sigkill.signalNumber,
+    );
   });
 
   test('a very short deadline still stops the launched command', () async {
@@ -203,6 +223,7 @@ class _HangingCommand {
     final trap = behavior == _TermBehavior.ignore ? "trap '' TERM\n" : '';
     await File('${command._directory.path}/parent.sh').writeAsString('''
 printf '%s' "\$\$" > parent.pid
+printf '%s' "\$PPID" > monitor.pid
 printf 'fixture started\\n'
 printf 'fixture diagnostic\\n' >&2
 bash child.sh &
@@ -230,8 +251,8 @@ exec sleep ${_processFailsafe.inSeconds}
     }
   }
 
-  Future<int> _waitForChildPid() async {
-    final file = File('${_directory.path}/child.pid');
+  Future<int> _waitForPid(String name) async {
+    final file = File('${_directory.path}/$name.pid');
     final clock = Stopwatch()..start();
     while (clock.elapsed < _observationTimeout) {
       if (await file.exists()) {
@@ -240,7 +261,7 @@ exec sleep ${_processFailsafe.inSeconds}
       }
       await Future<void>.delayed(_pollInterval);
     }
-    throw TimeoutException('The fixture child did not start.');
+    throw TimeoutException('The fixture $name did not start.');
   }
 
   Future<void> _expectStopped() async {
