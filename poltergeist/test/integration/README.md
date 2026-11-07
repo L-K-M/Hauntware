@@ -55,7 +55,17 @@ of each package, so the integration jobs never build it;
 by digest. To move to a newer OpenSSH, change the pins there and the matching
 constants in `check_config_test.dart` (the pull request builds the base for
 both platforms), merge, run the **Fixture images** workflow on main, and pin
-the digest from its summary in `sshd-modern/Dockerfile`.
+the digest from its summary in `sshd-modern/Dockerfile` and, at the suite root,
+`klabautermann/test/integration/sshd/Dockerfile` and
+`klabautermann/test/integration/sshd/Dockerfile.docker`.
+
+The rebuild source currently pins OpenSSH 10.6p2 and iproute2 7.3.0, whose
+packages remain available in the Alpine edge repositories. The integration
+fixtures still use the published OpenSSH 10.6p1 image by digest. Updating
+source pins does not publish an image or change those runtime fixtures;
+promotion is a separate, explicitly validated operation. Alpine can retire
+these replacement packages too, so the published digest remains the stable
+input for ordinary integration and benchmark runs.
 
 Run a benchmark inside the same lifecycle owner (the harness lives at
 `packages/poltergeist_bench`; the old `tool/bench/run.sh` still works and

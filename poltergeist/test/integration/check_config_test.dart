@@ -62,9 +62,9 @@ const _usageExitCode = 2;
 const _modernAlpineImage =
     'alpine:20260805@sha256:'
     '020dfcbaaf4cc1078bf2d9c7ba31a8466e334061dcd2f248001d68f79e52c000';
-const _modernOpenSshVersion = '10.6_p1-r0';
-// Keep in sync with the frozen base's Dockerfile; a bump republishes it.
-const _modernIproute2Version = '7.2.0-r0';
+const _modernOpenSshVersion = '10.6_p2-r0';
+// These source pins do not change the published runtime image's digest.
+const _modernIproute2Version = '7.3.0-r0';
 const _modernBaseDockerfile = 'test/integration/sshd-modern-base/Dockerfile';
 const _modernBaseImage = 'ghcr.io/l-k-m/poltergeist-sshd-modern-base';
 const _modernOpenSshPackages = [
