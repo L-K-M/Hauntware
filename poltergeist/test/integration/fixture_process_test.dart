@@ -60,6 +60,7 @@ void main() {
   test('terminating the monitor stops its process group', () async {
     final command = await _HangingCommand._create(_TermBehavior.exit);
     final pending = command._run();
+    await command._waitForPid('child');
     final monitorPid = await command._waitForPid('monitor');
     expect(
       await File('/proc/$monitorPid/cmdline').readAsString(),
