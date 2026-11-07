@@ -43,6 +43,20 @@ void main() {
     expect(result.stderr, contains('fixture diagnostic'));
   });
 
+  test('the deadline does not depend on the Dart event loop', () async {
+    final command = await _HangingCommand._create(_TermBehavior.exit);
+    final pending = command._run();
+    final childPid = await command._waitForChildPid();
+
+    sleep(_deadline * 2);
+    final stoppedDuringPause = !_isRunning(childPid);
+    final result = await pending;
+
+    await command._expectStopped();
+    expect(result, isA<ProcessResult>());
+    expect(stoppedDuringPause, isTrue);
+  });
+
   test('a very short deadline still stops the launched command', () async {
     final result = await runFixtureProcess('sleep', [
       '${_processFailsafe.inSeconds}',
@@ -91,6 +105,48 @@ void main() {
     });
   }
 
+  for (final signal in [
+    ProcessSignal.sigterm,
+    ProcessSignal.sigkill,
+    ProcessSignal.sigint,
+    ProcessSignal.sigpipe,
+  ]) {
+    test('preserves a command terminated by ${signal.signalNumber}', () async {
+      final result = await runFixtureProcess('/bin/bash', [
+        '-c',
+        'kill -${signal.signalNumber} "\$\$"',
+      ], timeout: _observationTimeout);
+      expect(result.exitCode, -signal.signalNumber);
+    });
+  }
+
+  test('closes stdin before waiting for the command', () async {
+    final result = await runFixtureProcess('/bin/bash', [
+      '-c',
+      'if read -r value; then exit 42; fi; printf EOF',
+    ], timeout: _deadline);
+    expect(result.exitCode, 0);
+    expect(result.stdout, 'EOF');
+  });
+
+  test('reports an executable that does not exist', () async {
+    final result = await runFixtureProcess(
+      'missing-hauntware-fixture-executable',
+      [],
+      timeout: _observationTimeout,
+    );
+    expect(result.exitCode, 127);
+    expect(result.stderr, contains('missing-hauntware-fixture-executable'));
+  });
+
+  test('distinguishes a numeric exit code from signal termination', () async {
+    final result = await runFixtureProcess('/bin/bash', [
+      '-c',
+      'exit 137',
+    ], timeout: _observationTimeout);
+    expect(result.exitCode, 137);
+  });
+
   test(
     'preserves exit status, output, arguments, environment and cwd',
     () async {
@@ -98,6 +154,11 @@ void main() {
         'fixture-result-',
       );
       addTearDown(() => directory.delete(recursive: true));
+      for (final module in ['subprocess', 'signal']) {
+        await File(
+          '${directory.path}/$module.py',
+        ).writeAsString("raise RuntimeError('untrusted monitor module')\n");
+      }
       const argument = r'a path; $(must-not-run)';
       final result = await runFixtureProcess(
         'bash',
@@ -109,7 +170,10 @@ void main() {
           argument,
         ],
         timeout: _observationTimeout,
-        environment: {'FIXTURE_VALUE': 'inherited fixture value'},
+        environment: {
+          'FIXTURE_VALUE': 'inherited fixture value',
+          'PYTHONPATH': directory.path,
+        },
         workingDirectory: directory.path,
       );
 
@@ -166,17 +230,30 @@ exec sleep ${_processFailsafe.inSeconds}
     }
   }
 
+  Future<int> _waitForChildPid() async {
+    final file = File('${_directory.path}/child.pid');
+    final clock = Stopwatch()..start();
+    while (clock.elapsed < _observationTimeout) {
+      if (await file.exists()) {
+        final pid = int.tryParse(await file.readAsString());
+        if (pid != null) return pid;
+      }
+      await Future<void>.delayed(_pollInterval);
+    }
+    throw TimeoutException('The fixture child did not start.');
+  }
+
   Future<void> _expectStopped() async {
     for (final name in ['child', 'parent']) {
       final pid = int.parse(
         await File('${_directory.path}/$name.pid').readAsString(),
       );
       final clock = Stopwatch()..start();
-      while (await _isRunning(pid) && clock.elapsed < _deadline) {
+      while (_isRunning(pid) && clock.elapsed < _deadline) {
         await Future<void>.delayed(_pollInterval);
       }
       expect(
-        await _isRunning(pid),
+        _isRunning(pid),
         isFalse,
         reason: '$name PID $pid survives the deadline',
       );
@@ -198,9 +275,9 @@ exec sleep ${_processFailsafe.inSeconds}
   }
 }
 
-Future<bool> _isRunning(int pid) async {
+bool _isRunning(int pid) {
   try {
-    final stat = await File('/proc/$pid/stat').readAsString();
+    final stat = File('/proc/$pid/stat').readAsStringSync();
     // An unreaped zombie cannot execute a late Docker lifecycle operation.
     return !{'Z', 'X'}.contains(
       stat.substring(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3),

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 /// Bounds a Linux command's process group until that command exits.
@@ -19,34 +18,46 @@ Future<ProcessResult> runFixtureProcess(
     throw ArgumentError.value(timeout, 'timeout', 'Must be positive.');
   }
 
-  // util-linux setsid execs this fresh child in its own process group.
-  // Unlike GNU timeout, uutils timeout can leave grandchildren running when
-  // asked to send KILL. Own the deadline instead of relying on that behavior.
-  return Process.start(
-    'setsid',
-    [executable, ...arguments],
+  // uutils timeout can leave grandchildren running when asked to send KILL.
+  // Keep the monitor outside Dart so a blocked test isolate cannot postpone
+  // the deadline. Popen establishes the child's session before returning.
+  // Isolate monitor imports from the command's cwd and Python environment.
+  final seconds = timeout.inMicroseconds / Duration.microsecondsPerSecond;
+  return Process.run(
+    'python3',
+    ['-I', '-S', '-c', _monitorScript, '$seconds', executable, ...arguments],
     environment: environment,
     workingDirectory: workingDirectory,
-  ).then((process) {
-    final deadline = Timer(timeout, () {
-      // Linux kill(2) interprets a negative PID as a process-group ID. A very
-      // short deadline can precede setsid's setup, so also stop the child if
-      // its group does not exist yet.
-      if (!Process.killPid(-process.pid, ProcessSignal.sigkill)) {
-        process.kill(ProcessSignal.sigkill);
-      }
-    });
-    return Future.wait<Object>([
-      process.exitCode.whenComplete(deadline.cancel),
-      process.stdout.transform(systemEncoding.decoder).join(),
-      process.stderr.transform(systemEncoding.decoder).join(),
-    ]).then(
-      (values) => ProcessResult(
-        process.pid,
-        values[0] as int,
-        values[1] as String,
-        values[2] as String,
-      ),
-    );
-  });
+  );
 }
+
+const _monitorScript = r'''
+import errno
+import os
+import signal
+import subprocess
+import sys
+
+try:
+    child = subprocess.Popen(sys.argv[2:], start_new_session=True)
+except OSError as error:
+    print(error, file=sys.stderr)
+    sys.exit(127 if error.errno == errno.ENOENT else 126)
+
+try:
+    status = child.wait(timeout=float(sys.argv[1]))
+except subprocess.TimeoutExpired:
+    try:
+        os.killpg(child.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    child.wait()
+    os.kill(os.getpid(), signal.SIGKILL)
+
+if status < 0:
+    signum = -status
+    if signum not in (signal.SIGKILL, signal.SIGSTOP):
+        signal.signal(signum, signal.SIG_DFL)
+    os.kill(os.getpid(), signum)
+sys.exit(status)
+''';
