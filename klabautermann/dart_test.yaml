@@ -2,7 +2,7 @@
 # those of the packages it is given. CI and scripts/test.sh run every
 # suite from here, so this repeats what packages/*/dart_test.yaml declare.
 tags:
-  # Real-shell tests: dash and bash where installed.
+  # Real-shell tests: dash and bash where installed; Python 3 for comm fixtures.
   shell:
   # Engine tests against the sshd fixture, which run.sh starts; skipped
   # without it (03 §11.3, D53).

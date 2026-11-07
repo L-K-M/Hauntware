@@ -2,6 +2,7 @@
 # the working directory, so runs from klabautermann/ (CI) load
 # klabautermann/dart_test.yaml, which repeats the tag and the cap.
 tags:
+  # Real-shell tests require Python 3 for adversarial Linux comm fixtures.
   shell:
 # A wedged sampler test (an unread pipe or a hung child shell) would pin the
 # VM; cap every test instead.

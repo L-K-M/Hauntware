@@ -34,7 +34,10 @@ unreachable on dartssh2 3.0.2; 3.2.0 added the cipher.
 
 Ordinary package tests skip these cases unless `POLTERGEIST_SSHD` and the
 suite's service-port variable are set; `run.sh` exports the complete fixture
-environment. Use Docker Compose and the Dart SDK to run the command above.
+environment. Use Docker Compose, the Dart SDK and Python 3 to run the command
+above. Linux command deadlines use an isolated Python standard-library monitor
+so neither a blocked Dart isolate nor the host's coreutils implementation can
+leave a timed-out command's process group running.
 
 The bookmark-sync convergence suite
 (`packages/poltergeist_core/test/integration/sync_server_convergence_test.dart`)

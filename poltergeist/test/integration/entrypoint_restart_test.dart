@@ -74,7 +74,7 @@ Future<ProcessResult> _runAccountScript(String preamble, String command) async {
   );
   addTearDown(() => directory.delete(recursive: true));
 
-  // Resolve GNU timeout first, then isolate shell command lookup and relative I/O.
+  // Resolve Python first, then isolate shell command lookup and relative I/O.
   return runFixtureProcess(
     '/bin/sh',
     [
