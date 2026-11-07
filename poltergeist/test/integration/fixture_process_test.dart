@@ -43,6 +43,14 @@ void main() {
     expect(result.stderr, contains('fixture diagnostic'));
   });
 
+  test('a very short deadline still stops the launched command', () async {
+    final result = await runFixtureProcess('sleep', [
+      '${_processFailsafe.inSeconds}',
+    ], timeout: const Duration(microseconds: 1)).timeout(_observationTimeout);
+
+    expect(result.exitCode, -ProcessSignal.sigkill.signalNumber);
+  });
+
   test(
     'cleanup survives an empty PID file and stops the remaining process',
     () async {
