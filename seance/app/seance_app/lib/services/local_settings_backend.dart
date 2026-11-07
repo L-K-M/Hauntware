@@ -18,6 +18,19 @@ import 'settings_backend.dart';
 /// value: settings hold key *names*, never keys.
 const String _zaiKeyRef = 'zai';
 
+class _AssistantKeyWriteFailure implements Exception {
+  const _AssistantKeyWriteFailure(this.key, this.error, [this.rollbackError]);
+
+  final AssistantKey key;
+  final Object error;
+  final Object? rollbackError;
+
+  @override
+  String toString() => rollbackError == null
+      ? '$error'
+      : '$error (restoring the earlier key also failed: $rollbackError)';
+}
+
 /// [SettingsBackend] over the app's own [AppState], in the app's isolate.
 ///
 /// The Settings route uses it directly; the settings window's host uses it to
@@ -29,10 +42,13 @@ class LocalSettingsBackend implements SettingsBackend {
   LocalSettingsBackend(
     this._state, {
     this._exportFiles = const PlatformSecretsExportFiles(),
-  });
+    LlmProvider Function(ModelQuery query, String apiKey)? modelProviderBuilder,
+  }) : _modelProviderBuilder = modelProviderBuilder ?? _buildModelProvider;
 
   final AppState _state;
   final SecretsExportFiles _exportFiles;
+  final LlmProvider Function(ModelQuery query, String apiKey)
+      _modelProviderBuilder;
 
   AppSettings get _s => _state.services.settings;
 
@@ -177,21 +193,14 @@ class LocalSettingsBackend implements SettingsBackend {
     final key = query.typedApiKey.isNotEmpty
         ? query.typedApiKey
         : (await _state.services.masterKeys.getApiKey(ref) ?? '');
-    final baseUrl = query.baseUrl.trim();
-    final LlmProvider provider = query.kind == LlmProviderKind.anthropic
-        ? AnthropicProvider(
-            apiKey: key,
-            baseUrl: baseUrl,
-            model: query.model.trim(),
-          )
-        : OpenAiCompatibleProvider(
-            baseUrl: baseUrl,
-            apiKey: key,
-            model: query.model.trim(),
-          );
-    final models = await provider.listModels();
-    models.sort();
-    return models;
+    final provider = _modelProviderBuilder(query, key);
+    try {
+      final models = await provider.listModels();
+      models.sort();
+      return models;
+    } finally {
+      closeLlmProvider(provider);
+    }
   }
 
   AssistantSaveResult _result(
@@ -229,6 +238,8 @@ class LocalSettingsBackend implements SettingsBackend {
     // before this Save, not one that lands during its awaits.
     final versionAtEntry = state.llmConfigVersion;
     final s = _s;
+    final settingsAtEntry = assistantSyncFingerprint(s);
+    final stampAtEntry = s.assistantUpdatedAt;
     final fields = draft.fields;
     // Store the API key under a per-provider name, taken from the draft once:
     // a provider read again after the keystore writes could disagree with
@@ -240,96 +251,101 @@ class LocalSettingsBackend implements SettingsBackend {
     final enteredZaiKey = draft.zaiApiKey.trim();
     final enteredLlmKey = draft.llmApiKey.trim();
 
-    // Keys first, settings after. A keystore failure returns without saving,
-    // and the settings object is the one the running app reads — leaving it
-    // mutated to say "Z.AI is on" behind a key that never landed would make
-    // the failed save take effect anyway, until the next launch.
-    if (zaiEnabled && enteredZaiKey.isNotEmpty) {
-      try {
-        // Trimmed like every other field here: a key pasted from a password
-        // manager carries a trailing newline more often than not, and it
-        // authenticates as garbage that CompositeSearch swallows into a log
-        // line.
-        await state.services.masterKeys.putApiKey(_zaiKeyRef, enteredZaiKey);
-      } catch (e) {
-        return _result(
-          AssistantSaveStatus.keystoreFailed,
-          failedKey: AssistantKey.zai,
-          error: '$e',
-        );
-      }
-    }
-    // Trimmed and tested trimmed, for the same reason as the Z.AI key above —
-    // and it matters more here: a search backend that authenticates as
-    // garbage leaves the others working, while this key is the assistant's
-    // only one. A whitespace-only paste is no key at all, so it does not
-    // overwrite the stored one.
-    if (enteredLlmKey.isNotEmpty) {
-      try {
-        await state.services.masterKeys.putApiKey(ref, enteredLlmKey);
-      } catch (e) {
-        // KeystoreException: the OS keyring is unavailable — don't report
-        // "Saved" for a key that never landed.
-        return _result(
-          AssistantSaveStatus.keystoreFailed,
-          failedKey: AssistantKey.llm,
-          error: '$e',
-        );
-      }
-    }
+    // Keys and the fields that reference them form one synced value. Keep the
+    // keychain writes inside the mutation phase too, so collection observes
+    // either the old value or the complete edit. If a later key fails, restore
+    // the earlier writes before releasing the queue.
+    final keyWrites = <({String name, String value, AssistantKey key})>[
+      if (zaiEnabled && enteredZaiKey.isNotEmpty)
+        (name: _zaiKeyRef, value: enteredZaiKey, key: AssistantKey.zai),
+      if (enteredLlmKey.isNotEmpty)
+        (name: ref, value: enteredLlmKey, key: AssistantKey.llm),
+    ];
+    var zaiWithoutKey = false;
+    final searxng = fields.searxngUrl.trim();
+    late ({bool stale, String? publishError}) committed;
+    try {
+      committed = await state.commitAssistantSettings(
+        expectedVersion: versionAtEntry,
+        expectedUpdatedAt: stampAtEntry,
+        expectedFingerprint: settingsAtEntry,
+        keyEntered: draft.keyEntered,
+        prepare: () async {
+          final previous = <String, String?>{};
+          for (final write in keyWrites) {
+            try {
+              previous[write.name] = await state.services.masterKeys
+                  .readApiKeyForUpdate(write.name);
+            } catch (error) {
+              throw _AssistantKeyWriteFailure(write.key, error);
+            }
+          }
+          Future<void> restore(
+            Iterable<({String name, String value, AssistantKey key})> writes,
+          ) async {
+            Object? firstError;
+            for (final write in writes) {
+              try {
+                final old = previous[write.name];
+                if (old == null) {
+                  await state.services.masterKeys.deleteApiKey(write.name);
+                } else {
+                  await state.services.masterKeys.putApiKey(write.name, old);
+                }
+              } catch (error) {
+                firstError ??= error;
+              }
+            }
+            if (firstError != null) throw firstError;
+          }
 
-    // Read before the guard and the assignments below, never between them:
-    // an adoption landing inside this await would otherwise land after the
-    // guard had passed, which is the race the guard exists for. `getApiKey`
-    // answers null on a locked keyring rather than throwing.
-    final zaiWithoutKey =
-        zaiEnabled &&
-        (await state.services.masterKeys.getApiKey(_zaiKeyRef)) == null;
-
-    // The guard at the top cannot see an adoption that landed during the
-    // keystore writes above. Assigning over it would put the pre-adoption
-    // fields back and republish them stamped `now` — the revert that wins on
-    // every device. Refused here too, before anything is assigned to `s`; a
-    // key stored above stays stored, since refs are per provider and
-    // adoption keeps them.
-    if (state.llmConfigVersion != versionAtEntry) {
+          final completed = <({String name, String value, AssistantKey key})>[];
+          for (final write in keyWrites) {
+            try {
+              await state.services.masterKeys.putApiKey(
+                write.name,
+                write.value,
+              );
+              completed.add(write);
+            } catch (error) {
+              Object? rollbackError;
+              try {
+                await restore(completed.reversed);
+              } catch (error) {
+                rollbackError = error;
+              }
+              throw _AssistantKeyWriteFailure(write.key, error, rollbackError);
+            }
+          }
+          zaiWithoutKey =
+              zaiEnabled &&
+              (await state.services.masterKeys.getApiKey(_zaiKeyRef)) == null;
+          return () => restore(keyWrites.reversed);
+        },
+        update: (settings) {
+          settings.llmKind = kind;
+          settings.llmBaseUrl = fields.baseUrl.trim();
+          settings.llmModel = fields.model.trim();
+          settings.llmApiKeyRef = ref;
+          settings.redactionEnabled = fields.redactionEnabled;
+          settings.searxngUrl = searxng.isEmpty ? null : searxng;
+          // The reference is what switches the backend on; turning it off
+          // leaves the key in the keystore rather than deleting it, like every
+          // other key here.
+          settings.zaiApiKeyRef = zaiEnabled ? _zaiKeyRef : null;
+        },
+      );
+    } on _AssistantKeyWriteFailure catch (failure) {
+      return _result(
+        AssistantSaveStatus.keystoreFailed,
+        failedKey: failure.key,
+        error: '$failure',
+      );
+    }
+    if (committed.stale) {
       return _result(AssistantSaveStatus.adoptedBeforeSave);
     }
-    // Taken before the assignments, so a Save that changes nothing does not
-    // stamp: see [assistantSyncFingerprint].
-    final before = assistantSyncFingerprint(s);
-    s.llmKind = kind;
-    s.llmBaseUrl = fields.baseUrl.trim();
-    s.llmModel = fields.model.trim();
-    s.llmApiKeyRef = ref;
-    s.redactionEnabled = fields.redactionEnabled;
-    final searxng = fields.searxngUrl.trim();
-    s.searxngUrl = searxng.isEmpty ? null : searxng;
-    // The reference is what switches the backend on; turning it off leaves the
-    // key in the keystore rather than deleting it, like every other key here.
-    s.zaiApiKeyRef = zaiEnabled ? _zaiKeyRef : null;
-    await state.services.saveSettings();
-    // Stamp and publish: this is the edit the synced record's timestamp is
-    // supposed to move for. A no-op when assistant sync is off.
-    //
-    // Re-checked against `versionAtEntry`: `saveSettings` is a plain disk
-    // write, not queued behind the mutation lock, so a periodic round can
-    // adopt during that await, and publishing then would stamp `now` on this
-    // Save's pre-adoption values — which beats the adopted record on every
-    // device. Skipping the publish loses nothing the arithmetic below does not
-    // already handle: `assistantSettingsEdited` never touches the counter, so
-    // `adoptedMeanwhile` still reads true and the fields are reloaded.
-    String? publishError;
-    if (state.llmConfigVersion == versionAtEntry &&
-        (draft.keyEntered || assistantSyncFingerprint(s) != before)) {
-      try {
-        await state.assistantSettingsEdited();
-      } catch (e) {
-        // The settings are already on disk. A failed publish must not skip
-        // the provider rebuild below or read like Save itself broke.
-        publishError = '$e';
-      }
-    }
+    final publishError = committed.publishError;
     // Rebuild the chat provider (new key/model) and refresh sidebar
     // visibility.
     //
@@ -390,26 +406,13 @@ class LocalSettingsBackend implements SettingsBackend {
       adopted: adopted,
     );
 
-    final wasAutoSync = s.autoSync;
-    final wasSyncSecrets = s.syncSecrets;
-    final wasSyncingAssistant = s.syncAssistant;
-    s.autoSync = autoSync;
-    s.syncSecrets = syncSecrets;
-    s.syncAssistant = syncAssistant;
-    try {
-      await state.services.saveSettings();
-    } catch (e) {
-      // Roll the flags back: left on in memory, the next successful save of
-      // anything would persist them, switching on a sync that carries API
-      // keys without the adopt-first step this failure skipped. All three,
-      // not only the assistant's: the other two are left in memory by the
-      // same failed write, with the same consequence one switch over. And do
-      // not go on to adopt for a switch that was not persisted.
-      s.syncAssistant = wasSyncingAssistant;
-      s.autoSync = wasAutoSync;
-      s.syncSecrets = wasSyncSecrets;
-      return result(saveError: '$e');
-    }
+    final saved = await state.saveSyncPreferences(
+      autoSync: autoSync,
+      syncSecrets: syncSecrets,
+      syncAssistant: syncAssistant,
+    );
+    if (saved.saveError != null) return result(saveError: saved.saveError);
+    final wasSyncingAssistant = saved.wasSyncingAssistant;
     state.ensureAutoSyncTimer();
     // Switching it on adopts what the account already has, and publishes what
     // this device has only when there was nothing to adopt.
@@ -428,12 +431,11 @@ class LocalSettingsBackend implements SettingsBackend {
       // next Save stamp `now` and publish this device's configuration over
       // the account's newer record — the clobber adopting first exists to
       // prevent. Turning it on again retries.
-      s.syncAssistant = false;
       try {
-        await state.services.saveSettings();
+        await state.disableAssistantSync();
       } catch (_) {
         // The original failure is the one worth telling; the in-memory flag
-        // and the reported switch still agree with each other.
+        // was already switched off before the failed durable write.
       }
       return result(assistantSyncError: '$e');
     }
@@ -448,14 +450,14 @@ class LocalSettingsBackend implements SettingsBackend {
   @override
   Future<void> enrollSync(SyncEnrollment enrollment) async {
     if (enrollment.mode == SyncEnrollmentMode.register) {
-      await _state.services.registerSync(
+      await _state.registerSync(
         baseUrl: enrollment.baseUrl,
         username: enrollment.username,
         password: enrollment.password,
         encryptionPassphrase: enrollment.encryptionPassphrase,
       );
     } else {
-      await _state.services.loginSync(
+      await _state.loginSync(
         baseUrl: enrollment.baseUrl,
         username: enrollment.username,
         password: enrollment.password,
@@ -552,4 +554,16 @@ class LocalSettingsBackend implements SettingsBackend {
       );
     }
   }
+}
+
+LlmProvider _buildModelProvider(ModelQuery query, String apiKey) {
+  final baseUrl = query.baseUrl.trim();
+  final model = query.model.trim();
+  return query.kind == LlmProviderKind.anthropic
+      ? AnthropicProvider(apiKey: apiKey, baseUrl: baseUrl, model: model)
+      : OpenAiCompatibleProvider(
+          baseUrl: baseUrl,
+          apiKey: apiKey,
+          model: model,
+        );
 }

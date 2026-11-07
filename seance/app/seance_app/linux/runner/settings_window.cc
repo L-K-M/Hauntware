@@ -28,6 +28,12 @@ struct SettingsWindowHost {
   // The open settings window and its engine's messenger, or null.
   GtkWindow* window;
   FlBinaryMessenger* window_messenger;
+
+  // Native visibility has two distinct hidden states. A user close discards
+  // the Dart page; a quit review only yields it temporarily and must also
+  // suppress a first frame that has not shown the new window yet.
+  gboolean window_hidden;
+  gboolean quit_confirmation_suppressed;
 };
 
 // A message in flight from one engine to the other: where its reply goes.
@@ -92,6 +98,8 @@ void window_link_cb(FlBinaryMessenger* messenger, const gchar* channel,
 gboolean window_delete_cb(GtkWidget* widget, GdkEvent* event,
                           gpointer user_data) {
   auto* host = static_cast<SettingsWindowHost*>(user_data);
+  host->window_hidden = TRUE;
+  host->quit_confirmation_suppressed = FALSE;
   gtk_widget_hide(widget);
   fl_method_channel_invoke_method(host->control, "closed", nullptr, nullptr,
                                   nullptr, nullptr);
@@ -102,19 +110,27 @@ gboolean window_delete_cb(GtkWidget* widget, GdkEvent* event,
 void window_destroyed_cb(GtkWidget* widget, gpointer user_data) {
   auto* host = static_cast<SettingsWindowHost*>(user_data);
   host->window = nullptr;
+  host->window_hidden = TRUE;
+  host->quit_confirmation_suppressed = FALSE;
   g_clear_object(&host->window_messenger);
 }
 
 // Shown on its first frame, like the main window, so it never flashes the
 // view's background before Flutter has drawn.
 void first_frame_cb(FlView* view, gpointer user_data) {
-  gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+  auto* host = static_cast<SettingsWindowHost*>(user_data);
+  if (!host->window_hidden && !host->quit_confirmation_suppressed) {
+    gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+  }
 }
 
 void open_window(SettingsWindowHost* host) {
   if (host->window != nullptr) {
     // Shows it again if it was closed, and raises it either way.
-    gtk_window_present(host->window);
+    host->window_hidden = FALSE;
+    if (!host->quit_confirmation_suppressed) {
+      gtk_window_present(host->window);
+    }
     return;
   }
 
@@ -137,6 +153,7 @@ void open_window(SettingsWindowHost* host) {
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
 
   host->window = window;
+  host->window_hidden = FALSE;
   host->window_messenger = FL_BINARY_MESSENGER(
       g_object_ref(fl_engine_get_binary_messenger(fl_view_get_engine(view))));
   // Before the engine starts: the window's Dart side says hello first thing.
@@ -144,7 +161,7 @@ void open_window(SettingsWindowHost* host) {
       host->window_messenger, kLinkChannel, window_link_cb, host, nullptr);
   g_signal_connect(window, "destroy", G_CALLBACK(window_destroyed_cb), host);
 
-  g_signal_connect(view, "first-frame", G_CALLBACK(first_frame_cb), nullptr);
+  g_signal_connect(view, "first-frame", G_CALLBACK(first_frame_cb), host);
   gtk_widget_realize(GTK_WIDGET(view));
   // No plugins: everything the Settings screen does runs in the app's engine,
   // reached over the link.
@@ -155,8 +172,24 @@ void control_cb(FlMethodChannel* channel, FlMethodCall* call,
                 gpointer user_data) {
   auto* host = static_cast<SettingsWindowHost*>(user_data);
   g_autoptr(FlMethodResponse) response = nullptr;
-  if (strcmp(fl_method_call_get_name(call), "open") == 0) {
+  const gchar* method = fl_method_call_get_name(call);
+  if (strcmp(method, "open") == 0) {
     open_window(host);
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else if (strcmp(method, "yieldForQuitConfirmation") == 0) {
+    const gboolean was_visible =
+        host->window != nullptr && !host->window_hidden;
+    if (was_visible) {
+      host->quit_confirmation_suppressed = TRUE;
+      gtk_widget_hide(GTK_WIDGET(host->window));
+    }
+    g_autoptr(FlValue) value = fl_value_new_bool(was_visible);
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(value));
+  } else if (strcmp(method, "restoreAfterQuitConfirmation") == 0) {
+    host->quit_confirmation_suppressed = FALSE;
+    if (host->window != nullptr && !host->window_hidden) {
+      gtk_window_present(host->window);
+    }
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());

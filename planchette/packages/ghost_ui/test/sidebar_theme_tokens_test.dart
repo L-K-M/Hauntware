@@ -18,6 +18,7 @@ void main() {
       expect(tokens.hoverFill, const Color(0xFFE7EAEF).withValues(alpha: 0.06));
       expect(tokens.capsuleFill, const Color(0xFF353D49));
       expect(tokens.inactiveSelectionFill, const Color(0xFF3B4452));
+      expect(tokens.indicator, isNull);
       expect(tokens.secondaryText, const Color(0xFFB4BCC8));
       expect(tokens.sidebarRowExtent, 26);
       expect(tokens.cornerScale, 1);
@@ -58,11 +59,13 @@ void main() {
       hoverFill: Color(0xFF000000),
       capsuleFill: Color(0xFF000000),
       inactiveSelectionFill: Color(0xFF000000),
+      indicator: Color(0xFF123456),
       secondaryText: Color(0xFF000000),
       sidebarRowExtent: 26,
       cornerScale: 1.4,
     );
     expect(tokens.corner(6), moreOrLessEquals(8.4, epsilon: 1e-9));
+    expect(tokens.indicator, const Color(0xFF123456));
     expect(
       const SidebarThemeTokens(
         sidebarBackground: Color(0xFF000000),
@@ -93,6 +96,13 @@ void main() {
     );
     expect(mid.sidebarRowExtent, (a.sidebarRowExtent + b.sidebarRowExtent) / 2);
     expect(a.lerp(null, 0.5), same(a));
+
+    final accentedA = a.copyWith(indicator: const Color(0xFF000000));
+    final accentedB = b.copyWith(indicator: const Color(0xFFFFFFFF));
+    expect(
+      accentedA.lerp(accentedB, 0.5).indicator,
+      Color.lerp(accentedA.indicator, accentedB.indicator, 0.5),
+    );
   });
 
   testWidgets('of resolves the installed extension, else the fallback', (
@@ -104,6 +114,7 @@ void main() {
       hoverFill: Color(0xFF112233),
       capsuleFill: Color(0xFF112233),
       inactiveSelectionFill: Color(0xFF112233),
+      indicator: Color(0xFF445566),
       secondaryText: Color(0xFF112233),
       sidebarRowExtent: 30,
       cornerScale: 2,

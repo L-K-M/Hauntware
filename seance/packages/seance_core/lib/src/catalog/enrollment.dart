@@ -10,10 +10,13 @@ import 'dart:convert';
 import 'package:seance_protocol/seance_protocol.dart';
 
 import '../sync/sync_engine.dart';
+import '../sync/legacy_envelope_migration.dart';
 import 'persistent_record_store.dart';
 import 'record_coordinator.dart' show isDecryptableSyncId;
 import 'record_crypto.dart';
 import 'record_handler.dart';
+import 'server_config_handler.dart';
+import 'host_key_handler.dart';
 
 /// 04 §4.3's verbatim copy for 403 `registration_closed` on a Design B
 /// register — the UI renders this string (ARB-mirrored when the settings
@@ -70,13 +73,13 @@ final class SyncAccount {
 /// one transport seam.
 abstract interface class SyncEnrollmentApi implements SyncApi {
   /// POST /v1/register — sets [token] on success.
-  Future<void> register(RegisterRequest request);
+  Future<LoginResponse> register(RegisterRequest request);
 
   /// POST /v1/prelogin — the account's KDF salt/params; unauthenticated.
   Future<PreloginResponse> prelogin(String username);
 
   /// POST /v1/login — sets [token] on success.
-  Future<void> login(LoginRequest request);
+  Future<LoginResponse> login(LoginRequest request);
 
   /// The session bearer token the last register/login produced.
   String? get token;
@@ -147,9 +150,9 @@ final class EnrollmentResult {
   /// [SyncCredentialStore.writeVaultKey], never a plain file.
   final List<int> vaultKey;
 
-  /// Non-null only when the trial-decrypt ran and failed — the §4.5
-  /// three-cause copy the UI shows. An empty account (no decryptable
-  /// candidate) sets [passphraseUnverified] with a null warning.
+  /// Non-null only when the legacy record trial ran and failed — the §4.5
+  /// three-cause copy the UI shows. Accounts with a registration-time key
+  /// check are verified without depending on a user record.
   final String? passphraseWarning;
 }
 
@@ -176,6 +179,14 @@ final class KdfDowngradeException extends SyncEnrollmentException {
 
   /// The below-minimum parameters the server offered.
   final Argon2Params offered;
+}
+
+/// The account's registration-time encrypted marker did not open with the
+/// candidate vault key. Unlike a legacy record failure, this marker has one
+/// purpose and schema, so the enrollment can reject the passphrase directly.
+final class VaultPassphraseMismatchException extends SyncEnrollmentException {
+  const VaultPassphraseMismatchException()
+      : super('The vault encryption passphrase is incorrect.');
 }
 
 /// 403 `registration_closed` (04 §4.3) — the message is the verbatim copy.
@@ -229,12 +240,25 @@ final class SyncEnrollment {
       params: params,
     );
     try {
-      await api.register(RegisterRequest(
+      final registered = await api.register(RegisterRequest(
         username: username,
         authVerifier: base64.encode(keys.authVerifier),
         argonSalt: base64.encode(salt),
         argonParams: params,
+        vaultKeyCheck: await VaultKeyCheck.create(
+          keys.vaultKey,
+          username: username,
+        ),
       ));
+      await VaultKeyCheck.verify(
+        keys.vaultKey,
+        registered.vaultKeyCheck ?? '',
+        username: username,
+      );
+      await observeRecordEnvelopeFloor(
+        _records,
+        registered.recordEnvelopeFloor,
+      );
     } on ApiError catch (error) {
       if (error.code == 'registration_closed') {
         throw const RegistrationClosedException();
@@ -261,8 +285,10 @@ final class SyncEnrollment {
   /// login → a **full** pull (`since = 0`, always — a retained highWaterSeq
   /// must never produce an empty pull that skips the check) → trial-decrypt
   /// the first non-tombstone record on a decryptable id → persist with the
-  /// hold flag reflecting the outcome. An immediate trial failure warns
-  /// with the three-cause copy and proceeds held, never aborts.
+  /// hold flag reflecting the outcome. New accounts use the authenticated
+  /// registration-time key check; legacy accounts trial-decrypt a live record
+  /// or sealed tombstone. An immediate legacy trial failure warns with the
+  /// three-cause copy and proceeds held, never aborts.
   Future<EnrollmentResult> login({
     required SyncEnrollmentApi api,
     required String baseUrl,
@@ -281,39 +307,108 @@ final class SyncEnrollment {
       salt: base64.decode(pre.argonSalt),
       params: pre.argonParams,
     );
-    await api.login(LoginRequest(
+    final login = await api.login(LoginRequest(
       username: username,
       authVerifier: base64.encode(keys.authVerifier),
     ));
-
+    await observeRecordEnvelopeFloor(
+      _records,
+      login.recordEnvelopeFloor,
+    );
+    final keyCheck = login.vaultKeyCheck;
+    if (keyCheck != null) {
+      try {
+        await VaultKeyCheck.verify(
+          keys.vaultKey,
+          keyCheck,
+          username: username,
+        );
+      } catch (_) {
+        throw const VaultPassphraseMismatchException();
+      }
+    }
     final response = await api.pull(since: 0);
-    // The trial-decrypt: the FIRST non-tombstone record on a decryptable
+    if (response.recordEnvelopeFloor == kCurrentRecordEnvelopeVersion &&
+        response.records.any(
+          (record) =>
+              record.envelopeVersion < kCurrentRecordEnvelopeVersion,
+        )) {
+      throw const FormatException(
+        'Authenticated-envelope account returned a legacy record',
+      );
+    }
+    await observeRecordEnvelopeFloor(
+      _records,
+      response.recordEnvelopeFloor,
+    );
+    final crypto = RecordCrypto(RecordCodec(keys.vaultKey));
+    final handlersByPrefix = <String?, RecordHandler>{
+      for (final handler in _handlers) handler.prefix: handler,
+    };
+
+    // Authenticate the complete pull before any record enters the local LWW
+    // mirror. Otherwise a valid first record can approve the passphrase while
+    // a later record with forged public tuple metadata silently settles an
+    // unsynced local edit. Invalid records remain on the server for a later
+    // corrected full pull; the cursor still advances past their sequence so a
+    // malicious or corrupt record cannot make every login replay forever.
+    final authenticated = <EncryptedRecord, DecryptedRecord>{};
+    for (final record in response.records) {
+      try {
+        final decrypted = await crypto.open(record);
+        final handler = handlersByPrefix[syncIdPrefix(record.id)];
+        if (handler != null && decrypted.kind != handler.kind) continue;
+        authenticated[record] = decrypted;
+      } catch (_) {
+        // Authentication failures are quarantined by omission. A full login
+        // always pulls from zero, so a corrected passphrase or server repair
+        // can recover the record later.
+      }
+    }
+
+    // The legacy trial-decrypt: the FIRST authenticated record on a decryptable
     // id decides — kind-agnostic across every prefix the registration
     // opens (prefixless, hostkey:, and product prefixes such as bookmark:),
     // never secret:/snippet:/unregistered (§3.2's never-decrypt dispatch
     // binds enrollment too). Auth success cannot prove the E2E passphrase.
-    var unverified = true;
+    var unverified = keyCheck == null;
     String? warning;
-    final crypto = RecordCrypto(RecordCodec(keys.vaultKey));
-    for (final record in response.records) {
+    for (final record in keyCheck == null
+        ? response.records
+        : const <EncryptedRecord>[]) {
       if (record.deleted || record.blob.isEmpty) continue;
       if (!isDecryptableSyncId(record.id, _handlers)) continue;
-      try {
-        await crypto.open(record);
+      if (authenticated.containsKey(record)) {
         unverified = false;
-      } catch (_) {
+      } else if (record.envelopeVersion == kLegacyRecordEnvelopeVersion) {
+        try {
+          final legacy = await crypto.openLegacyForMigration(record);
+          if (legacy.kind == _trialKindForId(record.id, _handlers)) {
+            // This proves only possession of the vault key. Legacy outer
+            // metadata remains unauthenticated, so the row is deliberately
+            // absent from [authenticated] and cannot enter the LWW mirror.
+            unverified = false;
+          } else {
+            warning = syncPassphraseCheckFailedMessage;
+          }
+        } catch (_) {
+          warning = syncPassphraseCheckFailedMessage;
+        }
+      } else {
         warning = syncPassphraseCheckFailedMessage;
       }
       break;
     }
 
-    // Only now persist: the pulled ciphertext merges into the §3.1 store
-    // (skip-preserved records re-apply once the passphrase is corrected),
-    // then the token, vault key, device id, account, and flag.
+    // Only now persist: authenticated pulled ciphertext merges into the §3.1
+    // store. A corrected login pulls from zero and can recover anything this
+    // key quarantined. Then persist the token, vault key, device id, account,
+    // and flag.
     var snapshot = await _records.highWaterSeq();
     for (final record in response.records) {
       final seq = record.seq;
       if (seq != null && seq > snapshot) snapshot = seq;
+      if (!authenticated.containsKey(record)) continue;
       await _records.putRemote(record);
     }
     await _records.setHighWaterSeq(snapshot);
@@ -392,4 +487,21 @@ final class SyncEnrollment {
         SyncAccount(baseUrl: baseUrl, username: username, mode: mode));
     await _state.setNotice(syncNoticeAccountAuthFailed, false);
   }
+}
+
+RecordKind? _trialKindForId(
+  String id,
+  Iterable<RecordHandler> handlers,
+) {
+  final prefix = syncIdPrefix(id);
+  if (prefix == ServerConfigHandler.idPrefix) {
+    return RecordKind.serverConfig;
+  }
+  if (prefix == HostKeyHandler.idPrefix) return RecordKind.hostKey;
+  for (final handler in handlers) {
+    if (handler.prefix == prefix && handler.trialDecryptable) {
+      return handler.kind;
+    }
+  }
+  return null;
 }

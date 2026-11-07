@@ -7,8 +7,8 @@
 #
 # It owns the whole run: client keys and an agent made for this run only
 # (never committed, D53), the safety checks of the rendered Compose
-# config, readiness, the Docker engine's seed, the previous release's
-# harness (previous_release.sh), the tests one at a time, and teardown
+# config, readiness, the Docker engine's seed, previous/current client
+# harnesses (previous_release.sh), the tests one at a time, and teardown
 # on every exit. With
 # KLABAUTERMANN_EVIDENCE_DIR set, logs and test results go there. After
 # the fixture suites it runs the host write inventory (03 §8.11, M4
@@ -326,10 +326,13 @@ done
 docker_port="$(published_port docker-sshd)"
 seed_docker_host
 wait_for_sync
-# The previous release's Séance and Poltergeist, built from the latest
-# release tag for the convergence suite's unknown-kind skip (M08b).
+# Build sequentially: each resolves dependencies in its own bounded archive.
+# The current clients cover opaque records even when a wire cutover must
+# refuse the previous release (M08b).
 KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS="$("$previous_release_script" \
   "$runtime_dir/previous-release")"
+KLABAUTERMANN_CURRENT_HARNESS="$("$previous_release_script" --current \
+  "$runtime_dir/current-harness")"
 
 export KLABAUTERMANN_FIXTURE_COMPOSE_FILE="$compose_file"
 export KLABAUTERMANN_FIXTURE_COMPOSE_PROJECT="$compose_project"
@@ -349,6 +352,7 @@ export KLABAUTERMANN_FIXTURE_IDENTITY_FILE="$runtime_dir/identity"
 sync_server="http://$(sync_address)"
 export KLABAUTERMANN_SYNC_SERVER="$sync_server"
 export KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS
+export KLABAUTERMANN_CURRENT_HARNESS
 
 reporter=(--reporter expanded)
 if [[ -n "$evidence_dir" ]]; then

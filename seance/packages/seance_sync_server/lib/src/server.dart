@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show HttpStatus;
+import 'dart:io' show HttpConnectionInfo, HttpStatus, stderr;
 import 'dart:math' show min;
 import 'dart:typed_data' show BytesBuilder, Uint8List;
 
@@ -10,8 +10,10 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
 
 import 'config.dart';
+import 'client_address.dart';
 import 'favicon.dart';
 import 'inbox_docs.dart';
+import 'legacy_migration_validation.dart';
 import 'rate_limiter.dart';
 import 'storage.dart';
 
@@ -21,6 +23,12 @@ part 'inbox_handlers.dart';
 /// devices, stores end-to-end encrypted records, and resolves conflicts with
 /// the same last-write-wins rule the client uses. It can decrypt nothing.
 class SyncServer {
+  /// SQLite sequence values are signed 64-bit integers. Size probes use the
+  /// widest value a stored row can acquire so a write accepted today remains
+  /// pullable after the account has accumulated more revisions.
+  static const int _maxStorageSequence = 0x7fffffffffffffff;
+  static const _inboxPurgeInterval = Duration(hours: 1);
+
   /// Cap on a body read before any authentication (register, prelogin,
   /// login). The largest of them, a register body, is under 1 KiB; without
   /// this they inherited the push cap, so anyone could make the server buffer
@@ -49,10 +57,15 @@ class SyncServer {
   /// anyone could sign in to with an empty one.
   static const _authVerifierBytes = 32;
   static const _minArgonSaltBytes = 16;
+  static const _sessionTokenBytes = 32;
 
   final Storage storage;
   final ServerSettings settings;
   final RateLimiter loginLimiter;
+  final RateLimiter authGlobalLimiter;
+  final RateLimiter authSourceLimiter;
+  final String Function(Request) _sourceFor;
+  late final PushLimits _advertisedPushLimits;
 
   /// Deposits per inbox app, keyed by app id (docs/INBOX.md: 30 a minute).
   final RateLimiter inboxLimiter;
@@ -64,26 +77,162 @@ class SyncServer {
     required this.storage,
     required this.settings,
     RateLimiter? loginLimiter,
+    RateLimiter? authGlobalLimiter,
+    RateLimiter? authSourceLimiter,
+    String Function(Request)? sourceFor,
     RateLimiter? inboxLimiter,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now,
+       _sourceFor =
+           sourceFor ??
+           ((request) {
+             final info = request.context['shelf.io.connection_info'];
+             final peer = info is HttpConnectionInfo
+                 ? info.remoteAddress.address
+                 : 'unknown';
+             return ClientAddressResolver(settings.trustedProxies).resolve(
+               peerAddress: peer,
+               forwardedFor: request.headers['x-forwarded-for'],
+             );
+           }),
+       authGlobalLimiter =
+           authGlobalLimiter ??
+           RateLimiter(
+             maxAttempts: settings.authGlobalMaxAttempts,
+             window: settings.authGlobalWindow,
+             maxBuckets: 1,
+             now: now,
+           ),
+       authSourceLimiter =
+           authSourceLimiter ??
+           RateLimiter(
+             maxAttempts: settings.authSourceMaxAttempts,
+             window: settings.authSourceWindow,
+             maxBuckets: settings.rateLimitMaxBuckets,
+             now: now,
+           ),
        loginLimiter =
            loginLimiter ??
            RateLimiter(
              maxAttempts: settings.loginMaxAttempts,
              window: settings.loginWindow,
+             maxBuckets: settings.rateLimitMaxBuckets,
+             now: now,
            ),
        inboxLimiter =
            inboxLimiter ??
            RateLimiter(
              maxAttempts: _inboxDepositsPerWindow,
              window: _inboxDepositWindow,
+             maxBuckets: settings.rateLimitMaxBuckets,
              now: now,
-           );
+           ) {
+    _advertisedPushLimits = _deriveAdvertisedPushLimits();
+    _validatePullPageSettings();
+  }
+
+  PushLimits _deriveAdvertisedPushLimits() {
+    final configured = settings.pushLimits;
+    final withoutSequence = EncryptedRecord(
+      id: '',
+      updatedAt: 0,
+      deviceId: '',
+      deleted: false,
+      seq: null,
+      blob: Uint8List(0),
+    );
+    final sequenceGrowth =
+        withoutSequence.withSeq(_maxStorageSequence).encodedJsonBytes() -
+        withoutSequence.encodedJsonBytes();
+    final fixedPullBytes = PullResponse.bodyBytesFor(
+      recordCount: 1,
+      recordBytes: sequenceGrowth,
+      latestSeq: _maxStorageSequence,
+      recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
+      throughSeq: _maxStorageSequence,
+      hasMore: false,
+      limits: configured,
+    );
+    final pullSafeRecordBytes = settings.maxPullBodyBytes - fixedPullBytes;
+    final pullSafeBodyBytes = pullSafeRecordBytes <= 0
+        ? 1
+        : PushRequest.bodyBytesFor(
+            recordCount: 1,
+            recordBytes: pullSafeRecordBytes,
+          );
+    return PushLimits(
+      maxBodyBytes: min(configured.maxBodyBytes, pullSafeBodyBytes),
+      maxRecordsPerPush: configured.maxRecordsPerPush,
+      maxBlobBytes: configured.maxBlobBytes,
+    );
+  }
+
+  void _validatePullPageSettings() {
+    final emptyRecordPage = PullResponse.bodyBytesFor(
+      recordCount: 0,
+      recordBytes: 0,
+      latestSeq: _maxStorageSequence,
+      throughSeq: _maxStorageSequence,
+      hasMore: false,
+      limits: _advertisedPushLimits,
+    );
+    final emptyInboxPage = InboxPage.bodyBytesFor(
+      itemCount: 0,
+      itemBytes: 0,
+      throughReceived: _maxStorageSequence,
+      nextReceived: _maxStorageSequence,
+      hasMore: false,
+    );
+    final minimum = emptyRecordPage > emptyInboxPage
+        ? emptyRecordPage
+        : emptyInboxPage;
+    if (settings.maxPullBodyBytes < minimum) {
+      throw ArgumentError.value(
+        settings.maxPullBodyBytes,
+        'settings.maxPullBodyBytes',
+        'must be at least $minimum bytes so an empty page fits',
+      );
+    }
+  }
+
+  bool _recordFitsPullPage(EncryptedRecord incoming) {
+    final stored = incoming.withSeq(_maxStorageSequence);
+    return PullResponse.bodyBytesFor(
+          recordCount: 1,
+          recordBytes: stored.encodedJsonBytes(),
+          latestSeq: _maxStorageSequence,
+          recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
+          throughSeq: _maxStorageSequence,
+          hasMore: false,
+          limits: _advertisedPushLimits,
+        ) <=
+        settings.maxPullBodyBytes;
+  }
+
+  bool _inboxItemFitsPullPage(String appId, String itemId, Uint8List blob) {
+    final item = InboxItem(
+      appId: appId,
+      itemId: itemId,
+      received: _maxStorageSequence,
+      blob: blob,
+    );
+    return InboxPage.bodyBytesFor(
+          itemCount: 1,
+          itemBytes: item.encodedJsonBytes(),
+          throughReceived: _maxStorageSequence,
+          nextReceived: _maxStorageSequence,
+          hasMore: false,
+        ) <=
+        settings.maxPullBodyBytes;
+  }
 
   Handler get handler {
     final router = Router()
       ..get('/healthz', (Request r) => Response.ok('ok'))
+      ..get('/readyz', (Request r) async {
+        await storage.checkReady();
+        return Response.ok('ready');
+      })
       // A browser hitting the server sees what it is instead of a 404 (the
       // API itself lives under /v1/); the favicon is embedded in the binary.
       ..get(
@@ -103,6 +252,14 @@ class SyncServer {
       ..post('/v1/login', _login)
       ..get('/v1/sync', _sync)
       ..put('/v1/records', _push)
+      ..get('/v1/records/legacy', _legacyRecords)
+      ..put('/v1/records/legacy', _migrateLegacyRecords)
+      ..delete('/v1/session', _revokeSession)
+      ..get('/v1/sessions', _listSessions)
+      ..delete('/v1/sessions/current', _revokeSession)
+      ..delete('/v1/sessions', _revokeAllSessions)
+      ..delete('/v1/sessions/<sessionId>', _revokeSessionById)
+      ..put('/v1/account/vault-key-check', _initializeVaultKeyCheck)
       ..delete('/v1/account', _deleteAccount)
       // The command inbox (docs/INBOX.md). The producer's only route is the
       // POST; every other inbox route needs a session, so a deposit token
@@ -131,23 +288,51 @@ class SyncServer {
         .addHandler(router.call);
   }
 
-  Future<HttpServerLike> start() async {
+  Future<HttpServerLike> start({
+    Timer Function(Duration, void Function())? timerFactory,
+  }) async {
+    // Purge before advertising a healthy listener. Request-time purges remain
+    // a correctness backstop, while this bounds storage for abandoned users.
+    await _purgeExpiredInbox();
     final server = await shelf_io.serve(
       handler,
       settings.bindAddress,
       settings.port,
       poweredByHeader: null,
     );
-    return HttpServerLike(
-      server.address.host,
-      server.port,
-      () => server.close(force: true),
+    final retention = _InboxRetentionPurge(
+      interval: _inboxPurgeInterval,
+      purge: _purgeExpiredInbox,
+      timerFactory: timerFactory ?? Timer.new,
+      onError: (error, _) {
+        stderr.writeln('Inbox retention purge failed: $error');
+      },
     );
+    try {
+      retention.start();
+    } catch (_) {
+      await server.close(force: true);
+      rethrow;
+    }
+
+    Future<void>? closeFuture;
+    Future<void> close() => closeFuture ??= () async {
+      retention.cancel();
+      try {
+        await server.close(force: true);
+      } finally {
+        await retention.done;
+      }
+    }();
+
+    return HttpServerLike(server.address.host, server.port, close);
   }
 
   // --- Handlers ---
 
   Future<Response> _register(Request req) async {
+    final limited = _limitAuthentication(req);
+    if (limited != null) return limited;
     final body = await _readJson(req, _authBodyCap);
     if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
     final RegisterRequest r;
@@ -163,6 +348,7 @@ class SyncServer {
         'Client protocol v${r.protocolVersion} != server v$kProtocolVersion',
       );
     }
+    final device = _deviceFromRequest(req);
     if (!settings.openRegistration) {
       return _error(403, 'registration_closed', 'Registration is disabled');
     }
@@ -178,33 +364,49 @@ class SyncServer {
     // Decoded with the same decoder a client uses at prelogin, so a salt
     // stored here is one every client can read back.
     final argonSalt = _tryBase64Decode(r.argonSalt);
+    final vaultKeyCheck = _tryBase64Decode(r.vaultKeyCheck);
     if (authVerifier == null ||
         authVerifier.length != _authVerifierBytes ||
         argonSalt == null ||
-        argonSalt.length < _minArgonSaltBytes) {
+        argonSalt.length < _minArgonSaltBytes ||
+        vaultKeyCheck == null ||
+        vaultKeyCheck.length < 40 ||
+        vaultKeyCheck.length > 1024) {
       return _error(400, 'bad_request', 'Invalid register payload');
-    }
-    // After every check that needs no storage, so a malformed request costs
-    // no lookup and learns nothing about which names are taken.
-    if (await storage.getAccount(r.username) != null) {
-      return _error(409, 'account_exists', 'Username already registered');
     }
     final verifierSalt = secureRandomBytes(16);
     final hash = VaultCrypto.hashAuthVerifier(authVerifier, verifierSalt);
-    await storage.createAccount(
+    final now = _nowMs;
+    final token = await storage.registerAccount(
       Account(
         username: r.username,
+        generation: base64Url.encode(secureRandomBytes(16)),
         authVerifierHash: hash,
         verifierSalt: base64.encode(verifierSalt),
         argonSalt: r.argonSalt,
         argonParams: r.argonParams,
+        vaultKeyCheck: r.vaultKeyCheck,
       ),
+      issuedAt: now,
+      expiresAt: now + settings.sessionDuration.inMilliseconds,
+      maxSessions: settings.maxSessionsPerAccount,
+      device: device,
     );
-    final token = await storage.createToken(r.username);
-    return _json(LoginResponse(token: token).toJson());
+    if (token == null) {
+      return _error(409, 'account_exists', 'Username already registered');
+    }
+    return _json(
+      LoginResponse(
+        token: token,
+        vaultKeyCheck: r.vaultKeyCheck,
+        recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
+      ).toJson(),
+    );
   }
 
   Future<Response> _prelogin(Request req) async {
+    final limited = _limitAuthentication(req);
+    if (limited != null) return limited;
     final body = await _readJson(req, _authBodyCap);
     final username = body?['username'];
     if (username == null) return _error(400, 'bad_request', 'Missing username');
@@ -225,6 +427,8 @@ class SyncServer {
   }
 
   Future<Response> _login(Request req) async {
+    final limited = _limitAuthentication(req);
+    if (limited != null) return limited;
     final body = await _readJson(req, _authBodyCap);
     if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
     final LoginRequest r;
@@ -236,11 +440,9 @@ class SyncServer {
     if (r.protocolVersion != kProtocolVersion) {
       return _error(400, 'protocol_version', 'Protocol version mismatch');
     }
+    final device = _deviceFromRequest(req);
     // Before the limiter, whose keys outlive this request by a whole window.
     if (!_usernameInBounds(r.username)) return _usernameOutOfBounds();
-    if (!loginLimiter.allow('login:${r.username}')) {
-      return _error(429, 'rate_limited', 'Too many login attempts');
-    }
     final account = await storage.getAccount(r.username);
     // Always compute against *some* stored hash to keep timing uniform.
     final expected = account?.authVerifierHash ?? '';
@@ -260,28 +462,91 @@ class SyncServer {
         ? ''
         : VaultCrypto.hashAuthVerifier(authVerifier, verifierSalt!);
     if (account == null || !_constantTimeEquals(provided, expected)) {
+      final decision = loginLimiter.check('login:${r.username}');
+      if (!decision.allowed) return _rateLimited(decision);
       return _error(401, 'invalid_credentials', 'Invalid credentials');
     }
-    final token = await storage.createToken(r.username);
+    final now = _nowMs;
+    final token = await storage.createTokenFor(
+      account,
+      issuedAt: now,
+      expiresAt: now + settings.sessionDuration.inMilliseconds,
+      maxSessions: settings.maxSessionsPerAccount,
+      device: device,
+    );
+    if (token == null) {
+      return _error(401, 'invalid_credentials', 'Invalid credentials');
+    }
     loginLimiter.reset('login:${r.username}');
-    return _json(LoginResponse(token: token).toJson());
+    return _json(
+      LoginResponse(
+        token: token,
+        vaultKeyCheck: account.vaultKeyCheck,
+        recordEnvelopeFloor: account.recordEnvelopeFloor,
+      ).toJson(),
+    );
   }
 
-  Future<Response> _sync(Request req) => _withAuth(req, (username) async {
-    final since = int.tryParse(req.url.queryParameters['since'] ?? '0') ?? 0;
-    final snapshot = await storage.pullSnapshot(username, since);
+  Future<Response> _sync(Request req) => _withAuth(req, (principal) async {
+    final protocolVersion = int.tryParse(
+      req.headers['x-seance-protocol-version'] ?? '',
+    );
+    if (protocolVersion != kProtocolVersion) {
+      return _error(
+        400,
+        'protocol_version',
+        'Client protocol v${protocolVersion ?? 'missing'} != server '
+            'v$kProtocolVersion',
+      );
+    }
+    final since = int.tryParse(req.url.queryParameters['since'] ?? '0');
+    if (since == null || since < 0) {
+      return _error(400, 'bad_request', 'Invalid sync cursor');
+    }
+    final page = req.url.queryParameters['page'];
+    if (page != null && page != '1') {
+      return _error(400, 'bad_request', 'Invalid sync page flag');
+    }
+    final throughText = req.url.queryParameters['through'];
+    final through = throughText == null ? null : int.tryParse(throughText);
+    if (throughText != null && (through == null || through < 0)) {
+      return _error(400, 'bad_request', 'Invalid sync watermark');
+    }
+    final snapshot = await storage.pullPageFor(
+      principal,
+      since,
+      throughSeq: page == '1' ? through : null,
+      limits: PullPageLimits(
+        maxRecords: settings.maxRecordsPerPull,
+        maxBodyBytes: settings.maxPullBodyBytes,
+      ),
+      advertisedLimits: _advertisedPushLimits,
+    );
+    // A request without the page flag predates pagination: its response shape
+    // has no field that could announce a cut, so an answer too large for one
+    // page is refused rather than silently truncated.
+    if (page != '1' && snapshot.hasMore) {
+      return _error(
+        400,
+        'pagination_required',
+        'The account no longer fits one response; retry with page=1',
+      );
+    }
     // Every round pulls before it pushes, so this is where a client learns how
     // to size the push it is about to make — see [PushLimits].
     return _json(
       PullResponse(
         records: snapshot.records,
         latestSeq: snapshot.latestSeq,
-        limits: settings.pushLimits,
+        recordEnvelopeFloor: snapshot.recordEnvelopeFloor,
+        throughSeq: page == '1' ? snapshot.throughSeq : null,
+        hasMore: snapshot.hasMore,
+        limits: _advertisedPushLimits,
       ).toJson(),
     );
   });
 
-  Future<Response> _push(Request req) => _withAuth(req, (username) async {
+  Future<Response> _push(Request req) => _withAuth(req, (principal) async {
     final body = await _readJson(req, settings.maxBodyBytes);
     if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
     final PushRequest r;
@@ -294,41 +559,246 @@ class SyncServer {
       return _error(400, 'protocol_version', 'Protocol version mismatch');
     }
     if (r.records.length > settings.maxRecordsPerPush) {
-      return _error(413, 'payload_too_large',
-          'Too many records in one push (max ${settings.maxRecordsPerPush})');
+      return _error(
+        413,
+        'payload_too_large',
+        'Too many records in one push (max ${settings.maxRecordsPerPush})',
+      );
     }
     for (final incoming in r.records) {
+      if (incoming.envelopeVersion != 2) {
+        return _error(
+          400,
+          'record_envelope_version',
+          'Only authenticated record envelope v2 is accepted',
+        );
+      }
       if (incoming.blob.length > settings.maxBlobBytes) {
-        return _error(413, 'payload_too_large',
-            'A record blob exceeds the ${settings.maxBlobBytes}-byte limit');
+        return _error(
+          413,
+          'payload_too_large',
+          'A record blob exceeds the ${settings.maxBlobBytes}-byte limit',
+        );
+      }
+      if (!_recordFitsPullPage(incoming)) {
+        return _error(
+          413,
+          'payload_too_large',
+          'A stored record would exceed the configured pull page limit',
+        );
       }
     }
-    final pushed = await storage.pushRecords(username, r.records);
+    final pushed = await storage.pushRecordsFor(
+      principal,
+      r.records,
+      quota: AccountQuota(
+        maxRecords: settings.maxRecordsPerAccount,
+        maxBytes: settings.maxAccountBytes,
+      ),
+    );
     return _json(pushed.toJson());
   });
 
+  Future<Response> _legacyRecords(Request req) =>
+      _withAuth(req, (principal) async {
+        final protocolVersion = int.tryParse(
+          req.headers['x-seance-protocol-version'] ?? '',
+        );
+        if (protocolVersion != kProtocolVersion) {
+          return _error(400, 'protocol_version', 'Protocol version mismatch');
+        }
+        final afterId = req.url.queryParameters['after'];
+        final page = await storage.legacyRecordPageFor(
+          principal,
+          afterId: afterId,
+          limits: PullPageLimits(
+            maxRecords: settings.maxRecordsPerPull,
+            maxBodyBytes: settings.maxPullBodyBytes,
+          ),
+        );
+        return _json(page.toJson());
+      });
+
+  Future<Response> _migrateLegacyRecords(Request req) =>
+      _withAuth(req, (principal) async {
+        final body = await _readJson(
+          req,
+          settings.maxBodyBytes + settings.maxPullBodyBytes,
+        );
+        if (body == null) {
+          return _error(400, 'bad_request', 'Malformed JSON');
+        }
+        final LegacyMigrationRequest migration;
+        try {
+          migration = LegacyMigrationRequest.fromJson(body);
+          validateLegacyMigrationBatch(migration.migrations);
+        } catch (_) {
+          return _error(400, 'bad_request', 'Invalid migration payload');
+        }
+        if (migration.protocolVersion != kProtocolVersion) {
+          return _error(400, 'protocol_version', 'Protocol version mismatch');
+        }
+        if (migration.migrations.length > settings.maxRecordsPerPush) {
+          return _error(
+            413,
+            'payload_too_large',
+            'Too many records in one migration batch',
+          );
+        }
+        for (final candidate in migration.migrations) {
+          if (candidate.replacement.blob.length > settings.maxBlobBytes ||
+              !_recordFitsPullPage(candidate.replacement)) {
+            return _error(
+              413,
+              'payload_too_large',
+              'A replacement record exceeds the configured limit',
+            );
+          }
+        }
+        final result = await storage.migrateLegacyRecordsFor(
+          principal,
+          migration.migrations,
+          finalize: migration.finalize,
+          quota: AccountQuota(
+            maxRecords: settings.maxRecordsPerAccount,
+            maxBytes: settings.maxAccountBytes,
+          ),
+        );
+        return _json(result.toJson());
+      });
+
+  Future<Response> _revokeSession(Request req) =>
+      _withAuth(req, (principal) async {
+        if (!await storage.revokeSession(principal)) {
+          throw const StalePrincipalException();
+        }
+        return Response(204);
+      });
+
+  Future<Response> _listSessions(Request req) =>
+      _withAuth(req, (principal) async {
+        final sessions = await storage.listSessionsFor(principal, now: _nowMs);
+        return _json(SyncSessionsResponse(sessions: sessions).toJson());
+      });
+
+  Future<Response> _revokeSessionById(Request req, String sessionId) =>
+      _withAuth(req, (principal) async {
+        final result = await storage.revokeSessionByIdFor(
+          principal,
+          sessionId,
+          now: _nowMs,
+        );
+        if (!result.revoked) return _error(404, 'not_found', 'No such session');
+        return _json(result.toJson());
+      });
+
+  Future<Response> _revokeAllSessions(Request req) =>
+      _withAuth(req, (principal) async {
+        if (!await storage.revokeAllSessions(principal)) {
+          throw const StalePrincipalException();
+        }
+        return Response(204);
+      });
+
+  Future<Response> _initializeVaultKeyCheck(Request req) => _withAuth(req, (
+    principal,
+  ) async {
+    final body = await _readJson(req, _authBodyCap);
+    final encoded = body?['vaultKeyCheck'];
+    if (encoded is! String) {
+      return _error(400, 'bad_request', 'Invalid vault key check');
+    }
+    final decoded = _tryBase64Decode(encoded);
+    if (decoded == null || decoded.length < 40 || decoded.length > 1024) {
+      return _error(400, 'bad_request', 'Invalid vault key check');
+    }
+    final stored = await storage.initializeVaultKeyCheckFor(principal, encoded);
+    return _json({'vaultKeyCheck': stored});
+  });
+
   Future<Response> _deleteAccount(Request req) =>
-      _withAuth(req, (username) async {
-        await storage.deleteAccount(username);
+      _withAuth(req, (principal) async {
+        if (!await storage.deleteAccountFor(principal)) {
+          throw const StalePrincipalException();
+        }
         return _json({'ok': true});
       });
 
   // --- Helpers ---
 
+  SessionDevice? _deviceFromRequest(Request req) {
+    final id = req.headers['x-seance-device-id'];
+    final name = req.headers['x-seance-device-name'];
+    // Older clients can still enroll without metadata. A supplied partial or
+    // malformed pair must be refused, rather than silently changing identity.
+    if (id == null && name == null) return null;
+    if (id == null || name == null) {
+      throw const _InvalidDevice();
+    }
+    final device = SessionDevice(id: id, name: name);
+    if (!device.isValid) throw const _InvalidDevice();
+    return device;
+  }
+
+  Response? _limitAuthentication(Request request) {
+    final source = authSourceLimiter.check('source:${_sourceFor(request)}');
+    if (!source.allowed) return _rateLimited(source);
+    // A source already denied by its tighter limit must not consume global
+    // capacity and turn one abusive address into an outage for everyone.
+    final global = authGlobalLimiter.check('authentication');
+    if (!global.allowed) return _rateLimited(global);
+    return null;
+  }
+
+  Response _rateLimited(RateLimitDecision decision) {
+    final duration = decision.retryAfter ?? const Duration(seconds: 1);
+    final seconds = (duration.inMilliseconds / 1000).ceil().clamp(
+      1,
+      0x7fffffff,
+    );
+    return _json(
+      const ApiError(
+        code: 'rate_limited',
+        message: 'Too many authentication attempts',
+      ).toJson(),
+      status: HttpStatus.tooManyRequests,
+      headers: {'retry-after': '$seconds'},
+    );
+  }
+
   Future<Response> _withAuth(
     Request req,
-    Future<Response> Function(String username) fn,
+    Future<Response> Function(AuthPrincipal principal) fn,
   ) async {
     final auth = req.headers['authorization'];
     if (auth == null || !auth.startsWith('Bearer ')) {
       return _error(401, 'unauthorized', 'Missing bearer token');
     }
-    final username = await storage.usernameForToken(auth.substring(7));
-    if (username == null) {
+    final token = auth.substring(7);
+    if (!_isCanonicalSessionToken(token)) {
       return _error(401, 'unauthorized', 'Invalid token');
     }
-    return fn(username);
+    final principal = await storage.principalForToken(token, now: _nowMs);
+    if (principal == null) {
+      return _error(401, 'unauthorized', 'Invalid token');
+    }
+    return fn(principal);
   }
+
+  static bool _isCanonicalSessionToken(String token) {
+    // Bound before decoding or hashing. Session bearers are exactly the
+    // canonical padded base64url representation of 32 random bytes.
+    if (token.length != 44) return false;
+    try {
+      final bytes = base64Url.decode(token);
+      return bytes.length == _sessionTokenBytes &&
+          base64Url.encode(bytes) == token;
+    } on FormatException {
+      return false;
+    }
+  }
+
+  int get _nowMs => _now().millisecondsSinceEpoch;
 
   int get _authBodyCap => min(settings.maxBodyBytes, _maxAuthBodyBytes);
 
@@ -401,12 +871,52 @@ class SyncServer {
         return await inner(req);
       } on StorageUnavailableException catch (e) {
         return _error(
-            HttpStatus.serviceUnavailable, 'storage_unavailable', e.toString());
+          HttpStatus.serviceUnavailable,
+          'storage_unavailable',
+          e.toString(),
+        );
       } on StorageBusyException {
-        return _error(HttpStatus.serviceUnavailable, 'storage_busy',
-            'Storage is busy; retry shortly.');
+        return _error(
+          HttpStatus.serviceUnavailable,
+          'storage_busy',
+          'Storage is busy; retry shortly.',
+        );
+      } on StorageCursorRejectedException {
+        return _error(409, 'cursor_rejected', 'Sync cursor is no longer valid');
+      } on StoragePageTooSmallException {
+        return _error(
+          500,
+          'pull_limit_too_small',
+          'The configured pull body limit cannot hold one stored item',
+        );
+      } on StorageEnvelopeFloorViolationException {
+        return _error(
+          500,
+          'record_envelope_floor_violation',
+          'The record envelope checkpoint is inconsistent',
+        );
+      } on AccountQuotaExceededException {
+        return _error(
+          413,
+          'account_quota_exceeded',
+          'The account has reached its record storage quota',
+        );
+      } on StalePrincipalException {
+        return _error(401, 'unauthorized', 'Invalid token');
+      } on VaultKeyCheckInitializationException {
+        return _error(
+          409,
+          'account_not_empty',
+          'A non-empty legacy account must verify its existing records first',
+        );
       } on _PayloadTooLarge {
         return _error(413, 'payload_too_large', 'Request body too large');
+      } on _InvalidDevice {
+        return _error(
+          400,
+          'bad_device',
+          'Valid device id and name headers must be supplied together',
+        );
       } on FormatException {
         return _error(400, 'bad_request', 'Invalid request payload');
       } catch (e) {
@@ -415,10 +925,14 @@ class SyncServer {
     };
   };
 
-  Response _json(Object body, {int status = 200}) => Response(
+  Response _json(
+    Object body, {
+    int status = 200,
+    Map<String, String> headers = const {},
+  }) => Response(
     status,
     body: jsonEncode(body),
-    headers: {'content-type': 'application/json'},
+    headers: {'content-type': 'application/json', ...headers},
   );
 
   Response _error(int status, String code, String message) => _json(
@@ -458,10 +972,78 @@ Configure this server's URL in the app's sync settings.</p>
   }
 }
 
+class _InvalidDevice implements Exception {
+  const _InvalidDevice();
+}
+
 /// Signals that a request body exceeded its route's cap. Mapped to HTTP 413 by
 /// the error middleware.
 class _PayloadTooLarge implements Exception {
   const _PayloadTooLarge();
+}
+
+/// A one-shot retention loop. Scheduling only after each purge settles keeps
+/// slow storage from accumulating overlapping global delete transactions.
+class _InboxRetentionPurge {
+  final Duration interval;
+  final Future<void> Function() purge;
+  final Timer Function(Duration, void Function()) timerFactory;
+  final void Function(Object, StackTrace) onError;
+
+  Timer? _timer;
+  Future<void>? _running;
+  bool _cancelled = false;
+
+  _InboxRetentionPurge({
+    required this.interval,
+    required this.purge,
+    required this.timerFactory,
+    required this.onError,
+  });
+
+  void start() => _schedule();
+
+  void _schedule() {
+    if (_cancelled) return;
+    _timer = timerFactory(interval, _run);
+  }
+
+  void _run() {
+    if (_cancelled) return;
+    _timer = null;
+    final running = _purgeOnce();
+    _running = running;
+    unawaited(
+      running.whenComplete(() {
+        if (identical(_running, running)) _running = null;
+        if (_cancelled) return;
+        try {
+          _schedule();
+        } catch (error, stackTrace) {
+          onError(error, stackTrace);
+        }
+      }),
+    );
+  }
+
+  Future<void> _purgeOnce() async {
+    try {
+      await purge();
+    } catch (error, stackTrace) {
+      onError(error, stackTrace);
+    }
+  }
+
+  void cancel() {
+    _cancelled = true;
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  Future<void> get done async {
+    final running = _running;
+    if (running != null) await running;
+  }
 }
 
 /// Minimal handle to a running server so callers can read the bound port and

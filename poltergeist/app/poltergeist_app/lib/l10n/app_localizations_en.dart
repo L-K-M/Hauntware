@@ -67,6 +67,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get hostKeyChangedReviewInstruction =>
+      'Review the new and previously trusted fingerprints, then read the warning below.';
+
+  @override
   String hostKeyEndpoint(String host, int port) {
     return '$host:$port';
   }
@@ -8654,4 +8658,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editorRedoLabel => 'Redo';
+
+  @override
+  String syncSessionDeviceName(String platform) {
+    return 'Poltergeist on $platform';
+  }
 }

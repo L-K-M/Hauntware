@@ -1,3 +1,5 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart';
@@ -88,5 +90,324 @@ void main() {
     await tester.pump(const Duration(seconds: 7));
     await tester.pumpAndSettle();
     expect(find.text('first'), findsNothing);
+  });
+
+  testWidgets('caps visible notices and exposes callback-free overflow', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    late OverlayState overlay;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            overlay = Overlay.of(context);
+            return const Scaffold();
+          },
+        ),
+      ),
+    );
+
+    for (var i = 1; i <= 5; i++) {
+      showTopToast(
+        overlay,
+        message: 'notice $i',
+        duration: const Duration(minutes: 1),
+      );
+    }
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('notice 1'), findsOneWidget);
+    expect(find.text('notice 2'), findsOneWidget);
+    expect(find.text('notice 3'), findsOneWidget);
+    expect(find.text('notice 4'), findsNothing);
+    expect(find.text('notice 5'), findsNothing);
+    expect(find.text('+2'), findsOneWidget);
+    final moreLabel = MaterialLocalizations.of(
+      tester.element(find.text('+2')),
+    ).moreButtonTooltip;
+    expect(find.bySemanticsLabel('$moreLabel, 2'), findsOneWidget);
+
+    await tester.tap(find.text('+2'));
+    await tester.pumpAndSettle();
+    expect(find.text('notice 4'), findsOneWidget);
+    expect(find.text('notice 5'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    semantics.dispose();
+  });
+
+  testWidgets(
+    'outside the centered card remains interactive and unpaused',
+    (tester) async {
+      late OverlayState overlay;
+      var underlyingTaps = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              overlay = Overlay.of(context);
+              return Scaffold(
+                body: Align(
+                  alignment: Alignment.topLeft,
+                  child: SizedBox(
+                    width: 120,
+                    height: 60,
+                    child: ElevatedButton(
+                      onPressed: () => underlyingTaps += 1,
+                      child: const Text('underlying'),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      showTopToast(
+        overlay,
+        message: 'centered toast',
+        duration: const Duration(seconds: 1),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final underlying = find.text('underlying');
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer();
+      await mouse.moveTo(tester.getCenter(underlying));
+      await tester.pump();
+      await tester.tap(underlying);
+      await tester.pump();
+      expect(underlyingTaps, 1);
+
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.text('centered toast'), findsNothing);
+    },
+    variant: TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.linux,
+      TargetPlatform.macOS,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets('safe coalescing refreshes lifetime but keeps actions distinct', (
+    tester,
+  ) async {
+    late OverlayState overlay;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            overlay = Overlay.of(context);
+            return const Scaffold();
+          },
+        ),
+      ),
+    );
+
+    showTopToast(
+      overlay,
+      message: 'repeated',
+      duration: const Duration(seconds: 2),
+    );
+    await tester.pump(const Duration(milliseconds: 1500));
+    showTopToast(
+      overlay,
+      message: 'repeated',
+      duration: const Duration(seconds: 2),
+    );
+    await tester.pump();
+    expect(find.text('repeated'), findsOneWidget);
+    expect(find.text('×2'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('repeated'), findsOneWidget);
+
+    showTopToast(
+      overlay,
+      message: 'actionable',
+      duration: const Duration(minutes: 1),
+      actionLabel: 'First',
+      onAction: () {},
+    );
+    showTopToast(
+      overlay,
+      message: 'actionable',
+      duration: const Duration(minutes: 1),
+      actionLabel: 'Second',
+      onAction: () {},
+    );
+    await tester.pump();
+    expect(find.text('actionable'), findsNWidgets(2));
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.text('repeated'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('overflow history remains bounded during a burst', (
+    tester,
+  ) async {
+    late OverlayState overlay;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            overlay = Overlay.of(context);
+            return const Scaffold();
+          },
+        ),
+      ),
+    );
+    for (var i = 0; i < 60; i++) {
+      showTopToast(
+        overlay,
+        message: 'burst $i',
+        duration: const Duration(minutes: 1),
+      );
+    }
+    await tester.pump();
+    expect(find.text('+50'), findsOneWidget);
+    await tester.tap(find.text('+50'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('persistent notices are live regions with an explicit close', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    late OverlayState overlay;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            overlay = Overlay.of(context);
+            return const Scaffold();
+          },
+        ),
+      ),
+    );
+
+    showTopToast(
+      overlay,
+      message: 'Recovery required',
+      dismissal: TopToastDismissal.persistent,
+    );
+    await tester.pump();
+    await tester.pump(const Duration(minutes: 1));
+    expect(find.text('Recovery required'), findsOneWidget);
+    expect(find.bySemanticsLabel('Recovery required'), findsOneWidget);
+    final liveRegion = tester.widget<Semantics>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.liveRegion == true &&
+            widget.properties.label == 'Recovery required',
+      ),
+    );
+    expect(liveRegion.properties.liveRegion, isTrue);
+    expect(find.byTooltip('Close'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Recovery required'), findsNothing);
+    semantics.dispose();
+  });
+
+  testWidgets('hover and focus independently pause the remaining lifetime', (
+    tester,
+  ) async {
+    late OverlayState overlay;
+    final outsideFocusNode = FocusNode();
+    addTearDown(outsideFocusNode.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            overlay = Overlay.of(context);
+            return Scaffold(body: TextField(focusNode: outsideFocusNode));
+          },
+        ),
+      ),
+    );
+    showTopToast(
+      overlay,
+      message: 'paused',
+      duration: const Duration(seconds: 2),
+      actionLabel: 'Keep',
+      onAction: () {},
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer();
+    await mouse.moveTo(tester.getCenter(find.text('paused')));
+    await tester.pump();
+    final actionFocusNode = Focus.of(tester.element(find.text('Keep')));
+    actionFocusNode.requestFocus();
+    await tester.pump();
+    expect(actionFocusNode.hasFocus, isTrue);
+    await mouse.moveTo(const Offset(1, 599));
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.text('paused'), findsOneWidget);
+
+    outsideFocusNode.requestFocus();
+    await tester.pump();
+    expect(outsideFocusNode.hasFocus, isTrue);
+    expect(actionFocusNode.hasFocus, isFalse);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.text('paused'), findsNothing);
+  });
+
+  testWidgets('toast strip stays bounded with narrow large-text content', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(280, 360);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    late OverlayState overlay;
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(2.5)),
+          child: child!,
+        ),
+        home: Builder(
+          builder: (context) {
+            overlay = Overlay.of(context);
+            return const Scaffold();
+          },
+        ),
+      ),
+    );
+    for (var i = 0; i < 3; i++) {
+      showTopToast(
+        overlay,
+        message: 'A long recovery notification that must remain readable $i',
+        dismissal: TopToastDismissal.persistent,
+        actionLabel: 'Review',
+        onAction: () {},
+      );
+    }
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(tester.takeException(), isNull);
+    final scrollView = tester.renderObject<RenderBox>(
+      find.byType(SingleChildScrollView),
+    );
+    expect(scrollView.size.height, lessThanOrEqualTo(180));
+    await tester.pumpWidget(const SizedBox());
   });
 }

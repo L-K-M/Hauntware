@@ -1,5 +1,6 @@
 import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
+import 'dart:ui' show AppExitResponse;
 
 import 'package:app_links/app_links.dart';
 import 'package:file_picker/file_picker.dart';
@@ -10,6 +11,7 @@ import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'app_state.dart';
+import 'services/app_quit_guard.dart';
 import 'services/app_services.dart';
 import 'services/link_intake.dart';
 import 'services/macos_titlebar.dart';
@@ -43,8 +45,19 @@ bool get _receivesLinks => !kIsWeb;
 /// Null on mobile, where Settings is a route, and before bootstrap finishes.
 SettingsWindowHost? settingsWindowHost;
 
+AppQuitGuard? _processQuitGuard;
+
+AppQuitGuard get _defaultQuitGuard => _processQuitGuard ??= AppQuitGuard(
+  navigatorKey: navigatorKey,
+  settingsWindow: () => settingsWindowHost,
+);
+
+bool get _isDesktop =>
+    !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
+
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  final quitGuard = _defaultQuitGuard;
   // The licenses page lists the APK's Maven libraries too (Android).
   registerPlatformLicenses();
   // The settings window's engine runs this same entrypoint, and gets the
@@ -87,8 +100,11 @@ Future<void> main(List<String> args) async {
   // Put the desktop window back where it was closed (size, monitor,
   // maximized/full-screen) before the first frame, and keep tracking it.
   // On macOS this is also what makes the hidden-at-launch window visible.
-  await WindowStateService.restoreAndTrack();
-  runApp(SeanceApp(toolbarBand: toolbarBand));
+  await WindowStateService.restoreAndTrack(
+    confirmClose: quitGuard.confirmClose,
+    onCloseFailed: () => unawaited(quitGuard.handleCloseFailure()),
+  );
+  runApp(SeanceApp(toolbarBand: toolbarBand, quitGuard: quitGuard));
 }
 
 /// Exposes [AppState] to the widget tree. The instance itself never changes
@@ -114,6 +130,7 @@ class SeanceApp extends StatelessWidget {
     super.key,
     @visibleForTesting this.initOverride,
     this.toolbarBand,
+    this.quitGuard,
   });
 
   /// Test seam: replaces [_BootstrapState._init], whose platform-channel
@@ -125,17 +142,28 @@ class SeanceApp extends StatelessWidget {
   /// and then no surface reserves a band.
   final ValueListenable<bool>? toolbarBand;
 
+  /// The one decision gate shared by the native close and OS-exit routes.
+  final AppQuitGuard? quitGuard;
+
   @override
-  Widget build(BuildContext context) =>
-      _Bootstrap(initOverride: initOverride, toolbarBand: toolbarBand);
+  Widget build(BuildContext context) => _Bootstrap(
+    initOverride: initOverride,
+    toolbarBand: toolbarBand,
+    quitGuard: quitGuard ?? _defaultQuitGuard,
+  );
 }
 
 /// Initializes services asynchronously, then installs the app shell and wires
 /// the host-key / keyboard-interactive dialog hooks.
 class _Bootstrap extends StatefulWidget {
-  const _Bootstrap({this.initOverride, this.toolbarBand});
+  const _Bootstrap({
+    this.initOverride,
+    this.toolbarBand,
+    required this.quitGuard,
+  });
   final Future<AppState> Function()? initOverride;
   final ValueListenable<bool>? toolbarBand;
+  final AppQuitGuard quitGuard;
   @override
   State<_Bootstrap> createState() => _BootstrapState();
 }
@@ -145,6 +173,7 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   AppState? _loadingState;
   Object? _error;
   SeanceLinkHandler? _linkHandler;
+  AppLifecycleListener? _exitRequests;
 
   /// The theme until the state exists to say otherwise: the settings are
   /// read during bootstrap, so the spinner is drawn in the default theme.
@@ -156,14 +185,28 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (_isDesktop) {
+      _exitRequests = AppLifecycleListener(
+        onExitRequested: () async {
+          if (!await widget.quitGuard.confirmClose()) {
+            return AppExitResponse.cancel;
+          }
+          await WindowStateService.saveBounds();
+          return AppExitResponse.exit;
+        },
+      );
+    }
     _start();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _exitRequests?.dispose();
     final linkHandler = _linkHandler;
     if (linkHandler != null) linkIntake.deactivate(linkHandler);
+    final state = _state ?? _loadingState;
+    if (state != null) widget.quitGuard.unbind(state);
     _bootAppearance.dispose();
     super.dispose();
   }
@@ -178,8 +221,18 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   Future<void> _start() async {
     try {
       final state = await (widget.initOverride ?? _init)();
-      if (!mounted) return;
+      widget.quitGuard.bind(state);
+      _loadingState ??= state;
+      if (!mounted) {
+        widget.quitGuard.unbind(state);
+        return;
+      }
       setState(() => _state = state);
+      // Keep startup notices on the common path so initOverride exercises
+      // them without invoking platform channels in widget tests.
+      _warnIfSettingsWereRecovered(state);
+      _warnIfKeystoreUnavailable(state);
+      _warnIfAppLocked(state);
       // Bound only once the app's own window can carry the review.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -195,6 +248,7 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   Future<AppState> _init() async {
     final services = await AppServices.initialize();
     final state = AppState(services);
+    widget.quitGuard.bind(state);
     _loadingState = state;
     final lifecycle = WidgetsBinding.instance.lifecycleState;
     if (lifecycle != null) state.onAppLifecycle(lifecycle);
@@ -210,15 +264,17 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
       if (ctx == null) return const <String>[];
       return showKeyboardInteractiveDialog(ctx, challenge);
     };
+    state.tabCleanupFailureReporter = (report) {
+      final overlay = navigatorKey.currentState?.overlay;
+      if (overlay == null) return;
+      showTopToast(overlay, message: report.userMessage);
+    };
 
     await state.load();
     if (Platform.isMacOS) installMacMenu(state);
-    if (!kIsWeb && (Platform.isMacOS || Platform.isLinux || Platform.isWindows)) {
+    if (_isDesktop) {
       settingsWindowHost = SettingsWindowHost(state);
     }
-    _warnIfSettingsWereRecovered(state);
-    _warnIfKeystoreUnavailable(state);
-    _warnIfAppLocked(state);
     // Fire-and-forget: don't let a slow/offline update check hold up startup.
     unawaited(_checkForUpdate(state));
     return state;
@@ -228,10 +284,10 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
     final error = state.credentialAccessError;
     if (error == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final context = navigatorKey.currentContext;
-      if (context == null) return;
+      final overlay = navigatorKey.currentState?.overlay;
+      if (overlay == null) return;
       showTopToast(
-        Overlay.of(context, rootOverlay: true),
+        overlay,
         message: error,
         actionLabel: 'Retry',
         onAction: () => unawaited(_retryAppLock(state)),
@@ -259,10 +315,10 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
     final masterKeys = state.services.masterKeys;
     if (masterKeys.keystoreStatus != KeystoreStatus.unavailable) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final context = navigatorKey.currentContext;
-      if (context == null) return;
+      final overlay = navigatorKey.currentState?.overlay;
+      if (overlay == null) return;
       showTopToast(
-        Overlay.of(context, rootOverlay: true),
+        overlay,
         message: 'The OS keyring is locked or unavailable '
             '(${masterKeys.lastKeystoreError ?? 'no details'}) — saved '
             'passwords, keys, and tokens are unreachable. Unlock the login '
@@ -289,13 +345,10 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
         _warnIfAppLocked(state);
         return;
       }
-      final context = navigatorKey.currentContext;
-      if (context == null) return;
+      final overlay = navigatorKey.currentState?.overlay;
+      if (overlay == null) return;
       showTopToast(
-        // navigatorKey's context is the root Navigator's — it outlives the
-        // awaits above; the lint can't see that this isn't widget-local.
-        // ignore: use_build_context_synchronously
-        Overlay.of(context, rootOverlay: true),
+        overlay,
         message: 'Keyring unlocked — saved secrets are available again.',
       );
     } else {
@@ -310,15 +363,18 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   void _warnIfSettingsWereRecovered(AppState state) {
     if (!state.services.settingsWereRecovered) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final context = navigatorKey.currentContext;
-      if (context == null) return;
+      final overlay = navigatorKey.currentState?.overlay;
+      if (overlay == null) return;
       showTopToast(
-        Overlay.of(context, rootOverlay: true),
+        overlay,
         message:
             'Your settings file could not be read and was reset. The previous '
             'one is kept as settings.json.corrupt — check Settings before '
             'syncing.',
-        duration: const Duration(seconds: 10),
+        dismissal: TopToastDismissal.persistent,
+        coalesceKey: 'settings-recovered',
+        actionLabel: 'Open Settings',
+        onAction: openSettings,
       );
     });
   }

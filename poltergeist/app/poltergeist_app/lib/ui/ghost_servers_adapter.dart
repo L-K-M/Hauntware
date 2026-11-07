@@ -77,6 +77,7 @@ GhostHostKeyStrings poltergeistHostKeyStrings(AppLocalizations l10n) =>
       unknownTitle: l10n.hostKeyUnknownTitle,
       changedTitle: l10n.hostKeyChangedTitle,
       changedWarning: l10n.hostKeyChangedWarning,
+      changedReviewInstruction: l10n.hostKeyChangedReviewInstruction,
       endpoint: l10n.hostKeyEndpoint,
       fingerprintLabel: l10n.hostKeyFingerprintLabel,
       newKeyLabel: l10n.hostKeyNewLabel,

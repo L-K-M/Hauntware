@@ -87,7 +87,12 @@ typedef SyncTransportFactory =
 /// Séance's HTTP sync client, which already has every member
 /// [SyncTransport] names.
 final class HttpSyncTransport extends HttpSyncClient implements SyncTransport {
-  HttpSyncTransport(String baseUrl, {String? token}) : super(baseUrl: baseUrl) {
+  HttpSyncTransport(
+    String baseUrl, {
+    String? token,
+    super.deviceId,
+    super.deviceName,
+  }) : super(baseUrl: baseUrl) {
     this.token = token;
   }
 }
@@ -145,7 +150,7 @@ final class EngineSync {
     required ConflictAwareHostKeyStore hostKeys,
     required SyncKeystore keystore,
     required EngineVault vault,
-    SyncTransportFactory transport = httpSyncTransport,
+    SyncTransportFactory? transport,
   }) async {
     final usableId = deviceId == null || deviceId.isEmpty ? null : deviceId;
     final enrollment = usableId == null
@@ -171,7 +176,16 @@ final class EngineSync {
       hostKeys: hostKeys,
       keystore: keystore,
       vault: vault,
-      transport: transport,
+      transport:
+          transport ??
+          (baseUrl, {token}) => HttpSyncTransport(
+            baseUrl,
+            token: token,
+            deviceId: usableId,
+            deviceName: usableId == null
+                ? null
+                : 'Klabautermann on ${Platform.operatingSystem}',
+          ),
       path: (name) => '${supportDirectory.path}${Platform.pathSeparator}$name',
       account: _info(account),
       klabautermannRecords: await KlabautermannRecordStore.open(
@@ -543,7 +557,7 @@ final class EngineSync {
 
   /// The vault entry [entry]'s boxes plan for [draft] under [secretId],
   /// or null when they plan none (`plannedCredential`): reading the stored
-  /// entry only where the plan carries part of it over.
+  /// entry only where the plan carries the inactive key source over.
   Future<Secret?> _plannedSecret(
     ServerDraft draft,
     ServerCredentialEntry? entry,
@@ -555,6 +569,7 @@ final class EngineSync {
     final readsStored = plannedCredentialReadsStored(
       auth: auth,
       referenceKeyFile: entry.referenceKeyFile,
+      keyPem: entry.keyPem,
       keyPassphrase: entry.keyPassphrase,
     );
     return plannedCredential(
@@ -563,6 +578,7 @@ final class EngineSync {
       password: entry.password,
       keyPem: entry.keyPem,
       keyPassphrase: entry.keyPassphrase,
+      identityFilePath: draft.identityFilePath,
       secretId: secretId,
       stored: readsStored ? await vault.getSecret(secretId) : null,
     );

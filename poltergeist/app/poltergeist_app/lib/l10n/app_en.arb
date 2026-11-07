@@ -75,12 +75,16 @@
   },
   "hostKeyChangedWarning": "The key for {host} does not match the one you previously trusted. This can mean a man-in-the-middle attack. Only continue if you know why the key changed.",
   "@hostKeyChangedWarning": {
-    "description": "Warning body of the changed-key dialog.",
+    "description": "Warning after the fingerprints in the changed-key dialog.",
     "placeholders": {
       "host": {
         "type": "String"
       }
     }
+  },
+  "hostKeyChangedReviewInstruction": "Review the new and previously trusted fingerprints, then read the warning below.",
+  "@hostKeyChangedReviewInstruction": {
+    "description": "Explains why trust starts disabled in the changed-key dialog."
   },
   "hostKeyEndpoint": "{host}:{port}",
   "@hostKeyEndpoint": {
@@ -10831,5 +10835,14 @@
     "description": "Disabled-command reason for Open Terminal in Séance when the active tab has no remote server."
   },
   "editorUndoLabel": "Undo",
-  "editorRedoLabel": "Redo"
+  "editorRedoLabel": "Redo",
+  "syncSessionDeviceName": "Poltergeist on {platform}",
+  "@syncSessionDeviceName": {
+    "description": "Device label shown in the account's synced-device list, identifying this installation by its operating system.",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  }
 }

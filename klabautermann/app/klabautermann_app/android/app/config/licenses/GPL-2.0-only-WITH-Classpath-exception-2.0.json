@@ -1,5 +1,5 @@
 {
-  "_comment": "Not on any runtime classpath (coreLibraryDesugaring in app/build.gradle.kts), so AboutLibraries cannot list it. Text: LICENSE of google/desugar_jdk_libs, unchanged since commit af7193bb1f81c050395c7273ee0354630a295d2f (2023-09-27), which the 2.1.4 POM names.",
+  "_comment": "Not on any runtime classpath (coreLibraryDesugaring in app/build.gradle.kts), so AboutLibraries cannot list it. Text: LICENSE of google/desugar_jdk_libs, unchanged since commit af7193bb1f81c050395c7273ee0354630a295d2f (2023-09-27), confirmed against the 2.1.5 POM.",
   "hash": "GPL-2.0-only-WITH-Classpath-exception-2.0",
   "spdxId": "GPL-2.0-only WITH Classpath-exception-2.0",
   "name": "GPL-2.0-only WITH Classpath-exception-2.0 (desugar_jdk_libs)",

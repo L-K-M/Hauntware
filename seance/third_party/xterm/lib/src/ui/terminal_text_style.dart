@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/widgets.dart';
 
 const _kDefaultFontSize = 13.0;
@@ -71,6 +72,30 @@ class TerminalStyle {
 
   /// [seance fork] Host-selected OpenType features, also used by the preview.
   final List<FontFeature>? fontFeatures;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is TerminalStyle &&
+            runtimeType == other.runtimeType &&
+            fontSize == other.fontSize &&
+            height == other.height &&
+            fontFamily == other.fontFamily &&
+            listEquals(fontFamilyFallback, other.fontFamilyFallback) &&
+            ligatures == other.ligatures &&
+            listEquals(fontFeatures, other.fontFeatures);
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        fontSize,
+        height,
+        fontFamily,
+        Object.hashAll(fontFamilyFallback),
+        ligatures,
+        fontFeatures == null ? null : Object.hashAll(fontFeatures!),
+      );
 
   TextStyle toTextStyle({
     Color? color,

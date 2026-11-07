@@ -211,6 +211,21 @@ class MasterKeyManager {
   Future<void> putApiKey(String name, String value) =>
       _write('seance.apikey.$name', value, what: 'the $name key');
 
+  /// Remove an API key. Used to roll back a multi-key settings save when a
+  /// later keychain write fails, so sync never observes half of that save.
+  Future<void> deleteApiKey(String name) async {
+    try {
+      await _storage.delete(key: 'seance.apikey.$name');
+      _markAvailable();
+    } catch (e) {
+      _markUnavailable(e);
+      throw KeystoreException(
+        'Could not restore the $name key in the OS keyring (${_describe(e)}). '
+        'Unlock the login keyring or install gnome-keyring, then try again.',
+      );
+    }
+  }
+
   Future<void> _write(String key, String value, {required String what}) async {
     try {
       await _storage.write(key: key, value: value);
@@ -230,6 +245,29 @@ class MasterKeyManager {
     final lock = _appLock;
     if (lock == null) return _readApiKey(name);
     return lock.read(() => _readApiKey(name));
+  }
+
+  /// Read the value a settings transaction may need to restore. Unlike the
+  /// tolerant consumer read above, an unavailable keyring is an error: null
+  /// must mean "absent" before rollback is allowed to delete the entry.
+  Future<String?> readApiKeyForUpdate(String name) {
+    final lock = _appLock;
+    if (lock == null) return _readApiKeyForUpdate(name);
+    return lock.read(() => _readApiKeyForUpdate(name));
+  }
+
+  Future<String?> _readApiKeyForUpdate(String name) async {
+    try {
+      final value = await _storage.read(key: 'seance.apikey.$name');
+      _markAvailable();
+      return value;
+    } catch (e) {
+      _markUnavailable(e);
+      throw KeystoreException(
+        'Could not read the $name key from the OS keyring (${_describe(e)}). '
+        'Unlock the login keyring or install gnome-keyring, then try again.',
+      );
+    }
   }
 
   Future<String?> _readApiKey(String name) async {

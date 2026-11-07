@@ -1,17 +1,17 @@
-// The previous release's Séance and Poltergeist as two devices on one
-// sync account (M5 plan M08b, X2; 03 §4.8, §11.2 item 2).
+// Séance and Poltergeist as independent devices on one sync account
+// (M5 plan M08b, X2; 03 §4.8, §11.2 item 2).
 //
 // previous_release.sh builds this file against the seance_core,
-// seance_protocol and poltergeist_core of the latest release tag, so it
-// may use only what that release has. It signs in to an account the
-// current Klabautermann already wrote to, runs a Séance round and a
-// Poltergeist round, each pushing a record of its own, and prints what
-// it pushed as JSON. sync_convergence_test.dart then checks from the
-// server that neither re-pushed or removed Klabautermann's records.
+// seance_protocol and poltergeist_core of the latest release tag, or HEAD
+// with --current. Use only APIs common to both. Compatible protocols must
+// roundtrip without changing opaque Klabautermann records; incompatible
+// releases must be explicitly refused without changing account records.
 //
-// Usage: harness --server URL --username NAME --password SECRET
+// Usage: harness --protocol-version
+//        harness --server URL --username NAME --password SECRET
+//          [--client seance|poltergeist|both]
 // (the password is also the encryption passphrase). Exit 0 on success,
-// 1 with the error on stderr otherwise.
+// 1 with a structured API error on stderr when refused. Default: both.
 import 'dart:convert';
 import 'dart:io';
 
@@ -19,14 +19,26 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:seance_core/seance_core.dart' as seance;
 
 Future<void> main(List<String> arguments) async {
+  if (arguments.length == 1 && arguments.single == '--protocol-version') {
+    stdout.writeln(seance.kProtocolVersion);
+    return;
+  }
   final options = _options(arguments);
   final dir = await Directory.systemTemp.createTemp('klab-previous-');
   try {
-    final seanceServer = await _seanceRound(options);
-    final bookmark = await _poltergeistRound(options, dir);
-    stdout.writeln(
-      jsonEncode({'seanceServer': seanceServer, 'bookmark': bookmark}),
+    final pushed = <String, String>{};
+    if (options.client != _Client.poltergeist) {
+      pushed['seanceServer'] = await _seanceRound(options);
+    }
+    if (options.client != _Client.seance) {
+      pushed['bookmark'] = await _poltergeistRound(options, dir);
+    }
+    stdout.writeln(jsonEncode(pushed));
+  } on seance.ApiError catch (error) {
+    stderr.writeln(
+      jsonEncode({...error.toJson(), 'client': options.client.name}),
     );
+    exitCode = 1;
   } on Object catch (error, stack) {
     stderr
       ..writeln('previous-release harness failed: $error')
@@ -37,9 +49,17 @@ Future<void> main(List<String> arguments) async {
   }
 }
 
-typedef _Options = ({String server, String username, String password});
+enum _Client { seance, poltergeist, both }
+
+typedef _Options = ({
+  String server,
+  String username,
+  String password,
+  _Client client,
+});
 
 _Options _options(List<String> arguments) {
+  if (arguments.length.isOdd) throw ArgumentError('Options need values');
   final values = <String, String>{};
   for (var i = 0; i + 1 < arguments.length; i += 2) {
     values[arguments[i]] = arguments[i + 1];
@@ -50,10 +70,14 @@ _Options _options(List<String> arguments) {
         'usage: harness --server URL --username NAME '
         '--password SECRET (missing --$name)',
       ));
+  final clientName = values['--client'] ?? 'both';
+  final client = _Client.values.where((value) => value.name == clientName);
+  if (client.isEmpty) throw ArgumentError('Unknown client: $clientName');
   return (
     server: required('server'),
     username: required('username'),
     password: required('password'),
+    client: client.single,
   );
 }
 

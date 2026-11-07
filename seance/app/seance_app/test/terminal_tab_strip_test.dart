@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsAction, Tristate;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -25,6 +27,75 @@ BoxDecoration _stripBackground(WidgetTester tester) =>
             )
             .decoration
         as BoxDecoration;
+
+ServerConfig _server() => ServerConfig(
+  id: 'server',
+  label: 'Server',
+  host: 'example.com',
+  port: 22,
+  username: 'user',
+  authMethod: AuthMethod.password,
+  createdAt: 0,
+  updatedAt: 0,
+);
+
+TerminalSession _session(
+  ServerConfig server,
+  String id, {
+  bool connecting = false,
+  String? error,
+  String? name,
+}) {
+  final engine = XtermTerminalEngine();
+  addTearDown(engine.dispose);
+  final session = TerminalSession(
+    id: id,
+    serverId: server.id,
+    config: server,
+    engine: engine,
+    connecting: connecting,
+    error: error,
+    initialCustomName: name,
+  );
+  addTearDown(session.dispose);
+  return session;
+}
+
+class _ConnectedTransport implements SessionTransport {
+  bool _closed = false;
+
+  @override
+  bool get isClosed => _closed;
+
+  @override
+  void Function()? onClosed;
+
+  @override
+  Future<void> close() async {
+    _closed = true;
+  }
+
+  @override
+  void resize(TerminalSize size) {}
+}
+
+Finder _tabViewport() => find.descendant(
+  of: find.byType(TerminalTabStrip),
+  matching: find.byType(SingleChildScrollView),
+);
+
+ScrollPosition _tabScrollPosition(WidgetTester tester) => tester
+    .state<ScrollableState>(
+      find.descendant(of: _tabViewport(), matching: find.byType(Scrollable)),
+    )
+    .position;
+
+void _expectInsideViewport(WidgetTester tester, Finder label) {
+  final viewport = tester.getRect(_tabViewport());
+  final visible = tester.getRect(label);
+  expect(visible.left, greaterThanOrEqualTo(viewport.left - 0.5));
+  expect(visible.right, lessThanOrEqualTo(viewport.right + 0.5));
+}
 
 void main() {
   testWidgets('a single session keeps tab actions reachable at phone width', (
@@ -79,6 +150,488 @@ void main() {
     expect(newTabCalls, 1);
     expect(generateCalls, 1);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the active overflowed tab is minimally revealed', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final tabs = [
+      for (var i = 0; i < 8; i++)
+        _session(server, 'tab-$i', name: 'Tab ${i + 1}'),
+    ];
+    var activeId = tabs.first.id;
+    late StateSetter update;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return TerminalTabStrip(
+                tabs: tabs,
+                activeTabId: activeId,
+                onFocus: (_) {},
+                onClose: (_) {},
+                onNewTab: () {},
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final strip = find.byType(TerminalTabStrip);
+    final horizontalScroll = find.descendant(
+      of: strip,
+      matching: find.byType(SingleChildScrollView),
+    );
+    final scrollable = find.descendant(
+      of: horizontalScroll,
+      matching: find.byType(Scrollable),
+    );
+    final position = tester.state<ScrollableState>(scrollable).position;
+    expect(tester.getSize(strip).height, TerminalTabStrip.height);
+    expect(find.byTooltip('All tabs'), findsOneWidget);
+    expect(position.pixels, 0);
+
+    update(() => activeId = tabs.last.id);
+    await tester.pumpAndSettle();
+
+    final viewportRect = tester.getRect(horizontalScroll);
+    final activeRect = tester.getRect(
+      find.ancestor(of: find.text('Tab 8'), matching: find.byType(InkWell)),
+    );
+    expect(activeRect.left, greaterThanOrEqualTo(viewportRect.left));
+    expect(activeRect.right, lessThanOrEqualTo(viewportRect.right));
+    expect(position.pixels, greaterThan(0));
+
+    // A rebuild with the same already-visible tab must not recenter the strip
+    // or otherwise undo the user's scroll position.
+    final offset = position.pixels;
+    update(() => activeId = tabs.last.id);
+    await tester.pumpAndSettle();
+    expect(position.pixels, offset);
+  });
+
+  testWidgets('overflow reveals the active tab and keeps actions fixed', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final tabs = [
+      for (var i = 1; i <= 6; i++) _session(server, 'tab-$i', name: 'Tab $i'),
+    ];
+    var newTabCalls = 0;
+    var generateCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TerminalTabStrip(
+            tabs: tabs,
+            activeTabId: tabs.last.id,
+            onFocus: (_) {},
+            onClose: (_) {},
+            onNewTab: () => newTabCalls++,
+            onGenerateCommand: () => generateCalls++,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    _expectInsideViewport(tester, find.text('Tab 6'));
+    expect(find.byTooltip('All tabs'), findsOneWidget);
+    expect(find.byTooltip('New tab'), findsOneWidget);
+    expect(find.byTooltip('Generate command'), findsOneWidget);
+    // Action buttons must stay within the strip width, not pushed off-screen.
+    expect(
+      tester.getRect(find.byTooltip('New tab')).right,
+      lessThanOrEqualTo(420),
+    );
+    expect(
+      tester.getRect(find.byTooltip('Generate command')).right,
+      lessThanOrEqualTo(420),
+    );
+    await tester.tap(find.byTooltip('New tab'));
+    await tester.tap(find.byTooltip('Generate command'));
+    expect(newTabCalls, 1);
+    expect(generateCalls, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('label growth keeps the active tab in view', (tester) async {
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final tabs = [
+      for (var i = 1; i <= 5; i++) _session(server, 'tab-$i', name: 'Tab $i'),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TerminalTabStrip(
+            tabs: tabs,
+            activeTabId: tabs.last.id,
+            onFocus: (_) {},
+            onClose: (_) {},
+            onNewTab: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    _expectInsideViewport(tester, find.text('Tab 5'));
+
+    // Growing a non-active tab's label must not push the active tab out.
+    tabs.first.customName.value = 'a much wider workspace label';
+    await tester.pumpAndSettle();
+    _expectInsideViewport(tester, find.text('Tab 5'));
+  });
+
+  testWidgets('the overflow menu disappears after tabs shrink to fit', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final allTabs = [
+      for (var i = 1; i <= 6; i++)
+        _session(server, 'tab-$i', name: 'a wide workspace $i'),
+    ];
+    List<PaneTab> shownTabs = [...allTabs];
+    late StateSetter rebuild;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              rebuild = setState;
+              return TerminalTabStrip(
+                tabs: shownTabs,
+                activeTabId: shownTabs.first.id,
+                onFocus: (_) {},
+                onClose: (_) {},
+                onNewTab: () {},
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('All tabs'), findsOneWidget);
+
+    // Shorten labels and remove tabs so everything fits.
+    for (var i = 0; i < 3; i++) {
+      allTabs[i].customName.value = String.fromCharCodes(
+        List.filled(3, 'a'.codeUnitAt(0) + i),
+      );
+    }
+    rebuild(() => shownTabs = allTabs.take(3).toList());
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byTooltip('All tabs'),
+      findsNothing,
+      reason:
+          'remaining overflow: ${_tabScrollPosition(tester).maxScrollExtent}',
+    );
+    expect(_tabScrollPosition(tester).maxScrollExtent, 0);
+  });
+
+  testWidgets('a vertical wheel scrolls overflowed tabs horizontally', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final tabs = [
+      for (var i = 0; i < 8; i++)
+        _session(server, 'tab-$i', name: 'Tab ${i + 1}'),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TerminalTabStrip(
+            tabs: tabs,
+            activeTabId: tabs.first.id,
+            onFocus: (_) {},
+            onClose: (_) {},
+            onNewTab: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final horizontalScroll = find.descendant(
+      of: find.byType(TerminalTabStrip),
+      matching: find.byType(SingleChildScrollView),
+    );
+    final scrollable = find.descendant(
+      of: horizontalScroll,
+      matching: find.byType(Scrollable),
+    );
+    final position = tester.state<ScrollableState>(scrollable).position;
+    expect(position.pixels, 0);
+
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(horizontalScroll),
+        scrollDelta: const Offset(0, 120),
+      ),
+    );
+    await tester.pump();
+    expect(position.pixels, 120);
+  });
+
+  testWidgets('an RTL vertical wheel advances the logical tab offset', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final tabs = [
+      for (var i = 0; i < 8; i++)
+        _session(server, 'tab-$i', name: 'Tab ${i + 1}'),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Directionality(
+            textDirection: TextDirection.rtl,
+            child: TerminalTabStrip(
+              tabs: tabs,
+              activeTabId: tabs.first.id,
+              onFocus: (_) {},
+              onClose: (_) {},
+              onNewTab: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final horizontalScroll = find.descendant(
+      of: find.byType(TerminalTabStrip),
+      matching: find.byType(SingleChildScrollView),
+    );
+    final scrollable = find.descendant(
+      of: horizontalScroll,
+      matching: find.byType(Scrollable),
+    );
+    final position = tester.state<ScrollableState>(scrollable).position;
+    final responses = <bool>[];
+    expect(position.axisDirection, AxisDirection.left);
+    expect(position.pixels, 0);
+
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(horizontalScroll),
+        scrollDelta: const Offset(0, 120),
+        onRespond: ({required allowPlatformDefault}) {
+          responses.add(allowPlatformDefault);
+        },
+      ),
+    );
+    await tester.pump();
+    expect(position.pixels, 120);
+    expect(responses, [false]);
+
+    // At the forward edge this strip declines the event, leaving an ancestor
+    // scrollable or the platform free to handle it.
+    position.jumpTo(position.maxScrollExtent);
+    responses.clear();
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(horizontalScroll),
+        scrollDelta: const Offset(0, 120),
+        onRespond: ({required allowPlatformDefault}) {
+          responses.add(allowPlatformDefault);
+        },
+      ),
+    );
+    await tester.pump();
+    expect(position.pixels, position.maxScrollExtent);
+    expect(responses, [true]);
+  });
+
+  testWidgets('reduced-motion jumps to the active tab without animating', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final tabs = [
+      for (var i = 0; i < 8; i++)
+        _session(server, 'tab-$i', name: 'Tab ${i + 1}'),
+    ];
+    var activeId = tabs.first.id;
+    late StateSetter update;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return MediaQuery(
+                data: const MediaQueryData(disableAnimations: true),
+                child: TerminalTabStrip(
+                  tabs: tabs,
+                  activeTabId: activeId,
+                  onFocus: (_) {},
+                  onClose: (_) {},
+                  onNewTab: () {},
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final position = _tabScrollPosition(tester);
+    expect(position.pixels, 0);
+
+    // Switching to the last tab should jump immediately when animations
+    // are disabled, not animate over a duration.
+    update(() => activeId = tabs.last.id);
+    await tester.pump();
+    // With reduced-motion the scroll is instantaneous: one frame suffices.
+    expect(position.pixels, greaterThan(0));
+    _expectInsideViewport(tester, find.text('Tab 8'));
+  });
+
+  testWidgets('the overflow menu focuses every tab', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final tabs = [
+      for (var i = 0; i < 8; i++)
+        _session(server, 'tab-$i', name: 'Tab ${i + 1}'),
+    ];
+    String? focused;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TerminalTabStrip(
+            tabs: tabs,
+            activeTabId: tabs.first.id,
+            onFocus: (id) => focused = id,
+            onClose: (_) {},
+            onNewTab: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('All tabs'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tab 8, Terminal, Disconnected'), findsOneWidget);
+    final checked = tester.widget<CheckedPopupMenuItem<String>>(
+      find.widgetWithText(
+        CheckedPopupMenuItem<String>,
+        'Tab 1, Terminal, Disconnected',
+      ),
+    );
+    expect(checked.checked, isTrue);
+
+    final lastItem = find.widgetWithText(
+      CheckedPopupMenuItem<String>,
+      'Tab 8, Terminal, Disconnected',
+    );
+    await tester.ensureVisible(lastItem);
+    await tester.pumpAndSettle();
+    await tester.tap(lastItem);
+    await tester.pumpAndSettle();
+    expect(focused, tabs.last.id);
+  });
+
+  testWidgets('the overflow menu identifies and reveals every tab kind', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(420, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final terminals = [
+      for (var i = 1; i <= 4; i++)
+        _session(server, 'tab-$i', name: 'Workspace $i'),
+    ];
+    final editor = EditorTab(
+      id: 'editor',
+      serverId: server.id,
+      config: server,
+      remotePath: '/var/log/notes.txt',
+      localPath: 'notes.txt',
+      ownerEditSessionId: terminals.first.editSessionId,
+    )..dirty.value = true;
+    addTearDown(editor.dispose);
+    final tabs = <PaneTab>[...terminals, editor];
+    var active = terminals.first.id;
+    var focused = '';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) => TerminalTabStrip(
+              tabs: tabs,
+              activeTabId: active,
+              onFocus: (id) => setState(() {
+                focused = id;
+                active = id;
+              }),
+              onClose: (_) {},
+              onNewTab: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('All tabs'));
+    await tester.pumpAndSettle();
+
+    for (var i = 1; i <= 4; i++) {
+      expect(find.text('Workspace $i, Terminal, Disconnected'), findsOneWidget);
+    }
+    final editorItem = find.widgetWithText(
+      CheckedPopupMenuItem<String>,
+      'notes.txt, File, Unsaved changes',
+    );
+    expect(editorItem, findsOneWidget);
+
+    // Selecting a menu item focuses the tab and reveals it in the strip.
+    await tester.ensureVisible(editorItem);
+    await tester.tap(editorItem);
+    await tester.pumpAndSettle();
+    expect(focused, editor.id);
+    _expectInsideViewport(tester, find.text('notes.txt'));
   });
 
   testWidgets('same-place tabs get disambiguating suffixes', (tester) async {
@@ -347,6 +900,111 @@ void main() {
     expect(hairline(), plainHairline);
     expect(tester.getRect(find.text('Session 1')), plainLabel);
   });
+
+  testWidgets('each tab is one selected and status-aware semantics node', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final semantics = tester.ensureSemantics();
+    final server = _server();
+    final connecting = _session(
+      server,
+      'connecting',
+      connecting: true,
+      name: 'Connecting tab',
+    );
+    final connected = _session(server, 'connected', name: 'Connected tab')
+      ..session = _ConnectedTransport();
+    final disconnected = _session(
+      server,
+      'disconnected',
+      name: 'Disconnected tab',
+    );
+    final failed = _session(
+      server,
+      'failed',
+      error: 'boom',
+      name: 'Failed tab',
+    );
+    final clean = EditorTab(
+      id: 'clean',
+      serverId: server.id,
+      config: server,
+      remotePath: '/tmp/clean.txt',
+      localPath: 'clean.txt',
+      ownerEditSessionId: connected.editSessionId,
+    );
+    final dirty = EditorTab(
+      id: 'dirty',
+      serverId: server.id,
+      config: server,
+      remotePath: '/tmp/dirty.txt',
+      localPath: 'dirty.txt',
+      ownerEditSessionId: connected.editSessionId,
+    )..dirty.value = true;
+    final closed = <String>[];
+
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TerminalTabStrip(
+              tabs: [connecting, connected, disconnected, failed, clean, dirty],
+              activeTabId: connected.id,
+              onFocus: (_) {},
+              onClose: closed.add,
+              onNewTab: () {},
+            ),
+          ),
+        ),
+      );
+      // The connecting status indicator animates indefinitely, so settle is
+      // intentionally unavailable. Two frames cover the strip's post-layout
+      // overflow/reveal pass without coupling the test to a timer.
+      await tester.pump();
+      await tester.pump();
+
+      final expected = {
+        'Connecting tab, Connecting': false,
+        'Connected tab, Connected': true,
+        'Disconnected tab, Disconnected': false,
+        'Failed tab, Connection failed': false,
+        'clean.txt, Saved': false,
+        'dirty.txt, Unsaved changes': false,
+      };
+      for (final MapEntry(key: label, value: selected) in expected.entries) {
+        final finder = find.semantics.byLabel(label);
+        expect(finder, findsOneWidget, reason: label);
+        final data = finder.evaluate().single.getSemanticsData();
+        expect(data.flagsCollection.isButton, isTrue, reason: label);
+        expect(
+          data.flagsCollection.isSelected,
+          selected ? Tristate.isTrue : Tristate.isFalse,
+          reason: label,
+        );
+        expect(data.hasAction(SemanticsAction.tap), isTrue, reason: label);
+        final actions = [
+          for (final id in data.customSemanticsActionIds ?? const <int>[])
+            CustomSemanticsAction.getAction(id)!.label,
+        ];
+        expect(actions, ['Close tab'], reason: label);
+      }
+      // The visual close buttons are folded into their tab node, not extra
+      // screen-reader stops of their own.
+      expect(find.semantics.byLabel('Close tab'), findsNothing);
+
+      tester.semantics.customAction(
+        find.semantics.byLabel('Connected tab, Connected'),
+        const CustomSemanticsAction(label: 'Close tab'),
+      );
+      expect(closed, [connected.id]);
+    } finally {
+      semantics.dispose();
+    }
+  });
+
   testWidgets('tabs take Poltergeist\'s pane-tab shape', (tester) async {
     // Disposed at the end of the body: flutter_test checks for live
     // handles before teardowns run, so addTearDown would be too late.
@@ -501,7 +1159,7 @@ void main() {
     // A screen reader, which never hovers, closes a tab whose button is
     // hidden through the tab itself.
     tester.semantics.customAction(
-      find.semantics.byLabel('Session 2'),
+      find.semantics.byLabel('Session 2, Disconnected'),
       const CustomSemanticsAction(label: 'Close tab'),
     );
     expect(closed, [other.id]);

@@ -56,6 +56,10 @@ void main() {
   late SettingsWindowHost host;
   late _ExportFiles exportFiles;
   late List<String> controlCalls;
+  late bool nativeSettingsCreated;
+  late bool nativeSettingsVisible;
+  late bool nativeSettingsUserHidden;
+  late bool nativeSettingsSuppressed;
   late TestDeviceAuthenticator device;
 
   /// Deliver what one end sends to the other end's handler, and its reply
@@ -74,6 +78,9 @@ void main() {
 
   /// What the runner says when the user closes the window.
   Future<void> nativeClosed() async {
+    nativeSettingsVisible = false;
+    nativeSettingsUserHidden = true;
+    nativeSettingsSuppressed = false;
     final reply = Completer<void>();
     ServicesBinding.instance.channelBuffers.push(
       _control.name,
@@ -96,8 +103,35 @@ void main() {
     relay(_appLink, _windowLink);
     relay(_windowLink, _appLink);
     controlCalls = [];
+    nativeSettingsCreated = false;
+    nativeSettingsVisible = false;
+    nativeSettingsUserHidden = true;
+    nativeSettingsSuppressed = false;
     messenger.setMockMethodCallHandler(_control, (call) async {
       controlCalls.add(call.method);
+      switch (call.method) {
+        case 'open':
+          if (nativeSettingsCreated) {
+            nativeSettingsUserHidden = false;
+            if (!nativeSettingsSuppressed) nativeSettingsVisible = true;
+          } else {
+            nativeSettingsCreated = true;
+            nativeSettingsUserHidden = false;
+          }
+        case 'yieldForQuitConfirmation':
+          final shouldYield =
+              nativeSettingsCreated && !nativeSettingsUserHidden;
+          if (shouldYield) {
+            nativeSettingsSuppressed = true;
+            nativeSettingsVisible = false;
+          }
+          return shouldYield;
+        case 'restoreAfterQuitConfirmation':
+          nativeSettingsSuppressed = false;
+          if (nativeSettingsCreated && !nativeSettingsUserHidden) {
+            nativeSettingsVisible = true;
+          }
+      }
       return null;
     });
     exportFiles = _ExportFiles();
@@ -122,13 +156,23 @@ void main() {
     await directory.delete(recursive: true);
   });
 
+  void nativeFirstFrame() {
+    if (nativeSettingsCreated &&
+        !nativeSettingsUserHidden &&
+        !nativeSettingsSuppressed) {
+      nativeSettingsVisible = true;
+    }
+  }
+
   /// Open Settings on [tab] and start the window's side, as the runner does
   /// on the first open.
   Future<RemoteSettingsBackend> openWindow([
     SettingsTab tab = SettingsTab.general,
   ]) async {
     expect(await host.open(tab), isTrue);
-    return RemoteSettingsBackend.connect(link: _windowLink);
+    final backend = await RemoteSettingsBackend.connect(link: _windowLink);
+    nativeFirstFrame();
+    return backend;
   }
 
   test('hello brings the settings and the tab it was opened on', () async {
@@ -386,6 +430,51 @@ void main() {
     expect(second.tab, SettingsTab.files);
     expect(second.generation, isNot(first.generation));
     expect(window.settings.terminalFontSize, 9);
+  });
+
+  test('quit review yields and restores without dropping the page', () async {
+    final window = await openWindow(SettingsTab.sync);
+    addTearDown(window.dispose);
+    final page = window.page.value;
+
+    expect(await host.yieldForQuitConfirmation(), isTrue);
+    expect(host.visible, isTrue);
+    expect(window.page.value, same(page));
+    expect(controlCalls, ['open', 'yieldForQuitConfirmation']);
+
+    await host.restoreAfterQuitConfirmation();
+    expect(host.visible, isTrue);
+    expect(window.page.value, same(page));
+    expect(controlCalls, [
+      'open',
+      'yieldForQuitConfirmation',
+      'restoreAfterQuitConfirmation',
+    ]);
+  });
+
+  test('quit review can yield the native window before its hello', () async {
+    expect(await host.open(SettingsTab.general), isTrue);
+    expect(host.connected, isFalse);
+    expect(host.visible, isFalse);
+    expect(nativeSettingsVisible, isFalse);
+
+    expect(await host.yieldForQuitConfirmation(), isTrue);
+    expect(nativeSettingsVisible, isFalse);
+    nativeFirstFrame();
+    expect(nativeSettingsVisible, isFalse);
+    await host.restoreAfterQuitConfirmation();
+    expect(nativeSettingsVisible, isTrue);
+  });
+
+  test('a hidden Settings window has nothing to yield', () async {
+    final window = await openWindow();
+    addTearDown(window.dispose);
+    await nativeClosed();
+    await pumpEventQueue();
+    controlCalls.clear();
+
+    expect(await host.yieldForQuitConfirmation(), isFalse);
+    expect(controlCalls, ['yieldForQuitConfirmation']);
   });
 
   test('a request to quit is the app\'s to answer', () async {

@@ -13,9 +13,11 @@
 //   KLABAUTERMANN_SYNC_SERVER=http://127.0.0.1:8799 dart test \
 //     --tags sync test/integration/sync_convergence_test.dart
 //
-// The previous-release case also needs KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS,
-// the harness test/integration/previous_release.sh builds from the latest
-// release tag (X2); run.sh builds and exports it.
+// run.sh builds the live harness against both the latest release tag and
+// HEAD, exporting KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS and
+// KLABAUTERMANN_CURRENT_HARNESS (X2). Each client's reported protocol
+// determines whether an opaque-record roundtrip must succeed or the server
+// must explicitly refuse it without changing records, floor or auth state.
 @Tags(['integration', 'sync'])
 @Timeout(Duration(minutes: 3))
 library;
@@ -46,13 +48,17 @@ import 'package:seance_core/seance_core.dart'
         ServerConfig,
         SyncCoordinator,
         VaultCrypto,
-        secureRandomBytes;
+        VaultKeyCheck,
+        secureRandomBytes,
+        kCurrentRecordEnvelopeVersion,
+        kProtocolVersion;
 import 'package:test/test.dart';
 
 import '../support/fake_sync_server.dart' show MemoryKeystore;
 
 const _serverVariable = 'KLABAUTERMANN_SYNC_SERVER';
 const _harnessVariable = 'KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS';
+const _currentHarnessVariable = 'KLABAUTERMANN_CURRENT_HARNESS';
 const _password = 'correct horse battery staple';
 const _release = '2026.11.0';
 
@@ -61,12 +67,10 @@ void main() {
   final skip = baseUrl.isEmpty
       ? 'Set $_serverVariable to a running seance_sync_server to enable.'
       : false;
-  final harness = Platform.environment[_harnessVariable] ?? '';
-  final previousSkip = skip != false
-      ? skip
-      : harness.isEmpty
-      ? 'Set $_harnessVariable to the previous-release harness to enable.'
-      : false;
+  final harnesses = {
+    _HarnessSource.previous: Platform.environment[_harnessVariable] ?? '',
+    _HarnessSource.current: Platform.environment[_currentHarnessVariable] ?? '',
+  };
 
   late Directory support;
   final clients = <HttpSyncClient>[];
@@ -107,6 +111,10 @@ void main() {
         authVerifier: base64.encode(keys.authVerifier),
         argonSalt: base64.encode(salt),
         argonParams: params,
+        vaultKeyCheck: await VaultKeyCheck.create(
+          keys.vaultKey,
+          username: username,
+        ),
       ),
     );
     final seance = _Seance(username, api, keys.vaultKey);
@@ -280,71 +288,148 @@ void main() {
     expect((await stored(sync, 'srv-alpha'))?.label, 'alpha edited');
   }, skip: skip);
 
-  test("the previous release's Séance and Poltergeist skip "
-      "Klabautermann's records (X2)", () async {
-    final seance = await seanceAccount([_server('srv-alpha', 'alpha')]);
-    final sync = await klabautermann(seance);
-    await sync.setServerPrefs(
-      const SetServerPrefs(
-        requestId: 'r1',
-        serverId: 'srv-alpha',
-        prefs: ServerPrefs(readOnly: true),
-      ),
-    );
-    await sync.putRule(
-      const PutRule(
-        requestId: 'r2',
-        ruleId: 'rule-1',
-        rule: ThresholdRule(
-          metric: 'cpu.busy',
-          op: ThresholdOp.greaterThan,
-          raise: ThresholdBound(value: 90, duration: Duration(minutes: 5)),
-          clear: ThresholdBound(value: 70, duration: Duration(minutes: 2)),
-        ),
-        target: 'srv-alpha',
-      ),
-    );
-    await round(sync);
-    final before = await seance.serverRecords();
-    final ids = [
-      for (final id in before.keys)
-        if (id.startsWith('klabautermann:')) id,
-    ];
-    expect(
-      ids,
-      containsAll([
-        'klabautermann:pref:srv-alpha',
-        'klabautermann:rule:rule-1',
-      ]),
-    );
+  for (final source in _HarnessSource.values) {
+    final harness = harnesses[source]!;
+    final variable = source == _HarnessSource.previous
+        ? _harnessVariable
+        : _currentHarnessVariable;
+    final harnessSkip = skip != false
+        ? skip
+        : harness.isEmpty
+        ? 'Set $variable to the compiled client harness to enable.'
+        : false;
+    for (final selected in _HarnessClient.values) {
+      // Exercise old clients independently: one refusal must not hide the
+      // other client. The current default also covers the original both mode.
+      if (source == _HarnessSource.previous &&
+          selected == _HarnessClient.both) {
+        continue;
+      }
+      test(
+        '${source.name} ${selected.name} clients respect protocol '
+        'compatibility and preserve opaque Klabautermann records (X2)',
+        () async {
+          final metadata = await Process.run(harness, ['--protocol-version']);
+          expect(metadata.exitCode, 0, reason: '${metadata.stderr}');
+          expect('${metadata.stderr}', isEmpty);
+          final protocol = int.parse('${metadata.stdout}'.trim());
+          expect(protocol, greaterThan(0));
+          if (source == _HarnessSource.current) {
+            expect(
+              protocol,
+              kProtocolVersion,
+              reason: 'The current harness must use this checkout’s protocol',
+            );
+          }
 
-    // Each device pulls the account, pushes a record of its own and runs
-    // again, so a re-push of Klabautermann's records would show.
-    final run = await Process.run(harness, [
-      '--server',
-      baseUrl,
-      '--username',
-      seance.username,
-      '--password',
-      _password,
-    ]);
-    expect(run.exitCode, 0, reason: '${run.stderr}');
-    final pushed = (jsonDecode('${run.stdout}') as Map).cast<String, String>();
+          final seance = await seanceAccount([_server('srv-alpha', 'alpha')]);
+          final sync = await klabautermann(seance);
+          await sync.setServerPrefs(
+            const SetServerPrefs(
+              requestId: 'r1',
+              serverId: 'srv-alpha',
+              prefs: ServerPrefs(readOnly: true),
+            ),
+          );
+          await sync.putRule(
+            const PutRule(
+              requestId: 'r2',
+              ruleId: 'rule-1',
+              rule: ThresholdRule(
+                metric: 'cpu.busy',
+                op: ThresholdOp.greaterThan,
+                raise: ThresholdBound(
+                  value: 90,
+                  duration: Duration(minutes: 5),
+                ),
+                clear: ThresholdBound(
+                  value: 70,
+                  duration: Duration(minutes: 2),
+                ),
+              ),
+              target: 'srv-alpha',
+            ),
+          );
+          await round(sync);
+          final before = await seance.accountSnapshot();
+          expect(before['recordEnvelopeFloor'], kCurrentRecordEnvelopeVersion);
+          final records = (before['records']! as Map).cast<String, Object?>();
+          final ids = records.keys.where(
+            (id) => id.startsWith('klabautermann:'),
+          );
+          expect(
+            ids,
+            containsAll([
+              'klabautermann:pref:srv-alpha',
+              'klabautermann:rule:rule-1',
+            ]),
+          );
 
-    final after = await seance.serverRecords();
-    // Names a record the old release dropped before reading its fields.
-    expect(after.keys, containsAll([...pushed.values, ...ids]));
-    for (final id in ids) {
-      expect(after[id]!.seq, before[id]!.seq, reason: id);
-      expect(after[id]!.blob, before[id]!.blob, reason: id);
-      expect(after[id]!.deleted, isFalse, reason: id);
+          final run = await Process.run(harness, [
+            '--server',
+            baseUrl,
+            '--username',
+            seance.username,
+            '--password',
+            _password,
+            if (selected != _HarnessClient.both) ...['--client', selected.name],
+          ]);
+          final compatible = protocol == kProtocolVersion;
+          if (compatible) {
+            expect(run.exitCode, 0, reason: '${run.stderr}');
+            expect('${run.stderr}', isEmpty);
+            final pushed = (jsonDecode('${run.stdout}') as Map)
+                .cast<String, String>();
+            expect(pushed, selected.records);
+            final after = await seance.serverRecords();
+            expect(after.keys, containsAll([...pushed.values, ...ids]));
+            for (final id in ids) {
+              // Compare the complete envelope, including seq/blob/deleted.
+              expect(after[id]!.toJson(), records[id], reason: id);
+            }
+            expect(
+              (await seance.accountSnapshot())['recordEnvelopeFloor'],
+              before['recordEnvelopeFloor'],
+            );
+          } else {
+            expect(run.exitCode, 1, reason: '${run.stderr}');
+            expect(
+              '${run.stdout}',
+              isEmpty,
+              reason:
+                  'A refused client must report no successful record output',
+            );
+            expect(jsonDecode('${run.stderr}'), {
+              'error': 'protocol_version',
+              'message': 'Protocol version mismatch',
+              'client': selected.name,
+            });
+            // No mint, write, deletion, re-push, or envelope downgrade is allowed.
+            expect(await seance.accountSnapshot(), before);
+          }
+
+          // Both original current sessions must remain usable after refusal or
+          // a compatible roundtrip; neither may lose its Klabautermann data.
+          await seance.round();
+          await round(sync);
+          expect((await sync.serverPrefs())['srv-alpha']?.readOnly, isTrue);
+          expect(await stored(sync, 'srv-alpha'), isNotNull);
+          final afterCurrent = await seance.serverRecords();
+          for (final id in ids) {
+            expect(afterCurrent[id]!.toJson(), records[id], reason: id);
+          }
+          if (compatible && selected.records.containsKey('seanceServer')) {
+            expect(
+              await stored(sync, selected.records['seanceServer']!),
+              isNotNull,
+            );
+          }
+          if (!compatible) expect(await seance.accountSnapshot(), before);
+        },
+        skip: harnessSkip,
+      );
     }
-
-    // Klabautermann still reads its settings, and the old Séance's server.
-    await round(sync);
-    expect((await sync.serverPrefs())['srv-alpha']?.readOnly, isTrue);
-    expect(await stored(sync, 'previous-seance-server'), isNotNull);
-  }, skip: previousSkip);
+  }
 
   test('a forged unsealed tombstone is ignored, and a sealed removal is '
       'applied (X3)', () async {
@@ -425,6 +510,20 @@ void main() {
   }, skip: skip);
 }
 
+enum _HarnessSource { previous, current }
+
+enum _HarnessClient {
+  seance({'seanceServer': 'previous-seance-server'}),
+  poltergeist({'bookmark': 'bookmark:previous-poltergeist'}),
+  both({
+    'seanceServer': 'previous-seance-server',
+    'bookmark': 'bookmark:previous-poltergeist',
+  });
+
+  const _HarnessClient(this.records);
+  final Map<String, String> records;
+}
+
 int _now() => DateTime.now().millisecondsSinceEpoch;
 
 ServerConfig _server(String id, String label) => ServerConfig(
@@ -489,6 +588,28 @@ final class _Seance {
   Future<Map<String, EncryptedRecord>> serverRecords() async => {
     for (final record in (await api.pull(since: 0)).records) record.id: record,
   };
+
+  /// Public HTTP observations of exact records/floor, registration metadata
+  /// and live sessions. A rejected old client must not mutate any of them.
+  Future<Map<String, Object?>> accountSnapshot() async {
+    final pull = await api.pull(since: 0);
+    expect(
+      pull.hasMore,
+      isFalse,
+      reason: 'The small fixture must fit one pull',
+    );
+    return {
+      'records': {
+        for (final record in pull.records) record.id: record.toJson(),
+      },
+      'latestSeq': pull.latestSeq,
+      'recordEnvelopeFloor': pull.recordEnvelopeFloor,
+      'prelogin': (await api.prelogin(username)).toJson(),
+      'sessions': [
+        for (final session in await api.listSessions()) session.toJson(),
+      ],
+    };
+  }
 }
 
 final class _ListConfigStore extends ConfigStore {

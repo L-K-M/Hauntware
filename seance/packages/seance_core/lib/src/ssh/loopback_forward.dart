@@ -49,6 +49,7 @@ final class LoopbackForward {
   final ServerSocket _listener;
   final ForwardOpener _open;
   late final StreamSubscription<Socket> _accepting;
+  final Set<Socket> _pendingClients = {};
   final Set<_Connection> _connections = {};
   bool _closed = false;
 
@@ -78,6 +79,10 @@ final class LoopbackForward {
       client.destroy();
       unawaited(stream.close());
     }
+    for (final client in _pendingClients) {
+      client.destroy();
+    }
+    _pendingClients.clear();
     _connections.clear();
   }
 
@@ -85,14 +90,20 @@ final class LoopbackForward {
   /// cannot open ends the connection, which the browser reports; the
   /// forward keeps listening.
   Future<void> _relay(Socket client) async {
+    if (_closed) {
+      client.destroy();
+      return;
+    }
+    _pendingClients.add(client);
     final ByteDuplex stream;
     try {
       stream = await _open();
     } on Object {
+      _pendingClients.remove(client);
       client.destroy();
       return;
     }
-    if (_closed) {
+    if (!_pendingClients.remove(client) || _closed) {
       client.destroy();
       unawaited(stream.close());
       return;

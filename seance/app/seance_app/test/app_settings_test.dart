@@ -180,6 +180,30 @@ void main() {
         .identityFileBookmarks, isEmpty);
   });
 
+  test('pending credential cleanup is local, sorted, and tolerant', () {
+    final settings = AppSettings(
+      pendingCredentialCleanup: {'secret-z', 'secret-a'},
+    );
+    final json = settings.toJson();
+    expect(json['pendingCredentialCleanup'], ['secret-a', 'secret-z']);
+    expect(AppSettings.fromJson(json).pendingCredentialCleanup, {
+      'secret-a',
+      'secret-z',
+    });
+
+    final malformed = AppSettings().toJson()
+      ..['pendingCredentialCleanup'] = ['secret-a', 7, null, 'secret-a'];
+    expect(AppSettings.fromJson(malformed).pendingCredentialCleanup, {
+      'secret-a',
+    });
+    expect(
+      AppSettings.fromJson(
+        AppSettings().toJson()..remove('pendingCredentialCleanup'),
+      ).pendingCredentialCleanup,
+      isEmpty,
+    );
+  });
+
   test('unknown editor and malformed bookmarks fall back safely', () {
     final json = AppSettings().toJson()
       ..['editorRegistry'] = {

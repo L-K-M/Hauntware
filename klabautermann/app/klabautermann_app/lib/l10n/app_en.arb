@@ -5388,11 +5388,29 @@
   },
   "hostKeyChangedWarning": "The key for {host} does not match the one you previously trusted. This can mean a man-in-the-middle attack. Only continue if you know why the key changed.",
   "@hostKeyChangedWarning": {
-    "description": "Warning at the top of the changed-key review; host is the server's host name or address as configured.",
+    "description": "Warning after the fingerprints in the changed-key review; host is the server's host name or address as configured.",
     "placeholders": {
       "host": {
         "type": "String",
         "example": "web-1.example"
+      }
+    }
+  },
+  "hostKeyChangedReviewInstruction": "Review the new and previously trusted fingerprints, then read the warning below.",
+  "@hostKeyChangedReviewInstruction": {
+    "description": "Explains why trust starts disabled in the changed-key review."
+  },
+  "hostKeyTypeChanged": "Key algorithm changed from {previousType} to {presentedType}.",
+  "@hostKeyTypeChanged": {
+    "description": "Warning in a changed-key review when the trusted and newly presented SSH key algorithms differ.",
+    "placeholders": {
+      "previousType": {
+        "type": "String",
+        "example": "ssh-ed25519"
+      },
+      "presentedType": {
+        "type": "String",
+        "example": "ecdsa-sha2-nistp256"
       }
     }
   },
@@ -8210,6 +8228,22 @@
   "appearanceAccent": "Accent",
   "@appearanceAccent": {
     "description": "Appearance tab: the accent colour row."
+  },
+  "appearanceAccentAdjusted": "Low contrast: links and indicators use an adjusted colour.",
+  "@appearanceAccentAdjusted": {
+    "description": "Appearance tab: notice that a chosen accent needs contrast-safe functional tones."
+  },
+  "appearanceChosenAccentPreview": "Chosen accent",
+  "@appearanceChosenAccentPreview": {
+    "description": "Appearance tab: accessible label for the chosen accent preview."
+  },
+  "appearanceAdjustedAccentPreview": "Adjusted interface colour",
+  "@appearanceAdjustedAccentPreview": {
+    "description": "Appearance tab: accessible label for the adjusted functional accent preview."
+  },
+  "appearanceUseAdjustedAccent": "Use adjusted colour",
+  "@appearanceUseAdjustedAccent": {
+    "description": "Appearance tab: replaces a low-contrast accent with the suggested accessible colour."
   },
   "appearanceSlotSurface": "Surface",
   "@appearanceSlotSurface": {

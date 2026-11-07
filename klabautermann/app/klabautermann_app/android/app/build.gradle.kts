@@ -141,5 +141,5 @@ dependencies {
     // No runtime classpath lists it, so its notice is the bundled entry
     // config/libraries/com.android.tools__desugar_jdk_libs.json: keep
     // that version in step.
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

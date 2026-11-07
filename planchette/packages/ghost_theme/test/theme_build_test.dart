@@ -2,7 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:ghost_ui/ghost_ui.dart'
-    show FamilyPalette, GhostFileTheme, SidebarThemeTokens, contrastRatio;
+    show
+        FamilyPalette,
+        GhostFileTheme,
+        GhostMenuThemeTokens,
+        SidebarThemeTokens,
+        compositeOver,
+        contrastRatio;
 
 import 'support/host_styles.dart';
 
@@ -132,7 +138,11 @@ void main() {
           expect(chrome.selectionFill, const Color(0xFF5A4BC0));
           expect(chrome.onSelection, const Color(0xFFFFFFFF));
           expect(chrome.inactiveSelectionFill, scheme.surfaceContainerHighest);
+          expect(chrome.accentFill, scheme.primary);
+          expect(chrome.onAccentFill, scheme.onPrimary);
           expect(chrome.activePaneIndicator, scheme.primary);
+          expect(chrome.sidebarIndicator, scheme.primary);
+          expect(chrome.headerIndicator, scheme.primary);
           expect(chrome.secondaryText, scheme.onSurfaceVariant);
           expect(chrome.headerHeight, desktop ? 52 : 56);
           expect(chrome.rowExtent, desktop ? 22 : 48);
@@ -198,8 +208,7 @@ void main() {
 
       // A dark surface of its own makes the theme dark, whatever was asked.
       expect(theme.brightness, Brightness.dark);
-      expect(scheme.primary, palette.accent);
-      expect(scheme.onPrimary, const Color(0xFFFFFFFF));
+      expect(scheme.primary, chrome.activePaneIndicator);
       expect(scheme.surface, palette.surface);
       expect(theme.scaffoldBackgroundColor, palette.surface);
       expect(chrome.paneBackground, palette.surface);
@@ -215,7 +224,24 @@ void main() {
       expect(chrome.separator, palette.hairline);
       expect(theme.dividerColor, palette.hairline);
       expect(chrome.selectionFill, palette.selection);
-      expect(chrome.activePaneIndicator, palette.accent);
+      expect(chrome.accentFill, palette.accent);
+      expect(chrome.onAccentFill, const Color(0xFFFFFFFF));
+      expect(
+        theme.filledButtonTheme.style?.backgroundColor?.resolve({}),
+        palette.accent,
+      );
+      expect(
+        contrastRatio(chrome.activePaneIndicator, chrome.paneBackground),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrastRatio(chrome.sidebarIndicator, chrome.sidebarBackground),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrastRatio(chrome.headerIndicator, chrome.headerBackground),
+        greaterThanOrEqualTo(4.5),
+      );
       expect(chrome.statusConnected, palette.online);
       expect(chrome.statusFailed, palette.offline);
       expect(chrome.statusConnecting, palette.connecting);
@@ -279,6 +305,188 @@ void main() {
       expect(chrome.selectionFill, isNot(const Color(0xFF5A4BC0)));
       expect(
         contrastRatio(chrome.onSelection, chrome.selectionFill),
+        greaterThanOrEqualTo(4.5),
+      );
+    });
+  });
+
+  group('custom accent contrast', () {
+    test('adjusted accent remains safe at stored colour precision', () {
+      const accent = Color(0xFFB846C1);
+      const surface = Color(0xFFFFFFFF);
+      final palette = ThemePalette(accent: accent, surface: surface);
+      final resolved = GhostTheme.resolveAccent(
+        seanceStyle,
+        palette,
+        Brightness.light,
+      );
+      final storedForeground = Color(resolved.paneIndicator.toARGB32());
+
+      expect(storedForeground, isNot(accent));
+      expect(
+        contrastRatio(storedForeground, surface),
+        greaterThanOrEqualTo(4.5),
+      );
+    });
+
+    for (final accent in const [
+      Color(0xFFFFD600),
+      Color(0xFF3949AB),
+      Color(0xFF6B5BD3),
+    ]) {
+      for (final brightness in Brightness.values) {
+        test('$accent on ${brightness.name} chrome', () {
+          final palette = seancePresets.brand.copyWith(accent: accent);
+          final theme = GhostTheme.build(seanceStyle, palette, brightness);
+          final chrome = theme.extension<GhostChrome>()!;
+          final rail = chrome.sidebarBackground;
+          final sidebarSurfaces = [
+            rail,
+            compositeOver(chrome.hoverFill, rail),
+            compositeOver(chrome.inactiveSelectionFill, rail),
+          ];
+
+          expect(chrome.accentFill, accent);
+          expect(
+            contrastRatio(chrome.onAccentFill, chrome.accentFill),
+            greaterThanOrEqualTo(4.5),
+          );
+          expect(
+            theme.filledButtonTheme.style?.backgroundColor?.resolve({}),
+            accent,
+          );
+          expect(theme.colorScheme.primary, chrome.activePaneIndicator);
+          expect(
+            contrastRatio(chrome.activePaneIndicator, chrome.paneBackground),
+            greaterThanOrEqualTo(4.5),
+          );
+          for (final surface in sidebarSurfaces) {
+            expect(
+              contrastRatio(chrome.sidebarIndicator, surface),
+              greaterThanOrEqualTo(4.5),
+            );
+          }
+          expect(
+            contrastRatio(chrome.headerIndicator, chrome.headerBackground),
+            greaterThanOrEqualTo(4.5),
+          );
+        });
+      }
+    }
+
+    test('the tuned fill adjusts over user-supplied chrome too', () {
+      final palette = ThemePalette(
+        accent: seanceStyle.seed,
+        surface: const Color(0xFF5847C2),
+        sidebar: const Color(0xFF5847C2),
+        raised: const Color(0xFF5847C2),
+        text: const Color(0xFFFFFFFF),
+      );
+      final theme = GhostTheme.build(seanceStyle, palette, Brightness.dark);
+      final chrome = theme.extension<GhostChrome>()!;
+
+      expect(chrome.accentFill, seanceStyle.dark.primary);
+      expect(chrome.activePaneIndicator, isNot(chrome.accentFill));
+      expect(
+        contrastRatio(chrome.activePaneIndicator, chrome.paneBackground),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrastRatio(theme.colorScheme.onPrimary, theme.colorScheme.primary),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        theme.filledButtonTheme.style?.backgroundColor?.resolve({}),
+        chrome.accentFill,
+      );
+      expect(
+        theme.filledButtonTheme.style?.foregroundColor?.resolve({}),
+        chrome.onAccentFill,
+      );
+    });
+
+    test('the tuned fill accounts for a custom hover-overlay colour', () {
+      final palette = ThemePalette(
+        accent: seanceStyle.seed,
+        text: const Color(0xFF5847C2),
+      );
+      final chrome = GhostTheme.build(
+        seanceStyle,
+        palette,
+        Brightness.dark,
+      ).extension<GhostChrome>()!;
+      final rail = chrome.sidebarBackground;
+
+      expect(chrome.sidebarIndicator, isNot(chrome.accentFill));
+      expect(
+        contrastRatio(
+          chrome.sidebarIndicator,
+          compositeOver(chrome.hoverFill, rail),
+        ),
+        greaterThanOrEqualTo(4.5),
+      );
+    });
+
+    test('opposing custom sidebar tones use a stable best effort', () {
+      final palette = ThemePalette(
+        accent: const Color(0xFFFFD600),
+        sidebar: const Color(0xFF747474),
+        raised: const Color(0xFF777777),
+      );
+      final first = GhostTheme.resolveAccent(
+        seanceStyle,
+        palette,
+        Brightness.dark,
+      );
+      final second = GhostTheme.resolveAccent(
+        seanceStyle,
+        palette,
+        Brightness.dark,
+      );
+
+      expect(first.adjusted, isTrue);
+      expect(first.suggestedAccent, isNull);
+      expect(first.sidebarIndicator, second.sidebarIndicator);
+      expect(
+        () => GhostTheme.build(seanceStyle, palette, Brightness.dark),
+        returnsNormally,
+      );
+    });
+
+    test('a phone list indicator clears its light pane states', () {
+      final palette = ThemePalette(
+        accent: const Color(0xFFFFD600),
+        surface: const Color(0xFFF8F8F8),
+        sidebar: const Color(0xFF000000),
+      );
+      final theme = GhostTheme.build(seanceStyle, palette, Brightness.light);
+      final chrome = theme.extension<GhostChrome>()!;
+      final indicator = theme.colorScheme.primary;
+      final pane = chrome.paneBackground;
+
+      expect(indicator, chrome.activePaneIndicator);
+      for (final background in [
+        pane,
+        compositeOver(chrome.hoverFill, pane),
+        compositeOver(chrome.inactiveSelectionFill, pane),
+      ]) {
+        expect(contrastRatio(indicator, background), greaterThanOrEqualTo(4.5));
+      }
+    });
+
+    test('menu indicators follow a divergent raised surface', () {
+      final palette = ThemePalette(
+        accent: const Color(0xFFFFD600),
+        surface: const Color(0xFF101010),
+        raised: const Color(0xFFFFF8E1),
+      );
+      final theme = GhostTheme.build(seanceStyle, palette, Brightness.dark);
+      final chrome = theme.extension<GhostChrome>()!;
+      final menu = theme.extension<GhostMenuThemeTokens>()!;
+
+      expect(menu.indicator, chrome.headerIndicator);
+      expect(
+        contrastRatio(menu.indicator!, chrome.headerBackground),
         greaterThanOrEqualTo(4.5),
       );
     });
@@ -428,6 +636,7 @@ void main() {
             chrome.inactiveSelectionFill,
             reason: where,
           );
+          expect(tokens.indicator, chrome.sidebarIndicator, reason: where);
           expect(tokens.secondaryText, chrome.secondaryText, reason: where);
           expect(
             tokens.sidebarRowExtent,

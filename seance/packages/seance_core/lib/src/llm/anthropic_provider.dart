@@ -2,27 +2,57 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'bounded_http.dart';
 import 'provider.dart';
 import 'sse.dart';
 
 /// LLM provider speaking the Anthropic Messages API.
-class AnthropicProvider implements LlmProvider {
+class AnthropicProvider implements LlmProvider, ClosableLlmProvider {
   @override
   final String model;
   final String baseUrl;
   final String apiKey;
   final int maxTokens;
   final Duration timeout;
+  final Duration headerTimeout;
+  final Duration idleTimeout;
+  final Duration totalTimeout;
+  final int maxResponseBytes;
+  final int maxSseLineBytes;
+  final int maxSseEventBytes;
+  final int maxSseEvents;
   final http.Client _client;
+  final bool _ownsClient;
+  bool _closed = false;
 
   AnthropicProvider({
     required this.apiKey,
     this.model = 'claude-haiku-4-5-20251001',
     this.baseUrl = 'https://api.anthropic.com',
     this.maxTokens = 1024,
-    this.timeout = const Duration(seconds: 120),
+    Duration timeout = const Duration(seconds: 120),
+    Duration? headerTimeout,
+    Duration? idleTimeout,
+    Duration? totalTimeout,
+    this.maxResponseBytes = maxAssistantResponseBytes,
+    this.maxSseLineBytes = maxAssistantSseLineBytes,
+    this.maxSseEventBytes = maxAssistantSseEventBytes,
+    this.maxSseEvents = maxAssistantSseEvents,
     http.Client? client,
-  }) : _client = client ?? http.Client();
+    http.Client Function()? clientFactory,
+  }) : timeout = timeout,
+       headerTimeout = headerTimeout ?? timeout,
+       idleTimeout = idleTimeout ?? const Duration(seconds: 30),
+       totalTimeout = totalTimeout ?? timeout,
+       _client = _providerClient(client, clientFactory),
+       _ownsClient = client == null;
+
+  @override
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    if (_ownsClient) _client.close();
+  }
 
   Uri get _endpoint => Uri.parse('$baseUrl/v1/messages');
 
@@ -92,25 +122,22 @@ class AnthropicProvider implements LlmProvider {
     required List<LlmMessage> messages,
     List<ToolSpec> tools = const [],
   }) async {
-    final res = await _client
-        .post(
-          _endpoint,
-          headers: _headers,
-          body: jsonEncode(buildBody(messages: messages, tools: tools)),
-        )
-        .timeout(timeout);
-    _throwIfError(res);
-    return parseResponse(
-        jsonDecode(res.body) as Map<String, dynamic>);
+    _ensureOpen();
+    final request = http.Request('POST', _endpoint)
+      ..headers.addAll(_headers)
+      ..body = jsonEncode(buildBody(messages: messages, tools: tools));
+    final response = await _sendJson(request, 'Anthropic API');
+    _ensureOpen();
+    return parseResponse(response);
   }
 
   @override
   Future<List<String>> listModels() async {
-    final res = await _client
-        .get(Uri.parse('$baseUrl/v1/models'), headers: _headers)
-        .timeout(timeout);
-    _throwIfError(res);
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    _ensureOpen();
+    final request = http.Request('GET', Uri.parse('$baseUrl/v1/models'))
+      ..headers.addAll(_headers);
+    final json = await _sendJson(request, 'Anthropic models API');
+    _ensureOpen();
     final data = (json['data'] as List?) ?? const [];
     return data
         .map((m) => (m as Map<String, dynamic>)['id'] as String?)
@@ -132,15 +159,34 @@ class AnthropicProvider implements LlmProvider {
 
   @override
   Stream<String> streamChat({required List<LlmMessage> messages}) async* {
+    _ensureOpen();
     final req = http.Request('POST', _endpoint)
       ..headers.addAll(_headers)
       ..body = jsonEncode(buildBody(messages: messages, stream: true));
-    final res = await _client.send(req).timeout(timeout);
-    if (res.statusCode >= 400) {
-      throw http.ClientException(
-          'Anthropic stream failed: HTTP ${res.statusCode}');
-    }
-    await for (final event in parseSseJson(res.stream)) {
+    final started = await sendWithResponseDeadlines(
+      _client,
+      req,
+      headerTimeout: headerTimeout,
+      totalTimeout: totalTimeout,
+      operation: 'Anthropic stream',
+    );
+    await requireSuccessfulResponse(
+      started.response,
+      operation: 'Anthropic stream',
+      abort: started.abort,
+    );
+    await for (final event in parseSseJson(
+      started.response.stream,
+      maxBytes: maxResponseBytes,
+      maxLineBytes: maxSseLineBytes,
+      maxEventBytes: maxSseEventBytes,
+      maxEvents: maxSseEvents,
+      idleTimeout: idleTimeout,
+      totalTimeout: started.remaining,
+      operation: 'Anthropic stream',
+      abort: started.abort,
+    )) {
+      _ensureOpen();
       if (event['type'] == 'content_block_delta') {
         final delta = event['delta'] as Map<String, dynamic>?;
         final text = delta?['text'] as String?;
@@ -149,10 +195,43 @@ class AnthropicProvider implements LlmProvider {
     }
   }
 
-  void _throwIfError(http.Response res) {
-    if (res.statusCode >= 400) {
-      throw http.ClientException(
-          'Anthropic API error HTTP ${res.statusCode}: ${res.body}');
-    }
+  Future<Map<String, dynamic>> _sendJson(
+    http.Request request,
+    String operation,
+  ) async {
+    final started = await sendWithResponseDeadlines(
+      _client,
+      request,
+      headerTimeout: headerTimeout,
+      totalTimeout: totalTimeout,
+      operation: operation,
+    );
+    await requireSuccessfulResponse(
+      started.response,
+      operation: operation,
+      abort: started.abort,
+    );
+    return readBoundedJsonObject(
+      started.response.stream,
+      maxBytes: maxResponseBytes,
+      idleTimeout: idleTimeout,
+      totalTimeout: started.remaining,
+      operation: operation,
+      abort: started.abort,
+    );
   }
+
+  void _ensureOpen() {
+    if (_closed) throw StateError('Anthropic provider is closed.');
+  }
+}
+
+http.Client _providerClient(
+  http.Client? client,
+  http.Client Function()? clientFactory,
+) {
+  if (client != null && clientFactory != null) {
+    throw ArgumentError('client and clientFactory cannot both be supplied.');
+  }
+  return client ?? clientFactory?.call() ?? http.Client();
 }

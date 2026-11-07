@@ -96,6 +96,28 @@ void main() {
     );
   });
 
+  testWidgets('the accent contrast notice uses the localized words', (
+    tester,
+  ) async {
+    final appearance = AppearanceController(
+      initial: AppAppearance(
+        palette: klabautermannThemePresets.brand.copyWith(
+          accent: const Color(0xFFFFD600),
+        ),
+      ),
+    );
+    await _pumpTab(tester, appearance);
+
+    expect(
+      find.text('Low contrast: links and indicators use an adjusted colour.'),
+      findsOneWidget,
+    );
+    expect(find.text('Use adjusted colour'), findsOneWidget);
+    await tester.tap(find.text('Use adjusted colour'));
+    await tester.pump();
+    expect(appearance.value.palette.accent, isNot(const Color(0xFFFFD600)));
+  });
+
   testWidgets('a change the app does not take puts the editor back on the '
       "app's appearance and says so", (tester) async {
     await _pumpTab(tester, _Refusing());

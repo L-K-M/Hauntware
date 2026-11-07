@@ -20,6 +20,35 @@ bool _desktop(TargetPlatform platform) => switch (platform) {
   _ => false,
 };
 
+/// Host-provided colours for controls drawn on menu panels.
+///
+/// [indicator] is optional so themes which do not install this extension
+/// retain the original [ColorScheme.primary] behaviour.
+@immutable
+final class GhostMenuThemeTokens extends ThemeExtension<GhostMenuThemeTokens> {
+  const GhostMenuThemeTokens({this.indicator});
+
+  final Color? indicator;
+
+  static Color indicatorOf(BuildContext context) {
+    final theme = Theme.of(context);
+    return theme.extension<GhostMenuThemeTokens>()?.indicator ??
+        theme.colorScheme.primary;
+  }
+
+  @override
+  GhostMenuThemeTokens copyWith({Color? indicator}) =>
+      GhostMenuThemeTokens(indicator: indicator ?? this.indicator);
+
+  @override
+  GhostMenuThemeTokens lerp(GhostMenuThemeTokens? other, double t) {
+    if (other == null) return this;
+    return GhostMenuThemeTokens(
+      indicator: Color.lerp(indicator, other.indicator, t),
+    );
+  }
+}
+
 /// Poltergeist's compact menu skin, shared by all three Ghost apps.
 /// Hosts keep their palette and font; desktop panels stay rounded even
 /// when a host theme makes its other surfaces square.
@@ -121,6 +150,7 @@ class _MenuLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final indicator = GhostMenuThemeTokens.indicatorOf(context);
     return Row(
       children: [
         if (icon != null) ...[
@@ -128,7 +158,7 @@ class _MenuLabel extends StatelessWidget {
             icon,
             size: _iconSize,
             color: enabled
-                ? iconColor ?? scheme.primary
+                ? iconColor ?? indicator
                 : scheme.onSurface.withValues(alpha: 0.38),
           ),
           const SizedBox(width: 10),
@@ -190,6 +220,7 @@ class _SelectionMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final indicator = GhostMenuThemeTokens.indicatorOf(context);
     final apple = theme.platform == TargetPlatform.macOS;
     final items = field.contextMenuButtonItems;
     if (items.isEmpty) return const SizedBox.shrink();
@@ -230,10 +261,7 @@ class _SelectionMenu extends StatelessWidget {
                         requestFocusOnHover: false,
                         onPressed: item.onPressed,
                         leadingIcon: switch (_selectionIcon(item.type)) {
-                          final icon? => Icon(
-                            icon,
-                            color: theme.colorScheme.primary,
-                          ),
+                          final icon? => Icon(icon, color: indicator),
                           null => null,
                         },
                         trailingIcon: switch (_selectionKey(item.type)) {

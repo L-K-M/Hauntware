@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,10 +9,43 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/services/app_services.dart';
+import 'package:seance_app/services/local_settings_backend.dart';
+import 'package:seance_app/services/settings_backend.dart';
 import 'package:seance_core/seance_core.dart';
 
 const _baseUrl = 'https://sync.test';
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+
+class _ClosableProvider implements LlmProvider, ClosableLlmProvider {
+  int closeCalls = 0;
+
+  @override
+  void close() => closeCalls++;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+MockClient _currentServerClient(
+  Future<http.Response> Function(http.Request) handler,
+) {
+  return MockClient((request) async {
+    if (request.method == 'GET' && request.url.path == '/v1/records/legacy') {
+      return http.Response(
+        jsonEncode(
+          const LegacyRecordPage(
+            records: [],
+            nextId: null,
+            hasMore: false,
+            recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
+          ).toJson(),
+        ),
+        HttpStatus.ok,
+      );
+    }
+    return handler(request);
+  });
+}
 
 /// A round that adopts the assistant record and *then* fails must still
 /// rebuild the chat provider.
@@ -34,6 +68,7 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
     services = await AppServices.initialize();
     services.settings.syncBaseUrl = _baseUrl;
+    services.settings.syncUsername = 'user';
     services.settings.syncAssistant = true;
     await services.masterKeys.putApiKey('sync.token', 'session-token');
   });
@@ -46,13 +81,170 @@ void main() {
     await directory.delete(recursive: true);
   });
 
-  test('a round that adopts and then fails still rebuilds the provider',
-      () async {
+  test(
+    'a round that adopts and then fails still rebuilds the provider',
+    () async {
+      final codec = RecordCodec(services.vaultKey!);
+      // A server this device keeps off the account. The copy arriving for it is
+      // outranked and re-dated, which is what makes the coordinator take its
+      // second pass — the one that fails here, after the assistant record has
+      // already been applied.
+      const excluded = ServerConfig(
+        id: 'excluded-server',
+        label: 'local only',
+        host: 'local.example.com',
+        username: 'me',
+        excludeFromSync: true,
+        createdAt: 100,
+        updatedAt: 100,
+      );
+      await services.configStore.putServer(excluded);
+      const added = ServerConfig(
+        id: 'added-server',
+        label: 'added elsewhere',
+        host: 'remote.example.com',
+        username: 'deploy',
+        createdAt: 500,
+        updatedAt: 500,
+      );
+
+      final records = [
+        await codec.encrypt(
+          DecryptedRecord(
+            id: AssistantSettings.recordId,
+            kind: RecordKind.assistantSettings,
+            updatedAt: 500,
+            deviceId: 'other-device',
+            data: const AssistantSettings(
+              providerKind: 'openaiCompatible',
+              baseUrl: 'https://api.openai.com/v1',
+              model: 'gpt-5',
+              llmApiKeyRef: 'openai',
+              redactSecrets: true,
+              apiKeys: {'openai': 'sk-remote'},
+              updatedAt: 500,
+            ).toJson(),
+          ),
+        ),
+        await codec.encrypt(
+          DecryptedRecord(
+            id: excluded.id,
+            kind: RecordKind.serverConfig,
+            updatedAt: 500,
+            deviceId: 'other-device',
+            data: excluded.copyWith(label: 'from the account').toJson(),
+          ),
+        ),
+        await codec.encrypt(
+          DecryptedRecord(
+            id: added.id,
+            kind: RecordKind.serverConfig,
+            updatedAt: added.updatedAt,
+            deviceId: 'other-device',
+            data: added.toJson(),
+          ),
+        ),
+      ];
+
+      // The engine drains the pull before the coordinator applies anything: the
+      // first GET carries the records, the second observes that nothing new
+      // arrived. Only then does `applyToStores` run, and its re-dating is what
+      // sends the coordinator back for the third — which is the first one this
+      // server refuses.
+      var gets = 0;
+      // Recorded here and asserted after the round, rather than expected inside
+      // the handler: this test expects `syncNow` to throw, and an assertion
+      // that fails inside the client is one more exception on a path that is
+      // already carrying one. It survives that today — dropping the header
+      // fails this test, measured — but only because nothing between here and
+      // the expectation reshapes it, which is not a property this file should
+      // depend on.
+      final sentAuth = <String?>[];
+      final thirdPullStarted = Completer<void>();
+      final releaseThirdPull = Completer<void>();
+      final transport = _currentServerClient((request) async {
+        // These records carry the assistant's API keys, and every mock in this
+        // file answers whatever it is asked — so without this, a round that
+        // stopped sending the session token would pass the whole suite.
+        sentAuth.add(request.headers['authorization']);
+        if (request.method == 'GET') {
+          gets++;
+          if (gets >= 3) {
+            if (!thirdPullStarted.isCompleted) thirdPullStarted.complete();
+            await releaseThirdPull.future;
+            return http.Response('down', HttpStatus.internalServerError);
+          }
+          return http.Response(
+            jsonEncode(
+              PullResponse(
+                records: gets == 1
+                    ? [
+                        for (var i = 0; i < records.length; i++)
+                          records[i].withSeq(i + 1),
+                      ]
+                    : const [],
+                latestSeq: records.length,
+              ).toJson(),
+            ),
+            HttpStatus.ok,
+          );
+        }
+        return http.Response(
+          jsonEncode(
+            PushResponse(results: const [], latestSeq: records.length).toJson(),
+          ),
+          HttpStatus.ok,
+        );
+      });
+
+      final state = AppState(services);
+      addTearDown(state.dispose);
+      final backend = LocalSettingsBackend(state);
+      final versionBefore = state.llmConfigVersion;
+      final staleDraft = AssistantDraft(
+        fields: AssistantFields.of(services.settings),
+        llmApiKey: '',
+        zaiApiKey: '',
+        versionSeen: versionBefore,
+      );
+      await http.runWithClient(() async {
+        final syncing = state.syncNow();
+        await thirdPullStarted.future;
+
+        final save = await backend.saveAssistant(staleDraft);
+        expect(save.status, AssistantSaveStatus.adoptedBeforeSave);
+        expect(services.settings.llmModel, 'gpt-5');
+
+        releaseThirdPull.complete();
+        await expectLater(syncing, throwsA(isA<ApiError>()));
+      }, () => transport);
+
+      // The failure came from the pull after the adoption, not from an earlier
+      // request — otherwise the assertions below would fail for the wrong
+      // reason.
+      expect(gets, greaterThanOrEqualTo(3));
+      expect(sentAuth, isNotEmpty);
+      expect(sentAuth, everyElement('Bearer session-token'));
+      // Adopted, as the round's first half managed.
+      expect(services.settings.llmModel, 'gpt-5');
+      expect(
+        state.servers.map((server) => server.label),
+        contains(added.label),
+      );
+      // The whole configuration, not just the model: the failure this guards
+      // is "answers with the old provider, model and key", and a key that
+      // never reached the keystore would leave the rebuilt provider mute.
+      expect(services.settings.llmBaseUrl, 'https://api.openai.com/v1');
+      expect(await services.masterKeys.getApiKey('openai'), 'sk-remote');
+      expect(services.assistantSettingsChanged, isTrue);
+      // And consumed, which is the whole point: an already-built chat provider
+      // notices none of a new provider, model or key on its own.
+      expect(state.llmConfigVersion, versionBefore + 1);
+    },
+  );
+
+  test('a successful redating pass preserves an earlier adoption', () async {
     final codec = RecordCodec(services.vaultKey!);
-    // A server this device keeps off the account. The copy arriving for it is
-    // outranked and re-dated, which is what makes the coordinator take its
-    // second pass — the one that fails here, after the assistant record has
-    // already been applied.
     const excluded = ServerConfig(
       id: 'excluded-server',
       label: 'local only',
@@ -63,69 +255,57 @@ void main() {
       updatedAt: 100,
     );
     await services.configStore.putServer(excluded);
-
     final records = [
-      await codec.encrypt(DecryptedRecord(
-        id: AssistantSettings.recordId,
-        kind: RecordKind.assistantSettings,
-        updatedAt: 500,
-        deviceId: 'other-device',
-        data: const AssistantSettings(
-          providerKind: 'openaiCompatible',
-          baseUrl: 'https://api.openai.com/v1',
-          model: 'gpt-5',
-          llmApiKeyRef: 'openai',
-          redactSecrets: true,
-          apiKeys: {'openai': 'sk-remote'},
+      await codec.encrypt(
+        DecryptedRecord(
+          id: AssistantSettings.recordId,
+          kind: RecordKind.assistantSettings,
           updatedAt: 500,
-        ).toJson(),
-      )),
-      await codec.encrypt(DecryptedRecord(
-        id: excluded.id,
-        kind: RecordKind.serverConfig,
-        updatedAt: 500,
-        deviceId: 'other-device',
-        data: excluded.copyWith(label: 'from the account').toJson(),
-      )),
+          deviceId: 'other-device',
+          data: const AssistantSettings(
+            providerKind: 'openaiCompatible',
+            baseUrl: 'https://api.openai.com/v1',
+            model: 'gpt-5',
+            llmApiKeyRef: 'openai',
+            redactSecrets: true,
+            apiKeys: {'openai': 'sk-remote'},
+            updatedAt: 500,
+          ).toJson(),
+        ),
+      ),
+      await codec.encrypt(
+        DecryptedRecord(
+          id: excluded.id,
+          kind: RecordKind.serverConfig,
+          updatedAt: 500,
+          deviceId: 'other-device',
+          data: excluded.copyWith(label: 'from the account').toJson(),
+        ),
+      ),
     ];
 
-    // The engine drains the pull before the coordinator applies anything: the
-    // first GET carries the records, the second observes that nothing new
-    // arrived. Only then does `applyToStores` run, and its re-dating is what
-    // sends the coordinator back for the third — which is the first one this
-    // server refuses.
     var gets = 0;
-    // Recorded here and asserted after the round, rather than expected inside
-    // the handler: this test expects `syncNow` to throw, and an assertion
-    // that fails inside the client is one more exception on a path that is
-    // already carrying one. It survives that today — dropping the header
-    // fails this test, measured — but only because nothing between here and
-    // the expectation reshapes it, which is not a property this file should
-    // depend on.
-    final sentAuth = <String?>[];
-    final transport = MockClient((request) async {
-      // These records carry the assistant's API keys, and every mock in this
-      // file answers whatever it is asked — so without this, a round that
-      // stopped sending the session token would pass the whole suite.
-      sentAuth.add(request.headers['authorization']);
+    final transport = _currentServerClient((request) async {
       if (request.method == 'GET') {
         gets++;
-        if (gets >= 3) {
-          return http.Response('down', HttpStatus.internalServerError);
-        }
         return http.Response(
-          jsonEncode(PullResponse(
-            records: gets == 1
-                ? [
-                    for (var i = 0; i < records.length; i++)
-                      records[i].withSeq(i + 1),
-                  ]
-                : const [],
-            latestSeq: records.length,
-          ).toJson()),
+          jsonEncode(
+            PullResponse(
+              records: gets == 1
+                  ? [
+                      for (var i = 0; i < records.length; i++)
+                        records[i].withSeq(i + 1),
+                    ]
+                  : const [],
+              latestSeq: records.length,
+            ).toJson(),
+          ),
           HttpStatus.ok,
         );
       }
+      // Leaving the retraction dirty makes the engine stop after its
+      // no-progress guard, while still exercising the coordinator's second
+      // pass. The second apply sees the assistant record unchanged.
       return http.Response(
         jsonEncode(
           PushResponse(results: const [], latestSeq: records.length).toJson(),
@@ -137,28 +317,144 @@ void main() {
     final state = AppState(services);
     addTearDown(state.dispose);
     final versionBefore = state.llmConfigVersion;
-    await http.runWithClient(
-      () => expectLater(state.syncNow(), throwsA(isA<ApiError>())),
-      () => transport,
+    await http.runWithClient(state.syncNow, () => transport);
+
+    expect(gets, greaterThanOrEqualTo(3), reason: 'redating ran a second pass');
+    expect(services.settings.llmModel, 'gpt-5');
+    expect(services.assistantSettingsChanged, isTrue);
+    expect(state.llmConfigVersion, versionBefore + 1);
+  });
+
+  test('every assistant application advances the editor version', () async {
+    final codec = RecordCodec(services.vaultKey!);
+    const excluded = ServerConfig(
+      id: 'excluded-server',
+      label: 'local only',
+      host: 'local.example.com',
+      username: 'me',
+      excludeFromSync: true,
+      createdAt: 100,
+      updatedAt: 100,
+    );
+    await services.configStore.putServer(excluded);
+    final first = await codec.encrypt(
+      DecryptedRecord(
+        id: AssistantSettings.recordId,
+        kind: RecordKind.assistantSettings,
+        updatedAt: 500,
+        deviceId: 'first-device',
+        data: const AssistantSettings(
+          providerKind: 'openaiCompatible',
+          baseUrl: 'https://api.openai.com/v1',
+          model: 'model-a',
+          llmApiKeyRef: 'openai',
+          redactSecrets: true,
+          apiKeys: {'openai': 'sk-a'},
+          updatedAt: 500,
+        ).toJson(),
+      ),
+    );
+    final second = await codec.encrypt(
+      DecryptedRecord(
+        id: AssistantSettings.recordId,
+        kind: RecordKind.assistantSettings,
+        updatedAt: 600,
+        deviceId: 'second-device',
+        data: const AssistantSettings(
+          providerKind: 'openaiCompatible',
+          baseUrl: 'https://api.openai.com/v1',
+          model: 'model-b',
+          llmApiKeyRef: 'openai',
+          redactSecrets: true,
+          apiKeys: {'openai': 'sk-b'},
+          updatedAt: 600,
+        ).toJson(),
+      ),
+    );
+    final outrankingExcluded = await codec.encrypt(
+      DecryptedRecord(
+        id: excluded.id,
+        kind: RecordKind.serverConfig,
+        updatedAt: 500,
+        deviceId: 'other-device',
+        data: excluded.copyWith(label: 'from the account').toJson(),
+      ),
     );
 
-    // The failure came from the pull after the adoption, not from an earlier
-    // request — otherwise the assertions below would fail for the wrong
-    // reason.
-    expect(gets, greaterThanOrEqualTo(3));
-    expect(sentAuth, isNotEmpty);
-    expect(sentAuth, everyElement('Bearer session-token'));
-    // Adopted, as the round's first half managed.
-    expect(services.settings.llmModel, 'gpt-5');
-    // The whole configuration, not just the model: the failure this guards
-    // is "answers with the old provider, model and key", and a key that
-    // never reached the keystore would leave the rebuilt provider mute.
-    expect(services.settings.llmBaseUrl, 'https://api.openai.com/v1');
-    expect(await services.masterKeys.getApiKey('openai'), 'sk-remote');
-    expect(services.assistantSettingsChanged, isTrue);
-    // And consumed, which is the whole point: an already-built chat provider
-    // notices none of a new provider, model or key on its own.
-    expect(state.llmConfigVersion, versionBefore + 1);
+    var gets = 0;
+    final thirdPullStarted = Completer<void>();
+    final releaseThirdPull = Completer<void>();
+    final transport = _currentServerClient((request) async {
+      if (request.method == 'GET') {
+        gets++;
+        if (gets == 3) {
+          thirdPullStarted.complete();
+          await releaseThirdPull.future;
+        }
+        final records = switch (gets) {
+          1 => [first.withSeq(1), outrankingExcluded.withSeq(2)],
+          3 => [second.withSeq(3)],
+          _ => const <EncryptedRecord>[],
+        };
+        return http.Response(
+          jsonEncode(
+            PullResponse(
+              records: records,
+              latestSeq: gets >= 3 ? 3 : 2,
+            ).toJson(),
+          ),
+          HttpStatus.ok,
+        );
+      }
+      return http.Response(
+        jsonEncode(
+          PushResponse(
+            results: const [],
+            latestSeq: gets >= 3 ? 3 : 2,
+          ).toJson(),
+        ),
+        HttpStatus.ok,
+      );
+    });
+
+    final state = AppState(services);
+    addTearDown(state.dispose);
+    final backend = LocalSettingsBackend(state);
+    final versionBefore = state.llmConfigVersion;
+    final initialProvider = _ClosableProvider();
+    state.chat.adoptController(
+      ChatController(provider: initialProvider, onPaste: (_) {}),
+      versionBefore,
+    );
+    await http.runWithClient(() async {
+      final syncing = state.syncNow();
+      await thirdPullStarted.future;
+
+      expect(initialProvider.closeCalls, 1);
+      final intermediateProvider = _ClosableProvider();
+      state.chat.adoptController(
+        ChatController(provider: intermediateProvider, onPaste: (_) {}),
+        state.llmConfigVersion,
+      );
+      expect(services.settings.llmModel, 'model-a');
+      expect(state.llmConfigVersion, versionBefore + 1);
+      final staleDraft = AssistantDraft(
+        fields: AssistantFields.of(services.settings),
+        llmApiKey: 'sk-a',
+        zaiApiKey: '',
+        versionSeen: state.llmConfigVersion,
+      );
+
+      releaseThirdPull.complete();
+      await syncing;
+      expect(intermediateProvider.closeCalls, 1);
+      expect(services.settings.llmModel, 'model-b');
+      expect(state.llmConfigVersion, versionBefore + 2);
+
+      final save = await backend.saveAssistant(staleDraft);
+      expect(save.status, AssistantSaveStatus.adoptedBeforeSave);
+      expect(services.settings.llmModel, 'model-b');
+    }, () => transport);
   });
 
   test('an edit never stamps below the record this device holds', () async {
@@ -168,7 +464,8 @@ void main() {
     // would re-apply that record over the edit, silently.
     final state = AppState(services);
     addTearDown(state.dispose);
-    final ahead = DateTime.now().millisecondsSinceEpoch +
+    final ahead =
+        DateTime.now().millisecondsSinceEpoch +
         const Duration(days: 365).inMilliseconds;
     services.settings.assistantUpdatedAt = ahead;
 
@@ -177,110 +474,120 @@ void main() {
     expect(services.settings.assistantUpdatedAt, greaterThan(ahead));
   });
 
-  test('a round queued behind an adopting one does not hide the adoption',
-      () async {
-    // `runSync` resets `assistantSettingsChanged` as its first statement, and
-    // a round queued on the mutation queue starts as soon as the adopting one
-    // releases it. The adoption flag is sampled while the round still holds
-    // the queue, so which of the two resumes first cannot matter. (Today the
-    // awaiting caller does — an async return reaches its awaiter a microtask
-    // ahead of the completer's release — so this passes with the flag read
-    // after the release too; it pins the scenario, not the ordering.)
-    final codec = RecordCodec(services.vaultKey!);
-    final record = await codec.encrypt(DecryptedRecord(
-      id: AssistantSettings.recordId,
-      kind: RecordKind.assistantSettings,
-      updatedAt: 500,
-      deviceId: 'other-device',
-      data: const AssistantSettings(
-        providerKind: 'openaiCompatible',
-        baseUrl: 'https://api.openai.com/v1',
-        model: 'gpt-5',
-        llmApiKeyRef: 'openai',
-        redactSecrets: true,
-        apiKeys: {'openai': 'sk-remote'},
-        updatedAt: 500,
-      ).toJson(),
-    ));
-    var gets = 0;
-    var seq = 1;
-    final transport = MockClient((request) async {
-      if (request.method == 'GET') {
-        gets++;
+  test(
+    'a round queued behind an adopting one does not hide the adoption',
+    () async {
+      // `runSync` resets `assistantSettingsChanged` as its first statement, and
+      // a round queued on the mutation queue starts as soon as the adopting one
+      // releases it. The adoption flag is sampled while the round still holds
+      // the queue, so which of the two resumes first cannot matter. (Today the
+      // awaiting caller does — an async return reaches its awaiter a microtask
+      // ahead of the completer's release — so this passes with the flag read
+      // after the release too; it pins the scenario, not the ordering.)
+      final codec = RecordCodec(services.vaultKey!);
+      final record = await codec.encrypt(
+        DecryptedRecord(
+          id: AssistantSettings.recordId,
+          kind: RecordKind.assistantSettings,
+          updatedAt: 500,
+          deviceId: 'other-device',
+          data: const AssistantSettings(
+            providerKind: 'openaiCompatible',
+            baseUrl: 'https://api.openai.com/v1',
+            model: 'gpt-5',
+            llmApiKeyRef: 'openai',
+            redactSecrets: true,
+            apiKeys: {'openai': 'sk-remote'},
+            updatedAt: 500,
+          ).toJson(),
+        ),
+      );
+      var gets = 0;
+      var seq = 1;
+      final transport = _currentServerClient((request) async {
+        if (request.method == 'GET') {
+          gets++;
+          return http.Response(
+            jsonEncode(
+              PullResponse(
+                records: gets == 1 ? [record.withSeq(1)] : const [],
+                // The head as this mock has actually handed it out, not the
+                // constant it started at: the pushes below advance it, and
+                // answering the old value would have the client watch the
+                // account's head go backwards between the two rounds — a state
+                // no server can be in, and one a client is free to reject.
+                latestSeq: seq,
+              ).toJson(),
+            ),
+            HttpStatus.ok,
+          );
+        }
+        // Accept whatever the second round publishes, so it ends cleanly.
+        final pushed = PushRequest.fromJson(
+          jsonDecode(request.body) as Map<String, dynamic>,
+        ).records;
         return http.Response(
-          jsonEncode(PullResponse(
-            records: gets == 1 ? [record.withSeq(1)] : const [],
-            // The head as this mock has actually handed it out, not the
-            // constant it started at: the pushes below advance it, and
-            // answering the old value would have the client watch the
-            // account's head go backwards between the two rounds — a state
-            // no server can be in, and one a client is free to reject.
-            latestSeq: seq,
-          ).toJson()),
+          jsonEncode(
+            PushResponse(
+              results: [
+                for (final r in pushed)
+                  PushResult(id: r.id, seq: ++seq, accepted: true),
+              ],
+              latestSeq: seq,
+            ).toJson(),
+          ),
           HttpStatus.ok,
         );
-      }
-      // Accept whatever the second round publishes, so it ends cleanly.
-      final pushed = PushRequest.fromJson(
-        jsonDecode(request.body) as Map<String, dynamic>,
-      ).records;
-      return http.Response(
-        jsonEncode(PushResponse(
-          results: [
-            for (final r in pushed)
-              PushResult(id: r.id, seq: ++seq, accepted: true),
-          ],
-          latestSeq: seq,
-        ).toJson()),
-        HttpStatus.ok,
+      });
+
+      final state = AppState(services);
+      addTearDown(state.dispose);
+      final versionBefore = state.llmConfigVersion;
+      await http.runWithClient(
+        () => Future.wait([state.syncNow(), state.syncNow()]),
+        () => transport,
       );
-    });
 
-    final state = AppState(services);
-    addTearDown(state.dispose);
-    final versionBefore = state.llmConfigVersion;
-    await http.runWithClient(
-      () => Future.wait([state.syncNow(), state.syncNow()]),
-      () => transport,
-    );
+      expect(services.settings.llmModel, 'gpt-5');
+      expect(gets, greaterThanOrEqualTo(3), reason: 'both rounds pulled');
+      // Rebuilt exactly once: by the round that adopted, not by the one that
+      // found nothing new.
+      expect(state.llmConfigVersion, versionBefore + 1);
+      // And the flag is the queued round's by the end — which is the whole
+      // reason the adopting round samples it before releasing the queue.
+      expect(services.assistantSettingsChanged, isFalse);
+    },
+  );
 
-    expect(services.settings.llmModel, 'gpt-5');
-    expect(gets, greaterThanOrEqualTo(3), reason: 'both rounds pulled');
-    // Rebuilt exactly once: by the round that adopted, not by the one that
-    // found nothing new.
-    expect(state.llmConfigVersion, versionBefore + 1);
-    // And the flag is the queued round's by the end — which is the whole
-    // reason the adopting round samples it before releasing the queue.
-    expect(services.assistantSettingsChanged, isFalse);
-  });
+  test(
+    'switching on with the toggle still off neither syncs nor stamps',
+    () async {
+      // With the toggle off `runSync` builds no assistant store, so a round can
+      // adopt nothing — and falling through would stamp `now` on this device's
+      // configuration and persist it, an inflated stamp that outranks the
+      // account's record when the switch is genuinely turned on later.
+      services.settings.syncAssistant = false;
+      services.settings.assistantUpdatedAt = 5;
+      var requests = 0;
+      final transport = _currentServerClient((request) async {
+        requests++;
+        return http.Response(
+          jsonEncode(const PullResponse(records: [], latestSeq: 0).toJson()),
+          HttpStatus.ok,
+        );
+      });
 
-  test('switching on with the toggle still off neither syncs nor stamps',
-      () async {
-    // With the toggle off `runSync` builds no assistant store, so a round can
-    // adopt nothing — and falling through would stamp `now` on this device's
-    // configuration and persist it, an inflated stamp that outranks the
-    // account's record when the switch is genuinely turned on later.
-    services.settings.syncAssistant = false;
-    services.settings.assistantUpdatedAt = 5;
-    var requests = 0;
-    final transport = MockClient((request) async {
-      requests++;
-      return http.Response(
-        jsonEncode(const PullResponse(records: [], latestSeq: 0).toJson()),
-        HttpStatus.ok,
+      final state = AppState(services);
+      addTearDown(state.dispose);
+      await http.runWithClient(
+        () => state.assistantSyncSwitchedOn(),
+        () => transport,
       );
-    });
 
-    final state = AppState(services);
-    addTearDown(state.dispose);
-    await http.runWithClient(
-      () => state.assistantSyncSwitchedOn(),
-      () => transport,
-    );
-
-    expect(requests, 0);
-    expect(services.settings.assistantUpdatedAt, 5);
-  });
+      expect(requests, 0);
+      expect(services.settings.assistantUpdatedAt, 5);
+    },
+  );
 
   test('reloadLlmProvider bumps the config version exactly once', () async {
     // `_save` in the settings screen tells an adoption that landed during its
@@ -291,12 +598,19 @@ void main() {
     // settings changed on another device, reload the fields, and refuse.
     final state = AppState(services);
     addTearDown(state.dispose);
+    final previousProvider = _ClosableProvider();
+    state.chat.adoptController(
+      ChatController(provider: previousProvider, onPaste: (_) {}),
+      state.llmConfigVersion,
+    );
 
     // With nothing configured first — the early return a future optimisation
     // would most plausibly add ("no provider, nothing to reload").
     final before = state.llmConfigVersion;
     await state.reloadLlmProvider();
     expect(state.llmConfigVersion, before + 1);
+    expect(previousProvider.closeCalls, 1);
+    expect(state.chat.controllerFor(before), isNull);
 
     // And with a key stored, where the reload has something to do. Twice in a
     // row with the same configuration too: a bump conditional on the config
@@ -312,10 +626,17 @@ void main() {
     // so the two calls it makes around that reload must not bump at all.
     final steady = state.llmConfigVersion;
     await services.saveSettings();
-    expect(state.llmConfigVersion, steady, reason: 'saveSettings must not bump');
+    expect(
+      state.llmConfigVersion,
+      steady,
+      reason: 'saveSettings must not bump',
+    );
     await state.assistantSettingsEdited();
-    expect(state.llmConfigVersion, steady,
-        reason: 'publishing an edit must not bump');
+    expect(
+      state.llmConfigVersion,
+      steady,
+      reason: 'publishing an edit must not bump',
+    );
   });
 
   group('switching on at the zero stamp', () {
@@ -334,81 +655,86 @@ void main() {
     // thing these tests are about, and a stamp that only ever moves in
     // `settings` cannot be told from one that also moves on the record.
     MockClient emptyAccount(void Function(EncryptedRecord record) onPushed) =>
-        MockClient(
-          (request) async {
-            if (request.method == 'GET') {
-              return http.Response(
-                jsonEncode(
-                  // Monotonic here too: the account head this mock reports is
-                  // the one its own acknowledgements have reached.
-                  PullResponse(records: const [], latestSeq: seq).toJson(),
-                ),
-                HttpStatus.ok,
-              );
-            }
-            // By id, not by counting requests: the round pushes whatever else
-            // this device holds, and "a POST happened" would pass for a
-            // server config while the assistant record stayed behind.
-            final pushed = PushRequest.fromJson(
-              jsonDecode(request.body) as Map<String, dynamic>,
-            ).records;
-            for (final record in pushed) {
-              onPushed(record);
-            }
-            // Acknowledged, as a server does. Answering `results: []` to
-            // every push simulates a server that silently drops what it is
-            // sent, so a client that treated an unacknowledged record as
-            // unsynced would look identical to one that published.
-            var next = seq;
-            seq += pushed.length;
+        MockClient((request) async {
+          if (request.method == 'GET') {
             return http.Response(
-              jsonEncode(PushResponse(
+              jsonEncode(
+                // Monotonic here too: the account head this mock reports is
+                // the one its own acknowledgements have reached.
+                PullResponse(records: const [], latestSeq: seq).toJson(),
+              ),
+              HttpStatus.ok,
+            );
+          }
+          // By id, not by counting requests: the round pushes whatever else
+          // this device holds, and "a POST happened" would pass for a
+          // server config while the assistant record stayed behind.
+          final pushed = PushRequest.fromJson(
+            jsonDecode(request.body) as Map<String, dynamic>,
+          ).records;
+          for (final record in pushed) {
+            onPushed(record);
+          }
+          // Acknowledged, as a server does. Answering `results: []` to
+          // every push simulates a server that silently drops what it is
+          // sent, so a client that treated an unacknowledged record as
+          // unsynced would look identical to one that published.
+          var next = seq;
+          seq += pushed.length;
+          return http.Response(
+            jsonEncode(
+              PushResponse(
                 results: [
                   for (final record in pushed)
                     PushResult(id: record.id, seq: ++next, accepted: true),
                 ],
                 latestSeq: seq,
-              ).toJson()),
-              HttpStatus.ok,
-            );
-          },
+              ).toJson(),
+            ),
+            HttpStatus.ok,
+          );
+        });
+
+    test(
+      'an install configured before this feature shipped publishes',
+      () async {
+        // The upgrade path, and the whole reason the guard cannot be the stamp
+        // alone: `assistantUpdatedAt` was added by this feature, so every device
+        // that already had a working assistant reads zero. Silent here, it
+        // adopts nothing from an empty account and publishes nothing, and the
+        // switch does nothing at all until the settings happen to be edited.
+        services.settings.assistantUpdatedAt = 0;
+        // Off, so the publish is this method's own second round rather than the
+        // debounce it would otherwise hand to — the branch the switch takes for
+        // a user who has just watched a round run.
+        services.settings.autoSync = false;
+        await services.masterKeys.putApiKey('anthropic', 'sk-configured');
+
+        final pushed = <EncryptedRecord>[];
+        final state = AppState(services);
+        addTearDown(state.dispose);
+        await http.runWithClient(
+          () => state.assistantSyncSwitchedOn(),
+          () => emptyAccount(pushed.add),
         );
 
-    test('an install configured before this feature shipped publishes',
-        () async {
-      // The upgrade path, and the whole reason the guard cannot be the stamp
-      // alone: `assistantUpdatedAt` was added by this feature, so every device
-      // that already had a working assistant reads zero. Silent here, it
-      // adopts nothing from an empty account and publishes nothing, and the
-      // switch does nothing at all until the settings happen to be edited.
-      services.settings.assistantUpdatedAt = 0;
-      // Off, so the publish is this method's own second round rather than the
-      // debounce it would otherwise hand to — the branch the switch takes for
-      // a user who has just watched a round run.
-      services.settings.autoSync = false;
-      await services.masterKeys.putApiKey('anthropic', 'sk-configured');
-
-      final pushed = <EncryptedRecord>[];
-      final state = AppState(services);
-      addTearDown(state.dispose);
-      await http.runWithClient(
-        () => state.assistantSyncSwitchedOn(),
-        () => emptyAccount(pushed.add),
-      );
-
-      expect(services.settings.assistantUpdatedAt, greaterThan(0),
-          reason: 'a configured device must stamp what it is about to publish');
-      expect(pushed.map((r) => r.id), contains(AssistantSettings.recordId));
-      // And the record carries that stamp, which is the half the setting
-      // cannot vouch for: a publish that dated the outgoing record from its
-      // own clock would satisfy every assertion above.
-      expect(
-        (await RecordCodec(services.vaultKey!).decrypt(pushed
-                .lastWhere((r) => r.id == AssistantSettings.recordId)))
-            .updatedAt,
-        services.settings.assistantUpdatedAt,
-      );
-    });
+        expect(
+          services.settings.assistantUpdatedAt,
+          greaterThan(0),
+          reason: 'a configured device must stamp what it is about to publish',
+        );
+        expect(pushed.map((r) => r.id), contains(AssistantSettings.recordId));
+        // And the record carries that stamp, which is the half the setting
+        // cannot vouch for: a publish that dated the outgoing record from its
+        // own clock would satisfy every assertion above.
+        expect(
+          (await RecordCodec(services.vaultKey!).decrypt(
+            pushed.lastWhere((r) => r.id == AssistantSettings.recordId),
+          )).updatedAt,
+          services.settings.assistantUpdatedAt,
+        );
+      },
+    );
 
     test('a device that already has a stamp does not stamp again', () async {
       // Not a zero-stamp case, and the reason the guard reads the stamp
@@ -441,15 +767,14 @@ void main() {
       // the setting alone is exactly the "permanent winner" this test's
       // comment describes, and the local assertion above cannot see it.
       expect(
-        (await RecordCodec(services.vaultKey!).decrypt(pushed
-                .lastWhere((r) => r.id == AssistantSettings.recordId)))
-            .updatedAt,
+        (await RecordCodec(services.vaultKey!).decrypt(
+          pushed.lastWhere((r) => r.id == AssistantSettings.recordId),
+        )).updatedAt,
         500,
       );
     });
 
-    test('an upgrading configured device adopts rather than clobbers',
-        () async {
+    test('an upgrading configured device adopts rather than clobbers', () async {
       // The other half of the upgrade path, and the one with something to
       // lose: stamp 0 and genuinely configured, but the account already holds
       // a phone's record. The empty-account test cannot tell "publishes
@@ -461,39 +786,44 @@ void main() {
       await services.masterKeys.putApiKey('anthropic', 'sk-configured');
 
       final codec = RecordCodec(services.vaultKey!);
-      final remote = await codec.encrypt(DecryptedRecord(
-        id: AssistantSettings.recordId,
-        kind: RecordKind.assistantSettings,
-        updatedAt: 900,
-        deviceId: 'phone',
-        data: const AssistantSettings(
-          providerKind: 'anthropic',
-          baseUrl: 'https://api.anthropic.com',
-          model: 'the-phone-model',
-          llmApiKeyRef: 'anthropic',
-          redactSecrets: true,
-          apiKeys: {'anthropic': 'sk-phone'},
+      final remote = await codec.encrypt(
+        DecryptedRecord(
+          id: AssistantSettings.recordId,
+          kind: RecordKind.assistantSettings,
           updatedAt: 900,
-        ).toJson(),
-      ));
+          deviceId: 'phone',
+          data: const AssistantSettings(
+            providerKind: 'anthropic',
+            baseUrl: 'https://api.anthropic.com',
+            model: 'the-phone-model',
+            llmApiKeyRef: 'anthropic',
+            redactSecrets: true,
+            apiKeys: {'anthropic': 'sk-phone'},
+            updatedAt: 900,
+          ).toJson(),
+        ),
+      );
 
       final pushed = <String>[];
       // Named apart from the group's `seq`: this transport starts from an
       // account that already holds a record, and shadowing the counter that
       // `setUp` resets makes it look as though that reset applied here.
       var pushSeq = 1;
-      final transport = MockClient((request) async {
+      final transport = _currentServerClient((request) async {
         if (request.method == 'GET') {
+          final since = int.parse(request.url.queryParameters['since'] ?? '0');
           return http.Response(
-            jsonEncode(PullResponse(
-              records: [remote.withSeq(1)],
-              // The head the acknowledgements below have reached, not a
-              // literal: identical today, since this device pushes nothing
-              // here, but a mock whose head goes backwards after a push is a
-              // state no server can be in — which the transport at the top of
-              // this file has its own comment about.
-              latestSeq: pushSeq,
-            ).toJson()),
+            jsonEncode(
+              PullResponse(
+                records: [if (since < 1) remote.withSeq(1)],
+                // The head the acknowledgements below have reached, not a
+                // literal: identical today, since this device pushes nothing
+                // here, but a mock whose head goes backwards after a push is a
+                // state no server can be in — which the transport at the top of
+                // this file has its own comment about.
+                latestSeq: pushSeq,
+              ).toJson(),
+            ),
             HttpStatus.ok,
           );
         }
@@ -504,13 +834,15 @@ void main() {
           pushed.add(record.id);
         }
         return http.Response(
-          jsonEncode(PushResponse(
-            results: [
-              for (final record in records)
-                PushResult(id: record.id, seq: ++pushSeq, accepted: true),
-            ],
-            latestSeq: pushSeq,
-          ).toJson()),
+          jsonEncode(
+            PushResponse(
+              results: [
+                for (final record in records)
+                  PushResult(id: record.id, seq: ++pushSeq, accepted: true),
+              ],
+              latestSeq: pushSeq,
+            ).toJson(),
+          ),
           HttpStatus.ok,
         );
       });
@@ -528,11 +860,17 @@ void main() {
       // The keys too: the switch's copy says it replaces the assistant setup,
       // and a configuration adopted without its key looks set up here and
       // answers nothing.
-      expect(await services.masterKeys.getApiKey('anthropic'), 'sk-phone',
-          reason: 'adoption replaces the whole setup, keys included');
+      expect(
+        await services.masterKeys.getApiKey('anthropic'),
+        'sk-phone',
+        reason: 'adoption replaces the whole setup, keys included',
+      );
       expect(services.settings.assistantUpdatedAt, 900);
-      expect(pushed, isNot(contains(AssistantSettings.recordId)),
-          reason: 'a device that adopted has nothing of its own to publish');
+      expect(
+        pushed,
+        isNot(contains(AssistantSettings.recordId)),
+        reason: 'a device that adopted has nothing of its own to publish',
+      );
     });
 
     test('a fresh install publishes nothing over the account', () async {
@@ -556,8 +894,11 @@ void main() {
       );
 
       expect(services.settings.assistantUpdatedAt, 0);
-      expect(pushed, isNot(contains(AssistantSettings.recordId)),
-          reason: 'defaults are not a configuration worth publishing');
+      expect(
+        pushed,
+        isNot(contains(AssistantSettings.recordId)),
+        reason: 'defaults are not a configuration worth publishing',
+      );
     });
   });
 }

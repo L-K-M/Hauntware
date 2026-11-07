@@ -6,9 +6,8 @@ const int _inboxMaxPendingPerApp = 100;
 
 /// Apps one account may register. Without it the per-app pending cap bounds
 /// nothing: a session could keep adding apps, and every one's queue lands in
-/// each `GET /v1/inbox`. The check and the insert are not atomic, so two
-/// concurrent registrations can pass it by one; it bounds growth, it is not
-/// an exact quota.
+/// each `GET /v1/inbox`. Storage checks the cap and inserts in one transaction,
+/// so concurrent registrations cannot exceed it.
 const int _inboxMaxAppsPerAccount = 50;
 
 const int _inboxDepositsPerWindow = 30;
@@ -32,7 +31,7 @@ final String _unknownAppHash = VaultCrypto.hashAuthVerifier(
 /// no say in what Séance believes (the key).
 extension _InboxHandlers on SyncServer {
   Future<Response> _createInboxApp(Request req) =>
-      _withAuth(req, (username) async {
+      _withAuth(req, (principal) async {
         final body = await _readJson(req, _authBodyCap);
         if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
         final CreateInboxAppRequest r;
@@ -55,7 +54,7 @@ extension _InboxHandlers on SyncServer {
                 'control characters',
           );
         }
-        if ((await storage.listInboxApps(username)).length >=
+        if ((await storage.listInboxAppsFor(principal)).length >=
             _inboxMaxAppsPerAccount) {
           return _error(
             429,
@@ -67,16 +66,26 @@ extension _InboxHandlers on SyncServer {
         // Stored like the auth verifier: a copied database yields no token
         // that could fill the inbox.
         final salt = secureRandomBytes(16);
-        final created = await storage.createInboxApp(
-          StoredInboxApp(
-            username: username,
-            appId: r.appId,
-            name: name,
-            tokenHash: _hashDepositToken(r.token, salt),
-            tokenSalt: base64.encode(salt),
-            created: _now().millisecondsSinceEpoch,
-          ),
-        );
+        final bool created;
+        try {
+          created = await storage.createInboxAppFor(
+            principal,
+            StoredInboxApp(
+              username: principal.username,
+              appId: r.appId,
+              name: name,
+              tokenHash: _hashDepositToken(r.token, salt),
+              tokenSalt: base64.encode(salt),
+              created: _now().millisecondsSinceEpoch,
+            ),
+          );
+        } on InboxAppLimitException {
+          return _error(
+            429,
+            'too_many_apps',
+            'Remove an inbox app before adding another',
+          );
+        }
         if (!created) {
           return _error(409, 'app_exists', 'App id already registered');
         }
@@ -84,29 +93,59 @@ extension _InboxHandlers on SyncServer {
       });
 
   Future<Response> _listInboxApps(Request req) =>
-      _withAuth(req, (username) async {
+      _withAuth(req, (principal) async {
         // Purged first, so pending counts leave out what already expired.
         await _purgeExpiredInbox();
-        final apps = await storage.listInboxApps(username);
+        final apps = await storage.listInboxAppsFor(principal);
         return _json({
           'apps': [for (final app in apps) app.toJson()],
         });
       });
 
   Future<Response> _deleteInboxApp(Request req, String appId) =>
-      _withAuth(req, (username) async {
-        if (!await storage.deleteInboxApp(username, appId)) {
+      _withAuth(req, (principal) async {
+        if (!await storage.deleteInboxAppFor(principal, appId)) {
           return _error(404, 'not_found', 'No such app');
         }
         return Response(204);
       });
 
-  Future<Response> _listInbox(Request req) => _withAuth(req, (username) async {
-    final since = int.tryParse(req.url.queryParameters['since'] ?? '0') ?? 0;
+  Future<Response> _listInbox(Request req) => _withAuth(req, (principal) async {
+    final since = int.tryParse(req.url.queryParameters['since'] ?? '0');
+    if (since == null || since < 0) {
+      return _error(400, 'bad_request', 'Invalid inbox cursor');
+    }
+    final throughText = req.url.queryParameters['through'];
+    final through = throughText == null ? null : int.tryParse(throughText);
+    if (throughText != null && (through == null || through < 0)) {
+      return _error(400, 'bad_request', 'Invalid inbox watermark');
+    }
+    final pageFlag = req.url.queryParameters['page'];
+    if (pageFlag != null && pageFlag != '1') {
+      return _error(400, 'bad_request', 'Invalid inbox page flag');
+    }
     await _purgeExpiredInbox();
-    final items = await storage.inboxItemsSince(username, since);
+    final page = await storage.inboxPageFor(
+      principal,
+      since,
+      throughReceived: pageFlag == '1' ? through : null,
+      limits: PullPageLimits(
+        maxRecords: settings.maxRecordsPerPull,
+        maxBodyBytes: settings.maxPullBodyBytes,
+      ),
+    );
+    if (pageFlag == '1') return _json(page.toJson());
+    // Same refusal as _sync: the unpaged shape has no field that could
+    // announce a cut, so an overflowing legacy request is not truncated.
+    if (page.hasMore) {
+      return _error(
+        400,
+        'pagination_required',
+        'The inbox no longer fits one response; retry with page=1',
+      );
+    }
     return _json({
-      'items': [for (final item in items) item.toJson()],
+      'items': [for (final item in page.items) item.toJson()],
     });
   });
 
@@ -114,8 +153,8 @@ extension _InboxHandlers on SyncServer {
   /// already deleted, usually by another device that ran or dismissed it.
   /// It must stay a 404 with `not_found` for every absent item.
   Future<Response> _deleteInboxItem(Request req, String appId, String itemId) =>
-      _withAuth(req, (username) async {
-        if (!await storage.deleteInboxItem(username, appId, itemId)) {
+      _withAuth(req, (principal) async {
+        if (!await storage.deleteInboxItemFor(principal, appId, itemId)) {
           return _error(404, 'not_found', 'No such inbox item');
         }
         return Response(204);
@@ -131,8 +170,9 @@ extension _InboxHandlers on SyncServer {
     final declared = req.contentLength;
     if (declared != null && declared > cap) throw const _PayloadTooLarge();
 
-    if (!await _producerAuthorized(req, appId)) return _depositUnauthorized();
-    if (!inboxLimiter.allow('inbox:$appId')) {
+    final producer = await _authorizedProducer(req, appId);
+    if (producer == null) return _depositUnauthorized();
+    if (!inboxLimiter.allow('inbox:$appId:${producer.tokenSalt}')) {
       return _error(429, 'rate_limited', 'Too many proposals; slow down');
     }
 
@@ -147,12 +187,24 @@ extension _InboxHandlers on SyncServer {
 
     await _purgeExpiredInbox();
     final itemId = uuidV4();
+    if (!_inboxItemFitsPullPage(appId, itemId, blob)) {
+      return _error(
+        413,
+        'item_too_large_for_pull',
+        'The stored item would exceed the configured pull page limit',
+      );
+    }
     final result = await storage.addInboxItem(
       appId,
       itemId,
       blob,
       storedAt: _now().millisecondsSinceEpoch,
       maxPending: _inboxMaxPendingPerApp,
+      expectedGeneration: producer.tokenSalt,
+      quota: AccountQuota(
+        maxRecords: settings.maxRecordsPerAccount,
+        maxBytes: settings.maxAccountBytes,
+      ),
     );
     switch (result.status) {
       case InboxAddStatus.added:
@@ -163,6 +215,13 @@ extension _InboxHandlers on SyncServer {
           'inbox_full',
           'The app has $_inboxMaxPendingPerApp pending proposals; wait for '
               'the user to handle some',
+        );
+      case InboxAddStatus.accountFull:
+        return _error(
+          429,
+          'inbox_account_full',
+          'The account has reached its pending inbox storage quota; handle '
+              'some proposals first',
         );
       case InboxAddStatus.unknownApp:
         // Removed between the token check and the insert.
@@ -175,7 +234,7 @@ extension _InboxHandlers on SyncServer {
   /// all end in the same 401, so a caller learns nothing about which apps
   /// exist. (The ids are 128 random bits, so the lookup's own timing gives
   /// away nothing guessable either.)
-  Future<bool> _producerAuthorized(Request req, String appId) async {
+  Future<StoredInboxApp?> _authorizedProducer(Request req, String appId) async {
     final auth = req.headers['authorization'];
     // The scheme is case-insensitive (RFC 9110 11.1); hand-written producer
     // clients are the ones likely to send `bearer`.
@@ -194,7 +253,7 @@ extension _InboxHandlers on SyncServer {
     final provided = _hashDepositToken(token, salt);
     final expected = app?.tokenHash ?? _unknownAppHash;
     final matches = SyncServer._constantTimeEquals(provided, expected);
-    return app != null && matches;
+    return app != null && matches ? app : null;
   }
 
   Response _depositUnauthorized() =>
@@ -206,9 +265,9 @@ extension _InboxHandlers on SyncServer {
       VaultCrypto.hashAuthVerifier(utf8.encode(token), salt);
 
   /// Drops items older than [kInboxRetention]. The server cannot read a
-  /// proposal's own `expires`, so it keeps each item for the cap on it.
-  /// Run on the inbox requests themselves, which needs no timer and keeps a
-  /// list from ever returning an expired item.
+  /// proposal's own `expires`, so it keeps each item for the cap on it. The
+  /// server lifecycle runs this for abandoned accounts; inbox requests also
+  /// run it so a response never includes an item that has already expired.
   Future<void> _purgeExpiredInbox() => storage.purgeInboxItems(
     storedBefore: _now().subtract(kInboxRetention).millisecondsSinceEpoch + 1,
   );

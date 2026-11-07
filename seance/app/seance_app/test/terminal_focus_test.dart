@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -24,6 +26,7 @@ void main() {
   late AppServices services;
   late AppState state;
   final pending = <_PendingConnection>[];
+  final menuCalls = <MethodCall>[];
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('seance-terminal-focus-');
@@ -33,7 +36,10 @@ void main() {
       _pathChannel,
       (_) async => directory.path,
     );
-    messenger.setMockMethodCallHandler(_menuChannel, (_) async => null);
+    messenger.setMockMethodCallHandler(_menuChannel, (call) async {
+      menuCalls.add(call);
+      return null;
+    });
     FlutterSecureStorage.setMockInitialValues({});
     services = await AppServices.initialize();
     state = AppState(
@@ -70,6 +76,7 @@ void main() {
     state.dispose();
     await services.probe.dispose();
     pending.clear();
+    menuCalls.clear();
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(_pathChannel, null);
@@ -125,6 +132,20 @@ void main() {
         ),
       )
       .focusNode!;
+
+  List<bool> terminalFocusReports() => menuCalls
+      .where((call) => call.method == 'setTerminalFocused')
+      .map((call) => call.arguments as bool)
+      .toList();
+
+  Future<void> onMacOS(Future<void> Function() body) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      await body();
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  }
 
   testWidgets('connecting from the sidebar focuses the new terminal', (
     tester,
@@ -297,6 +318,45 @@ void main() {
 
     await complete(tester, 0);
     expect(dialogFocus.hasPrimaryFocus, isTrue);
+  });
+
+  testWidgets('closing the focused terminal clears native menu focus', (
+    tester,
+  ) async {
+    await onMacOS(() async {
+      await mount(tester);
+      await open(tester, 'alpha');
+      await complete(tester, 0);
+      final sessionId = state.activeSession!.id;
+      expect(terminalFocusReports().last, isTrue);
+
+      await tester.runAsync(() => state.closeTab(sessionId));
+      await pumpFrames(tester);
+
+      expect(find.byType(TerminalView), findsNothing);
+      expect(terminalFocusReports().last, isFalse);
+    });
+  });
+
+  testWidgets('disposing an inactive terminal keeps the active focus report', (
+    tester,
+  ) async {
+    await onMacOS(() async {
+      await mount(tester);
+      await open(tester, 'alpha');
+      await complete(tester, 0);
+      final alphaId = state.activeSession!.id;
+      await open(tester, 'beta');
+      await complete(tester, 1);
+      expect(state.activeSession!.serverId, 'beta');
+      expect(terminalFocusReports().last, isTrue);
+
+      await tester.runAsync(() => state.closeTab(alphaId));
+      await pumpFrames(tester);
+
+      expect(state.activeSession!.serverId, 'beta');
+      expect(terminalFocusReports().last, isTrue);
+    });
   });
 }
 

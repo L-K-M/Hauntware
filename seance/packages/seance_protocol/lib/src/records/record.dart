@@ -84,16 +84,21 @@ class DecryptedRecord {
 /// resolve conflicts. [seq] is assigned by the server on upsert and is null for
 /// a record the client has not yet pushed.
 class EncryptedRecord {
+  /// Authenticated record-envelope generation. An absent wire value is the
+  /// legacy v1 shape; current writers emit v2 and current sync rejects v1.
+  final int envelopeVersion;
   final String id;
   final int updatedAt;
   final String deviceId;
   final bool deleted;
   final int? seq;
 
-  /// `nonce || ciphertext || mac`. Empty for a tombstone.
+  /// `nonce || ciphertext || mac`. Current writers seal typed tombstones too;
+  /// an empty blob is a legacy unverified tombstone and must not be applied.
   final Uint8List blob;
 
   const EncryptedRecord({
+    this.envelopeVersion = 2,
     required this.id,
     required this.updatedAt,
     required this.deviceId,
@@ -102,19 +107,21 @@ class EncryptedRecord {
     required this.blob,
   });
 
-  /// A tombstone: the deletion of [id], carrying no payload. Identity and date
-  /// are all a delete needs — [RecordCodec] leaves the empty [blob] unsealed, so
-  /// no vault key is required to mint one — and [seq] stays null until the
-  /// server assigns one on push.
+  /// The legacy wire shape of a tombstone, retained for decoding stored/server
+  /// data and size accounting. It is deliberately unsealed and current
+  /// [RecordCodec] readers reject it; create new tombstones by encrypting a
+  /// deleted [DecryptedRecord]. [seq] stays null until the server assigns one.
   EncryptedRecord.tombstone({
     required this.id,
     required this.updatedAt,
     required this.deviceId,
-  })  : deleted = true,
+  })  : envelopeVersion = 1,
+        deleted = true,
         seq = null,
         blob = Uint8List(0);
 
   EncryptedRecord withSeq(int newSeq) => EncryptedRecord(
+        envelopeVersion: envelopeVersion,
         id: id,
         updatedAt: updatedAt,
         deviceId: deviceId,
@@ -127,6 +134,7 @@ class EncryptedRecord {
   /// entries, and a push batched against a stale count is a push the server
   /// rejects.
   Map<String, dynamic> toJson() => {
+        'envelopeVersion': envelopeVersion,
         'id': id,
         'updatedAt': updatedAt,
         'deviceId': deviceId,
@@ -143,7 +151,9 @@ class EncryptedRecord {
   /// for why this counts rather than encodes.
   int encodedJsonBytes() {
     final seqValue = seq;
-    return jsonObjectFramingBytes(seqValue == null ? 5 : 6) +
+    return jsonObjectFramingBytes(seqValue == null ? 6 : 7) +
+        jsonKeyBytes('envelopeVersion') +
+        jsonIntBytes(envelopeVersion) +
         jsonKeyBytes('id') +
         jsonStringBytes(id) +
         jsonKeyBytes('updatedAt') +
@@ -161,6 +171,8 @@ class EncryptedRecord {
 
   factory EncryptedRecord.fromJson(Map<String, dynamic> json) =>
       EncryptedRecord(
+        envelopeVersion:
+            (json['envelopeVersion'] as num?)?.toInt() ?? 1,
         id: json['id'] as String,
         updatedAt: (json['updatedAt'] as num).toInt(),
         deviceId: json['deviceId'] as String,

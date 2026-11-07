@@ -13,6 +13,7 @@ import '../theme/app_appearance.dart';
 import '../theme/theme_palette.dart';
 import '../theme/theme_presets.dart';
 import '../ui/terminal_appearance.dart';
+import 'app_quit_guard.dart';
 import 'app_settings.dart';
 import 'external_file_opener.dart';
 import 'local_settings_backend.dart';
@@ -100,7 +101,7 @@ Map<String, dynamic> _snapshotOf(SettingsBackend backend) => {
 /// opens it and sends it a fresh snapshot whenever the app's state changes
 /// while it shows; this host answers what it asks through a
 /// [LocalSettingsBackend].
-class SettingsWindowHost {
+class SettingsWindowHost implements QuitSettingsWindow {
   /// [exportFiles] replaces the platform's save and open panels for a
   /// secrets export, in tests.
   SettingsWindowHost(
@@ -109,7 +110,8 @@ class SettingsWindowHost {
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
     @visibleForTesting SecretsExportFiles? exportFiles,
-  }) : _backend = exportFiles == null
+  }) : _control = control,
+       _backend = exportFiles == null
            ? LocalSettingsBackend(state)
            : LocalSettingsBackend(state, exportFiles: exportFiles) {
     _engine = GhostSettingsWindowHost(
@@ -125,6 +127,7 @@ class SettingsWindowHost {
     );
   }
 
+  final MethodChannel _control;
   final LocalSettingsBackend _backend;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
 
@@ -138,6 +141,19 @@ class SettingsWindowHost {
   /// there. False when the runner has no settings window — a build from
   /// before it existed — so the caller can show the Settings route instead.
   Future<bool> open(SettingsTab tab) => _engine.open(tab);
+
+  /// Temporarily gets the owned Settings window out of the way of the main
+  /// window's quit review. This is not a close: the native hosts must not send
+  /// `closed`, so the Settings engine keeps its page and draft fields mounted.
+  @override
+  Future<bool> yieldForQuitConfirmation() async {
+    return await _control.invokeMethod<bool>('yieldForQuitConfirmation') ??
+        false;
+  }
+
+  @override
+  Future<void> restoreAfterQuitConfirmation() =>
+      _control.invokeMethod<void>('restoreAfterQuitConfirmation');
 
   void dispose() => _engine.dispose();
 

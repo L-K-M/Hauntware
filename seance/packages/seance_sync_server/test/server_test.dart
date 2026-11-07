@@ -10,6 +10,7 @@ import 'package:test/test.dart';
 class TestClient {
   final Handler handler;
   String? token;
+  Map<String, String> lastHeaders = const {};
   TestClient(this.handler);
 
   Future<(int, Map<String, dynamic>)> send(
@@ -18,6 +19,8 @@ class TestClient {
     Object? body,
     bool auth = false,
     Map<String, String> query = const {},
+    Map<String, String> headers = const {},
+    int? protocolVersion = kProtocolVersion,
   }) async {
     final uri = Uri.parse(
       'http://localhost$path',
@@ -27,11 +30,15 @@ class TestClient {
       uri,
       headers: {
         'content-type': 'application/json',
+        ...headers,
+        if (protocolVersion != null)
+          'x-seance-protocol-version': '$protocolVersion',
         if (auth && token != null) 'authorization': 'Bearer $token',
       },
       body: body == null ? null : jsonEncode(body),
     );
     final res = await handler(req);
+    lastHeaders = res.headers;
     final text = await res.readAsString();
     Map<String, dynamic> json;
     try {
@@ -46,8 +53,21 @@ class TestClient {
 
 class ThrowingStorage extends InMemoryStorage {
   @override
-  Future<Account?> getAccount(String username) async {
+  Future<String?> registerAccount(
+    Account account, {
+    required int issuedAt,
+    required int expiresAt,
+    required int maxSessions,
+    SessionDevice? device,
+  }) async {
     throw StateError('database password is hunter2');
+  }
+}
+
+class NotReadyStorage extends InMemoryStorage {
+  @override
+  Future<void> checkReady() async {
+    throw const StorageUnavailableException();
   }
 }
 
@@ -57,9 +77,9 @@ class RecordingRateLimiter extends RateLimiter {
   final keys = <String>[];
 
   @override
-  bool allow(String key) {
+  RateLimitDecision check(String key) {
     keys.add(key);
-    return super.allow(key);
+    return super.check(key);
   }
 }
 
@@ -68,6 +88,7 @@ RegisterRequest registerReq(String user) => RegisterRequest(
   authVerifier: base64.encode(secureRandomBytes(32)),
   argonSalt: base64.encode(secureRandomBytes(16)),
   argonParams: const Argon2Params(),
+  vaultKeyCheck: base64.encode(secureRandomBytes(64)),
 );
 
 EncryptedRecord rec(String id, int updatedAt, String device) => EncryptedRecord(
@@ -91,16 +112,20 @@ void main() {
         'SEANCE_MAX_BODY_BYTES',
         'SEANCE_MAX_RECORDS_PER_PUSH',
         'SEANCE_MAX_BLOB_BYTES',
+        'SEANCE_MAX_RECORDS_PER_PULL',
+        'SEANCE_MAX_PULL_BODY_BYTES',
+        'SEANCE_MAX_RECORDS_PER_ACCOUNT',
+        'SEANCE_MAX_ACCOUNT_BYTES',
       ]) {
         for (final value in const ['0', '-1']) {
           // Silently advertising a cap no push can satisfy would surface as
           // every sync failing with an opaque 413. The error names the
           // variable, which is the whole point of failing at startup.
           expect(
-              () => ServerSettings.fromEnvironment({key: value}),
-              throwsA(isA<ArgumentError>()
-                  .having((e) => e.name, 'name', key)),
-              reason: '$key=$value');
+            () => ServerSettings.fromEnvironment({key: value}),
+            throwsA(isA<ArgumentError>().having((e) => e.name, 'name', key)),
+            reason: '$key=$value',
+          );
         }
       }
     });
@@ -112,13 +137,17 @@ void main() {
         'SEANCE_MAX_BODY_BYTES',
         'SEANCE_MAX_RECORDS_PER_PUSH',
         'SEANCE_MAX_BLOB_BYTES',
+        'SEANCE_MAX_RECORDS_PER_PULL',
+        'SEANCE_MAX_PULL_BODY_BYTES',
+        'SEANCE_MAX_RECORDS_PER_ACCOUNT',
+        'SEANCE_MAX_ACCOUNT_BYTES',
       ]) {
         for (final value in const ['lots', '4096b', '1_000_000']) {
           expect(
-              () => ServerSettings.fromEnvironment({key: value}),
-              throwsA(isA<ArgumentError>()
-                  .having((e) => e.name, 'name', key)),
-              reason: '$key=$value');
+            () => ServerSettings.fromEnvironment({key: value}),
+            throwsA(isA<ArgumentError>().having((e) => e.name, 'name', key)),
+            reason: '$key=$value',
+          );
         }
       }
     });
@@ -127,6 +156,10 @@ void main() {
       final settings = ServerSettings.fromEnvironment(const {});
       expect(settings.pushLimits, const PushLimits());
       expect(settings.maxBlobBytes, 1024 * 1024);
+      expect(settings.maxRecordsPerPull, 1000);
+      expect(settings.maxPullBodyBytes, 8 * 1024 * 1024);
+      expect(settings.maxRecordsPerAccount, 5000);
+      expect(settings.maxAccountBytes, 40 * 1024 * 1024);
     });
 
     test('an empty value means unset and keeps the default', () {
@@ -137,17 +170,26 @@ void main() {
           'SEANCE_MAX_BODY_BYTES': value,
           'SEANCE_MAX_RECORDS_PER_PUSH': value,
           'SEANCE_MAX_BLOB_BYTES': value,
+          'SEANCE_MAX_RECORDS_PER_PULL': value,
+          'SEANCE_MAX_PULL_BODY_BYTES': value,
+          'SEANCE_MAX_RECORDS_PER_ACCOUNT': value,
+          'SEANCE_MAX_ACCOUNT_BYTES': value,
         });
         expect(settings.maxBodyBytes, kDefaultMaxPushBodyBytes);
         expect(settings.maxRecordsPerPush, kDefaultMaxRecordsPerPush);
         expect(settings.maxBlobBytes, 1024 * 1024);
+        expect(settings.maxRecordsPerPull, 1000);
+        expect(settings.maxPullBodyBytes, 8 * 1024 * 1024);
+        expect(settings.maxRecordsPerAccount, 5000);
+        expect(settings.maxAccountBytes, 40 * 1024 * 1024);
       }
     });
 
     test('surrounding whitespace is not a typo', () {
       // Env files pick up trailing newlines; that must not stop the server.
-      final settings = ServerSettings.fromEnvironment(
-          const {'SEANCE_MAX_BODY_BYTES': ' 4096\n'});
+      final settings = ServerSettings.fromEnvironment(const {
+        'SEANCE_MAX_BODY_BYTES': ' 4096\n',
+      });
       expect(settings.maxBodyBytes, 4096);
     });
 
@@ -155,30 +197,93 @@ void main() {
       final settings = ServerSettings.fromEnvironment(const {
         'SEANCE_MAX_BODY_BYTES': '4096',
         'SEANCE_MAX_RECORDS_PER_PUSH': '7',
+        'SEANCE_MAX_RECORDS_PER_PULL': '3',
+        'SEANCE_MAX_PULL_BODY_BYTES': '2048',
+        'SEANCE_MAX_RECORDS_PER_ACCOUNT': '12',
+        'SEANCE_MAX_ACCOUNT_BYTES': '8192',
       });
-      expect(settings.pushLimits,
-          const PushLimits(maxBodyBytes: 4096, maxRecordsPerPush: 7));
-      expect(settings.maxBlobBytes, 1024 * 1024,
-          reason: 'overriding one cap must not disturb another');
+      expect(
+        settings.pushLimits,
+        const PushLimits(maxBodyBytes: 4096, maxRecordsPerPush: 7),
+      );
+      expect(
+        settings.maxBlobBytes,
+        1024 * 1024,
+        reason: 'overriding one cap must not disturb another',
+      );
+      expect(settings.maxRecordsPerPull, 3);
+      expect(settings.maxPullBodyBytes, 2048);
+      expect(settings.maxRecordsPerAccount, 12);
+      expect(settings.maxAccountBytes, 8192);
     });
 
     test('the blob cap is read too, not only validated', () {
       // The other tests here only prove this key is rejected when invalid.
-      final settings = ServerSettings.fromEnvironment(
-          const {'SEANCE_MAX_BLOB_BYTES': '2048'});
+      final settings = ServerSettings.fromEnvironment(const {
+        'SEANCE_MAX_BLOB_BYTES': '2048',
+      });
       expect(settings.maxBlobBytes, 2048);
       // Advertised along with the other two: a client that does not know this
       // deployment's blob cap batches a record past it beside records that
       // would have been accepted, and the 413 takes all of them.
       expect(settings.pushLimits, const PushLimits(maxBlobBytes: 2048));
     });
+
+    test('a pull page must be large enough for its empty envelope', () {
+      expect(
+        () => SyncServer(
+          storage: InMemoryStorage(),
+          settings: const ServerSettings(maxPullBodyBytes: 1),
+        ),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.name,
+            'name',
+            'settings.maxPullBodyBytes',
+          ),
+        ),
+      );
+    });
+
+    test('session lifetime and account cap are strict positive settings', () {
+      final settings = ServerSettings.fromEnvironment(const {
+        'SEANCE_SESSION_TTL_SECONDS': '3600',
+        'SEANCE_MAX_SESSIONS_PER_ACCOUNT': '4',
+      });
+      expect(settings.sessionDuration, const Duration(hours: 1));
+      expect(settings.maxSessionsPerAccount, 4);
+      for (final key in const [
+        'SEANCE_SESSION_TTL_SECONDS',
+        'SEANCE_MAX_SESSIONS_PER_ACCOUNT',
+      ]) {
+        expect(
+          () => ServerSettings.fromEnvironment({key: '0'}),
+          throwsA(isA<ArgumentError>().having((e) => e.name, 'name', key)),
+        );
+      }
+    });
   });
 
   group('health + registration', () {
-    test('healthz is 200', () async {
+    test('healthz and readyz are 200 when storage is available', () async {
       final c = TestClient(makeServer().handler);
       final (status, _) = await c.send('GET', '/healthz');
       expect(status, 200);
+      final (readyStatus, _) = await c.send('GET', '/readyz');
+      expect(readyStatus, 200);
+    });
+
+    test('healthz stays live when readyz reports storage unavailable',
+        () async {
+      final c = TestClient(SyncServer(
+        storage: NotReadyStorage(),
+        settings: const ServerSettings(),
+      ).handler);
+
+      expect((await c.send('GET', '/healthz')).$1, 200);
+      final (status, body) = await c.send('GET', '/readyz');
+      expect(status, 503);
+      expect(body['error'], 'storage_unavailable');
     });
 
     test('landing page and favicon are served for browsers', () async {
@@ -210,6 +315,7 @@ void main() {
       );
       expect(s1, 200);
       expect(b1['token'], isNotEmpty);
+      expect(b1['vaultKeyCheck'], isNotEmpty);
 
       final (s2, b2) = await c.send(
         'POST',
@@ -231,17 +337,44 @@ void main() {
       expect(body['error'], 'registration_closed');
     });
 
-    test('rejects a protocol-version mismatch', () async {
-      final c = TestClient(makeServer().handler);
-      final payload = registerReq('carol').toJson()..['protocolVersion'] = 999;
-      final (status, body) = await c.send(
-        'POST',
-        '/v1/register',
-        body: payload,
-      );
-      expect(status, 400);
-      expect(body['error'], 'protocol_version');
-    });
+    test(
+      'rejects protocol v2 clients that still accept legacy envelopes',
+      () async {
+        final c = TestClient(makeServer().handler);
+        final payload = registerReq('carol').toJson()..['protocolVersion'] = 2;
+        final (status, body) = await c.send(
+          'POST',
+          '/v1/register',
+          body: payload,
+        );
+        expect(status, 400);
+        expect(body['error'], 'protocol_version');
+      },
+    );
+
+    test(
+      'rejects a v1 registration before checking its missing key check',
+      () async {
+        final storage = InMemoryStorage();
+        final c = TestClient(
+          SyncServer(
+            storage: storage,
+            settings: const ServerSettings(openRegistration: true),
+          ).handler,
+        );
+        final payload = registerReq('old-client').toJson()
+          ..['protocolVersion'] = 1
+          ..remove('vaultKeyCheck');
+        final (status, body) = await c.send(
+          'POST',
+          '/v1/register',
+          body: payload,
+        );
+        expect(status, 400);
+        expect(body['error'], 'protocol_version');
+        expect(await storage.getAccount('old-client'), isNull);
+      },
+    );
 
     test('rejects malformed register verifier as a bad request', () async {
       final c = TestClient(makeServer().handler);
@@ -254,6 +387,29 @@ void main() {
       );
       expect(status, 400);
       expect(body['error'], 'bad_request');
+    });
+
+    test('registration requires a bounded encrypted vault key check', () async {
+      final c = TestClient(makeServer().handler);
+      for (final value in <Object?>[
+        null,
+        'not base64!',
+        base64.encode([1]),
+      ]) {
+        final payload = registerReq('key-check').toJson();
+        if (value == null) {
+          payload.remove('vaultKeyCheck');
+        } else {
+          payload['vaultKeyCheck'] = value;
+        }
+        final (status, body) = await c.send(
+          'POST',
+          '/v1/register',
+          body: payload,
+        );
+        expect(status, 400, reason: '$value');
+        expect(body['error'], 'bad_request', reason: '$value');
+      }
     });
 
     test('internal errors do not leak exception details', () async {
@@ -293,6 +449,7 @@ void main() {
         );
         expect(okStatus, 200);
         expect(okBody['token'], isNotEmpty);
+        expect(okBody['vaultKeyCheck'], req.vaultKeyCheck);
 
         final (badStatus, badBody) = await c.send(
           'POST',
@@ -319,6 +476,11 @@ void main() {
       expect(status, 200);
       expect(body['argonSalt'], req.argonSalt);
       expect(body['argonParams']['memory'], 19456);
+      expect(
+        body.containsKey('vaultKeyCheck'),
+        isFalse,
+        reason: 'the key check is returned only after authentication',
+      );
     });
 
     test('protected routes require a valid bearer token', () async {
@@ -408,6 +570,41 @@ void main() {
       expect(pull.latestSeq, 2);
     });
 
+    test('push refuses a legacy unauthenticated envelope', () async {
+      final server = makeServer();
+      final c = await authed(server, 'legacy-envelope');
+      final legacy = rec('legacy', 10, 'd1').toJson()
+        ..remove('envelopeVersion');
+
+      final (status, body) = await c.send(
+        'PUT',
+        '/v1/records',
+        auth: true,
+        body: {
+          'protocolVersion': kProtocolVersion,
+          'records': [legacy],
+        },
+      );
+
+      expect(status, 400);
+      expect(body['error'], 'record_envelope_version');
+    });
+
+    test('pull refuses an already-issued protocol v2 session', () async {
+      final server = makeServer();
+      final c = await authed(server, 'old-pull-session');
+
+      final (status, body) = await c.send(
+        'GET',
+        '/v1/sync',
+        auth: true,
+        protocolVersion: 2,
+      );
+
+      expect(status, 400);
+      expect(body['error'], 'protocol_version');
+    });
+
     test('a pull advertises this deployment\'s push limits', () async {
       // Env-tunable, so a client cannot infer them: it sizes its push batches
       // from what the pull it just made told it.
@@ -429,8 +626,10 @@ void main() {
       );
 
       expect(status, 200);
-      expect(PullResponse.fromJson(body).limits,
-          const PushLimits(maxBodyBytes: 4096, maxRecordsPerPush: 7));
+      expect(
+        PullResponse.fromJson(body).limits,
+        const PushLimits(maxBodyBytes: 4096, maxRecordsPerPush: 7),
+      );
     });
 
     test('since filter returns only newer records', () async {
@@ -457,6 +656,184 @@ void main() {
       );
       final pull = PullResponse.fromJson(body);
       expect(pull.records.map((r) => r.id), ['b']); // only seq > 1
+    });
+
+    test('paged pulls hold a stable watermark', () async {
+      final server = SyncServer(
+        storage: InMemoryStorage(),
+        settings: const ServerSettings(
+          openRegistration: true,
+          maxRecordsPerPull: 1,
+        ),
+      );
+      final c = await authed(server, 'paged');
+      await c.send(
+        'PUT',
+        '/v1/records',
+        auth: true,
+        body: PushRequest(
+          records: [rec('a', 10, 'd1'), rec('b', 11, 'd1')],
+        ).toJson(),
+      );
+      final (_, firstBody) = await c.send(
+        'GET',
+        '/v1/sync',
+        auth: true,
+        query: {'since': '0', 'page': '1'},
+      );
+      final first = PullResponse.fromJson(firstBody);
+      expect(first.records.map((record) => record.id), ['a']);
+      expect(first.throughSeq, 2);
+      expect(first.hasMore, isTrue);
+
+      await c.send(
+        'PUT',
+        '/v1/records',
+        auth: true,
+        body: PushRequest(records: [rec('c', 12, 'd1')]).toJson(),
+      );
+      final (_, secondBody) = await c.send(
+        'GET',
+        '/v1/sync',
+        auth: true,
+        query: {
+          'since': '${first.records.single.seq}',
+          'through': '${first.throughSeq}',
+          'page': '1',
+        },
+      );
+      final second = PullResponse.fromJson(secondBody);
+      expect(second.records.map((record) => record.id), ['b']);
+      expect(second.throughSeq, 2);
+      expect(second.hasMore, isFalse);
+
+      // With a page limit of one, the whole account no longer fits a single
+      // response and the legacy shape has no field that could say so: the
+      // unpaged request is refused rather than silently truncated.
+      final (legacyStatus, legacyBody) = await c.send(
+        'GET',
+        '/v1/sync',
+        auth: true,
+        query: {'since': '0'},
+      );
+      expect(legacyStatus, 400);
+      expect(legacyBody['error'], 'pagination_required');
+    });
+
+    test(
+      'an unpaged pull keeps its shape while the account fits a page',
+      () async {
+        final server = SyncServer(
+          storage: InMemoryStorage(),
+          settings: const ServerSettings(
+            openRegistration: true,
+            maxRecordsPerPull: 1,
+          ),
+        );
+        final c = await authed(server, 'legacy-pull');
+        await c.send(
+          'PUT',
+          '/v1/records',
+          auth: true,
+          body: PushRequest(records: [rec('a', 10, 'd1')]).toJson(),
+        );
+
+        final (status, body) = await c.send(
+          'GET',
+          '/v1/sync',
+          auth: true,
+          query: {'since': '0'},
+        );
+        expect(status, 200);
+        final pull = PullResponse.fromJson(body);
+        expect(pull.records.map((record) => record.id), ['a']);
+        expect(pull.latestSeq, 1);
+        expect(body, isNot(contains('throughSeq')));
+        expect(body, isNot(contains('hasMore')));
+      },
+    );
+
+    test('a page flag other than 1 is a bad request', () async {
+      final server = makeServer();
+      final c = await authed(server, 'bad-page');
+      for (final flag in ['0', '2', 'next', '']) {
+        final (status, body) = await c.send(
+          'GET',
+          '/v1/sync',
+          auth: true,
+          query: {'since': '0', 'page': flag},
+        );
+        expect(status, 400, reason: 'page=$flag');
+        expect(body['error'], 'bad_request', reason: 'page=$flag');
+      }
+    });
+
+    test('account quota refusal rolls back a whole HTTP push', () async {
+      final server = SyncServer(
+        storage: InMemoryStorage(),
+        settings: const ServerSettings(
+          openRegistration: true,
+          maxRecordsPerAccount: 1,
+        ),
+      );
+      final c = await authed(server, 'quota');
+      final (status, body) = await c.send(
+        'PUT',
+        '/v1/records',
+        auth: true,
+        body: PushRequest(
+          records: [rec('a', 10, 'd1'), rec('b', 11, 'd1')],
+        ).toJson(),
+      );
+      expect(status, 413);
+      expect(body['error'], 'account_quota_exceeded');
+      final (_, pullBody) = await c.send(
+        'GET',
+        '/v1/sync',
+        auth: true,
+        query: {'since': '0'},
+      );
+      final pull = PullResponse.fromJson(pullBody);
+      expect(pull.records, isEmpty);
+      expect(pull.latestSeq, 0);
+    });
+
+    test('a record that cannot fit a pull page is never stored', () async {
+      final server = SyncServer(
+        storage: InMemoryStorage(),
+        settings: const ServerSettings(
+          openRegistration: true,
+          maxPullBodyBytes: 512,
+        ),
+      );
+      final c = await authed(server, 'pullable');
+      final oversized = EncryptedRecord(
+        id: 'r' * 420,
+        updatedAt: 1,
+        deviceId: 'device',
+        deleted: false,
+        seq: null,
+        blob: Uint8List.fromList([1]),
+      );
+
+      final (status, body) = await c.send(
+        'PUT',
+        '/v1/records',
+        auth: true,
+        body: PushRequest(records: [oversized]).toJson(),
+      );
+      expect(status, 413);
+      expect(body['error'], 'payload_too_large');
+
+      final (_, pullBody) = await c.send(
+        'GET',
+        '/v1/sync',
+        auth: true,
+        query: {'since': '0', 'page': '1'},
+      );
+      final pull = PullResponse.fromJson(pullBody);
+      expect(pull.records, isEmpty);
+      expect(pull.latestSeq, 0);
     });
 
     test('an older concurrent push is rejected by LWW', () async {
@@ -527,7 +904,9 @@ void main() {
       final server = SyncServer(
         storage: InMemoryStorage(),
         settings: const ServerSettings(
-            openRegistration: true, maxBodyBytes: 200),
+          openRegistration: true,
+          maxBodyBytes: 200,
+        ),
       );
       final c = TestClient(server.handler);
       // A register payload padded well past the 200-byte cap.
@@ -544,18 +923,26 @@ void main() {
       final server = SyncServer(
         storage: InMemoryStorage(),
         settings: const ServerSettings(
-            openRegistration: true, maxRecordsPerPush: 1, maxBlobBytes: 8),
+          openRegistration: true,
+          maxRecordsPerPush: 1,
+          maxBlobBytes: 8,
+        ),
       );
       final c = TestClient(server.handler);
-      final (_, reg) =
-          await c.send('POST', '/v1/register', body: registerReq('bob').toJson());
+      final (_, reg) = await c.send(
+        'POST',
+        '/v1/register',
+        body: registerReq('bob').toJson(),
+      );
       c.token = reg['token'] as String;
 
       final (tooMany, b1) = await c.send(
         'PUT',
         '/v1/records',
         auth: true,
-        body: PushRequest(records: [rec('x', 1, 'd'), rec('y', 2, 'd')]).toJson(),
+        body: PushRequest(
+          records: [rec('x', 1, 'd'), rec('y', 2, 'd')],
+        ).toJson(),
       );
       expect(tooMany, 413);
       expect(b1['error'], 'payload_too_large');
@@ -786,6 +1173,7 @@ void main() {
         await storage.createAccount(
           Account(
             username: legacy,
+            generation: 'legacy-generation',
             authVerifierHash: VaultCrypto.hashAuthVerifier(
               verifier,
               verifierSalt,

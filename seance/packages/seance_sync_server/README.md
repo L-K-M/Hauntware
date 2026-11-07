@@ -26,10 +26,55 @@ then set it back to `false` and restart. Put a TLS-terminating reverse proxy
 The compose file and `docker run` example bind the host port to loopback only;
 publish it more broadly only behind TLS or on a trusted private network.
 
-To update a running deployment (pull the latest code, rebuild the image,
-recreate the container in one step), run `./update.sh` from `seance/`. It
-probes the published `/healthz` after the recreate and fails with the
-container's logs when the server doesn't answer.
+To update a running deployment, run `./update.sh` from `seance/`. It builds a
+versioned candidate, snapshots the stopped SQLite/WAL files, restarts the old
+service, and preflights the candidate against a temporary copy. Only then does
+it stop the old service again for a fresh rollback snapshot, replace production,
+and require `/readyz`. A failure before candidate startup restores both that
+final snapshot and the tagged previous image with its preserved Compose
+configuration. Once the candidate may have accepted writes, automatic recovery
+instead stops it and retains the unchanged live database plus snapshot for
+explicit recovery. It does not start an older image against a potentially
+migrated schema or erase writes accepted during the readiness probe. Cleanup
+happens only after the candidate is ready; the previous tagged image is retained
+for manual rollback too. The updater refuses concurrent runs and keeps its
+recovery bundle whenever manual recovery is required.
+
+An uncatchable interruption such as power loss or `SIGKILL` can leave the
+updater lock behind. A later run prints the recorded PID, host, user ID and
+recovery-bundle path and stops. Check the recorded host and confirm that the
+updater and its Docker operations have stopped before removing the lock;
+a PID may have been reused, so a failed local PID lookup alone is not proof.
+Inspect the running deployment and the bundle's `update-state.txt`, preserved
+Compose configuration and snapshots first. A `candidate-may-have-writes`
+phase means the candidate could have migrated the database or accepted writes;
+preserve the live volume and do not restore an older snapshot automatically.
+
+After completing recovery, remove only `pid`, `host`, `uid` and `recovery-dir`
+from the printed lock directory, then remove that empty directory with
+`rmdir`. Keep the recovery bundle until its data is no longer needed. Older
+locks may contain only `pid`; inspect the deployment and any retained bundles
+before removing those too. The default lock is
+`${TMPDIR:-/tmp}/seance-sync-update.lock`; `SEANCE_UPDATE_LOCK_DIR` overrides it.
+
+For a real Docker integration check, prebuild a protocol-v1 runtime image, its
+`build` stage (with Python3 and SQLite), and the candidate runtime. Then run:
+
+```bash
+python3 scripts/test-update-docker.py \
+  --old-image seance-updater-old \
+  --helper-image seance-updater-old-helper \
+  --candidate-image seance-updater-candidate \
+  --candidate-ref "$(git rev-parse HEAD)"
+```
+
+The harness uses private temporary directories, unique Compose projects and
+volumes, loopback-only ephemeral ports, and test-owned image tags. Repository
+synchronization and Compose build are intercepted to use those prebuilt images;
+server starts, probes, snapshots and SQLite migration are real. It checks a
+successful migration and a failure after readiness plus a durable concurrent
+write. It retains fixture logs and recovery evidence and removes only its own
+Docker resources; it never prunes or changes an existing deployment's image tag.
 
 ### Moving from a standalone Séance clone
 
@@ -108,21 +153,81 @@ Omit `--db` for an ephemeral in-memory store.
 | `SEANCE_OPEN_REGISTRATION` | `--open-registration` | `false` | Allow `/v1/register` |
 | `SEANCE_LOGIN_MAX_ATTEMPTS` | — | `10` | Login attempts per window |
 | `SEANCE_LOGIN_WINDOW_SECONDS` | — | `60` | Rate-limit window |
+| `SEANCE_AUTH_GLOBAL_MAX_ATTEMPTS` | — | `1000` | Auth requests across all sources per global window |
+| `SEANCE_AUTH_GLOBAL_WINDOW_SECONDS` | — | `60` | Global auth window |
+| `SEANCE_AUTH_SOURCE_MAX_ATTEMPTS` | — | `60` | Auth requests per network source per source window |
+| `SEANCE_AUTH_SOURCE_WINDOW_SECONDS` | — | `60` | Source auth window |
+| `SEANCE_RATE_LIMIT_MAX_BUCKETS` | — | `4096` | Maximum keyed buckets per limiter before overflow sharing |
+| `SEANCE_TRUSTED_PROXIES` | — | *(empty)* | Exact comma-separated proxy IPs allowed to supply `X-Forwarded-For` |
+| `SEANCE_SESSION_TTL_SECONDS` | — | `2592000` | Bearer-session lifetime (30 days) |
+| `SEANCE_MAX_SESSIONS_PER_ACCOUNT` | — | `20` | Active sessions retained per account, evicting least recently used |
+| `SEANCE_MAX_RECORDS_PER_PULL` | — | `1000` | Records or inbox items returned per page |
+| `SEANCE_MAX_PULL_BODY_BYTES` | — | `8388608` | Maximum encoded JSON bytes per record or inbox page |
+| `SEANCE_MAX_RECORDS_PER_ACCOUNT` | — | `5000` | Current records and, separately, pending inbox items per account |
+| `SEANCE_MAX_ACCOUNT_BYTES` | — | `41943040` | Encoded record and, separately, inbox-item bytes per account |
 
-## API (protocol v1)
+## API (protocol v4)
 
-All request/response bodies are JSON; every request carries a `protocolVersion`
-so an old client and new server detect a mismatch instead of corrupting data.
+Request and response bodies are JSON. Registration, login, and push carry a
+`protocolVersion`, so an old client and new server reject a breaking account or
+record write before changing storage.
 
 | Method & path | Auth | Purpose |
 |---|---|---|
 | `GET /healthz` | — | Liveness check |
+| `GET /readyz` | — | Storage readiness check |
 | `POST /v1/register` | — | Create an account, returns a bearer token |
 | `POST /v1/prelogin` | — | Return the KDF salt/params for a username |
 | `POST /v1/login` | — | Exchange the auth verifier for a token |
-| `GET /v1/sync?since=<seq>` | Bearer | Pull records newer than a sequence number |
+| `GET /v1/sync?since=<seq>` | Bearer | Legacy full pull of records newer than a sequence number |
+| `GET /v1/sync?since=<seq>&page=1[&through=<seq>]` | Bearer | Bounded pull from a stable watermark |
 | `PUT /v1/records` | Bearer | Push a batch of encrypted records (LWW) |
+| `GET /v1/records/legacy[?after=<id>]` | Bearer | Read a bounded page of legacy rows for migration |
+| `PUT /v1/records/legacy` | Bearer | Replace exact observed legacy rows and finalize the account envelope floor |
+| `DELETE /v1/session` | Bearer | Revoke the current session |
+| `GET /v1/sessions` | Bearer | List active sessions and public device metadata |
+| `DELETE /v1/sessions/current` | Bearer | Alias for revoking the current session |
+| `DELETE /v1/sessions` | Bearer | Revoke every session for the account |
+| `DELETE /v1/sessions/<id>` | Bearer | Revoke one opaque session id owned by this account |
+| `PUT /v1/account/vault-key-check` | Bearer | Initialize an empty legacy account's encrypted key check once |
 | `DELETE /v1/account` | Bearer | Delete the account and all its data |
+
+The server returns a raw bearer token only once and stores its SHA-256 digest.
+Sessions expire after the configured lifetime and issuing a session beyond the
+per-account cap revokes the least recently used one. Last-use timestamps update
+at most hourly and never extend expiry. Upgrading from protocol v1 deliberately
+invalidates legacy plaintext token rows, so each device must sign in once. The
+protocol bump prevents an older client or server from partly creating an
+account without the registration-time encrypted vault-key check.
+An already enrolled device may initialize that check for an empty legacy
+account; the official client requires its locally persisted vault key to match
+before calling the set-once endpoint. New devices cannot silently choose one.
+
+Current clients write authenticated v2 record envelopes. Protocol v4 migrates
+legacy rows by exact compare-and-swap using independently authenticated local
+state. Unmatched legacy rows remain held; an unauthenticated old tombstone
+cannot authorize deletion. The account floor advances only when no legacy row
+remains, and clients persist that floor to reject downgrade or replay.
+
+Pending inbox items also have a 32 MiB raw-blob cap and a 5,000-item cap across
+all apps, in addition to the encoded-byte quota above and each app's 100-item
+cap. The 50-app registration cap is checked atomically with insertion.
+
+Registration and login may supply `X-Seance-Device-Id` and
+`X-Seance-Device-Name` together. Both are limited to 128 UTF-8 bytes; ids use
+ASCII letters, digits, `.`, `_`, `:`, or `-`, and names cannot contain control
+or invisible formatting characters or surrounding whitespace. A malformed pair
+returns `400 bad_device`. Older clients may omit both and receive an unlabeled
+session. Signing in again with the same device id rotates that device's earlier
+session within this account generation.
+
+Session listings contain opaque ids, device labels, creation/expiry/last-use
+timestamps, and `legacy`/`current` flags. They expose no bearer token or digest.
+Selective revocation returns `{"revoked":true,"current":false}` (or `true` for
+the current flag when revoking yourself); a missing or foreign id is
+`404 not_found`. Listing and revocation revalidate the caller's account
+generation and live session inside the storage transaction. Existing current
+and all-session revocation endpoints retain their `204` responses.
 
 Register, prelogin and login run before any authentication, so they read at
 most 16 KiB of request body (less if `SEANCE_MAX_BODY_BYTES` is lower) and
@@ -166,9 +271,26 @@ back to the default; an unset or empty variable still means "use the default".
 A database failure rolls back the batch and its sequence changes. A lost HTTP
 reply can still follow a successful commit; clients must reconcile by pulling.
 
-Pull records and `latestSeq` come from one snapshot: every returned sequence is
-`since < seq <= latestSeq`. Later writes belong to the next pull. This does not
-yet provide pagination, client-side durable revisions or authenticated metadata.
+An explicit `page=1` pull is capped by both `SEANCE_MAX_RECORDS_PER_PULL` and
+the exact compact-JSON size in `SEANCE_MAX_PULL_BODY_BYTES`. Its first response
+captures `throughSeq`; continuations send that value as `through`, advance
+`since` only to the last record they observed, and use `hasMore` to decide
+whether to continue. Records written after the captured watermark wait for the
+next sync window. A single stored row that cannot fit the configured page is a
+rejected before it is committed; an incompatible row left by an older build is
+reported as a server configuration error rather than returned without a bound.
+Omitting `page=1` retains the full-response shape for already enrolled clients.
+If the pull-page cap is tighter than the request cap, the server advertises a
+smaller effective push-body limit. Current clients then send a record that
+cannot fit a page by itself, so its `413` does not hold back valid neighbours.
+
+Record pushes enforce the per-account count and encoded-byte ceilings in the
+same transaction as LWW resolution and sequence allocation. Inbox deposits use
+the same configured ceilings independently, so producer traffic cannot consume
+the record catalog's budget; inbox listing returns the same stable page
+metadata. A write that would exceed either ceiling changes nothing. An account
+already beyond a newly lowered ceiling may replace or delete data only when the
+over-limit dimension does not grow, allowing it to shrink back under the cap.
 
 SQLite uses `BEGIN IMMEDIATE` for writes and a read transaction for snapshots.
 Transaction lock contention returns `503 storage_busy` without committing the
@@ -178,8 +300,10 @@ If transaction cleanup itself fails, SQLite storage fails closed and returns
 Diagnostics retain the original cause and log only exception types/SQLite numeric
 codes—not messages, SQL, parameters or blobs. Restart after investigating the
 database failure; automatic reopen could
-silently replace an injected or in-memory database. `/healthz` remains liveness,
-not storage readiness. Closing the disabled connection is safe to repeat.
+silently replace an injected or in-memory database. `/healthz` reports only
+process liveness; `/readyz` performs a real storage access and returns 503 when
+the backend is busy or unavailable. Deployment health checks use `/readyz`.
+Closing the disabled connection is safe to repeat.
 The memory backend stages batches without yielding, then swaps state together.
 
 Custom server `Storage` implementations must implement `pushRecords` and
@@ -195,7 +319,15 @@ DTOs and the database schema are unchanged; this is not an account migration.
   login (the raw verifier is needed and cannot be recovered from the hash).
 - Record payloads are sealed client-side with XChaCha20-Poly1305. The server
   stores `nonce ‖ ciphertext ‖ mac` and never holds a key.
-- Login is rate-limited to blunt online guessing.
+- Registration, prelogin and login have global and network-source limits.
+  Failed logins also have an account limit; a correct verifier remains usable.
+  Forwarded addresses are accepted only from configured exact-IP proxies,
+  including equivalent IPv4-mapped IPv6 addresses. Malformed or oversized
+  forwarding chains fall back to the immediate peer.
+- Active limiter buckets are never evicted. When all keyed buckets are active,
+  unseen keys share a bounded overflow bucket, so saturation can temporarily
+  throttle new clients. Set the global/source budgets and bucket capacity for
+  your deployment; refusals return `Retry-After`.
 - Conflict resolution is deterministic last-write-wins keyed by
   `(updatedAt, deviceId)`, identical to the client, so both sides agree.
 

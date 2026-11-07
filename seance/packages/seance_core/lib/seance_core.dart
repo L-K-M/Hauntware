@@ -81,6 +81,7 @@ export 'src/inbox/inbox_staging.dart';
 export 'src/inbox/inbox_stores.dart';
 
 export 'src/sync/local_record_store.dart';
+export 'src/sync/legacy_envelope_migration.dart';
 export 'src/sync/pulled_pin_resolver.dart';
 export 'src/sync/sync_engine.dart';
 export 'src/sync/sync_coordinator.dart';

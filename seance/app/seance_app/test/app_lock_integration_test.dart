@@ -171,6 +171,27 @@ void main() {
     expect(device.prompts, 0);
   });
 
+  test('pending credential cleanup waits for an unlocked vault', () async {
+    final state = await launch();
+    await state.services.vault.putSecret(_savedSecret);
+    state.services.settings.pendingCredentialCleanup.add('saved');
+    await state.setAppLock(AppLockMode.on);
+    timeout(state);
+    final prompts = device.prompts;
+
+    await state.saveServer(server(AuthMethod.password, ref: null));
+
+    expect(device.prompts, prompts,
+        reason: 'an unrelated save must not prompt to retry old cleanup');
+    expect(state.services.settings.pendingCredentialCleanup, {'saved'});
+    await state.services.appLock.requireUnlocked();
+    await state.saveServer(state.servers.single.copyWith(updatedAt: 2));
+    expect(state.services.settings.pendingCredentialCleanup, isEmpty);
+    expect(await state.services.vault.getSecret('saved'), isNull);
+    expect((await state.services.tombstoneStore.all()).single.id,
+        'secret:saved');
+  });
+
   test('app-lock changes and timeout preserve existing SSH sessions', () async {
     final state = await launch();
     final engine = XtermTerminalEngine();
@@ -257,6 +278,7 @@ void main() {
       final state = await launch(AppLockMode.on);
       final services = state.services;
       services.settings.syncBaseUrl = 'https://sync.example';
+      services.settings.syncUsername = 'user';
       services.settings.llmApiKeyRef = 'anthropic';
       services.settings.braveApiKeyRef = 'brave';
       keystore.values['seance.apikey.anthropic'] = 'api-key';
@@ -447,6 +469,7 @@ void main() {
   test('manual inbox refresh reports cancellation and allows retry', () async {
     final state = await launch(AppLockMode.on);
     state.services.settings.syncBaseUrl = 'https://sync.example';
+    state.services.settings.syncUsername = 'user';
     device.reject();
     await state.refreshInbox();
     expect(state.inboxError, 'Auth cancelled');

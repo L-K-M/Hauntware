@@ -518,6 +518,43 @@ void main() {
       expect(physical.closeCalls, 1);
     });
 
+    test('a forward that ignores its deadline is bounded and discarded late',
+        () async {
+      final jump = _server(id: 'jump', host: 'jump.invalid', port: 2225);
+      final target = _server(
+        id: 'target',
+        host: 'target.internal',
+        port: 2226,
+        jumpHostId: jump.id,
+      );
+      final physical = _HopSocket();
+      final pending = Completer<SSHSocket>();
+
+      await expectLater(
+        openAuthenticatedClient(
+          config: target,
+          credentials: const SshCredentials.password('target-password'),
+          tofu: TofuVerifier(InMemoryHostKeyStore()),
+          onHostKey: (_) async => true,
+          connect: (host, port, timeout) async => physical,
+          resolveJumpHost: (id) async => ResolvedSshHost(
+            jump,
+            const SshCredentials.password('jump-password'),
+          ),
+          forward: (client, host, port, timeout) => pending.future,
+          timeout: const Duration(milliseconds: 100),
+          keepAliveInterval: null,
+        ),
+        throwsA(_failureOfKind(SshConnectFailureKind.timedOut)),
+      );
+      expect(physical.closeCalls, 1);
+
+      final late = _DestroyTrackingSocket();
+      pending.complete(late);
+      await pumpEventQueue();
+      expect(late.destroyCalls, 1);
+    });
+
     test('an SSH constructor failure closes the forwarded chain', () async {
       final jump = _server(id: 'jump', host: 'jump.invalid', port: 2213);
       final target = _server(
@@ -672,6 +709,16 @@ class _HopSocket extends SshPeerSocket {
   Future<void> close() {
     closeCalls++;
     return super.close();
+  }
+}
+
+final class _DestroyTrackingSocket extends _HopSocket {
+  int destroyCalls = 0;
+
+  @override
+  void destroy() {
+    destroyCalls++;
+    unawaited(super.close());
   }
 }
 

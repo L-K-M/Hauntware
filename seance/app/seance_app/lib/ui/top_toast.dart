@@ -1,1 +1,2 @@
-export 'package:ghost_ui/ghost_ui.dart' show showTopToast, showTopToastIn;
+export 'package:ghost_ui/ghost_ui.dart'
+    show TopToastDismissal, showTopToast, showTopToastIn;

@@ -129,6 +129,20 @@ abstract class LlmProvider {
   Stream<String> streamChat({required List<LlmMessage> messages});
 }
 
+/// An LLM provider that owns resources which its caller must release.
+///
+/// Providers may borrow an injected HTTP client. In that case [close] releases
+/// only provider-owned resources and leaves the borrowed client open.
+abstract interface class ClosableLlmProvider {
+  void close();
+}
+
+void closeLlmProvider(LlmProvider provider) {
+  if (provider is ClosableLlmProvider) {
+    (provider as ClosableLlmProvider).close();
+  }
+}
+
 /// System prompt for command generation. Kept here so both providers share it.
 const String kCommandSystemPrompt = '''
 You translate a natural-language request into a single shell command for the

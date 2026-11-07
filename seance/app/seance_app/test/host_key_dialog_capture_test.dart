@@ -110,12 +110,30 @@ void main() {
 
     if (decision.isChanged) {
       expect(find.text('HOST KEY CHANGED'), findsOneWidget);
-      expect(find.textContaining('ssh-rsa'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is SelectableText &&
+              widget.data?.contains('ssh-rsa') == true,
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Key algorithm changed from ssh-rsa to ssh-ed25519.'),
+        findsOneWidget,
+      );
     } else {
       expect(find.text('Unknown host key'), findsOneWidget);
       expect(find.textContaining('ssh-rsa'), findsNothing);
     }
-    expect(find.textContaining('ssh-ed25519'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableText &&
+            widget.data?.contains('ssh-ed25519') == true,
+      ),
+      findsOneWidget,
+    );
 
     if (_captureOn) {
       final boundary = tester.renderObject<RenderRepaintBoundary>(

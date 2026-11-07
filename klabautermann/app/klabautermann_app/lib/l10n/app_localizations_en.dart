@@ -4424,6 +4424,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get hostKeyChangedReviewInstruction =>
+      'Review the new and previously trusted fingerprints, then read the warning below.';
+
+  @override
+  String hostKeyTypeChanged(String previousType, String presentedType) {
+    return 'Key algorithm changed from $previousType to $presentedType.';
+  }
+
+  @override
   String promptEndpoint(String host, int port) {
     return '$host:$port';
   }
@@ -6840,6 +6849,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appearanceAccent => 'Accent';
+
+  @override
+  String get appearanceAccentAdjusted =>
+      'Low contrast: links and indicators use an adjusted colour.';
+
+  @override
+  String get appearanceChosenAccentPreview => 'Chosen accent';
+
+  @override
+  String get appearanceAdjustedAccentPreview => 'Adjusted interface colour';
+
+  @override
+  String get appearanceUseAdjustedAccent => 'Use adjusted colour';
 
   @override
   String get appearanceSlotSurface => 'Surface';

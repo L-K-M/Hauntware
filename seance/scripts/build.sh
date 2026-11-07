@@ -262,6 +262,111 @@ preserve_apple_configs() {
   trap 'exit 143' TERM
 }
 
+# A valid code-signing identity's common-name suffix is the developer's
+# personal ID, not necessarily the project's team. Resolve each identity's
+# certificate and compare its subject OU with DEVELOPMENT_TEAM instead.
+has_apple_development_identity_for_team() {
+  local team="$1" identities line common certificate subject
+  if ! identities="$(security find-identity -v -p codesigning 2>/dev/null)"; then
+    return 1
+  fi
+  while IFS= read -r line; do
+    common="${line#*\"}"
+    [[ "$common" != "$line" ]] || continue
+    common="${common%%\"*}"
+    [[ "$common" == "Apple Development:"* ]] || continue
+    if ! certificate="$(security find-certificate -c "$common" -p 2>/dev/null)"; then
+      continue
+    fi
+    if ! subject="$(printf '%s\n' "$certificate" \
+        | openssl x509 -noout -subject -nameopt RFC2253 2>/dev/null)"; then
+      continue
+    fi
+    case ",${subject#subject=}," in
+      *",OU=$team,"*) return 0 ;;
+    esac
+  done <<< "$identities"
+  return 1
+}
+
+# Keep a contributor's matching Apple Development identity so permissions
+# survive rebuilds. The committed project is the only configuration eligible
+# for fallback: custom, Developer ID, and already ad-hoc signing stay intact.
+prepare_macos_signing() {
+  [[ "$HOST" == "macos" ]] || return 0
+  local project="app/seance_app/macos/Runner.xcodeproj/project.pbxproj"
+  local identities teams team patched
+  if [[ ! -f "$project" ]]; then
+    echo "!! macOS signing project is missing: $project" >&2
+    return 1
+  fi
+
+  identities="$(sed -n \
+    's/^[[:space:]]*"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "\([^"]*\)";.*/\1/p' \
+    "$project" | sort -u)"
+  # No stock identity, or any custom/ad-hoc identity: do not rewrite it.
+  [[ "$identities" == "Apple Development" ]] || return 0
+
+  teams="$(sed -n \
+    's/^[[:space:]]*DEVELOPMENT_TEAM = \([^;]*\);.*/\1/p' "$project" \
+    | tr -d '"' | sort -u)"
+  if [[ -z "$teams" || "$teams" == *$'\n'* ]]; then
+    echo ".. macOS signing: preserving ambiguous custom team configuration"
+    return 0
+  fi
+  team="$teams"
+
+  # Every block that requests Apple Development must use the same automatic
+  # team configuration. A manual or mixed block is a custom setup.
+  if ! awk -v team="$team" '
+    /buildSettings = \{/ {
+      in_block = 1; has_identity = 0; automatic = 0; team_ok = 0; next
+    }
+    in_block && /"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Apple Development";/ {
+      has_identity = 1
+    }
+    in_block && /CODE_SIGN_STYLE = Automatic;/ { automatic = 1 }
+    in_block && index($0, "DEVELOPMENT_TEAM = " team ";") { team_ok = 1 }
+    in_block && /^[[:space:]]*};/ {
+      if (has_identity) {
+        count++
+        if (!automatic || !team_ok) bad = 1
+      }
+      in_block = 0
+    }
+    END { exit(count > 0 && !bad ? 0 : 1) }
+  ' "$project"; then
+    echo ".. macOS signing: preserving custom Apple Development configuration"
+    return 0
+  fi
+
+  if has_apple_development_identity_for_team "$team"; then
+    echo "-- macOS signing: using Apple Development identity for team $team"
+    return 0
+  fi
+
+  echo "-- macOS signing: no valid Apple Development identity for team $team; using temporary ad-hoc signing"
+  patched="$APPLE_CONFIG_BACKUP/ad-hoc-project.pbxproj"
+  if ! sed \
+      -e 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Apple Development";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/g' \
+      -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' \
+      -e 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/g' \
+      "$project" > "$patched"; then
+    echo "!! Could not prepare temporary ad-hoc macOS signing" >&2
+    return 1
+  fi
+  if grep -Fq '"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";' "$patched" \
+      || grep -Fq 'CODE_SIGN_STYLE = Automatic;' "$patched" \
+      || ! grep -Fq '"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";' "$patched"; then
+    echo "!! Temporary ad-hoc signing did not replace the expected project settings" >&2
+    return 1
+  fi
+  if ! cp "$patched" "$project"; then
+    echo "!! Could not install temporary ad-hoc macOS signing" >&2
+    return 1
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # The platform folders are committed (they carry the app name, icons, and
 # entitlements — AGENTS.md §3); regenerating here is only a fallback for a
@@ -368,8 +473,16 @@ build_app() {
   if [[ "$HOST" == "macos" ]]; then
     rm -rf app/seance_app/build/macos/Build/Products/"$cfg"/*.app
   fi
+  echo "-- flutter pub get"
+  if ! ( cd app/seance_app && flutter pub get ); then
+    echo "!! app: flutter pub get failed" >&2
+    record "app: FAILED (flutter pub get)"; return 1
+  fi
+  if ! prepare_macos_signing; then
+    record "app: FAILED (macOS signing setup)"; return 1
+  fi
   echo "-- flutter build $HOST ${mode_flag}"
-  if ( cd app/seance_app && flutter pub get && flutter build "$HOST" $mode_flag ); then
+  if ( cd app/seance_app && flutter build "$HOST" $mode_flag ); then
     # Stage the final product; the nested output path differs per platform
     # (and per arch on linux), so glob for it.
     case "$HOST" in

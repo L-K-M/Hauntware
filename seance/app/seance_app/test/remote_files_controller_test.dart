@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/services/download_provenance.dart';
@@ -560,6 +561,130 @@ void main() {
     shellDirectory.dispose();
   });
 
+  test(
+    'coalesces transfer progress while other updates stay immediate',
+    () async {
+      final remote = _FakeRemoteFileSystem();
+      final shellDirectory = ValueNotifier<String?>(null);
+      final controller = RemoteFilesController(
+        () async => remote,
+        shellDirectory: _located(shellDirectory),
+        managedFileStore: _store(),
+        serverId: 'server',
+        editSessionId: 'session',
+      );
+      await controller.initialize();
+      final content = StreamController<List<int>>(sync: true);
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      late Future<RemoteFileEntry> uploading;
+
+      fakeAsync((time) {
+        uploading = controller.upload(
+          name: 'large.txt',
+          content: content.stream,
+          length: 5,
+        );
+        expect(
+          notifications,
+          1,
+          reason: 'the new transfer appears immediately',
+        );
+        notifications = 0;
+
+        content
+          ..add([1])
+          ..add([2])
+          ..add([3]);
+        time.flushMicrotasks();
+
+        expect(controller.transfers.single.transferred, 3);
+        expect(notifications, 0);
+        expect(time.nonPeriodicTimerCount, 1);
+
+        time.elapse(const Duration(milliseconds: 99));
+        expect(notifications, 0);
+        time.elapse(const Duration(milliseconds: 1));
+        expect(notifications, 1);
+
+        content
+          ..add([4])
+          ..add([5]);
+        time.flushMicrotasks();
+        expect(controller.transfers.single.transferred, 5);
+        expect(time.nonPeriodicTimerCount, 1);
+
+        controller.setFilterQuery('large');
+        expect(notifications, 2, reason: 'filtering must repaint immediately');
+        expect(time.nonPeriodicTimerCount, 0);
+        time.elapse(const Duration(milliseconds: 100));
+        expect(
+          notifications,
+          2,
+          reason: 'the cancelled timer must not repaint',
+        );
+
+        content.close();
+        time.flushMicrotasks();
+        expect(
+          controller.transfers.single.status,
+          RemoteTransferStatus.completed,
+        );
+        expect(
+          notifications,
+          greaterThan(2),
+          reason: 'completion must repaint without waiting for the timer',
+        );
+        expect(time.nonPeriodicTimerCount, 0);
+        uploading.ignore();
+        controller.dispose();
+      });
+
+      shellDirectory.dispose();
+    },
+  );
+
+  test('dispose cancels a pending transfer progress repaint', () async {
+    final remote = _FakeRemoteFileSystem();
+    final shellDirectory = ValueNotifier<String?>(null);
+    final controller = RemoteFilesController(
+      () async => remote,
+      shellDirectory: _located(shellDirectory),
+      managedFileStore: _store(),
+      serverId: 'server',
+      editSessionId: 'session',
+    );
+    await controller.initialize();
+    final content = StreamController<List<int>>(sync: true);
+    var notifications = 0;
+    controller.addListener(() => notifications++);
+    late Future<RemoteFileEntry> uploading;
+
+    fakeAsync((time) {
+      uploading = controller.upload(
+        name: 'large.txt',
+        content: content.stream,
+        length: 1,
+      );
+      notifications = 0;
+      content.add([1]);
+      time.flushMicrotasks();
+
+      expect(time.nonPeriodicTimerCount, 1);
+      controller.dispose();
+      expect(time.nonPeriodicTimerCount, 0);
+      final notificationsAtDispose = notifications;
+      time.elapse(const Duration(milliseconds: 100));
+      expect(notifications, notificationsAtDispose);
+
+      content.close();
+      time.flushMicrotasks();
+      uploading.ignore();
+    });
+
+    shellDirectory.dispose();
+  });
+
   test('managed copies detach for reconnect without being discarded', () async {
     final remote = _FakeRemoteFileSystem();
     final shellDirectory = ValueNotifier<String?>(null);
@@ -865,6 +990,218 @@ void main() {
       shellDirectory.dispose();
     },
   );
+
+  group('recursive download name collisions', () {
+    late _FakeRemoteFileSystem remote;
+    late ValueNotifier<String?> shellDirectory;
+    late RemoteFilesController controller;
+    late Directory localRoot;
+
+    setUp(() async {
+      remote = _FakeRemoteFileSystem();
+      shellDirectory = ValueNotifier<String?>(null);
+      controller = RemoteFilesController(
+        () async => remote,
+        shellDirectory: _located(shellDirectory),
+        managedFileStore: _store(),
+        serverId: 'server',
+        editSessionId: 'session',
+      );
+      await controller.initialize();
+      localRoot = await Directory.systemTemp.createTemp('seance-collide-');
+      addTearDown(() async {
+        if (await localRoot.exists()) await localRoot.delete(recursive: true);
+      });
+    });
+
+    tearDown(() {
+      controller.dispose();
+      shellDirectory.dispose();
+    });
+
+    Directory destination() => Directory('${localRoot.path}/downloads');
+
+    List<RemoteFileEntry> listing() => remote.directories['/home/test']!;
+
+    RemoteFileEntry fileEntry(
+      String name, {
+      String parent = '/home/test',
+    }) => RemoteFileEntry(
+      path: '$parent/$name',
+      name: name,
+      type: RemoteFileType.file,
+      size: 3,
+    );
+
+    void expectNothingTransferred(Directory target) {
+      expect(remote.downloaded, isEmpty, reason: 'no payload bytes moved');
+      expect(
+        target.listSync(),
+        isEmpty,
+        reason: 'neither the probe nor a planned entry may remain',
+      );
+    }
+
+    test(
+      'case-aliasing files are rejected iff the volume aliases them',
+      () async {
+        final target = destination();
+        await target.create();
+        final aliases = await _volumeAliases(target, 'Report', 'report');
+        remote.directories['/home/test'] = [
+          fileEntry('Report'),
+          fileEntry('report'),
+        ];
+        remote.contents['/home/test/Report'] = [1];
+        remote.contents['/home/test/report'] = [2];
+        if (aliases) {
+          await expectLater(
+            controller.downloadEntries(listing(), target),
+            throwsStateError,
+          );
+          expectNothingTransferred(target);
+        } else {
+          await controller.downloadEntries(listing(), target);
+          expect(await File('${target.path}/Report').readAsBytes(), [1]);
+          expect(await File('${target.path}/report').readAsBytes(), [2]);
+        }
+      },
+    );
+
+    test(
+      'normalization-aliasing files are rejected iff the volume aliases them',
+      () async {
+        final target = destination();
+        await target.create();
+        final aliases = await _volumeAliases(
+          target,
+          'caf\u00e9',
+          'cafe\u0301',
+        );
+        remote.directories['/home/test'] = [
+          fileEntry('caf\u00e9'),
+          fileEntry('cafe\u0301'),
+        ];
+        remote.contents['/home/test/caf\u00e9'] = [1];
+        remote.contents['/home/test/cafe\u0301'] = [2];
+        if (aliases) {
+          await expectLater(
+            controller.downloadEntries(listing(), target),
+            throwsStateError,
+          );
+          expectNothingTransferred(target);
+        } else {
+          await controller.downloadEntries(listing(), target);
+          expect(await File('${target.path}/caf\u00e9').readAsBytes(), [1]);
+          expect(await File('${target.path}/cafe\u0301').readAsBytes(), [2]);
+        }
+      },
+    );
+
+    test(
+      'a case-aliasing file and directory are rejected together',
+      () async {
+        final target = destination();
+        await target.create();
+        final aliases = await _volumeAliases(target, 'Notes', 'notes');
+        remote.directories['/home/test'] = [
+          fileEntry('notes'),
+          const RemoteFileEntry(
+            path: '/home/test/Notes',
+            name: 'Notes',
+            type: RemoteFileType.directory,
+          ),
+        ];
+        remote.directories['/home/test/Notes'] = [
+          fileEntry('child.txt', parent: '/home/test/Notes'),
+        ];
+        if (aliases) {
+          await expectLater(
+            controller.downloadEntries(listing(), target),
+            throwsStateError,
+          );
+          expectNothingTransferred(target);
+        } else {
+          await controller.downloadEntries(listing(), target);
+          expect(await File('${target.path}/notes').readAsBytes(), [1, 2, 3]);
+          expect(
+            await File('${target.path}/Notes/child.txt').readAsBytes(),
+            [1, 2, 3],
+          );
+        }
+      },
+    );
+
+    test(
+      'a normalization-aliasing file and directory are rejected together',
+      () async {
+        final target = destination();
+        await target.create();
+        final aliases = await _volumeAliases(
+          target,
+          'caf\u00e9',
+          'cafe\u0301',
+        );
+        remote.directories['/home/test'] = [
+          fileEntry('cafe\u0301'),
+          const RemoteFileEntry(
+            path: '/home/test/caf\u00e9',
+            name: 'caf\u00e9',
+            type: RemoteFileType.directory,
+          ),
+        ];
+        remote.directories['/home/test/caf\u00e9'] = [
+          fileEntry('inner.txt', parent: '/home/test/caf\u00e9'),
+        ];
+        if (aliases) {
+          await expectLater(
+            controller.downloadEntries(listing(), target),
+            throwsStateError,
+          );
+          expectNothingTransferred(target);
+        } else {
+          await controller.downloadEntries(listing(), target);
+          expect(
+            await File('${target.path}/cafe\u0301').readAsBytes(),
+            [1, 2, 3],
+          );
+          expect(
+            await File('${target.path}/caf\u00e9/inner.txt').readAsBytes(),
+            [1, 2, 3],
+          );
+        }
+      },
+    );
+
+    test('Windows-reserved names follow the destination platform', () async {
+      const names = [
+        'con',
+        'aux.txt',
+        'com1',
+        'colon:name',
+        'question?',
+        'notes.',
+        'tail ',
+      ];
+      remote.directories['/home/test'] = [
+        for (final name in names) fileEntry(name),
+      ];
+      final target = destination();
+
+      if (Platform.isWindows) {
+        await expectLater(
+          controller.downloadEntries(listing(), target),
+          throwsFormatException,
+        );
+        expect(remote.downloaded, isEmpty);
+      } else {
+        await controller.downloadEntries(listing(), target);
+        for (final name in names) {
+          expect(await File('${target.path}/$name').exists(), isTrue);
+        }
+      }
+    });
+  });
 
   test('reopening a managed copy refreshes changed remote content', () async {
     final remote = _FakeRemoteFileSystem();
@@ -1436,6 +1773,31 @@ Future<void> _until(bool Function() condition) async {
 Future<void> _pastDebounce() =>
     Future<void>.delayed(const Duration(milliseconds: 700));
 
+/// Whether the volume under the system temp directory (where the download
+/// destinations in these tests live) treats [second] as the same name as
+/// [first]: an exclusive create of [second] fails once [first] exists, as
+/// it does for case-insensitive or Unicode-normalizing filesystems.
+Future<bool> _volumeAliases(
+  Directory destinationParent,
+  String first,
+  String second,
+) async {
+  final directory = await destinationParent.createTemp('seance-alias-');
+  try {
+    await File('${directory.path}${Platform.pathSeparator}$first').create();
+    try {
+      await File(
+        '${directory.path}${Platform.pathSeparator}$second',
+      ).create(exclusive: true);
+      return false;
+    } on FileSystemException {
+      return true;
+    }
+  } finally {
+    if (await directory.exists()) await directory.delete(recursive: true);
+  }
+}
+
 ManagedRemoteFileStore _store() {
   final directory = Directory.systemTemp.createTempSync('seance-files-test-');
   addTearDown(() async {
@@ -1482,6 +1844,9 @@ class _FakeRemoteFileSystem implements RemoteFileSystem {
   /// A hook awaited mid-[download], letting a test interleave another call
   /// (e.g. a delete) while a transfer is in flight.
   Future<void> Function()? duringDownload;
+
+  /// Paths [download] served, in order.
+  final List<String> downloaded = [];
 
   @override
   Future<void> setMode(String path, int permissions) async {}
@@ -1564,6 +1929,7 @@ class _FakeRemoteFileSystem implements RemoteFileSystem {
     RemoteTransferCancellation? cancellation,
     bool computeHash = true,
   }) async {
+    downloaded.add(path);
     cancellation?.throwIfCancelled();
     await duringDownload?.call();
     final bytes = contents[path] ?? const [1, 2, 3];

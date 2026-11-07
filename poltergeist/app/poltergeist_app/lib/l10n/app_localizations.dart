@@ -196,11 +196,17 @@ abstract class AppLocalizations {
   /// **'HOST KEY CHANGED'**
   String get hostKeyChangedTitle;
 
-  /// Warning body of the changed-key dialog.
+  /// Warning after the fingerprints in the changed-key dialog.
   ///
   /// In en, this message translates to:
   /// **'The key for {host} does not match the one you previously trusted. This can mean a man-in-the-middle attack. Only continue if you know why the key changed.'**
   String hostKeyChangedWarning(String host);
+
+  /// Explains why trust starts disabled in the changed-key dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the new and previously trusted fingerprints, then read the warning below.'**
+  String get hostKeyChangedReviewInstruction;
 
   /// The endpoint whose key is presented, host:port.
   ///
@@ -12204,6 +12210,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Redo'**
   String get editorRedoLabel;
+
+  /// Device label shown in the account's synced-device list, identifying this installation by its operating system.
+  ///
+  /// In en, this message translates to:
+  /// **'Poltergeist on {platform}'**
+  String syncSessionDeviceName(String platform);
 }
 
 class _AppLocalizationsDelegate

@@ -2,8 +2,10 @@
 # Builds the previous release's Séance and Poltergeist as one harness
 # (M5 plan M08b, 03 §4.8 and §11.2 item 2) and prints its path. run.sh
 # runs it after the sync service is up and hands the path to the
-# convergence suite, which proves that the last release skips
-# Klabautermann's records: it neither applies nor re-pushes them.
+# convergence suite. Compatible protocols must skip Klabautermann's
+# records without re-pushing them; incompatible releases must be refused
+# without altering the account. --current builds the same harness from
+# HEAD to keep successful opaque-record coverage during a protocol cutover.
 #
 # The previous release is the highest vMAJOR.MINOR.PATCH tag on origin.
 # Its seance_core, seance_protocol and poltergeist_core (with the
@@ -13,7 +15,7 @@
 # checkout, and the analyzer leaves it out. Needs git, tar, network
 # access to origin and pub.dev, and the Dart SDK.
 #
-# Usage: previous_release.sh WORK_DIR
+# Usage: previous_release.sh [--current] WORK_DIR
 set -euo pipefail
 
 readonly integration_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,8 +31,14 @@ readonly packages=(
   planchette/packages/planchette_core
 )
 
+source_kind=previous
+if [[ "${1:-}" == --current ]]; then
+  source_kind=current
+  shift
+fi
+readonly source_kind
 if [[ "$#" -ne 1 ]]; then
-  echo 'usage: test/integration/previous_release.sh WORK_DIR' >&2
+  echo 'usage: test/integration/previous_release.sh [--current] WORK_DIR' >&2
   exit 2
 fi
 mkdir -p "$1"
@@ -38,33 +46,37 @@ work_dir="$(cd "$1" && pwd)"
 repo_dir="$(git -C "$integration_dir" rev-parse --show-toplevel)"
 readonly work_dir repo_dir
 
-# A CI checkout is shallow and carries no tags, so the remote names them.
-tag="$(git -C "$repo_dir" ls-remote --tags --refs origin 'v*' \
-  | sed -n 's#^[0-9a-f]*[[:space:]]*refs/tags/\(v[0-9]*\.[0-9]*\.[0-9]*\)$#\1#p' \
-  | sort -V | tail -n 1)"
-if [[ -z "$tag" ]]; then
-  echo 'origin has no vMAJOR.MINOR.PATCH release tag' >&2
-  exit 1
-fi
-echo "previous release: $tag" >&2
-
-# A local clone may hold the tag already. Only a shallow one fetches with
-# --depth, which would otherwise make a full clone shallow.
-if ! commit="$(git -C "$repo_dir" rev-parse -q --verify "refs/tags/$tag^{commit}")"; then
-  depth=()
-  if [[ "$(git -C "$repo_dir" rev-parse --is-shallow-repository)" == true ]]; then
-    depth=(--depth 1)
+if [[ "$source_kind" == current ]]; then
+  commit="$(git -C "$repo_dir" rev-parse HEAD)"
+  echo "current checkout: $commit" >&2
+else
+  # A CI checkout is shallow and carries no tags, so the remote names them.
+  tag="$(git -C "$repo_dir" ls-remote --tags --refs origin 'v*' \
+    | sed -n 's#^[0-9a-f]*[[:space:]]*refs/tags/\(v[0-9]*\.[0-9]*\.[0-9]*\)$#\1#p' \
+    | sort -V | tail -n 1)"
+  if [[ -z "$tag" ]]; then
+    echo 'origin has no vMAJOR.MINOR.PATCH release tag' >&2
+    exit 1
   fi
-  for ((attempt = 1; ; attempt++)); do
-    git -C "$repo_dir" fetch --quiet --no-tags "${depth[@]}" origin \
-      "refs/tags/$tag:refs/tags/$tag" && break
-    if ((attempt == fetch_attempts)); then
-      echo "cannot fetch $tag from origin" >&2
-      exit 1
+  echo "previous release: $tag" >&2
+
+  # Only a shallow clone fetches with --depth, preserving full local clones.
+  if ! commit="$(git -C "$repo_dir" rev-parse -q --verify "refs/tags/$tag^{commit}")"; then
+    depth=()
+    if [[ "$(git -C "$repo_dir" rev-parse --is-shallow-repository)" == true ]]; then
+      depth=(--depth 1)
     fi
-    sleep $((attempt * 5))
-  done
-  commit="$(git -C "$repo_dir" rev-parse --verify "refs/tags/$tag^{commit}")"
+    for ((attempt = 1; ; attempt++)); do
+      git -C "$repo_dir" fetch --quiet --no-tags "${depth[@]}" origin \
+        "refs/tags/$tag:refs/tags/$tag" && break
+      if ((attempt == fetch_attempts)); then
+        echo "cannot fetch $tag from origin" >&2
+        exit 1
+      fi
+      sleep $((attempt * 5))
+    done
+    commit="$(git -C "$repo_dir" rev-parse --verify "refs/tags/$tag^{commit}")"
+  fi
 fi
 
 rm -rf -- "${work_dir:?}/src" "${work_dir:?}/harness"

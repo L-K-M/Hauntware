@@ -17,8 +17,10 @@ import 'package:xterm/xterm.dart' show TerminalController;
 
 import 'services/app_services.dart';
 import 'services/app_settings.dart';
+import 'services/assistant_settings_sync.dart';
 import 'services/background_keep_alive.dart';
 import 'services/chat_session.dart';
+import 'services/credential_retirement.dart';
 import 'services/default_snippets.dart';
 import 'services/managed_remote_file.dart';
 import 'services/missing_credential.dart';
@@ -40,6 +42,51 @@ import 'ui/terminal_appearance.dart';
 /// Connection state of a server's terminal, mirrored by the status dot in the
 /// server list (green / grey / red, with a spinner while connecting).
 enum TerminalStatus { connecting, connected, disconnected, error }
+
+/// One resource that could not be released while a terminal tab was torn
+/// down. The operation is safe to show in diagnostics; [error] and
+/// [stackTrace] stay out of user-facing copy because they can contain local
+/// paths or remote details.
+@immutable
+class TabCleanupFailure {
+  const TabCleanupFailure({
+    required this.operation,
+    required this.error,
+    required this.stackTrace,
+  });
+
+  final String operation;
+  final Object error;
+  final StackTrace stackTrace;
+}
+
+/// Outcome of closing one tab, or a group of tabs.
+///
+/// A close always removes the tab and attempts every teardown step. Failures
+/// are returned rather than thrown midway, so callers can tell the user that
+/// cleanup was incomplete without leaving later resources alive.
+@immutable
+class TabCloseReport {
+  const TabCloseReport.success() : failures = const [];
+
+  const TabCloseReport._(this.failures);
+
+  factory TabCloseReport.combine(Iterable<TabCloseReport> reports) =>
+      TabCloseReport._(
+        List.unmodifiable([for (final report in reports) ...report.failures]),
+      );
+
+  final List<TabCleanupFailure> failures;
+
+  bool get hasFailures => failures.isNotEmpty;
+
+  String get userMessage =>
+      'The tab closed, but cleanup did not finish. A connection may remain '
+      'until Séance exits; any undeleted local edits remain available for '
+      'recovery.';
+}
+
+typedef TabCleanupFailureReporter = void Function(TabCloseReport report);
 
 /// What the remote shell has told us about a session: its working directory
 /// ([ShellLocation]), the OSC 0/2 terminal title, and the command it is
@@ -218,8 +265,9 @@ class TerminalSession extends PaneTab {
 
   /// Tab labels are chrome: a secret pasted into a command line must never be
   /// rendered in the strip. Always on — unlike the assistant's redaction
-  /// toggle there is nothing being *sent* here to opt out of, and the engine's
-  /// capture is keystroke-level so it sees passwords typed at flag prompts.
+  /// toggle there is nothing being *sent* here to opt out of. The engine only
+  /// captures validated shell prompts, but command arguments can still contain
+  /// secrets.
   static final SecretRedactor _redactor = SecretRedactor();
 
   Timer? _commandReveal;
@@ -323,14 +371,32 @@ class TerminalSession extends PaneTab {
   /// listener from an already-disposed notifier is explicitly supported.
   @override
   void dispose() {
-    _commandReveal?.cancel();
-    contextStack.dispose();
-    _shellLocation.removeListener(_syncDirectory);
-    _shellLocation.dispose();
-    engine.terminalTitle.removeListener(_syncTitle);
-    engine.activeCommand.removeListener(_syncRunningCommand);
-    metadata.dispose();
-    customName.dispose();
+    Object? firstError;
+    StackTrace? firstStackTrace;
+
+    void release(void Function() action) {
+      try {
+        action();
+      } catch (error, stackTrace) {
+        firstError ??= error;
+        firstStackTrace ??= stackTrace;
+      }
+    }
+
+    // A broken notifier or context consumer must not keep the remaining tab
+    // resources alive. The caller records the first failure after every
+    // independent release has had its chance to run.
+    release(() => _commandReveal?.cancel());
+    release(contextStack.dispose);
+    release(() => _shellLocation.removeListener(_syncDirectory));
+    release(_shellLocation.dispose);
+    release(() => engine.terminalTitle.removeListener(_syncTitle));
+    release(() => engine.activeCommand.removeListener(_syncRunningCommand));
+    release(metadata.dispose);
+    release(customName.dispose);
+
+    final error = firstError;
+    if (error != null) Error.throwWithStackTrace(error, firstStackTrace!);
   }
 
   bool get isConnected => session != null && !session!.isClosed;
@@ -456,6 +522,49 @@ class SourceServerChanged implements Exception {
       'deleted, or it now holds a different credential. Nothing was created.';
 }
 
+/// The config no longer references a credential, but removing the now-unused
+/// vault entry failed. The server save is durable and the entry remains in a
+/// device-local pending-cleanup set that startup and later saves retry.
+final class CredentialCleanupException implements Exception {
+  const CredentialCleanupException(this.credentialId, this.cause);
+
+  final String credentialId;
+  final Object cause;
+
+  @override
+  String toString() =>
+      'The server was saved, but its old credential could not be removed: '
+      '$cause';
+}
+
+/// The credential reference an editor observed before starting an asynchronous
+/// save. Checked inside the mutation queue, immediately before any vault or
+/// config write, so a concurrent sync or editor cannot be overwritten after
+/// the UI's earlier conflict check has already passed.
+final class ServerCredentialPrecondition {
+  const ServerCredentialPrecondition({
+    required this.serverId,
+    required this.secretRef,
+    required this.secret,
+  });
+
+  final String serverId;
+  final String? secretRef;
+
+  /// The exact entry read while planning the save. Checking only [secretRef]
+  /// cannot see a sync or older editor replacing material under the same id.
+  final Secret? secret;
+}
+
+final class ServerCredentialChanged implements Exception {
+  const ServerCredentialChanged();
+
+  @override
+  String toString() =>
+      'This server\'s credential changed while it was being saved. Close and '
+      'reopen the editor; nothing from this save was written.';
+}
+
 /// Whether any server other than [excludingId] still points at [secretRef].
 ///
 /// Deleting a server drops its vault entry, and nothing stops two configs
@@ -464,15 +573,29 @@ class SourceServerChanged implements Exception {
 /// ref by hand. Dropping it out from under a server that still names it is
 /// silent credential loss the survivor only discovers at connect time.
 ///
-/// The sync coordinator no longer honours a `secret:` tombstone at all (an
-/// unsealed one is the sync server's to forge), so this is the only place the
-/// rule lives. A top-level function so it can be asserted on its own, apart
-/// from the delete that applies it.
+/// A synced credential tombstone withdraws publication without deleting local
+/// vault material, so the local delete must enforce this sharing rule too.
+/// A top-level function so it can be asserted apart from the delete.
 bool secretStillReferenced(
   String secretRef,
   Iterable<ServerConfig> servers, {
   required String excludingId,
 }) => servers.any((s) => s.id != excludingId && s.secretRef == secretRef);
+
+/// Exact equality for a credential snapshot used as a write precondition.
+/// [Secret] deliberately has identity equality so plaintext is never folded
+/// into a generic value object's logs or diagnostics.
+bool sameSecretSnapshot(Secret? left, Secret? right) {
+  if (identical(left, right)) return true;
+  if (left == null || right == null) return false;
+  return left.id == right.id &&
+      left.kind == right.kind &&
+      left.value == right.value &&
+      left.updatedAt == right.updatedAt &&
+      left.keyPassphrase == right.keyPassphrase &&
+      left.identityFilePath == right.identityFilePath &&
+      left.identityFilePassphrase == right.identityFilePassphrase;
+}
 
 /// Opens a terminal's SSH session through [manager]. The app connects for
 /// real ([SshSessionManager.connect]); a test replays a handshake instead,
@@ -486,6 +609,11 @@ typedef SshSessionOpener =
       required TerminalEngine engine,
       SshConnectionLog? log,
     });
+
+/// Claims one inbox proposal. The app normally uses its authenticated inbox;
+/// tests can hold this boundary to reproduce a session changing mid-claim.
+typedef InboxProposalClaimer =
+    Future<InboxClaim> Function(PendingProposal proposal);
 
 Future<SshSession> _connectThrough(
   SshSessionManager manager, {
@@ -535,6 +663,7 @@ class _HostKeyAttempt {
 class AppState extends ChangeNotifier {
   final AppServices services;
   final SshSessionOpener _openSshSession;
+  final InboxProposalClaimer? _claimInboxProposal;
 
   List<ServerConfig> servers = [];
   List<Snippet> snippets = [];
@@ -545,6 +674,10 @@ class AppState extends ChangeNotifier {
   /// insert), so a per-server tab strip is a simple order-preserving filter
   /// and adjacent tabs are always same-server.
   final List<PaneTab> tabs = [];
+
+  /// Prevents an asynchronous close from notifying after [dispose] has torn
+  /// down this notifier. The cleanup itself still runs to completion.
+  bool _disposed = false;
 
   /// The id of the tab shown in the right pane (see [activeServerId],
   /// which is derived from it).
@@ -615,15 +748,21 @@ class AppState extends ChangeNotifier {
   final SecretRedactor _redactor = SecretRedactor();
   Timer? _statsSaveDebounce;
 
-  /// The assistant conversation. Lives here rather than in the sidebar widget
-  /// so it survives the drawer closing on narrow layouts, and the pane being
-  /// rebuilt when the layout crosses the wide/narrow breakpoint.
-  final ChatSession chat = ChatSession();
+  /// General plus one isolated assistant conversation per logical terminal.
+  final ChatConversationStore chats = ChatConversationStore();
+
+  /// The currently selected conversation.
+  ChatSession get chat => chats.selectedSession;
 
   /// UI-supplied interaction hooks (wired by the root widget so dialogs can be
   /// shown). Default to a safe "deny" if the UI hasn't set them yet.
   HostKeyPrompter? hostKeyPrompter;
   KeyboardInteractiveResponder? keyboardInteractiveResponder;
+
+  /// Shows the non-fatal result of a session close whose teardown could not
+  /// release everything. The tab is already gone when this runs; durable
+  /// managed-edit records are deliberately left recoverable on disk.
+  TabCleanupFailureReporter? tabCleanupFailureReporter;
 
   // --- Update check ---
 
@@ -652,6 +791,7 @@ class AppState extends ChangeNotifier {
     ApkUpdater? apkUpdater,
     BackgroundKeepAlive? keepAlive,
     this._openSshSession = _connectThrough,
+    this._claimInboxProposal,
   }) : _updateChecker = updateChecker ?? UpdateChecker(),
        apkUpdater = apkUpdater ?? (Platform.isAndroid ? ApkUpdater() : null),
        _keepAlive = keepAlive ?? BackgroundKeepAlive();
@@ -690,6 +830,8 @@ class AppState extends ChangeNotifier {
     String? draftPrivateKey,
     String? draftKeyPassphrase,
     IdentityFileBookmark? draftIdentityBookmark,
+    CredentialEditAction? draftCredentialAction,
+    KeyPassphraseAction? draftPassphraseAction,
     SshConnectionLog? log,
   }) {
     return runConnectionTest(
@@ -700,6 +842,8 @@ class AppState extends ChangeNotifier {
         draftPrivateKey: draftPrivateKey,
         draftKeyPassphrase: draftKeyPassphrase,
         draftIdentityBookmark: draftIdentityBookmark,
+        draftCredentialAction: draftCredentialAction,
+        draftPassphraseAction: draftPassphraseAction,
       ),
       authenticate: liveHostAuthenticator(
         // Not a verifier: liveHostAuthenticator wraps this in an
@@ -735,6 +879,68 @@ class AppState extends ChangeNotifier {
           if (t is TerminalSession) t,
       ];
       return terminals.isEmpty ? null : terminals.last;
+    }
+    return null;
+  }
+
+  /// Refresh assistant destinations without following later focus changes.
+  void _syncChatTargets() {
+    final terminals = tabs.whereType<TerminalSession>().toList();
+    final active = activeSession;
+    chats.reconcile([
+      for (final session in terminals) chatTargetFor(session),
+    ], initiallyActive: active == null ? null : chatTargetFor(active));
+  }
+
+  TerminalChatTarget chatTargetFor(TerminalSession session) {
+    if (session.isLocal) {
+      final siblings = tabs
+          .whereType<TerminalSession>()
+          .where((tab) => tab.isLocal)
+          .toList();
+      final ordinal = siblings.indexOf(session) + 1;
+      return TerminalChatTarget(
+        editSessionId: session.editSessionId,
+        serverId: kLocalShellServerId,
+        username: '',
+        host: 'this-machine',
+        port: 0,
+        isLocal: true,
+        label:
+            'Local shell · ${sessionTabLabel(ordinal: ordinal, customName: session.customName.value)}',
+        description: session.displayTarget,
+      );
+    }
+    // This is the endpoint the live terminal actually opened. A saved edit
+    // changes the assistant identity only when reconnect installs a terminal
+    // for that new fingerprint.
+    final config = session.config!;
+    final displayConfig = configFor(session.serverId) ?? config;
+    final siblings = tabs
+        .whereType<TerminalSession>()
+        .where((tab) => tab.serverId == session.serverId)
+        .toList();
+    final ordinal = siblings.indexOf(session) + 1;
+    return TerminalChatTarget(
+      editSessionId: session.editSessionId,
+      serverId: session.serverId,
+      username: config.username,
+      host: config.host,
+      port: config.port,
+      isLocal: false,
+      label:
+          '${displayConfig.label} · ${sessionTabLabel(ordinal: ordinal, customName: session.customName.value)}',
+      description: '${config.username}@${config.host}:${config.port}',
+    );
+  }
+
+  /// Resolve only while the same logical target and fingerprint remain open.
+  TerminalSession? sessionForChatTarget(TerminalChatTarget target) {
+    for (final session in tabs.whereType<TerminalSession>()) {
+      if (session.editSessionId == target.editSessionId &&
+          chatTargetFor(session).key == target.key) {
+        return session;
+      }
     }
     return null;
   }
@@ -796,6 +1002,7 @@ class AppState extends ChangeNotifier {
     // app can be backgrounded mid-handshake right after opening a tab.
     _keepAlive.setEnabled(services.settings.keepSessionsAliveInBackground);
     servers = await services.configStore.listServers();
+    await _retryPendingCredentialCleanups();
     // Managed edits are a side feature: a checkout folder the store cannot
     // read costs the restored edit tabs, never startup. The local copies stay
     // on disk, and the store retries on its next use.
@@ -810,6 +1017,7 @@ class AppState extends ChangeNotifier {
         stackTrace: stackTrace,
       );
     }
+    _syncChatTargets();
     await _seedDefaultSnippets();
     snippets = await services.snippetStore.listSnippets();
     try {
@@ -847,6 +1055,83 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Persist a cleanup intention before the config can stop naming [id].
+  /// If settings cannot be made durable, the edit has not started and is
+  /// refused rather than risking an orphan that no later launch knows about.
+  Future<void> _queueCredentialCleanup(String id) async {
+    if (!services.settings.pendingCredentialCleanup.add(id)) return;
+    try {
+      await services.saveSettings();
+    } catch (_) {
+      services.settings.pendingCredentialCleanup.remove(id);
+      rethrow;
+    }
+  }
+
+  /// Delete queued entries that no saved server still names. Deletion is
+  /// idempotent, so a settings write failing after the vault write merely
+  /// causes the next launch to confirm the already-completed cleanup again.
+  Future<void> _retryPendingCredentialCleanups({
+    String? reportFailureFor,
+    int? updatedAt,
+  }) async {
+    // Startup and unrelated saves must not prompt merely to retry old cleanup.
+    // An explicit credential save already owns its unlock and reports failure.
+    if (reportFailureFor == null && services.appLock.requiresAuthentication) {
+      return;
+    }
+    Object? reportedCause;
+    StackTrace? reportedStack;
+    var changed = false;
+    for (final id in services.settings.pendingCredentialCleanup.toList()) {
+      try {
+        final result = await retireCredential(
+          vault: services.vault,
+          tombstones: services.tombstoneStore,
+          credentialId: id,
+          deviceId: services.settings.deviceId,
+          servers: servers,
+          updatedAt: updatedAt ?? DateTime.now().millisecondsSinceEpoch,
+        );
+        if (result == CredentialRetirement.stillReferenced) continue;
+        services.settings.pendingCredentialCleanup.remove(id);
+        changed = true;
+      } catch (error, stackTrace) {
+        developer.log(
+          'Could not remove unreferenced credential $id; cleanup remains '
+          'queued',
+          name: 'seance.app',
+          level: 900,
+          error: error,
+          stackTrace: stackTrace,
+        );
+        if (id == reportFailureFor) {
+          reportedCause = error;
+          reportedStack = stackTrace;
+        }
+      }
+    }
+    if (changed) {
+      try {
+        await services.saveSettings();
+      } catch (error, stackTrace) {
+        developer.log(
+          'Could not persist completed credential cleanup',
+          name: 'seance.app',
+          level: 900,
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+    if (reportedCause != null) {
+      Error.throwWithStackTrace(
+        CredentialCleanupException(reportFailureFor!, reportedCause),
+        reportedStack!,
+      );
+    }
+  }
+
   /// Recompute whether the assistant is usable: a key-based provider needs a
   /// stored API key; a local OpenAI-compatible endpoint (Ollama, LM Studio)
   /// works keyless as long as a base URL is set. Keystore errors read as
@@ -870,23 +1155,38 @@ class AppState extends ChangeNotifier {
 
   /// Called after the LLM provider settings change: invalidate any cached chat
   /// provider (so a new API key takes effect) and refresh sidebar visibility.
-  Future<void> reloadLlmProvider() async {
-    llmConfigVersion++;
+  Future<void> reloadLlmProvider({bool advanceVersion = true}) async {
+    if (advanceVersion) _advanceLlmConfigVersion();
     await refreshLlmConfigured();
     notifyListeners();
+  }
+
+  void _advanceLlmConfigVersion() {
+    // A local sync phase can adopt another model while later HTTP is still
+    // pending. Retire its providers here, beside the editor epoch, rather
+    // than allowing an old conversation to keep working until round end.
+    chats.invalidateControllers();
+    llmConfigVersion++;
   }
 
   /// [identityFileBookmark] is the final, device-local security-scope grant
   /// for the server's identity file: a value stores it, null clears any stored
   /// one (the editor owns the keep-or-drop decision, so this always applies).
+  /// [clearSecretRef] removes an old entry after the config is durable and no
+  /// other server references it. [credentialPrecondition] makes an editor's
+  /// copy-on-write save conditional on the ref it originally observed.
   Future<void> saveServer(
     ServerConfig config, {
     Secret? secret,
+    String? clearSecretRef,
+    ServerCredentialPrecondition? credentialPrecondition,
     IdentityFileBookmark? identityFileBookmark,
   }) => _mutate(
     () => _saveServerNow(
       config,
       secret: secret,
+      clearSecretRef: clearSecretRef,
+      credentialPrecondition: credentialPrecondition,
       identityFileBookmark: identityFileBookmark,
     ),
   );
@@ -895,8 +1195,36 @@ class AppState extends ChangeNotifier {
   Future<void> _saveServerNow(
     ServerConfig config, {
     Secret? secret,
+    String? clearSecretRef,
+    ServerCredentialPrecondition? credentialPrecondition,
     IdentityFileBookmark? identityFileBookmark,
   }) async {
+    if (clearSecretRef != null && clearSecretRef == config.secretRef) {
+      throw ArgumentError.value(
+        clearSecretRef,
+        'clearSecretRef',
+        'cannot remove the credential the saved server still references',
+      );
+    }
+    if (credentialPrecondition != null) {
+      final current = await services.configStore.getServer(
+        credentialPrecondition.serverId,
+      );
+      if (current == null ||
+          current.secretRef != credentialPrecondition.secretRef) {
+        throw const ServerCredentialChanged();
+      }
+      final ref = credentialPrecondition.secretRef;
+      final currentSecret = ref == null
+          ? null
+          : await services.vault.getSecret(ref);
+      if (!sameSecretSnapshot(currentSecret, credentialPrecondition.secret)) {
+        throw const ServerCredentialChanged();
+      }
+    }
+    if (clearSecretRef != null) {
+      await _queueCredentialCleanup(clearSecretRef);
+    }
     if (secret != null) {
       await services.vault.putLocalSecret(secret, updatedAt: config.updatedAt);
     }
@@ -928,9 +1256,27 @@ class AppState extends ChangeNotifier {
       await services.saveSettings();
     }
     servers = await services.configStore.listServers();
+    Object? cleanupError;
+    StackTrace? cleanupStack;
+    try {
+      await _retryPendingCredentialCleanups(
+        reportFailureFor: clearSecretRef,
+        updatedAt: config.updatedAt,
+      );
+    } catch (error, stackTrace) {
+      cleanupError = error;
+      cleanupStack = stackTrace;
+    }
     services.probe.updateServers(servers);
+    _syncChatTargets();
     notifyListeners();
     _scheduleAutoSync();
+    if (cleanupError != null) {
+      Error.throwWithStackTrace(
+        cleanupError,
+        cleanupStack!,
+      );
+    }
   }
 
   /// Duplicate [source] as a new server and return the copy.
@@ -1753,9 +2099,21 @@ class AppState extends ChangeNotifier {
     );
     tabs[index] = replacement;
     if (activeTabId == old.id) _setActive(replacement.id);
-    await _disposeSession(old);
-    replacement.retainedLocalCopies.addAll(old.retainedLocalCopies);
-    old.retainedLocalCopies.clear();
+    // Revoke the old conversation before transport teardown can wait. The
+    // assistant may still target this terminal while another tab is active.
+    _syncChatTargets();
+    // _disposeSession transfers both retained and controller-owned copies
+    // synchronously before its first await. A failed old transport close must
+    // not strand those copies on the disposed tab or abort the replacement.
+    final cleanup = await _disposeSession(
+      old,
+      retainLocalCopiesIn: replacement.retainedLocalCopies,
+    );
+    _reportCleanupFailures(cleanup);
+    // The replacement can be closed (or the whole state disposed) while the
+    // old transport takes its time to shut down. Never resurrect that tab
+    // with a late dial or notify a notifier whose owner is already gone.
+    if (_disposed || !identical(tabById(replacement.id), replacement)) return;
     notifyListeners();
     await (replacement.isLocal
         ? _startLocalShell(replacement)
@@ -1781,45 +2139,132 @@ class AppState extends ChangeNotifier {
   /// Close a session's SSH connection AND dispose its engine. For a session
   /// that never connected (still connecting, or errored) there is no session
   /// to close the engine for us, so dispose it directly.
-  Future<void> _disposeSession(
+  Future<TabCloseReport> _disposeSession(
     TerminalSession tab, {
     bool deleteLocalCopies = false,
+    Map<String, ManagedRemoteFile>? retainLocalCopiesIn,
   }) async {
+    final failures = <TabCleanupFailure>[];
+
+    void record(String operation, Object error, StackTrace stackTrace) {
+      failures.add(
+        TabCleanupFailure(
+          operation: operation,
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
+
+    void attemptSync(String operation, void Function() action) {
+      try {
+        action();
+      } catch (error, stackTrace) {
+        record(operation, error, stackTrace);
+      }
+    }
+
+    Future<void> attempt(
+      String operation,
+      FutureOr<void> Function() action,
+    ) async {
+      try {
+        await action();
+      } catch (error, stackTrace) {
+        record(operation, error, stackTrace);
+      }
+    }
+
+    // Detach every owner before the first await. The tab can already have
+    // disappeared from [tabs], and an onClosed callback or a second close must
+    // not race this teardown for the same controller or transport.
     final files = tab.files;
-    if (files != null) {
-      if (deleteLocalCopies) {
-        await files.deleteAllLocalCopies();
-      } else {
-        tab.retainedLocalCopies.addAll(files.takeLocalCopies());
-      }
-      files.dispose();
-      tab.files = null;
-    }
-    tab.git?.dispose();
+    tab.files = null;
+    final git = tab.git;
     tab.git = null;
-    if (deleteLocalCopies && tab.retainedLocalCopies.isNotEmpty) {
-      for (final copy in tab.retainedLocalCopies.values) {
-        await services.managedRemoteFiles.remove(copy.id);
-      }
-      tab.retainedLocalCopies.clear();
+    final transport = tab.session;
+    tab.session = null;
+    tab.connecting = false;
+
+    final localCopies = Map<String, ManagedRemoteFile>.of(
+      tab.retainedLocalCopies,
+    );
+    tab.retainedLocalCopies.clear();
+    if (files != null) {
+      attemptSync(
+        'detach managed local copies',
+        () => localCopies.addAll(files.takeLocalCopies()),
+      );
     }
+    if (!deleteLocalCopies) {
+      (retainLocalCopiesIn ?? tab.retainedLocalCopies).addAll(localCopies);
+    }
+
     // Sever the log's callback before anything async begins: a trace line
     // arriving during (or after) teardown would otherwise reach a notifier
     // that is about to be disposed, which asserts. Freezing also stops the
     // transcript growing while the transport closes.
-    tab.log.freeze();
-    try {
-      if (tab.session != null) {
-        await tab.session!.close(); // SshSession.close disposes the engine
-      } else {
-        await tab.engine.dispose();
-      }
-    } finally {
-      tab.logNotifier.dispose();
+    attemptSync('freeze connection log', tab.log.freeze);
+    if (transport != null) {
+      attemptSync('detach session close callback', () {
+        transport.onClosed = null;
+      });
     }
+
+    // Controllers no longer own the copies above, so they can be disposed
+    // even when deleting one checkout fails. Every durable copy is removed
+    // independently; a failed remove remains indexed for recovery next run.
+    if (files != null) {
+      await attempt('dispose remote files', files.dispose);
+    }
+    if (git != null) await attempt('dispose remote Git', git.dispose);
+    if (deleteLocalCopies) {
+      for (final copy in localCopies.values) {
+        await attempt(
+          'delete managed local copy',
+          () => services.managedRemoteFiles.remove(copy.id),
+        );
+      }
+    }
+
+    if (transport != null) {
+      await attempt('close session transport', transport.close);
+    }
+    // SessionTransport.close owns the engine, but a transport is allowed to
+    // throw before reaching that step. XtermTerminalEngine.dispose is
+    // idempotent, so this final attempt closes both paths without guessing.
+    await attempt('dispose terminal engine', tab.engine.dispose);
+    await attempt('dispose connection log notifier', tab.logNotifier.dispose);
     // Only here, not in disconnect(): a disconnected tab stays in the strip and
     // keeps showing where it last was.
-    tab.dispose();
+    await attempt('dispose terminal tab', tab.dispose);
+
+    return TabCloseReport._(List.unmodifiable(failures));
+  }
+
+  void _reportCleanupFailures(TabCloseReport report, {bool notifyUser = true}) {
+    if (!report.hasFailures) return;
+    for (final failure in report.failures) {
+      developer.log(
+        'Session cleanup failed while trying to ${failure.operation}',
+        name: 'seance.app',
+        level: 1000,
+        error: failure.error,
+        stackTrace: failure.stackTrace,
+      );
+    }
+    if (!notifyUser) return;
+    try {
+      tabCleanupFailureReporter?.call(report);
+    } catch (error, stackTrace) {
+      developer.log(
+        'Could not report incomplete session cleanup',
+        name: 'seance.app',
+        level: 1000,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// Seed the built-in snippets on first launch only (guarded by a persisted
@@ -1902,7 +2347,11 @@ class AppState extends ChangeNotifier {
     required bool keepLocal,
   }) async {
     try {
-      return await services.resolvePinConflict(conflict, keepLocal: keepLocal);
+      return await services.resolvePinConflict(
+        conflict,
+        keepLocal: keepLocal,
+        runLocal: _mutate,
+      );
     } finally {
       notifyListeners();
     }
@@ -1922,8 +2371,7 @@ class AppState extends ChangeNotifier {
       lastSyncError = _shortError(e);
       rethrow;
     } finally {
-      syncing = false;
-      notifyListeners();
+      _finishSync();
     }
   }
 
@@ -1946,61 +2394,111 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Persists the switches that determine what the next sync snapshot reads.
+  Future<({bool wasSyncingAssistant, String? saveError})> saveSyncPreferences({
+    required bool autoSync,
+    required bool syncSecrets,
+    required bool syncAssistant,
+  }) => _mutate(() async {
+    final settings = services.settings;
+    final wasAutoSync = settings.autoSync;
+    final wasSyncSecrets = settings.syncSecrets;
+    final wasSyncingAssistant = settings.syncAssistant;
+    settings.autoSync = autoSync;
+    settings.syncSecrets = syncSecrets;
+    settings.syncAssistant = syncAssistant;
+    try {
+      await services.saveSettings();
+      return (wasSyncingAssistant: wasSyncingAssistant, saveError: null);
+    } catch (error) {
+      settings.autoSync = wasAutoSync;
+      settings.syncSecrets = wasSyncSecrets;
+      settings.syncAssistant = wasSyncingAssistant;
+      return (wasSyncingAssistant: wasSyncingAssistant, saveError: '$error');
+    }
+  });
+
+  /// Rolls back an assistant-sync switch whose adopt-first round failed.
+  Future<void> disableAssistantSync() => _mutate(() async {
+    services.settings.syncAssistant = false;
+    await services.saveSettings();
+  });
+
+  Future<void> registerSync({
+    required String baseUrl,
+    required String username,
+    required String password,
+    required String encryptionPassphrase,
+  }) => services.registerSync(
+    baseUrl: baseUrl,
+    username: username,
+    password: password,
+    encryptionPassphrase: encryptionPassphrase,
+    runLocal: _mutate,
+  );
+
+  Future<void> loginSync({
+    required String baseUrl,
+    required String username,
+    required String password,
+    required String encryptionPassphrase,
+  }) => services.loginSync(
+    baseUrl: baseUrl,
+    username: username,
+    password: password,
+    encryptionPassphrase: encryptionPassphrase,
+    runLocal: _mutate,
+  );
+
   /// One sync round + refresh of the domain lists from the (possibly updated)
   /// stores. Shared by manual and automatic sync.
   Future<SyncOutcome> _runSyncAndRefresh() async {
-    // On the mutation queue: a round writes the config store and the vault
-    // (tombstones delete both), so it is a mutation like any other and must
-    // not interleave with a delete's reference count or a duplicate's plan.
-    // The re-reads are inside it too — outside, a mutation could land while
-    // `listServers` was still resolving and then have its own assignment
-    // overwritten by this older snapshot.
-    //
-    // That does hold the queue across network I/O, so what bounds it is worth
-    // writing down here rather than leaving to be rediscovered: every request
-    // carries `HttpSyncClient.timeout` (30 s by default), a timeout throws
-    // rather than retrying so the round ends at the first dead request, and
-    // `_mutate` releases in a `finally`. A black-holed network therefore
-    // costs one timeout, not a wedged app. A slow-but-alive one costs more —
-    // `SyncEngine.sync` runs up to five rounds and `SyncCoordinator.run` up
-    // to two passes — and the fix for that is splitting the coordinator's
-    // fetch from its apply so only the apply serializes, which is a change to
-    // `seance_core`, not to this line.
+    // The coordinator enters the mutation queue only for its short local
+    // collect/merge/apply phases. Pulls and pushes stay outside it, so a slow
+    // server cannot stop an editor save or delete. The services layer keeps
+    // the account operation serialized across the whole round, then asks for
+    // this queue inside it; every other account operation uses that same lock
+    // order to avoid a sync-operation/mutation-queue cycle.
     var adoptedAssistant = false;
+    var assistantVersionAdvanced = false;
     try {
-      final outcome = await _mutate(() async {
+      final SyncOutcome outcome;
+      try {
+        outcome = await services.runSync(
+          runLocal: _mutate,
+          onAssistantSettingsApplied: () {
+            _advanceLlmConfigVersion();
+            assistantVersionAdvanced = true;
+          },
+          onAssistantSettingsChanged: (changed) {
+            adoptedAssistant = changed;
+            _lastRoundAdoptedAssistant = changed;
+          },
+        );
+      } catch (error, stackTrace) {
+        // A later network pass can fail after a local phase committed.
         try {
-          final result = await services.runSync();
-          servers = await services.configStore.listServers();
-          snippets = await services.snippetStore.listSnippets();
-          return result;
-        } on SyncRecordsRefused {
-          // The round applied everything else before reporting the records
-          // the server refused as too large, and it will refuse them again on
-          // every round until they shrink. Refreshed only on success, another
-          // device's edits would reach the stores and never the screen.
-          servers = await services.configStore.listServers();
-          snippets = await services.snippetStore.listSnippets();
-          services.probe.updateServers(servers);
-          _recomputeSuggestions();
-          rethrow;
-        } finally {
-          // Sampled while this round still holds the queue, so the answer
-          // cannot depend on what runs between the release and this method's
-          // continuation. `runSync` resets the flag as its first statement,
-          // and a round queued behind this one — a manual sync during an
-          // automatic one, or the reverse — starts as soon as the queue is
-          // released. Today the caller resumes first (an async return reaches
-          // its awaiter a microtask ahead of the completer's release), so a
-          // read in the outer `finally` happens to see this round's answer;
-          // which of the two gets there first is a scheduling detail nothing
-          // here should rest on.
-          adoptedAssistant = services.assistantSettingsChanged;
-          _lastRoundAdoptedAssistant = adoptedAssistant;
+          await _mutate(() async {
+            servers = await services.configStore.listServers();
+            snippets = await services.snippetStore.listSnippets();
+            await _loadInbox();
+            services.probe.updateServers(servers);
+            _recomputeSuggestions();
+          });
+        } catch (_) {
+          // Preserve the sync failure if its secondary view refresh fails.
         }
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+      // Re-read atomically with respect to ordinary edits. If one queued
+      // before this refresh, it is included; if it queues after, its own list
+      // assignment is the newer one.
+      await _mutate(() async {
+        servers = await services.configStore.listServers();
+        snippets = await services.snippetStore.listSnippets();
+        services.probe.updateServers(servers);
+        _recomputeSuggestions();
       });
-      services.probe.updateServers(servers);
-      _recomputeSuggestions();
       // Apps and statuses may have arrived: a new app's items can be opened
       // now, and a proposal handled elsewhere should stop being announced.
       unawaited(_refreshInboxAutomatically());
@@ -2031,7 +2529,7 @@ class AppState extends ChangeNotifier {
       // rebuilds the provider anyway.
       if (adoptedAssistant) {
         try {
-          await reloadLlmProvider();
+          await reloadLlmProvider(advanceVersion: !assistantVersionAdvanced);
         } catch (_) {
           // Deliberately swallowed rather than reported: there is no surface
           // here, and masking the sync round's outcome is the worse of the
@@ -2044,11 +2542,9 @@ class AppState extends ChangeNotifier {
   /// Whether the most recent sync round adopted an assistant configuration
   /// from the account.
   ///
-  /// Written inside the round, while it holds the mutation queue, which is
-  /// what makes it safe to read straight after awaiting [_runSyncAndRefresh]
-  /// where `services.assistantSettingsChanged` is not: that flag is reset at
-  /// the *start* of the next round, which can already be running by then,
-  /// while this is only written at the *end* of one.
+  /// Written by this round's completion callback before the serialized
+  /// account operation is released. That preserves the per-round answer even
+  /// when another sync starts before this caller's continuation runs.
   ///
   /// That holds for a round that adopted nothing. One that *did* adopt awaits
   /// `reloadLlmProvider` in [_runSyncAndRefresh]'s outer `finally`, after
@@ -2059,9 +2555,80 @@ class AppState extends ChangeNotifier {
   /// stamp, so the pair answers correctly whichever round wrote the flag.
   bool _lastRoundAdoptedAssistant = false;
 
+  /// Commit assistant fields only if the settings the editor loaded are still
+  /// current. The comparison, assignments, persistence, and sync stamp share
+  /// one mutation phase so a pulled configuration cannot land between them.
+  Future<({bool stale, String? publishError})> commitAssistantSettings({
+    required int expectedVersion,
+    required int expectedUpdatedAt,
+    required String expectedFingerprint,
+    required bool keyEntered,
+    required Future<AsyncCallback> Function() prepare,
+    required void Function(AppSettings settings) update,
+  }) => _mutate(() async {
+    final settings = services.settings;
+    bool isStale() =>
+        llmConfigVersion != expectedVersion ||
+        settings.assistantUpdatedAt != expectedUpdatedAt ||
+        assistantSyncFingerprint(settings) != expectedFingerprint;
+    if (isStale()) {
+      return (stale: true, publishError: null);
+    }
+
+    final rollbackKeys = await prepare();
+    // AppState's production writers share this queue. The second check also
+    // protects direct service embeddings and makes a delayed keychain write
+    // harmless if some external writer changed the settings meanwhile.
+    if (isStale()) {
+      await rollbackKeys();
+      return (stale: true, publishError: null);
+    }
+
+    final previous = (
+      kind: settings.llmKind,
+      baseUrl: settings.llmBaseUrl,
+      model: settings.llmModel,
+      apiKeyRef: settings.llmApiKeyRef,
+      redactionEnabled: settings.redactionEnabled,
+      searxngUrl: settings.searxngUrl,
+      zaiApiKeyRef: settings.zaiApiKeyRef,
+    );
+    final before = assistantSyncFingerprint(settings);
+    update(settings);
+    try {
+      await services.saveSettings();
+    } catch (_) {
+      settings
+        ..llmKind = previous.kind
+        ..llmBaseUrl = previous.baseUrl
+        ..llmModel = previous.model
+        ..llmApiKeyRef = previous.apiKeyRef
+        ..redactionEnabled = previous.redactionEnabled
+        ..searxngUrl = previous.searxngUrl
+        ..zaiApiKeyRef = previous.zaiApiKeyRef;
+      await rollbackKeys();
+      rethrow;
+    }
+
+    String? publishError;
+    if (keyEntered || assistantSyncFingerprint(settings) != before) {
+      try {
+        await _assistantSettingsEditedNow();
+      } catch (error) {
+        // The fields are already durable. Keep the save successful while
+        // reporting that its new sync stamp could not be persisted.
+        publishError = '$error';
+      }
+    }
+    return (stale: false, publishError: publishError);
+  });
+
   /// The assistant's configuration was just edited here: stamp it so the
   /// synced record has a timestamp that moved for a real reason, and push it.
-  Future<void> assistantSettingsEdited() async {
+  Future<void> assistantSettingsEdited() =>
+      _mutate(_assistantSettingsEditedNow);
+
+  Future<void> _assistantSettingsEditedNow() async {
     final now = DateTime.now().millisecondsSinceEpoch;
     // Never below a record this device already holds. The stamp is the whole
     // of the last-write-wins comparison, so a clock that runs behind the
@@ -2198,10 +2765,15 @@ class AppState extends ChangeNotifier {
     // today; not depending on that costs one `||`, and the flag can only be
     // true here if a round adopted inside the keystore read above, which is
     // exactly when this device must not stamp.
-    if (_mustNotStampOnSwitchOn()) {
-      return;
-    }
-    await assistantSettingsEdited();
+    final stamped = await _mutate(() async {
+      // An opt-out, account detach or adoption may already be queued ahead
+      // of this mutation. Recheck beside the write so none can land between
+      // the guard and the new stamp.
+      if (_mustNotStampOnSwitchOn()) return false;
+      await _assistantSettingsEditedNow();
+      return true;
+    });
+    if (!stamped) return;
     // That hands the publish to the auto-sync debounce, which does not run
     // with auto-sync off — and this switch is an explicit ask to sync, made
     // by a user who just watched one round run. Published now in that case;
@@ -2247,6 +2819,7 @@ class AppState extends ChangeNotifier {
     }
     syncing = true;
     notifyListeners();
+    var retryQueued = false;
     try {
       do {
         _syncQueued = false;
@@ -2256,10 +2829,24 @@ class AppState extends ChangeNotifier {
       } while (_syncQueued);
     } catch (e) {
       lastSyncError = _shortError(e);
+      // A second optimistic invalidation ends this bounded run, but an edit
+      // whose debounce already fired still deserves the one follow-up round
+      // promised above. Debounce it again instead of extending this loop
+      // without a bound while the user keeps editing.
+      retryQueued = _syncQueued;
     } finally {
-      syncing = false;
-      notifyListeners();
+      _finishSync(retryQueued: retryQueued);
     }
+  }
+
+  /// Release the shared sync indicator and preserve a debounce that fired
+  /// while either a manual or background round owned it.
+  void _finishSync({bool retryQueued = false}) {
+    final followUp = retryQueued || _syncQueued;
+    _syncQueued = false;
+    syncing = false;
+    if (followUp) _scheduleAutoSync();
+    notifyListeners();
   }
 
   static String _shortError(Object e) {
@@ -2367,6 +2954,7 @@ class AppState extends ChangeNotifier {
     // so renaming a tab does not rebuild the app the way notifyListeners
     // would.
     session.customName.value = cleaned.isEmpty ? null : cleaned;
+    _syncChatTargets();
   }
 
   /// Set the active tab and remember it as its server's most-recent tab.
@@ -2377,6 +2965,7 @@ class AppState extends ChangeNotifier {
     if (tab != null) {
       _lastTabForServer[tab.serverId] = tab.id;
     }
+    _syncChatTargets();
   }
 
   /// Apply a change of the "keep sessions alive in the background" setting:
@@ -2661,9 +3250,14 @@ class AppState extends ChangeNotifier {
   /// teardown deletes the local copies they write to. (The UI asks about
   /// unsaved editor buffers before calling this; a programmatic close is
   /// allowed to drop them.)
-  Future<void> closeTab(String tabId) async {
+  Future<TabCloseReport> closeTab(String tabId) => _closeTab(tabId);
+
+  Future<TabCloseReport> _closeTab(
+    String tabId, {
+    bool reportFailures = true,
+  }) async {
     final tab = tabById(tabId);
-    if (tab == null) return;
+    if (tab == null) return const TabCloseReport.success();
     if (tab is TerminalSession) {
       for (final editor in editorTabsOwnedBy(tab)) {
         tabs.remove(editor);
@@ -2674,26 +3268,53 @@ class AppState extends ChangeNotifier {
     final siblingsBefore = tabsForServer(tab.serverId);
     tabs.remove(tab);
     _dropLastTabFor(tab);
-    if (tab is TerminalSession) {
-      await _disposeSession(tab, deleteLocalCopies: true);
-    } else {
-      tab.dispose();
+    _syncChatTargets();
+    final cleanup = tab is TerminalSession
+        ? _disposeSession(tab, deleteLocalCopies: true)
+        : Future<TabCloseReport>.sync(() {
+            tab.dispose();
+            return const TabCloseReport.success();
+          });
+
+    void recoverSelection() {
+      // The fallback is needed whenever the tab the pane was showing is gone
+      // — the closed tab itself, or an editor cascaded away with its session.
+      if (tabById(activeTabId) == null) {
+        _setActive(
+          fallbackAfterClosing(
+            closed: tab,
+            siblingsBefore: siblingsBefore,
+            remaining: tabs,
+            lastTabForServer: _lastTabForServer,
+          )?.id,
+        );
+      }
     }
 
-    // The fallback is needed whenever the tab the pane was showing is gone —
-    // the closed tab itself, or an editor cascaded away with its session.
-    if (tabById(activeTabId) == null) {
-      _setActive(
-        fallbackAfterClosing(
-          closed: tab,
-          siblingsBefore: siblingsBefore,
-          remaining: tabs,
-          lastTabForServer: _lastTabForServer,
-        )?.id,
-      );
+    // The tab and all its resource owners were detached synchronously above.
+    // Repaint now instead of leaving a dead pane visible while a transport
+    // takes time to close.
+    if (!_disposed) {
+      recoverSelection();
+      notifyListeners();
+      _refreshKeepAlive();
     }
-    notifyListeners();
-    _refreshKeepAlive();
+
+    late final TabCloseReport report;
+    try {
+      report = await cleanup;
+      if (!_disposed && reportFailures) _reportCleanupFailures(report);
+    } finally {
+      // A cleanup failure must never skip focus recovery, repaint, or the
+      // Android keep-alive count. A concurrent close may have removed the
+      // fallback chosen above, so validate it once more after the await.
+      if (!_disposed) {
+        recoverSelection();
+        notifyListeners();
+        _refreshKeepAlive();
+      }
+    }
+    return report;
   }
 
   /// Forget [tab] as its server's most-recent tab, if it still is.
@@ -2733,11 +3354,15 @@ class AppState extends ChangeNotifier {
   }
 
   /// Close every tab of a server (used when the server is deleted).
-  Future<void> closeAllTabsForServer(String serverId) async {
+  Future<TabCloseReport> closeAllTabsForServer(String serverId) async {
     final ids = [for (final s in tabsForServer(serverId)) s.id];
+    final reports = <TabCloseReport>[];
     for (final id in ids) {
-      await closeTab(id);
+      reports.add(await _closeTab(id, reportFailures: false));
     }
+    final report = TabCloseReport.combine(reports);
+    if (!_disposed) _reportCleanupFailures(report);
+    return report;
   }
 
   /// Recreate disconnected placeholder tabs for durable managed edits. The
@@ -2773,6 +3398,8 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    tabCleanupFailureReporter = null;
     _probeSub?.cancel();
     _autoSyncTimer?.cancel();
     _syncDebounce?.cancel();
@@ -2782,7 +3409,7 @@ class AppState extends ChangeNotifier {
     // Nothing anchors a dying app: drop the OS keep-alive before the sessions
     // it was holding open go.
     _keepAlive.stop();
-    chat.dispose();
+    chats.dispose();
     undoHistory.dispose();
     apkUpdater?.dispose();
     // Drop the callback before the service goes: it closes over `sessions`,
@@ -2796,9 +3423,15 @@ class AppState extends ChangeNotifier {
         // failure explicitly rather than leaving an unhandled async error to
         // surface long after the state object is gone.
         unawaited(
-          _disposeSession(t).catchError((Object error, StackTrace stack) {
-            debugPrint('Session teardown failed: $error\n$stack');
-          }),
+          _disposeSession(t).then(
+            (report) => _reportCleanupFailures(report, notifyUser: false),
+            onError: (Object error, StackTrace stack) {
+              // _disposeSession collects every expected cleanup failure. This
+              // remains as a final guard against a programming error escaping
+              // from the collector after AppState itself is gone.
+              debugPrint('Session teardown failed: $error\n$stack');
+            },
+          ),
         );
       } else {
         t.dispose();
@@ -2865,19 +3498,26 @@ class AppState extends ChangeNotifier {
     if (!services.isSyncConfigured) return;
     _inboxFetching = true;
     try {
-      await _mutate(() async {
+      // Authenticate and discover whether there is anything to fetch before
+      // opening the account session. This phase releases the mutation queue
+      // before waiting for the serialized account operation, so it preserves
+      // the global lock order while avoiding a token read for an empty inbox.
+      final hasApps = await _mutate(() async {
         await services.appLock.requireUnlocked();
         await _loadInbox();
-        if (inboxApps.isEmpty) return;
-        inboxPending = await services.withInbox((inbox) async {
-          final pending = await inbox.refresh();
-          await inbox.pruneStatuses();
-          return pending;
-        });
+        return inboxApps.isNotEmpty;
+      });
+      if (!hasApps) {
+        inboxError = null;
+        return;
+      }
+      await services.withInbox<void>((inbox) async {
+        inboxPending = await inbox.refresh();
+        await inbox.pruneStatuses();
         inboxFailures = await services.inboxCache.load().then(
           (cache) => cache.failures,
         );
-      });
+      }, runLocal: _mutate);
       inboxError = null;
     } catch (error) {
       inboxError = _shortError(error);
@@ -2900,7 +3540,7 @@ class AppState extends ChangeNotifier {
   /// Keeps [code] as this device's recovery code, once the user confirmed
   /// writing it down.
   Future<void> saveRecoveryCode(String code) =>
-      _mutate(() => services.saveRecoveryCode(code));
+      services.saveRecoveryCode(code, runLocal: _mutate);
 
   /// Remembers "Not now" to the offer of a recovery code, so it is not made
   /// again; Settings still offers it.
@@ -2977,7 +3617,8 @@ class AppState extends ChangeNotifier {
 
   /// The vault as an encrypted export the recovery code opens. In the
   /// mutation queue, so a save cannot land halfway through the snapshot.
-  Future<Uint8List> exportSecrets() => _mutate(services.exportSecrets);
+  Future<Uint8List> exportSecrets() =>
+      services.exportSecrets(runLocal: _mutate);
 
   /// Merges an export into this device's vault. In the mutation queue, so a
   /// save or a sync round cannot write a credential between the restore's
@@ -2986,9 +3627,8 @@ class AppState extends ChangeNotifier {
     Uint8List export,
     String code, {
     required RestoreConflictPolicy policy,
-  }) => _mutate(
-    () => services.restoreSecrets(export, code, policy: policy),
-  );
+  }) =>
+      services.restoreSecrets(export, code, policy: policy, runLocal: _mutate);
 
   /// Connect a producer. Returns the pairing string, which is shown once.
   Future<String> addInboxApp({
@@ -2999,17 +3639,15 @@ class AppState extends ChangeNotifier {
     if (baseUrl == null || baseUrl.isEmpty) {
       throw StateError('Set up sync first: the inbox uses the sync server.');
     }
-    final pairing = await _mutate(() async {
-      final pairing = await services.withInbox(
-        (inbox) => inbox.addApp(
-          name: name,
-          serverUrl: baseUrl,
-          allowedServerIds: allowedServerIds,
-        ),
+    final pairing = await services.withInbox((inbox) async {
+      final pairing = await inbox.addApp(
+        name: name,
+        serverUrl: baseUrl,
+        allowedServerIds: allowedServerIds,
       );
-      await _loadInbox();
+      await _mutate(_loadInbox);
       return pairing;
-    });
+    }, runLocal: _mutate);
     _ensureInboxTimer();
     notifyListeners();
     // The app record carries the key, and the user's other devices need it
@@ -3023,25 +3661,23 @@ class AppState extends ChangeNotifier {
     required String name,
     required List<String> allowedServerIds,
   }) async {
-    await _mutate(() async {
-      await services.withInbox(
-        (inbox) => inbox.updateApp(
-          appId,
-          name: name,
-          allowedServerIds: allowedServerIds,
-        ),
+    await services.withInbox((inbox) async {
+      await inbox.updateApp(
+        appId,
+        name: name,
+        allowedServerIds: allowedServerIds,
       );
-      await _loadInbox();
-    });
+      await _mutate(_loadInbox);
+    }, runLocal: _mutate);
     notifyListeners();
     _scheduleAutoSync();
   }
 
   Future<void> removeInboxApp(String appId) async {
-    await _mutate(() async {
-      await services.withInbox((inbox) => inbox.removeApp(appId));
-      await _loadInbox();
-    });
+    await services.withInbox((inbox) async {
+      await inbox.removeApp(appId);
+      await _mutate(_loadInbox);
+    }, runLocal: _mutate);
     _ensureInboxTimer();
     notifyListeners();
     _scheduleAutoSync();
@@ -3050,13 +3686,11 @@ class AppState extends ChangeNotifier {
   /// Returns [InboxClaim.handledElsewhere] when another device ran or
   /// dismissed it first, in which case nothing is recorded here.
   Future<InboxClaim> dismissProposal(PendingProposal proposal) async {
-    final result = await _mutate(() async {
-      final result = await services.withInbox(
-        (inbox) => inbox.dismiss(proposal),
-      );
-      await _loadInbox();
+    final result = await services.withInbox((inbox) async {
+      final result = await inbox.dismiss(proposal);
+      await _mutate(_loadInbox);
       return result;
-    });
+    }, runLocal: _mutate);
     notifyListeners();
     _scheduleAutoSync();
     return result;
@@ -3102,11 +3736,14 @@ class AppState extends ChangeNotifier {
     if (session == null || ssh is! SshSession) {
       return const ProposalRunResult.failed('Could not connect to the server.');
     }
+    // Every await below can outlive a disconnect, reconnect, or closed tab.
+    // Keep the exact prompt and transport the user reviewed so a replacement
+    // session cannot receive a command claimed for the old one.
+    final engine = session.engine;
     final String line;
-    final RemoteFileSystem fs;
     final StagedScript staged;
     try {
-      fs = await ssh.openRemoteFileSystem();
+      final fs = await ssh.openRemoteFileSystem();
       staged = await stageProposalScript(fs, proposal.proposal);
     } catch (error) {
       return ProposalRunResult.failed('Could not upload the script: $error');
@@ -3114,60 +3751,69 @@ class AppState extends ChangeNotifier {
     try {
       // Built from a quoted path, so it never holds a line break; it goes
       // through the same gate as every paste regardless, and before the
-      // claim, so a refusal leaves the proposal pending. The script is on
-      // the server by now, so a refusal removes it again.
+      // claim, so a refusal leaves the proposal pending. Staged scripts are
+      // content-addressed and can be shared with an earlier claimed command,
+      // so every failure leaves the inert file in place.
       line = PasteSanitizer.sanitize(staged.commandLine);
     } on UnsafePasteException catch (error) {
-      await _unstage(fs, staged);
       return ProposalRunResult.failed(error.reason);
     }
     final InboxClaim claim;
     try {
-      claim = await _mutate(() async {
-        final claim = await services.withInbox(
-          (inbox) => inbox.claim(proposal),
-        );
-        await _loadInbox();
+      Future<InboxClaim> settleClaim(
+        Future<InboxClaim> Function() action,
+      ) async {
+        final claim = await action();
+        await _mutate(_loadInbox);
+        if (claim == InboxClaim.claimed) {
+          // The server claim is authoritative even if local settlement failed.
+          inboxPending = [
+            for (final pending in inboxPending)
+              if (pending.cached.appId != proposal.cached.appId ||
+                  pending.cached.itemId != proposal.cached.itemId)
+                pending,
+          ];
+        }
         return claim;
-      });
+      }
+
+      final injected = _claimInboxProposal;
+      claim = injected == null
+          ? await services.withInbox(
+              (inbox) => settleClaim(() => inbox.claim(proposal)),
+              runLocal: _mutate,
+            )
+          : await settleClaim(() => _mutate(() => injected(proposal)));
     } catch (error) {
-      await _unstage(fs, staged);
       return ProposalRunResult.failed('Could not claim the proposal: $error');
     }
     notifyListeners();
     _scheduleAutoSync();
     switch (claim) {
       case InboxClaim.handledElsewhere:
-        await _unstage(fs, staged);
         return const ProposalRunResult.failed(
           'Another device already ran or dismissed this proposal.',
         );
       case InboxClaim.unavailable:
-        await _unstage(fs, staged);
         return const ProposalRunResult.failed(
           'This proposal expired or its app was removed.',
         );
       case InboxClaim.claimed:
         break;
     }
-    session.engine.injectInput(line);
-    focusTab(session.id);
-    return ProposalRunResult.staged(line);
-  }
-
-  /// Remove a script staged for a proposal that will not run here, so
-  /// `~/.seance/inbox/` does not collect files nothing will run. Best effort:
-  /// a leftover is inert (nothing runs it without the user typing its path).
-  Future<void> _unstage(RemoteFileSystem fs, StagedScript staged) async {
-    try {
-      await fs.delete(await fs.stat(staged.path, followLinks: false));
-    } catch (error) {
-      developer.log(
-        'Could not remove staged inbox script: ${error.runtimeType}',
-        name: 'seance.app',
-        level: 900,
-      );
+    // There is deliberately no await between this check and injection: all
+    // four identities and the live transport describe one reviewed prompt.
+    // The staged command stays available as the user's recovery path if that
+    // prompt moved.
+    if (!identical(tabById(session.id), session) ||
+        !identical(session.session, ssh) ||
+        !identical(session.engine, engine) ||
+        ssh.isClosed) {
+      return ProposalRunResult.needsRecovery(line);
     }
+    engine.injectInput(line);
+    focusTab(session.id);
+    return ProposalRunResult.placed(line);
   }
 
   /// A connected terminal on [server]: the last one used there if it is up,
@@ -3189,16 +3835,33 @@ class AppState extends ChangeNotifier {
   }
 }
 
-/// What [AppState.runProposal] did.
-class ProposalRunResult {
-  /// The line placed in the prompt, when [ok].
-  final String? commandLine;
-  final String? error;
+/// What [AppState.runProposal] did. Sealed so the UI must distinguish a line
+/// placed in a live prompt from one the user needs to recover manually.
+sealed class ProposalRunResult {
+  const ProposalRunResult();
 
-  const ProposalRunResult.staged(String this.commandLine) : error = null;
-  const ProposalRunResult.failed(String this.error) : commandLine = null;
+  const factory ProposalRunResult.placed(String commandLine) = ProposalPlaced;
+  const factory ProposalRunResult.needsRecovery(String commandLine) =
+      ProposalNeedsRecovery;
+  const factory ProposalRunResult.failed(String error) = ProposalRunFailed;
+}
 
-  bool get ok => error == null;
+final class ProposalPlaced extends ProposalRunResult {
+  final String commandLine;
+
+  const ProposalPlaced(this.commandLine);
+}
+
+final class ProposalNeedsRecovery extends ProposalRunResult {
+  final String commandLine;
+
+  const ProposalNeedsRecovery(this.commandLine);
+}
+
+final class ProposalRunFailed extends ProposalRunResult {
+  final String error;
+
+  const ProposalRunFailed(this.error);
 }
 
 /// The inbox read from local state only, for [AppState._loadInbox]: pending

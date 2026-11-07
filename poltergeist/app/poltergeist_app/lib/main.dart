@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show AppExitType;
+import 'dart:ui' show AppExitType, PlatformDispatcher;
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart' show GlobalKey, ScaffoldMessengerState;
@@ -15,6 +15,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'app.dart';
+import 'l10n/app_localizations.dart';
 import 'settings_window_app.dart';
 import 'services/app_preferences.dart';
 import 'services/atomic_file.dart';
@@ -467,7 +468,18 @@ Future<void> main(List<String> args) async {
     hostKeys: pinStore,
     pinVerdicts: SettingsPinVerdictStore(store: settingsStore),
     tripwires: SettingsSyncTripwireStore(store: settingsStore),
-    transportFactory: httpSyncTransport,
+    transportFactory: (baseUrl, {token}) {
+      final deviceId = syncEnrollmentState.cachedDeviceId;
+      final deviceName = deviceId == null
+          ? null
+          : _syncDeviceName(Platform.operatingSystem);
+      return httpSyncTransport(
+        baseUrl,
+        token: token,
+        deviceId: deviceId,
+        deviceName: deviceName,
+      );
+    },
     vaultKey: masterKeys.probeKeystore,
     servers: servers,
     vaultStore: vaultStore,
@@ -813,4 +825,15 @@ Future<void> _checkForUpdate(UpdateCheckController updateCheck) async {
   } catch (_) {
     // No version info / platform channel unavailable — skip silently.
   }
+}
+
+/// Resolves the localized device label for the sync session list.
+String _syncDeviceName(String platform) {
+  final l10n = lookupAppLocalizations(
+    basicLocaleListResolution(
+      PlatformDispatcher.instance.locales,
+      AppLocalizations.supportedLocales,
+    ),
+  );
+  return l10n.syncSessionDeviceName(platform);
 }

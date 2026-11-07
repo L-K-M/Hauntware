@@ -455,6 +455,54 @@ void main() {
       ], unorderedEquals(['srv-new', 'secret:$ref']));
     });
 
+    test('a referenced-key edit preserves the pasted-key passphrase', () async {
+      final sync = await enrolled();
+      const pastedDraft = ServerDraft(
+        id: 'srv-key',
+        label: 'key host',
+        host: 'key.example.com',
+        port: 22,
+        username: 'deploy',
+        auth: ServerDraftAuth.privateKey,
+      );
+      await sync.saveServer(
+        const SaveServer(
+          requestId: 'r1',
+          draft: pastedDraft,
+          credential: ServerCredentialEntry(
+            keyPem: 'PASTED PEM',
+            keyPassphrase: 'pasted phrase',
+          ),
+        ),
+      );
+      final ref = (await stored(sync, 'srv-key'))!.secretRef!;
+
+      await sync.saveServer(
+        const SaveServer(
+          requestId: 'r2',
+          draft: ServerDraft(
+            id: 'srv-key',
+            label: 'key host',
+            host: 'key.example.com',
+            port: 22,
+            username: 'deploy',
+            auth: ServerDraftAuth.privateKey,
+            identityFilePath: '/keys/id_ed25519',
+          ),
+          credential: ServerCredentialEntry(
+            referenceKeyFile: true,
+            keyPassphrase: 'file phrase',
+          ),
+        ),
+      );
+
+      final saved = (await vault.read(ref))!;
+      expect(saved.value, 'PASTED PEM');
+      expect(saved.keyPassphrase, 'pasted phrase');
+      expect(saved.identityFilePath, '/keys/id_ed25519');
+      expect(saved.identityFilePassphrase, 'file phrase');
+    });
+
     test('blank credential boxes keep the stored entry', () async {
       final sync = await enrolled();
       await sync.saveServer(
@@ -916,7 +964,7 @@ void main() {
           contains('snippet:s-x'),
         );
 
-        server.seedTombstone('snippet:s-a', updatedAt: 2);
+        await server.seedTombstone('snippet:s-a', updatedAt: 2);
         await server.seedSnippet('snippet:s-b', snippet('s-b', 'Disk'));
         final removal = await sync.runRound();
         expect(removal.phase, SyncPhase.succeeded, reason: removal.detail);

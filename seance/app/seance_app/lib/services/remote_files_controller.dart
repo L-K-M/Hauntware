@@ -95,6 +95,11 @@ class RemoteFilesController extends ChangeNotifier {
   String? _lastCommand;
   Timer? _remoteSnapshotDebounce;
   int _remoteSnapshotGeneration = 0;
+  Timer? _transferProgressNotifyTimer;
+
+  /// Progress counters can change for every SFTP chunk, but the pane cannot
+  /// usefully repaint faster than this.
+  static const _transferProgressNotifyInterval = Duration(milliseconds: 100);
 
   /// Collapses a burst of finished shell commands (a pasted multi-line
   /// script) into one re-stat pass over the managed copies.
@@ -688,7 +693,10 @@ class RemoteFilesController extends ChangeNotifier {
   }
 
   /// Downloads files/directories into [destination] with one aggregate
-  /// transfer. Remote symlinks are skipped instead of followed.
+  /// transfer. Remote symlinks are skipped instead of followed. The planned
+  /// names are probed on the destination volume before any payload byte is
+  /// written, so names the volume aliases onto one local path (see
+  /// [_preflightLocalNameCollisions]) fail the whole transfer up front.
   Future<void> downloadEntries(
     Iterable<RemoteFileEntry> roots,
     Directory destination, {
@@ -713,10 +721,7 @@ class RemoteFilesController extends ChangeNotifier {
       final safeRelative = relativePath.isEmpty
           ? safeName
           : '$relativePath${Platform.pathSeparator}$safeName';
-      final collisionKey = Platform.isWindows
-          ? safeRelative.toLowerCase()
-          : safeRelative;
-      if (!plannedLocalPaths.add(collisionKey)) {
+      if (!plannedLocalPaths.add(safeRelative)) {
         throw StateError(
           'Two remote items map to the same local path: "$safeRelative".',
         );
@@ -744,6 +749,13 @@ class RemoteFilesController extends ChangeNotifier {
       transfer.total = total;
       _notify();
       await _ensureSafeLocalDirectory(destination, '');
+      transfer.cancellation.throwIfCancelled();
+      await _preflightLocalNameCollisions(
+        destination,
+        directories,
+        files,
+        transfer.cancellation,
+      );
       for (final relative in directories) {
         transfer.cancellation.throwIfCancelled();
         await _ensureSafeLocalDirectory(destination, relative);
@@ -1299,7 +1311,15 @@ class RemoteFilesController extends ChangeNotifier {
   ) {
     transfer.transferred = transferred;
     transfer.total = total ?? transfer.total;
-    _notify();
+    _notifyTransferProgress();
+  }
+
+  void _notifyTransferProgress() {
+    if (_disposed || _transferProgressNotifyTimer != null) return;
+    _transferProgressNotifyTimer = Timer(_transferProgressNotifyInterval, () {
+      _transferProgressNotifyTimer = null;
+      _notify();
+    });
   }
 
   void _failTransfer(RemoteTransferItem transfer, Object failure) {
@@ -1371,6 +1391,7 @@ class RemoteFilesController extends ChangeNotifier {
 
   static String _validateLocalName(String value) {
     final name = _validatePathComponent(value);
+    if (!Platform.isWindows) return name;
     if (RegExp(r'[\\:*?"<>|\x00-\x1f\x7f]').hasMatch(name) ||
         name.endsWith('.') ||
         name.endsWith(' ') ||
@@ -1554,6 +1575,71 @@ class RemoteFilesController extends ChangeNotifier {
     }
   }
 
+  /// Probes the destination volume with every planned directory and file
+  /// name before any payload byte is written. Which names alias is a
+  /// property of the destination filesystem, not of the platform Séance
+  /// runs on: a case-insensitive or Unicode-normalizing volume maps
+  /// `Foo`/`foo` or composed/decomposed forms onto one local path, which
+  /// replace mode would then overwrite, while a case-sensitive volume keeps
+  /// them distinct. Every planned directory is mirrored as an empty
+  /// directory and every planned file as a zero-byte placeholder created
+  /// exclusively inside a short-lived scratch directory, so any collision
+  /// the real downloads would hit — including a file name aliasing a
+  /// directory — fails the whole transfer before a payload file exists.
+  /// The probe is always removed.
+  static Future<void> _preflightLocalNameCollisions(
+    Directory destination,
+    List<String> directories,
+    List<_RemoteDownloadPlan> files,
+    RemoteTransferCancellation cancellation,
+  ) async {
+    final probe = await destination.createTemp('.seance-preflight-');
+    try {
+      // Deepest last, so every planned parent is mirrored before its
+      // children and a directory can never be created under a name a
+      // shallower planned item already claimed.
+      final sorted = [...directories]..sort(
+        (a, b) => _nameDepth(a).compareTo(_nameDepth(b)),
+      );
+      for (final relative in sorted) {
+        cancellation.throwIfCancelled();
+        final path = '${probe.path}${Platform.pathSeparator}$relative';
+        if (await FileSystemEntity.type(path, followLinks: false) !=
+            FileSystemEntityType.notFound) {
+          throw StateError(
+            'Two remote items map to the same local path: "$relative".',
+          );
+        }
+        await Directory(path).create();
+      }
+      for (final plan in files) {
+        cancellation.throwIfCancelled();
+        final path =
+            '${probe.path}${Platform.pathSeparator}${plan.relativePath}';
+        try {
+          await File(path).create(exclusive: true);
+        } on FileSystemException {
+          // An entity the volume aliased onto this placeholder is a
+          // collision; a failure with nothing there is the filesystem's own
+          // refusal and must surface as itself.
+          if (await FileSystemEntity.type(path, followLinks: false) ==
+              FileSystemEntityType.notFound) {
+            rethrow;
+          }
+          throw StateError(
+            'Two remote items map to the same local path: '
+            '"${plan.relativePath}".',
+          );
+        }
+      }
+    } finally {
+      if (await probe.exists()) await probe.delete(recursive: true);
+    }
+  }
+
+  static int _nameDepth(String relativePath) =>
+      relativePath.split(Platform.pathSeparator).length;
+
   static Future<void> _ensureSafeLocalDirectory(
     Directory root,
     String relativePath,
@@ -1626,6 +1712,8 @@ class RemoteFilesController extends ChangeNotifier {
   }
 
   void _notify() {
+    _transferProgressNotifyTimer?.cancel();
+    _transferProgressNotifyTimer = null;
     if (!_disposed) notifyListeners();
   }
 
@@ -1637,6 +1725,8 @@ class RemoteFilesController extends ChangeNotifier {
     terminalTitle.removeListener(_followTitle);
     activeCommand.removeListener(_followActiveCommand);
     _remoteSnapshotDebounce?.cancel();
+    _transferProgressNotifyTimer?.cancel();
+    _transferProgressNotifyTimer = null;
     for (final transfer in transfers) {
       transfer.cancellation.cancel();
     }

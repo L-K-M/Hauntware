@@ -13,15 +13,17 @@ import 'atomic_file.dart';
 /// Simple JSON-file [ConfigStore]. For a single-user personal tool this is
 /// plenty; the proposal's SQLite/drift backend is a drop-in future swap behind
 /// the same interface. Secret material never lands here — only references.
-class FileConfigStore implements ConfigStore {
+class FileConfigStore implements ConfigStore, SyncCollectionHealth {
   final File file;
   final Map<String, ServerConfig> _cache = {};
   bool _loaded = false;
+  bool _syncCollectionFailed = false;
 
   FileConfigStore(this.file);
 
   Future<void> _load() async {
     if (_loaded) return;
+    _syncCollectionFailed = await hasSyncCollectionRecovery(file);
     if (await file.exists()) {
       try {
         final list = jsonDecode(await file.readAsString()) as List;
@@ -32,6 +34,8 @@ class FileConfigStore implements ConfigStore {
       } catch (_) {
         // A corrupt file must not wedge startup: move it aside and start empty.
         _cache.clear();
+        await markSyncCollectionRecovery(file);
+        _syncCollectionFailed = true;
         await quarantineCorruptFile(file);
       }
     }
@@ -41,6 +45,17 @@ class FileConfigStore implements ConfigStore {
   Future<void> _flush() async {
     await writeStringAtomically(
         file, jsonEncode(_cache.values.map((c) => c.toJson()).toList()));
+  }
+
+  @override
+  bool get syncCollectionFailed => _syncCollectionFailed;
+
+  @override
+  Future<void> markSyncCollectionRecovered() async {
+    await _load();
+    await _flush();
+    await clearSyncCollectionRecovery(file);
+    _syncCollectionFailed = false;
   }
 
   @override
@@ -73,15 +88,17 @@ class FileConfigStore implements ConfigStore {
 }
 
 /// Simple JSON-file [SnippetStore]. Non-secret; synced like server configs.
-class FileSnippetStore implements SnippetStore {
+class FileSnippetStore implements SnippetStore, SyncCollectionHealth {
   final File file;
   final Map<String, Snippet> _cache = {};
   bool _loaded = false;
+  bool _syncCollectionFailed = false;
 
   FileSnippetStore(this.file);
 
   Future<void> _load() async {
     if (_loaded) return;
+    _syncCollectionFailed = await hasSyncCollectionRecovery(file);
     if (await file.exists()) {
       try {
         final list = jsonDecode(await file.readAsString()) as List;
@@ -91,6 +108,8 @@ class FileSnippetStore implements SnippetStore {
         }
       } catch (_) {
         _cache.clear();
+        await markSyncCollectionRecovery(file);
+        _syncCollectionFailed = true;
         await quarantineCorruptFile(file);
       }
     }
@@ -100,6 +119,17 @@ class FileSnippetStore implements SnippetStore {
   Future<void> _flush() async {
     await writeStringAtomically(
         file, jsonEncode(_cache.values.map((s) => s.toJson()).toList()));
+  }
+
+  @override
+  bool get syncCollectionFailed => _syncCollectionFailed;
+
+  @override
+  Future<void> markSyncCollectionRecovered() async {
+    await _load();
+    await _flush();
+    await clearSyncCollectionRecovery(file);
+    _syncCollectionFailed = false;
   }
 
   @override
@@ -554,16 +584,19 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
 /// writes a pulled pin only when it agrees with the local one (Séance #56).
 ///
 /// Use one instance per [file]. Separate instances do not coordinate writes.
-class FileHostKeyStore implements ConflictAwareHostKeyStore {
+class FileHostKeyStore
+    implements ConflictAwareHostKeyStore, SyncCollectionHealth {
   final File file;
   final Map<String, HostKey> _keys = {};
   bool _loaded = false;
+  bool _syncCollectionFailed = false;
   Future<void> _pending = Future<void>.value();
 
   FileHostKeyStore(this.file);
 
   Future<void> _load() async {
     if (_loaded) return;
+    _syncCollectionFailed = await hasSyncCollectionRecovery(file);
     if (await file.exists()) {
       try {
         final list = jsonDecode(await file.readAsString()) as List;
@@ -573,6 +606,8 @@ class FileHostKeyStore implements ConflictAwareHostKeyStore {
         }
       } catch (_) {
         _keys.clear();
+        await markSyncCollectionRecovery(file);
+        _syncCollectionFailed = true;
         await quarantineCorruptFile(file);
       }
     }
@@ -658,4 +693,14 @@ class FileHostKeyStore implements ConflictAwareHostKeyStore {
       ..clear()
       ..addAll(next);
   }
+
+  @override
+  bool get syncCollectionFailed => _syncCollectionFailed;
+
+  @override
+  Future<void> markSyncCollectionRecovered() => _serialize(() async {
+    await _flush(_keys);
+    await clearSyncCollectionRecovery(file);
+    _syncCollectionFailed = false;
+  });
 }

@@ -222,8 +222,9 @@ void main() {
   );
 
   test(
-    'wrong encryption passphrase preserves enrollment and the working vault key',
+    'legacy trial-decrypt preserves enrollment and the working vault key',
     () async {
+      server.legacyAccount = true;
       await server.seedServer();
       await signIn();
       final key = List<int>.of(masterKeys.key!);
@@ -440,9 +441,28 @@ void main() {
     expect(await directory.list().toList(), isEmpty);
   });
 
+  test('an empty current account verifies its key before enrollment', () async {
+    await signIn();
+    expect(catalog.notices, isEmpty);
+    expect(catalog.account?.username, _username);
+    final key = List<int>.of(masterKeys.key!);
+    final token = masterKeys.token;
+    final pulls = server.cursors.length;
+
+    await expectLater(
+      signIn(passphrase: 'incorrect encryption passphrase'),
+      throwsA(isA<VaultPassphraseMismatchException>()),
+    );
+    expect(masterKeys.key, key);
+    expect(masterKeys.token, token);
+    expect(catalog.account?.username, _username);
+    expect(server.cursors.length, pulls, reason: 'key proof precedes the pull');
+  });
+
   test(
-    'an empty account persists the unverified notice until records arrive',
+    'an empty legacy account persists the unverified notice until records arrive',
     () async {
+      server.legacyAccount = true;
       await signIn();
       expect(catalog.notices.join(), contains('not yet been verified'));
       final reopened = WorkspaceCatalog(
@@ -585,6 +605,7 @@ final class _Server {
   ApiError? pullError;
   ApiError? loginError;
   Argon2Params parameters = Argon2Params.minimum;
+  bool legacyAccount = false;
   Future<void> Function()? beforePull;
 
   WorkspaceCatalogTransport transport(String baseUrl, {String? token}) {
@@ -647,7 +668,7 @@ final class _Transport implements WorkspaceCatalogTransport {
     argonParams: server.parameters,
   );
   @override
-  Future<void> login(LoginRequest request) async {
+  Future<LoginResponse> login(LoginRequest request) async {
     final error = server.loginError;
     if (error != null) throw error;
     if (request.username != _username ||
@@ -658,10 +679,22 @@ final class _Transport implements WorkspaceCatalogTransport {
       );
     }
     token = _Server.sessionToken;
+    return LoginResponse(
+      token: token!,
+      vaultKeyCheck: server.legacyAccount
+          ? null
+          : await VaultKeyCheck.create(
+              server.keys.vaultKey,
+              username: _username,
+            ),
+      recordEnvelopeFloor: server.legacyAccount
+          ? kLegacyRecordEnvelopeVersion
+          : kCurrentRecordEnvelopeVersion,
+    );
   }
 
   @override
-  Future<void> register(RegisterRequest request) async {
+  Future<LoginResponse> register(RegisterRequest request) async {
     server.registers++;
     throw UnsupportedError('No registration');
   }
@@ -675,6 +708,9 @@ final class _Transport implements WorkspaceCatalogTransport {
     return PullResponse(
       records: server.records.where((record) => record.seq! > since).toList(),
       latestSeq: server.records.length,
+      recordEnvelopeFloor: server.legacyAccount
+          ? kLegacyRecordEnvelopeVersion
+          : kCurrentRecordEnvelopeVersion,
     );
   }
 

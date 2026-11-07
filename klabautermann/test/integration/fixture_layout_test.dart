@@ -388,14 +388,20 @@ void main() {
     expect(suite, contains("@Tags(['integration', 'sync'])"));
   });
 
-  test('run.sh builds the previous-release harness from packages the '
-      'harness pubspec names, outside the analyzed workspace (M08b)', () {
+  test('run.sh builds previous and current harnesses from bounded package '
+      'archives outside the analyzed workspace (M08b)', () {
     final run = read('klabautermann/test/integration/run.sh');
     expect(
       run.indexOf('\nwait_for_sync\n'),
       lessThan(run.indexOf(r'"$previous_release_script"')),
     );
     expect(run, contains('export KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS\n'));
+    expect(run, contains('export KLABAUTERMANN_CURRENT_HARNESS\n'));
+    expect(run, contains(r'"$previous_release_script" --current'));
+    expect(
+      run.indexOf(r'"$runtime_dir/previous-release"'),
+      lessThan(run.indexOf(r'"$runtime_dir/current-harness"')),
+    );
     final suite = read(
       'klabautermann/packages/klabautermann_core/test/integration/'
       'sync_convergence_test.dart',
@@ -404,10 +410,17 @@ void main() {
       suite,
       contains("_harnessVariable = 'KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS'"),
     );
+    expect(
+      suite,
+      contains("_currentHarnessVariable = 'KLABAUTERMANN_CURRENT_HARNESS'"),
+    );
 
     // Every archived package exists today, and the harness imports only
     // the ones its generated pubspec depends on.
     final script = read('klabautermann/test/integration/previous_release.sh');
+    expect(script, contains('previous_release.sh [--current] WORK_DIR'));
+    expect(script, contains('git -C "\$repo_dir" rev-parse HEAD'));
+    expect(script, contains(r'archive "$commit" "${packages[@]}"'));
     final archived = RegExp(
       r'^  (\w+/packages/\w+)$',
       multiLine: true,

@@ -874,10 +874,13 @@ class _SidebarSectionHeaderState extends State<SidebarSectionHeader>
   Widget build(BuildContext context) {
     final chrome = _chrome(context);
     final theme = Theme.of(context);
+    final list = _list(context);
+    final indicator = list
+        ? theme.colorScheme.primary
+        : chrome.indicator ?? theme.colorScheme.primary;
     final strings = SidebarKitScope.of(context);
     final focused = showFocusRing;
     final touch = _touch(context);
-    final list = _list(context);
     final comfortable = _comfortable(context);
     final metrics = _metrics(context);
     // Touch has no hover to reveal on, so the chevron and the "+" stay
@@ -908,9 +911,7 @@ class _SidebarSectionHeaderState extends State<SidebarSectionHeader>
     final background = _railBackground(context);
 
     final titleStyle = switch ((list, nested)) {
-      (true, false) => theme.textTheme.titleSmall?.copyWith(
-        color: theme.colorScheme.primary,
-      ),
+      (true, false) => theme.textTheme.titleSmall?.copyWith(color: indicator),
       (true, true) => theme.textTheme.titleSmall?.copyWith(
         color: chrome.secondaryText,
       ),
@@ -995,7 +996,7 @@ class _SidebarSectionHeaderState extends State<SidebarSectionHeader>
                   // the decoration insets the child by its width, and the
                   // title would jump 2 px whenever focus arrived.
                   foregroundDecoration: focused
-                      ? _focusRing(theme.colorScheme.primary, radius)
+                      ? _focusRing(indicator, radius)
                       : null,
                   child: Row(
                     children: [
@@ -1592,6 +1593,10 @@ class _SidebarRowState extends State<SidebarRow> with _KeyboardFocusRing {
   Widget build(BuildContext context) {
     final chrome = _chrome(context);
     final theme = Theme.of(context);
+    final list = _list(context);
+    final indicator = list
+        ? theme.colorScheme.primary
+        : chrome.indicator ?? theme.colorScheme.primary;
     final focused = showFocusRing;
     final selected = widget.selected;
     final dropInto = widget.dropIndicator == SidebarDropIndicator.into;
@@ -1603,7 +1608,6 @@ class _SidebarRowState extends State<SidebarRow> with _KeyboardFocusRing {
     // The dot's ring reads as a cut-out: it takes the colour actually
     // behind the mark, pill or hover included.
     final ring = fill == null ? background : Color.alphaBlend(fill, background);
-    final list = _list(context);
     final comfortable = _comfortable(context);
     final metrics = _metrics(context);
     final radius = _radius(context);
@@ -1708,7 +1712,7 @@ class _SidebarRowState extends State<SidebarRow> with _KeyboardFocusRing {
       // Over the content, as on the header: a decoration border would
       // shift the mark and title by its width while focused.
       foregroundDecoration: focused || dropInto
-          ? _focusRing(theme.colorScheme.primary, radius)
+          ? _focusRing(indicator, radius)
           : null,
       // The painted parts are excluded one by one, not the whole row: the
       // row's label says what they show, but its buttons (the hover action,
@@ -1754,7 +1758,7 @@ class _SidebarRowState extends State<SidebarRow> with _KeyboardFocusRing {
     }
     if (widget.dropIndicator
         case SidebarDropIndicator.before || SidebarDropIndicator.after) {
-      final line = Container(height: 2, color: theme.colorScheme.primary);
+      final line = Container(height: 2, color: indicator);
       content = Stack(
         children: [
           content,

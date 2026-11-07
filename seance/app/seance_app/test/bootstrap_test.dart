@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,10 +10,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_keystore/app_lock.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart';
+import 'package:seance_app/services/app_quit_guard.dart';
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/local_settings_backend.dart';
 import 'package:seance_app/theme/app_appearance.dart';
 import 'package:seance_app/theme/theme_presets.dart';
+import 'package:seance_app/ui/settings_screen.dart';
 
 import 'support/device_authenticator.dart';
 
@@ -27,6 +31,32 @@ const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 /// platform-channel futures never complete under fake-async), so the tests
 /// drive the phase transition through SeanceApp's initOverride seam.
 void main() {
+  testWidgets('desktop exit requests use the shared quit guard', (
+    tester,
+  ) async {
+    var allow = false;
+    final never = Completer<AppState>();
+    final guard = AppQuitGuard(
+      navigatorKey: navigatorKey,
+      snapshotOverride: () => QuitRiskSnapshot(
+        dirtyEditors: const [
+          QuitDirtyEditor(server: 'server', path: '/unsaved'),
+        ],
+      ),
+      presentDialog: (_, _) async => allow,
+    );
+    await tester.pumpWidget(
+      SeanceApp(initOverride: () => never.future, quitGuard: guard),
+    );
+    await tester.pump();
+
+    expect(await tester.binding.handleRequestAppExit(), AppExitResponse.cancel);
+    allow = true;
+    expect(await tester.binding.handleRequestAppExit(), AppExitResponse.exit);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('bootstrap lifecycle drives the saved-credential timeout', (tester) async {
     late Directory directory;
     late AppServices services;
@@ -55,6 +85,7 @@ void main() {
       expect(services.appLock.requiresAuthentication, isFalse);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
       elapsed += appLockBackgroundTimeout;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       expect(services.appLock.requiresAuthentication, isTrue);
     });
@@ -98,6 +129,47 @@ void main() {
     final scope = routeContext.dependOnInheritedWidgetOfExactType<AppScope>();
     expect(scope, isNotNull,
         reason: 'AppScope must wrap the Navigator so pushed routes see it');
+  });
+
+  testWidgets('recovered settings warning persists and opens Settings', (
+    tester,
+  ) async {
+    late Directory directory;
+    late AppServices services;
+    late AppState state;
+    await tester.runAsync(() async {
+      directory = await Directory.systemTemp.createTemp('seance-recovered-');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(_pathChannel, (_) async => directory.path);
+      await File('${directory.path}/settings.json').writeAsString('{broken');
+      FlutterSecureStorage.setMockInitialValues({});
+      services = await AppServices.initialize();
+      state = AppState(services);
+    });
+    expect(services.settingsWereRecovered, isTrue);
+    settingsWindowHost = null;
+    addTearDown(() async {
+      settingsWindowHost = null;
+      state.dispose();
+      await services.probe.dispose();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(_pathChannel, null);
+      await directory.delete(recursive: true);
+    });
+
+    await tester.pumpWidget(SeanceApp(initOverride: () async => state));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('settings file could not be read'), findsOne);
+    expect(find.text('Open Settings'), findsOneWidget);
+
+    await tester.pump(const Duration(minutes: 1));
+    expect(find.textContaining('settings file could not be read'), findsOne);
+
+    await tester.tap(find.text('Open Settings'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsScreen), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 
   // AppState notifies for every connection, probe and tab change; the
