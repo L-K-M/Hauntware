@@ -482,8 +482,9 @@ sourceMtime, accessedAt: sourceMtime)` — in SFTP v3, atime and mtime
 travel under one flag, so both are set — and applies the source's
 permission bits to the destination (`preserveMode` on the upload itself,
 the adapter's existing parameter; `setMode` after write for the
-kind-change path). Downloads apply the remote mode to the local file on
-Unix and no-op on Windows (03 §2.2's local-mode rule). This is what
+kind-change path). Downloads apply the remote permission bits the local
+umask grants to the local file on Unix, never setuid, setgid or sticky,
+and no-op on Windows (03 §2.2's local-mode rule). This is what
 `EntrySnapshot.mode` is captured for; the exporter's `-p` mirrors it. After every download it sets the local mtime to the remote's.
 `setTimes` is the D3 additive method: `LocalFileSystem` implements it from
 day one, the remote side gates on the upstream Séance PR and pin bump

@@ -17,6 +17,10 @@
   program, bookmark imports, and choosing a key file or a server's image
   showed no panel: file_picker refused them in the unsandboxed app, as it
   did in Séance.
+- **Downloads keep no setuid bit.** A downloaded file took the server's
+  whole mode, so a hostile server could leave a setuid or world-writable
+  file on your disk. Downloads now keep only the read, write and execute
+  bits your umask allows, as `sftp get` and Séance do.
 - **The keyboard follows a sidebar location.** Choosing a location or a
   saved workspace in the sidebar now moves the keyboard to its file list,
   so the arrow keys move through files instead of the sidebar. Page Up
