@@ -2,9 +2,12 @@
 
 ## Unreleased
 
-- Deleting a saved server retracts its current shared credential, even if
-  the deletion uses a snapshot from before the credential changed. Other
-  servers' credentials and the local vault are unchanged.
+- Deleting a saved server retracts its credential from your sync account
+  as well as from this device, unless another server still uses it, so a
+  new device no longer picks up the password or key of a server that is
+  gone, as with Poltergeist's and Klabautermann's deletes. Other servers'
+  credentials are unchanged. If the keychain is locked, the retraction
+  waits and runs later.
 - The window has the same layout on Linux, Windows, macOS and tablets: a
   header with the server's name, Generate command and buttons that hide
   the server list (the sidebar) and the side panel (the inspector), as a

@@ -71,6 +71,66 @@ void main() {
     expect(stillPending.single.deleted, isTrue);
   });
 
+  test('deleting a server retracts the credential nothing else names', () async {
+    // Poltergeist and Klabautermann retract it through the shared
+    // CatalogWriter; Séance's own delete only dropped the local vault entry,
+    // so the credential's `secret:` record stayed live in the sync account
+    // for every new device to adopt.
+    final services = await AppServices.initialize();
+    final state = AppState(services);
+    addTearDown(() async {
+      state.dispose();
+      await services.probe.dispose();
+    });
+    const secret = Secret(
+      id: 'credential',
+      kind: SecretKind.password,
+      value: 'hunter2',
+    );
+    await state.saveServer(
+      server('a').copyWith(secretRef: secret.id, updatedAt: 10),
+      secret: secret,
+    );
+
+    await state.deleteServer('a');
+
+    final pending = {
+      for (final tombstone in await services.tombstoneStore.all())
+        tombstone.id: tombstone,
+    };
+    expect(pending.keys, containsAll(['a', 'secret:credential']));
+    expect(pending['secret:credential']!.deleted, isTrue);
+    expect(pending['secret:credential']!.blob, isEmpty);
+    expect(await services.vault.getSecret(secret.id), isNull);
+  });
+
+  test('deleting a server keeps a credential another server names', () async {
+    final services = await AppServices.initialize();
+    final state = AppState(services);
+    addTearDown(() async {
+      state.dispose();
+      await services.probe.dispose();
+    });
+    const secret = Secret(
+      id: 'shared',
+      kind: SecretKind.password,
+      value: 'hunter2',
+    );
+    await state.saveServer(
+      server('a').copyWith(secretRef: secret.id),
+      secret: secret,
+    );
+    await state.saveServer(server('b').copyWith(secretRef: secret.id));
+
+    await state.deleteServer('a');
+
+    expect(
+      (await services.tombstoneStore.all()).map((t) => t.id),
+      isNot(contains('secret:shared')),
+    );
+    expect(await services.vault.getSecret(secret.id), isNotNull);
+  });
+
   test('a delete stamps its tombstone past a future-dated record', () async {
     // Clock skew or a same-ms tie must not let the live copy on the sync server
     // win last-write-wins and resurrect the row. The tombstone is stamped
