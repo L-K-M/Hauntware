@@ -12,6 +12,7 @@ import '../../l10n/app_localizations.dart';
 import '../../services/settings_models.dart';
 import '../../services/sync_account_gate.dart';
 import 'backup_switch_dialog.dart';
+import 'pin_conflict_keys.dart';
 
 /// The enrolled view. Stateless by shape — every rendered fact lives on
 /// the service, which notifies after each durable change.
@@ -179,6 +180,10 @@ final class BackupEnrolledView extends StatelessWidget {
               children: [
                 _NoticeText(
                   text: l10n.backupPinConflictWarning(conflict.locator),
+                ),
+                PinConflictKeys(
+                  conflict: conflict,
+                  pulledLabel: l10n.backupPinPulledKey,
                 ),
                 Wrap(
                   spacing: 8,

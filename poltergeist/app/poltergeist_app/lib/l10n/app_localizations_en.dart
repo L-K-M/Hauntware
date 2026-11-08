@@ -2423,7 +2423,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get backupPinAcceptSynced => 'Use synced key';
+  String get backupPinAcceptSynced => 'Trust the new key';
 
   @override
   String get backupSyncSecretsTitle => 'Sync saved passwords & keys';
@@ -2433,7 +2433,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'End-to-end encrypted. Only includes servers where credential sync is also on.';
 
   @override
-  String get backupPinKeepLocal => 'Keep local key';
+  String get backupPinKeepLocal => 'Keep this device\'s key';
+
+  @override
+  String get backupPinLocalKey => 'This device trusts';
+
+  @override
+  String get backupPinPulledKey => 'The other device synced';
+
+  @override
+  String get backupSwitchPulledKey => 'The shared account holds';
 
   @override
   String get backupStoreQuarantined =>
