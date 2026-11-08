@@ -143,15 +143,19 @@ class SshConfigImporter {
         if (port == null) {
           current.badPort ??= (line: index + 1, value: value);
         } else {
-          current.port = port;
+          // ssh keeps the first value it obtains for a setting.
+          current.port ??= port;
         }
       } else if (current != null) {
         // ssh reads a directive's first argument and rejects the line when
         // it is missing, empty or followed by more; the importer reads the
         // first one and treats a missing or empty one as absent.
+        // The first value ssh obtains for a setting wins, so a later line
+        // in the block does not replace it (Klabautermann's import reads
+        // the file the same way).
         final value = line.arguments.firstOrNull;
         if (value != null && value.isNotEmpty) {
-          current.directives[line.keyword] = value;
+          current.directives.putIfAbsent(line.keyword, () => value);
         }
       }
     }
@@ -165,10 +169,10 @@ class SshConfigImporter {
       for (final alias in hostAliases(block.patterns)) {
         final host = ImportedHost(
           alias: alias,
-          hostName: d['hostname'],
+          hostName: _expandHostName(d['hostname'], alias),
           port: badPort == null ? block.port : null,
           user: d['user'],
-          identityFile: _expandTilde(d['identityfile']),
+          identityFile: _identityFile(d['identityfile']),
           proxyJump: d['proxyjump'],
         );
         if (badPort == null) {
@@ -189,6 +193,24 @@ class SshConfigImporter {
       hosts: List.unmodifiable(hosts),
       skipped: List.unmodifiable(skipped),
     );
+  }
+
+  /// [value] with the tokens ssh expands in `HostName`: `%h`, the name
+  /// given to ssh ([alias]), and `%%`, a percent sign. ssh allows no other
+  /// token there; one is kept as written.
+  static String? _expandHostName(String? value, String alias) =>
+      value?.replaceAllMapped(
+        RegExp('%([%h])'),
+        (match) => match[1] == 'h' ? alias : '%',
+      );
+
+  /// The key file an `IdentityFile` [value] names, or null for none:
+  /// `IdentityFile none` (any case) tells ssh to use no key file, so the
+  /// host signs in through the agent rather than with a file named
+  /// "none".
+  static String? _identityFile(String? value) {
+    if (value == null || value.toLowerCase() == 'none') return null;
+    return _expandTilde(value);
   }
 
   /// The port ssh's `a2port()` reads from [value], or null where ssh

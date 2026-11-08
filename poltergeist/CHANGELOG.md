@@ -17,6 +17,10 @@
   program, bookmark imports, and choosing a key file or a server's image
   showed no panel: file_picker refused them in the unsandboxed app, as it
   did in Séance.
+- **ssh_config import reads repeated settings as ssh does.** The first
+  `HostName`, `User`, `Port` or `IdentityFile` in a block wins, where the
+  last one did. `IdentityFile none` uses the agent instead of a key file
+  called "none", and `%h` in `HostName` becomes the host's own name.
 - Undo and Redo cover favorite deletion, renaming, grouping, ordering,
   pins and server duplication. Deleting a favorite offers Undo; failed
   restores explain the error. Undo preserves other windows' later changes

@@ -19,6 +19,11 @@
   asks first, as Klabautermann's container shell does: Paste all, First
   line only or Cancel. A single line still pastes at once, and runs only
   when you press Enter.
+- Import SSH config reads repeated settings as ssh does: the first
+  `HostName`, `User`, `Port` or `IdentityFile` in a block wins, where
+  the last one did. `IdentityFile none` signs in through the agent
+  instead of naming a key file called "none", and `HostName %h.example`
+  becomes the host's own name with that domain.
 - The window has the same layout on Linux, Windows, macOS and tablets: a
   header with the server's name, Generate command and buttons that hide
   the server list (the sidebar) and the side panel (the inspector), as a
