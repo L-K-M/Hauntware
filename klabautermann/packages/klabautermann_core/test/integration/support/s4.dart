@@ -18,6 +18,43 @@ typedef HostRun =
       String commandLine,
     );
 
+/// Whether [user] still owns a logind login session.
+/// systemd 256+ also lists the user manager itself, which linger keeps
+/// after logout. Only those known manager classes are excluded.
+Future<bool> hasLoginSession(HostRun run, String user) async {
+  final sessions = await run('loginctl list-sessions --no-legend --no-pager');
+  if (sessions.exitCode != 0) {
+    throw StateError('Cannot read logind sessions: ${sessions.stderr}');
+  }
+  for (final line in const LineSplitter().convert(sessions.stdout)) {
+    final text = line.trim();
+    if (text.isEmpty ||
+        text == 'No sessions.' ||
+        RegExp(r'^\d+ sessions? listed\.$').hasMatch(text)) {
+      continue;
+    }
+    // The first three columns predate manager sessions. Query Class
+    // separately because older loginctl has neither a CLASS column nor JSON.
+    final row = RegExp(r'^(\S+)\s+(\d+)\s+(\S+)(?:\s|$)').firstMatch(text);
+    if (row == null) {
+      throw StateError('Unrecognized logind session row: $line');
+    }
+    if (row[3] != user) continue;
+    final sessionClass = await run(
+      'loginctl show-session --property=Class --value -- ${quoteShellWord(row[1]!)}',
+    );
+    // It may vanish between reads. Require a fresh successful listing
+    // instead of interpreting a failed/empty class query as logout.
+    if (sessionClass.exitCode != 0 ||
+        !_managerSessionClasses.contains(sessionClass.stdout.trim())) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const _managerSessionClasses = {'manager', 'manager-early'};
+
 /// The command line that prints the login user's operation directory,
 /// resolved in the login shell's environment as 03 §7.17 says the engine
 /// does (`kOpsDirSuffix`).

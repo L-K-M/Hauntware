@@ -123,14 +123,25 @@ void main() {
     '2>&1 || true',
   )).stdout;
 
-  /// Waits until [user] has no logind session left, so the logout has
-  /// happened; returns whether it did within [_logoutWait].
-  Future<bool> loggedOut(String user) => eventually(() async {
-    final sessions = await asRoot('loginctl list-sessions --no-legend');
-    return !sessions.stdout
-        .split('\n')
-        .any((line) => line.split(RegExp(r'\s+')).contains(user));
-  }, timeout: _logoutWait);
+  /// Waits until [user]'s login sessions end, independently of the user
+  /// manager a linger account keeps after logout.
+  Future<({bool ended, Map<String, Object?> probe})> loggedOut(
+    String user,
+  ) async {
+    var last = <String, Object?>{};
+    final ended = await eventually(() async {
+      final current = <String, Object?>{};
+      final active = await hasLoginSession((line) async {
+        final result = await asRoot(line);
+        current[line] = resultJson(result);
+        return result;
+      }, user);
+      // Keep the final poll, including ignored manager rows and query errors.
+      last = current;
+      return !active;
+    }, timeout: _logoutWait);
+    return (ended: ended, probe: last);
+  }
 
   /// A root-run operation (E08's `rootSystemd` row) of [argv], launched
   /// by klab-vm-sudo through the prelude; returns the launch, the done
@@ -266,7 +277,7 @@ void main() {
     final before = pid == null ? null : await procFacts(asRoot, pid);
 
     await link.close();
-    final out = await loggedOut(user);
+    final logout = await loggedOut(user);
     await Future<void>.delayed(_userStopDelay);
     final after = pid == null ? null : await procFacts(asRoot, pid);
     final userManager = await asRoot(
@@ -302,7 +313,8 @@ void main() {
       )),
       'runningRecord': running,
       'beforeLogout': procJson(before),
-      'loggedOut': out,
+      'loggedOut': logout.ended,
+      'logoutProbe': logout.probe,
       'afterLogout': procJson(after),
       'userManagerAfter': userManager.stdout.trim(),
       'survived': after != null,
