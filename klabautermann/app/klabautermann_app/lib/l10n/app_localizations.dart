@@ -11319,6 +11319,18 @@ abstract class AppLocalizations {
   /// **'Not saved'**
   String get editUnsaved;
 
+  /// Remote editor: tooltip of the button that opens the shared editor's find bar, the way Séance's and Poltergeist's editors offer it.
+  ///
+  /// In en, this message translates to:
+  /// **'Find'**
+  String get editFind;
+
+  /// Remote editor: tooltip of the button that opens the shared editor's text tools, in the shared editor's words.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse Text Tools…'**
+  String get editTextTools;
+
   /// Remote editor: accessibility label of the editor. path is the file being edited.
   ///
   /// In en, this message translates to:

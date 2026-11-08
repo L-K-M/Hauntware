@@ -8997,6 +8997,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editUnsaved => 'Not saved';
 
   @override
+  String get editFind => 'Find';
+
+  @override
+  String get editTextTools => 'Browse Text Tools…';
+
+  @override
   String editEditorLabel(String path) {
     return 'Editor for $path';
   }

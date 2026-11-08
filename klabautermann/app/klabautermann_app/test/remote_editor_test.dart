@@ -196,6 +196,24 @@ void main() {
     expect(tester.widget<FilledButton>(review).onPressed, isNull);
   });
 
+  testWidgets('Find and the text tools have buttons, as in the siblings\' '
+      'editors', (tester) async {
+    final editor = await _pump(tester);
+    await editor.answer(tester, _content(_original));
+    final controller = tester
+        .widget<PlanchetteEditor>(find.byType(PlanchetteEditor))
+        .controller;
+
+    // Touch has no Cmd/Ctrl+F: the buttons are the way to both.
+    await tester.tap(find.byTooltip('Find'));
+    await tester.pumpAndSettle();
+    expect(controller.searchOpen, isTrue);
+
+    await tester.tap(find.byTooltip('Browse Text Tools…'));
+    await tester.pumpAndSettle();
+    expect(controller.textToolsOpen, isTrue);
+  });
+
   testWidgets('a failed read says why, and one that may pass offers to read '
       'again', (tester) async {
     final editor = await _pump(tester);

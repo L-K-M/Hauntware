@@ -14,6 +14,8 @@
   Clear scrollback, a long-press or double-tap selection on a phone or
   tablet shows Copy, Paste and Select all, and the on-screen keys are
   named in the app's own words.
+- The file editor has Find and Text Tools buttons, as Séance's and
+  Poltergeist's editors do, so a phone or tablet can reach them too.
 - The disk space explorer can be driven from the keyboard: arrows,
   Home, End, Page Up and Page Down, Return to open a folder and
   Command+Up (Alt+Up or Backspace elsewhere) to go back up, never above

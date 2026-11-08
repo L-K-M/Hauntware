@@ -10823,6 +10823,14 @@
   "@editUnsaved": {
     "description": "Remote editor: shown while the text differs from the server's."
   },
+  "editFind": "Find",
+  "@editFind": {
+    "description": "Remote editor: tooltip of the button that opens the shared editor's find bar, the way Séance's and Poltergeist's editors offer it."
+  },
+  "editTextTools": "Browse Text Tools…",
+  "@editTextTools": {
+    "description": "Remote editor: tooltip of the button that opens the shared editor's text tools, in the shared editor's words."
+  },
   "editEditorLabel": "Editor for {path}",
   "@editEditorLabel": {
     "description": "Remote editor: accessibility label of the editor. path is the file being edited.",

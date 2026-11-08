@@ -443,6 +443,21 @@ class _RemoteEditorState extends State<RemoteEditor> {
                     color: theme.colorScheme.tertiary,
                   ),
                 ),
+              // The shared editor's find bar and text tools, which touch
+              // cannot reach by chord, as Séance's and Poltergeist's
+              // editors offer them.
+              IconButton(
+                tooltip: l10n.editTextTools,
+                visualDensity: VisualDensity.compact,
+                onPressed: editor.openTextTools,
+                icon: const Icon(Icons.construction_outlined),
+              ),
+              IconButton(
+                tooltip: l10n.editFind,
+                visualDensity: VisualDensity.compact,
+                onPressed: editor.openSearch,
+                icon: const Icon(Icons.search),
+              ),
             ],
           ),
           Expanded(
