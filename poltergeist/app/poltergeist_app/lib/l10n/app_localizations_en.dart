@@ -563,6 +563,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get viewToggleSidebarLabel => 'Show/Hide Sidebar';
 
   @override
+  String get viewShowSidebarLabel => 'Show Sidebar';
+
+  @override
+  String get viewHideSidebarLabel => 'Hide Sidebar';
+
+  @override
   String get paneOpeningHome => 'Opening home…';
 
   @override

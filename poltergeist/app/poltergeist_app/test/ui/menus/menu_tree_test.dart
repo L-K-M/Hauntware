@@ -298,7 +298,7 @@ const _desktopMenus = <AppMenuId, List<String>>{
     'Filter Sidebar Ctrl+Alt+F',
   ],
   AppMenuId.view: [
-    'Show/Hide Sidebar Ctrl+Alt+S',
+    'Hide Sidebar Ctrl+Alt+S',
     'Use Compact Sidebar Rows',
     'Hide Inspector Ctrl+Alt+I',
     'Show/Hide Second Pane Ctrl+Shift+D',
@@ -422,7 +422,7 @@ const _macMenus = <String, List<String>>{
     'Filter Sidebar ⌥⌘F',
   ],
   'View': [
-    'Show/Hide Sidebar ⌃⌘S',
+    'Hide Sidebar ⌃⌘S',
     'Use Compact Sidebar Rows',
     'Hide Inspector ⌥⌘I',
     'Show/Hide Second Pane ⇧⌘D',
@@ -656,7 +656,7 @@ void main() {
         l10n,
         mac,
       ),
-      l10n.toolbarTooltipWithShortcut('Show/Hide Sidebar', '⌃⌘S'),
+      l10n.toolbarTooltipWithShortcut('Hide Sidebar', '⌃⌘S'),
     );
   });
 

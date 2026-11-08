@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
+import 'package:poltergeist_app/l10n/app_localizations_en.dart';
 import 'package:poltergeist_app/services/directory_grouping_controller.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
+import 'package:poltergeist_app/services/pane_tabs_controller.dart';
 import 'package:poltergeist_app/services/registered_command.dart';
 import 'package:poltergeist_app/services/workspace_controller.dart';
 import 'package:poltergeist_app/ui/panes/pane_commands.dart';
@@ -222,6 +224,33 @@ void main() {
     // The registration assert trips in debug builds; release keeps the
     // documented later-command-wins behavior.
     expect(tester.takeException(), isA<AssertionError>());
+  });
+
+  test('the sidebar toggle is named for what it does, except as a drawer', () {
+    final workspace = WorkspaceController(
+      left: PaneTabsController(paneId: PaneTabsController.leftPaneId),
+      right: PaneTabsController(paneId: PaneTabsController.rightPaneId),
+    );
+    addTearDown(workspace.dispose);
+    var drawer = false;
+    final toggle = buildPaneCommands(
+      workspace: workspace,
+      focusLeft: () {},
+      focusRight: () {},
+      swapFocus: () {},
+      sidebarAvailable: () => true,
+      sidebarIsDrawer: () => drawer,
+    ).singleWhere((c) => c.id == kViewToggleSidebarCommandId);
+    final l10n = AppLocalizationsEn();
+
+    expect(toggle.label(l10n), 'Hide Sidebar');
+    workspace.toggleSidebar();
+    expect(toggle.label(l10n), 'Show Sidebar');
+
+    // Below the stage-0 boundary it opens or closes the overlay drawer,
+    // whatever the inline region's hidden intent says.
+    drawer = true;
+    expect(toggle.label(l10n), 'Show/Hide Sidebar');
   });
 
   testWidgets('select-all and invert act on the active pane only', (

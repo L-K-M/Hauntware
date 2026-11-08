@@ -775,7 +775,15 @@
   },
   "viewToggleSidebarLabel": "Show/Hide Sidebar",
   "@viewToggleSidebarLabel": {
-    "description": "Command label: hide or show the global sidebar (view.toggleSidebar, 02 §1/§8.3/§9). At stage 1 it opens the overlay drawer instead."
+    "description": "Command label: view.toggleSidebar at stage 1, where it opens or closes the overlay drawer instead of hiding the inline sidebar (02 §1/§8.3/§9)."
+  },
+  "viewShowSidebarLabel": "Show Sidebar",
+  "@viewShowSidebarLabel": {
+    "description": "Command label: view.toggleSidebar while the inline sidebar is hidden, named for what it does like view.toggleInspector's."
+  },
+  "viewHideSidebarLabel": "Hide Sidebar",
+  "@viewHideSidebarLabel": {
+    "description": "Command label: view.toggleSidebar while the inline sidebar shows, named for what it does like view.toggleInspector's."
   },
   "paneOpeningHome": "Opening home…",
   "@paneOpeningHome": {
