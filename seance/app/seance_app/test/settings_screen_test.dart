@@ -509,17 +509,29 @@ void main() {
     }
   });
 
-  testWidgets('the API key keeps the keyboard from learning it', (
+  testWidgets('the API keys keep the keyboard from learning them', (
     tester,
   ) async {
     await pumpScreen(tester, tab: SettingsTab.assistant);
 
-    final secret = tester.widget<TextField>(
-      field('API key (OS keystore; synced if assistant sync is on)'),
+    void expectNoLearning(String label) {
+      final secret = tester.widget<TextField>(field(label));
+      expect(secret.autocorrect, isFalse, reason: label);
+      expect(secret.enableSuggestions, isFalse, reason: label);
+      expect(secret.enableIMEPersonalizedLearning, isFalse, reason: label);
+    }
+
+    expectNoLearning('API key (OS keystore; synced if assistant sync is on)');
+
+    // The Z.AI key shows only once its search is on.
+    final zai = find.widgetWithText(SwitchListTile, 'Z.AI Web Search Prime');
+    await tester.ensureVisible(zai);
+    await tester.pumpAndSettle();
+    await tester.tap(zai);
+    await tester.pumpAndSettle();
+    expectNoLearning(
+      'Z.AI API key (OS keystore; synced if assistant sync is on)',
     );
-    expect(secret.autocorrect, isFalse);
-    expect(secret.enableSuggestions, isFalse);
-    expect(secret.enableIMEPersonalizedLearning, isFalse);
   });
 
   testWidgets('Save sends the form and clears a key once it is stored', (
