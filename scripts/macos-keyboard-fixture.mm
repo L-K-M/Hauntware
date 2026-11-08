@@ -288,6 +288,53 @@ static void checkOtherModifiers(FixtureController *controller,
   NSLog(@"PASS: unrelated modifier flags and physical sides");
 }
 
+static void checkFileNavigationKeys(FixtureController *controller,
+                                    KeyboardFixtureEngine *engine) {
+  const struct {
+    unsigned short keyCode;
+    unichar character;
+    uint64_t physical;
+    uint64_t logical;
+  } keys[] = {
+    {126, NSUpArrowFunctionKey, kPhysicalArrowUp, kLogicalArrowUp},
+    {125, NSDownArrowFunctionKey, kPhysicalArrowDown, kLogicalArrowDown},
+    {115, NSHomeFunctionKey, kPhysicalHome, kLogicalHome},
+    {119, NSEndFunctionKey, kPhysicalEnd, kLogicalEnd},
+    {116, NSPageUpFunctionKey, kPhysicalPageUp, kLogicalPageUp},
+    {121, NSPageDownFunctionKey, kPhysicalPageDown, kLogicalPageDown},
+  };
+  const NSEventModifierFlags modifiers[] = {
+    0, NSEventModifierFlagCommand,
+    NSEventModifierFlagShift | NX_DEVICELSHIFTKEYMASK,
+  };
+  for (const auto& key : keys) {
+    NSString *characters = [NSString stringWithCharacters:&key.character length:1];
+    for (NSEventModifierFlags modifier : modifiers) {
+      // AppKit marks navigation keys as function/keypad input. Those flags
+      // must neither hide the logical arrow nor turn it into a modifier.
+      NSEventModifierFlags flags = modifier | NSEventModifierFlagFunction |
+          NSEventModifierFlagNumericPad;
+      [controller keyDown:keyEvent(NSEventTypeKeyDown, flags, key.keyCode, characters)];
+      NSDictionary *event = lastCharacterEvent(engine, key.physical);
+      require([event[@"logical"] unsignedLongLongValue] == key.logical &&
+              [event[@"type"] intValue] == kFlutterKeyEventTypeDown,
+              @"Native navigation key reaches Flutter with its logical identity");
+      require(metaPressed(event[@"pressed"]) == ((modifier & NSEventModifierFlagCommand) != 0),
+              @"Command navigation preserves Meta without modifying plain arrows");
+      require((event[@"pressed"][@(kPhysicalShiftLeft)] != nil) ==
+                  ((modifier & NSEventModifierFlagShift) != 0),
+              @"Shift navigation preserves the selection modifier");
+      [controller keyDown:keyEvent(NSEventTypeKeyDown, flags, key.keyCode, characters, YES)];
+      require([lastCharacterEvent(engine, key.physical)[@"type"] intValue] ==
+                  kFlutterKeyEventTypeRepeat,
+              @"Held navigation keys reach Flutter as repeats");
+      [controller keyUp:keyEvent(NSEventTypeKeyUp, flags, key.keyCode, characters)];
+      releaseWithPlainInput(controller, engine);
+    }
+  }
+  NSLog(@"PASS: native arrows, Home/End, Page Up/Down, Command, Shift, and repeats");
+}
+
 static void checkUnhandledDispatch(void) {
   KeyboardFixtureEngine *engine = [[KeyboardFixtureEngine alloc] initFixture];
   UnhandledFixtureController *controller = [[UnhandledFixtureController alloc]
@@ -371,6 +418,7 @@ int main(void) {
     checkRepeatAndKeyEquivalent(controller, engine);
     checkPhysicalShiftSequence(controller, engine);
     checkOtherModifiers(controller, engine);
+    checkFileNavigationKeys(controller, engine);
 
     // Replacing a controller keeps the engine's keyboard state. No window or
     // extra engine view is required to prove both ingress instances normalize.

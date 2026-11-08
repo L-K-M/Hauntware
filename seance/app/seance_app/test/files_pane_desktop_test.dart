@@ -131,8 +131,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context)
-              .copyWith(textScaler: TextScaler.linear(textScale)),
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
           child: AppScope(state: state!, child: child!),
         ),
         home: Scaffold(
@@ -1279,6 +1280,111 @@ void main() {
       await tester.runAsync(() async {});
       await tester.pump();
       expect(files.currentPath, '$_home/docs');
+    },
+  );
+
+  platformTest(
+    'Cmd Down opens and Cmd Up leaves an empty folder',
+    TargetPlatform.macOS,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      await tester.tap(find.text('docs'));
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pumpAndSettle();
+      expect(files.currentPath, '$_home/docs');
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pumpAndSettle();
+      expect(files.currentPath, _home);
+    },
+  );
+
+  platformTest(
+    'loading rows cannot be selected or opened by keyboard',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      await tester.tap(find.text('a.txt'));
+      await tester.pump();
+      files.loading = true;
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(files.selectedPaths, {'$_home/a.txt'});
+      expect(state!.tabs, hasLength(1));
+      files.loading = false;
+    },
+  );
+
+  platformTest(
+    'Page movement and End reveal offscreen items',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(
+        tester,
+        _ListFileSystem(
+          extra: [
+            for (var i = 0; i < 100; i++)
+              RemoteFileEntry(
+                path: '$_home/extra$i',
+                name: 'extra$i',
+                type: RemoteFileType.file,
+              ),
+          ],
+        ),
+      );
+      await tester.tap(find.text('a.txt'));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+      await tester.pump();
+      expect(files.selectedPaths, isNot({'$_home/a.txt'}));
+      await tester.sendKeyEvent(LogicalKeyboardKey.end);
+      await tester.pump();
+      expect(files.selectedPaths, {'$_home/z.txt'});
+      expect(find.text('z.txt').hitTestable(), findsOneWidget);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.home);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+      expect(files.selectedPaths, hasLength(104));
+      expect(find.text('docs').hitTestable(), findsOneWidget);
+    },
+  );
+
+  platformTest(
+    'Home End and Shift extend the visible range',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      await tester.tap(find.text('a.txt'));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.end);
+      await tester.pump();
+      expect(files.selectedPaths, {'$_home/z.txt'});
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.home);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+      expect(files.selectedPaths.length, 4);
+    },
+  );
+
+  platformTest(
+    'modified arrows do not silently move selection',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      await tester.tap(find.text('a.txt'));
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(files.selectedPaths, {'$_home/a.txt'});
     },
   );
 

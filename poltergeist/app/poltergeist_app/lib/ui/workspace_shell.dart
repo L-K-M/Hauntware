@@ -4065,6 +4065,9 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       case BookmarkKind.workspace || BookmarkKind.savedSync:
         break; // answered above — the switch is exhaustive.
     }
+    // Activating a location transfers keyboard ownership too. Leaving
+    // focus on the sidebar makes arrows navigate servers, not files.
+    _focusPane(strip);
   }
 
   /// ── Quick Open (02 §8.4) ─────────────────────────────────────────
@@ -4140,6 +4143,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         ? strip.newTab(target: NewTabTarget.launcher)
         : strip.activeTab!;
     final controller = tab.controller;
+    _focusPane(strip);
     if (!recent.isRemote) {
       unawaited(
         controller

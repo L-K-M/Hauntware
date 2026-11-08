@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/services/engine_session.dart';
+import 'package:poltergeist_app/ui/panes/pane_view.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../services/engine_session_test.dart' as session_test;
@@ -39,7 +40,7 @@ void main() {
     ]);
   });
 
-  Future<void> pumpApp(WidgetTester tester) async {
+  Future<void> pumpApp(WidgetTester tester, {FakeBookmarkStore? store}) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -47,7 +48,7 @@ void main() {
     final navigatorKey = GlobalKey<NavigatorState>();
     final supportDir = Directory.systemTemp.createTempSync('pg-row-focus-');
     addTearDown(() => supportDir.deleteSync(recursive: true));
-    final bookmarks = FakeBookmarkStore();
+    final bookmarks = store ?? FakeBookmarkStore();
     final session = await startEngineSession(
       supportDirectoryPath: supportDir.path,
       bookmarks: bookmarks,
@@ -76,6 +77,71 @@ void main() {
       )
       .focusNode
       .hasFocus;
+
+  testWidgets('opening a sidebar favorite hands arrow keys to its file list', (
+    tester,
+  ) async {
+    final now = DateTime.utc(2026, 11, 8);
+    final bookmark = Bookmark(
+      id: 'remote',
+      kind: BookmarkKind.remotePath,
+      label: 'Storage',
+      preferredPane: PreferredPane.right,
+      server: BookmarkServerRef(
+        identity: EmbeddedHostIdentity(
+          host: 'storage.example.com',
+          port: 22,
+          username: 'tester',
+          authMethod: AuthMethod.password,
+        ),
+      ),
+      remotePath: '/srv/home',
+      sortKey: 'k',
+      createdAt: now,
+      updatedAt: now,
+    );
+    engine.channel = session_test.FakeAppBrowseChannel(homePath: '/srv/home')
+      ..listings['/srv/home'] = [
+        _entry('/srv/home', 'first.txt'),
+        _entry('/srv/home', 'second.txt'),
+      ];
+    await pumpApp(tester, store: FakeBookmarkStore([bookmark]));
+    await tester.tap(find.byKey(const ValueKey('sidebar.favorite.remote')));
+    await tester.pumpAndSettle();
+    final pane = tester.widget<PaneView>(find.byType(PaneView).last);
+    expect(pane.controller.location?.path, '/srv/home');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(pane.controller.cursorIndex, 0);
+    expect(pane.controller.selectedCount, 1);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(pane.controller.cursorIndex, 1);
+  }, variant: TargetPlatformVariant.desktop());
+
+  testWidgets(
+    'the initial listing responds to arrows without a pointer click',
+    (tester) async {
+      await pumpApp(tester);
+      final pane = tester.widget<PaneView>(find.byType(PaneView).first);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(pane.controller.cursorIndex, 0);
+      expect(pane.controller.selectedCount, 1);
+    },
+    variant: TargetPlatformVariant.desktop(),
+  );
+
+  testWidgets('clicking a file keeps arrows on the listing', (tester) async {
+    await pumpApp(tester);
+    await tester.tap(find.text('left.txt'));
+    await tester.pumpAndSettle();
+    final pane = tester.widget<PaneView>(find.byType(PaneView).first);
+    expect(pane.controller.cursorIndex, 0);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(pane.controller.cursorIndex, 1);
+  }, variant: TargetPlatformVariant.desktop());
 
   testWidgets(
     'a click then the filter chord inside the double-click window leaves '

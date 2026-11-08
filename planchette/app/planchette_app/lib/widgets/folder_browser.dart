@@ -85,18 +85,54 @@ class FolderBrowser extends StatefulWidget {
 
 class _FolderBrowserState extends State<FolderBrowser> {
   final _focus = FocusNode(debugLabel: 'Workspace files');
+  final _scroll = ScrollController();
   String? _selected;
+  (String?, String?, String?)? _location;
 
-  void _move(int direction) {
-    final entries = widget.workspace.entries;
-    if (entries.isEmpty) return;
-    final current = entries.indexWhere((entry) => entry.path == _selected);
-    final next = (current + direction).clamp(0, entries.length - 1);
-    setState(() => _selected = entries[next].path);
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (!node.hasPrimaryFocus) return KeyEventResult.ignored;
+    final binding = ghostFileListKey(event, Theme.of(context).platform);
+    if (binding == null) return KeyEventResult.ignored;
+    final workspace = widget.workspace;
+    if (!widget.enabled || workspace.loading) return KeyEventResult.handled;
+    if (binding.command == GhostFileListCommand.parent) {
+      if (event is! KeyRepeatEvent && workspace.canGoUp) {
+        unawaited(workspace.up());
+      }
+      return KeyEventResult.handled;
+    }
+    if (workspace.error != null) return KeyEventResult.handled;
+    final entries = workspace.entries;
+    final index = entries.indexWhere((entry) => entry.path == _selected);
+    final extent = scaledGhostFileRowExtent(context);
+    final target = ghostFileListTargetIndex(
+      binding.command,
+      currentIndex: index,
+      itemCount: entries.length,
+      pageSize: _scroll.hasClients
+          ? (_scroll.position.viewportDimension / extent).floor()
+          : 1,
+    );
+    if (target != null) {
+      setState(() => _selected = entries[target].path);
+      ghostRevealFileListIndex(_scroll, target, extent);
+      return KeyEventResult.handled;
+    }
+    if (event is KeyRepeatEvent) return KeyEventResult.handled;
+    if (binding.command == GhostFileListCommand.open && index >= 0) {
+      _open(entries[index]);
+    } else if (binding.command == GhostFileListCommand.clearSelection) {
+      setState(() => _selected = null);
+    }
+    return KeyEventResult.handled;
   }
 
   void _open(RemoteFileEntry entry) {
-    if (!widget.enabled || widget.workspace.loading) return;
+    if (!widget.enabled ||
+        widget.workspace.loading ||
+        widget.workspace.error != null) {
+      return;
+    }
     setState(() => _selected = entry.path);
     _focus.requestFocus();
     if (entry.type == RemoteFileType.directory) {
@@ -113,6 +149,12 @@ class _FolderBrowserState extends State<FolderBrowser> {
   Widget build(BuildContext context) {
     final workspace = widget.workspace;
     final entries = workspace.entries;
+    final location = (workspace.server?.id, workspace.root, workspace.path);
+    if (_location != location ||
+        !entries.any((entry) => entry.path == _selected)) {
+      _location = location;
+      _selected = null;
+    }
     final enabled = widget.enabled && !workspace.loading;
     final scheme = Theme.of(context).colorScheme;
     return Material(
@@ -177,7 +219,10 @@ class _FolderBrowserState extends State<FolderBrowser> {
               IconButton(
                 tooltip: 'Parent folder',
                 onPressed: enabled && workspace.canGoUp
-                    ? () => unawaited(workspace.up())
+                    ? () {
+                        _focus.requestFocus();
+                        unawaited(workspace.up());
+                      }
                     : null,
                 icon: const Icon(Icons.arrow_upward, size: 18),
               ),
@@ -218,24 +263,16 @@ class _FolderBrowserState extends State<FolderBrowser> {
           if (workspace.loading) const LinearProgressIndicator(),
           const Divider(height: 1),
           Expanded(
-            child: CallbackShortcuts(
-              bindings: {
-                const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
-                    _move(1),
-                const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
-                    _move(-1),
-                const SingleActivator(LogicalKeyboardKey.enter): () {
-                  final entry = entries
-                      .where((entry) => entry.path == _selected)
-                      .firstOrNull;
-                  if (entry != null) _open(entry);
-                },
-              },
-              child: Focus(
-                focusNode: _focus,
+            child: Focus(
+              focusNode: _focus,
+              onKeyEvent: _onKey,
+              child: Listener(
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: (_) => _focus.requestFocus(),
                 child: entries.isEmpty && !workspace.loading
                     ? const Center(child: Text('This folder is empty'))
                     : ListView.builder(
+                        controller: _scroll,
                         itemExtent: scaledGhostFileRowExtent(context),
                         itemCount: entries.length,
                         itemBuilder: (context, index) {
@@ -276,6 +313,7 @@ class _FolderBrowserState extends State<FolderBrowser> {
 
   @override
   void dispose() {
+    _scroll.dispose();
     _focus.dispose();
     super.dispose();
   }

@@ -3,6 +3,7 @@
 // reading them again, says what it could not read, and in admin mode
 // reads as root.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
@@ -121,6 +122,38 @@ void main() {
     expect(reads(), hasLength(2), reason: 'a folder read stays');
     expect(find.byTooltip('Up a folder'), findsOneWidget);
   });
+
+  testWidgets('Mac arrows select and open folders and leave an empty folder', (
+    tester,
+  ) async {
+    await pump(tester);
+    await answer(
+      tester,
+      listing: _listing('/var', {
+        'log': (8192, true),
+        'tmpfile': (4096, false),
+      }),
+    );
+    await tester.tap(find.text('tmpfile'));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump();
+    expect(reads().last.path, '/var/log');
+    await answer(tester, listing: _listing('/var/log', {}));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('tmpfile'), findsOneWidget);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pumpAndSettle();
+    expect(reads(), hasLength(2), reason: 'cannot leave the mount root');
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
   testWidgets('says what it could not read, and reads again on request', (
     tester,
