@@ -631,6 +631,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\x1b[38;5;${colour}m$name\x1b[0m $text'",
   },
   'lib/ui/docker/container_terminal.dart': {
+    // The only URL schemes a link the shell prints may open.
+    "'http'",
+    "'https'",
     // Shell paths the picker offers, run as typed, and the empty field
     // that leaves the choice to the engine.
     "'/bin/bash'",

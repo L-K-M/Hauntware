@@ -10219,6 +10219,82 @@
   "@dockerShellPasteCancel": {
     "description": "Paste dialog button that pastes nothing (CTX-07)."
   },
+  "dockerShellSelectAll": "Select all",
+  "@dockerShellSelectAll": {
+    "description": "Context menu item that selects the whole terminal buffer, scrollback included (CTX-07)."
+  },
+  "dockerShellClearScrollback": "Clear scrollback",
+  "@dockerShellClearScrollback": {
+    "description": "Context menu item that drops the terminal lines scrolled off the top, keeping the visible screen (CTX-07)."
+  },
+  "dockerShellKeyEscape": "Escape",
+  "@dockerShellKeyEscape": {
+    "description": "Semantics label of the esc key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeyTab": "Tab",
+  "@dockerShellKeyTab": {
+    "description": "Semantics label of the tab key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeyControlModifier": "Control modifier",
+  "@dockerShellKeyControlModifier": {
+    "description": "Semantics label of the ctrl key in the container shell's keyboard bar: a one-shot modifier, tapped before a letter (CTX-07)."
+  },
+  "dockerShellKeyControlC": "Control C",
+  "@dockerShellKeyControlC": {
+    "description": "Semantics label of the ^C key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeyLeftArrow": "Left arrow",
+  "@dockerShellKeyLeftArrow": {
+    "description": "Semantics label and tooltip of the left arrow key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeyUpArrow": "Up arrow",
+  "@dockerShellKeyUpArrow": {
+    "description": "Semantics label and tooltip of the up arrow key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeyDownArrow": "Down arrow",
+  "@dockerShellKeyDownArrow": {
+    "description": "Semantics label and tooltip of the down arrow key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeyRightArrow": "Right arrow",
+  "@dockerShellKeyRightArrow": {
+    "description": "Semantics label and tooltip of the right arrow key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeyHome": "Home",
+  "@dockerShellKeyHome": {
+    "description": "Semantics label of the home key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeyEnd": "End",
+  "@dockerShellKeyEnd": {
+    "description": "Semantics label of the end key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeyPageUp": "Page up",
+  "@dockerShellKeyPageUp": {
+    "description": "Semantics label of the pgup key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeyPageDown": "Page down",
+  "@dockerShellKeyPageDown": {
+    "description": "Semantics label of the pgdn key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeyPipe": "Pipe",
+  "@dockerShellKeyPipe": {
+    "description": "Semantics label of the | key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeySlash": "Slash",
+  "@dockerShellKeySlash": {
+    "description": "Semantics label of the / key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeyHyphen": "Hyphen",
+  "@dockerShellKeyHyphen": {
+    "description": "Semantics label of the - key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeyTilde": "Tilde",
+  "@dockerShellKeyTilde": {
+    "description": "Semantics label of the ~ key in the container shell's keyboard bar (CTX-07)."
+  },
+  "dockerShellKeyHideKeyboard": "Hide keyboard",
+  "@dockerShellKeyHideKeyboard": {
+    "description": "Semantics label and tooltip of the key in the container shell's keyboard bar that closes the soft keyboard (CTX-07)."
+  },
   "dockerLogsTitle": "Logs",
   "@dockerLogsTitle": {
     "description": "Under a container's name above its logs, in the Docker tab's log pane on desktops and in the bottom sheet on phones."

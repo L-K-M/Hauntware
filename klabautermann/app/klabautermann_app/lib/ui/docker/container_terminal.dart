@@ -2,9 +2,11 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:ghost_ui/ghost_ui.dart' show ghostIsDesktopPlatform;
+import 'package:ghost_ui/ghost_ui.dart'
+    show ghostIsDesktopPlatform, showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:seance_terminal/seance_terminal.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../controllers/container_terminals.dart';
 import '../../controllers/monitoring_controller.dart';
@@ -211,6 +213,11 @@ final class _ShellRun {
   }
 }
 
+/// The only schemes a link printed by a container may invoke: anything
+/// else stays inert, so the shell can never hand the OS a file path or
+/// another app's scheme.
+const _webSchemes = {'http', 'https'};
+
 class _ShellView extends StatefulWidget {
   const _ShellView({
     super.key,
@@ -230,6 +237,8 @@ class _ShellView extends StatefulWidget {
 class _ShellViewState extends State<_ShellView> {
   final _controller = TerminalController();
   final _focus = FocusNode();
+  final _selectionToolbar = ContextMenuController();
+  final _viewKey = GlobalKey<TerminalViewState>();
 
   XtermTerminalEngine get _engine => widget.run.engine;
 
@@ -237,11 +246,16 @@ class _ShellViewState extends State<_ShellView> {
   void initState() {
     super.initState();
     widget.run.shell.state.addListener(_onState);
+    _controller.addListener(_hideSelectionToolbarWithoutSelection);
+    _focus.addListener(_hideSelectionToolbarOnBlur);
   }
 
   @override
   void dispose() {
     widget.run.shell.state.removeListener(_onState);
+    _controller.removeListener(_hideSelectionToolbarWithoutSelection);
+    _focus.removeListener(_hideSelectionToolbarOnBlur);
+    _selectionToolbar.remove();
     _controller.dispose();
     _focus.dispose();
     super.dispose();
@@ -327,6 +341,93 @@ class _ShellViewState extends State<_ShellView> {
     );
   }
 
+  /// The whole buffer, scrollback included, as Select all covers on the
+  /// platforms' own text.
+  void _selectAll() {
+    final terminal = _engine.terminal;
+    final buffer = terminal.buffer;
+    _controller.setSelection(
+      buffer.createAnchor(0, 0),
+      buffer.createAnchor(terminal.viewWidth, buffer.height - 1),
+    );
+  }
+
+  /// Drops the lines scrolled off the top; the visible screen stays.
+  void _clearScrollback() {
+    final terminal = _engine.terminal;
+    terminal.eraseScrollbackOnly();
+    terminal.notifyListeners();
+  }
+
+  /// A link printed to the shell opens in the browser — and only the
+  /// web schemes get that far, so the terminal can never invoke a file
+  /// path or another app's scheme. A refused launch says so the way the
+  /// app's other link failures do.
+  Future<void> _openLink(Uri uri) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final notOpened = AppLocalizations.of(context).dockerLinksNotOpened;
+    var opened = false;
+    if (_webSchemes.contains(uri.scheme) &&
+        uri.host.isNotEmpty &&
+        uri.userInfo.isEmpty) {
+      try {
+        opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } on PlatformException {
+        opened = false;
+      } on ArgumentError {
+        opened = false;
+      }
+    }
+    if (!opened && overlay.mounted) showTopToast(overlay, message: notOpened);
+  }
+
+  /// The platform's selection toolbar over a touch selection, as
+  /// Android and iOS text gets. Copy ends the selection, and Paste goes
+  /// through the shell's own check so its paste policy still holds.
+  void _showSelectionToolbar() {
+    final anchors = _viewKey.currentState?.selectionToolbarAnchors;
+    if (anchors == null) return;
+    _selectionToolbar.show(
+      context: context,
+      contextMenuBuilder: (context) => AdaptiveTextSelectionToolbar.buttonItems(
+        anchors: anchors,
+        buttonItems: [
+          ContextMenuButtonItem(
+            type: ContextMenuButtonType.copy,
+            onPressed: _copy,
+          ),
+          ContextMenuButtonItem(
+            type: ContextMenuButtonType.paste,
+            onPressed: widget.run.shell.state.value is ContainerShellEnded
+                ? null
+                : () {
+                    _selectionToolbar.remove();
+                    unawaited(_paste());
+                  },
+          ),
+          ContextMenuButtonItem(
+            type: ContextMenuButtonType.selectAll,
+            onPressed: () {
+              _selectAll();
+              _showSelectionToolbar();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// A tap that clears the selection takes its toolbar with it.
+  void _hideSelectionToolbarWithoutSelection() {
+    if (_controller.selection != null) return;
+    _selectionToolbar.remove();
+  }
+
+  void _hideSelectionToolbarOnBlur() {
+    if (_focus.hasFocus) return;
+    _selectionToolbar.remove();
+  }
+
   Future<void> _contextMenu(Offset position) async {
     final l10n = AppLocalizations.of(context);
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -347,6 +448,15 @@ class _ShellViewState extends State<_ShellView> {
           enabled: widget.run.shell.state.value is! ContainerShellEnded,
           child: Text(l10n.dockerShellPaste),
         ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: _ShellMenu.selectAll,
+          child: Text(l10n.dockerShellSelectAll),
+        ),
+        PopupMenuItem(
+          value: _ShellMenu.clearScrollback,
+          child: Text(l10n.dockerShellClearScrollback),
+        ),
       ],
     );
     switch (action) {
@@ -354,6 +464,12 @@ class _ShellViewState extends State<_ShellView> {
         _copy();
       case _ShellMenu.paste:
         await _paste();
+      case _ShellMenu.selectAll:
+        // The menu's await can outlive the view; the controller dies
+        // with it.
+        if (mounted) _selectAll();
+      case _ShellMenu.clearScrollback:
+        if (mounted) _clearScrollback();
       case null:
         break;
     }
@@ -414,11 +530,14 @@ class _ShellViewState extends State<_ShellView> {
             color: appearance.theme.background,
             child: TerminalView(
               _engine.terminal,
+              key: _viewKey,
               controller: _controller,
               focusNode: _focus,
               autofocus: true,
               readOnly: ended,
               onKeyEvent: _onKey,
+              onLinkTap: _openLink,
+              onTouchSelectionEnd: _showSelectionToolbar,
               // No default shortcuts: xterm's would paste around the
               // paste policy and take Ctrl+V and Ctrl+A from the shell.
               shortcuts: const <ShortcutActivator, Intent>{},
@@ -432,13 +551,36 @@ class _ShellViewState extends State<_ShellView> {
           ),
         ),
         if (!ghostIsDesktopPlatform(theme.platform) && !ended)
-          TerminalKeyboardBar(engine: _engine),
+          TerminalKeyboardBar(engine: _engine, strings: _keyboardStrings(l10n)),
       ],
     );
   }
+
+  /// The keyboard bar's key labels and tooltips, in the app's words
+  /// rather than the package's built-in English ones.
+  TerminalKeyboardBarStrings _keyboardStrings(AppLocalizations l10n) =>
+      TerminalKeyboardBarStrings(
+        escape: l10n.dockerShellKeyEscape,
+        tab: l10n.dockerShellKeyTab,
+        controlModifier: l10n.dockerShellKeyControlModifier,
+        controlC: l10n.dockerShellKeyControlC,
+        leftArrow: l10n.dockerShellKeyLeftArrow,
+        upArrow: l10n.dockerShellKeyUpArrow,
+        downArrow: l10n.dockerShellKeyDownArrow,
+        rightArrow: l10n.dockerShellKeyRightArrow,
+        home: l10n.dockerShellKeyHome,
+        end: l10n.dockerShellKeyEnd,
+        pageUp: l10n.dockerShellKeyPageUp,
+        pageDown: l10n.dockerShellKeyPageDown,
+        pipe: l10n.dockerShellKeyPipe,
+        slash: l10n.dockerShellKeySlash,
+        hyphen: l10n.dockerShellKeyHyphen,
+        tilde: l10n.dockerShellKeyTilde,
+        hideKeyboard: l10n.dockerShellKeyHideKeyboard,
+      );
 }
 
-enum _ShellMenu { copy, paste }
+enum _ShellMenu { copy, paste, selectAll, clearScrollback }
 
 /// What the shell is doing, or why it ended.
 class _ShellStatus extends StatelessWidget {
