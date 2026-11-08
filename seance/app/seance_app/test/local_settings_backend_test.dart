@@ -445,6 +445,28 @@ void main() {
     expect(backend.settings.checkForUpdates, before);
   });
 
+  test('a failed write of the value already set changes nothing', () async {
+    // Restoring "the opposite" of the requested value would flip a setting
+    // a failed no-op save never meant to change.
+    final updates = backend.settings.checkForUpdates;
+    final suggestions = backend.settings.commandSuggestions;
+    final keepAlive = backend.settings.keepSessionsAliveInBackground;
+    await breakSettingsWrites();
+
+    await expectLater(backend.setCheckForUpdates(updates), throwsA(anything));
+    await expectLater(
+      backend.setCommandSuggestions(suggestions),
+      throwsA(anything),
+    );
+    await expectLater(
+      backend.setKeepSessionsAlive(keepAlive),
+      throwsA(anything),
+    );
+    expect(backend.settings.checkForUpdates, updates);
+    expect(backend.settings.commandSuggestions, suggestions);
+    expect(backend.settings.keepSessionsAliveInBackground, keepAlive);
+  });
+
   test('a failed command-suggestions write puts the setting back and throws',
       () async {
     final before = backend.settings.commandSuggestions;

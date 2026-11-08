@@ -399,6 +399,25 @@ void main() {
       expect(store.loadIssue, isNull);
     });
 
+    test('a file that cannot be read says so and stays where it is', () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'planchette-settings-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final file = File('${directory.path}/settings.json');
+      // Not UTF-8: reading the text fails before any JSON is seen.
+      await file.writeAsBytes([0xff, 0xfe, 0x00, 0x7b]);
+      final store = LocalSettingsStore(file);
+      final settings = SettingsController(store: store);
+      addTearDown(settings.dispose);
+
+      await settings.load();
+
+      expect(settings.value, const AppSettings());
+      expect(await file.exists(), isTrue);
+      expect(settings.error, contains('could not be read'));
+    });
+
     test('writes and reads a file it was given a path for', () async {
       final directory = await Directory.systemTemp.createTemp(
         'planchette-settings-',

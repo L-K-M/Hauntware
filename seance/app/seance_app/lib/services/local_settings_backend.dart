@@ -84,11 +84,12 @@ class LocalSettingsBackend implements SettingsBackend {
   /// setter does, so the refused value cannot ride a later save.
   @override
   Future<void> setCheckForUpdates(bool enabled) async {
+    final previous = _s.checkForUpdates;
     _s.checkForUpdates = enabled;
     try {
       await _state.services.saveSettings();
     } catch (_) {
-      if (_s.checkForUpdates == enabled) _s.checkForUpdates = !enabled;
+      if (_s.checkForUpdates == enabled) _s.checkForUpdates = previous;
       rethrow;
     }
     if (!enabled) _state.dismissUpdateNotice();
@@ -110,6 +111,7 @@ class LocalSettingsBackend implements SettingsBackend {
 
   @override
   Future<void> setKeepSessionsAlive(bool enabled) async {
+    final previous = _s.keepSessionsAliveInBackground;
     _s.keepSessionsAliveInBackground = enabled;
     try {
       await _state.services.saveSettings();
@@ -119,9 +121,10 @@ class LocalSettingsBackend implements SettingsBackend {
       _state.setKeepSessionsAliveEnabled(enabled);
     } catch (_) {
       // The newer choice is authoritative and stands; only this call's own
-      // value is put back.
+      // value is put back, to what it replaced: a failed save of the value
+      // already set changes nothing.
       if (_s.keepSessionsAliveInBackground != enabled) return;
-      _s.keepSessionsAliveInBackground = !enabled;
+      _s.keepSessionsAliveInBackground = previous;
       rethrow;
     }
   }
@@ -129,13 +132,14 @@ class LocalSettingsBackend implements SettingsBackend {
   /// Refreshes the suggestion list, which empties when the switch goes off.
   @override
   Future<void> setCommandSuggestions(bool enabled) async {
+    final previous = _s.commandSuggestions;
     _s.commandSuggestions = enabled;
     try {
       await _state.services.saveSettings();
     } catch (_) {
       // As for the keep-alive setting: the refused value must not stay in
       // memory to ride a later save.
-      if (_s.commandSuggestions == enabled) _s.commandSuggestions = !enabled;
+      if (_s.commandSuggestions == enabled) _s.commandSuggestions = previous;
       rethrow;
     }
     _state.refreshSuggestions();

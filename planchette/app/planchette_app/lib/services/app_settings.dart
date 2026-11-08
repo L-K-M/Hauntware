@@ -280,6 +280,11 @@ final class LocalSettingsStore implements SettingsStore, SettingsLoadReport {
       }
       return AppSettings.fromJson(Map<String, Object?>.from(decoded));
     } on Exception {
+      // Unreadable rather than damaged (permissions, a locked file, bytes
+      // that are not text): say so, but leave the file where it is.
+      _loadIssue =
+          'Your settings file could not be read, so Planchette started with '
+          'its default settings.';
       return null;
     }
   }
