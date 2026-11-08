@@ -2304,9 +2304,11 @@ and Séance's root Unlicense.
 - Divergences: class and category names only; the controller is injected
   into `MacOSWindowUtilsViewController(flutterViewController:)` instead of
   becoming the window's content controller directly. Séance's native
-  regression script (`scripts/test-macos-accessibility.sh`) is not ported
-  yet — its CI gate is the follow-up; until then the workaround is
-  verified only by Séance's gate against the same Flutter line.
+  regression (`scripts/test-macos-accessibility.sh` and
+  `macos/RunnerTests/AccessibilityLifecycleTest.mm`) is ported from
+  Planchette's identical copy, whose controller shares Poltergeist's
+  multi-view semantics routing; it gates the macOS client build like the
+  keyboard fixture, and `--stock-engine` must fail.
 - Why: Flutter 3.47 destroys `AccessibilityBridge::tree_` before
   detaching native `FlutterTextField`s; with any accessibility client
   active a text-input callback can read the freed tree (Séance's

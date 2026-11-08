@@ -77,7 +77,10 @@ typedef struct {
 // The view an update is for; the implicit view when the producer is too old
 // to say.
 static int64_t PoltergeistSemanticsUpdateViewId(const void* update) {
-  const PoltergeistSemanticsUpdate* head = update;
+  // The accessibility fixture compiles this file as Objective-C++, where
+  // void* needs the cast the C rules allow implicitly.
+  const PoltergeistSemanticsUpdate* head =
+      (const PoltergeistSemanticsUpdate*)update;
   if (head->struct_size < offsetof(PoltergeistSemanticsUpdate, view_id) +
                               sizeof(head->view_id)) {
     return 0;
@@ -121,8 +124,10 @@ static int64_t PoltergeistSemanticsUpdateViewId(const void* update) {
     return;
   }
   FlutterViewController* target = [self.engine viewControllerForIdentifier:viewId];
-  if (target == nil || target == self) {
-    // The window closed after its frame: nothing shows the tree.
+  if (target == nil || target == self || target.viewIdentifier != viewId) {
+    // The window closed after its frame, or the engine's map disagreed
+    // with the update: anything else could recurse forever (Planchette's
+    // copy of this routing has the same guard).
     return;
   }
   // A controller made after semantics were enabled has no accessibility
