@@ -124,14 +124,16 @@ int? ghostFileListTargetIndex(
 
 /// Keeps a fixed-extent listing's cursor visible without overscrolling when
 /// its last row is only partly visible or the viewport is taller than it.
+/// [leadingExtent] accounts for a header that scrolls above the first row.
 void ghostRevealFileListIndex(
   ScrollController scroll,
   int index,
-  double extent,
-) {
+  double extent, {
+  double leadingExtent = 0,
+}) {
   if (!scroll.hasClients) return;
   final position = scroll.position;
-  final top = index * extent;
+  final top = leadingExtent + index * extent;
   final bottom = top + extent;
   final double target;
   if (top < position.pixels) {

@@ -59,8 +59,9 @@ class _DiskExplorerState extends State<DiskExplorer> {
 
   /// Whether to read as root; in effect only while admin mode is on.
   bool _wantRoot = false;
-  final _listFocus = FocusNode(debugLabel: 'Disk files');
+  final _listFocus = FocusNode();
   final _scroll = ScrollController();
+  final _notesKey = GlobalKey();
   String? _selected;
 
   String get _path => _trail.last;
@@ -104,7 +105,13 @@ class _DiskExplorerState extends State<DiskExplorer> {
     );
     if (target != null) {
       setState(() => _selected = entries[target].name);
-      ghostRevealFileListIndex(_scroll, target, extent);
+      final notes = _notesKey.currentContext?.findRenderObject() as RenderBox?;
+      ghostRevealFileListIndex(
+        _scroll,
+        target,
+        extent,
+        leadingExtent: notes?.size.height ?? 0,
+      );
     } else if (event is! KeyRepeatEvent) {
       if (binding.command == GhostFileListCommand.open &&
           index >= 0 &&
@@ -246,6 +253,7 @@ class _DiskExplorerState extends State<DiskExplorer> {
                         selected: _selected,
                         scroll: _scroll,
                         rowExtent: _rowExtent(context),
+                        notesKey: _notesKey,
                         onSelect: (name) => setState(() => _selected = name),
                         onOpen: (name) => _open(name, elevated: asRoot),
                         onRetry: () =>
@@ -309,8 +317,10 @@ class _Report extends StatelessWidget {
     required this.onSelect,
     required this.scroll,
     required this.rowExtent,
+    required this.notesKey,
   });
 
+  final GlobalKey notesKey;
   final String? selected;
   final ValueChanged<String> onSelect;
   final ScrollController scroll;
@@ -360,39 +370,43 @@ class _Report extends StatelessWidget {
             : l10n.diskExplorerIncomplete,
       if (listing.truncated) l10n.diskExplorerTruncated(listing.entries.length),
     ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final note in notes)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-            child: Text(note),
+    return CustomScrollView(
+      key: ValueKey((report.path, asRoot)),
+      controller: scroll,
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            key: notesKey,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final note in notes)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                  child: Text(note),
+                ),
+              if (listing.entries.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(l10n.diskExplorerEmpty),
+                ),
+            ],
           ),
-        if (listing.entries.isEmpty)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(l10n.diskExplorerEmpty),
-          ),
-        Expanded(
-          child: ListView.builder(
-            key: ValueKey((report.path, asRoot)),
-            controller: scroll,
-            itemExtent: rowExtent,
-            itemCount: listing.entries.length,
-            itemBuilder: (context, index) {
-              final entry = listing.entries[index];
-              return _EntryTile(
-                entry: entry,
-                size: size(entry.bytes),
-                share: listing.totalBytes == 0
-                    ? 0
-                    : entry.bytes / listing.totalBytes,
-                selected: entry.name == selected,
-                onSelect: () => onSelect(entry.name),
-                onOpen: entry.isFolder ? () => onOpen(entry.name) : null,
-              );
-            },
-          ),
+        ),
+        SliverFixedExtentList(
+          itemExtent: rowExtent,
+          delegate: SliverChildBuilderDelegate((context, index) {
+            final entry = listing.entries[index];
+            return _EntryTile(
+              entry: entry,
+              size: size(entry.bytes),
+              share: listing.totalBytes == 0
+                  ? 0
+                  : entry.bytes / listing.totalBytes,
+              selected: entry.name == selected,
+              onSelect: () => onSelect(entry.name),
+              onOpen: entry.isFolder ? () => onOpen(entry.name) : null,
+            );
+          }, childCount: listing.entries.length),
         ),
       ],
     );

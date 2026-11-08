@@ -43,9 +43,15 @@ void main() {
     await engine.close();
   });
 
-  Future<void> pump(WidgetTester tester) async {
+  Future<void> pump(WidgetTester tester, {double textScale = 1}) async {
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: DiskExplorer(
@@ -154,6 +160,61 @@ void main() {
     await tester.pumpAndSettle();
     expect(reads(), hasLength(2), reason: 'cannot leave the mount root');
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('boundary and page keys reveal file rows without opening them', (
+    tester,
+  ) async {
+    await pump(tester);
+    await answer(
+      tester,
+      listing: _listing('/var', {
+        for (var i = 0; i < 120; i++) 'file$i': (4096 - i, false),
+      }),
+    );
+    await tester.tap(find.text('file0'));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pump();
+    expect(find.text('file119').hitTestable(), findsOneWidget);
+    expect(
+      tester
+          .widgetList<ListTile>(find.byType(ListTile))
+          .singleWhere((tile) => tile.selected)
+          .title,
+      isA<Text>().having((text) => text.data, 'name', 'file119'),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.home);
+    await tester.pump();
+    expect(find.text('file0').hitTestable(), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+    await tester.pump();
+    expect(
+      tester
+          .widgetList<ListTile>(find.byType(ListTile))
+          .singleWhere((tile) => tile.selected)
+          .title,
+      isA<Text>().having((text) => text.data, 'name', isNot('file0')),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(reads(), hasLength(1), reason: 'files remain read-only');
+  });
+
+  testWidgets('large text keeps notes and rows scrollable in a small window', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pump(tester, textScale: 2);
+    await answer(
+      tester,
+      listing: _listing('/var', {'log': (8192, true)}, incomplete: true),
+    );
+    await tester.binding.setSurfaceSize(const Size(360, 320));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.byType(CustomScrollView), findsOneWidget);
+  });
 
   testWidgets('says what it could not read, and reads again on request', (
     tester,

@@ -33,11 +33,12 @@ ownership of file operations, selection models, loading state and root boundarie
 
 ## Common navigation
 
-These keys act only while the file listing itself has focus, including when it
-is empty. A click in the listing or normal focus traversal arms it. Opening a
-Poltergeist sidebar location also hands focus to its destination listing.
-Text fields, buttons, menus, other panes and terminal/editor surfaces keep their
-own keys.
+Cursor movement and view-owned keys act only while the listing itself has
+focus, including when it is empty. A click in the listing or normal focus
+traversal arms it. Opening a Poltergeist sidebar location also hands focus to
+its destination listing. Text fields, buttons, menus and terminal/editor
+surfaces keep their own keys. Poltergeist's registered modified menu commands
+retain their existing app-wide scope outside text editing.
 
 | Action | macOS | Windows/Linux |
 | --- | --- | --- |

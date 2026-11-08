@@ -103,7 +103,7 @@ class CompactListing extends StatefulWidget {
 
 class _CompactListingState extends State<CompactListing> {
   final _scroll = ScrollController();
-  final _focus = FocusNode(debugLabel: 'Compact files');
+  final _focus = FocusNode();
   Timer? _graceTimer;
   bool _pastGrace = false;
   String? _revealedPath;
@@ -188,8 +188,9 @@ class _CompactListingState extends State<CompactListing> {
       case GhostFileListCommand.parent:
         controller.goUp();
       case GhostFileListCommand.open:
-        if (cursor != null)
+        if (cursor != null) {
           unawaited(controller.openEntry(controller.entries[cursor]));
+        }
       case GhostFileListCommand.rename:
         controller.startRename();
       case GhostFileListCommand.selectAll:

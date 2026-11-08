@@ -133,6 +133,39 @@ void main() {
     });
   }
 
+  testWidgets('scroll reveal accounts for a scrolling header', (tester) async {
+    final scroll = ScrollController();
+    addTearDown(scroll.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            height: 105,
+            child: CustomScrollView(
+              controller: scroll,
+              slivers: [
+                const SliverToBoxAdapter(child: SizedBox(height: 60)),
+                SliverFixedExtentList(
+                  itemExtent: 20,
+                  delegate: SliverChildBuilderDelegate(
+                    (_, index) => Text('$index'),
+                    childCount: 100,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    ghostRevealFileListIndex(scroll, 99, 20, leadingExtent: 60);
+    await tester.pump();
+    expect(scroll.offset, scroll.position.maxScrollExtent);
+    ghostRevealFileListIndex(scroll, 0, 20, leadingExtent: 60);
+    await tester.pump();
+    expect(scroll.offset, 60);
+  });
+
   testWidgets('scroll reveal stays inside the scroll range', (tester) async {
     final scroll = ScrollController();
     addTearDown(scroll.dispose);
