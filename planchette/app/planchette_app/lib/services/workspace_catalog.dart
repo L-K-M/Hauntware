@@ -390,6 +390,20 @@ final class _EnrollmentCredentials implements SyncCredentialStore {
 
 /// Account, consent and security notices fail closed together in one file.
 /// Private callers already hold WorkspaceCatalog's operation queue.
+/// The catalog's own state over [file] (enrollment, pin verdicts and
+/// tripwires), for tests of how it persists.
+@visibleForTesting
+({
+  SyncEnrollmentState enrollment,
+  PinVerdictStore pins,
+  SyncTripwireStore tripwires,
+  Future<void> Function() load,
+})
+debugCatalogState(File file) {
+  final state = _CatalogState(file);
+  return (enrollment: state, pins: state, tripwires: state, load: state.load);
+}
+
 final class _CatalogState
     implements SyncEnrollmentState, PinVerdictStore, SyncTripwireStore {
   _CatalogState(this._file);
@@ -483,12 +497,29 @@ final class _CatalogState
     _loaded = true;
   }
 
-  Future<void> _save(Map<String, dynamic> changes) async {
-    final next = {..._data, ...changes};
-    final file = _file;
-    if (file != null) await writeJsonFileAtomically(file, next);
-    _data = next;
+  Future<void> _save(Map<String, dynamic> changes) => _update((_) => changes);
+
+  /// Runs [change] against the last committed state and writes what it
+  /// returns (nothing when null), one change at a time. Two overlapping
+  /// changes would otherwise both start from the same state, so the later
+  /// would drop the earlier's, and both would write the same staging file
+  /// at once. Memory takes a change only once its write succeeded.
+  Future<void> _update(
+    Map<String, dynamic>? Function(Map<String, dynamic> data) change,
+  ) {
+    final result = _saveTail.then((_) async {
+      final changes = change(_data);
+      if (changes == null) return;
+      final next = {..._data, ...changes};
+      final file = _file;
+      if (file != null) await writeJsonFileAtomically(file, next);
+      _data = next;
+    });
+    _saveTail = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return result;
   }
+
+  Future<void> _saveTail = Future<void>.value();
 
   Future<void> commitEnrollment(
     _CatalogState draft,
@@ -499,9 +530,11 @@ final class _CatalogState
   Future<String> deviceId() async {
     final existing = _data['deviceId'] as String?;
     if (existing != null) return existing;
-    final minted = uuidV4();
-    await _save({'deviceId': minted});
-    return minted;
+    // Minted inside the queue, so two first calls agree on one id.
+    await _update(
+      (data) => data['deviceId'] == null ? {'deviceId': uuidV4()} : null,
+    );
+    return _data['deviceId'] as String;
   }
 
   @override
@@ -536,14 +569,17 @@ final class _CatalogState
   Future<Set<String>> negativePins() async =>
       Set<String>.from(_data['negativePins'] as List);
   @override
-  Future<void> addNegativePin(String locator) async {
-    final kept = Map<String, String>.from(_data['keptPins'] as Map)
+  Future<void> addNegativePin(String locator) => _update((data) {
+    final kept = Map<String, String>.from(data['keptPins'] as Map)
       ..remove(locator);
-    await _save({
-      'negativePins': {...await negativePins(), locator}.toList()..sort(),
+    return {
+      'negativePins': {
+        ...Set<String>.from(data['negativePins'] as List),
+        locator,
+      }.toList()..sort(),
       'keptPins': kept,
-    });
-  }
+    };
+  });
 
   @override
   Future<void> removeNegativePin(String locator) =>
@@ -553,13 +589,19 @@ final class _CatalogState
       (_data['keptPins'] as Map)[locator] as String?;
   @override
   Future<void> recordKeptVerdict(String locator, String rejectedFingerprint) =>
-      _save({
-        'keptPins': {..._data['keptPins'] as Map, locator: rejectedFingerprint},
-      });
+      _update(
+        (data) => {
+          'keptPins': {
+            ...data['keptPins'] as Map,
+            locator: rejectedFingerprint,
+          },
+        },
+      );
 
-  Future<void> _setMembership(String key, String value, bool active) async {
-    final next = Set<String>.from(_data[key] as List);
-    if (active ? !next.add(value) : !next.remove(value)) return;
-    await _save({key: next.toList()..sort()});
-  }
+  Future<void> _setMembership(String key, String value, bool active) =>
+      _update((data) {
+        final next = Set<String>.from(data[key] as List);
+        if (active ? !next.add(value) : !next.remove(value)) return null;
+        return {key: next.toList()..sort()};
+      });
 }
