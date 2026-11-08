@@ -37,11 +37,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // An account read's request id, matched in the engine's answer.
   'lib/controllers/account_reads.dart': {r"'accounts-${_count++}'"},
   'lib/controllers/disk_usage_reads.dart': {r"'disk-usage-${_count++}'"},
-  // The keys tests find the pane toggles by.
+  // The keys tests find the pane toggles and the resize handles by.
   'lib/ui/desktop_shell.dart': {
     "'shell.sidebarToggle'",
     "'shell.inspectorToggle'",
     "'shell.serverTitle'",
+    "'shell.sidebarResize'",
+    "'shell.inspectorResize'",
   },
   // A folder's path on the server, built from its parent and its name.
   'lib/ui/disk_explorer.dart': {"'/'", r"'/$name'", r"'$_path/$name'"},

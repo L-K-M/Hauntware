@@ -24,6 +24,8 @@ const _monitorSetKey = 'klabautermann.monitorSet';
 const _containerColumnsKey = 'klabautermann.docker.containerColumns';
 const _safetyKey = 'klabautermann.safety';
 const _attentionKey = 'klabautermann.attention.acknowledged';
+const _shellSidebarWidthKey = 'klabautermann.shell.sidebarWidth';
+const _shellInspectorWidthKey = 'klabautermann.shell.inspectorWidth';
 
 final _uuidV4 = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -671,6 +673,95 @@ void main() {
         'klabautermann.fleet.density': true,
       });
       expect((await DeviceSettingsStore.open(file)).fleetDensity, isNull);
+    });
+
+    test('keeps the shell pane widths across reloads, beside keys it '
+        'does not know', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.later': {'nested': true},
+      });
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.shellSidebarWidth, isNull, reason: 'never resized');
+      expect(store.shellInspectorWidth, isNull);
+      await store.setShellSidebarWidth(320);
+      await store.setShellInspectorWidth(412.5);
+      final reopened = await DeviceSettingsStore.open(file);
+
+      expect(reopened.shellSidebarWidth, 320);
+      expect(reopened.shellInspectorWidth, 412.5);
+      expect(document(), {
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.later': {'nested': true},
+        _shellSidebarWidthKey: 320.0,
+        _shellInspectorWidthKey: 412.5,
+      });
+    });
+
+    test('a width a read-only session cannot save stays in memory and '
+        'throws', () async {
+      writeDocument({_versionKey: 2, _deviceIdKey: 'device-a'});
+      final store = await DeviceSettingsStore.open(file);
+      final before = file.readAsStringSync();
+
+      await expectLater(
+        store.setShellSidebarWidth(320),
+        throwsA(isA<DeviceSettingsReadOnlyException>()),
+      );
+
+      expect(store.shellSidebarWidth, 320);
+      expect(file.readAsStringSync(), before);
+    });
+
+    for (final (name, value) in [
+      ('a string', 'wide'),
+      ('a boolean', true),
+      ('a list', <Object?>[300]),
+      ('zero', 0),
+      ('a negative', -40),
+    ]) {
+      test('a shell pane width holding $name reads as none', () async {
+        writeDocument({
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          _shellSidebarWidthKey: value,
+          _shellInspectorWidthKey: value,
+        });
+
+        final store = await DeviceSettingsStore.open(file);
+
+        expect(store.issue, isNull);
+        expect(store.shellSidebarWidth, isNull);
+        expect(store.shellInspectorWidth, isNull);
+      });
+    }
+
+    test('a shell pane width JSON writes as infinity reads as none', () async {
+      file.writeAsStringSync(
+        '{"$_versionKey":1,"$_deviceIdKey":"device-a",'
+        '"$_shellSidebarWidthKey":1e999,'
+        '"$_shellInspectorWidthKey":1e999}',
+      );
+
+      final store = await DeviceSettingsStore.open(file);
+
+      expect(store.issue, isNull);
+      expect(store.shellSidebarWidth, isNull);
+      expect(store.shellInspectorWidth, isNull);
+    });
+
+    test('a finite shell pane width outside the layout\'s bounds still '
+        'reads, for the app to clamp', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _shellSidebarWidthKey: 99999,
+      });
+
+      expect((await DeviceSettingsStore.open(file)).shellSidebarWidth, 99999);
     });
 
     test('keeps each server\'s polling cap across reloads, lifts one on '

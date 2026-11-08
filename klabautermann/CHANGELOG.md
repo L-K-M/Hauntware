@@ -4,6 +4,11 @@
 
 - Activity shows the commands an action ran in the code font, as the
   preview before it runs does.
+- On the desktop, drag the edge of the fleet rail or the inspector, or
+  focus it and use the arrow keys, to make the pane wider, as in Séance
+  and Poltergeist. Each width is kept on this device across restarts,
+  and a pane never gets narrower than it was before it could be resized,
+  so a narrow window keeps its layout.
 - The desktop header shows the selected server and controls the sidebar
   and inspector. View-menu commands, keyboard shortcuts and remembered
   visibility work across desktop platforms.

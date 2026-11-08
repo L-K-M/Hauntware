@@ -394,6 +394,24 @@ abstract class AppLocalizations {
   /// **'Klabautermann could not save your window layout, so the change lasts only until it quits.'**
   String get windowPanesNotSaved;
 
+  /// Screen-reader label of the desktop shell's fleet rail edge, which a pointer drag or the arrow keys resize.
+  ///
+  /// In en, this message translates to:
+  /// **'Sidebar width. Use the left and right arrow keys to resize it.'**
+  String get sidebarResize;
+
+  /// Screen-reader label of the desktop shell's inspector edge, which a pointer drag or the arrow keys resize.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspector width. Use the left and right arrow keys to resize it.'**
+  String get inspectorResize;
+
+  /// A desktop side pane's width as screen readers announce it while its edge is resized.
+  ///
+  /// In en, this message translates to:
+  /// **'{width, plural, =1{1 pixel} other{{width} pixels}}'**
+  String paneWidthPixels(int width);
+
   /// The Edit menu's Undo command while nothing can be undone, and the delete notice's Undo action.
   ///
   /// In en, this message translates to:
