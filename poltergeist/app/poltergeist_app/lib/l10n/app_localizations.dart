@@ -8265,6 +8265,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t copy the rsync command — clipboard unavailable'**
   String get syncRsyncCopyFailed;
 
+  /// Toast when no rsync command can be generated for two remote folders. The clipboard stays intact.
+  ///
+  /// In en, this message translates to:
+  /// **'To copy an rsync command for two server folders, both must use the same SSH login and a POSIX shell. Use Poltergeist to sync this pair.'**
+  String get syncRsyncRemotePairUnavailable;
+
   /// Heavy-directory suggestion's accept verb (05 §9): adds the name to the pair's exclude rules.
   ///
   /// In en, this message translates to:

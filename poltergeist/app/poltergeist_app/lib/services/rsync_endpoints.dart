@@ -49,7 +49,36 @@ ResolvedSyncEndpoints? resolveRsyncEndpoints(
   final left = resolve(pair.left);
   final right = resolve(pair.right);
   if (left == null || right == null) return null;
-  return ResolvedSyncEndpoints(left: left, right: right);
+  return ResolvedSyncEndpoints(
+    left: left,
+    right: right,
+    sameRemoteConnection: _sameRemoteConnection(pair.left, pair.right),
+  );
+}
+
+/// A shared catalog entry or two embedded references to the same login
+/// and credentials identify one connection. Different catalog entries
+/// may route differently even when their host and login match.
+bool _sameRemoteConnection(SyncEndpoint left, SyncEndpoint right) {
+  if (left is! RemoteEndpoint || right is! RemoteEndpoint) return false;
+  final leftRef = left.server;
+  final rightRef = right.server;
+  final leftId = leftRef.serverConfigId;
+  if (leftId != null) return leftId == rightRef.serverConfigId;
+
+  final leftIdentity = leftRef.identity;
+  final rightIdentity = rightRef.identity;
+  if (leftIdentity == null || rightIdentity == null) return false;
+  PoolKey key(EmbeddedHostIdentity identity) => PoolKey.normalize(
+    host: identity.host,
+    port: identity.port,
+    username: identity.username,
+  );
+
+  return key(leftIdentity) == key(rightIdentity) &&
+      leftIdentity.authMethod == rightIdentity.authMethod &&
+      leftIdentity.secretRef == rightIdentity.secretRef &&
+      leftIdentity.identityFilePath == rightIdentity.identityFilePath;
 }
 
 ResolvedRemoteEndpoint? _remote(

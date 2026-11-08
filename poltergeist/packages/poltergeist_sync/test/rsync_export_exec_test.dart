@@ -27,6 +27,7 @@ const _fakeSsh = r'''#!/bin/sh
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -l|-p|-o) shift 2 ;;
+    --) shift; break ;;
     -*) shift ;;
     *) break ;;
   esac
@@ -82,21 +83,29 @@ void main() {
     _write('$root/stale.txt');
   }
 
-  /// Runs the preview line, checks it changed nothing and itemized the
-  /// plan, then runs the live line.
-  Future<void> paste(String block, String destination) async {
+  ({String preview, String live}) invocations(String block) {
     final lines = block.split('\n');
     const previewPrefix = "# Preview first (matches Poltergeist's plan):  ";
     final preview = lines
         .singleWhere((l) => l.startsWith(previewPrefix))
         .substring(previewPrefix.length);
     final live = lines.singleWhere((l) => l.isNotEmpty && !l.startsWith('#'));
+    return (preview: preview, live: live);
+  }
 
+  Future<ProcessResult> runShell(String command) => Process.run(
+    'sh',
+    ['-c', command],
+    workingDirectory: temp.path,
+    environment: environment,
+  );
+
+  /// Runs the preview line, checks it changed nothing and itemized the
+  /// plan, then runs the live line.
+  Future<void> paste(String block, String destination) async {
+    final (:preview, :live) = invocations(block);
     final before = _tree(destination);
-    final dryRun = await Process.run('sh', [
-      '-c',
-      preview,
-    ], environment: environment);
+    final dryRun = await runShell(preview);
     expect(dryRun.exitCode, 0, reason: '${dryRun.stderr}');
     expect(_tree(destination), before);
     final itemized = '${dryRun.stdout}';
@@ -105,7 +114,7 @@ void main() {
     expect(itemized, isNot(contains('Private Notes')));
     expect(itemized, isNot(contains('.poltergeist-trash')));
 
-    final run = await Process.run('sh', ['-c', live], environment: environment);
+    final run = await runShell(live);
     expect(run.exitCode, 0, reason: '${run.stderr}');
   }
 
@@ -120,6 +129,7 @@ void main() {
     });
     // Nothing ran or landed beside the root on the remote side.
     expect(_tree(home, recursive: false), {'$_hostileName/'});
+    expect(File('${temp.path}/pwned').existsSync(), isFalse);
   }
 
   test('a pasted Mirror push lands in the hostile remote root with the '
@@ -169,6 +179,83 @@ void main() {
       backupDir: '.poltergeist-trash/rsync-20260922-150407',
     );
   }, skip: skip);
+
+  String sharedLoginMirror(String source, String destination) =>
+      buildRsyncCommand(
+        ResolvedSyncEndpoints(
+          left: ResolvedRemoteEndpoint(
+            user: 'deploy',
+            host: remote,
+            port: 2222,
+            path: source,
+          ),
+          right: ResolvedRemoteEndpoint(
+            user: 'deploy',
+            host: remote,
+            port: 2222,
+            path: destination,
+          ),
+          sameRemoteConnection: true,
+        ),
+        rules,
+        engineSkipPaths: const [],
+        now: _now,
+      );
+
+  test('a pasted Mirror between folders on one SSH login runs on the '
+      'server and preserves quoting, excludes, and trash', () async {
+    final destination = "$localRoot/dst 'quoted'; \$(touch pwned) \\c\n";
+    seedSource(remoteRoot);
+    seedDestination(destination);
+    final block = sharedLoginMirror(remoteRoot, destination);
+    expect(block, contains(' | ssh '));
+    await paste(block, destination);
+    expectConverged(destination, backupDir: 'old files');
+  }, skip: skip);
+
+  Future<void> expectRefusesOverlap(
+    String source,
+    String destination,
+    String originalRoot,
+  ) async {
+    final before = _tree(originalRoot);
+    final (:preview, :live) = invocations(
+      sharedLoginMirror(source, destination),
+    );
+    for (final command in [preview, live]) {
+      final result = await runShell(command);
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr, contains('overlap'));
+      expect(_tree(originalRoot), before);
+    }
+  }
+
+  test('a same-login Mirror refuses a destination aliased to an ancestor '
+      'of the source', () async {
+    final source = '$remoteRoot/nested';
+    _write('$source/source-only.txt');
+    _write('$remoteRoot/stale.txt');
+    final alias = Link('$localRoot/destination')..createSync(remoteRoot);
+    await expectRefusesOverlap(source, alias.path, remoteRoot);
+  }, skip: skip);
+
+  const dataVolume = '/System/Volumes/Data';
+  const temporaryRoot = '/private/tmp';
+  final hasFirmlink =
+      Platform.isMacOS &&
+      Directory('$dataVolume$temporaryRoot').existsSync() &&
+      FileSystemEntity.identicalSync(
+        temporaryRoot,
+        '$dataVolume$temporaryRoot',
+      );
+  test('a same-login Mirror refuses overlap across a macOS firmlink', () async {
+    final root = await Directory(temporaryRoot).createTemp('rsync-overlap-');
+    addTearDown(() => root.delete(recursive: true));
+    final source = '${root.path}/nested';
+    _write('$source/source-only.txt');
+    _write('${root.path}/stale.txt');
+    await expectRefusesOverlap(source, '$dataVolume${root.path}', root.path);
+  }, skip: skip == false && !hasFirmlink ? 'needs a macOS Data volume' : skip);
 }
 
 bool _hasRsync3() {

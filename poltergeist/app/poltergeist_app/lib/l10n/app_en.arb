@@ -7442,6 +7442,10 @@
   "@syncRsyncCopyFailed": {
     "description": "Toast when the rsync export's clipboard write throws (a platform-channel failure surfaces as feedback, never an unhandled async error)."
   },
+  "syncRsyncRemotePairUnavailable": "To copy an rsync command for two server folders, both must use the same SSH login and a POSIX shell. Use Poltergeist to sync this pair.",
+  "@syncRsyncRemotePairUnavailable": {
+    "description": "Toast when no rsync command can be generated for two remote folders. The clipboard stays intact."
+  },
   "syncHeavySuggestionAccept": "Exclude",
   "@syncHeavySuggestionAccept": {
     "description": "Heavy-directory suggestion's accept verb (05 §9): adds the name to the pair's exclude rules."
