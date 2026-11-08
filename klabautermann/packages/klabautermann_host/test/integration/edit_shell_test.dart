@@ -314,6 +314,34 @@ void main() {
         },
       );
 
+      test('a crontab backup leaves another run\'s temps alone', () async {
+        // Two devices may back up crontabs into one directory at once
+        // (root's, in admin mode). Directories stand in for the other
+        // run's temps: a shared temp name would write into them or fail.
+        shim('crontab', r'printf "0 3 * * * a\n"');
+        final backups = '${dir.path}/state$kBackupsDirSuffix';
+        for (final name in ['.crontab.tmp', '.index.tmp']) {
+          Directory('$backups/$name').createSync(recursive: true);
+        }
+
+        final backup = await run(
+          EditCommands.crontabBackup(backups, indexName: 'crontab:deploy'),
+        );
+        expect(backup.exitCode, 0, reason: '${backup.stderr}');
+        expect(
+          File((backup.stdout as String).trim()).readAsStringSync(),
+          '0 3 * * * a\n',
+        );
+        expect(
+          File('$backups/$kEditBackupIndexName').readAsStringSync(),
+          endsWith('\tcrontab:deploy\n'),
+        );
+        expect(
+          Directory(backups).listSync().map((e) => e.path.split('/').last),
+          isNot(contains(matches(r'^\.(crontab|index)\.tmp\..'))),
+        );
+      });
+
       test('the user backup directory resolves under XDG_STATE_HOME', () async {
         final resolved = await run(EditCommands.userBackupsDir());
         expect(
