@@ -299,6 +299,9 @@ class _BackupEnrollmentFormState extends State<BackupEnrollmentForm> {
         TextField(
           key: const ValueKey('backup.enroll.password'),
           controller: _password,
+          autocorrect: false,
+          enableSuggestions: false,
+          enableIMEPersonalizedLearning: false,
           enabled: !_busy,
           obscureText: true,
           textInputAction: TextInputAction.next,
@@ -316,6 +319,9 @@ class _BackupEnrollmentFormState extends State<BackupEnrollmentForm> {
         TextField(
           key: const ValueKey('backup.enroll.passphrase'),
           controller: _passphrase,
+          autocorrect: false,
+          enableSuggestions: false,
+          enableIMEPersonalizedLearning: false,
           enabled: !_busy,
           obscureText: true,
           textInputAction: _sharedSelected ||
@@ -331,6 +337,9 @@ class _BackupEnrollmentFormState extends State<BackupEnrollmentForm> {
           TextField(
             key: const ValueKey('backup.enroll.confirm'),
             controller: _confirm,
+            autocorrect: false,
+            enableSuggestions: false,
+            enableIMEPersonalizedLearning: false,
             enabled: !_busy,
             obscureText: true,
             textInputAction: TextInputAction.done,

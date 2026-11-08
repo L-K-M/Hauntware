@@ -53,4 +53,23 @@ void main() {
     expect(find.text('Vault encryption passphrase'), findsOneWidget);
     expect(find.text('Confirm vault encryption passphrase'), findsOneWidget);
   });
+
+  testWidgets('secret fields keep the keyboard from learning them', (
+    tester,
+  ) async {
+    await pumpFields(tester, SyncEnrollmentMode.register);
+
+    for (final label in [
+      'Account password',
+      'Vault encryption passphrase',
+      'Confirm vault encryption passphrase',
+    ]) {
+      final secret = tester.widget<TextField>(
+        find.widgetWithText(TextField, label),
+      );
+      expect(secret.autocorrect, isFalse, reason: label);
+      expect(secret.enableSuggestions, isFalse, reason: label);
+      expect(secret.enableIMEPersonalizedLearning, isFalse, reason: label);
+    }
+  });
 }

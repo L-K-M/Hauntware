@@ -249,6 +249,9 @@ class _BackupSwitchDialogState extends State<BackupSwitchDialog> {
         TextField(
           key: const ValueKey('backup.switch.password'),
           controller: _password,
+          autocorrect: false,
+          enableSuggestions: false,
+          enableIMEPersonalizedLearning: false,
           obscureText: true,
           textInputAction: TextInputAction.next,
           decoration: InputDecoration(
@@ -259,6 +262,9 @@ class _BackupSwitchDialogState extends State<BackupSwitchDialog> {
         TextField(
           key: const ValueKey('backup.switch.passphrase'),
           controller: _passphrase,
+          autocorrect: false,
+          enableSuggestions: false,
+          enableIMEPersonalizedLearning: false,
           obscureText: true,
           textInputAction: TextInputAction.done,
           decoration: InputDecoration(

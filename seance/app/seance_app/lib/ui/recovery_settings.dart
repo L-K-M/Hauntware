@@ -316,6 +316,7 @@ class _RecoveryCodeDialogState extends State<_RecoveryCodeDialog> {
                   controller: _confirmation,
                   autocorrect: false,
                   enableSuggestions: false,
+                  enableIMEPersonalizedLearning: false,
                   style: _mono,
                   decoration: const InputDecoration(
                     labelText: 'Type the code\'s first four characters',
@@ -396,6 +397,7 @@ class _RestoreDialogState extends State<_RestoreDialog> {
               controller: _code,
               autocorrect: false,
               enableSuggestions: false,
+              enableIMEPersonalizedLearning: false,
               style: _mono,
               decoration: const InputDecoration(labelText: 'Recovery code'),
               onChanged: (_) => setState(() {}),

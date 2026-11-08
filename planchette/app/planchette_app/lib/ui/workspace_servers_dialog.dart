@@ -184,6 +184,7 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
                   obscureText: true,
                   autocorrect: false,
                   enableSuggestions: false,
+                  enableIMEPersonalizedLearning: false,
                   decoration: const InputDecoration(
                     labelText: 'Account password',
                   ),
@@ -196,6 +197,7 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
                   obscureText: true,
                   autocorrect: false,
                   enableSuggestions: false,
+                  enableIMEPersonalizedLearning: false,
                   decoration: const InputDecoration(
                     labelText: 'Encryption passphrase',
                   ),

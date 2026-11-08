@@ -959,6 +959,35 @@ void main() {
       }
     }
 
+    testWidgets('secret fields keep the keyboard from learning them', (
+      tester,
+    ) async {
+      void expectNoLearning(String label) {
+        final secret = tester.widget<TextField>(
+          find.descendant(of: field(label), matching: find.byType(TextField)),
+        );
+        expect(secret.autocorrect, isFalse, reason: label);
+        expect(secret.enableSuggestions, isFalse, reason: label);
+        expect(secret.enableIMEPersonalizedLearning, isFalse, reason: label);
+      }
+
+      await boot(tester);
+      await openEditor(tester);
+      await fillRequired(tester);
+      await chooseAuth(tester, 'Password');
+      expectNoLearning('Password');
+
+      await chooseAuth(tester, 'Private key');
+      expectNoLearning('Private key (PEM/OpenSSH)');
+      final passphrase = find.byKey(const ValueKey('key-passphrase-action'));
+      await scrollTo(tester, passphrase);
+      await tester.tap(passphrase);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Replace saved passphrase').last);
+      await tester.pumpAndSettle();
+      expectNoLearning('New key passphrase');
+    });
+
     testWidgets('saving a password offers a recovery code', (tester) async {
       await boot(tester);
       await openEditor(tester);

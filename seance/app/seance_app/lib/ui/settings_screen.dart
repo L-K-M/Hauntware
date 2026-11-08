@@ -387,6 +387,9 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
       TextField(
         controller: _apiKey,
+        autocorrect: false,
+        enableSuggestions: false,
+        enableIMEPersonalizedLearning: false,
         obscureText: true,
         decoration: const InputDecoration(
           // Not "never synced" any more, which is what this said before the
@@ -435,6 +438,9 @@ class _SettingsScreenState extends State<SettingsScreen>
       if (_zai)
         TextField(
           controller: _zaiApiKey,
+          autocorrect: false,
+          enableSuggestions: false,
+          enableIMEPersonalizedLearning: false,
           obscureText: true,
           decoration: const InputDecoration(
             // Same correction as the LLM key's above: this one rides the
@@ -1534,6 +1540,9 @@ class SyncEnrollmentFields extends StatelessWidget {
       TextField(
         key: const ValueKey('sync-account-password'),
         controller: passwordController,
+        autocorrect: false,
+        enableSuggestions: false,
+        enableIMEPersonalizedLearning: false,
         obscureText: true,
         autofillHints: [
           mode == SyncEnrollmentMode.register
@@ -1548,6 +1557,9 @@ class SyncEnrollmentFields extends StatelessWidget {
       TextField(
         key: const ValueKey('sync-encryption-passphrase'),
         controller: encryptionPassphraseController,
+        autocorrect: false,
+        enableSuggestions: false,
+        enableIMEPersonalizedLearning: false,
         obscureText: true,
         decoration: const InputDecoration(
           labelText: 'Vault encryption passphrase',
@@ -1558,6 +1570,9 @@ class SyncEnrollmentFields extends StatelessWidget {
         TextField(
           key: const ValueKey('sync-encryption-passphrase-confirmation'),
           controller: confirmationController,
+          autocorrect: false,
+          enableSuggestions: false,
+          enableIMEPersonalizedLearning: false,
           obscureText: true,
           decoration: const InputDecoration(
             labelText: 'Confirm vault encryption passphrase',

@@ -177,6 +177,14 @@ Future<void> _enterAll(
   }
 }
 
+/// Pasted and typed secrets stay out of the keyboard's learning (#625).
+void _expectNoLearning(WidgetTester tester, String key) {
+  final secret = tester.widget<TextField>(find.byKey(ValueKey(key)));
+  expect(secret.autocorrect, isFalse, reason: key);
+  expect(secret.enableSuggestions, isFalse, reason: key);
+  expect(secret.enableIMEPersonalizedLearning, isFalse, reason: key);
+}
+
 /// Tap a widget that may sit below the fold of the scroll view — the
 /// default 800×600 viewport leaves the form's tail untouchable.
 Future<void> _tapVisible(WidgetTester tester, Key key) async {
@@ -309,6 +317,20 @@ void main() {
         find.byKey(const ValueKey('backup.mode.separate')),
         findsOneWidget,
       );
+    });
+
+    testWidgets('secret fields keep the keyboard from learning them', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(720, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await _pumpSection(tester, h.service);
+      await tester.pumpAndSettle();
+      _expectNoLearning(tester, 'backup.enroll.password');
+      _expectNoLearning(tester, 'backup.enroll.passphrase');
+      _expectNoLearning(tester, 'backup.enroll.confirm');
     });
 
     testWidgets('a closed gate preselects Design B with the verbatim copy', (
@@ -674,6 +696,25 @@ void main() {
   });
 
   group('B→A switch dialog (04 §4.4)', () {
+    testWidgets('secret fields keep the keyboard from learning them', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(760, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final service = await h.enrolled();
+      await _pumpSection(tester, service, gate: _gateOffered);
+      await tester.pumpAndSettle();
+      await _tapVisible(tester, const ValueKey('backup.enrolled.switch'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('backup.switch.fleet')));
+      await tester.pumpAndSettle();
+
+      _expectNoLearning(tester, 'backup.switch.password');
+      _expectNoLearning(tester, 'backup.switch.passphrase');
+    });
+
     testWidgets('the confirm phase gates on the fleet checkbox and walks '
         'to done', (tester) async {
       tester.view.physicalSize = const Size(760, 1200);

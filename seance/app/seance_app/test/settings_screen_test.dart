@@ -509,6 +509,19 @@ void main() {
     }
   });
 
+  testWidgets('the API key keeps the keyboard from learning it', (
+    tester,
+  ) async {
+    await pumpScreen(tester, tab: SettingsTab.assistant);
+
+    final secret = tester.widget<TextField>(
+      field('API key (OS keystore; synced if assistant sync is on)'),
+    );
+    expect(secret.autocorrect, isFalse);
+    expect(secret.enableSuggestions, isFalse);
+    expect(secret.enableIMEPersonalizedLearning, isFalse);
+  });
+
   testWidgets('Save sends the form and clears a key once it is stored', (
     tester,
   ) async {
@@ -1412,6 +1425,26 @@ void main() {
     FilledButton done(WidgetTester tester) => tester.widget<FilledButton>(
       find.byKey(const ValueKey('recovery.code.done')),
     );
+
+    testWidgets('recovery codes keep the keyboard from learning them', (
+      tester,
+    ) async {
+      void expectNoLearning(String key) {
+        final secret = tester.widget<TextField>(find.byKey(ValueKey(key)));
+        expect(secret.autocorrect, isFalse, reason: key);
+        expect(secret.enableSuggestions, isFalse, reason: key);
+        expect(secret.enableIMEPersonalizedLearning, isFalse, reason: key);
+      }
+
+      await pumpScreen(tester, tab: SettingsTab.sync);
+      await tap(tester, 'recovery.setUp');
+      expectNoLearning('recovery.code.confirm');
+      Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+      await tester.pumpAndSettle();
+
+      await tap(tester, 'recovery.restore');
+      expectNoLearning('recovery.restore.code');
+    });
 
     testWidgets('the code shows once and is kept only after its first group', (
       tester,
