@@ -20,17 +20,18 @@ packages/
   planchette_core/        pure Dart syntax, search, metadata, guarded file I/O
   planchette_editor/      Flutter controller and surface; outside the workspace
   ghost_desktop/          Flutter desktop window lifecycle (restore, track,
-                          close) shared with Séance and Poltergeist; also
-                          outside the workspace
+                          close) shared with Séance, Poltergeist and
+                          Klabautermann; also outside the workspace
   ghost_ui/               shared leaf UI widgets/theme tokens; outside the
                           workspace, no app or host dependencies
   ghost_fonts/            the bundled monospace fonts (OFL; see README),
                           their shared picker, ligature policy and code
                           stack; outside the workspace, Flutter only
   ghost_marks/            server badges, accents and glyph tables shared by
-                          Séance and Poltergeist, over seance_protocol;
-                          outside the workspace; no platform picker: each
-                          app passes the mark picker its image reader
+                          Séance, Poltergeist and Klabautermann, over
+                          seance_protocol; outside the workspace; no
+                          platform picker: each app passes the mark picker
+                          its image reader
   ghost_marks_picker/     that reader over file_picker 11, for Séance and
                           Poltergeist; outside the workspace
   ghost_theme/            the editable theme palette, its stored/pasted JSON
@@ -39,12 +40,15 @@ packages/
                           seams, and the Appearance editor
                           (GhostAppearanceSection) with its strings bag and
                           model seam; outside the workspace
-  ghost_servers/          server surfaces shared by Séance and Poltergeist
+  ghost_servers/          server surfaces shared by all four apps
                           (today the server list's sectioning, the
                           status-dot vocabulary and the host-key,
                           keyboard-interactive and credential prompts),
                           over seance_protocol and ghost_ui; outside the
                           workspace
+  ghost_licenses/         the third-party notices Flutter's NOTICES cannot
+                          hold (an APK's Maven libraries), for every app's
+                          licenses page; outside the workspace
   ghost_keystore/         the OS-keystore vault master key and API-key
                           entries (MasterKeyManager, parameterized by each
                           product's entry names) over
