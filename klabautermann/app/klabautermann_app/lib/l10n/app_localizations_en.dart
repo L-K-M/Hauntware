@@ -290,6 +290,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get changeNewAlertRule => 'New alert rule';
 
   @override
+  String quitWithUnsavedEditsTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Quit and discard unsaved changes to $count files?',
+      one: 'Quit and discard unsaved changes?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String quitWithUnsavedEditsBody(String paths) {
+    return 'Your changes to $paths are not saved to the server and will be lost.';
+  }
+
+  @override
+  String get quitWithUnsavedEditsSeparator => ', ';
+
+  @override
+  String get quitWithUnsavedEditsQuit => 'Discard and quit';
+
+  @override
   String quitWhileRunningTitle(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

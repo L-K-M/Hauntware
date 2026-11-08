@@ -128,6 +128,21 @@ final class OperationsController extends ChangeNotifier {
   List<DetachedOperation> detachedOf(String serverId) =>
       _detached[serverId]?.operations ?? const [];
 
+  /// Remote files whose open editor holds text not saved to the server,
+  /// by editor. Only the quit guard reads it, on demand, so marking does
+  /// not notify listeners.
+  final Map<Object, String> _unsavedEdits = {};
+
+  /// The remote paths of open editors with unsaved changes.
+  List<String> get unsavedEdits => List.unmodifiable(_unsavedEdits.values);
+
+  /// Records that [editor]'s text for [path] differs from the server's.
+  void markUnsaved(Object editor, String path) => _unsavedEdits[editor] = path;
+
+  /// Records that [editor] has nothing left to lose: saved, discarded or
+  /// closed.
+  void markSaved(Object editor) => _unsavedEdits.remove(editor);
+
   /// Detached operations still running across every server the engine
   /// listed — [DetachedOperationState.running], and [unknown], whose
   /// record says running though its wrapper could not be checked. The

@@ -508,6 +508,30 @@ abstract class AppLocalizations {
   /// **'New alert rule'**
   String get changeNewAlertRule;
 
+  /// The quit confirmation's title while remote file editors hold changes not saved to their servers; count is how many files.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Quit and discard unsaved changes?} other{Quit and discard unsaved changes to {count} files?}}'**
+  String quitWithUnsavedEditsTitle(int count);
+
+  /// The unsaved-changes quit confirmation's body; paths lists the edited remote files.
+  ///
+  /// In en, this message translates to:
+  /// **'Your changes to {paths} are not saved to the server and will be lost.'**
+  String quitWithUnsavedEditsBody(String paths);
+
+  /// Joins the edited remote file paths in the unsaved-changes quit confirmation's body.
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get quitWithUnsavedEditsSeparator;
+
+  /// The unsaved-changes quit confirmation's button that quits and loses the edits.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard and quit'**
+  String get quitWithUnsavedEditsQuit;
+
   /// The quit confirmation's title while detached operations still run; count is how many.
   ///
   /// In en, this message translates to:

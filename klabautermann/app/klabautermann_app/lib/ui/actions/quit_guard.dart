@@ -60,41 +60,72 @@ final class AppQuitGuard {
 }
 
 /// The main window's close gate (the intercepting [GhostClosePolicy]):
-/// asks before quitting while detached operations still run. They keep
-/// running on their servers either way — a quit only defers their
-/// results to the next connect — so with none running this returns true
-/// and the window closes without asking.
+/// asks before quitting would lose edits an open remote editor has not
+/// saved, then while detached operations still run. Those keep running
+/// on their servers either way — a quit only defers their results to the
+/// next connect. With neither, this returns true and the window closes
+/// without asking.
 ///
 /// [contextOf] finds the app's navigator; a close it cannot reach, which
 /// happens only before the first frame, closes without asking because
-/// nothing can run that early.
+/// nothing can be edited or run that early.
 Future<bool> confirmQuitWhileRunning(
   OperationsController operations,
   BuildContext? Function() contextOf,
 ) async {
+  final unsaved = operations.unsavedEdits;
   final running = operations.runningDetachedCount;
-  if (running == 0) return true;
+  if (unsaved.isEmpty && running == 0) return true;
   final context = contextOf();
   if (context == null) return true;
   final l10n = AppLocalizations.of(context);
   final materialL10n = MaterialLocalizations.of(context);
-  final quit = await showDialog<bool>(
+  if (unsaved.isNotEmpty) {
+    final discard = await _confirmQuit(
+      context,
+      title: l10n.quitWithUnsavedEditsTitle(unsaved.length),
+      body: l10n.quitWithUnsavedEditsBody(
+        unsaved.join(l10n.quitWithUnsavedEditsSeparator),
+      ),
+      quit: l10n.quitWithUnsavedEditsQuit,
+      cancel: materialL10n.cancelButtonLabel,
+    );
+    if (!discard || running == 0 || !context.mounted) return discard;
+  }
+
+  return _confirmQuit(
+    context,
+    title: l10n.quitWhileRunningTitle(running),
+    body: l10n.quitWhileRunningBody,
+    quit: l10n.quitWhileRunningQuit,
+    cancel: materialL10n.cancelButtonLabel,
+  );
+}
+
+Future<bool> _confirmQuit(
+  BuildContext context, {
+  required String title,
+  required String body,
+  required String quit,
+  required String cancel,
+}) async {
+  final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: Text(l10n.quitWhileRunningTitle(running)),
-      content: Text(l10n.quitWhileRunningBody),
+      title: Text(title),
+      content: Text(body),
       actions: [
         TextButton(
           autofocus: true,
           onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: Text(materialL10n.cancelButtonLabel),
+          child: Text(cancel),
         ),
         FilledButton(
           onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: Text(l10n.quitWhileRunningQuit),
+          child: Text(quit),
         ),
       ],
     ),
   );
-  return quit ?? false;
+  return confirmed ?? false;
 }

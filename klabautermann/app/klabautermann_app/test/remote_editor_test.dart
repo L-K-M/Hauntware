@@ -11,6 +11,7 @@ import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/actions/action_preview.dart';
+import 'package:klabautermann_app/ui/actions/quit_guard.dart';
 import 'package:klabautermann_app/ui/docker/stack_file_view.dart';
 import 'package:klabautermann_app/ui/edit/remote_editor.dart';
 import 'package:klabautermann_app/ui/server_safety.dart' show SafetyScope;
@@ -47,9 +48,10 @@ ActionPreview _preview(EditFile intent) => ActionPreview(
 );
 
 final class _Editor {
-  _Editor(this.engine);
+  _Editor(this.engine, this.operations);
 
   final FakeEngineClient engine;
+  final OperationsController operations;
 
   List<ReadEditable> get reads => engine.sentOfType<ReadEditable>().cast();
 
@@ -159,7 +161,7 @@ Future<_Editor> _pump(
     ),
   );
   await tester.pumpAndSettle();
-  return _Editor(engine);
+  return _Editor(engine, operations);
 }
 
 void main() {
@@ -413,6 +415,68 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byType(PlanchetteEditor), findsNothing);
+  });
+
+  testWidgets('quitting with unsaved changes asks first, and a saved or '
+      'closed editor no longer does', (tester) async {
+    final editor = await _pump(
+      tester,
+      home: Builder(
+        builder: (context) => TextButton(
+          onPressed: () =>
+              openRemoteEditor(context, serverId: _serverId, target: _target),
+          child: const Text('open'),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await editor.answer(tester, _content(_original));
+    final navigator = tester.element(find.byType(PlanchetteEditor));
+    Future<bool> quit() =>
+        confirmQuitWhileRunning(editor.operations, () => navigator);
+
+    expect(await quit(), isTrue);
+    await editor.type(tester, '$_original# mine\n');
+    expect(editor.operations.unsavedEdits, [_path]);
+
+    final vetoed = quit();
+    await tester.pumpAndSettle();
+    expect(find.text('Quit and discard unsaved changes?'), findsOneWidget);
+    expect(
+      find.text(
+        'Your changes to $_path are not saved to the server and will be '
+        'lost.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(await vetoed, isFalse);
+
+    final accepted = quit();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Discard and quit'));
+    await tester.pumpAndSettle();
+    expect(await accepted, isTrue);
+
+    // Back to the server's text leaves nothing to lose.
+    await editor.type(tester, _original);
+    expect(editor.operations.unsavedEdits, isEmpty);
+
+    // Neither does an editor that closed after discarding.
+    await editor.type(tester, '$_original# mine\n');
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Discard changes'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(PlanchetteEditor), findsNothing);
+    expect(editor.operations.unsavedEdits, isEmpty);
   });
 
   testWidgets('a read for the new base that fails keeps the user\'s text', (

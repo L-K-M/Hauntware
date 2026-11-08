@@ -427,6 +427,30 @@ void main() {
       expect(find.byType(AlertDialog), findsNothing);
     });
 
+    testWidgets('unsaved edits are asked about before running operations', (
+      tester,
+    ) async {
+      final harness = await pumpApp(tester, operations: true);
+      harness.engine.emit(OperationsChanged('srv-1', operations: [running()]));
+      await tester.pumpAndSettle();
+      final editor = Object();
+      harness.operations!.markUnsaved(editor, '/etc/nginx/nginx.conf');
+      addTearDown(() => harness.operations!.markSaved(editor));
+
+      final quit = confirmQuitWhileRunning(
+        harness.operations!,
+        () => appNavigatorKey.currentContext,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Quit and discard unsaved changes?'), findsOneWidget);
+      await tester.tap(find.text('Discard and quit'));
+      await tester.pumpAndSettle();
+      expect(find.text('Quit while 1 operation is running?'), findsOneWidget);
+      await tester.tap(find.text('Quit'));
+      await tester.pumpAndSettle();
+      expect(await quit, isTrue);
+    });
+
     testWidgets('with detached operations running, it asks — Cancel holds '
         'the window, Quit lets it go', (tester) async {
       final harness = await pumpApp(tester, operations: true);

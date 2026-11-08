@@ -16,6 +16,8 @@
   named in the app's own words.
 - The file editor has Find and Text Tools buttons, as Séance's and
   Poltergeist's editors do, so a phone or tablet can reach them too.
+- Closing the window or quitting while a file editor holds unsaved
+  changes asks first and names the files, as leaving the editor does.
 - The disk space explorer can be driven from the keyboard: arrows,
   Home, End, Page Up and Page Down, Return to open a folder and
   Command+Up (Alt+Up or Backspace elsewhere) to go back up, never above
