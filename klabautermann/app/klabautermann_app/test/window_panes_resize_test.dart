@@ -330,6 +330,26 @@ void main() {
   });
 
   group('WindowPanesController widths', () {
+    test('ignore widths that cannot be a pane\'s', () async {
+      final saved = <double>[];
+      final panes = WindowPanesController(
+        sidebarWidth: double.nan,
+        inspectorWidth: -4,
+        saveSidebarWidth: (width) async => saved.add(width),
+      );
+      expect(panes.sidebarWidth, WindowPanesController.defaultSidebarWidth);
+      expect(
+        panes.inspectorWidth,
+        WindowPanesController.defaultInspectorWidth,
+      );
+
+      for (final width in [double.nan, double.infinity, 0.0, -10.0]) {
+        await panes.setWidth(WindowPane.sidebar, width);
+      }
+      expect(saved, isEmpty);
+      expect(panes.sidebarWidth, WindowPanesController.defaultSidebarWidth);
+    });
+
     test('default to the layout\'s 260 and 300 until resized', () {
       final panes = WindowPanesController();
       addTearDown(panes.dispose);

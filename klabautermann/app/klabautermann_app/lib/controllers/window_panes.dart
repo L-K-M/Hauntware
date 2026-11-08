@@ -40,10 +40,18 @@ final class WindowPanesController extends ChangeNotifier {
        _inspector = inspector,
        _sidebarSaved = sidebar,
        _inspectorSaved = inspector,
-       _sidebarWidth = sidebarWidth ?? defaultSidebarWidth,
-       _inspectorWidth = inspectorWidth ?? defaultInspectorWidth,
-       _sidebarWidthSaved = sidebarWidth ?? defaultSidebarWidth,
-       _inspectorWidthSaved = inspectorWidth ?? defaultInspectorWidth;
+       _sidebarWidth = _usable(sidebarWidth) ?? defaultSidebarWidth,
+       _inspectorWidth = _usable(inspectorWidth) ?? defaultInspectorWidth,
+       _sidebarWidthSaved = _usable(sidebarWidth) ?? defaultSidebarWidth,
+       _inspectorWidthSaved =
+           _usable(inspectorWidth) ?? defaultInspectorWidth;
+
+  /// [width] when it can be a pane's width (finite and positive), else
+  /// null. The store already reads damaged values as none; this keeps the
+  /// controller safe for any caller, and the shell clamps what it lays out
+  /// to the panes' bounds and the window.
+  static double? _usable(double? width) =>
+      width != null && width.isFinite && width > 0 ? width : null;
 
   /// The fleet rail's width until the user resizes it, and the
   /// inspector's alongside; a launch without a stored width — or with
@@ -129,6 +137,7 @@ final class WindowPanesController extends ChangeNotifier {
   /// drag writes once rather than on every frame. Throws
   /// [WindowPanesNotSavedException] when it applied but was not saved.
   Future<void> setWidth(WindowPane pane, double width) async {
+    if (_usable(width) == null) return;
     final (current, saved, apply, save) = switch (pane) {
       WindowPane.sidebar => (
         _sidebarWidth,
