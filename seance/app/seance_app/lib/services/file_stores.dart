@@ -18,6 +18,7 @@ class FileConfigStore implements ConfigStore, SyncCollectionHealth {
   final Map<String, ServerConfig> _cache = {};
   bool _loaded = false;
   bool _syncCollectionFailed = false;
+  Future<void> _operationTail = Future<void>.value();
 
   FileConfigStore(this.file);
 
@@ -42,49 +43,64 @@ class FileConfigStore implements ConfigStore, SyncCollectionHealth {
     _loaded = true;
   }
 
-  Future<void> _flush() async {
+  Future<void> _flush(Map<String, ServerConfig> snapshot) async {
     await writeStringAtomically(
-        file, jsonEncode(_cache.values.map((c) => c.toJson()).toList()));
+        file, jsonEncode(snapshot.values.map((c) => c.toJson()).toList()));
   }
+
+  Future<T> _serialize<T>(Future<T> Function() operation) {
+    final result = _operationTail.then((_) async {
+      await _load();
+      return operation();
+    });
+    _operationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
+  }
+
+  Future<void> _mutate(void Function(Map<String, ServerConfig>) update) =>
+      _serialize(() async {
+        // A failed config write must not publish a new credential reference
+        // or let the rejected change ride a later, unrelated successful save.
+        // Serialize reads too: callers observe only completed disk commits.
+        final candidate = Map<String, ServerConfig>.of(_cache);
+        update(candidate);
+        await _flush(candidate);
+        _cache
+          ..clear()
+          ..addAll(candidate);
+      });
 
   @override
   bool get syncCollectionFailed => _syncCollectionFailed;
 
   @override
-  Future<void> markSyncCollectionRecovered() async {
-    await _load();
-    await _flush();
-    await clearSyncCollectionRecovery(file);
-    _syncCollectionFailed = false;
-  }
+  Future<void> markSyncCollectionRecovered() => _serialize(() async {
+        await _flush(_cache);
+        await clearSyncCollectionRecovery(file);
+        _syncCollectionFailed = false;
+      });
 
   @override
-  Future<List<ServerConfig>> listServers() async {
-    await _load();
-    final list = _cache.values.toList()
-      ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
-    return list;
-  }
+  Future<List<ServerConfig>> listServers() => _serialize(() async {
+        final list = _cache.values.toList()
+          ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+        return list;
+      });
 
   @override
-  Future<ServerConfig?> getServer(String id) async {
-    await _load();
-    return _cache[id];
-  }
+  Future<ServerConfig?> getServer(String id) =>
+      _serialize(() async => _cache[id]);
 
   @override
-  Future<void> putServer(ServerConfig config) async {
-    await _load();
-    _cache[config.id] = config;
-    await _flush();
-  }
+  Future<void> putServer(ServerConfig config) =>
+      _mutate((candidate) => candidate[config.id] = config);
 
   @override
-  Future<void> deleteServer(String id) async {
-    await _load();
-    _cache.remove(id);
-    await _flush();
-  }
+  Future<void> deleteServer(String id) =>
+      _mutate((candidate) => candidate.remove(id));
 }
 
 /// Simple JSON-file [SnippetStore]. Non-secret; synced like server configs.
