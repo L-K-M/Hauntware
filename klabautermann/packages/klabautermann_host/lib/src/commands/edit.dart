@@ -233,7 +233,9 @@ if [ "${c%% *}" != "$h" ]; then exit 101; fi
 exec crontab "$@" -''';
 
 /// Saves `crontab -l`'s output as a backup, as [_kBackupScript] saves a
-/// file, under the name `crontab:<user>` in the index.
+/// file, under the name `crontab:<user>` in the index. Its temps carry
+/// the shell's PID, as the file backup's index temp does, so two devices
+/// backing up into one directory never write each other's.
 const String _kCrontabBackupScript = r'''
 umask 077
 d=$1
@@ -241,13 +243,15 @@ n=$2
 shift 2
 mkdir -p -- "$d" && chmod 0700 -- "$d" || exit
 t=$(date +%s)
-crontab -l "$@" > "$d/.crontab.tmp" 2>/dev/null || : > "$d/.crontab.tmp"
-h=$(sha256sum -- "$d/.crontab.tmp") || exit
+c=$d/.crontab.tmp.$$
+crontab -l "$@" > "$c" 2>/dev/null || : > "$c" || exit
+h=$(sha256sum -- "$c") || { s=$?; rm -f -- "$c"; exit "$s"; }
 h=${h%% *}
 b=$d/$h-$t
-mv -f -- "$d/.crontab.tmp" "$b" || { s=$?; rm -f -- "$d/.crontab.tmp"; exit "$s"; }
-{ cat -- "$d/index" 2>/dev/null; printf '%s\t%s\t%s\n' "$t" "$h" "$n"; } > "$d/.index.tmp" &&
-  mv -f -- "$d/.index.tmp" "$d/index" || exit
+mv -f -- "$c" "$b" || { s=$?; rm -f -- "$c"; exit "$s"; }
+x=$d/.index.tmp.$$
+{ cat -- "$d/index" 2>/dev/null; printf '%s\t%s\t%s\n' "$t" "$h" "$n"; } > "$x" &&
+  mv -f -- "$x" "$d/index" || { s=$?; rm -f -- "$x"; exit "$s"; }
 printf '%s\n' "$b"''';
 
 /// Sets `c` to the SHA-256 of `$1`, or of nothing when `$1` does not
