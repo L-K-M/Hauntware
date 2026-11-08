@@ -258,10 +258,13 @@ Additional rules:
   on the clipboard rather than latent — 00 D6's recorded interim
   ruling, which blocked "Copy as rsync command" from shipping in any
   milestone until it landed here.
-- When both endpoints are remote, rsync refuses to run ("The source and
-  destination cannot both be remote"); the exporter emits a comment saying
-  the command is not directly runnable (Poltergeist routes such pairs via
-  the local machine) instead of a command that fails.
+- Two remote folders can be exported when they share a configured SSH
+  connection and have absolute POSIX paths. The export starts `sh` over
+  SSH and sends it the server-local rsync invocation. The server needs
+  `sh`, rsync, and access to both existing directories through that
+  login. The command checks their physical paths for overlap. For other
+  remote pairs the app explains the limitation and leaves the clipboard
+  intact. Poltergeist can still sync the folders via the local machine.
 - When the plan carries manual per-item overrides, prepend
   `# note: N manual per-item overrides are not reflected — this command
   applies the ruleset only and may copy or delete items you excluded in
