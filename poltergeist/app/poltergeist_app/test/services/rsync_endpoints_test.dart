@@ -30,6 +30,33 @@ ServerConfig _config(
   updatedAt: 0,
 );
 
+SyncPair _remotePair(BookmarkServerRef left, BookmarkServerRef right) =>
+    SyncPair(
+      id: 'remote-pair',
+      name: 'Remote pair',
+      left: RemoteEndpoint(server: left, path: '/left'),
+      right: RemoteEndpoint(server: right, path: '/right'),
+      rules: const SyncRuleSet(),
+    );
+
+BookmarkServerRef _embedded({
+  String host = 'example.com',
+  int port = 2222,
+  String user = 'deploy',
+  AuthMethod authMethod = AuthMethod.privateKey,
+  String secretRef = 'saved-key',
+  String? identityFilePath,
+}) => BookmarkServerRef(
+  identity: EmbeddedHostIdentity(
+    host: host,
+    port: port,
+    username: user,
+    authMethod: authMethod,
+    secretRef: secretRef,
+    identityFilePath: identityFilePath,
+  ),
+);
+
 void main() {
   test('local/local resolves both sides with the host OS tag', () {
     final pair = testSyncPair();
@@ -38,6 +65,7 @@ void main() {
     expect(resolved!.left, isA<ResolvedLocalEndpoint>());
     expect(resolved.left.path, '/left');
     expect(resolved.left.os, SyncEndpointOs.posix);
+    expect(resolved.sameRemoteConnection, isFalse);
   });
 
   test('a Windows host tags the local side windows', () {
@@ -97,6 +125,43 @@ void main() {
     final remote = resolved!.right as ResolvedRemoteEndpoint;
     expect(remote.host, 'srv.example.com');
     expect(remote.connectionShape, contains(SyncConnectionFlag.jumpHost));
+  });
+
+  test('shared catalog references must name the same connection', () {
+    const ref = BookmarkServerRef(serverConfigId: 'srv-1');
+    const otherRef = BookmarkServerRef(serverConfigId: 'srv-2');
+    ServerConfig lookup(String id) => _config(id, jumpHostId: 'srv-bastion');
+
+    final same = resolveRsyncEndpoints(
+      _remotePair(ref, ref),
+      serverConfig: lookup,
+    );
+    final distinct = resolveRsyncEndpoints(
+      _remotePair(ref, otherRef),
+      serverConfig: lookup,
+    );
+    expect(same!.sameRemoteConnection, isTrue);
+    expect(distinct!.sameRemoteConnection, isFalse);
+  });
+
+  test('embedded identities must name the same login and credentials', () {
+    final ref = _embedded();
+    final same = resolveRsyncEndpoints(
+      _remotePair(ref, _embedded(host: 'Example.com')),
+    );
+    expect(same!.sameRemoteConnection, isTrue);
+
+    for (final otherRef in [
+      _embedded(host: 'alias.example.com'),
+      _embedded(port: 22),
+      _embedded(user: 'Deploy'),
+      _embedded(authMethod: AuthMethod.password),
+      _embedded(secretRef: 'other-key'),
+      _embedded(identityFilePath: '~/.ssh/other-key'),
+    ]) {
+      final distinct = resolveRsyncEndpoints(_remotePair(ref, otherRef));
+      expect(distinct!.sameRemoteConnection, isFalse);
+    }
   });
 
   test('an unknown serverConfigId returns null, not a wrong host', () {

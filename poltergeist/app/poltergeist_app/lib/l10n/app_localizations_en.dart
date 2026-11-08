@@ -5977,6 +5977,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Couldn\'t copy the rsync command — clipboard unavailable';
 
   @override
+  String get syncRsyncRemotePairUnavailable =>
+      'To copy an rsync command for two server folders, both must use the same SSH login and a POSIX shell. Use Poltergeist to sync this pair.';
+
+  @override
   String get syncHeavySuggestionAccept => 'Exclude';
 
   @override

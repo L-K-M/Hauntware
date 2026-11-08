@@ -51,8 +51,16 @@ Future<void> copyPairRsyncCommand(
 }
 
 Future<void> _copyExport(BuildContext context, SyncRsyncExport export) async {
+  final text = export.text;
+  if (text == null) {
+    showTopToastIn(
+      context,
+      message: AppLocalizations.of(context).syncRsyncRemotePairUnavailable,
+    );
+    return;
+  }
   try {
-    await Clipboard.setData(ClipboardData(text: export.text));
+    await Clipboard.setData(ClipboardData(text: text));
   } catch (_) {
     // Callers unawait this future — an unguarded platform-channel throw
     // would surface as an unhandled async error; the user gets a toast

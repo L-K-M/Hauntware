@@ -1674,6 +1674,48 @@ void main() {
       await tester.pump();
     }
 
+    Future<void> copyServerPair(
+      WidgetTester tester, {
+      required String rightHost,
+      SyncRuleSet rules = const SyncRuleSet(),
+    }) async {
+      RemoteEndpoint endpoint(String host, String path) => RemoteEndpoint(
+        server: BookmarkServerRef(
+          identity: EmbeddedHostIdentity(
+            host: host,
+            port: 2222,
+            username: 'deploy',
+            authMethod: AuthMethod.agent,
+          ),
+        ),
+        path: path,
+      );
+
+      final scratch = Directory.systemTemp.createTempSync('pg-view-');
+      addTearDown(() => scratch.deleteSync(recursive: true));
+      final pair = SyncPair(
+        id: 'pair-remote',
+        name: 'Remote',
+        left: endpoint('example.com', '/srv/source'),
+        right: endpoint(rightHost, '/srv/target'),
+        rules: rules,
+      );
+      final controller = fakeController(
+        scratch,
+        pair: pair,
+        plan: testPlan(pair, [
+          testItem(
+            'a.txt',
+            left: testFile(),
+            suggested: SyncActionType.copyLeftToRight,
+            reason: SyncReason.onlyOnLeft,
+          ),
+        ]),
+      );
+      addTearDown(controller.dispose);
+      await pumpAndCopy(tester, controller);
+    }
+
     testWidgets('copies the rendered command and toasts', (tester) async {
       final scratch = Directory.systemTemp.createTempSync('pg-view-');
       addTearDown(() => scratch.deleteSync(recursive: true));
@@ -1814,6 +1856,50 @@ void main() {
       await pumpAndCopy(tester, controller);
       expect(clipboardText, contains("'deploy@example.com:/srv/site'"));
       expect(clipboardText, contains('ssh -p 2222'));
+    });
+
+    testWidgets('two folders on one SSH login copy a server-local rsync', (
+      tester,
+    ) async {
+      await copyServerPair(tester, rightHost: 'example.com');
+
+      expect(clipboardText, contains("\nprintf '%b\\n' "));
+      expect(
+        clipboardText,
+        contains("| ssh -T -p 2222 -l 'deploy' -- 'example.com' sh -s"),
+      );
+      expect(clipboardText, contains('rsync -n -i '));
+      expect(clipboardText, contains('exec rsync '));
+      expect(clipboardText, contains('/srv/source'));
+      expect(clipboardText, contains('/srv/target'));
+      expect(find.text('Copied rsync command'), findsOneWidget);
+    });
+
+    testWidgets('different SSH servers explain why there is no command', (
+      tester,
+    ) async {
+      await copyServerPair(
+        tester,
+        rightHost: 'other.example.com',
+        rules: const SyncRuleSet(
+          deletions: DeletionPolicy.permanent,
+          backups: BackupPolicy.none,
+        ),
+      );
+
+      expect(clipboardText, isNull);
+      expect(
+        find.text(
+          'To copy an rsync command for two server folders, both must use '
+          'the same SSH login and a POSIX shell. Use Poltergeist to sync '
+          'this pair.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Copied rsync command — deletions are permanent when pasted'),
+        findsNothing,
+      );
     });
   });
 

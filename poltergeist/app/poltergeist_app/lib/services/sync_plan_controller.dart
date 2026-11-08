@@ -329,8 +329,9 @@ Future<SyncPairState?> loadStoredSyncPairState(
 }
 
 /// A rendered rsync export (05 §2.1) and whether it carries the
-/// paste-time permanent-deletion warning.
-typedef SyncRsyncExport = ({String text, bool permanentDeletions});
+/// paste-time permanent-deletion warning. A null text means the resolved
+/// remote pair cannot be exported.
+typedef SyncRsyncExport = ({String? text, bool permanentDeletions});
 
 /// §2.1's body for [pair], shared by the plan view (which passes its
 /// settled [plan]: manual overrides and scan-derived skip paths) and
@@ -348,6 +349,9 @@ SyncRsyncExport? syncRsyncExport(
 }) {
   final endpoints = resolver(pair);
   if (endpoints == null) return null;
+  if (!endpoints.supportsRsyncCommand) {
+    return (text: null, permanentDeletions: false);
+  }
   final downgraded =
       mtimesUntrusted && pair.rules.comparison == ComparisonMode.sizeAndMtime;
   final rules = downgraded
@@ -1447,8 +1451,8 @@ final class SyncPlanController extends ChangeNotifier {
       (_pairState.mtimeUnreliableLeft || _pairState.mtimeUnreliableRight);
 
   /// The `sync.copyRsyncCommand` enablement probe (05 §2.1): true when
-  /// [rsyncExport] would produce text — a settled plan exists and every
-  /// remote side resolves. Cheap: no string is built.
+  /// [rsyncExport] can check a settled plan and all remote sides resolve.
+  /// For a resolved pair that cannot be exported, the command explains why.
   bool get canExportRsync =>
       _exportablePlan != null && _rsyncEndpoints(_pair) != null;
 

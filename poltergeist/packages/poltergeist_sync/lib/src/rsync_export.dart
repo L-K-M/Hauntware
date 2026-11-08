@@ -100,11 +100,56 @@ final class ResolvedRemoteEndpoint extends ResolvedSyncEndpoint {
 
 /// Both resolved sides of a pair, in the pair's left/right order.
 final class ResolvedSyncEndpoints {
-  const ResolvedSyncEndpoints({required this.left, required this.right});
+  const ResolvedSyncEndpoints({
+    required this.left,
+    required this.right,
+    this.sameRemoteConnection = false,
+  });
 
   final ResolvedSyncEndpoint left;
   final ResolvedSyncEndpoint right;
+
+  /// The resolver has matched both folders to the same SSH login and route.
+  final bool sameRemoteConnection;
+
+  /// Whether the export contains a command rather than only notes.
+  bool get supportsRsyncCommand => !_bothRemote || _sharedSshTarget != null;
+
+  bool get _bothRemote =>
+      left is ResolvedRemoteEndpoint && right is ResolvedRemoteEndpoint;
+
+  ResolvedRemoteEndpoint? get _sharedSshTarget {
+    if (!sameRemoteConnection) return null;
+    final left = this.left;
+    final right = this.right;
+    if (left is! ResolvedRemoteEndpoint || right is! ResolvedRemoteEndpoint) {
+      return null;
+    }
+    // The paths will be interpreted by server-local rsync, not SFTP.
+    // Reject relative paths and SFTP's Windows drive and UNC spellings.
+    if (!_isPosixRoot(left) || !_isPosixRoot(right)) return null;
+    if (left.host.toLowerCase() != right.host.toLowerCase() ||
+        left.user != right.user ||
+        left.port != right.port) {
+      return null;
+    }
+    // Give OpenSSH a bare host, never a URI, user@host or option.
+    if (!_sshHost.hasMatch(left.host) || !_sshUser.hasMatch(left.user)) {
+      return null;
+    }
+    return left;
+  }
 }
+
+final _windowsSftpRoot = RegExp(r'^/(?:[A-Za-z]:(?:[/\\]|$)|/)');
+final _sshHost = RegExp(r'^[A-Za-z0-9_.:][A-Za-z0-9_.:%-]*$');
+final _sshUser = RegExp(r'^[A-Za-z0-9_.-]+$');
+
+bool _isPosixRoot(ResolvedRemoteEndpoint endpoint) =>
+    endpoint.os != SyncEndpointOs.windows &&
+    endpoint.path.startsWith('/') &&
+    !_windowsSftpRoot.hasMatch(endpoint.path) &&
+    !endpoint.path.contains('\u0000');
 
 /// The paths the plan refused to touch for engine reasons (05 §2.1):
 /// scan-error subtree roots (§6 rule 8's mirrored exclusions) and
@@ -142,7 +187,8 @@ List<String> rsyncEngineSkipPaths(SyncPlan plan) {
 /// (05 §2.1): every `# note:` first — auth caveat, override count,
 /// approximation notes in the order §2.1's rules introduce them — then
 /// the commented dry-run line, then the real command (two dry-run/live
-/// pairs for Additive; no command at all when both sides are remote).
+/// pairs for Additive). For a shared SSH login the command runs on the
+/// server, where both folders are local. Other remote pairs get notes only.
 ///
 /// [rules] is the EFFECTIVE ruleset — the caller resolves §4's
 /// `mtimeUnreliable` fallback to `sizeOnly` before calling, exactly as
@@ -164,7 +210,19 @@ String buildRsyncCommand(
     endpoints.left,
     endpoints.right,
   ].whereType<ResolvedRemoteEndpoint>().toList();
-  final bothRemote = remoteSides.length == 2;
+  final sharedTarget = endpoints._sharedSshTarget;
+  final fileEndpoints = sharedTarget == null
+      ? endpoints
+      : ResolvedSyncEndpoints(
+          left: ResolvedLocalEndpoint(
+            path: endpoints.left.path,
+            os: endpoints.left.os,
+          ),
+          right: ResolvedLocalEndpoint(
+            path: endpoints.right.path,
+            os: endpoints.right.os,
+          ),
+        );
   final mirror =
       rules.direction != SyncDirection.bidirectional &&
       rules.deletions != DeletionPolicy.none;
@@ -196,7 +254,12 @@ String buildRsyncCommand(
   // Resolved ahead of the notes: a pull's fallback announces itself.
   final backupDirs = {
     for (final (_, destinationSide) in directions)
-      destinationSide: _backupDirWord(destinationSide, endpoints, rules, now),
+      destinationSide: _backupDirWord(
+        destinationSide,
+        fileEndpoints,
+        rules,
+        now,
+      ),
   };
 
   final notes = <String>[];
@@ -204,6 +267,12 @@ String buildRsyncCommand(
     notes.add(
       "uses your OpenSSH config and known_hosts, not Poltergeist's "
       'connections',
+    );
+  }
+  if (sharedTarget != null) {
+    notes.add(
+      'runs rsync on the server through SSH; the server needs rsync and '
+      'a POSIX shell that can access both existing, non-overlapping folders',
     );
   }
   if (remote != null) {
@@ -232,7 +301,7 @@ String buildRsyncCommand(
       'path in the source are not copied',
     );
   }
-  for (final side in remoteSides) {
+  for (final side in sharedTarget == null ? remoteSides : [sharedTarget]) {
     if (side.connectionShape.contains(SyncConnectionFlag.identityFile)) {
       notes.add(
         'this pair authenticates with an identity file — the command '
@@ -354,7 +423,7 @@ String buildRsyncCommand(
   final lines = <String>[
     for (final note in notes) '# note: ${_commentSafe(note)}',
   ];
-  if (bothRemote) {
+  if (endpoints._bothRemote && sharedTarget == null) {
     lines.add(
       '# note: both endpoints are remote — rsync refuses a '
       'remote-to-remote transfer; Poltergeist routes such pairs through '
@@ -364,6 +433,33 @@ String buildRsyncCommand(
   }
 
   final environment = remote == null ? '' : _remoteArgsEnvironment;
+  final ssh = sharedTarget == null
+      ? null
+      : 'ssh -T -p ${sharedTarget.port} -l ${_sq(sharedTarget.user)} '
+            '-- ${_sq(sharedTarget.host)} sh -s';
+  final rootCheck = ssh == null ? '' : _sharedRootCheck(fileEndpoints);
+  String invocation(String command) {
+    if (ssh == null) return '$environment$command';
+    // The login shell only sees `sh -s`. Send the script on stdin and
+    // encode line breaks so even a preview with a multiline path fits
+    // on one commented line.
+    final script = '$rootCheck exec $command'
+        .replaceAll(r'\', r'\\')
+        .replaceAll('\r', r'\r')
+        .replaceAll('\n', r'\n');
+    return "printf '%b\\n' ${_sq(script)} | $ssh";
+  }
+
+  String rootArgument(SyncSide side, {required bool source}) {
+    if (ssh != null) {
+      return side == SyncSide.left ? r'"${left%.}"' : r'"${right%.}"';
+    }
+    return _renderEndpoint(
+      side == SyncSide.left ? fileEndpoints.left : fileEndpoints.right,
+      source: source,
+    );
+  }
+
   for (final (sourceSide, destinationSide) in directions) {
     final flags = _flags(
       rules: rules,
@@ -377,23 +473,32 @@ String buildRsyncCommand(
       trashSkipPaths: trashSkipPaths,
       filters: filters.patterns,
     );
-    final source = _renderEndpoint(
-      sourceSide == SyncSide.left ? endpoints.left : endpoints.right,
-      source: true,
-    );
-    final destination = _renderEndpoint(
-      destinationSide == SyncSide.left ? endpoints.left : endpoints.right,
-      source: false,
-    );
+    final source = rootArgument(sourceSide, source: true);
+    final destination = rootArgument(destinationSide, source: false);
     final arguments = '$flags -- $source $destination';
     lines.add(
       "# Preview first (matches Poltergeist's plan):  "
-      '${_commentSafe('${environment}rsync -n -i $arguments')}',
+      '${_commentSafe(invocation('rsync -n -i $arguments'))}',
     );
-    lines.add('${environment}rsync $arguments');
+    lines.add(invocation('rsync $arguments'));
   }
   return '${lines.join('\n')}\n';
 }
+
+/// Resolve both directories on the server before rsync. A Mirror whose
+/// destination contains its source could delete the source itself.
+/// Compare directory identities along both ancestor chains so aliases
+/// such as macOS firmlinks cannot hide an overlap. Append `/.` so shell
+/// command substitution preserves any trailing newlines in the path.
+String _sharedRootCheck(ResolvedSyncEndpoints endpoints) =>
+    r'''root() { cd -P "$1" && printf '%s/.' "${PWD%/}"; }; '''
+    'left=\$(root ${_sq(endpoints.left.path)}) && '
+    'right=\$(root ${_sq(endpoints.right.path)}) || exit 1; '
+    r'''[ "$left" -ef "$left" ] || { echo 'Cannot check sync folders with this shell' >&2; exit 1; }; '''
+    r'''check() { ancestor=${1%/}; while :; do '''
+    r'''if [ "${ancestor:-/}" -ef "$2" ]; then echo 'Sync folders must not overlap' >&2; exit 1; fi; '''
+    r'''[ -n "$ancestor" ] || return 0; ancestor=${ancestor%/*}; done; }; '''
+    r'''check "${left%.}" "${right%.}"; check "${right%.}" "${left%.}";''';
 
 /// The shared flag list for one direction (§2.1) — everything between
 /// `rsync` and `--`, in a fixed order the goldens pin. [backupDir] is
