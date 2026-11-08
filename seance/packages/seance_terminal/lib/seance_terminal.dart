@@ -18,6 +18,11 @@ export 'src/paste_policy.dart'
         TerminalPastePolicy,
         TerminalPasteReview,
         TerminalPasteSeverity;
+export 'src/paste_review_dialog.dart'
+    show
+        TerminalPasteReviewDialog,
+        TerminalPasteReviewStrings,
+        showTerminalPasteReview;
 export 'src/terminal_appearance.dart'
     show
         SeanceTerminalThemes,

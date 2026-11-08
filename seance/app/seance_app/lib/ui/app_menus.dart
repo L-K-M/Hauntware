@@ -4,6 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostChordBinding, GhostUndoHistory, dispatchGhostChord;
+import 'package:seance_core/seance_core.dart'
+    show DangerLinter, DangerSeverity;
+import 'package:seance_terminal/seance_terminal.dart'
+    show
+        TerminalPasteChoice,
+        TerminalPasteFinding,
+        TerminalPastePolicy,
+        TerminalPasteSeverity,
+        showTerminalPasteReview;
 
 import '../app_state.dart';
 import '../main.dart';
@@ -96,13 +105,36 @@ bool terminalCopy(TerminalSession tab) {
   return true;
 }
 
-/// Paste clipboard text into the active terminal (honours bracketed-paste mode).
-Future<void> terminalPaste(TerminalSession tab) async {
+/// Paste clipboard text into [tab]'s terminal through the shared
+/// [TerminalPastePolicy], as Klabautermann's container shell does: control
+/// characters are stripped, so a clipboard holding `ESC[201~` cannot end
+/// bracketed paste early and run the rest as typed, and a multi-line paste
+/// the danger linter flags (or cannot check) asks first, over [context] or
+/// the app's navigator. With nowhere to ask, such a paste is cancelled.
+Future<void> terminalPaste(TerminalSession tab, {BuildContext? context}) async {
   final data = await Clipboard.getData(Clipboard.kTextPlain);
   final text = data?.text;
-  if (text != null && text.isNotEmpty) {
-    tab.engine.terminal.paste(text);
-  }
+  if (text == null || text.isEmpty) return;
+  await TerminalPastePolicy(
+    inspect: (text) async => [
+      for (final finding in DangerLinter.scan(text))
+        TerminalPasteFinding(
+          severity: switch (finding.severity) {
+            DangerSeverity.critical => TerminalPasteSeverity.critical,
+            DangerSeverity.warning => TerminalPasteSeverity.warning,
+          },
+          line: finding.line,
+          explanation: finding.explanation,
+        ),
+    ],
+    confirm: (review) async {
+      final ask = context != null && context.mounted
+          ? context
+          : navigatorKey.currentContext;
+      if (ask == null || !ask.mounted) return TerminalPasteChoice.cancel;
+      return showTerminalPasteReview(ask, review);
+    },
+  ).paste(tab.engine, text);
 }
 
 /// Select the active terminal's whole buffer (scrollback included).
