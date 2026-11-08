@@ -52,7 +52,9 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.text('docs'));
+      // Keyboard traversal arms the listing without taking focus from Home
+      // or an editor automatically when the browser mounts.
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
@@ -74,6 +76,19 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
       await tester.pumpAndSettle();
       expect(pane.location?.path, '/home/test');
+
+      channel.openFailure = const RemoteFileException(
+        kind: RemoteFileErrorKind.permissionDenied,
+        operation: 'open',
+        message: 'Denied',
+      );
+      pane.setCursorIndex(1);
+      await pane.openEntry(pane.entries[1]);
+      await tester.pumpAndSettle();
+      expect(pane.error, isNotNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(pane.cursorIndex, 1, reason: 'the error overlay owns interaction');
     },
   );
 }

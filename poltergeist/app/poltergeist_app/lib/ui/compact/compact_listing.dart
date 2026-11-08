@@ -160,7 +160,9 @@ class _CompactListingState extends State<CompactListing> {
       }
       return KeyEventResult.handled;
     }
-    if (!controller.verbsEnabled || controller.inlineRenameActive) {
+    if (!controller.verbsEnabled ||
+        controller.inlineRenameActive ||
+        controller.error != null) {
       return KeyEventResult.handled;
     }
     final cursor = controller.cursorIndex;
