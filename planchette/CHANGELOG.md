@@ -23,9 +23,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Host-key fingerprints and key paths in the server prompts draw in the
   bundled code font on macOS and Windows, as in Séance and Poltergeist.
   They were in the proportional system font there.
-- A settings file Planchette cannot read is kept beside it as
+- A damaged settings file is kept beside it as
   `settings.json.corrupt-<time>`, and a notice says where, instead of
-  being replaced by the next save. Planchette still opens with its
+  being replaced by the next save. One Planchette cannot read at all
+  stays where it is, with a notice. Planchette still opens with its
   default settings, as the other apps do.
 - Overlapping changes to the sync state, such as two trusted-key verdicts
   or notices at once, no longer drop one another, and two first reads of

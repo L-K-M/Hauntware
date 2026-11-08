@@ -211,6 +211,28 @@ void main() {
         isNull,
       );
     });
+
+    test('overlapping app saves keep both apps, on disk and in memory', () async {
+      final file = File('${directory.path}/inbox_apps.json');
+      final vault = SecretVault(InMemoryVaultStore(), secureRandomBytes(32));
+      final store = FileInboxAppStore(file, () => vault);
+      InboxApp app(String name) => InboxApp(
+        id: newInboxAppId(),
+        name: name,
+        key: newInboxKey(),
+        allowedServerIds: const [],
+        createdAt: 1,
+        updatedAt: 1,
+      );
+      final first = app('first');
+      final second = app('second');
+
+      await Future.wait([store.putApp(first), store.putApp(second)]);
+
+      expect((await store.listApps()).map((a) => a.id), unorderedEquals([first.id, second.id]));
+      final reopened = FileInboxAppStore(file, () => vault);
+      expect((await reopened.listApps()).map((a) => a.id), unorderedEquals([first.id, second.id]));
+    });
   });
 
   group('FileInboxCacheStore', () {
@@ -230,6 +252,23 @@ void main() {
       );
       expect((await store.load()).cursor, 3);
       await blocker.delete();
+    });
+
+    test('overlapping saves leave the file and memory on the last one', () async {
+      final file = File('${directory.path}/inbox_cache.json');
+      final scope = SyncAccountScope(
+        baseUrl: 'https://sync.example',
+        username: 'me',
+      );
+      final store = FileInboxCacheStore(file, scope: scope);
+
+      await Future.wait([
+        for (var cursor = 1; cursor <= 5; cursor++)
+          store.save(InboxCache(cursor: cursor)),
+      ]);
+
+      expect((await store.load()).cursor, 5);
+      expect((await FileInboxCacheStore(file, scope: scope).load()).cursor, 5);
     });
   });
 }

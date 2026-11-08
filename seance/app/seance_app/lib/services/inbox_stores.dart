@@ -28,8 +28,23 @@ class FileInboxAppStore implements InboxAppStore {
   final SecretVault Function() vault;
   final Map<String, Map<String, dynamic>> _meta = {};
   bool _loaded = false;
+  Future<void> _operationTail = Future<void>.value();
 
   FileInboxAppStore(this.file, this.vault);
+
+  /// One save at a time: each builds its candidate from the metadata the
+  /// previous one committed, so overlapping saves cannot drop each other.
+  Future<T> _serialize<T>(Future<T> Function() operation) {
+    final result = _operationTail.then((_) async {
+      await _load();
+      return operation();
+    });
+    _operationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
+  }
 
   Future<void> _load() async {
     if (_loaded) return;
@@ -63,7 +78,8 @@ class FileInboxAppStore implements InboxAppStore {
   Future<List<InboxApp>> listApps() async {
     await _load();
     final out = <InboxApp>[];
-    for (final meta in _meta.values) {
+    // A copy: a save can commit while a hydration awaits the vault.
+    for (final meta in _meta.values.toList()) {
       final app = await _hydrate(meta);
       if (app != null) out.add(app);
     }
@@ -82,8 +98,7 @@ class FileInboxAppStore implements InboxAppStore {
   /// absent and is repaired by the next sync, while a key without metadata is
   /// an inert vault entry.
   @override
-  Future<void> putApp(InboxApp app) async {
-    await _load();
+  Future<void> putApp(InboxApp app) => _serialize(() async {
     final json = app.toJson();
     final key = json.remove('key') as String?;
     final secretId = '$_keySecretPrefix${app.id}';
@@ -98,11 +113,9 @@ class FileInboxAppStore implements InboxAppStore {
     final candidate = Map<String, Map<String, dynamic>>.of(_meta)
       ..[app.id] = json;
     await _flush(candidate);
-    _meta
-      ..clear()
-      ..addAll(candidate);
+    _meta[app.id] = json;
     if (app.removed) await vault().deleteSecret(secretId);
-  }
+  });
 }
 
 /// JSON-file [InboxStatusStore].
@@ -212,6 +225,7 @@ class FileInboxCacheStore implements InboxCacheStore {
 
   InboxCache? _cache;
   bool _loaded = false;
+  Future<void> _operationTail = Future<void>.value();
 
   FileInboxCacheStore(
     this.file, {
@@ -222,7 +236,21 @@ class FileInboxCacheStore implements InboxCacheStore {
   static const _version = 1;
 
   /// Bind the file to [scope] before the account becomes active.
-  Future<void> initialize() => _load();
+  Future<void> initialize() => _serialize(() async {});
+
+  /// One load or save at a time, so the file and memory end on the same
+  /// cache whatever order overlapping saves finish their writes in.
+  Future<T> _serialize<T>(Future<T> Function() operation) {
+    final result = _operationTail.then((_) async {
+      await _load();
+      return operation();
+    });
+    _operationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
+  }
 
   Future<void> _load() async {
     if (_loaded) return;
@@ -296,19 +324,15 @@ class FileInboxCacheStore implements InboxCacheStore {
   }
 
   @override
-  Future<InboxCache> load() async {
-    await _load();
-    return _cache!;
-  }
+  Future<InboxCache> load() => _serialize(() async => _cache!);
 
   /// Memory takes [cache] only once its write succeeded (FileConfigStore's
   /// rule, #661): a failed save leaves the cache the store had.
   @override
-  Future<void> save(InboxCache cache) async {
-    await _load();
+  Future<void> save(InboxCache cache) => _serialize(() async {
     await _flush(cache);
     _cache = cache;
-  }
+  });
 
   Future<void> _flush([InboxCache? cache]) {
     return writeStringAtomically(
