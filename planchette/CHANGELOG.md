@@ -37,6 +37,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Overlapping changes to the sync state, such as two trusted-key verdicts
   or notices at once, no longer drop one another, and two first reads of
   the device id agree on one id.
+- The document and the font picker draw one scrollbar on macOS, Windows
+  and Linux; they drew two side by side.
+- The folder sidebar takes Home, End, Page Up and Page Down, and
+  Command+Up (Alt+Up or Backspace elsewhere) opens the parent folder.
+  Up with nothing selected starts at the last item, and a move scrolls
+  the item into view.
 - Sign In and Open wait for valid fields; Return submits the forms.
 - The grep cheat sheet in the find bar shows its patterns in the
   document's font. On macOS and Windows they were in the proportional

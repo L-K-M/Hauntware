@@ -14,6 +14,10 @@
   Clear scrollback, a long-press or double-tap selection on a phone or
   tablet shows Copy, Paste and Select all, and the on-screen keys are
   named in the app's own words.
+- The disk space explorer can be driven from the keyboard: arrows,
+  Home, End, Page Up and Page Down, Return to open a folder and
+  Command+Up (Alt+Up or Backspace elsewhere) to go back up, never above
+  the mount. The file editor draws one scrollbar on the desktop.
 - The desktop header shows the selected server and controls the sidebar
   and inspector. View-menu commands, keyboard shortcuts and remembered
   visibility work across desktop platforms.

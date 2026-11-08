@@ -8,6 +8,14 @@
   sidebar and inspector buttons and their shortcuts, undo for snippet
   and server-list changes, and Save, Don't save or Cancel when a tab
   with unsaved text closes. Séance's changelog has the details.
+- Planchette, Poltergeist and Klabautermann follow the same window
+  conventions. Hide the sidebar with Control+Command+S or Ctrl+Alt+S, and,
+  where the app has one, the inspector with Option+Command+I or
+  Ctrl+Alt+I; each window remembers which panes show. Undo and Redo
+  cover app data such as favorites, pins and alert rules, and deleting
+  one offers Undo. Closing edited text asks Save, Don't save or Cancel,
+  and Save buttons wait for valid input. Each product's changelog has the
+  details.
 
 - Séance and Poltergeist use dartssh2 4.1.0 instead of 3.0.2. Servers
   that offer only chacha20-poly1305 connect, strict key exchange is
@@ -64,6 +72,16 @@
   their asset names start with `klabautermann-preview-`, except the
   .deb, which keeps Debian's versioned name. Its
   [changelog](klabautermann/CHANGELOG.md) tracks the work so far.
+
+### Fixed
+
+- File lists in every app take the same keys: arrows, Home and End, Page
+  Up and Page Down, Command+Down or Command+O to open and Command+Up for
+  the parent folder on macOS, Enter, keypad Enter and Alt+Up or
+  Backspace elsewhere. In Poltergeist, choosing a sidebar location or a
+  saved workspace moves the keyboard to its file list.
+- The built-in editor and the font picker draw one scrollbar on macOS,
+  Windows and Linux in every app; they drew two.
 
 ## 1.9.0 (2026-10-04)
 

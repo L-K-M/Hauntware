@@ -17,6 +17,13 @@
   program, bookmark imports, and choosing a key file or a server's image
   showed no panel: file_picker refused them in the unsandboxed app, as it
   did in Séance.
+- **The keyboard follows a sidebar location.** Choosing a location or a
+  saved workspace in the sidebar now moves the keyboard to its file list,
+  so the arrow keys move through files instead of the sidebar. Page Up
+  and Page Down move by a screen, keypad Enter opens, and the compact
+  listing takes a hardware keyboard.
+- **One scrollbar in the editor.** The built-in editor and the font
+  picker drew two scrollbars on macOS, Windows and Linux.
 - **ssh_config import reads repeated settings as ssh does.** The first
   `HostName`, `User`, `Port` or `IdentityFile` in a block wins, where the
   last one did. `IdentityFile none` uses the agent instead of a key file
