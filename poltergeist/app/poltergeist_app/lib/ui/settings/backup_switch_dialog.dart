@@ -13,6 +13,7 @@ import '../../services/bookmark_backup_service.dart';
 import '../../services/settings_models.dart';
 import '../../services/sync_account_gate.dart';
 import 'backup_enrollment_form.dart';
+import 'pin_conflict_keys.dart';
 
 /// Opens the §4.4 switch flow. Offered only where the gate already
 /// passed — the enrolled view guards its entry button on
@@ -297,6 +298,10 @@ class _BackupSwitchDialogState extends State<BackupSwitchDialog> {
           Text(
             l10n.backupSwitchConflictBody(conflict.locator),
             key: ValueKey('backup.switch.conflict.${conflict.locator}'),
+          ),
+          PinConflictKeys(
+            conflict: conflict,
+            pulledLabel: l10n.backupSwitchPulledKey,
           ),
           Wrap(
             spacing: 8,

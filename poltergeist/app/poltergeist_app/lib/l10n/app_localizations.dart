@@ -3796,7 +3796,7 @@ abstract class AppLocalizations {
   /// Resolves a pin conflict by installing the pulled key (04 §3.2's accept).
   ///
   /// In en, this message translates to:
-  /// **'Use synced key'**
+  /// **'Trust the new key'**
   String get backupPinAcceptSynced;
 
   /// Title of the device-level credential-sync switch in shared mode (Séance's syncSecrets); the server editor's credential switch names it.
@@ -3814,8 +3814,26 @@ abstract class AppLocalizations {
   /// Resolves a pin conflict by re-pushing the trusted key (04 §3.2's keep local).
   ///
   /// In en, this message translates to:
-  /// **'Keep local key'**
+  /// **'Keep this device\'s key'**
   String get backupPinKeepLocal;
+
+  /// Label over the fingerprint of the host key this device trusts, in a pin conflict (Séance's Settings ▸ Sync wording, #56).
+  ///
+  /// In en, this message translates to:
+  /// **'This device trusts'**
+  String get backupPinLocalKey;
+
+  /// Label over the fingerprint of the host key another device synced, in a pin conflict on this account.
+  ///
+  /// In en, this message translates to:
+  /// **'The other device synced'**
+  String get backupPinPulledKey;
+
+  /// Label over the fingerprint of the shared account's host key, in the §4.4 switch's conflict list.
+  ///
+  /// In en, this message translates to:
+  /// **'The shared account holds'**
+  String get backupSwitchPulledKey;
 
   /// 04 §3.1's durable corrupt-store notice; it must name that deleted bookmarks may reappear, not only that edits may be lost.
   ///

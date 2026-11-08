@@ -609,6 +609,14 @@ void main() {
         find.byKey(const ValueKey('backup.pin.accept.conflict.example.com:22')),
         findsOneWidget,
       );
+      // Both keys show, as in Séance (#56), so the choice can be checked
+      // against the server's own fingerprint; the verbs use Séance's words.
+      expect(find.text('This device trusts'), findsOneWidget);
+      expect(find.text('SHA256:local'), findsOneWidget);
+      expect(find.text('The other device synced'), findsOneWidget);
+      expect(find.text('SHA256:fleet'), findsOneWidget);
+      expect(find.text("Keep this device's key"), findsOneWidget);
+      expect(find.text('Trust the new key'), findsOneWidget);
     });
 
     testWidgets('sign-out asks, then returns to the enrollment form', (
@@ -800,6 +808,13 @@ void main() {
         find.byKey(const ValueKey('backup.switch.conflicts')),
         findsOneWidget,
       );
+      final dialog = find.byKey(const ValueKey('backup.switch.dialog'));
+      for (final fingerprint in ['SHA256:local', 'SHA256:fleet']) {
+        expect(
+          find.descendant(of: dialog, matching: find.text(fingerprint)),
+          findsOneWidget,
+        );
+      }
       expect(find.byKey(const ValueKey('backup.switch.close')), findsNothing);
       await tester.tap(
         find.byKey(

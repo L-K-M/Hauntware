@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Host-key conflicts show both keys.** When a synced host key differs
+  from the one this device trusts, Settings and the account switch now
+  show both fingerprints, so you can check them against the server's own
+  before choosing, as Séance does. The choices read Keep this device's
+  key and Trust the new key, as in Séance.
 - Undo and Redo cover favorite deletion, renaming, grouping, ordering,
   pins and server duplication. Deleting a favorite offers Undo; failed
   restores explain the error. Undo preserves other windows' later changes
