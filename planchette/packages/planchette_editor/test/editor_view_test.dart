@@ -240,6 +240,59 @@ void main() {
     expect(documentScrollbar().thumbVisibility, isFalse);
   });
 
+  testWidgets('the document draws one scrollbar', (tester) async {
+    final c = EditorController(displayPath: 't', initialText: 'x\n' * 500);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+
+    // On desktop a multiline field asks the inherited scroll behavior for
+    // a scrollbar of its own, which drew a second thumb beside the
+    // editor's.
+    expect(
+      find.descendant(
+        of: find.byType(PlanchetteEditor),
+        matching: find.byWidgetPredicate((w) => w is RawScrollbar),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Scrollbar>(
+            find.descendant(
+              of: find.byType(PlanchetteEditor),
+              matching: find.byType(Scrollbar),
+            ),
+          )
+          .thumbVisibility,
+      isTrue,
+    );
+  }, variant: TargetPlatformVariant.all());
+
+  testWidgets('the document keeps the host scroll behavior', (tester) async {
+    final c = EditorController(displayPath: 't', initialText: 'x\n' * 500);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        scrollBehavior: const MaterialScrollBehavior().copyWith(
+          physics: const NeverScrollableScrollPhysics(),
+        ),
+        home: Scaffold(
+          body: PlanchetteEditor(controller: c, strings: const EditorStrings()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final document = tester.state<ScrollableState>(
+      find.descendant(
+        of: find.byKey(const ValueKey('planchette.document')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(document.position.physics, isA<NeverScrollableScrollPhysics>());
+  });
+
   testWidgets('find and replace fields use the document monospace face', (
     tester,
   ) async {

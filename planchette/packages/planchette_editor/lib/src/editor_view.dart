@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -1283,109 +1284,117 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   width: gutterWidth,
                 ),
               Expanded(
-                // The field's own scrollable never gets a Scrollbar of its
-                // own, so without this a 10,000 line document gives no
-                // indication of where the caret is in it and nothing to
-                // drag.
+                // The field's own scrollbar exists only on desktop and sits
+                // inside the content padding, so the editor draws this one
+                // at the edge on every platform; without it a 10,000 line
+                // mobile document gives no indication of where the caret is
+                // and nothing to drag. The field's is suppressed below.
                 child: Scrollbar(
                   controller: c.scroll,
                   thumbVisibility: widget.showScrollbar,
-                  child: KeyedSubtree(
-                    // A new document field per installed buffer: the field's
-                    // undo history cannot be cleared, and must not reach back
-                    // past a load, reload or revert into the previous text.
-                    key: ValueKey(c.installGeneration),
-                    child: Actions(
-                      actions: {
-                        // Undo, redo and paste deliver a stored or clipboard
-                        // write that the buffer must not read as a keystroke:
-                        // they run under code-input suppression so a restored
-                        // or pasted bracket never pairs. Locked, they are
-                        // swallowed as before.
-                        UndoTextIntent: CallbackAction<UndoTextIntent>(
-                          onInvoke: (_) {
-                            if (!_locked) c.undo();
-                            return null;
-                          },
-                        ),
-                        RedoTextIntent: CallbackAction<RedoTextIntent>(
-                          onInvoke: (_) {
-                            if (!_locked) c.redo();
-                            return null;
-                          },
-                        ),
-                        PasteTextIntent: _PasteAction(
-                          locked: () => _locked,
-                          controller: c,
-                        ),
-                        _IndentIntent: _EditAction<_IndentIntent>(
-                          enabled: () => !_locked,
-                          run: c.indent,
-                          heldWhileComposing: _composing,
-                          keepsKey: true,
-                        ),
-                        _OutdentIntent: _EditAction<_OutdentIntent>(
-                          enabled: () => !_locked,
-                          run: c.outdent,
-                          heldWhileComposing: _composing,
-                          keepsKey: true,
-                        ),
-                        _NewlineIntent: _EditAction<_NewlineIntent>(
-                          enabled: () => !_locked,
-                          run: c.insertNewline,
-                        ),
-                        _DeleteIndentIntent: _EditAction<_DeleteIndentIntent>(
-                          enabled: () => !_locked && c.canDeleteIndentBackward,
-                          run: c.deleteIndentBackward,
-                        ),
-                      },
-                      child: Shortcuts(
-                        shortcuts: {
-                          if (widget.tabKeyBehavior ==
-                              EditorTabKeyBehavior.indent) ...const {
-                            SingleActivator(LogicalKeyboardKey.tab):
-                                _IndentIntent(),
-                            SingleActivator(
-                              LogicalKeyboardKey.tab,
-                              shift: true,
-                            ): _OutdentIntent(),
-                          },
-                          const SingleActivator(LogicalKeyboardKey.enter):
-                              const _NewlineIntent(),
-                          const SingleActivator(LogicalKeyboardKey.numpadEnter):
-                              const _NewlineIntent(),
-                          const SingleActivator(LogicalKeyboardKey.backspace):
-                              const _DeleteIndentIntent(),
+                  child: ScrollConfiguration(
+                    behavior: _WithoutScrollbar(
+                      ScrollConfiguration.of(context),
+                    ),
+                    child: KeyedSubtree(
+                      // A new document field per installed buffer: the field's
+                      // undo history cannot be cleared, and must not reach back
+                      // past a load, reload or revert into the previous text.
+                      key: ValueKey(c.installGeneration),
+                      child: Actions(
+                        actions: {
+                          // Undo, redo and paste deliver a stored or clipboard
+                          // write that the buffer must not read as a keystroke:
+                          // they run under code-input suppression so a restored
+                          // or pasted bracket never pairs. Locked, they are
+                          // swallowed as before.
+                          UndoTextIntent: CallbackAction<UndoTextIntent>(
+                            onInvoke: (_) {
+                              if (!_locked) c.undo();
+                              return null;
+                            },
+                          ),
+                          RedoTextIntent: CallbackAction<RedoTextIntent>(
+                            onInvoke: (_) {
+                              if (!_locked) c.redo();
+                              return null;
+                            },
+                          ),
+                          PasteTextIntent: _PasteAction(
+                            locked: () => _locked,
+                            controller: c,
+                          ),
+                          _IndentIntent: _EditAction<_IndentIntent>(
+                            enabled: () => !_locked,
+                            run: c.indent,
+                            heldWhileComposing: _composing,
+                            keepsKey: true,
+                          ),
+                          _OutdentIntent: _EditAction<_OutdentIntent>(
+                            enabled: () => !_locked,
+                            run: c.outdent,
+                            heldWhileComposing: _composing,
+                            keepsKey: true,
+                          ),
+                          _NewlineIntent: _EditAction<_NewlineIntent>(
+                            enabled: () => !_locked,
+                            run: c.insertNewline,
+                          ),
+                          _DeleteIndentIntent: _EditAction<_DeleteIndentIntent>(
+                            enabled: () =>
+                                !_locked && c.canDeleteIndentBackward,
+                            run: c.deleteIndentBackward,
+                          ),
                         },
-                        child: TextField(
-                          key: const ValueKey('planchette.document'),
-                          contextMenuBuilder: ghostTextContextMenu,
-                          controller: c.text,
-                          undoController: c.undoController,
-                          readOnly: _locked,
-                          focusNode: c.editorFocus,
-                          scrollController: c.scroll,
-                          autofocus: widget.isActive && _routeIsCurrent,
-                          expands: true,
-                          maxLines: null,
-                          minLines: null,
-                          keyboardType: TextInputType.multiline,
-                          textAlignVertical: TextAlignVertical.top,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          smartDashesType: SmartDashesType.disabled,
-                          smartQuotesType: SmartQuotesType.disabled,
-                          style: _style,
-                          decoration: InputDecoration(
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.all(_padding),
-                            hintText: widget.placeholder,
-                            hintStyle: _style.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant
-                                  .withValues(alpha: 0.6),
-                              fontStyle: FontStyle.italic,
+                        child: Shortcuts(
+                          shortcuts: {
+                            if (widget.tabKeyBehavior ==
+                                EditorTabKeyBehavior.indent) ...const {
+                              SingleActivator(LogicalKeyboardKey.tab):
+                                  _IndentIntent(),
+                              SingleActivator(
+                                LogicalKeyboardKey.tab,
+                                shift: true,
+                              ): _OutdentIntent(),
+                            },
+                            const SingleActivator(LogicalKeyboardKey.enter):
+                                const _NewlineIntent(),
+                            const SingleActivator(
+                              LogicalKeyboardKey.numpadEnter,
+                            ): const _NewlineIntent(),
+                            const SingleActivator(LogicalKeyboardKey.backspace):
+                                const _DeleteIndentIntent(),
+                          },
+                          child: TextField(
+                            key: const ValueKey('planchette.document'),
+                            contextMenuBuilder: ghostTextContextMenu,
+                            controller: c.text,
+                            undoController: c.undoController,
+                            readOnly: _locked,
+                            focusNode: c.editorFocus,
+                            scrollController: c.scroll,
+                            autofocus: widget.isActive && _routeIsCurrent,
+                            expands: true,
+                            maxLines: null,
+                            minLines: null,
+                            keyboardType: TextInputType.multiline,
+                            textAlignVertical: TextAlignVertical.top,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            smartDashesType: SmartDashesType.disabled,
+                            smartQuotesType: SmartQuotesType.disabled,
+                            style: _style,
+                            decoration: InputDecoration(
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.all(_padding),
+                              hintText: widget.placeholder,
+                              hintStyle: _style.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant
+                                    .withValues(alpha: 0.6),
+                                fontStyle: FontStyle.italic,
+                              ),
                             ),
                           ),
                         ),
@@ -1796,6 +1805,67 @@ final class _DeleteIndentIntent extends Intent {
 /// reporting, toolbar handling and the selection replace stay exactly the
 /// platform's — only the buffer write it ends in is marked as arranged,
 /// keeping a pasted bracket from completing a pair as if it were typed.
+/// The inherited scroll behavior without its scrollbar, for the document
+/// field, which draws the editor's own [Scrollbar] instead.
+///
+/// A multiline [EditableText] copies the inherited behavior with
+/// `scrollbars: true`, which overrides an ancestor's
+/// `copyWith(scrollbars: false)`, so only a behavior whose own
+/// [buildScrollbar] declines keeps the field from adding a second one.
+/// Everything else defers to the inherited behavior.
+final class _WithoutScrollbar extends ScrollBehavior {
+  const _WithoutScrollbar(this._inherited);
+
+  final ScrollBehavior _inherited;
+
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) => child;
+
+  @override
+  TargetPlatform getPlatform(BuildContext context) =>
+      _inherited.getPlatform(context);
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => _inherited.dragDevices;
+
+  @override
+  MultitouchDragStrategy getMultitouchDragStrategy(BuildContext context) =>
+      _inherited.getMultitouchDragStrategy(context);
+
+  @override
+  Set<LogicalKeyboardKey> get pointerAxisModifiers =>
+      _inherited.pointerAxisModifiers;
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) => _inherited.buildOverscrollIndicator(context, child, details);
+
+  @override
+  GestureVelocityTrackerBuilder velocityTrackerBuilder(BuildContext context) =>
+      _inherited.velocityTrackerBuilder(context);
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) =>
+      _inherited.getScrollPhysics(context);
+
+  @override
+  ScrollViewKeyboardDismissBehavior getKeyboardDismissBehavior(
+    BuildContext context,
+  ) => _inherited.getKeyboardDismissBehavior(context);
+
+  @override
+  bool shouldNotify(_WithoutScrollbar oldDelegate) =>
+      _inherited.runtimeType != oldDelegate._inherited.runtimeType ||
+      _inherited.shouldNotify(oldDelegate._inherited);
+}
+
 final class _PasteAction extends ContextAction<PasteTextIntent> {
   _PasteAction({required this.locked, required this.controller});
 
