@@ -62,6 +62,28 @@ void main() {
       );
     }
 
+    test('names the app that asks, Séance by default', () async {
+      final agents = <String?>[];
+      UpdateChecker named({String? userAgent}) => userAgent == null
+          ? UpdateChecker(
+              client: MockClient((req) async {
+                agents.add(req.headers['User-Agent']);
+                return http.Response('{}', 200);
+              }),
+            )
+          : UpdateChecker(
+              userAgent: userAgent,
+              client: MockClient((req) async {
+                agents.add(req.headers['User-Agent']);
+                return http.Response('{}', 200);
+              }),
+            );
+
+      await named().check('1.0.0');
+      await named(userAgent: 'Poltergeist-update-check').check('1.0.0');
+      expect(agents, ['Seance-update-check', 'Poltergeist-update-check']);
+    });
+
     test('reports an update when the latest tag is newer', () async {
       final checker = checkerReturning(jsonEncode({'tag_name': 'v0.3.0'}));
       final info = await checker.check('0.2.0');

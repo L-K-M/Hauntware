@@ -248,7 +248,8 @@ export 'package:seance_core/catalog.dart'
         ServerSyncTuple,
         SyncTrackingServerStore,
         serverStoreQuarantinePath;
-export 'src/update/update_check.dart' show poltergeistUpdateRepo;
+export 'src/update/update_check.dart'
+    show poltergeistUpdateRepo, poltergeistUpdateUserAgent;
 export 'package:seance_core/catalog.dart'
     show
         InMemoryPinVerdictStore,

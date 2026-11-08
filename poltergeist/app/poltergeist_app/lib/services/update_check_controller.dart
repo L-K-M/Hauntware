@@ -22,7 +22,12 @@ class UpdateCheckController extends ChangeNotifier {
     bool enabled = true,
     // The persist sink stays private to the controller.
     Future<void> Function(bool enabled)? onEnabledChanged,
-  }) : _checker = checker ?? UpdateChecker(repo: poltergeistUpdateRepo),
+  }) : _checker =
+           checker ??
+           UpdateChecker(
+             repo: poltergeistUpdateRepo,
+             userAgent: poltergeistUpdateUserAgent,
+           ),
        // ignore: prefer_initializing_formals
        _enabled = enabled,
        // ignore: prefer_initializing_formals
