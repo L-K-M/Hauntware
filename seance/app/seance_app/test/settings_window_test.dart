@@ -188,6 +188,14 @@ void main() {
     expect(window.llmConfigVersion, state.llmConfigVersion);
   });
 
+  test('the running version crosses in the snapshot', () async {
+    state.appVersion = '1.2.3';
+    final window = await openWindow();
+    addTearDown(window.dispose);
+
+    expect(window.appVersion, '1.2.3');
+  });
+
   test('app-lock snapshot, dispatch and proxy share the host gate', () async {
     final window = await openWindow();
     addTearDown(window.dispose);

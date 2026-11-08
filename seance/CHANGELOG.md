@@ -294,6 +294,8 @@
   choose System default under Settings > Files > Default editor. A
   desktop editor you added and made the default stays the default;
   files it does not accept are handled as above.
+- Settings > About shows the running build's version, and the
+  open-source licenses page names it under the app name.
 
 ## 1.9.0 (2026-10-04)
 

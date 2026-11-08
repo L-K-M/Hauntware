@@ -2944,6 +2944,20 @@
   "@openSourceLicensesLegalese": {
     "description": "Line at the top of the licenses page."
   },
+  "aboutVersion": "Version {version}",
+  "@aboutVersion": {
+    "description": "The running build's version in Settings → General and on the licenses page.",
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "1.9.1"
+      }
+    }
+  },
+  "aboutVersionUnknown": "Version unknown",
+  "@aboutVersionUnknown": {
+    "description": "In place of aboutVersion when the platform could not tell the app's version."
+  },
   "backupTitle": "Bookmark backup",
   "@backupTitle": {
     "description": "04 §4.3's verbatim section title."

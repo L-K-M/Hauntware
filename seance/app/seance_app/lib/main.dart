@@ -271,6 +271,10 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
     };
 
     await state.load();
+    // The running build's version, read once for the update check and the
+    // Settings > About line; the settings window's engine registers no
+    // plugins, so it reaches that window through the backend's snapshot.
+    state.appVersion = await _readAppVersion();
     if (Platform.isMacOS) installMacMenu(state);
     if (_isDesktop) {
       settingsWindowHost = SettingsWindowHost(state);
@@ -379,14 +383,26 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
     });
   }
 
-  /// Look up the running version and ask AppState to check GitHub for a newer
-  /// release. Best-effort; a failure here must never affect startup.
-  Future<void> _checkForUpdate(AppState state) async {
+  /// The running build's version as PackageInfo reports it, or null where
+  /// the platform cannot tell.
+  Future<String?> _readAppVersion() async {
     try {
-      final info = await PackageInfo.fromPlatform();
-      await state.checkForUpdate(info.version);
+      final version = (await PackageInfo.fromPlatform()).version;
+      return version.isEmpty ? null : version;
     } catch (_) {
-      // No version info / platform channel unavailable — skip silently.
+      return null;
+    }
+  }
+
+  /// Ask AppState to check GitHub for a newer release than the running
+  /// version. Best-effort; a failure here must never affect startup.
+  Future<void> _checkForUpdate(AppState state) async {
+    final version = state.appVersion;
+    if (version == null) return;
+    try {
+      await state.checkForUpdate(version);
+    } catch (_) {
+      // The update check is best-effort; a failure must never affect startup.
     }
   }
 

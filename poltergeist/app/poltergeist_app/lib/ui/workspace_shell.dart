@@ -207,6 +207,7 @@ class WorkspaceShell extends StatefulWidget {
     this.syncEnvironment,
     this.syncTasks,
     this.updateCheck,
+    this.appVersion,
     this.localVolumes,
     this.settingsWindow,
     this.window,
@@ -476,6 +477,12 @@ class WorkspaceShell extends StatefulWidget {
   /// registers `app.settings` (its General section hosts the opt-out).
   /// Null leaves both unwired — tests and seam-less boots stay silent.
   final UpdateCheckController? updateCheck;
+
+  /// The running build's version as PackageInfo reports it, shown in
+  /// Settings → General and on its licenses page, and carried to the
+  /// Settings window through the link's snapshot. Null where the platform
+  /// cannot tell.
+  final String? appVersion;
 
   /// The sidebar's DEVICES source; null reads the host's volumes. Tests
   /// script it so a phone-posture run never lists the test machine's
@@ -1746,6 +1753,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     return GeneralSettings(
       checkForUpdates: updateCheck.enabled,
       onCheckForUpdatesChanged: updateCheck.setEnabled,
+      appVersion: widget.appVersion,
     );
   }
 

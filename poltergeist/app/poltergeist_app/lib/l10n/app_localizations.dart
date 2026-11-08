@@ -3493,6 +3493,18 @@ abstract class AppLocalizations {
   /// **'Poltergeist\'s own code is public domain (Unlicense). It includes third-party components that keep their own licenses, listed here.'**
   String get openSourceLicensesLegalese;
 
+  /// The running build's version in Settings → General and on the licenses page.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String aboutVersion(String version);
+
+  /// In place of aboutVersion when the platform could not tell the app's version.
+  ///
+  /// In en, this message translates to:
+  /// **'Version unknown'**
+  String get aboutVersionUnknown;
+
   /// 04 §4.3's verbatim section title.
   ///
   /// In en, this message translates to:

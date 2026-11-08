@@ -67,6 +67,7 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
   }
 
   bool? _checkForUpdates;
+  String? _appVersion;
   Map<String, Object?>? _preview;
   RemoteEditorRegistry? _editors;
   RemoteBackupSettings? _backup;
@@ -94,6 +95,7 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
     if (checkForUpdates == null) return null;
     return GeneralSettings(
       checkForUpdates: checkForUpdates,
+      appVersion: _appVersion,
       onCheckForUpdatesChanged: (enabled) =>
           _link.call(SettingsLinkMethod.setCheckForUpdates, enabled),
     );
@@ -168,6 +170,7 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
   void applySnapshot(Map<String, Object?> snapshot) {
     final general = snapshot[SettingsLinkKey.general.name] as Map?;
     _checkForUpdates = general?[SettingsLinkKey.checkForUpdates.name] as bool?;
+    _appVersion = general?[SettingsLinkKey.appVersion.name] as String?;
     _preview = (snapshot[SettingsLinkKey.preview.name] as Map?)
         ?.cast<String, Object?>();
 

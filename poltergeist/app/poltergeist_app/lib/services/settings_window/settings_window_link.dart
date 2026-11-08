@@ -76,6 +76,7 @@ enum SettingsLinkMethod {
 /// each crosses as its [name].
 enum SettingsLinkKey {
   account,
+  appVersion,
   appearance,
   available,
   backup,

@@ -638,6 +638,11 @@ Future<void> main(List<String> args) async {
   final seanceLauncher = await SeanceLinkLauncher.probe(
     onError: errorReporter.report,
   );
+  // The running build's version, read once for the launch update check and
+  // the Settings → General about row; the Settings window's engine
+  // registers no plugins, so it reaches that window through the link's
+  // snapshot.
+  final appVersion = await _readAppVersion();
   // The app for one window, or the single-window app. Built once per
   // window: its parameters must keep their identity across the root's
   // rebuilds.
@@ -728,6 +733,7 @@ Future<void> main(List<String> args) async {
       syncEnvironment: syncEnvironment,
       syncTasks: syncTasks,
       updateCheck: updateCheck,
+      appVersion: appVersion,
       appearance: appearance,
       editorTextSize: editorTextSize,
       editorFont: editorFont,
@@ -783,7 +789,7 @@ Future<void> main(List<String> args) async {
   // The launch-time check fires beside the window bring-up — the
   // banner mounts whenever the answer lands, and any failure here
   // (no package info, no network) simply leaves it absent.
-  unawaited(_checkForUpdate(updateCheck));
+  unawaited(_checkForUpdate(updateCheck, appVersion));
   await errorReporter.guard(windowLifecycle.show);
   // The windows the last session had open beside the first, once the
   // first is on screen.
@@ -815,15 +821,28 @@ Future<void> _quitApplication() async {
   await ServicesBinding.instance.exitApplication(AppExitType.cancelable);
 }
 
-/// Look up the running version and ask the controller to compare it
-/// against GitHub's latest release tag. Best-effort; a failure must
-/// never affect startup.
-Future<void> _checkForUpdate(UpdateCheckController updateCheck) async {
+/// The running build's version as PackageInfo reports it, or null where
+/// the platform cannot tell.
+Future<String?> _readAppVersion() async {
   try {
-    final info = await PackageInfo.fromPlatform();
-    await updateCheck.checkForUpdate(info.version);
+    final version = (await PackageInfo.fromPlatform()).version;
+    return version.isEmpty ? null : version;
+  } on Object {
+    return null;
+  }
+}
+
+/// Ask the controller to compare the running version against GitHub's
+/// latest release tag. Best-effort; a failure must never affect startup.
+Future<void> _checkForUpdate(
+  UpdateCheckController updateCheck,
+  String? appVersion,
+) async {
+  if (appVersion == null) return;
+  try {
+    await updateCheck.checkForUpdate(appVersion);
   } catch (_) {
-    // No version info / platform channel unavailable — skip silently.
+    // The update check is best-effort; a failure must never affect startup.
   }
 }
 

@@ -92,6 +92,9 @@ class LocalSettingsBackend implements SettingsBackend {
   LocalShellInfo get localShell =>
       LocalShellInfo.of(_state.services.localShell);
 
+  @override
+  String? get appVersion => _state.appVersion;
+
   /// [AppState.setLocalShellEnabled] writes the setting and closes the local
   /// tabs itself; the keep-alive setter's rollback dance is not needed here
   /// because a failed save reverts inside the same method.
