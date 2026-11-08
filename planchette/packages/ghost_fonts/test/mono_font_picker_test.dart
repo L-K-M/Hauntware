@@ -117,6 +117,22 @@ void main() {
     },
   );
 
+  testWidgets('the font list draws one scrollbar', (tester) async {
+    await open(tester);
+    final list = tester.widget<ListView>(
+      find.byKey(const ValueKey('font.list')),
+    );
+
+    // On desktop the scroll behavior gives the list a scrollbar of its own,
+    // drawn over the picker's.
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is RawScrollbar && w.controller == list.controller,
+      ),
+      findsOneWidget,
+    );
+  }, variant: TargetPlatformVariant.all());
+
   testWidgets('opening respects an existing disabled preference', (
     tester,
   ) async {

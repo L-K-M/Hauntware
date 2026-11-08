@@ -304,14 +304,18 @@ class _MonoFontPickerState extends State<_MonoFontPicker> {
         () => _row(choice, layout: layout),
       ],
     ];
-    return Scrollbar(
-      controller: _scroll,
-      thumbVisibility: true,
-      child: ListView.builder(
-        key: const ValueKey('font.list'),
+    // The desktop scroll behavior would draw its own thumb over this one.
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+      child: Scrollbar(
         controller: _scroll,
-        itemCount: rows.length,
-        itemBuilder: (_, index) => rows[index](),
+        thumbVisibility: true,
+        child: ListView.builder(
+          key: const ValueKey('font.list'),
+          controller: _scroll,
+          itemCount: rows.length,
+          itemBuilder: (_, index) => rows[index](),
+        ),
       ),
     );
   }
