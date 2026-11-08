@@ -91,20 +91,20 @@ Future<void> main(List<String> args) async {
   if (Platform.isMacOS) {
     WidgetsBinding.instance.platformMenuDelegate =
         CheckedPlatformMenuDelegate(channelName: 'poltergeist/menu_checks');
+  }
+
+  final errorReporter = ApplicationErrorReporter();
+  if (Platform.isMacOS) {
     // Poltergeist is unsandboxed on macOS and so carries no file
     // entitlements, which file_picker otherwise demands before every open
     // or save panel ("Either the Read-Only or Read-Write entitlement is
     // required"): without this, Open Folder, adding an editor program,
-    // bookmark imports, key files and server images all fail
-    // there, as they did in Séance (#567).
+    // bookmark imports, key files and server images all fail there, as
+    // they did in Séance (#567).
     unawaited(
-      FilePicker.skipEntitlementsChecks().catchError(
-        (Object error) => debugPrint('File panels may refuse: $error'),
-      ),
+      FilePicker.skipEntitlementsChecks().catchError(errorReporter.report),
     );
   }
-
-  final errorReporter = ApplicationErrorReporter();
   final deepLinks = DeepLinkCoordinator(onError: errorReporter.report);
   final workspaceWindowsReady = Completer<WorkspaceWindows?>();
   AppLinks().uriLinkStream.listen(
