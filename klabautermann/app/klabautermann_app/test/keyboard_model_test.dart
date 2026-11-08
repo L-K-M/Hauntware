@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/keyboard_map.dart';
@@ -288,6 +289,32 @@ void main() {
           'Ctrl+, Settings…',
           'Esc Close the dialog, sheet or page on top',
         ]),
+      );
+    });
+
+    test('the keyboard map lists every chord a command takes', () {
+      final l10n = lookupAppLocalizations(const Locale('en'));
+      final history = GhostUndoHistory();
+      addTearDown(history.dispose);
+      final map = commandKeyboardMap(
+        l10n,
+        TargetPlatform.linux,
+        buildAppCommands(
+          platform: TargetPlatform.linux,
+          fleet: fleet,
+          onOpenSettings: () {},
+          appVersion: null,
+          onOpenPanel: (_, _) {},
+          onShowKeyboardMap: (_) async {},
+          undoHistory: history,
+        ),
+      );
+
+      // Redo takes Ctrl+Y beside Ctrl+Shift+Z, and the map shows both as
+      // Séance's and Poltergeist's shortcut lists do.
+      expect(
+        map.map((entry) => '${entry.keys} ${entry.action}'),
+        contains('Ctrl+Shift+Z  ·  Ctrl+Y Redo'),
       );
     });
   });
