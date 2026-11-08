@@ -2308,7 +2308,8 @@ and Séance's root Unlicense.
   `macos/RunnerTests/AccessibilityLifecycleTest.mm`) is ported from
   Planchette's identical copy, whose controller shares Poltergeist's
   multi-view semantics routing; it gates the macOS client build like the
-  keyboard fixture, and `--stock-engine` must fail.
+  keyboard fixture. As for the siblings, `--stock-engine` must fail and
+  is checked by hand after a Flutter upgrade, not in CI.
 - Why: Flutter 3.47 destroys `AccessibilityBridge::tree_` before
   detaching native `FlutterTextField`s; with any accessibility client
   active a text-input callback can read the freed tree (Séance's
