@@ -5,6 +5,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/theme/app_theme.dart'
+    show klabautermannMonoStyle;
 import 'package:klabautermann_app/controllers/operations_controller.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
@@ -104,9 +106,19 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('A step failed.'), findsOneWidget);
       expect(find.text('Exit status 5'), findsOneWidget);
+      final step = find.text(
+        'env API_TOKEN=«redacted» systemctl restart nginx.service',
+      );
+      expect(step, findsOneWidget);
+      // Steps are commands: fixed-width, as the action preview draws them.
       expect(
-        find.text('env API_TOKEN=«redacted» systemctl restart nginx.service'),
-        findsOneWidget,
+        tester
+            .widget<SelectableText>(
+              find.ancestor(of: step, matching: find.byType(SelectableText)),
+            )
+            .style
+            ?.fontFamily,
+        klabautermannMonoStyle.fontFamily,
       );
       Navigator.of(tester.element(find.text('What ran'))).pop();
       await tester.pumpAndSettle();

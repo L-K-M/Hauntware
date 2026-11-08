@@ -8,6 +8,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/operations_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../../theme/app_theme.dart' show klabautermannMonoStyle;
 import '../sortable_table.dart';
 
 /// The Activity page (SAF-11, 03 §8.10): [serverId]'s device audit log,
@@ -212,7 +213,9 @@ void _showRecord(BuildContext context, AuditRecord record) {
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
               ),
-              for (final step in record.steps) SelectableText(step),
+              // Commands, so fixed-width, as the action preview draws them.
+              for (final step in record.steps)
+                SelectableText(step, style: klabautermannMonoStyle),
             ],
           ),
         ),
