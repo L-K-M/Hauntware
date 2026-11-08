@@ -7,6 +7,12 @@
   show both fingerprints, so you can check them against the server's own
   before choosing, as Séance does. The choices read Keep this device's
   key and Trust the new key, as in Séance.
+- **Deep-link intake is bounded.** A burst of `poltergeist://` links now
+  keeps at most 16 waiting, the same limit Séance uses. Links beyond it
+  are dropped, and the review says how many were ignored; any left once
+  the queue drains get their own notice. On Android, Poltergeist is only
+  offered for `poltergeist://browse`, the one link form its parser
+  accepts.
 - Undo and Redo cover favorite deletion, renaming, grouping, ordering,
   pins and server duplication. Deleting a favorite offers Undo; failed
   restores explain the error. Undo preserves other windows' later changes

@@ -10835,6 +10835,15 @@
   "deepLinkMixedScriptWarning": "Mixed writing systems detected in this hostname.",
   "deepLinkUnrecognizedScriptWarning": "Unrecognized writing system in this hostname. Check every character.",
   "deepLinkControlsRemovedWarning": "Hidden direction or line-control characters were removed for display.",
+  "deepLinkIgnoredLinks": "{count, plural, =1{1 more link was ignored.} other{{count} more links were ignored.}}",
+  "@deepLinkIgnoredLinks": {
+    "description": "Links dropped because the deep-link queue was full; counted in the host review and reported once the queue drains.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "deepLinkFailureTitle": "Link can’t be opened",
   "deepLinkFailureUnsupported": "This Poltergeist link does not name a supported action.",
   "deepLinkFailureParameters": "This Poltergeist link has invalid or unexpected parameters.",

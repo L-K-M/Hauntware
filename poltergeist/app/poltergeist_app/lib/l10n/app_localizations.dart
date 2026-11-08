@@ -12169,6 +12169,12 @@ abstract class AppLocalizations {
   /// **'Hidden direction or line-control characters were removed for display.'**
   String get deepLinkControlsRemovedWarning;
 
+  /// Links dropped because the deep-link queue was full; counted in the host review and reported once the queue drains.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more link was ignored.} other{{count} more links were ignored.}}'**
+  String deepLinkIgnoredLinks(int count);
+
   /// No description provided for @deepLinkFailureTitle.
   ///
   /// In en, this message translates to:

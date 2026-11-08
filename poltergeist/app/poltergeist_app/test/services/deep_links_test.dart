@@ -693,6 +693,98 @@ void main() {
       expect(handler.opened, isEmpty);
       expect(handler.failures.single.kind, DeepLinkFailureKind.serverNotFound);
     });
+
+    test('caps the pending queue and counts what it drops', () async {
+      final handler = _Handler();
+      final coordinator = DeepLinkCoordinator();
+      coordinator.activate(handler);
+
+      coordinator.add(_hostUri('one.example'));
+      await handler.waitForReviews(1);
+
+      for (var i = 0; i < poltergeistLinkQueueLimit; i++) {
+        coordinator.add(_hostUri('queued$i.example'));
+      }
+      for (var i = 0; i < 3; i++) {
+        coordinator.add(_hostUri('dropped$i.example'));
+      }
+      // A repeat of a queued endpoint coalesces rather than dropping.
+      coordinator.add(_hostUri('queued0.example', path: '/again'));
+
+      final snapshot = handler.reviews.single.value;
+      expect(snapshot.remainingCount, poltergeistLinkQueueLimit);
+      expect(snapshot.ignoredCount, 3);
+      expect(
+        snapshot.visibleWaiting.length + snapshot.overflow.length,
+        poltergeistLinkQueueLimit,
+      );
+      expect(snapshot.visibleWaiting.first.remotePath, '/again');
+      expect(snapshot.visibleWaiting.first.activationCount, 2);
+
+      // The review that showed the count consumes it.
+      handler.answer(DeepLinkReviewDecision.cancel, shown: snapshot);
+      for (var i = 0; i < poltergeistLinkQueueLimit; i++) {
+        await handler.waitForReviews(i + 2);
+        expect(handler.reviews[i + 1].value.ignoredCount, 0);
+        handler.answer(DeepLinkReviewDecision.cancel);
+      }
+      await coordinator.idle;
+
+      expect(handler.reviews, hasLength(poltergeistLinkQueueLimit + 1));
+      expect(handler.reviews.map((review) => review.value.current.host), [
+        'one.example',
+        for (var i = 0; i < poltergeistLinkQueueLimit; i++) 'queued$i.example',
+      ]);
+      expect(handler.reviews[1].value.current.activationCount, 2);
+      expect(handler.reviews[1].value.current.remotePath, '/again');
+      expect(handler.ignoredReports, isEmpty);
+    });
+
+    test('carries drops the last drawn review missed to the next', () async {
+      final handler = _Handler();
+      final coordinator = DeepLinkCoordinator();
+      coordinator.activate(handler);
+
+      coordinator.add(_hostUri('one.example'));
+      await handler.waitForReviews(1);
+      for (var i = 0; i < poltergeistLinkQueueLimit; i++) {
+        coordinator.add(_hostUri('queued$i.example'));
+      }
+      final drawn = handler.reviews.single.value;
+      expect(drawn.ignoredCount, 0);
+
+      coordinator
+        ..add(_hostUri('dropped0.example'))
+        ..add(_hostUri('dropped1.example'));
+      expect(handler.reviews.single.value.ignoredCount, 2);
+
+      // The dialog decided on the snapshot it last drew, before the drops.
+      handler.answer(DeepLinkReviewDecision.cancel, shown: drawn);
+
+      await handler.waitForReviews(2);
+      expect(handler.reviews[1].value.ignoredCount, 2);
+      handler.answer(DeepLinkReviewDecision.discardAllRemaining);
+      await coordinator.idle;
+
+      expect(handler.ignoredReports, isEmpty);
+    });
+
+    test('reports dropped links when no review carries the count', () async {
+      final handler = _Handler();
+      final coordinator = DeepLinkCoordinator();
+
+      // With no handler bound the queue fills without draining, so every
+      // link beyond the limit drops.
+      for (var i = 0; i < poltergeistLinkQueueLimit + 2; i++) {
+        coordinator.add(Uri.parse('poltergeist://unknown'));
+      }
+      coordinator.activate(handler);
+      await coordinator.idle;
+
+      expect(handler.reviews, isEmpty);
+      expect(handler.failures, hasLength(poltergeistLinkQueueLimit));
+      expect(handler.ignoredReports, [2]);
+    });
   });
 }
 
@@ -736,6 +828,7 @@ final class _Handler implements DeepLinkHandler {
   final serverAttempts = <ServerDeepLink>[];
   final servers = <ServerDeepLink>[];
   final failures = <DeepLinkFailure>[];
+  final ignoredReports = <int>[];
   final _answers = StreamController<DeepLinkReviewDecision>.broadcast();
   final _hostOpenRelease = Completer<void>();
 
@@ -807,19 +900,27 @@ final class _Handler implements DeepLinkHandler {
     }
   }
 
-  void answer(DeepLinkReviewDecision decision) {
+  @override
+  Future<void> showIgnoredLinks(int count, DeepLinkOperation operation) async {
+    if (operation.isCancelled) return;
+    ignoredReports.add(count);
+  }
+
+  /// Answers the open review on the snapshot the decision covered, which
+  /// is what it shows now unless a test passes an older one.
+  void answer(
+    DeepLinkReviewDecision decision, {
+    DeepLinkReviewSnapshot? shown,
+  }) {
     if (reviews.isEmpty) {
       throw StateError('answer() called before a review was presented');
     }
-    if (decision == DeepLinkReviewDecision.discardAllRemaining) {
-      reviews.last.markRemainingReviewed(reviews.last.value);
-    }
+    reviews.last.markSnapshotShown(shown ?? reviews.last.value);
     _answers.add(decision);
   }
 
   void answerDiscarding(DeepLinkReviewSnapshot snapshot) {
-    reviews.last.markRemainingReviewed(snapshot);
-    _answers.add(DeepLinkReviewDecision.discardAllRemaining);
+    answer(DeepLinkReviewDecision.discardAllRemaining, shown: snapshot);
   }
 
   void failReview(Object error) => _answers.addError(error, StackTrace.empty);

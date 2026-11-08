@@ -39,6 +39,13 @@ export 'package:poltergeist_core/poltergeist_core.dart'
 
 const deepLinkVisibleQueueLimit = 3;
 
+/// The most links waiting behind the ones being handled. Large enough for
+/// a burst of hand-offs, small enough that a link flood can neither grow
+/// memory nor keep dialogs coming; a link beyond it is dropped and
+/// counted (docs/design/suite-links.md section 6 gives Séance's intake
+/// the same limit).
+const poltergeistLinkQueueLimit = 16;
+
 /// The Quick Connect target a host link opens; app-side because
 /// [QuickConnectTarget] is Poltergeist's.
 extension HostDeepLinkQuickConnect on HostDeepLink {
@@ -63,12 +70,17 @@ final class DeepLinkReviewSnapshot {
     required this.visibleWaiting,
     required this.overflow,
     required this.remainingCount,
+    this.ignoredCount = 0,
   });
 
   final HostDeepLink current;
   final List<HostDeepLink> visibleWaiting;
   final Iterable<HostDeepLink> overflow;
   final int remainingCount;
+
+  /// Links dropped at [poltergeistLinkQueueLimit] that no review has
+  /// reported yet.
+  final int ignoredCount;
 }
 
 abstract interface class DeepLinkHandler {
@@ -88,6 +100,10 @@ abstract interface class DeepLinkHandler {
     DeepLinkFailure failure,
     DeepLinkOperation operation,
   );
+
+  /// Reports links dropped at [poltergeistLinkQueueLimit] once the queue
+  /// has drained and no review was left to carry the count.
+  Future<void> showIgnoredLinks(int count, DeepLinkOperation operation);
 }
 
 abstract interface class DeepLinkOperation {
@@ -98,8 +114,10 @@ abstract interface class DeepLinkOperation {
 
 abstract interface class DeepLinkReview
     implements ValueListenable<DeepLinkReviewSnapshot>, DeepLinkOperation {
-  /// Limits a discard decision to the pending endpoints this snapshot showed.
-  void markRemainingReviewed(DeepLinkReviewSnapshot snapshot);
+  /// Records the snapshot the dialog showed when the decision was made,
+  /// so a discard covers exactly the pending endpoints it listed and the
+  /// ignored-link count it carried is reported once.
+  void markSnapshotShown(DeepLinkReviewSnapshot snapshot);
 }
 
 typedef DeepLinkErrorSink = void Function(Object error, StackTrace stackTrace);
@@ -120,6 +138,7 @@ final class DeepLinkCoordinator {
   int _handlerEpoch = 0;
   bool _draining = false;
   bool _pausedAfterHandlerFailure = false;
+  int _ignoredLinks = 0;
   Completer<void>? _idleCompleter;
 
   Future<void> get idle => _idleCompleter?.future ?? Future<void>.value();
@@ -147,10 +166,8 @@ final class DeepLinkCoordinator {
     final request = parsed.request;
     if (request case final HostDeepLink host) {
       _addHost(host);
-    } else if (request != null) {
-      _pending.addLast(request);
-    } else {
-      _pending.addLast(parsed.failure!);
+    } else if (!_enqueue(request ?? parsed.failure!)) {
+      _ignoredLinks++;
     }
     _idleCompleter ??= Completer<void>();
     _pausedAfterHandlerFailure = false;
@@ -173,9 +190,20 @@ final class DeepLinkCoordinator {
     }
 
     final pending = _PendingHost(incoming);
+    if (!_enqueue(pending)) {
+      _ignoredLinks++;
+      return;
+    }
     _pendingHosts[incoming.endpointKey] = pending;
     _pendingHostOrder.add(pending);
-    _pending.addLast(pending);
+  }
+
+  /// Adds [item] to the pending queue, or reports it dropped when the
+  /// queue already holds [poltergeistLinkQueueLimit] links.
+  bool _enqueue(Object item) {
+    if (_pending.length >= poltergeistLinkQueueLimit) return false;
+    _pending.addLast(item);
+    return true;
   }
 
   void _replaceReviewCurrent(HostDeepLink current) {
@@ -186,6 +214,7 @@ final class DeepLinkCoordinator {
       visibleWaiting: review.value.visibleWaiting,
       overflow: review.value.overflow,
       remainingCount: review.value.remainingCount,
+      ignoredCount: review.value.ignoredCount,
     );
   }
 
@@ -200,7 +229,7 @@ final class DeepLinkCoordinator {
     if (_draining ||
         _pausedAfterHandlerFailure ||
         _handler == null ||
-        _pending.isEmpty) {
+        (_pending.isEmpty && _ignoredLinks == 0)) {
       return;
     }
     _draining = true;
@@ -209,9 +238,32 @@ final class DeepLinkCoordinator {
 
   Future<void> _drain() async {
     try {
-      while (_pending.isNotEmpty) {
+      while (true) {
         final handler = _handler;
         if (handler == null) return;
+        if (_pending.isEmpty) {
+          // Links dropped at the queue limit reach the user through the
+          // next review, or through a report once nothing is left to
+          // carry the count.
+          if (_ignoredLinks == 0) break;
+          final handlerEpoch = _handlerEpoch;
+          final ignored = _ignoredLinks;
+          _ignoredLinks = 0;
+          final result = await _reportIgnoredLinks(
+            handler,
+            handlerEpoch,
+            ignored,
+          );
+          if (result == _DispatchResult.paused) {
+            _ignoredLinks += ignored;
+            _pausedAfterHandlerFailure = true;
+            return;
+          }
+          if (result == _DispatchResult.requeued) {
+            _ignoredLinks += ignored;
+          }
+          continue;
+        }
         final handlerEpoch = _handlerEpoch;
         final request = _takeFirst();
         final result = switch (request) {
@@ -239,12 +291,35 @@ final class DeepLinkCoordinator {
       }
     } finally {
       _draining = false;
-      if (_pending.isEmpty) {
+      if (_pending.isEmpty && _ignoredLinks == 0) {
         _idleCompleter?.complete();
         _idleCompleter = null;
       } else {
         _pump();
       }
+    }
+  }
+
+  Future<_DispatchResult> _reportIgnoredLinks(
+    DeepLinkHandler handler,
+    int handlerEpoch,
+    int count,
+  ) async {
+    final operation = _DeepLinkOperation();
+    _startOperation(operation);
+    try {
+      await handler.showIgnoredLinks(count, operation);
+      if (_ownershipMoved(handler, handlerEpoch, operation)) {
+        return _DispatchResult.requeued;
+      }
+      return _DispatchResult.completed;
+    } on Object catch (error, stackTrace) {
+      _onError(error, stackTrace);
+      return _ownershipMoved(handler, handlerEpoch, operation)
+          ? _DispatchResult.requeued
+          : _DispatchResult.paused;
+    } finally {
+      _finishOperation(operation);
     }
   }
 
@@ -295,6 +370,7 @@ final class DeepLinkCoordinator {
           : _DispatchResult.paused;
     } finally {
       if (identical(_review, review)) _review = null;
+      _ignoredLinks -= review.shownIgnoredCount;
       _finishOperation(review);
       review.dispose();
     }
@@ -403,6 +479,7 @@ final class DeepLinkCoordinator {
         length: pendingHostCount - visibleCount,
       ),
       remainingCount: pendingHostCount,
+      ignoredCount: _ignoredLinks,
     );
   }
 
@@ -503,12 +580,20 @@ final class _DeepLinkReview extends ValueNotifier<DeepLinkReviewSnapshot>
 
   final _DeepLinkOperation _operation = _DeepLinkOperation();
   bool _acceptsActivations = true;
-  Set<({String host, int port, String username})> _reviewedRemaining = const {};
+  DeepLinkReviewSnapshot? _shownSnapshot;
 
   bool get acceptsActivations => _acceptsActivations;
 
-  Set<({String host, int port, String username})> get reviewedRemaining =>
-      _reviewedRemaining;
+  Set<({String host, int port, String username})> get reviewedRemaining {
+    final shown = _shownSnapshot;
+    if (shown == null) return const {};
+    return {
+      for (final link in shown.visibleWaiting) link.endpointKey,
+      for (final link in shown.overflow) link.endpointKey,
+    };
+  }
+
+  int get shownIgnoredCount => _shownSnapshot?.ignoredCount ?? 0;
 
   @override
   bool get isCancelled => _operation.isCancelled;
@@ -520,11 +605,8 @@ final class _DeepLinkReview extends ValueNotifier<DeepLinkReviewSnapshot>
   void cancel() => _operation.cancel();
 
   @override
-  void markRemainingReviewed(DeepLinkReviewSnapshot snapshot) {
-    _reviewedRemaining = {
-      for (final link in snapshot.visibleWaiting) link.endpointKey,
-      for (final link in snapshot.overflow) link.endpointKey,
-    };
+  void markSnapshotShown(DeepLinkReviewSnapshot snapshot) {
+    _shownSnapshot = snapshot;
   }
 
   void stopAcceptingActivations() => _acceptsActivations = false;

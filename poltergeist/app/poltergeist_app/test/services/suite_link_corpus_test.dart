@@ -91,4 +91,7 @@ final class _Handler implements DeepLinkHandler {
   ) async {
     failures.add(failure);
   }
+
+  @override
+  Future<void> showIgnoredLinks(int count, DeepLinkOperation operation) async {}
 }

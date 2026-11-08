@@ -401,9 +401,57 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(decision, DeepLinkReviewDecision.discardAllRemaining);
-    expect(review.reviewedSnapshot!.visibleWaiting.map((link) => link.host), [
+    expect(review.shownSnapshot!.visibleWaiting.map((link) => link.host), [
       'two.example',
     ]);
+  });
+
+  testWidgets('shows links ignored at the queue limit', (tester) async {
+    final review = _TestDeepLinkReview(
+      DeepLinkReviewSnapshot(
+        current: _snapshot().current,
+        visibleWaiting: const [],
+        overflow: const [],
+        remainingCount: 0,
+        ignoredCount: 3,
+      ),
+    );
+    addTearDown(review.dispose);
+
+    await tester.pumpWidget(_DialogHarness(review: review));
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('3 more links were ignored.'), findsOneWidget);
+  });
+
+  testWidgets('reports links ignored once the queue drains', (tester) async {
+    int? reported;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () async {
+              await showDeepLinkIgnoredDialog(context, 2);
+              reported = 2;
+            },
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('deepLink.ignored')), findsOneWidget);
+    expect(find.text('2 more links were ignored.'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('deepLink.ignored.close')));
+    await tester.pumpAndSettle();
+    expect(reported, 2);
   });
 }
 
@@ -424,7 +472,7 @@ final class _TestDeepLinkReview extends ValueNotifier<DeepLinkReviewSnapshot>
   _TestDeepLinkReview(super.value);
 
   final _cancelled = Completer<void>();
-  DeepLinkReviewSnapshot? reviewedSnapshot;
+  DeepLinkReviewSnapshot? shownSnapshot;
 
   @override
   bool get isCancelled => _cancelled.isCompleted;
@@ -437,8 +485,8 @@ final class _TestDeepLinkReview extends ValueNotifier<DeepLinkReviewSnapshot>
   }
 
   @override
-  void markRemainingReviewed(DeepLinkReviewSnapshot snapshot) {
-    reviewedSnapshot = snapshot;
+  void markSnapshotShown(DeepLinkReviewSnapshot snapshot) {
+    shownSnapshot = snapshot;
   }
 }
 

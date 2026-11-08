@@ -1568,6 +1568,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/deep_link_dialogs.dart': {
     "'deepLink.failure'",
     "'deepLink.failure.close'",
+    "'deepLink.ignored'",
+    "'deepLink.ignored.close'",
     "'deepLink.review'",
     "'deepLink.overflow'",
     "'deepLink.cancel'",
