@@ -83,17 +83,46 @@ Future<Directory> _tempDir(String prefix) async {
   return dir;
 }
 
-/// A long-lived process, started as [executable] (a symlink to `sleep`
-/// gives it that comm), stopped after the test if still alive.
-Future<Process> _sleeper({String executable = 'sleep'}) async {
-  final process = await Process.start(executable, ['30']);
-  addTearDown(() => process.kill(ProcessSignal.sigkill));
+/// A long-lived process with an optional Linux comm, stopped after the test.
+Future<Process> _sleeper({String? comm}) async {
+  // Multicall sleep implementations dispatch by argv[0], so a hostile symlink
+  // name can make them exit instead of creating the process under test. One
+  // write sets comm without stdio splitting an embedded newline into writes.
+  final process = await Process.start(
+    comm == null ? 'sleep' : 'python3',
+    comm == null
+        ? ['30']
+        : [
+            '-c',
+            '''import os, sys, time
+fd = os.open('/proc/self/comm', os.O_WRONLY)
+try:
+    os.write(fd, os.fsencode(sys.argv[1]))
+finally:
+    os.close(fd)
+print('ready', flush=True)
+time.sleep(30)
+''',
+            comm,
+          ],
+  );
+  addTearDown(() async {
+    process.kill(ProcessSignal.sigkill);
+    await process.exitCode;
+  });
+  if (comm != null) {
+    expect(
+      await process.stdout
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .first
+          .timeout(const Duration(seconds: 5)),
+      'ready',
+    );
+    expect(await File('/proc/${process.pid}/comm').readAsString(), '$comm\n');
+  }
   return process;
 }
-
-Future<String> _sleepPath() async =>
-    ((await Process.run('sh', ['-c', 'command -v sleep'])).stdout as String)
-        .trim();
 
 /// The wrapper argv of the user setsid row for [argv], recording in [dir].
 List<String> _wrapper(
@@ -166,10 +195,7 @@ void main() {
       });
 
       test('reads the ticks after the last ") " of a hostile comm', () async {
-        final dir = await _tempDir('klab-comm-');
-        final link = Link('${dir.path}/e) 1 2 3 4 5');
-        await link.create(await _sleepPath());
-        final p = await _sleeper(executable: link.path);
+        final p = await _sleeper(comm: 'e) 1 2 3 4 5');
 
         final ticks = _startTicks(p.pid);
         final argv = HostCommands.guardedKill(p.pid, ticks, KillSignal.sigterm);
@@ -183,10 +209,7 @@ void main() {
       });
 
       test('a comm with a newline reads as unreadable, not a guess', () async {
-        final dir = await _tempDir('klab-comm-');
-        final link = Link('${dir.path}/x\ny) 1 2 3');
-        await link.create(await _sleepPath());
-        final p = await _sleeper(executable: link.path);
+        final p = await _sleeper(comm: 'x\ny) 1 2 3');
 
         final argv = HostCommands.guardedKill(p.pid, 0, KillSignal.sigkill);
         final result = await _run(shell, argv);

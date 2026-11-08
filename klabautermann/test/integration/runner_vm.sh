@@ -760,6 +760,15 @@ PrintLastLog no
 UseDNS no
 LogLevel VERBOSE
 EOF
+# Hosted images export the runner's runtime path in /etc/environment
+# (actions/runner-images#14649). SetEnv follows PAM, so fix only this
+# fixture's accounts without changing host-wide policy or user managers.
+for user in "${users[@]}"; do
+  uid="$(id -u "$user")"
+  printf 'Match User %s\n  SetEnv XDG_RUNTIME_DIR=/run/user/%s\n' \
+    "$user" "$uid" >>"$runtime_dir/sshd_config"
+done
+printf 'Match all\n' >>"$runtime_dir/sshd_config"
 sudo -n install -m 0600 -o root -g root "$runtime_dir/sshd_config" \
   "$sshd_dir/sshd_config"
 if ! sudo -n test -d "$privsep_dir"; then

@@ -25,6 +25,42 @@ const _offline = {
 };
 
 void main() {
+  for (final program in ['sshd', 'sshd-session']) {
+    test(
+      '$program connection lookup keeps account and listener boundaries',
+      () {
+        final processes =
+            '''
+  10 1 /usr/sbin/sshd -D
+  11 10 $program: fixture [priv]
+  12 11 $program: fixture@notty
+  13 10 $program: fixture
+  14 10 $program: fixture-other@notty
+  15 10 env $program: fixture@notty
+  20 1 /usr/sbin/sshd -D
+  21 20 $program: fixture@notty
+  22 10 $program: another@notty
+''';
+        expect(
+          runnerVmConnectionProcesses(
+            processes,
+            listenerPid: 10,
+            user: 'fixture',
+          ),
+          [11, 12, 13],
+        );
+        expect(
+          runnerVmConnectionProcesses(
+            processes,
+            listenerPid: 99,
+            user: 'fixture',
+          ),
+          isEmpty,
+        );
+      },
+    );
+  }
+
   test('without runner_vm.sh there is no leg, and the suite skips', () {
     expect(RunnerVm.fromEnvironment({'PATH': '/usr/bin'}), isNull);
   });

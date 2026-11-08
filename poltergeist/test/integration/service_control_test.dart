@@ -152,7 +152,7 @@ class _Fixture {
 
     final bin = await Directory('${directory.path}/bin').create();
     await Link('${bin.path}/dirname').create('/usr/bin/dirname');
-    await Link('${bin.path}/timeout').create('/usr/bin/timeout');
+    await Link('${bin.path}/python3').create('/usr/bin/python3');
     await File('${bin.path}/docker').writeAsString(_fakeDocker);
     await File('${bin.path}/dart').writeAsString(_fakeDart);
     final chmod = await Process.run('/bin/chmod', [

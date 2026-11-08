@@ -7,7 +7,7 @@ FROM alpine:20260805@sha256:020dfcbaaf4cc1078bf2d9c7ba31a8466e334061dcd2f248001d
 # change it and publishes it from main, and sshd-modern/Dockerfile builds on
 # that image by digest.
 RUN apk add --no-cache \
-      iproute2=7.2.0-r0 \
-      openssh-client-common=10.6_p1-r0 \
-      openssh-server-pam=10.6_p1-r0 \
-      openssh-sftp-server=10.6_p1-r0
+      iproute2=7.3.0-r0 \
+      openssh-client-common=10.6_p2-r0 \
+      openssh-server-pam=10.6_p2-r0 \
+      openssh-sftp-server=10.6_p2-r0
