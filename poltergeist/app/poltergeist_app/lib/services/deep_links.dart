@@ -214,7 +214,7 @@ final class DeepLinkCoordinator {
       visibleWaiting: review.value.visibleWaiting,
       overflow: review.value.overflow,
       remainingCount: review.value.remainingCount,
-      ignoredCount: review.value.ignoredCount,
+      ignoredCount: _ignoredLinks,
     );
   }
 
