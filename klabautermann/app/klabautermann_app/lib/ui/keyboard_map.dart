@@ -16,8 +16,10 @@ final class KeyboardMapEntry {
 }
 
 /// The keys every window takes (03 §10.6), read from the command registry
-/// so the map cannot drift from the menus: each enabled command with a
-/// shortcut, and Esc, which closes the top dialog, sheet or page.
+/// so the map cannot drift from the menus: each enabled command with every
+/// chord it takes (Redo's Ctrl+Y beside Ctrl+Shift+Z), joined as
+/// Poltergeist's shortcut sheet joins them, and Esc, which closes the top
+/// dialog, sheet or page.
 List<KeyboardMapEntry> commandKeyboardMap(
   AppLocalizations l10n,
   TargetPlatform platform,
@@ -28,9 +30,12 @@ List<KeyboardMapEntry> commandKeyboardMap(
             .activators(platform)
             .map((activator) => formatShortcutActivator(activator, platform))
             .nonNulls
-            .firstOrNull
-        case final keys?)
-      KeyboardMapEntry(keys, command.label(l10n)),
+            .toList()
+        case final chords when chords.isNotEmpty)
+      KeyboardMapEntry(
+        chords.join(l10n.keyboardMapChordSeparator),
+        command.label(l10n),
+      ),
   KeyboardMapEntry(l10n.keyboardMapEscapeKeys, l10n.keyboardMapEscape),
 ];
 

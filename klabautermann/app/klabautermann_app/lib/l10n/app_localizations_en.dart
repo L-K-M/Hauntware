@@ -10834,6 +10834,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get keyboardMapEscapeKeys => 'Esc';
 
   @override
+  String get keyboardMapChordSeparator => '  ·  ';
+
+  @override
   String get keyboardMapEscape => 'Close the dialog, sheet or page on top';
 
   @override

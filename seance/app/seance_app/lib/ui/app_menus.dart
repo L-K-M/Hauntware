@@ -200,11 +200,13 @@ SingleActivator serverFilterActivator(TargetPlatform platform) =>
       ),
     };
 
-/// [serverFilterActivator] as the app-wide binding takes it. On Windows it
-/// stands down while the right Alt is held: Windows reports AltGr as Ctrl +
-/// right Alt, AltGr+F types "[" on Czech, Slovak, Hungarian and other
-/// layouts, and a handled key would swallow that character in every field
-/// and terminal under [AppMenus]. The chord itself uses the left Alt.
+/// [serverFilterActivator] as the app-wide binding takes it. Off Apple
+/// platforms it stands down while the right Alt is held, as the tab and
+/// window chords do: Windows reports AltGr as Ctrl + right Alt (and some
+/// Linux setups as the right Alt), AltGr+F types "[" on Czech, Slovak,
+/// Hungarian and other layouts, and a handled key would swallow that
+/// character in every field and terminal under [AppMenus]. The chord
+/// itself uses the left Alt.
 final class _ServerFilterChord extends ShortcutActivator {
   const _ServerFilterChord(this._platform);
 
@@ -218,7 +220,8 @@ final class _ServerFilterChord extends ShortcutActivator {
   @override
   bool accepts(KeyEvent event, HardwareKeyboard state) =>
       _chord.accepts(event, state) &&
-      !(_platform == TargetPlatform.windows &&
+      !(_platform != TargetPlatform.macOS &&
+          _platform != TargetPlatform.iOS &&
           state.logicalKeysPressed.contains(LogicalKeyboardKey.altRight));
 
   @override

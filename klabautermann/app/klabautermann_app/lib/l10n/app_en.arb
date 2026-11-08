@@ -13034,6 +13034,10 @@
   "@keyboardMapEscapeKeys": {
     "description": "Keyboard map: the Escape key's name."
   },
+  "keyboardMapChordSeparator": "  ·  ",
+  "@keyboardMapChordSeparator": {
+    "description": "Between the chords of one command in the keyboard map, such as Redo's Ctrl+Shift+Z and Ctrl+Y."
+  },
   "keyboardMapEscape": "Close the dialog, sheet or page on top",
   "@keyboardMapEscape": {
     "description": "Keyboard map: what Escape does."

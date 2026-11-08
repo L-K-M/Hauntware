@@ -13762,6 +13762,12 @@ abstract class AppLocalizations {
   /// **'Esc'**
   String get keyboardMapEscapeKeys;
 
+  /// Between the chords of one command in the keyboard map, such as Redo's Ctrl+Shift+Z and Ctrl+Y.
+  ///
+  /// In en, this message translates to:
+  /// **'  ·  '**
+  String get keyboardMapChordSeparator;
+
   /// Keyboard map: what Escape does.
   ///
   /// In en, this message translates to:
