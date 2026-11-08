@@ -374,6 +374,69 @@ void main() {
       }
     }
 
+    test('a safe custom accent over explicit chrome stays as chosen', () {
+      // Neither accent is the seed, so both take the custom-accent path; each
+      // already clears the explicit chrome, so no indicator may be adjusted.
+      for (final (brightness, accent, surface, sidebar, raised, text) in const [
+        (
+          Brightness.light,
+          Color(0xFF5847C2),
+          Color(0xFFFFFFFF),
+          Color(0xFFF1F2F4),
+          Color(0xFFF6F6F8),
+          Color(0xFF1C1F24),
+        ),
+        (
+          Brightness.dark,
+          Color(0xFFADA1FF),
+          Color(0xFF101418),
+          Color(0xFF14181E),
+          Color(0xFF181C24),
+          Color(0xFFE7EAEF),
+        ),
+      ]) {
+        final palette = ThemePalette(
+          accent: accent,
+          surface: surface,
+          sidebar: sidebar,
+          raised: raised,
+          text: text,
+        );
+        final resolved = GhostTheme.resolveAccent(
+          seanceStyle,
+          palette,
+          brightness,
+        );
+        final theme = GhostTheme.build(seanceStyle, palette, brightness);
+        final where = '${brightness.name} ${formatThemeColor(accent)}';
+
+        expect(resolved.fill.toARGB32(), accent.toARGB32(), reason: where);
+        expect(
+          resolved.paneIndicator.toARGB32(),
+          accent.toARGB32(),
+          reason: where,
+        );
+        expect(
+          resolved.sidebarIndicator.toARGB32(),
+          accent.toARGB32(),
+          reason: where,
+        );
+        expect(
+          resolved.headerIndicator.toARGB32(),
+          accent.toARGB32(),
+          reason: where,
+        );
+        expect(resolved.adjusted, isFalse, reason: where);
+        expect(resolved.suggestedAccent, isNull, reason: where);
+        expect(theme.colorScheme.primary, accent, reason: where);
+        expect(
+          theme.filledButtonTheme.style?.backgroundColor?.resolve({}),
+          accent,
+          reason: where,
+        );
+      }
+    });
+
     test('the tuned fill adjusts over user-supplied chrome too', () {
       final palette = ThemePalette(
         accent: seanceStyle.seed,
