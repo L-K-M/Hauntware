@@ -458,6 +458,39 @@ rotation. Only the shared runner-image calibration moves. Budget
 thresholds, landed flags, enforcement, and per-scenario configs are
 unchanged.
 
+## Baseline refresh: Ubuntu 26 runner image (2026-11-08)
+
+The recorded `20261026.354.1` image retired. Main run 42317057042 first
+reported `20261101.360.1`, but the hosted fleet moved again before a third
+matching measurement was available. This refresh measures the actual
+`ubuntu-latest@20261101.186.1` Ubuntu 26 image, without pooling the two
+rotations.
+
+Three complete collector artifacts share every recorded axis and
+per-scenario config: 42441538913, 42441540630, and 42447248691. They are
+`ci.yml` dispatches on `bench/*` side branches at main's exact tip
+`ed6939dc860772b0a9870639074735bd34609260`. The reference stays
+`linux_x64` on `AMD EPYC 7763 64-Core Processor`, with Flutter 3.47.2 and
+its bundled Dart 3.13.2 in profile mode for tier B. Tier A still uses
+standalone Dart 3.13.4 in AOT mode. Main run 42441402705 used the same
+image but an `AMD EPYC 9V74 80-Core Processor`; it is excluded, not
+relabeled. Non-reference CPUs retain the CPU-axis notice. Main CI was
+left running; extra side sampling stopped after three matching runs.
+
+Pooling every healthy row gives P1 1211.403 ms (n=9), P2 12916.379 ms
+(n=9), and P4 48.810 ms (n=15). P6 still has no entry: all nine rows
+errored at 782 to 907 captured frames against the required minimum of
+1800. No zero or replacement median is fabricated.
+
+All three artifacts record P5's first file as `entry-04105.txt`, rather
+than the previous image's `entry-06844.txt`. Its calibrated scenario
+config moves with that observed order. The pooled tier-A medians are
+P3 608.701 ms, P5 609.127 ms, and P7 16759.586 entries/s (n=15 each).
+Each included artifact passes all six landed comparisons with both
+enforcement flags enabled after this refresh, without drift-skipping.
+Thresholds, minimum repetitions, landed flags, enforcement, and the
+Dart 3.13.4 job pin are unchanged.
+
 ## Baseline refresh: runner image rotation (2026-10-31)
 
 Main run 40489638863 exposed the controlled `ubuntu-latest` rotation from
