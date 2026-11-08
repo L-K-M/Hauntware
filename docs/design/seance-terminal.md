@@ -526,7 +526,8 @@ terminal yet, so it has no baseline to keep.
    through, so a clipboard holding `ESC[201~` ended bracketed paste early
    and the rest ran as typed (1.4). Séance's `terminalPaste` now goes
    through `TerminalPastePolicy` with the danger linter, and both apps
-   show the package's `TerminalPasteReviewDialog`, each in its own words.
+   show the package's `TerminalPasteReviewDialog`: Klabautermann in its
+   ARB strings, Séance in the package's English defaults.
 
 ## 11. Corrections to the plan
 
