@@ -86,7 +86,9 @@ class FileConfigStore implements ConfigStore, SyncCollectionHealth {
   @override
   Future<List<ServerConfig>> listServers() => _serialize(() async {
         final list = _cache.values.toList()
-          ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+          ..sort(
+            (a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()),
+          );
         return list;
       });
 
