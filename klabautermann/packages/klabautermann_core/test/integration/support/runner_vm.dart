@@ -39,8 +39,38 @@ final _psRow = RegExp(r'^\s*(\d+)\s+(\d+)\s+(.*)$');
 /// sshd: klab-vm-journal [priv]
 /// sshd: klab-vm-journal
 /// sshd: klab-vm-journal@notty
+/// sshd-session: klab-vm-journal@notty
 /// ```
-final _connectionTitle = RegExp(r'^sshd: ([^\s@\[]+)(?:[\s@]|$)');
+final _connectionTitle = RegExp(r'^sshd(?:-session)?: ([^\s@\[]+)(?:[\s@]|$)');
+
+/// [user]'s connection processes below this fixture's [listenerPid].
+/// Kept pure so title changes cannot silently disable disconnect coverage.
+List<int> runnerVmConnectionProcesses(
+  String processTable, {
+  required int listenerPid,
+  required String user,
+}) {
+  final children = <int, List<int>>{};
+  final titles = <int, String>{};
+  for (final line in const LineSplitter().convert(processTable)) {
+    final row = _psRow.firstMatch(line);
+    if (row == null) continue;
+    final pid = int.parse(row[1]!);
+    (children[int.parse(row[2]!)] ??= []).add(pid);
+    titles[pid] = row[3]!;
+  }
+
+  final serving = <int>[];
+  final pending = [...?children[listenerPid]];
+  while (pending.isNotEmpty) {
+    final pid = pending.removeLast();
+    if (_connectionTitle.firstMatch(titles[pid]!)?[1] == user) {
+      serving.add(pid);
+    }
+    pending.addAll(children[pid] ?? const []);
+  }
+  return serving..sort();
+}
 
 /// The runner-VM leg runner_vm.sh started (03 §11.3, K28a): a second sshd
 /// on loopback of the GitHub-hosted runner, which is a systemd host, with
@@ -314,25 +344,10 @@ Host linger
     final ps = await Process.run('ps', ['-e', '-o', 'pid=,ppid=,args=']);
     if (ps.exitCode != 0) fail('ps exited ${ps.exitCode}: ${ps.stderr}');
 
-    final children = <int, List<int>>{};
-    final titles = <int, String>{};
-    for (final line in const LineSplitter().convert('${ps.stdout}')) {
-      final row = _psRow.firstMatch(line);
-      if (row == null) continue;
-      final pid = int.parse(row[1]!);
-      (children[int.parse(row[2]!)] ??= []).add(pid);
-      titles[pid] = row[3]!;
-    }
-
-    final serving = <int>[];
-    final pending = [...?children[_sshdPid]];
-    while (pending.isNotEmpty) {
-      final pid = pending.removeLast();
-      if (_connectionTitle.firstMatch(titles[pid]!)?[1] == user) {
-        serving.add(pid);
-      }
-      pending.addAll(children[pid] ?? const []);
-    }
-    return serving..sort();
+    return runnerVmConnectionProcesses(
+      '${ps.stdout}',
+      listenerPid: _sshdPid,
+      user: user,
+    );
   }
 }

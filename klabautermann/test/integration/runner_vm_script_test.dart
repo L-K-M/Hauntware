@@ -146,7 +146,8 @@ if [[ ! -e "$STUB_STATE/users/$user" ]]; then
   echo "id: '$user': no such user" >&2
   exit 1
 fi
-if [[ "$1" == -u ]]; then echo 4242; else echo "uid=4242($user)"; fi
+uid="${STUB_USER_UID:-4242}"
+if [[ "$1" == -u ]]; then echo "$uid"; else echo "uid=$uid($user)"; fi
 ''',
   'getent': r'''
 mkdir -p "$STUB_STATE/home/$2"
@@ -710,6 +711,32 @@ void main() {
       ]);
       expectTornDown();
     });
+
+    for (final uid in [4242, 5252]) {
+      test('sets each account runtime path from its actual uid $uid', () async {
+        final (process: _, :exitCode, :output) = await start({
+          ...onRunner,
+          'STUB_SUITE_EXIT': '0',
+          'STUB_USER_UID': '$uid',
+          'XDG_RUNTIME_DIR': '/run/user/1001',
+        });
+        expect(await exitCode, 0, reason: '$output');
+        final config = File('${state.path}/sshd_config').readAsStringSync();
+        for (final user in _users) {
+          expect(
+            config,
+            contains(
+              'Match User $user\n'
+              '  SetEnv XDG_RUNTIME_DIR=/run/user/$uid\n',
+            ),
+          );
+        }
+        expect(config, contains('UsePAM yes\n'));
+        expect(config, contains('PermitUserEnvironment no\n'));
+        expect(config, endsWith('Match all\n'));
+        expectTornDown();
+      });
+    }
 
     test('gives the sudo accounts fresh passwords that no argv, log or '
         'variable carries, and checks the drop-in first', () async {

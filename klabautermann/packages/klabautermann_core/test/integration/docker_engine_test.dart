@@ -361,7 +361,16 @@ void main() {
     }
   });
 
-  test('images list with the seeded dangling image flagged', () async {
+  test('images list flags a dangling image created for the query', () async {
+    // Another suite may have pruned the global seed. Own the image this
+    // query asserts on instead of depending on test discovery order.
+    final danglingId = (await dind([
+      'commit',
+      '--change',
+      'LABEL klabautermann.fixture=dangling-query',
+      'coolify-app',
+    ])).trim();
+    addTearDown(() => dind(['image', 'rm', danglingId]));
     final engine = await start('docker images');
 
     final payload = await query(engine, const DockerImagesQuery());
@@ -371,9 +380,8 @@ void main() {
     expect(seeded.isDangling, isFalse);
     // The in-use count arrives with API 1.51, below the dind engine's.
     expect(seeded.inUse, isTrue);
-    final dangling = images.singleWhere(
-      (i) => i.labels['klabautermann.fixture']?.display == 'dangling',
-    );
+    final dangling = images.singleWhere((i) => i.id == danglingId);
+    expect(dangling.labels['klabautermann.fixture']?.display, 'dangling-query');
     expect(dangling.isDangling, isTrue);
     expect(dangling.inUse, isFalse);
   });
