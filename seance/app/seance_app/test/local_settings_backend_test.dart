@@ -434,6 +434,29 @@ void main() {
     expect(backend.settings.keepSessionsAliveInBackground, before);
   });
 
+  // The same rule as the keep-alive setting and FileConfigStore (#661): a
+  // value the disk refused must not stay in memory to ride a later save.
+  test('a failed update-check write puts the setting back and throws',
+      () async {
+    final before = backend.settings.checkForUpdates;
+    await breakSettingsWrites();
+
+    await expectLater(backend.setCheckForUpdates(!before), throwsA(anything));
+    expect(backend.settings.checkForUpdates, before);
+  });
+
+  test('a failed command-suggestions write puts the setting back and throws',
+      () async {
+    final before = backend.settings.commandSuggestions;
+    await breakSettingsWrites();
+
+    await expectLater(
+      backend.setCommandSuggestions(!before),
+      throwsA(anything),
+    );
+    expect(backend.settings.commandSuggestions, before);
+  });
+
   group('setAppearance', () {
     test('re-themes the app and lands on disk', () async {
       final themes = <AppAppearance>[];

@@ -47,8 +47,8 @@ class FileInboxAppStore implements InboxAppStore {
     _loaded = true;
   }
 
-  Future<void> _flush() =>
-      writeStringAtomically(file, jsonEncode(_meta.values.toList()));
+  Future<void> _flush(Map<String, Map<String, dynamic>> snapshot) =>
+      writeStringAtomically(file, jsonEncode(snapshot.values.toList()));
 
   /// Null for an app whose key is missing from the vault: it cannot open
   /// anything, and the next sync round brings the key back.
@@ -92,8 +92,15 @@ class FileInboxAppStore implements InboxAppStore {
         Secret(id: secretId, kind: SecretKind.password, value: key),
       );
     }
-    _meta[app.id] = json;
-    await _flush();
+    // Memory takes the metadata only once its write succeeded
+    // (FileConfigStore's rule, #661), so a rejected app cannot ride a later,
+    // unrelated save.
+    final candidate = Map<String, Map<String, dynamic>>.of(_meta)
+      ..[app.id] = json;
+    await _flush(candidate);
+    _meta
+      ..clear()
+      ..addAll(candidate);
     if (app.removed) await vault().deleteSecret(secretId);
   }
 }
@@ -104,6 +111,7 @@ class FileInboxStatusStore implements InboxStatusStore, SyncCollectionHealth {
   final Map<String, InboxStatus> _cache = {};
   bool _loaded = false;
   bool _syncCollectionFailed = false;
+  Future<void> _operationTail = Future<void>.value();
 
   FileInboxStatusStore(this.file);
 
@@ -128,49 +136,71 @@ class FileInboxStatusStore implements InboxStatusStore, SyncCollectionHealth {
 
   /// Owner-only like the cache: which proposals were run or dismissed, and
   /// when, is a record of activity on the user's servers.
-  Future<void> _flush() => writeStringAtomically(
+  Future<void> _flush(Map<String, InboxStatus> snapshot) =>
+      writeStringAtomically(
         file,
-        jsonEncode([for (final s in _cache.values) s.toJson()]),
+        jsonEncode([for (final s in snapshot.values) s.toJson()]),
         privacy: AtomicFilePrivacy.ownerOnly,
       );
+
+  // FileConfigStore's rule (#661): one operation at a time, and memory takes
+  // a status only once its write succeeded.
+  Future<T> _serialize<T>(Future<T> Function() operation) {
+    final result = _operationTail.then((_) async {
+      await _load();
+      return operation();
+    });
+    _operationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
+  }
+
+  /// Writes the candidate [update] makes when it reports a change, then
+  /// commits it to memory.
+  Future<void> _mutate(bool Function(Map<String, InboxStatus>) update) =>
+      _serialize(() async {
+        final candidate = Map<String, InboxStatus>.of(_cache);
+        if (!update(candidate)) return;
+        await _flush(candidate);
+        _cache
+          ..clear()
+          ..addAll(candidate);
+      });
 
   @override
   bool get syncCollectionFailed => _syncCollectionFailed;
 
   @override
-  Future<void> markSyncCollectionRecovered() async {
-    await _load();
-    await _flush();
-    await clearSyncCollectionRecovery(file);
-    _syncCollectionFailed = false;
-  }
+  Future<void> markSyncCollectionRecovered() => _serialize(() async {
+        await _flush(_cache);
+        await clearSyncCollectionRecovery(file);
+        _syncCollectionFailed = false;
+      });
 
   @override
-  Future<List<InboxStatus>> listStatuses() async {
-    await _load();
-    return _cache.values.toList();
-  }
+  Future<List<InboxStatus>> listStatuses() =>
+      _serialize(() async => _cache.values.toList());
 
   @override
-  Future<InboxStatus?> getStatus(String appId, String proposalId) async {
-    await _load();
-    return _cache[InboxStatus.recordIdFor(appId, proposalId)];
-  }
+  Future<InboxStatus?> getStatus(String appId, String proposalId) =>
+      _serialize(
+        () async => _cache[InboxStatus.recordIdFor(appId, proposalId)],
+      );
 
   @override
-  Future<void> putStatus(InboxStatus status) async {
-    await _load();
-    _cache[status.recordId] = status;
-    await _flush();
-  }
+  Future<void> putStatus(InboxStatus status) => _mutate((candidate) {
+        candidate[status.recordId] = status;
+        return true;
+      });
 
   @override
-  Future<void> deleteStatus(String appId, String proposalId) async {
-    await _load();
-    if (_cache.remove(InboxStatus.recordIdFor(appId, proposalId)) != null) {
-      await _flush();
-    }
-  }
+  Future<void> deleteStatus(String appId, String proposalId) => _mutate(
+        (candidate) =>
+            candidate.remove(InboxStatus.recordIdFor(appId, proposalId)) !=
+            null,
+      );
 }
 
 /// JSON-file [InboxCacheStore], owner-only: the scripts are commands for the
@@ -271,20 +301,22 @@ class FileInboxCacheStore implements InboxCacheStore {
     return _cache!;
   }
 
+  /// Memory takes [cache] only once its write succeeded (FileConfigStore's
+  /// rule, #661): a failed save leaves the cache the store had.
   @override
   Future<void> save(InboxCache cache) async {
     await _load();
+    await _flush(cache);
     _cache = cache;
-    await _flush();
   }
 
-  Future<void> _flush() {
+  Future<void> _flush([InboxCache? cache]) {
     return writeStringAtomically(
       file,
       jsonEncode({
         'version': _version,
         'account': scope.toJson(),
-        'cache': (_cache ?? const InboxCache()).toJson(),
+        'cache': (cache ?? _cache ?? const InboxCache()).toJson(),
       }),
       privacy: AtomicFilePrivacy.ownerOnly,
     );

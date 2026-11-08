@@ -80,11 +80,17 @@ class LocalSettingsBackend implements SettingsBackend {
   Future<void> setAppLock(AppLockMode mode) => _state.setAppLock(mode);
 
   /// Turning the update check off also clears any banner already showing
-  /// this session.
+  /// this session. A failed save puts the setting back, as the keep-alive
+  /// setter does, so the refused value cannot ride a later save.
   @override
   Future<void> setCheckForUpdates(bool enabled) async {
     _s.checkForUpdates = enabled;
-    await _state.services.saveSettings();
+    try {
+      await _state.services.saveSettings();
+    } catch (_) {
+      if (_s.checkForUpdates == enabled) _s.checkForUpdates = !enabled;
+      rethrow;
+    }
     if (!enabled) _state.dismissUpdateNotice();
   }
 
@@ -124,9 +130,17 @@ class LocalSettingsBackend implements SettingsBackend {
   @override
   Future<void> setCommandSuggestions(bool enabled) async {
     _s.commandSuggestions = enabled;
-    await _state.services.saveSettings();
+    try {
+      await _state.services.saveSettings();
+    } catch (_) {
+      // As for the keep-alive setting: the refused value must not stay in
+      // memory to ride a later save.
+      if (_s.commandSuggestions == enabled) _s.commandSuggestions = !enabled;
+      rethrow;
+    }
     _state.refreshSuggestions();
   }
+
 
   @override
   Future<void> setTerminalAppearance({

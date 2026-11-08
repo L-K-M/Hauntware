@@ -8,6 +8,11 @@
   gone, as with Poltergeist's and Klabautermann's deletes. Other servers'
   credentials are unchanged. If the keychain is locked, the retraction
   waits and runs later.
+- A snippet, deletion, Command inbox app or status, or setting that
+  could not be saved no longer rides along with a later, unrelated save:
+  Séance keeps what is on disk, as it already did for servers. The
+  update-check and command-suggestion switches go back when their save
+  fails.
 - The window has the same layout on Linux, Windows, macOS and tablets: a
   header with the server's name, Generate command and buttons that hide
   the server list (the sidebar) and the side panel (the inspector), as a
