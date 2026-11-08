@@ -634,6 +634,56 @@ void main() {
     );
   });
 
+  testWidgets('a press stamped before the last one starts no double-click', (
+    tester,
+  ) async {
+    final scratch = Directory.systemTemp.createTempSync('pg-view-');
+    addTearDown(() => scratch.deleteSync(recursive: true));
+    final left = Directory('${scratch.path}/left')..createSync();
+    final right = Directory('${scratch.path}/right')..createSync();
+    File('${left.path}/a.txt').writeAsStringSync('alpha\n');
+    File('${right.path}/a.txt').writeAsStringSync('beta\n');
+    final pair = testSyncPair(
+      left: left.path,
+      right: right.path,
+      rules: const SyncRuleSet(direction: SyncDirection.bidirectional),
+    );
+    final item = testItem(
+      'a.txt',
+      left: testFile(size: 6, mtimeSecs: 1700000000),
+      right: testFile(size: 5, mtimeSecs: 1700000010),
+      suggested: SyncActionType.conflict,
+      reason: SyncReason.bothChanged,
+    );
+    final controller = fakeController(
+      scratch,
+      pair: pair,
+      plan: testPlan(pair, [item]),
+    );
+    addTearDown(controller.dispose);
+    await pumpSyncPlanView(tester, controller);
+    await pumpToReady(tester, controller);
+
+    // An event clock that reset between two presses: the second carries
+    // an earlier stamp. A third press soon after it on the old clock's
+    // terms must not pair with the out-of-order one (Séance #626).
+    final row = tester.getCenter(find.byKey(const ValueKey('sync.row.a.txt')));
+    for (final at in const [
+      Duration(seconds: 10),
+      Duration(seconds: 9),
+      Duration(milliseconds: 9050),
+    ]) {
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.down(row, timeStamp: at);
+      await gesture.up(timeStamp: at + const Duration(milliseconds: 8));
+      await gesture.removePointer();
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byKey(const ValueKey('sync.compare.view')), findsNothing);
+  });
+
   testWidgets('double-click ignores a row without two files', (tester) async {
     final scratch = Directory.systemTemp.createTempSync('pg-view-');
     addTearDown(() => scratch.deleteSync(recursive: true));

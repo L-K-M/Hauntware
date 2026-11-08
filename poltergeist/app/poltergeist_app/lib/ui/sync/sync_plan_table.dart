@@ -724,6 +724,16 @@ final class _ImmediateDoubleTapState extends State<_ImmediateDoubleTap> {
     }
 
     _timer?.cancel();
+    // A press stamped before the armed one (a reset event clock, or
+    // mis-stamped synthetic input) starts no pair of its own: the next
+    // press could otherwise pair with it across the break.
+    final first = armed?.timeStamp ?? Duration.zero;
+    final second = event.timeStamp;
+    if (first != Duration.zero && second != Duration.zero && second < first) {
+      _armed = null;
+      _timer = null;
+      return;
+    }
     _armed = (position: event.position, timeStamp: event.timeStamp);
     _timer = event.timeStamp == Duration.zero
         ? Timer(kDoubleTapTimeout, _disarm)

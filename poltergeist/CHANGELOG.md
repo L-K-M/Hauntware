@@ -13,6 +13,10 @@
   the queue drains get their own notice. On Android, Poltergeist is only
   offered for `poltergeist://browse`, the one link form its parser
   accepts.
+- **File panels open again on macOS.** Open Folder, adding an editor
+  program, bookmark imports, and choosing a key file or a server's image
+  showed no panel: file_picker refused them in the unsandboxed app, as it
+  did in Séance.
 - Undo and Redo cover favorite deletion, renaming, grouping, ordering,
   pins and server duplication. Deleting a favorite offers Undo; failed
   restores explain the error. Undo preserves other windows' later changes

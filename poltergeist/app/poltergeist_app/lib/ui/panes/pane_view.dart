@@ -1157,7 +1157,10 @@ class _PaneViewState extends State<PaneView> {
     }
     widget.focusNode.requestFocus();
     _armedClickTimer?.cancel();
-    _armedClick = plain
+    // A press stamped before the armed one (a reset event clock, or
+    // mis-stamped synthetic input) starts no pair of its own: the next
+    // press could otherwise pair with it across the break.
+    _armedClick = plain && !_outOfOrder(armed?.timeStamp, event.timeStamp)
         ? (row: index, position: event.position, timeStamp: event.timeStamp)
         : null;
     // Stamped presses carry their own clock; only a stampless synthetic
@@ -1175,6 +1178,14 @@ class _PaneViewState extends State<PaneView> {
     final gap = second - first;
     return !gap.isNegative && gap <= kDoubleTapTimeout;
   }
+
+  /// Whether a press at [second] carries an earlier stamp than the armed
+  /// press at [first]. Stampless presses have no order.
+  static bool _outOfOrder(Duration? first, Duration second) =>
+      first != null &&
+      first != Duration.zero &&
+      second != Duration.zero &&
+      second < first;
 
   void _onRowPointerMove(PointerMoveEvent event) {
     final deferred = _deferredSelect;
