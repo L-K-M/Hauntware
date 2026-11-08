@@ -554,11 +554,7 @@ class _PaneViewState extends State<PaneView> {
       }
     }
 
-    // 02 §2.5: shift + a cursor key extends the anchored selection
-    // instead of single-selecting the target row.
-    final cursorUpdate = HardwareKeyboard.instance.isShiftPressed
-        ? SelectionUpdate.range
-        : SelectionUpdate.single;
+    final fileKey = ghostFileListKey(event, platform, canRename: true);
 
     // The pane's single keys are PLAIN keys: modified chords (Ctrl+Enter,
     // Alt+Backspace, …) belong to whoever binds them, not this table.
@@ -582,7 +578,10 @@ class _PaneViewState extends State<PaneView> {
         key == LogicalKeyboardKey.arrowUp ||
         key == LogicalKeyboardKey.home ||
         key == LogicalKeyboardKey.end ||
+        key == LogicalKeyboardKey.pageUp ||
+        key == LogicalKeyboardKey.pageDown ||
         key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter ||
         key == LogicalKeyboardKey.f2 ||
         key == LogicalKeyboardKey.backspace ||
         key == LogicalKeyboardKey.space ||
@@ -607,10 +606,44 @@ class _PaneViewState extends State<PaneView> {
         plainKey) {
       return KeyEventResult.handled;
     }
-    // Modified chords (Ctrl+Enter, Alt+Home, …) belong to whoever binds
-    // them, not this table — pass them through untouched.
     if (!plainKey) {
+      // Folder navigation belongs to the focused listing as well as the
+      // command registry. Handle it here so its repeats cannot fall through
+      // to native menus or turn an Open into an ordinary selection move.
+      if (fileKey?.command == GhostFileListCommand.parent ||
+          fileKey?.command == GhostFileListCommand.open) {
+        if (controller.verbsEnabled && event is! KeyRepeatEvent) {
+          if (fileKey!.command == GhostFileListCommand.parent) {
+            controller.goUp();
+          } else {
+            _openCursor();
+          }
+        }
+        return KeyEventResult.handled;
+      }
       return KeyEventResult.ignored;
+    }
+
+    if (fileKey != null) {
+      final target = ghostFileListTargetIndex(
+        fileKey.command,
+        currentIndex: controller.cursorIndex,
+        itemCount: controller.entries.length,
+        pageSize: _scrollController.hasClients
+            ? (_scrollController.position.viewportDimension / _rowExtent())
+                  .floor()
+            : 1,
+      );
+      if (target != null) {
+        controller.setCursorIndex(
+          target,
+          update: fileKey.extendSelection
+              ? SelectionUpdate.range
+              : SelectionUpdate.single,
+        );
+        _revealCursor();
+        return KeyEventResult.handled;
+      }
     }
 
     switch (key) {
@@ -641,29 +674,16 @@ class _PaneViewState extends State<PaneView> {
         }
         return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowDown:
-        controller.moveCursorBy(1, update: cursorUpdate);
-        _revealCursor();
-        return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowUp:
-        controller.moveCursorBy(-1, update: cursorUpdate);
-        _revealCursor();
-        return KeyEventResult.handled;
       case LogicalKeyboardKey.home:
-        if (controller.entries.isNotEmpty) {
-          controller.setCursorIndex(0, update: cursorUpdate);
-          _revealCursor();
-        }
-        return KeyEventResult.handled;
       case LogicalKeyboardKey.end:
-        if (controller.entries.isNotEmpty) {
-          controller.setCursorIndex(
-            controller.entries.length - 1,
-            update: cursorUpdate,
-          );
-          _revealCursor();
-        }
+      case LogicalKeyboardKey.pageUp:
+      case LogicalKeyboardKey.pageDown:
+        // Empty listings still own navigation rather than scrolling an
+        // unrelated ancestor or moving focus onto a header control.
         return KeyEventResult.handled;
       case LogicalKeyboardKey.enter:
+      case LogicalKeyboardKey.numpadEnter:
         // Enter opens on Windows/Linux; on macOS Enter is the rename key
         // (02 §8.3). Key repeats never re-open or re-invoke — holding
         // Enter must not drill through nested folders (and the owned

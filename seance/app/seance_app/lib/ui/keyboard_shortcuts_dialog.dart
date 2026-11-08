@@ -78,6 +78,46 @@ List<ShortcutSection> keyboardShortcutSections(TargetPlatform platform) {
       ],
     ),
     (
+      title: 'Files (while the file list has focus)',
+      rows: [
+        (action: 'Move selection', keys: 'Up / Down'),
+        (action: 'Extend selection', keys: 'Shift+Up / Shift+Down'),
+        (action: 'First / last item', keys: 'Home / End'),
+        (action: 'Move by a page', keys: 'Page Up / Page Down'),
+        (
+          action: 'Open item',
+          keys: platform == TargetPlatform.macOS
+              ? '${keys(const SingleActivator(LogicalKeyboardKey.arrowDown, meta: true))} or ${keys(const SingleActivator(LogicalKeyboardKey.keyO, meta: true))}'
+              : 'Enter',
+        ),
+        (
+          action: 'Parent folder',
+          keys: platform == TargetPlatform.macOS
+              ? keys(
+                  const SingleActivator(LogicalKeyboardKey.arrowUp, meta: true),
+                )
+              : '${keys(const SingleActivator(LogicalKeyboardKey.arrowUp, alt: true))} or Backspace',
+        ),
+        (
+          action: 'Rename',
+          keys: platform == TargetPlatform.macOS ? 'Return' : 'F2',
+        ),
+        (action: 'Toggle selection', keys: 'Space'),
+        (action: 'Clear selection', keys: 'Esc'),
+        (
+          action: 'Select all files',
+          keys: keys(
+            SingleActivator(
+              LogicalKeyboardKey.keyA,
+              meta: platform == TargetPlatform.macOS,
+              control: platform != TargetPlatform.macOS,
+            ),
+          ),
+        ),
+        (action: 'Item actions', keys: 'Menu or Shift+F10'),
+      ],
+    ),
+    (
       title: 'View',
       rows: [
         (

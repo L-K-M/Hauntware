@@ -147,6 +147,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
 
   /// The desktop listing's keyboard cursor — the path the ring sits on.
   String? _cursorPath;
+  String? _cursorDirectory;
 
   /// The pane's double-click window (the pane state times it itself, as
   /// Poltergeist's `_RowGestures` does): a second primary press on the
@@ -178,6 +179,15 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       listenable: widget.controller,
       builder: (context, _) {
         final controller = widget.controller;
+        if (_cursorDirectory != controller.currentPath) {
+          _cursorDirectory = controller.currentPath;
+          _cursorPath = null;
+          _lastPrimaryDownPath = null;
+        } else if (!controller.entries.any(
+          (entry) => entry.path == _cursorPath,
+        )) {
+          _cursorPath = null;
+        }
         _queueDirtyEditPrompt(controller);
         final content = Stack(
           children: [
@@ -205,7 +215,17 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
                     message: controller.error!,
                     onRetry: controller.refresh,
                   ),
-                Expanded(child: _browserBody(controller)),
+                Expanded(
+                  child: Focus(
+                    focusNode: _listFocus,
+                    onKeyEvent: _onListingKey,
+                    child: Listener(
+                      behavior: HitTestBehavior.translucent,
+                      onPointerDown: (_) => _listFocus.requestFocus(),
+                      child: _browserBody(controller),
+                    ),
+                  ),
+                ),
                 if (controller.localCopies.isNotEmpty)
                   _LocalCopiesPanel(
                     copies: controller.localCopies.values.toList(),
@@ -412,22 +432,13 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
             },
           ),
           Expanded(
-            child: Focus(
-              focusNode: _listFocus,
-              onKeyEvent: _onListingKey,
-              child: Listener(
-                // A press anywhere in the listing arms the keyboard
-                // focus; the rows' own Listeners see the same event.
-                onPointerDown: (_) => _listFocus.requestFocus(),
-                child: ListView.builder(
-                  key: _listViewportKey,
-                  controller: _listScroll,
-                  itemExtent: scaledGhostFileRowExtent(context),
-                  itemCount: controller.entries.length,
-                  itemBuilder: (context, index) =>
-                      _desktopRow(controller.entries[index]),
-                ),
-              ),
+            child: ListView.builder(
+              key: _listViewportKey,
+              controller: _listScroll,
+              itemExtent: scaledGhostFileRowExtent(context),
+              itemCount: controller.entries.length,
+              itemBuilder: (context, index) =>
+                  _desktopRow(controller.entries[index]),
             ),
           ),
         ],
@@ -440,6 +451,8 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   /// the verb menu.
   Widget _compactListing(RemoteFilesController controller) {
     return ListView.builder(
+      key: _listViewportKey,
+      controller: _listScroll,
       itemExtent: scaledGhostCompactFileRowExtent(context),
       itemCount: controller.entries.length,
       itemBuilder: (context, index) {
@@ -534,6 +547,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   /// pointer-down; the double-click window stays here, in pane state.
   void _rowPointerDown(RemoteFileEntry entry, PointerDownEvent event) {
     final controller = widget.controller;
+    if (controller.loading || controller.error != null) return;
     _setCursor(entry.path);
     if (event.buttons & kSecondaryMouseButton != 0) {
       // A right-click on an unselected row selects it first, like the
@@ -588,6 +602,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   }
 
   void _openEntry(RemoteFileEntry entry) {
+    if (widget.controller.loading || widget.controller.error != null) return;
     if (entry.isDirectory) {
       unawaited(widget.controller.navigate(entry.path));
     } else {
@@ -600,90 +615,82 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     setState(() => _cursorPath = path);
   }
 
-  /// The listing's keyboard contract: arrows move the cursor (Shift
-  /// extends the range, a plain move single-selects), Enter opens,
-  /// Space toggles, Ctrl/⌘+A selects all, Escape clears, and the Menu
-  /// key or Shift+F10 opens the cursor row's verbs.
+  /// Shared navigation stays scoped to the listing, including when the
+  /// folder is empty. Header fields and row action buttons keep their keys.
   KeyEventResult _onListingKey(FocusNode node, KeyEvent event) {
-    // Key-down and the arrows' key-repeat run; a held Enter would keep
-    // re-opening rows and repeating Space/select-all is meaningless, so
-    // only cursor movement honours auto-repeat.
-    if (event is! KeyDownEvent &&
-        !(event is KeyRepeatEvent &&
-            (event.logicalKey == LogicalKeyboardKey.arrowDown ||
-                event.logicalKey == LogicalKeyboardKey.arrowUp))) {
-      return KeyEventResult.ignored;
-    }
+    if (!node.hasPrimaryFocus) return KeyEventResult.ignored;
+    final binding = ghostFileListKey(
+      event,
+      Theme.of(context).platform,
+      canRename: true,
+    );
+    final keys = HardwareKeyboard.instance;
+    final space =
+        (event is KeyDownEvent || event is KeyRepeatEvent) &&
+        event.logicalKey == LogicalKeyboardKey.space &&
+        !keys.isShiftPressed &&
+        !keys.isControlPressed &&
+        !keys.isMetaPressed &&
+        !keys.isAltPressed;
+    if (binding == null && !space) return KeyEventResult.ignored;
+
     final controller = widget.controller;
+    if (!controller.initialized || controller.loading) {
+      return KeyEventResult.handled;
+    }
+    final command = binding?.command;
     final entries = controller.entries;
-    if (entries.isEmpty) return KeyEventResult.ignored;
-    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-    final isApple = Theme.of(context).platform == TargetPlatform.macOS;
-    final modifier = isApple
-        ? pressed.contains(LogicalKeyboardKey.metaLeft) ||
-              pressed.contains(LogicalKeyboardKey.metaRight)
-        : pressed.contains(LogicalKeyboardKey.controlLeft) ||
-              pressed.contains(LogicalKeyboardKey.controlRight);
-    final shift =
-        pressed.contains(LogicalKeyboardKey.shiftLeft) ||
-        pressed.contains(LogicalKeyboardKey.shiftRight);
-    final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.keyA && modifier) {
+    final index = entries.indexWhere((entry) => entry.path == _cursorPath);
+    final extent = _listingRowExtent();
+    final target = command == null
+        ? null
+        : ghostFileListTargetIndex(
+            command,
+            currentIndex: index,
+            itemCount: entries.length,
+            pageSize: _listScroll.hasClients
+                ? (_listScroll.position.viewportDimension / extent).floor()
+                : 1,
+          );
+    if (target != null && controller.error == null) {
+      final entry = entries[target];
+      _setCursor(entry.path);
+      binding!.extendSelection
+          ? controller.selectRangeTo(entry.path)
+          : controller.selectOnly(entry.path);
+      ghostRevealFileListIndex(_listScroll, target, extent);
+      return KeyEventResult.handled;
+    }
+    // Action repeats are consumed, not leaked to app or native menus.
+    if (event is KeyRepeatEvent) return KeyEventResult.handled;
+    if (command == GhostFileListCommand.parent) {
+      if (controller.canGoUp) unawaited(controller.goUp());
+      return KeyEventResult.handled;
+    }
+    if (controller.error != null) return KeyEventResult.handled;
+    if (command == GhostFileListCommand.selectAll) {
       controller.selectAll();
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.escape) {
+    } else if (command == GhostFileListCommand.clearSelection) {
       controller.clearSelection();
-      return KeyEventResult.handled;
+    } else if (index >= 0) {
+      final entry = entries[index];
+      if (command == GhostFileListCommand.open) {
+        _openEntry(entry);
+      } else if (command == GhostFileListCommand.rename) {
+        if (!ghostFileNameIsFlagged(entry.name)) unawaited(_rename(entry));
+      } else if (command == GhostFileListCommand.contextMenu) {
+        unawaited(_showEntryMenu(entry, _cursorMenuPosition(index)));
+      } else if (space) {
+        controller.toggleSelection(entry.path);
+      }
     }
-    var index = entries.indexWhere((entry) => entry.path == _cursorPath);
-    if (key == LogicalKeyboardKey.arrowDown ||
-        key == LogicalKeyboardKey.arrowUp) {
-      final delta = key == LogicalKeyboardKey.arrowDown ? 1 : -1;
-      index = index < 0
-          ? (delta > 0 ? 0 : entries.length - 1)
-          : (index + delta).clamp(0, entries.length - 1);
-      final target = entries[index];
-      _setCursor(target.path);
-      shift
-          ? controller.selectRangeTo(target.path)
-          : controller.selectOnly(target.path);
-      _scrollCursorIntoView(index);
-      return KeyEventResult.handled;
-    }
-    if (index < 0) return KeyEventResult.ignored;
-    final entry = entries[index];
-    if (key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.numpadEnter) {
-      _openEntry(entry);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.space) {
-      controller.toggleSelection(entry.path);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.contextMenu ||
-        (key == LogicalKeyboardKey.f10 && shift)) {
-      unawaited(_showEntryMenu(entry, _cursorMenuPosition(index)));
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
+    return KeyEventResult.handled;
   }
 
-  /// Keeps the cursor row inside the viewport on keyboard moves — the
-  /// rows are fixed-extent, so the target scroll offset is exact.
-  void _scrollCursorIntoView(int index) {
-    if (!_listScroll.hasClients) return;
-    final extent = scaledGhostFileRowExtent(context);
-    final position = _listScroll.position;
-    final top = index * extent;
-    final bottom = top + extent;
-    if (top < position.pixels) {
-      _listScroll.jumpTo(top);
-    } else if (bottom > position.pixels + position.viewportDimension) {
-      _listScroll.jumpTo(bottom - position.viewportDimension);
-    }
-  }
+  double _listingRowExtent() =>
+      ghostIsDesktopPlatform(Theme.of(context).platform)
+      ? scaledGhostFileRowExtent(context)
+      : scaledGhostCompactFileRowExtent(context);
 
   /// Where the cursor row's menu anchors for the Menu key/Shift+F10 —
   /// the row's own rect inside the viewport, not the screen edge.
@@ -692,7 +699,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
         _listViewportKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return const Offset(32, 32);
     final origin = box.localToGlobal(Offset.zero);
-    final extent = scaledGhostFileRowExtent(context);
+    final extent = _listingRowExtent();
     final offset = _listScroll.hasClients ? _listScroll.offset : 0.0;
     final center = (index * extent) - offset + extent / 2;
     return Offset(

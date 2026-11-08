@@ -1,6 +1,8 @@
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
@@ -57,8 +59,70 @@ class _DiskExplorerState extends State<DiskExplorer> {
 
   /// Whether to read as root; in effect only while admin mode is on.
   bool _wantRoot = false;
+  final _listFocus = FocusNode();
+  final _scroll = ScrollController();
+  final _notesKey = GlobalKey();
+  String? _selected;
 
   String get _path => _trail.last;
+  double _rowExtent(BuildContext context) =>
+      MediaQuery.textScalerOf(context).scale(72);
+
+  @override
+  void dispose() {
+    _listFocus.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  KeyEventResult _onKey(
+    FocusNode node,
+    KeyEvent event, {
+    required bool asRoot,
+  }) {
+    if (!node.hasPrimaryFocus) return KeyEventResult.ignored;
+    final binding = ghostFileListKey(event, Theme.of(context).platform);
+    if (binding == null) return KeyEventResult.ignored;
+    if (binding.command == GhostFileListCommand.parent) {
+      if (event is! KeyRepeatEvent) _up();
+      return KeyEventResult.handled;
+    }
+    final key = (_path, asRoot);
+    final listing = _reads[key]?.listing;
+    if (_reading.contains(key) || listing == null) {
+      return KeyEventResult.handled;
+    }
+    final entries = listing.entries;
+    final index = entries.indexWhere((entry) => entry.name == _selected);
+    final extent = _rowExtent(context);
+    final target = ghostFileListTargetIndex(
+      binding.command,
+      currentIndex: index,
+      itemCount: entries.length,
+      pageSize: _scroll.hasClients
+          ? (_scroll.position.viewportDimension / extent).floor()
+          : 1,
+    );
+    if (target != null) {
+      setState(() => _selected = entries[target].name);
+      final notes = _notesKey.currentContext?.findRenderObject() as RenderBox?;
+      ghostRevealFileListIndex(
+        _scroll,
+        target,
+        extent,
+        leadingExtent: notes?.size.height ?? 0,
+      );
+    } else if (event is! KeyRepeatEvent) {
+      if (binding.command == GhostFileListCommand.open &&
+          index >= 0 &&
+          entries[index].isFolder) {
+        _open(entries[index].name, elevated: asRoot);
+      } else if (binding.command == GhostFileListCommand.clearSelection) {
+        setState(() => _selected = null);
+      }
+    }
+    return KeyEventResult.handled;
+  }
 
   @override
   void initState() {
@@ -86,17 +150,26 @@ class _DiskExplorerState extends State<DiskExplorer> {
 
   void _open(String name, {required bool elevated}) {
     final path = _path == '/' ? '/$name' : '$_path/$name';
-    setState(() => _trail.add(path));
+    setState(() {
+      _selected = null;
+      _trail.add(path);
+    });
     _read(path, elevated: elevated);
   }
 
   void _up() {
     if (_trail.length < 2) return;
-    setState(_trail.removeLast);
+    setState(() {
+      _selected = null;
+      _trail.removeLast();
+    });
   }
 
   void _setAsRoot(bool asRoot) {
-    setState(() => _wantRoot = asRoot);
+    setState(() {
+      _selected = null;
+      _wantRoot = asRoot;
+    });
     _read(_path, elevated: asRoot);
   }
 
@@ -164,22 +237,36 @@ class _DiskExplorerState extends State<DiskExplorer> {
                   onChanged: _setAsRoot,
                 ),
               Expanded(
-                child: switch ((report, reading)) {
-                  (_, true) => _Reading(path: _path),
-                  (final report?, false) => _Report(
-                    report: report,
-                    adminOn: adminOn,
-                    asRoot: asRoot,
-                    onOpen: (name) => _open(name, elevated: asRoot),
-                    onRetry: () => _read(_path, elevated: asRoot, again: true),
+                child: Focus(
+                  focusNode: _listFocus,
+                  onKeyEvent: (node, event) =>
+                      _onKey(node, event, asRoot: asRoot),
+                  child: Listener(
+                    behavior: HitTestBehavior.opaque,
+                    onPointerDown: (_) => _listFocus.requestFocus(),
+                    child: switch ((report, reading)) {
+                      (_, true) => _Reading(path: _path),
+                      (final report?, false) => _Report(
+                        report: report,
+                        adminOn: adminOn,
+                        asRoot: asRoot,
+                        selected: _selected,
+                        scroll: _scroll,
+                        rowExtent: _rowExtent(context),
+                        notesKey: _notesKey,
+                        onSelect: (name) => setState(() => _selected = name),
+                        onOpen: (name) => _open(name, elevated: asRoot),
+                        onRetry: () =>
+                            _read(_path, elevated: asRoot, again: true),
+                      ),
+                      // Admin mode ending needs a fresh unprivileged read.
+                      (null, false) => _Reading(
+                        path: _path,
+                        onShown: () => _read(_path, elevated: asRoot),
+                      ),
+                    },
                   ),
-                  // A folder not yet read this way, as after admin mode
-                  // ended: read it once the frame is built.
-                  (null, false) => _Reading(
-                    path: _path,
-                    onShown: () => _read(_path, elevated: asRoot),
-                  ),
-                },
+                ),
               ),
             ],
           ),
@@ -226,8 +313,18 @@ class _Report extends StatelessWidget {
     required this.asRoot,
     required this.onOpen,
     required this.onRetry,
+    required this.selected,
+    required this.onSelect,
+    required this.scroll,
+    required this.rowExtent,
+    required this.notesKey,
   });
 
+  final GlobalKey notesKey;
+  final String? selected;
+  final ValueChanged<String> onSelect;
+  final ScrollController scroll;
+  final double rowExtent;
   final DiskUsageReport report;
   final bool adminOn;
   final bool asRoot;
@@ -273,27 +370,44 @@ class _Report extends StatelessWidget {
             : l10n.diskExplorerIncomplete,
       if (listing.truncated) l10n.diskExplorerTruncated(listing.entries.length),
     ];
-    return ListView(
-      children: [
-        for (final note in notes)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-            child: Text(note),
+    return CustomScrollView(
+      key: ValueKey((report.path, asRoot)),
+      controller: scroll,
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            key: notesKey,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final note in notes)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                  child: Text(note),
+                ),
+              if (listing.entries.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(l10n.diskExplorerEmpty),
+                ),
+            ],
           ),
-        if (listing.entries.isEmpty)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(l10n.diskExplorerEmpty),
-          ),
-        for (final entry in listing.entries)
-          _EntryTile(
-            entry: entry,
-            size: size(entry.bytes),
-            share: listing.totalBytes == 0
-                ? 0
-                : entry.bytes / listing.totalBytes,
-            onOpen: entry.isFolder ? () => onOpen(entry.name) : null,
-          ),
+        ),
+        SliverFixedExtentList(
+          itemExtent: rowExtent,
+          delegate: SliverChildBuilderDelegate((context, index) {
+            final entry = listing.entries[index];
+            return _EntryTile(
+              entry: entry,
+              size: size(entry.bytes),
+              share: listing.totalBytes == 0
+                  ? 0
+                  : entry.bytes / listing.totalBytes,
+              selected: entry.name == selected,
+              onSelect: () => onSelect(entry.name),
+              onOpen: entry.isFolder ? () => onOpen(entry.name) : null,
+            );
+          }, childCount: listing.entries.length),
+        ),
       ],
     );
   }
@@ -305,18 +419,24 @@ class _EntryTile extends StatelessWidget {
     required this.size,
     required this.share,
     required this.onOpen,
+    required this.selected,
+    required this.onSelect,
   });
 
   final DiskUsageEntry entry;
   final String size;
   final double share;
   final VoidCallback? onOpen;
+  final bool selected;
+  final VoidCallback onSelect;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final percent = (share * 100).round();
     return ListTile(
+      selected: selected,
+      selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
       leading: Icon(
         entry.isFolder ? Icons.folder_outlined : Icons.insert_drive_file,
       ),
@@ -328,7 +448,10 @@ class _EntryTile extends StatelessWidget {
         ),
       ),
       trailing: Text(l10n.diskExplorerEntrySize(size, percent)),
-      onTap: onOpen,
+      onTap: () {
+        onSelect();
+        onOpen?.call();
+      },
     );
   }
 }

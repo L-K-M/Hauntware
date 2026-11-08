@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:ghost_ui/ghost_ui.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -10,6 +11,7 @@ import '../../services/pane_controller.dart';
 import '../../services/pane_location.dart';
 import '../../services/pane_permissions.dart' show nameIsFlagged;
 import '../../services/quick_select_state.dart';
+import '../../services/selection_state.dart';
 import '../../theme/app_theme.dart';
 import '../local_edits_review.dart';
 import '../panes/pane_format.dart';
@@ -101,6 +103,7 @@ class CompactListing extends StatefulWidget {
 
 class _CompactListingState extends State<CompactListing> {
   final _scroll = ScrollController();
+  final _focus = FocusNode();
   Timer? _graceTimer;
   bool _pastGrace = false;
   String? _revealedPath;
@@ -134,7 +137,72 @@ class _CompactListingState extends State<CompactListing> {
     _controller.removeListener(_onControllerChanged);
     _graceTimer?.cancel();
     _scroll.dispose();
+    _focus.dispose();
     super.dispose();
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (!node.hasPrimaryFocus) return KeyEventResult.ignored;
+    final binding = ghostFileListKey(
+      event,
+      Theme.of(context).platform,
+      canRename: true,
+    );
+    if (binding == null) return KeyEventResult.ignored;
+    final controller = _controller;
+    if (binding.command == GhostFileListCommand.clearSelection) {
+      if (event is! KeyRepeatEvent) {
+        if (controller.navigationInFlight) {
+          controller.cancelNavigation();
+        } else {
+          controller.clearSelection();
+        }
+      }
+      return KeyEventResult.handled;
+    }
+    if (!controller.verbsEnabled ||
+        controller.inlineRenameActive ||
+        controller.error != null) {
+      return KeyEventResult.handled;
+    }
+    final cursor = controller.cursorIndex;
+    final extent = scaledGhostCompactFileRowExtent(context);
+    final target = ghostFileListTargetIndex(
+      binding.command,
+      currentIndex: cursor,
+      itemCount: controller.entries.length,
+      pageSize: _scroll.hasClients
+          ? (_scroll.position.viewportDimension / extent).floor()
+          : 1,
+    );
+    if (target != null) {
+      controller.setCursorIndex(
+        target,
+        update: binding.extendSelection
+            ? SelectionUpdate.range
+            : SelectionUpdate.single,
+      );
+      ghostRevealFileListIndex(_scroll, target, extent);
+      return KeyEventResult.handled;
+    }
+    if (event is KeyRepeatEvent) return KeyEventResult.handled;
+    switch (binding.command) {
+      case GhostFileListCommand.parent:
+        controller.goUp();
+      case GhostFileListCommand.open:
+        if (cursor != null) {
+          unawaited(controller.openEntry(controller.entries[cursor]));
+        }
+      case GhostFileListCommand.rename:
+        controller.startRename();
+      case GhostFileListCommand.selectAll:
+        controller.selectAll();
+      case GhostFileListCommand.contextMenu:
+        if (cursor != null) widget.callbacks.onActions(controller, cursor);
+      default:
+        break;
+    }
+    return KeyEventResult.handled;
   }
 
   bool get _busy =>
@@ -254,7 +322,17 @@ class _CompactListingState extends State<CompactListing> {
                 : null,
           ),
           ..._bannerSlot(context, l10n),
-          Expanded(child: _body(context, l10n)),
+          Expanded(
+            child: Focus(
+              focusNode: _focus,
+              onKeyEvent: _onKey,
+              child: Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: (_) => _focus.requestFocus(),
+                child: _body(context, l10n),
+              ),
+            ),
+          ),
         ],
       ),
     );

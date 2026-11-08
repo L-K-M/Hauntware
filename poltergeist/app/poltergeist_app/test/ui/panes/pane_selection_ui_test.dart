@@ -340,6 +340,34 @@ void main() {
     expect(left.cursorIndex, 2);
   });
 
+  testWidgets('Mac folder chords are listing-local and do not repeat', (
+    tester,
+  ) async {
+    final channel = await openFiveRows();
+    channel.listings['/home/tester/alpha'] = [];
+    await pumpPanes(tester);
+    await tapRow(tester, find.text('alpha'));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(left.location?.path, '/home/tester/alpha');
+    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pumpAndSettle();
+    expect(left.location?.path, '/home/tester');
+    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pumpAndSettle();
+    expect(left.location?.path, '/home/tester');
+    expect(channel.listCalls, [
+      '/home/tester',
+      '/home/tester/alpha',
+      '/home/tester',
+    ]);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
   testWidgets('plain arrows single-select; shift arrows extend', (
     tester,
   ) async {
@@ -371,6 +399,63 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     await tester.pump();
     expect(selectedOf(left), {1, 2});
+  });
+
+  testWidgets('choosing a parent folder returns arrow control to the listing', (
+    tester,
+  ) async {
+    final channel = await openFiveRows();
+    channel.listings['/home'] = [
+      _entry('tester', parent: '/home', type: RemoteFileType.directory),
+      _entry('other', parent: '/home'),
+    ];
+    await pumpPanes(tester);
+    await tester.tap(find.byKey(const ValueKey('pane.left.path.ancestors')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pane.left.path.ancestor.0')));
+    await tester.pumpAndSettle();
+    expect(left.location?.path, '/home');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(left.selectedCount, 1);
+  }, variant: TargetPlatformVariant.desktop());
+
+  testWidgets('sorting a listing keeps arrow navigation working', (
+    tester,
+  ) async {
+    await openFiveRows();
+    await pumpPanes(tester);
+    await tester.tap(find.byKey(const ValueKey('pane.left.column.name')));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(left.selectedCount, 1);
+  }, variant: TargetPlatformVariant.desktop());
+
+  testWidgets('Page Down moves selection and Shift Page Up extends it', (
+    tester,
+  ) async {
+    final channel = controller_test.FakePaneChannel('/home/tester');
+    channel.listings['/home/tester'] = [
+      for (var i = 0; i < 100; i++)
+        _entry('file${i.toString().padLeft(3, '0')}.txt'),
+    ];
+    lanes.nextLocalChannel = channel;
+    await left.openLocalHome();
+    await pumpPanes(tester);
+    leftNode.requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+    await tester.pump();
+    expect(left.cursorIndex, greaterThan(1));
+    final end = left.cursorIndex!;
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.pageUp);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+    expect(left.cursorIndex, 0);
+    expect(left.selectedCount, end + 1);
   });
 
   testWidgets('Home and End keep plain behavior and extend with shift', (
@@ -452,7 +537,10 @@ void main() {
     // the foreground one (it never shifts the row's layout).
     Iterable<BoxDecoration> rowDecorations(String name) => tester
         .widgetList<DecoratedBox>(
-          find.ancestor(of: find.text(name), matching: find.byType(DecoratedBox)),
+          find.ancestor(
+            of: find.text(name),
+            matching: find.byType(DecoratedBox),
+          ),
         )
         .map((box) => box.decoration)
         .whereType<BoxDecoration>();
