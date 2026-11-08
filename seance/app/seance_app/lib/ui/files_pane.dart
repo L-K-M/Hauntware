@@ -641,9 +641,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     final command = binding?.command;
     final entries = controller.entries;
     final index = entries.indexWhere((entry) => entry.path == _cursorPath);
-    final extent = ghostIsDesktopPlatform(Theme.of(context).platform)
-        ? scaledGhostFileRowExtent(context)
-        : scaledGhostCompactFileRowExtent(context);
+    final extent = _listingRowExtent();
     final target = command == null
         ? null
         : ghostFileListTargetIndex(
@@ -689,6 +687,11 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     return KeyEventResult.handled;
   }
 
+  double _listingRowExtent() =>
+      ghostIsDesktopPlatform(Theme.of(context).platform)
+      ? scaledGhostFileRowExtent(context)
+      : scaledGhostCompactFileRowExtent(context);
+
   /// Where the cursor row's menu anchors for the Menu key/Shift+F10 —
   /// the row's own rect inside the viewport, not the screen edge.
   Offset _cursorMenuPosition(int index) {
@@ -696,7 +699,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
         _listViewportKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return const Offset(32, 32);
     final origin = box.localToGlobal(Offset.zero);
-    final extent = scaledGhostFileRowExtent(context);
+    final extent = _listingRowExtent();
     final offset = _listScroll.hasClients ? _listScroll.offset : 0.0;
     final center = (index * extent) - offset + extent / 2;
     return Offset(

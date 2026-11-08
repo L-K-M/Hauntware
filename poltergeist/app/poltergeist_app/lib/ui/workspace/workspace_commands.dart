@@ -143,6 +143,7 @@ Future<void> openWorkspaceBookmark(
   required WorkspaceController workspace,
   required WorkspaceLibrary? library,
   required SavedWorkspace saved,
+  VoidCallback? onApplied,
 }) async {
   final l10n = AppLocalizations.of(context);
   // The guarded replace: every existing tab's in-flight state is
@@ -151,6 +152,9 @@ Future<void> openWorkspaceBookmark(
   // workspace stands exactly as it was, no toast.
   final prior = await workspace.requestApplyWorkspace(saved.snapshot);
   if (prior == null) return;
+  // Let the host hand focus to the applied listing, not a cancelled
+  // replacement, and do so before a slow recency write can steal it later.
+  onApplied?.call();
   // Persist the open's recency stamp — reported like any other store
   // fault, never silently.
   await library?.markOpened(saved.id);

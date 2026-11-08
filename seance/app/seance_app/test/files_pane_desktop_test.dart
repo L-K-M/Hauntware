@@ -1249,6 +1249,30 @@ void main() {
   );
 
   platformTest(
+    'compact keyboard menus anchor at the cursor row',
+    TargetPlatform.android,
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      Focus.of(
+        tester.element(find.byType(GhostFileCompactRow).first),
+      ).requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.end);
+      await tester.pump();
+      expect(files.selectedPaths, {'$_home/z.txt'});
+      final cursorY = tester.getCenter(find.text('z.txt')).dy;
+      await tester.sendKeyEvent(LogicalKeyboardKey.contextMenu);
+      await tester.pumpAndSettle();
+      final menuY = tester.getTopLeft(find.text('Open locally')).dy;
+      expect(menuY, inInclusiveRange(cursorY, cursorY + 60));
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+    },
+  );
+
+  platformTest(
     'touch posture keeps the comfortable rows',
     TargetPlatform.android,
     (tester) async {

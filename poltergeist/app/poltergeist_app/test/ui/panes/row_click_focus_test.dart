@@ -120,6 +120,41 @@ void main() {
   }, variant: TargetPlatformVariant.desktop());
 
   testWidgets(
+    'a workspace favorite also hands arrows to its restored listing',
+    (tester) async {
+      final now = DateTime.utc(2026, 11, 8);
+      final bookmark = Bookmark(
+        id: 'workspace',
+        kind: BookmarkKind.workspace,
+        label: 'Work files',
+        left: const BookmarkLocation(path: '/work-left'),
+        right: const BookmarkLocation(path: '/work-right'),
+        sortKey: 'k',
+        createdAt: now,
+        updatedAt: now,
+      );
+      for (final path in ['/work-left', '/work-right']) {
+        engine.localChannels.add(
+          session_test.FakeAppBrowseChannel(homePath: '/home/tester')
+            ..listings[path] = [_entry(path, 'restored.txt')],
+        );
+      }
+      await pumpApp(tester, store: FakeBookmarkStore([bookmark]));
+      await tester.tap(
+        find.byKey(const ValueKey('sidebar.favorite.workspace')),
+      );
+      await tester.pumpAndSettle();
+      final pane = tester.widget<PaneView>(find.byType(PaneView).first);
+      expect(pane.controller.location?.path, '/work-left');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(pane.controller.cursorIndex, 0);
+      expect(pane.controller.selectedCount, 1);
+    },
+    variant: TargetPlatformVariant.desktop(),
+  );
+
+  testWidgets(
     'the initial listing responds to arrows without a pointer click',
     (tester) async {
       await pumpApp(tester);

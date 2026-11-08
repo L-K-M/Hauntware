@@ -92,13 +92,11 @@ List<ShortcutSection> keyboardShortcutSections(TargetPlatform platform) {
         ),
         (
           action: 'Parent folder',
-          keys: keys(
-            SingleActivator(
-              LogicalKeyboardKey.arrowUp,
-              meta: platform == TargetPlatform.macOS,
-              alt: platform != TargetPlatform.macOS,
-            ),
-          ),
+          keys: platform == TargetPlatform.macOS
+              ? keys(
+                  const SingleActivator(LogicalKeyboardKey.arrowUp, meta: true),
+                )
+              : '${keys(const SingleActivator(LogicalKeyboardKey.arrowUp, alt: true))} or Backspace',
         ),
         (
           action: 'Rename',

@@ -176,6 +176,15 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     await tester.pump();
     expect(find.text('file119').hitTestable(), findsOneWidget);
+    final scroll = tester.widget<CustomScrollView>(
+      find.byType(CustomScrollView),
+    );
+    final notes = (scroll.slivers.first as SliverToBoxAdapter).child!;
+    expect(
+      (notes.key! as GlobalKey).currentContext,
+      isNotNull,
+      reason: 'the single-child notes sliver stays mounted outside the cache',
+    );
     expect(
       tester
           .widgetList<ListTile>(find.byType(ListTile))

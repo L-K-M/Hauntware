@@ -4706,6 +4706,11 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         workspace: workspace,
         library: library,
         saved: saved,
+        onApplied: () {
+          if (mounted && identical(_workspace, workspace)) {
+            _focusPane(workspace.activePane);
+          }
+        },
       );
     } on Object catch (error, stackTrace) {
       ApplicationErrorReporter().report(error, stackTrace);

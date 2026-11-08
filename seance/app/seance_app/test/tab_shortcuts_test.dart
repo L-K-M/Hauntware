@@ -420,7 +420,7 @@ void main() {
         'First / last item': 'Home / End',
         'Move by a page': 'Page Up / Page Down',
         'Open item': 'Enter',
-        'Parent folder': 'Alt+Up',
+        'Parent folder': 'Alt+Up or Backspace',
         'Rename': 'F2',
         'Toggle selection': 'Space',
         'Clear selection': 'Esc',
