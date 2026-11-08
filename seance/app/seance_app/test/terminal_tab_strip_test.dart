@@ -219,6 +219,79 @@ void main() {
     expect(position.pixels, offset);
   });
 
+  testWidgets('an already-visible adjacent tab does not move the strip', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(440, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final server = _server();
+    final tabs = [
+      for (var i = 1; i <= 6; i++) _session(server, 'tab-$i', name: 'Tab $i'),
+    ];
+    var activeId = tabs.first.id;
+    late StateSetter update;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return TerminalTabStrip(
+                tabs: tabs,
+                activeTabId: activeId,
+                onFocus: (_) {},
+                onClose: (_) {},
+                onNewTab: () {},
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final position = _tabScrollPosition(tester);
+    expect(position.pixels, 0);
+
+    update(() => activeId = tabs.last.id);
+    await tester.pumpAndSettle();
+    expect(position.pixels, greaterThan(0));
+
+    // The tab beside the last one is already fully visible after the reveal.
+    // Compute its geometry rather than assume it, so the regression holds
+    // whichever exact widths the chips take.
+    final neighbor = tabs[tabs.length - 2];
+    final viewport = tester.getRect(_tabViewport());
+    final neighborRect = tester.getRect(
+      find.ancestor(of: find.text('Tab 5'), matching: find.byType(InkWell)),
+    );
+    expect(
+      neighborRect.left,
+      greaterThanOrEqualTo(viewport.left - 0.5),
+      reason: 'the adjacent tab must start inside the viewport',
+    );
+    expect(
+      neighborRect.right,
+      lessThanOrEqualTo(viewport.right + 0.5),
+      reason: 'the adjacent tab must end inside the viewport',
+    );
+
+    // Changing the active ID to that already-visible tab must not recenter
+    // the strip, unlike a rebuild that keeps the same active ID.
+    final strip = find.byType(TerminalTabStrip);
+    expect(tester.widget<TerminalTabStrip>(strip).activeTabId, tabs.last.id);
+    final offset = position.pixels;
+    update(() => activeId = neighbor.id);
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<TerminalTabStrip>(strip).activeTabId, neighbor.id);
+    expect(activeId, isNot(tabs.last.id));
+    expect(position.pixels, offset);
+    _expectInsideViewport(tester, find.text('Tab 5'));
+  });
+
   testWidgets('overflow reveals the active tab and keeps actions fixed', (
     tester,
   ) async {

@@ -650,6 +650,32 @@ void main() {
       },
     );
 
+    test('a tombstone sealed under the wrong kind trips without deleting the server', () async {
+      final device = await _Device.create(tempDir, 'a', shared: true);
+      final crypto = RecordCrypto(RecordCodec(_key));
+      server.seed(await crypto.seal(DecryptedRecord(
+        id: 'srv-uuid-1',
+        kind: RecordKind.serverConfig,
+        updatedAt: 1,
+        deviceId: 'seance-device',
+        data: config('srv-uuid-1', 'web').toJson(),
+      )));
+      await device.coordinator.runRound(server);
+      expect(device.catalog!.servers, hasLength(1));
+
+      server.seed(await crypto.seal(const DecryptedRecord(
+        id: 'srv-uuid-1',
+        kind: RecordKind.hostKey,
+        updatedAt: 2,
+        deviceId: 'seance-device',
+        deleted: true,
+      )));
+      await device.coordinator.runRound(server);
+
+      expect(device.catalog!.servers.single.id, 'srv-uuid-1');
+      expect(await device.tripwires.trippedIds(), contains('srv-uuid-1'));
+    });
+
     test('separate mode never decrypts prefixless ids', () async {
       final device = await _Device.create(tempDir, 'a');
       server.seed(_enc('opaque-id', updatedAt: 1, blob: [1, 2, 3]));
