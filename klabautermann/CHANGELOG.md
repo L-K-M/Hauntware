@@ -50,6 +50,8 @@
   snippet once every placeholder is filled.
 - The unit-file and stack-file views have a Find button, so you can
   search them on a phone or tablet too.
+- The desktop header band uses the theme's header colour, as Séance's
+  and Poltergeist's headers do.
 - Initial scaffold: the `klabautermann_host`, `klabautermann_docker` and
   `klabautermann_core` packages, the five-platform app shell (desktop
   three-pane layout, phone master-detail stack, settings route), light
