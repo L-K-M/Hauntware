@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/ghost_fonts.dart' show ghostMonoFontFamily;
 import 'package:planchette_app/ui/workspace_connection_prompts.dart';
 import 'package:planchette_app/ui/workspace_remote_folder_dialog.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -193,6 +194,44 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  testWidgets('remote folder path field draws the bundled mono stack', (
+    tester,
+  ) async {
+    final key = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      MaterialApp(navigatorKey: key, home: const Scaffold()),
+    );
+    unawaited(showRemoteWorkspaceRoot(key.currentContext!, server));
+    await tester.pumpAndSettle();
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.style?.fontFamily, ghostMonoFontFamily);
+    expect(field.style?.fontSize, 12);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('credential prompt does not claim a single connection', (
+    tester,
+  ) async {
+    final key = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      MaterialApp(navigatorKey: key, home: const Scaffold()),
+    );
+    final prompts = AppWorkspaceConnectionPrompts(
+      () => (context: key.currentContext!, workspace: workspace),
+      pickKeyText: (_) async => null,
+    );
+    unawaited(
+      prompts.credentials(server, _Scope()).then<Object?>((v) => v),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Used for this connection only.'), findsNothing);
+    expect(
+      find.text('Used for this workspace session and never saved.'),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('remote workspace root submits by Return once valid', (
     tester,

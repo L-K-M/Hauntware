@@ -1,20 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:ghost_fonts/ghost_fonts.dart'
-    show ghostMonoFontFamilies, ghostMonoFontFamily;
 import 'package:ghost_servers/ghost_servers.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../services/workspace_remote_files.dart';
 import '../services/document_workspace.dart';
-
-/// Host-key fingerprints and key paths in the shared SSH prompts: the
-/// bundled code stack, as Séance and Poltergeist pass, since a bare
-/// 'monospace' draws the proportional system font on macOS, iOS and
-/// Windows.
-const TextStyle _mono = TextStyle(
-  fontFamily: ghostMonoFontFamily,
-  fontFamilyFallback: ghostMonoFontFamilies,
-);
+import '../widgets/mono_text_style.dart';
 
 typedef WorkspacePromptHost = ({
   BuildContext context,
@@ -64,7 +54,7 @@ final class AppWorkspaceConnectionPrompts
             pinnedFingerprintSha256: decision.pinned?.fingerprintSha256,
             pinnedKeyType: decision.pinned?.type,
           ),
-          monoStyle: _mono,
+          monoStyle: monoTextStyle,
         );
       });
 
@@ -103,13 +93,13 @@ final class AppWorkspaceConnectionPrompts
           host: server.host,
           port: server.port,
         ),
-        monoStyle: _mono,
+        monoStyle: monoTextStyle,
         dialogKey: dialogKey,
         pickKeyText: server.identityFilePath == null
             ? () => _pickKeyText(host.workspace)
             : null,
         strings: const GhostCredentialStrings(
-          explanation: 'Used for this connection only.',
+          explanation: 'Used for this workspace session and never saved.',
           connect: 'Connect',
         ),
       );
