@@ -123,6 +123,7 @@ class PoltergeistApp extends StatefulWidget {
     this.syncEnvironment,
     this.syncTasks,
     this.updateCheck,
+    this.appVersion,
     this.settingsWindow,
     this.toolbarBand,
     this.window,
@@ -337,6 +338,11 @@ class PoltergeistApp extends StatefulWidget {
   /// the link-only banner when a newer release exists and registers
   /// `app.settings` for the opt-out toggle. Null leaves both unwired.
   final UpdateCheckController? updateCheck;
+
+  /// The running build's version as PackageInfo reports it, shown in
+  /// Settings → General and carried to the Settings window through the
+  /// link's snapshot. Null where the platform cannot tell.
+  final String? appVersion;
 
   /// The desktop Settings window (see [WorkspaceShell.settingsWindow]).
   final SettingsWindowHost? settingsWindow;
@@ -575,6 +581,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       syncEnvironment: widget.syncEnvironment,
       syncTasks: widget.syncTasks,
       updateCheck: widget.updateCheck,
+      appVersion: widget.appVersion,
       settingsWindow: widget.settingsWindow,
       window: widget.window,
       probeOwner: widget.probeOwner,

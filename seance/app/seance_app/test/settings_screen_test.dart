@@ -38,6 +38,9 @@ class _FakeBackend extends ChangeNotifier implements SettingsBackend {
   SyncStatus syncStatus = const SyncStatus();
 
   @override
+  String? appVersion;
+
+  @override
   AppLockAvailability appLockAvailability = AppLockAvailability.unavailable;
 
   @override
@@ -420,6 +423,27 @@ void main() {
 
     expect(find.byType(LicensePage), findsOneWidget);
     expect(find.text('bundled_component'), findsWidgets);
+  });
+
+  testWidgets('General shows the running version', (tester) async {
+    backend.appVersion = '1.2.3';
+    await pumpScreen(tester);
+
+    // The list builds its rows lazily: scroll to the About section.
+    final licenses = find.byKey(const ValueKey('settings.licenses'));
+    await tester.scrollUntilVisible(
+      licenses,
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const PageStorageKey('general-settings')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Version 1.2.3'), findsOneWidget);
   });
 
   testWidgets('the editor text size writes through when the slider settles', (

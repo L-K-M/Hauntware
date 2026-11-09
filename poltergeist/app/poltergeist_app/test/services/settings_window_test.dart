@@ -182,6 +182,7 @@ void main() {
   late _FakeBackup backup;
   late _FakeEditors editors;
   late bool checkForUpdates;
+  late String? appVersion;
   late int threshold;
   late AppearanceController appearance;
   late EditorTextSizeController editorTextSize;
@@ -221,6 +222,7 @@ void main() {
   SettingsWindowSources sources() => SettingsWindowSources(
     general: () => GeneralSettings(
       checkForUpdates: checkForUpdates,
+      appVersion: appVersion,
       onCheckForUpdatesChanged: (enabled) async => checkForUpdates = enabled,
     ),
     editors: editors,
@@ -273,6 +275,7 @@ void main() {
     backup = _FakeBackup();
     editors = _FakeEditors();
     checkForUpdates = true;
+    appVersion = '1.2.3';
     threshold = 100 << 20;
     savedAppearances = [];
     appearanceSaveFailure = null;
@@ -341,6 +344,12 @@ void main() {
       'SHA256:pulled',
     );
     expect(mirrored.lastSyncAt, DateTime.fromMillisecondsSinceEpoch(1234));
+  });
+
+  test('the running version crosses in the snapshot', () async {
+    final remote = await openWindow();
+
+    expect(remote.general?.appVersion, '1.2.3');
   });
 
   test('a section the app has no seam for is left out', () async {

@@ -32,9 +32,11 @@ void main() {
 
   GeneralSettings settings({
     bool checkForUpdates = true,
+    String? appVersion,
     Future<void> Function(bool)? onCheckForUpdatesChanged,
   }) => GeneralSettings(
     checkForUpdates: checkForUpdates,
+    appVersion: appVersion,
     onCheckForUpdatesChanged: onCheckForUpdatesChanged ?? (_) async {},
   );
 
@@ -77,6 +79,12 @@ void main() {
 
     expect(find.byType(LicensePage), findsOneWidget);
     expect(find.text('bundled_component'), findsWidgets);
+  });
+
+  testWidgets('the section shows the running version', (tester) async {
+    await tester.pumpWidget(wrap(settings(appVersion: '1.2.3')));
+
+    expect(find.text('Version 1.2.3'), findsOneWidget);
   });
 
   testWidgets('a failed persist reverts the switch', (tester) async {

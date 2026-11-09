@@ -153,7 +153,10 @@ class SettingsWindowHost {
           _sources.doubleClickAction?.value.name,
       SettingsLinkKey.general.name: general == null
           ? null
-          : {SettingsLinkKey.checkForUpdates.name: general.checkForUpdates},
+          : {
+              SettingsLinkKey.checkForUpdates.name: general.checkForUpdates,
+              SettingsLinkKey.appVersion.name: general.appVersion,
+            },
       SettingsLinkKey.editors.name: editors?.registry.toJson(),
       SettingsLinkKey.preview.name: preview == null
           ? null

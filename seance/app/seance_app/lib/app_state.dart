@@ -770,6 +770,13 @@ class AppState extends ChangeNotifier {
   /// manifest (scripts/release-manifest.txt) names it.
   static const androidReleaseAsset = 'seance-android.apk';
 
+  /// The running build's version as PackageInfo reports it (`1.9.1`), or
+  /// null where the platform cannot tell — read once at bootstrap: the
+  /// update check compares it and Settings > About shows it (the settings
+  /// window's engine registers no plugins, so it reaches that window
+  /// through the backend's snapshot).
+  String? appVersion;
+
   /// Set when a newer release exists on GitHub; drives the "update available"
   /// affordance. Desktop and iOS builds only link out; see [apkUpdater].
   UpdateInfo? updateInfo;

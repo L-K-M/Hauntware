@@ -605,6 +605,14 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       const Divider(height: 40),
       SettingsSectionHeader('About'),
+      // The running build, so a bug report can name it; the licenses page
+      // repeats it under the app name.
+      Text(
+        _backend.appVersion == null
+            ? 'Version unknown'
+            : 'Version ${_backend.appVersion}',
+      ),
+      const SizedBox(height: 8),
       // The notices of everything Séance includes: Flutter's NOTICES, plus
       // the APK's Maven libraries on Android (ghost_licenses).
       ListTile(
@@ -618,6 +626,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         onTap: () => showLicensePage(
           context: context,
           applicationName: 'Séance',
+          applicationVersion: _backend.appVersion,
           applicationLegalese:
               "Séance's own code is public domain (Unlicense). It includes "
               'third-party components that keep their own licenses, listed '

@@ -30,6 +30,7 @@ final class GeneralSettings {
   const GeneralSettings({
     required this.checkForUpdates,
     required this.onCheckForUpdatesChanged,
+    this.appVersion,
   });
 
   /// Live D19 update-check opt-out state (ON = the check may run).
@@ -37,6 +38,11 @@ final class GeneralSettings {
 
   /// Applies + persists a new toggle value. Throws on persist failure.
   final Future<void> Function(bool enabled) onCheckForUpdatesChanged;
+
+  /// The running build's version as PackageInfo reports it, or null when
+  /// the platform cannot tell — shown in the section and passed to the
+  /// licenses page.
+  final String? appVersion;
 }
 
 /// The bounded `app.settings` dialog: the General section with its
@@ -148,6 +154,15 @@ class _GeneralSectionState extends State<GeneralSection> {
           onChanged: (value) =>
               unawaited(_commitCheckForUpdates(value)),
         ),
+        // The running build, so a bug report can name it; the licenses
+        // page repeats it under the app name.
+        Text(
+          widget.settings.appVersion == null
+              ? l10n.aboutVersionUnknown
+              : l10n.aboutVersion(widget.settings.appVersion!),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
         // The notices of everything Poltergeist includes: Flutter's
         // NOTICES (PDFium's among them), plus the APK's Maven libraries on
         // Android (ghost_licenses).
@@ -159,6 +174,7 @@ class _GeneralSectionState extends State<GeneralSection> {
           onTap: () => showLicensePage(
             context: context,
             applicationName: l10n.appTitle,
+            applicationVersion: widget.settings.appVersion,
             applicationLegalese: l10n.openSourceLicensesLegalese,
           ),
         ),

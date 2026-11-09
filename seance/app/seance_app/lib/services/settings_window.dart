@@ -95,6 +95,7 @@ Map<String, dynamic> _snapshotOf(SettingsBackend backend) => {
   'llmConfigVersion': backend.llmConfigVersion,
   'syncStatus': backend.syncStatus.toJson(),
   'appLockAvailability': backend.appLockAvailability.name,
+  'appVersion': backend.appVersion,
 };
 
 /// The app's side of the settings window: ghost_desktop's link engine
@@ -295,6 +296,7 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
   late int _llmConfigVersion;
   late SyncStatus _syncStatus;
   AppLockAvailability _appLockAvailability = AppLockAvailability.unavailable;
+  String? _appVersion;
 
   /// The theme the window draws itself in: the app's, from the latest
   /// snapshot. Its own notifier for the reason [AppState.appearance] is
@@ -330,6 +332,9 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
   AppLockAvailability get appLockAvailability => _appLockAvailability;
 
   @override
+  String? get appVersion => _appVersion;
+
+  @override
   void applySnapshot(Map<String, Object?> snapshot) {
     _appLockAvailability = snapshot['appLockAvailability'] ==
             AppLockAvailability.available.name
@@ -346,6 +351,7 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
     _syncStatus = SyncStatus.fromJson(
       (snapshot['syncStatus'] as Map).cast<String, dynamic>(),
     );
+    _appVersion = snapshot['appVersion'] as String?;
   }
 
   Future<Object?> _call(SettingsLinkMethod method, [Object? argument]) =>

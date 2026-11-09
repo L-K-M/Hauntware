@@ -2219,6 +2219,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Poltergeist\'s own code is public domain (Unlicense). It includes third-party components that keep their own licenses, listed here.';
 
   @override
+  String aboutVersion(String version) {
+    return 'Version $version';
+  }
+
+  @override
+  String get aboutVersionUnknown => 'Version unknown';
+
+  @override
   String get backupTitle => 'Bookmark backup';
 
   @override

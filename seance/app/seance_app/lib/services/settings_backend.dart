@@ -60,6 +60,12 @@ abstract class SettingsBackend implements Listenable {
   /// the same answer with no link round-trip.
   LocalShellInfo get localShell;
 
+  /// The running build's version as the platform reports it, or null when
+  /// it cannot tell. Static for the process's life like [localShell]; the
+  /// settings window's engine registers no plugins, so it arrives there in
+  /// the snapshot.
+  String? get appVersion;
+
   /// Persists the local-shell opt-in and applies it: off closes every open
   /// local tab, so a hidden row cannot strand live shells.
   Future<void> setLocalShellEnabled(bool enabled);

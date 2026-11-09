@@ -165,6 +165,8 @@
   with its entries greyed out, set for the other pane, until you moved
   the pointer over them. Clicking in a pane now always makes it the
   active one.
+- **Settings names the running build.** Settings → General shows the
+  version, and the licenses page repeats it under the app name.
 
 ## 1.9.0 — first suite release (2026-10-04)
 
