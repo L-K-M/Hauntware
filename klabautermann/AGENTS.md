@@ -65,8 +65,9 @@ flutter pub get && flutter analyze && flutter test
 CI (`.github/workflows/ci.yml` at the repository root) analyzes and tests
 the workspace packages and the app on every PR, and its
 `klabautermann_client` job builds all five clients with release launch
-checks, Linux packaging and the macOS fixtures. No release job ships
-them before M4 (decision 16).
+checks, Linux packaging and the macOS fixtures. Suite releases ship
+them as previews (`release.yml`'s `client_klabautermann` job), with
+asset names starting `klabautermann-preview-` until v1.
 
 On macOS, after `flutter build macos` (or with `FLUTTER_ROOT` pointing at
 an SDK with its macOS release engine cached), `scripts/test-macos-keyboard.sh`

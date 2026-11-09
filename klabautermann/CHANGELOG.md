@@ -20,6 +20,20 @@
 - Quitting stays possible while locked, and a refused rule Undo remains
   available after restoring keychain access. History shortcuts reach page
   routes, and opening container details reveals a hidden inspector.
+- Code, logs and commands draw in the bundled JetBrains Mono on every
+  platform, as in the other apps. Before, they used JetBrains Mono only
+  where it was installed and fell back to SF Mono, Menlo, Consolas or
+  DejaVu Sans Mono.
+- Password, passphrase and private-key fields in the sync sign-in, the
+  sudo prompt, the server editor and the connection prompts turn off
+  autocorrect, suggestions and keyboard learning, so your keyboard does
+  not learn or offer your secrets.
+- A key passphrase you type to sign in to a server is no longer kept in
+  memory for as long as the connection stays open.
+- When a connection fails until you act, such as after rejected
+  credentials, a cancelled prompt or a declined key, the server's header
+  offers Try again, or Review the new key when its host key changed.
+  Before, you had to leave the server for 30 seconds and open it again.
 - Initial scaffold: the `klabautermann_host`, `klabautermann_docker` and
   `klabautermann_core` packages, the five-platform app shell (desktop
   three-pane layout, phone master-detail stack, settings route), light

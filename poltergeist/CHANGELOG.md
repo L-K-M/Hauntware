@@ -173,6 +173,17 @@
   active one.
 - **Settings names the running build.** Settings → General shows the
   version, and the licenses page repeats it under the app name.
+- **The editor zooms.** View ▸ Zoom In, Zoom Out and Actual Size, or
+  their keyboard shortcuts, change the built-in editor's text size, and
+  a slider in Settings sets it too. Every open editor follows, and the
+  size stays on this device.
+- **Keyboards stay out of your secrets.** Password, passphrase and
+  private-key fields in the backup sign-in and switch, the server editor
+  and the connection prompts turn off autocorrect, suggestions and
+  keyboard learning.
+- **Passphrases are not kept after sign-in.** A key passphrase you type
+  to sign in to a server is no longer kept in memory for as long as the
+  connection stays open.
 
 ## 1.9.0 — first suite release (2026-10-04)
 

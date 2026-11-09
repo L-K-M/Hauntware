@@ -35,8 +35,10 @@ palette offers provider-supported actions; desktop workspaces stay host-owned.
 
 ## Font catalog and preview picker (2026-10-17)
 
-`ghost_fonts` bundles 20 OFL families. The shared picker searches offline,
-previews real glyphs and emphasis, and confirms family and ligatures together.
+`ghost_fonts` bundles 23 families, all under the SIL Open Font License
+except 3270, which ships under BSD-3-Clause. The shared picker searches
+offline, previews real glyphs and emphasis, and confirms family and
+ligatures together.
 Planchette, Séance and Poltergeist use it. Defaults and stored family names
 are preserved; a saved ligatures-off choice stays off.
 
@@ -200,7 +202,7 @@ host shortcuts. Pointer-opened menus keep their existing focus behavior.
 
 ### Shared window lifecycle, 2026-10-02
 
-`packages/ghost_desktop` holds the desktop window lifecycle the three apps
+`packages/ghost_desktop` holds the desktop window lifecycle the four apps
 share: frame snapshot and restore-before-show, missing-monitor policy,
 maximized/full-screen restore, debounced normal-frame capture, and the
 veto/retry close path behind host-owned window/display/persistence
@@ -229,10 +231,11 @@ disabled-dimmed `GhostShortcutHint`), `CheckedPlatformMenuItem`/
 `EditableText`, and `dispatchGhostChord`/`GhostChordScope` for the
 hosts' app-level chord layers.
 
-All three apps consume it: Planchette renders its shell menus and palette
+All four apps consume it: Planchette renders its shell menus and palette
 through it, Poltergeist's registry-derived menus, compact sheet, hints and
-checked bridge do, and Séance's tab-shortcut dispatch and shortcut hints
-do. Hosts keep their action sets, localized labels, scopes, enablement,
+checked bridge do, Séance's tab-shortcut dispatch and shortcut hints do,
+and so do Klabautermann's command-registry menus, checked bridge and chord
+scopes. Hosts keep their action sets, localized labels, scopes, enablement,
 native focus retargeting and Séance's storyboard menu — `installMacMenu`
 and the `seance/menu` channel are untouched.
 

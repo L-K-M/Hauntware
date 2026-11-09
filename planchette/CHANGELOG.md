@@ -18,6 +18,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ship with Planchette, each shown in its own face, and Ligatures turns
   joined symbols such as `->` and `!=` off. A font named in a
   hand-edited settings file stays selected.
+- Mistakes in common config files are underlined as you type: JSON that
+  doesn't parse, a key set twice in a `.env`, JSON, YAML or TOML file,
+  broken XML tags, and leftover merge-conflict markers. The status bar
+  counts them and describes the one on the caret's line. F8 and
+  Shift+F8, or Find › Next Problem and Previous Problem, move between
+  them.
 
 ### Fixed
 - Host-key fingerprints and key paths in the server prompts draw in the
@@ -38,6 +44,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Selected text stands out in the dark look. Its indigo highlight was
   barely lighter than the page; it is now lighter and bluer, and comments
   are a little lighter so they stay readable on it.
+- Password, passphrase and pasted-key fields in the server prompts and
+  the workspace server forms turn off autocorrect, suggestions and
+  keyboard learning, so your keyboard does not learn or offer your
+  secrets.
+- A key passphrase you type to open a remote workspace is no longer kept
+  in memory for as long as the connection stays open.
+- On Windows, the app's file properties name the Unlicense, and a font
+  installed or removed while a window closes no longer crashes
+  Planchette.
 
 ## [1.9.0] - 2026-10-04
 

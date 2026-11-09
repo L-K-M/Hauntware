@@ -5,8 +5,9 @@ toolchain in a fresh environment, how to build/test each piece, and the
 conventions this repo family shares.
 
 Planchette is a text editor (Android, macOS, Windows, Linux) and the shared
-editor foundation for [Séance](https://github.com/L-K-M/Seance) and
-[Poltergeist](https://github.com/L-K-M/Poltergeist). The shared Flutter editor
+editor foundation for [Séance](https://github.com/L-K-M/Seance),
+[Poltergeist](https://github.com/L-K-M/Poltergeist) and
+[Klabautermann](../klabautermann/). The shared Flutter editor
 also supports the hosts' mobile flows. Architecture and file-safety contracts
 live in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); verified results and limits
 live in [docs/STATUS.md](docs/STATUS.md).
