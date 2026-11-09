@@ -34,6 +34,10 @@ const double _wideWidth = 600;
 const double _gap = 16;
 const double _sparklineHeight = 40;
 
+/// The most cores the CPU card draws a bar each for; more read as a
+/// [CoreHeatmap], which fits many on a phone (03 §10.7).
+const int _coreBarLimit = 16;
+
 /// A per-core bar's width with its figure's box, beside the core's name,
 /// before text scaling, and the gap between a core's name, bar and figure.
 const double _coreBarAndFigureWidth = 106;
@@ -1177,43 +1181,50 @@ final class _Cards {
         )
       : null;
 
-  /// [series]' session sparkline over its gauge of [segments] out of
-  /// [total]. The sparkline's bands are in its own unit, so it takes
-  /// [thresholds] only for a share; a gauge judges its first segment's
-  /// share of [total].
-  List<Widget> _charts(
+  /// [series]' gauge of [value] out of [total] beside its session
+  /// sparkline. The sparkline's bands are in its own unit, so it takes
+  /// [thresholds] only for a share; the gauge judges [value]'s share of
+  /// [total].
+  Widget _charts(
     BuildContext context, {
     required MetricSeries series,
     required String label,
+    required String part,
     required ChartUnit unit,
-    required List<BarSegment> segments,
+    required double? value,
     required double? total,
     ChartThresholds? thresholds,
   }) {
     final strings = klabautermannChartStrings(AppLocalizations.of(context));
-    return [
-      SizedBox(
-        height: _sparklineHeight,
-        child: Sparkline(
-          series: monitoring.seriesFor(serverId, SampleStream.core, series),
+    return Row(
+      spacing: 16,
+      children: [
+        Gauge(
           label: label,
+          part: part,
+          value: value,
+          total: total,
           unit: unit,
           strings: strings,
-          max: total != null && total > 0 ? total : null,
-          thresholds: unit == ChartUnit.percent ? thresholds : null,
-          color: stale ? ChartPalette.of(context).muted : null,
+          thresholds: thresholds,
+          stale: stale,
         ),
-      ),
-      StackedBar(
-        label: label,
-        segments: segments,
-        total: total,
-        unit: unit,
-        strings: strings,
-        thresholds: thresholds,
-        stale: stale,
-      ),
-    ];
+        Expanded(
+          child: SizedBox(
+            height: _sparklineHeight,
+            child: Sparkline(
+              series: monitoring.seriesFor(serverId, SampleStream.core, series),
+              label: label,
+              unit: unit,
+              strings: strings,
+              max: total != null && total > 0 ? total : null,
+              thresholds: unit == ChartUnit.percent ? thresholds : null,
+              color: stale ? ChartPalette.of(context).muted : null,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget cpu(BuildContext context) {
@@ -1227,12 +1238,13 @@ final class _Cards {
     return PanelSection(
       title: l10n.overviewCpuTitle,
       children: [
-        ..._charts(
+        _charts(
           context,
           series: MetricSeries.cpuBusy,
           label: l10n.overviewCpuTitle,
+          part: l10n.overviewCpuBusy,
           unit: ChartUnit.percent,
-          segments: [BarSegment(label: l10n.overviewCpuBusy, value: cpu?.busy)],
+          value: cpu?.busy,
           total: 100,
           thresholds: ThresholdScope.of(context, ThresholdMetric.cpu),
         ),
@@ -1265,6 +1277,13 @@ final class _Cards {
         ),
         if (perCpu == null || perCpu.isEmpty)
           _Facts(stale: stale, facts: const [])
+        else if (perCpu.length > _coreBarLimit)
+          CoreHeatmap(
+            label: l10n.overviewPerCoreTitle,
+            cores: orderedCores(perCpu),
+            strings: strings,
+            stale: stale,
+          )
         else
           _CoreBars(cores: orderedCores(perCpu), stale: stale),
         // One note for the card: a container withholds both from the same
@@ -1403,6 +1422,21 @@ final class _Cards {
     return PanelSection(
       title: l10n.overviewLoadTitle,
       children: [
+        SizedBox(
+          height: _sparklineHeight,
+          child: Sparkline(
+            series: monitoring.seriesFor(
+              serverId,
+              SampleStream.core,
+              MetricSeries.load1,
+            ),
+            label: l10n.overviewLoadSparkline,
+            unit: ChartUnit.decimal,
+            strings: klabautermannChartStrings(l10n),
+            showScale: true,
+            color: stale ? ChartPalette.of(context).muted : null,
+          ),
+        ),
         _Facts(
           stale: stale,
           facts: [
@@ -1441,17 +1475,13 @@ final class _Cards {
         // Only used is drawn: it is the total less MemAvailable, which
         // counts no shared memory and keeps some cache back, so buffers
         // and cache overlap it and would stack past what is taken.
-        ..._charts(
+        _charts(
           context,
           series: MetricSeries.memoryUsed,
           label: l10n.overviewMemoryTitle,
+          part: l10n.overviewMemoryUsed,
           unit: ChartUnit.bytes,
-          segments: [
-            BarSegment(
-              label: l10n.overviewMemoryUsed,
-              value: memory?.usedBytes?.toDouble(),
-            ),
-          ],
+          value: memory?.usedBytes?.toDouble(),
           total: memory?.totalBytes?.toDouble(),
           thresholds: ThresholdScope.of(context, ThresholdMetric.memory),
         ),
@@ -1505,17 +1535,13 @@ final class _Cards {
         if (total == 0)
           Text(l10n.overviewSwapNone, style: _valueStyle(context, stale))
         else ...[
-          ..._charts(
+          _charts(
             context,
             series: MetricSeries.swapUsed,
             label: l10n.overviewSwapTitle,
+            part: l10n.overviewMemoryUsed,
             unit: ChartUnit.bytes,
-            segments: [
-              BarSegment(
-                label: l10n.overviewMemoryUsed,
-                value: memory?.swapUsedBytes?.toDouble(),
-              ),
-            ],
+            value: memory?.swapUsedBytes?.toDouble(),
             total: total?.toDouble(),
           ),
           _Facts(
