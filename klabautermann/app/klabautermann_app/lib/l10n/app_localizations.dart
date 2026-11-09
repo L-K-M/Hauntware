@@ -10761,6 +10761,120 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get dockerShellPasteCancel;
 
+  /// Context menu item that selects the whole terminal buffer, scrollback included (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get dockerShellSelectAll;
+
+  /// Context menu item that drops the terminal lines scrolled off the top, keeping the visible screen (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Clear scrollback'**
+  String get dockerShellClearScrollback;
+
+  /// Semantics label of the esc key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Escape'**
+  String get dockerShellKeyEscape;
+
+  /// Semantics label of the tab key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Tab'**
+  String get dockerShellKeyTab;
+
+  /// Semantics label of the ctrl key in the container shell's keyboard bar: a one-shot modifier, tapped before a letter (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Control modifier'**
+  String get dockerShellKeyControlModifier;
+
+  /// Semantics label of the ^C key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Control C'**
+  String get dockerShellKeyControlC;
+
+  /// Semantics label and tooltip of the left arrow key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Left arrow'**
+  String get dockerShellKeyLeftArrow;
+
+  /// Semantics label and tooltip of the up arrow key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Up arrow'**
+  String get dockerShellKeyUpArrow;
+
+  /// Semantics label and tooltip of the down arrow key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Down arrow'**
+  String get dockerShellKeyDownArrow;
+
+  /// Semantics label and tooltip of the right arrow key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Right arrow'**
+  String get dockerShellKeyRightArrow;
+
+  /// Semantics label of the home key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get dockerShellKeyHome;
+
+  /// Semantics label of the end key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'End'**
+  String get dockerShellKeyEnd;
+
+  /// Semantics label of the pgup key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Page up'**
+  String get dockerShellKeyPageUp;
+
+  /// Semantics label of the pgdn key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Page down'**
+  String get dockerShellKeyPageDown;
+
+  /// Semantics label of the | key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Pipe'**
+  String get dockerShellKeyPipe;
+
+  /// Semantics label of the / key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Slash'**
+  String get dockerShellKeySlash;
+
+  /// Semantics label of the - key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Hyphen'**
+  String get dockerShellKeyHyphen;
+
+  /// Semantics label of the ~ key in the container shell's keyboard bar (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Tilde'**
+  String get dockerShellKeyTilde;
+
+  /// Semantics label and tooltip of the key in the container shell's keyboard bar that closes the soft keyboard (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Hide keyboard'**
+  String get dockerShellKeyHideKeyboard;
+
   /// Under a container's name above its logs, in the Docker tab's log pane on desktops and in the bottom sheet on phones.
   ///
   /// In en, this message translates to:

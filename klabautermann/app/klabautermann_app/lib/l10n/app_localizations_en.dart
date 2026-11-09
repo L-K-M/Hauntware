@@ -8529,6 +8529,63 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerShellPasteCancel => 'Cancel';
 
   @override
+  String get dockerShellSelectAll => 'Select all';
+
+  @override
+  String get dockerShellClearScrollback => 'Clear scrollback';
+
+  @override
+  String get dockerShellKeyEscape => 'Escape';
+
+  @override
+  String get dockerShellKeyTab => 'Tab';
+
+  @override
+  String get dockerShellKeyControlModifier => 'Control modifier';
+
+  @override
+  String get dockerShellKeyControlC => 'Control C';
+
+  @override
+  String get dockerShellKeyLeftArrow => 'Left arrow';
+
+  @override
+  String get dockerShellKeyUpArrow => 'Up arrow';
+
+  @override
+  String get dockerShellKeyDownArrow => 'Down arrow';
+
+  @override
+  String get dockerShellKeyRightArrow => 'Right arrow';
+
+  @override
+  String get dockerShellKeyHome => 'Home';
+
+  @override
+  String get dockerShellKeyEnd => 'End';
+
+  @override
+  String get dockerShellKeyPageUp => 'Page up';
+
+  @override
+  String get dockerShellKeyPageDown => 'Page down';
+
+  @override
+  String get dockerShellKeyPipe => 'Pipe';
+
+  @override
+  String get dockerShellKeySlash => 'Slash';
+
+  @override
+  String get dockerShellKeyHyphen => 'Hyphen';
+
+  @override
+  String get dockerShellKeyTilde => 'Tilde';
+
+  @override
+  String get dockerShellKeyHideKeyboard => 'Hide keyboard';
+
+  @override
   String get dockerLogsTitle => 'Logs';
 
   @override

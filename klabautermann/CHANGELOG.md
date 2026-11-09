@@ -9,6 +9,11 @@
   and Poltergeist. Each width is kept on this device across restarts,
   and a pane never gets narrower than it was before it could be resized,
   so a narrow window keeps its layout.
+- A container's shell works more like Séance's terminal: http and https
+  links it prints open in the browser, its menu adds Select all and
+  Clear scrollback, a long-press or double-tap selection on a phone or
+  tablet shows Copy, Paste and Select all, and the on-screen keys are
+  named in the app's own words.
 - The desktop header shows the selected server and controls the sidebar
   and inspector. View-menu commands, keyboard shortcuts and remembered
   visibility work across desktop platforms.
