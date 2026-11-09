@@ -263,6 +263,17 @@ class _AppDialogState extends State<_AppDialog> {
         (_anyServer || _selected.isNotEmpty);
   }
 
+  void _save() {
+    if (!_valid) return;
+    Navigator.pop(
+      context,
+      InboxAppDraft(
+        name: _name.text.trim(),
+        allowedServerIds: _anyServer ? const [] : _selected,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -283,6 +294,7 @@ class _AppDialogState extends State<_AppDialog> {
                 hintText: 'e.g. bots on bene-dev',
               ),
               onChanged: (_) => setState(() {}),
+              onSubmitted: (_) => _save(),
             ),
             SwitchListTile(
               key: const ValueKey('inbox.app.any'),
@@ -327,15 +339,7 @@ class _AppDialogState extends State<_AppDialog> {
         ),
         FilledButton(
           key: const ValueKey('inbox.app.save'),
-          onPressed: _valid
-              ? () => Navigator.pop(
-                  context,
-                  InboxAppDraft(
-                    name: _name.text.trim(),
-                    allowedServerIds: _anyServer ? const [] : _selected,
-                  ),
-                )
-              : null,
+          onPressed: _valid ? _save : null,
           child: Text(widget.existing == null ? 'Connect' : 'Save'),
         ),
       ],

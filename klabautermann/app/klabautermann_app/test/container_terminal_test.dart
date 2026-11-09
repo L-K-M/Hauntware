@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,13 +10,15 @@ import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/operations_controller.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/l10n/app_localizations_en.dart';
 import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/docker/container_details.dart';
 import 'package:klabautermann_app/ui/docker/container_terminal.dart';
 import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_app/ui/workspace_dock.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
-import 'package:seance_terminal/seance_terminal.dart' show TerminalKeyboardBar;
+import 'package:seance_terminal/seance_terminal.dart'
+    show TerminalKeyboardBar, TerminalKeyboardBarStrings, TerminalView;
 
 import 'support/docker.dart';
 import 'support/fake_engine.dart';
@@ -241,6 +244,8 @@ void main() {
         SystemChannels.platform,
         (call) async => switch (call.method) {
           'Clipboard.getData' => {'text': clipboard},
+          // What the shell copies must read back as a paste.
+          'Clipboard.setData' => clipboard = call.arguments['text'] as String?,
           _ => null,
         },
       );
@@ -424,6 +429,264 @@ void main() {
       await tester.tap(find.text('Change shell'));
       await tester.pump();
       expect(find.text('Open shell'), findsOneWidget);
+    });
+
+    testWidgets('a link tap opens http and https links in the browser '
+        'and only says of others that they cannot be opened', (tester) async {
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      final calls = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        call,
+      ) async {
+        calls.add(call);
+        return true;
+      });
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        ),
+      );
+      await pumpPane(tester);
+      await start(tester);
+      final view = tester.widget<TerminalView>(find.byType(TerminalView));
+
+      for (final link in [
+        'http://example.com/',
+        'https://example.com/docs?q=1',
+      ]) {
+        view.onLinkTap!(Uri.parse(link));
+        await tester.pump();
+        expect(calls.map((call) => call.arguments['url']), [link]);
+        calls.clear();
+      }
+
+      // Anything else a container prints never reaches the platform.
+      for (final link in [
+        'file:///etc/passwd',
+        'ssh://example.com',
+        'https://user:password@example.com',
+      ]) {
+        view.onLinkTap!(Uri.parse(link));
+        await tester.pump();
+        expect(calls, isEmpty, reason: link);
+      }
+      expect(
+        find.text('The link could not be opened in a browser.'),
+        findsWidgets,
+      );
+    });
+
+    testWidgets('a link the system refuses says it cannot be opened', (
+      tester,
+    ) async {
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        (_) async => false,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        ),
+      );
+      await pumpPane(tester);
+      await start(tester);
+      tester.widget<TerminalView>(find.byType(TerminalView)).onLinkTap!(
+        Uri.parse('https://example.com'),
+      );
+      // The launch's answer lands after this frame's build, so the
+      // toast takes a second one to draw.
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.text('The link could not be opened in a browser.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the context menu selects the whole buffer and clears '
+        'the scrollback', (tester) async {
+      await pumpPane(tester);
+      await start(tester);
+      final view = tester.widget<TerminalView>(find.byType(TerminalView));
+      // Straight into the view's terminal: what the shell printed, enough
+      // to scroll its first lines off the screen.
+      view.terminal.write(
+        [for (var i = 0; i < 80; i++) 'scrollback marker $i\r\n'].join(),
+      );
+      await tester.pump();
+      expect(
+        view.terminal.buffer.height,
+        greaterThan(view.terminal.viewHeight),
+      );
+
+      await tester.tap(find.byType(TerminalView), buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Select all'));
+      await tester.pump();
+
+      final selection = view.controller!.selection!;
+      expect((selection.begin.x, selection.begin.y), (0, 0));
+      expect(selection.end.y, view.terminal.buffer.height - 1);
+      expect(
+        view.terminal.buffer.getText(selection),
+        contains('scrollback marker 0'),
+      );
+
+      await tester.tap(find.byType(TerminalView), buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Clear scrollback'));
+      await tester.pump();
+      expect(view.terminal.buffer.height, view.terminal.viewHeight);
+    });
+
+    testWidgets('a long-press selection shows Copy, Paste and Select '
+        'all above it, and Paste keeps the paste policy', (tester) async {
+      await pumpPane(tester, platform: TargetPlatform.android);
+      await start(tester);
+      final view = tester.widget<TerminalView>(find.byType(TerminalView));
+      view.terminal.write('echo hello world\r\n');
+      await tester.pump();
+
+      await tester.longPressAt(
+        tester.getTopLeft(find.byType(TerminalView)) + const Offset(30, 14),
+      );
+      await tester.pump();
+      expect(view.controller!.selection, isNotNull);
+      await tester.pump();
+      final toolbar = find.byType(AdaptiveTextSelectionToolbar);
+      expect(toolbar, findsOneWidget);
+      for (final label in ['Copy', 'Paste', 'Select all']) {
+        expect(
+          find.descendant(of: toolbar, matching: find.text(label)),
+          findsOneWidget,
+        );
+      }
+
+      // Copy fills the clipboard and ends the selection, as on the
+      // platforms' own text.
+      await tester.tap(
+        find.descendant(of: toolbar, matching: find.text('Copy')),
+      );
+      await tester.pump();
+      expect(clipboard, isNotNull);
+      expect(clipboard, isNot(''));
+      expect(view.controller!.selection, isNull);
+      expect(toolbar, findsNothing);
+
+      // Paste goes through the shell's own _paste, so the danger check
+      // still asks before a flagged multi-line paste.
+      clipboard = 'cd /tmp\nrm -rf /';
+      view.controller!.setSelection(
+        view.terminal.buffer.createAnchor(0, 0),
+        view.terminal.buffer.createAnchor(4, 0),
+      );
+      view.onTouchSelectionEnd!();
+      await tester.pump();
+      await tester.tap(
+        find.descendant(of: toolbar, matching: find.text('Paste')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Paste 2 lines?'), findsOneWidget);
+      await tester.tap(find.text('Paste all'));
+      await tester.pumpAndSettle();
+      expect(_typed(engine), contains('cd /tmp\nrm -rf /'));
+
+      // Select all grows the selection to the whole buffer and keeps
+      // the toolbar above it.
+      view.controller!.setSelection(
+        view.terminal.buffer.createAnchor(0, 0),
+        view.terminal.buffer.createAnchor(4, 0),
+      );
+      view.onTouchSelectionEnd!();
+      await tester.pump();
+      await tester.tap(
+        find.descendant(of: toolbar, matching: find.text('Select all')),
+      );
+      await tester.pump();
+      expect(
+        view.controller!.selection!.end.y,
+        view.terminal.buffer.height - 1,
+      );
+      expect(toolbar, findsOneWidget);
+    });
+
+    testWidgets('the keyboard bar takes its labels from the ARB', (
+      tester,
+    ) async {
+      await pumpPane(tester, platform: TargetPlatform.android);
+      await start(tester);
+      final bar = tester.widget<TerminalKeyboardBar>(
+        find.byType(TerminalKeyboardBar),
+      );
+      final en = AppLocalizationsEn();
+      // The package's const English defaults are the unlocalized
+      // instance; a constructed one binds every label to the ARB.
+      expect(
+        identical(bar.strings, const TerminalKeyboardBarStrings()),
+        isFalse,
+      );
+      final expected = TerminalKeyboardBarStrings(
+        escape: en.dockerShellKeyEscape,
+        tab: en.dockerShellKeyTab,
+        controlModifier: en.dockerShellKeyControlModifier,
+        controlC: en.dockerShellKeyControlC,
+        leftArrow: en.dockerShellKeyLeftArrow,
+        upArrow: en.dockerShellKeyUpArrow,
+        downArrow: en.dockerShellKeyDownArrow,
+        rightArrow: en.dockerShellKeyRightArrow,
+        home: en.dockerShellKeyHome,
+        end: en.dockerShellKeyEnd,
+        pageUp: en.dockerShellKeyPageUp,
+        pageDown: en.dockerShellKeyPageDown,
+        pipe: en.dockerShellKeyPipe,
+        slash: en.dockerShellKeySlash,
+        hyphen: en.dockerShellKeyHyphen,
+        tilde: en.dockerShellKeyTilde,
+        hideKeyboard: en.dockerShellKeyHideKeyboard,
+      );
+      expect(
+        (
+          bar.strings.escape,
+          bar.strings.tab,
+          bar.strings.controlModifier,
+          bar.strings.controlC,
+          bar.strings.leftArrow,
+          bar.strings.upArrow,
+          bar.strings.downArrow,
+          bar.strings.rightArrow,
+          bar.strings.home,
+          bar.strings.end,
+          bar.strings.pageUp,
+          bar.strings.pageDown,
+          bar.strings.pipe,
+          bar.strings.slash,
+          bar.strings.hyphen,
+          bar.strings.tilde,
+          bar.strings.hideKeyboard,
+        ),
+        (
+          expected.escape,
+          expected.tab,
+          expected.controlModifier,
+          expected.controlC,
+          expected.leftArrow,
+          expected.upArrow,
+          expected.downArrow,
+          expected.rightArrow,
+          expected.home,
+          expected.end,
+          expected.pageUp,
+          expected.pageDown,
+          expected.pipe,
+          expected.slash,
+          expected.hyphen,
+          expected.tilde,
+          expected.hideKeyboard,
+        ),
+      );
     });
 
     testWidgets('closing the pane closes the shell', (tester) async {

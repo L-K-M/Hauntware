@@ -617,34 +617,42 @@ void runWindowCommand(
     case WindowCommand.showAssistant:
       unawaited(state.showInspectorPage(InspectorPage.assistant));
     case WindowCommand.undo || WindowCommand.redo:
-      unawaited(_stepUndoHistory(context, state, command));
+      unawaited(
+        stepUndoHistory(
+          Overlay.of(context, rootOverlay: true),
+          state.undoHistory,
+          command,
+        ),
+      );
   }
 }
 
 /// Undo or redo the app's last change, and say which: with no menu
 /// naming it, the notice is how the user learns what Ctrl+Z took back
-/// ("Delete snippet undone").
-Future<void> _stepUndoHistory(
-  BuildContext context,
-  AppState state,
+/// ("Delete snippet undone"). [command] is [WindowCommand.undo] or
+/// [WindowCommand.redo]. The root [overlay] outlives the pane that
+/// triggered the step, so the notice is not lost if that pane unmounts
+/// while the change is being applied.
+Future<void> stepUndoHistory(
+  OverlayState overlay,
+  GhostUndoHistory history,
   WindowCommand command,
 ) async {
-  final history = state.undoHistory;
   final undo = command == WindowCommand.undo;
   final name = undo ? history.undoName : history.redoName;
   if (name == null) return;
   try {
     await (undo ? history.undo() : history.redo());
   } catch (error) {
-    if (!context.mounted) return;
-    showTopToastIn(
-      context,
+    if (!overlay.mounted) return;
+    showTopToast(
+      overlay,
       message: 'Couldn’t ${undo ? 'undo' : 'redo'} “$name”: $error',
     );
     return;
   }
-  if (!context.mounted) return;
-  showTopToastIn(context, message: '$name ${undo ? 'undone' : 'redone'}');
+  if (!overlay.mounted) return;
+  showTopToast(overlay, message: '$name ${undo ? 'undone' : 'redone'}');
 }
 
 /// Cross-platform keyboard shortcuts for the menu commands. On macOS the native

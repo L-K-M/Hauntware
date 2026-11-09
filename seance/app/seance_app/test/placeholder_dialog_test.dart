@@ -110,4 +110,40 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Return in the last field inserts, as the Insert button does', (
+    tester,
+  ) async {
+    Map<String, String>? result;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () async {
+                result = await showPlaceholderDialog(context, 'cp', const [
+                  'from',
+                  'to',
+                ]);
+              },
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, 'a');
+    await tester.testTextInput.receiveAction(TextInputAction.next);
+    await tester.pump();
+    // Return in the first field moves on rather than inserting.
+    expect(result, isNull);
+
+    await tester.enterText(find.byType(TextField).last, 'b');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(result, {'from': 'a', 'to': 'b'});
+  });
 }

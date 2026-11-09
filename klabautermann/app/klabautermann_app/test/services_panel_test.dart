@@ -928,6 +928,27 @@ void main() {
       expect(text(), '[Service]\nEnvironment=********\n');
     });
 
+    testWidgets('a Find button opens the unit file editor\'s find bar', (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await panel.sample(tester);
+      await _open(tester, 'nginx.service');
+      await tester.tap(find.byTooltip('Show unit file'));
+      await tester.pumpAndSettle();
+      await panel.answerUnit(
+        tester,
+        UnitFilePayload([MaskedValue.plain('[Service]\n')]),
+      );
+      final controller = tester
+          .widget<PlanchetteEditor>(find.byType(PlanchetteEditor))
+          .controller;
+
+      await tester.tap(find.byTooltip('Find'));
+      await tester.pumpAndSettle();
+      expect(controller.searchOpen, isTrue);
+    });
+
     testWidgets('the unit file dialog fits a window narrower than its size', (
       tester,
     ) async {

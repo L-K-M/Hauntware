@@ -290,6 +290,42 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('a second request while it is open opens nothing', (
+      tester,
+    ) async {
+      final host = await pumpHost(tester);
+      await open(tester, host);
+      // The macOS menu stays live under the modal, as does a held ⌘K.
+      await open(tester, host);
+      expect(find.byType(Dialog), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsNothing);
+
+      await open(tester, host);
+      expect(find.byType(Dialog), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('two requests in one frame open one generator', (
+      tester,
+    ) async {
+      final host = await pumpHost(tester);
+      // A menu click and a shortcut can land before the first dialog's
+      // first frame, when it is not yet mounted.
+      showCommandGenerator(host, state);
+      showCommandGenerator(host, state);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(Dialog), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsNothing);
+    });
+
     testWidgets('honours an opt-out made in the chat', (tester) async {
       await state.setIncludeTerminalContext(false);
       final host = await pumpHost(tester);

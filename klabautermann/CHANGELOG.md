@@ -9,6 +9,11 @@
   and Poltergeist. Each width is kept on this device across restarts,
   and a pane never gets narrower than it was before it could be resized,
   so a narrow window keeps its layout.
+- A container's shell works more like Séance's terminal: http and https
+  links it prints open in the browser, its menu adds Select all and
+  Clear scrollback, a long-press or double-tap selection on a phone or
+  tablet shows Copy, Paste and Select all, and the on-screen keys are
+  named in the app's own words.
 - The desktop header shows the selected server and controls the sidebar
   and inspector. View-menu commands, keyboard shortcuts and remembered
   visibility work across desktop platforms.
@@ -34,6 +39,17 @@
   credentials, a cancelled prompt or a declined key, the server's header
   offers Try again, or Review the new key when its host key changed.
   Before, you had to leave the server for 30 seconds and open it again.
+- Undo removes a server you duplicated, as in Séance and Poltergeist.
+  While the copy is open, Undo waits and says to close it first.
+- On Linux and Windows, Edit ▸ Undo and Redo in the menu bar undo the
+  text of a focused field, as the shortcuts and the macOS menu do,
+  instead of the app's last change.
+- The command palette and the keyboard map open once: choosing either
+  again while it is open does nothing.
+- Return continues from any field of the sync sign-in, and inserts a
+  snippet once every placeholder is filled.
+- The unit-file and stack-file views have a Find button, so you can
+  search them on a phone or tablet too.
 - Initial scaffold: the `klabautermann_host`, `klabautermann_docker` and
   `klabautermann_core` packages, the five-platform app shell (desktop
   three-pane layout, phone master-detail stack, settings route), light

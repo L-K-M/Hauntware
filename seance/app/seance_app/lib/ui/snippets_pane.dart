@@ -9,6 +9,7 @@ import '../app_state.dart';
 import '../family_hues.dart';
 import '../main.dart';
 import '../theme.dart' show SeanceTheme;
+import 'app_menus.dart' show WindowCommand, stepUndoHistory;
 import 'top_toast.dart';
 
 /// The Snippets tab: reusable command templates, synced across devices. Tapping
@@ -199,17 +200,21 @@ class _SnippetsPaneState extends State<SnippetsPane> {
     AppState state,
     Snippet snippet,
   ) async {
+    // Captured before the await: the root overlay outlives this pane, so
+    // the undone notice still shows if the pane has gone by then.
+    final overlay = Overlay.of(context, rootOverlay: true);
     final change = await deleteSnippetUndoably(state, snippet);
-    if (!context.mounted) return;
-    showTopToastIn(
-      context,
+    if (!overlay.mounted) return;
+    showTopToast(
+      overlay,
       message: 'Deleted “${snippet.title}”',
       actionLabel: 'Undo',
       // This deletion only, while it is still the one Undo would take
       // back: a later change has its own.
       onAction: () {
         final history = state.undoHistory;
-        if (history.isNextUndo(change)) unawaited(history.undo());
+        if (!history.isNextUndo(change)) return;
+        unawaited(stepUndoHistory(overlay, history, WindowCommand.undo));
       },
     );
   }
@@ -230,6 +235,17 @@ Future<GhostUndoableChange> deleteSnippetUndoably(
   );
   state.undoHistory.record(change);
   return change;
+}
+
+/// The undoable record of creating [snippet], shared by the editor's Save
+/// and the suggestion's add button.
+GhostUndoableChange _newSnippetChange(AppState state, Snippet snippet) {
+  final stamps = _RestoreStamps(snippet.updatedAt);
+  return GhostUndoableChange(
+    name: 'New snippet',
+    undo: () => state.deleteSnippet(snippet.id),
+    redo: () => state.saveSnippet(snippet.copyWith(updatedAt: stamps.next())),
+  );
 }
 
 /// Stamps for a snippet written back by Undo or Redo. Each must outrank
@@ -255,6 +271,11 @@ final class _RestoreStamps {
 class _Suggestions extends StatelessWidget {
   final AppState state;
   const _Suggestions({required this.state});
+
+  Future<void> _addSuggestion(String command) async {
+    final snippet = await state.addSuggestionAsSnippet(command);
+    state.undoHistory.record(_newSnippetChange(state, snippet));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -297,7 +318,7 @@ class _Suggestions extends StatelessWidget {
                     tooltip: 'Save as snippet',
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.add, size: 20),
-                    onPressed: () => state.addSuggestionAsSnippet(cmd),
+                    onPressed: () => unawaited(_addSuggestion(cmd)),
                   ),
                   IconButton(
                     tooltip: 'Dismiss',
@@ -445,12 +466,7 @@ class _SnippetEditorState extends State<_SnippetEditor> {
     final stamps = _RestoreStamps(snippet.updatedAt);
     state.undoHistory.record(
       existing == null
-          ? GhostUndoableChange(
-              name: 'New snippet',
-              undo: () => state.deleteSnippet(snippet.id),
-              redo: () =>
-                  state.saveSnippet(snippet.copyWith(updatedAt: stamps.next())),
-            )
+          ? _newSnippetChange(state, snippet)
           : GhostUndoableChange(
               name: 'Edit snippet',
               undo: () => state.saveSnippet(
@@ -564,6 +580,10 @@ class _PlaceholderDialogState extends State<_PlaceholderDialog> {
     super.dispose();
   }
 
+  void _insert() => Navigator.pop(context, {
+    for (final e in _controllers.entries) e.key: e.value.text,
+  });
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -580,6 +600,13 @@ class _PlaceholderDialogState extends State<_PlaceholderDialog> {
                   child: TextField(
                     controller: _controllers[widget.names[i]],
                     autofocus: i == 0,
+                    // Return moves to the next field, and inserts from the last.
+                    textInputAction: i == widget.names.length - 1
+                        ? TextInputAction.done
+                        : TextInputAction.next,
+                    onSubmitted: i == widget.names.length - 1
+                        ? (_) => _insert()
+                        : null,
                     decoration: InputDecoration(
                       labelText: widget.names[i],
                       border: const OutlineInputBorder(),
@@ -595,12 +622,7 @@ class _PlaceholderDialogState extends State<_PlaceholderDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, {
-            for (final e in _controllers.entries) e.key: e.value.text,
-          }),
-          child: const Text('Insert'),
-        ),
+        FilledButton(onPressed: _insert, child: const Text('Insert')),
       ],
     );
   }

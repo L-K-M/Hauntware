@@ -321,6 +321,14 @@
   memory for as long as the connection stays open.
 - On Windows, the app's file properties name the Unlicense, and a font
   installed or removed while a window closes no longer crashes Séance.
+- Undo on a deleted snippet's notice says "Delete snippet undone", as
+  Ctrl+Z does, and a snippet saved from a suggestion can be undone like
+  one saved from the editor.
+- The command generator opens once: choosing it again from the menu or
+  its shortcut while it is open does nothing.
+- Return confirms the recovery code check, the restore code, a Command
+  inbox app's name and a file's permissions, as their buttons do, and
+  moves through a snippet's placeholders, inserting from the last.
 
 ## 1.9.0 (2026-10-04)
 

@@ -1883,6 +1883,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           workspace: workspace,
           dropDelegate: () => dropDelegate,
           openConnect: _openConnectDialog,
+          dialogAvailable: () => !_commandSessionActive,
           allCommands: () => _commands,
           openUrl: (url) async {
             await launchUrl(url);

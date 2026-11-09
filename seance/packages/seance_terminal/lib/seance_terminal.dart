@@ -8,7 +8,8 @@ export 'package:xterm/xterm.dart'
         TerminalLigatures,
         TerminalStyle,
         TerminalTheme,
-        TerminalView;
+        TerminalView,
+        TerminalViewState;
 
 export 'src/byte_session.dart' show TerminalByteSession, TerminalByteTransport;
 export 'src/paste_policy.dart'

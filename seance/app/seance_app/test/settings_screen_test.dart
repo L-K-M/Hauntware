@@ -1317,6 +1317,25 @@ void main() {
       expect(backend.updatedApps.single.$2.allowedServerIds, ['s1']);
     });
 
+    testWidgets('Return in the name field saves a valid app and ignores an '
+        'empty one', (tester) async {
+      await pumpScreen(tester, tab: SettingsTab.inbox);
+
+      await tester.tap(find.byKey(const ValueKey('inbox.add')));
+      await tester.pumpAndSettle();
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(backend.addedApps, isEmpty);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('inbox.app.name')),
+        'bots',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(backend.addedApps.single.name, 'bots');
+    });
+
     testWidgets('connecting an app shows its pairing string once', (
       tester,
     ) async {
@@ -1587,6 +1606,22 @@ void main() {
         message(tester),
         startsWith('Restored: 2 added, 0 replaced, 1 kept.'),
       );
+    });
+
+    testWidgets('Return in the code field chooses the export, once a code '
+        'is entered', (tester) async {
+      await pumpScreen(tester, tab: SettingsTab.sync);
+
+      await tap(tester, 'recovery.restore');
+      final field = find.byKey(const ValueKey('recovery.restore.code'));
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(field, findsOneWidget);
+
+      await tester.enterText(field, 'AAAA-BBBB');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(backend.lastRestoreCode, 'AAAA-BBBB');
     });
 
     testWidgets('a failed restore shows its sentence', (tester) async {

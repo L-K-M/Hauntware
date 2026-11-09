@@ -352,26 +352,45 @@ class _UnitFileViewState extends State<UnitFileView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 8,
       children: [
-        if (masked > 0)
-          Wrap(
-            spacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(
-                l10n.unitFileMasked(masked, kRevealDuration.inSeconds),
-                style: theme.textTheme.bodySmall,
-              ),
-              TextButton.icon(
-                onPressed: _toggleReveal,
-                icon: Icon(
-                  revealed
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                ),
-                label: Text(revealed ? l10n.unitFileHide : l10n.unitFileReveal),
-              ),
-            ],
-          ),
+        // Find sits here because touch cannot reach the editor's chord.
+        Row(
+          children: [
+            Expanded(
+              child: masked > 0
+                  ? Wrap(
+                      spacing: 12,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          l10n.unitFileMasked(
+                            masked,
+                            kRevealDuration.inSeconds,
+                          ),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        TextButton.icon(
+                          onPressed: _toggleReveal,
+                          icon: Icon(
+                            revealed
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                          ),
+                          label: Text(
+                            revealed ? l10n.unitFileHide : l10n.unitFileReveal,
+                          ),
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            IconButton(
+              tooltip: l10n.fileViewFind,
+              visualDensity: VisualDensity.compact,
+              onPressed: editor.openSearch,
+              icon: const Icon(Icons.search),
+            ),
+          ],
+        ),
         Expanded(
           child: DecoratedBox(
             decoration: BoxDecoration(

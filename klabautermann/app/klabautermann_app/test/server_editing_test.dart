@@ -385,6 +385,38 @@ void main() {
       await outlastToasts(tester);
     });
 
+    testWidgets('Duplicate is undoable: Undo deletes the copy', (tester) async {
+      final harness = await pumpApp(
+        tester,
+        size: _desktop,
+        servers: _servers,
+        syncAccount: testSyncAccount,
+      );
+
+      await openRowMenu(tester, 'web-1');
+      await tester.tap(find.text('Duplicate'));
+      await tester.pumpAndSettle();
+      final duplicate =
+          harness.engine.sentOfType<DuplicateServer>().single
+              as DuplicateServer;
+      harness.engine.emit(
+        CatalogWritten(requestId: requestIdOf(duplicate), serverId: 'srv-2'),
+      );
+      await tester.pumpAndSettle();
+      expect(harness.undoHistory.undoName, 'Duplicate server');
+
+      final undo = harness.undoHistory.undo();
+      await tester.pump();
+      final delete =
+          harness.engine.sentOfType<DeleteServer>().single as DeleteServer;
+      expect(delete.serverId, 'srv-2');
+      harness.engine.emit(
+        CatalogWritten(requestId: requestIdOf(delete), serverId: 'srv-2'),
+      );
+      await undo;
+      await outlastToasts(tester);
+    });
+
     testWidgets('an ssh_config import offers no Duplicate', (tester) async {
       await pumpApp(
         tester,

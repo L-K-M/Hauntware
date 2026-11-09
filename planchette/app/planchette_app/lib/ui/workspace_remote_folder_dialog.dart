@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
+import '../widgets/mono_text_style.dart';
+
 Future<String?> showRemoteWorkspaceRoot(
   BuildContext context,
   ServerConfig server,
@@ -61,6 +63,7 @@ class _RemoteFolderState extends State<_RemoteFolder> {
         child: TextField(
           controller: _path,
           autofocus: true,
+          style: monoTextStyle.copyWith(fontSize: 12),
           decoration: InputDecoration(
             labelText: 'Remote folder',
             helperText: 'Absolute path or relative to your login home.',

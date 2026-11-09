@@ -5,18 +5,29 @@ import '../app_state.dart';
 import '../family_hues.dart';
 import 'top_toast.dart';
 
+/// Whether a generator is up or about to be. It is set before the dialog's
+/// first frame, so a second request in the same frame opens nothing, and
+/// cleared only when the dialog's state goes away, after its exit or with
+/// its window, so a closing dialog cannot clear a newer one's flag.
+bool _generatorOpen = false;
+
 /// The inline command generator: a focused "describe a task → get one command"
 /// tool, distinct from the chat sidebar. It generates a single command and
 /// places it in the active terminal's input line for review — it never runs
 /// anything. Enter generates, inserts, and closes; the explanation and any
 /// danger are surfaced in a snackbar so the streamlined flow still warns you.
+///
+/// Only one at a time: the macOS menu stays live under the modal, so its
+/// item or a repeated shortcut would otherwise stack a second dialog.
 Future<void> showCommandGenerator(BuildContext context, AppState state) {
+  if (_generatorOpen) return Future.value();
   final active = state.activeSession;
   if (active == null || !active.isConnected) {
     showTopToastIn(context, message: 'Open a connected session first.');
     return Future.value();
   }
   final dialogKey = GlobalKey<_CommandGeneratorDialogState>();
+  _generatorOpen = true;
   return showDialog<void>(
     context: context,
     builder: (_) => PopScope<void>(
@@ -69,6 +80,7 @@ class _CommandGeneratorDialogState extends State<_CommandGeneratorDialog> {
 
   @override
   void dispose() {
+    _generatorOpen = false;
     _invalidateOperation();
     _input.dispose();
     super.dispose();
