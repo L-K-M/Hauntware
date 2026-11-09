@@ -135,6 +135,11 @@ void open_window(SettingsWindowHost* host) {
   fl_dart_project_set_dart_entrypoint_arguments(project, arguments);
 
   FlView* view = fl_view_new(project);
+  // Transparent, like the app's window, so the GTK background (which
+  // follows the desktop's light/dark theme) shows through during a resize.
+  GdkRGBA background_color;
+  gdk_rgba_parse(&background_color, "#00000000");
+  fl_view_set_background_color(view, &background_color);
   gtk_widget_set_size_request(GTK_WIDGET(view), kMinimumWidth, kMinimumHeight);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
