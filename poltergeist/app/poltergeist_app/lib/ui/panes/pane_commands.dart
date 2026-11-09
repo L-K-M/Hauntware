@@ -552,7 +552,14 @@ List<RegisteredCommand> buildPaneCommands({
     RegisteredCommand(
       id: kViewToggleSidebarCommandId,
       scope: CommandScope.app,
-      label: (l10n) => l10n.viewToggleSidebarLabel,
+      // Named for what it does, as view.toggleInspector and the siblings'
+      // sidebar toggles are; the drawer stage keeps the neutral label,
+      // since there it opens or closes the overlay instead.
+      label: (l10n) => sidebarIsDrawer?.call() ?? false
+          ? l10n.viewToggleSidebarLabel
+          : workspace.sidebarHidden
+          ? l10n.viewShowSidebarLabel
+          : l10n.viewHideSidebarLabel,
       icon: Icons.view_sidebar_outlined,
       // ⌃⌘S on macOS, the platform's sidebar standard (10 §4, which
       // supersedes 02 §8.3's ⌥⌘S); Ctrl+Alt+S elsewhere.

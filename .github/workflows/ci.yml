@@ -2025,6 +2025,10 @@ jobs:
         if: matrix.target == 'macos'
         working-directory: poltergeist/app/poltergeist_app
         run: bash "$GITHUB_WORKSPACE/scripts/verify-macos-app.sh"
+      - name: Test native accessibility lifecycle
+        if: matrix.target == 'macos'
+        working-directory: poltergeist
+        run: bash scripts/test-macos-accessibility.sh
       - name: Verify native macOS keyboard compatibility
         if: matrix.target == 'macos'
         working-directory: poltergeist

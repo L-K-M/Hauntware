@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' show AppExitType, PlatformDispatcher;
 
 import 'package:app_links/app_links.dart';
+import 'package:file_picker/file_picker.dart' show FilePicker;
 import 'package:flutter/material.dart' show GlobalKey, ScaffoldMessengerState;
 import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:flutter/widgets.dart';
@@ -93,6 +94,17 @@ Future<void> main(List<String> args) async {
   }
 
   final errorReporter = ApplicationErrorReporter();
+  if (Platform.isMacOS) {
+    // Poltergeist is unsandboxed on macOS and so carries no file
+    // entitlements, which file_picker otherwise demands before every open
+    // or save panel ("Either the Read-Only or Read-Write entitlement is
+    // required"): without this, Open Folder, adding an editor program,
+    // bookmark imports, key files and server images all fail there, as
+    // they did in Séance (#567).
+    unawaited(
+      FilePicker.skipEntitlementsChecks().catchError(errorReporter.report),
+    );
+  }
   final deepLinks = DeepLinkCoordinator(onError: errorReporter.report);
   final workspaceWindowsReady = Completer<WorkspaceWindows?>();
   AppLinks().uriLinkStream.listen(

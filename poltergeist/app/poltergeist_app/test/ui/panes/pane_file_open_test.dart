@@ -203,6 +203,26 @@ void main() {
     expect(channel.openCalls, ['/home/tester/report.txt']);
   });
 
+  testWidgets('a press stamped before the last one starts no '
+      'double-click', (tester) async {
+    final channel = localChannel();
+    await left.openLocalHome();
+    await pumpShell(tester);
+
+    // An event clock that reset between two presses: the second carries
+    // an earlier stamp. A third press soon after it on the old clock's
+    // terms must not pair with the out-of-order one (Séance #626).
+    await clickAt(tester, 'report.txt', const Duration(seconds: 10));
+    await tester.pump(const Duration(milliseconds: 16));
+    await clickAt(tester, 'report.txt', const Duration(seconds: 9));
+    await tester.pump(const Duration(milliseconds: 16));
+    await clickAt(tester, 'report.txt', const Duration(milliseconds: 9050));
+    await tester.pumpAndSettle();
+
+    expect(channel.openCalls, isEmpty);
+    expect(left.isRowSelected(2), isTrue);
+  });
+
   testWidgets('presses further apart than the window are two clicks, '
       'however fast the frames', (tester) async {
     final channel = localChannel();

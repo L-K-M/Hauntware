@@ -1000,11 +1000,23 @@ abstract class AppLocalizations {
   /// **'Opening saved-sync favorites isn\'t available yet — the sync preview arrives in a later milestone.'**
   String get sidebarSyncLater;
 
-  /// Command label: hide or show the global sidebar (view.toggleSidebar, 02 §1/§8.3/§9). At stage 1 it opens the overlay drawer instead.
+  /// Command label: view.toggleSidebar at stage 1, where it opens or closes the overlay drawer instead of hiding the inline sidebar (02 §1/§8.3/§9).
   ///
   /// In en, this message translates to:
   /// **'Show/Hide Sidebar'**
   String get viewToggleSidebarLabel;
+
+  /// Command label: view.toggleSidebar while the inline sidebar is hidden, named for what it does like view.toggleInspector's.
+  ///
+  /// In en, this message translates to:
+  /// **'Show Sidebar'**
+  String get viewShowSidebarLabel;
+
+  /// Command label: view.toggleSidebar while the inline sidebar shows, named for what it does like view.toggleInspector's.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide Sidebar'**
+  String get viewHideSidebarLabel;
 
   /// State shown while the initial local home channel opens.
   ///
