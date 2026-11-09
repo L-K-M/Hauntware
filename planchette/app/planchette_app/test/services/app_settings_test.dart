@@ -367,6 +367,57 @@ void main() {
   });
 
   group('LocalSettingsStore', () {
+    test('a damaged file is kept aside and named, not overwritten', () async {
+      // As the siblings do: a hand edit with a typo used to read as no
+      // settings, and the next save replaced it, taking the edit with it.
+      final directory = await Directory.systemTemp.createTemp(
+        'planchette-settings-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final file = File('${directory.path}/settings.json');
+      await file.writeAsString('{"fontSize": 18,');
+      final store = LocalSettingsStore(
+        file,
+        clock: () => DateTime.utc(2026, 11, 8, 12, 30, 5),
+      );
+      final settings = SettingsController(store: store);
+      addTearDown(settings.dispose);
+
+      await settings.load();
+
+      expect(settings.value, const AppSettings());
+      final aside = File('${file.path}.corrupt-2026-11-08T123005000Z');
+      expect(await aside.readAsString(), '{"fontSize": 18,');
+      expect(await file.exists(), isFalse);
+      expect(settings.error, contains(aside.path));
+      expect(store.loadIssue, settings.error);
+
+      await settings.update(const AppSettings(fontSize: 20));
+      await settings.flush();
+      expect(await aside.readAsString(), '{"fontSize": 18,');
+      expect((await store.load())?.fontSize, 20);
+      expect(store.loadIssue, isNull);
+    });
+
+    test('a file that cannot be read says so and stays where it is', () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'planchette-settings-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final file = File('${directory.path}/settings.json');
+      // Not UTF-8: reading the text fails before any JSON is seen.
+      await file.writeAsBytes([0xff, 0xfe, 0x00, 0x7b]);
+      final store = LocalSettingsStore(file);
+      final settings = SettingsController(store: store);
+      addTearDown(settings.dispose);
+
+      await settings.load();
+
+      expect(settings.value, const AppSettings());
+      expect(await file.exists(), isTrue);
+      expect(settings.error, contains('could not be read'));
+    });
+
     test('writes and reads a file it was given a path for', () async {
       final directory = await Directory.systemTemp.createTemp(
         'planchette-settings-',

@@ -28,8 +28,23 @@ class FileInboxAppStore implements InboxAppStore {
   final SecretVault Function() vault;
   final Map<String, Map<String, dynamic>> _meta = {};
   bool _loaded = false;
+  Future<void> _operationTail = Future<void>.value();
 
   FileInboxAppStore(this.file, this.vault);
+
+  /// One save at a time: each builds its candidate from the metadata the
+  /// previous one committed, so overlapping saves cannot drop each other.
+  Future<T> _serialize<T>(Future<T> Function() operation) {
+    final result = _operationTail.then((_) async {
+      await _load();
+      return operation();
+    });
+    _operationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
+  }
 
   Future<void> _load() async {
     if (_loaded) return;
@@ -47,8 +62,8 @@ class FileInboxAppStore implements InboxAppStore {
     _loaded = true;
   }
 
-  Future<void> _flush() =>
-      writeStringAtomically(file, jsonEncode(_meta.values.toList()));
+  Future<void> _flush(Map<String, Map<String, dynamic>> snapshot) =>
+      writeStringAtomically(file, jsonEncode(snapshot.values.toList()));
 
   /// Null for an app whose key is missing from the vault: it cannot open
   /// anything, and the next sync round brings the key back.
@@ -63,7 +78,8 @@ class FileInboxAppStore implements InboxAppStore {
   Future<List<InboxApp>> listApps() async {
     await _load();
     final out = <InboxApp>[];
-    for (final meta in _meta.values) {
+    // A copy: a save can commit while a hydration awaits the vault.
+    for (final meta in _meta.values.toList()) {
       final app = await _hydrate(meta);
       if (app != null) out.add(app);
     }
@@ -82,8 +98,7 @@ class FileInboxAppStore implements InboxAppStore {
   /// absent and is repaired by the next sync, while a key without metadata is
   /// an inert vault entry.
   @override
-  Future<void> putApp(InboxApp app) async {
-    await _load();
+  Future<void> putApp(InboxApp app) => _serialize(() async {
     final json = app.toJson();
     final key = json.remove('key') as String?;
     final secretId = '$_keySecretPrefix${app.id}';
@@ -92,10 +107,15 @@ class FileInboxAppStore implements InboxAppStore {
         Secret(id: secretId, kind: SecretKind.password, value: key),
       );
     }
+    // Memory takes the metadata only once its write succeeded
+    // (FileConfigStore's rule, #661), so a rejected app cannot ride a later,
+    // unrelated save.
+    final candidate = Map<String, Map<String, dynamic>>.of(_meta)
+      ..[app.id] = json;
+    await _flush(candidate);
     _meta[app.id] = json;
-    await _flush();
     if (app.removed) await vault().deleteSecret(secretId);
-  }
+  });
 }
 
 /// JSON-file [InboxStatusStore].
@@ -104,6 +124,7 @@ class FileInboxStatusStore implements InboxStatusStore, SyncCollectionHealth {
   final Map<String, InboxStatus> _cache = {};
   bool _loaded = false;
   bool _syncCollectionFailed = false;
+  Future<void> _operationTail = Future<void>.value();
 
   FileInboxStatusStore(this.file);
 
@@ -128,49 +149,71 @@ class FileInboxStatusStore implements InboxStatusStore, SyncCollectionHealth {
 
   /// Owner-only like the cache: which proposals were run or dismissed, and
   /// when, is a record of activity on the user's servers.
-  Future<void> _flush() => writeStringAtomically(
+  Future<void> _flush(Map<String, InboxStatus> snapshot) =>
+      writeStringAtomically(
         file,
-        jsonEncode([for (final s in _cache.values) s.toJson()]),
+        jsonEncode([for (final s in snapshot.values) s.toJson()]),
         privacy: AtomicFilePrivacy.ownerOnly,
       );
+
+  // FileConfigStore's rule (#661): one operation at a time, and memory takes
+  // a status only once its write succeeded.
+  Future<T> _serialize<T>(Future<T> Function() operation) {
+    final result = _operationTail.then((_) async {
+      await _load();
+      return operation();
+    });
+    _operationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
+  }
+
+  /// Writes the candidate [update] makes when it reports a change, then
+  /// commits it to memory.
+  Future<void> _mutate(bool Function(Map<String, InboxStatus>) update) =>
+      _serialize(() async {
+        final candidate = Map<String, InboxStatus>.of(_cache);
+        if (!update(candidate)) return;
+        await _flush(candidate);
+        _cache
+          ..clear()
+          ..addAll(candidate);
+      });
 
   @override
   bool get syncCollectionFailed => _syncCollectionFailed;
 
   @override
-  Future<void> markSyncCollectionRecovered() async {
-    await _load();
-    await _flush();
-    await clearSyncCollectionRecovery(file);
-    _syncCollectionFailed = false;
-  }
+  Future<void> markSyncCollectionRecovered() => _serialize(() async {
+        await _flush(_cache);
+        await clearSyncCollectionRecovery(file);
+        _syncCollectionFailed = false;
+      });
 
   @override
-  Future<List<InboxStatus>> listStatuses() async {
-    await _load();
-    return _cache.values.toList();
-  }
+  Future<List<InboxStatus>> listStatuses() =>
+      _serialize(() async => _cache.values.toList());
 
   @override
-  Future<InboxStatus?> getStatus(String appId, String proposalId) async {
-    await _load();
-    return _cache[InboxStatus.recordIdFor(appId, proposalId)];
-  }
+  Future<InboxStatus?> getStatus(String appId, String proposalId) =>
+      _serialize(
+        () async => _cache[InboxStatus.recordIdFor(appId, proposalId)],
+      );
 
   @override
-  Future<void> putStatus(InboxStatus status) async {
-    await _load();
-    _cache[status.recordId] = status;
-    await _flush();
-  }
+  Future<void> putStatus(InboxStatus status) => _mutate((candidate) {
+        candidate[status.recordId] = status;
+        return true;
+      });
 
   @override
-  Future<void> deleteStatus(String appId, String proposalId) async {
-    await _load();
-    if (_cache.remove(InboxStatus.recordIdFor(appId, proposalId)) != null) {
-      await _flush();
-    }
-  }
+  Future<void> deleteStatus(String appId, String proposalId) => _mutate(
+        (candidate) =>
+            candidate.remove(InboxStatus.recordIdFor(appId, proposalId)) !=
+            null,
+      );
 }
 
 /// JSON-file [InboxCacheStore], owner-only: the scripts are commands for the
@@ -182,6 +225,7 @@ class FileInboxCacheStore implements InboxCacheStore {
 
   InboxCache? _cache;
   bool _loaded = false;
+  Future<void> _operationTail = Future<void>.value();
 
   FileInboxCacheStore(
     this.file, {
@@ -192,7 +236,21 @@ class FileInboxCacheStore implements InboxCacheStore {
   static const _version = 1;
 
   /// Bind the file to [scope] before the account becomes active.
-  Future<void> initialize() => _load();
+  Future<void> initialize() => _serialize(() async {});
+
+  /// One load or save at a time, so the file and memory end on the same
+  /// cache whatever order overlapping saves finish their writes in.
+  Future<T> _serialize<T>(Future<T> Function() operation) {
+    final result = _operationTail.then((_) async {
+      await _load();
+      return operation();
+    });
+    _operationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
+  }
 
   Future<void> _load() async {
     if (_loaded) return;
@@ -266,25 +324,23 @@ class FileInboxCacheStore implements InboxCacheStore {
   }
 
   @override
-  Future<InboxCache> load() async {
-    await _load();
-    return _cache!;
-  }
+  Future<InboxCache> load() => _serialize(() async => _cache!);
 
+  /// Memory takes [cache] only once its write succeeded (FileConfigStore's
+  /// rule, #661): a failed save leaves the cache the store had.
   @override
-  Future<void> save(InboxCache cache) async {
-    await _load();
+  Future<void> save(InboxCache cache) => _serialize(() async {
+    await _flush(cache);
     _cache = cache;
-    await _flush();
-  }
+  });
 
-  Future<void> _flush() {
+  Future<void> _flush([InboxCache? cache]) {
     return writeStringAtomically(
       file,
       jsonEncode({
         'version': _version,
         'account': scope.toJson(),
-        'cache': (_cache ?? const InboxCache()).toJson(),
+        'cache': (cache ?? _cache ?? const InboxCache()).toJson(),
       }),
       privacy: AtomicFilePrivacy.ownerOnly,
     );

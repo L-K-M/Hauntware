@@ -434,6 +434,51 @@ void main() {
     expect(backend.settings.keepSessionsAliveInBackground, before);
   });
 
+  // The same rule as the keep-alive setting and FileConfigStore (#661): a
+  // value the disk refused must not stay in memory to ride a later save.
+  test('a failed update-check write puts the setting back and throws',
+      () async {
+    final before = backend.settings.checkForUpdates;
+    await breakSettingsWrites();
+
+    await expectLater(backend.setCheckForUpdates(!before), throwsA(anything));
+    expect(backend.settings.checkForUpdates, before);
+  });
+
+  test('a failed write of the value already set changes nothing', () async {
+    // Restoring "the opposite" of the requested value would flip a setting
+    // a failed no-op save never meant to change.
+    final updates = backend.settings.checkForUpdates;
+    final suggestions = backend.settings.commandSuggestions;
+    final keepAlive = backend.settings.keepSessionsAliveInBackground;
+    await breakSettingsWrites();
+
+    await expectLater(backend.setCheckForUpdates(updates), throwsA(anything));
+    await expectLater(
+      backend.setCommandSuggestions(suggestions),
+      throwsA(anything),
+    );
+    await expectLater(
+      backend.setKeepSessionsAlive(keepAlive),
+      throwsA(anything),
+    );
+    expect(backend.settings.checkForUpdates, updates);
+    expect(backend.settings.commandSuggestions, suggestions);
+    expect(backend.settings.keepSessionsAliveInBackground, keepAlive);
+  });
+
+  test('a failed command-suggestions write puts the setting back and throws',
+      () async {
+    final before = backend.settings.commandSuggestions;
+    await breakSettingsWrites();
+
+    await expectLater(
+      backend.setCommandSuggestions(!before),
+      throwsA(anything),
+    );
+    expect(backend.settings.commandSuggestions, before);
+  });
+
   group('setAppearance', () {
     test('re-themes the app and lands on disk', () async {
       final themes = <AppAppearance>[];

@@ -111,6 +111,7 @@ class FileSnippetStore implements SnippetStore, SyncCollectionHealth {
   final Map<String, Snippet> _cache = {};
   bool _loaded = false;
   bool _syncCollectionFailed = false;
+  Future<void> _operationTail = Future<void>.value();
 
   FileSnippetStore(this.file);
 
@@ -134,49 +135,65 @@ class FileSnippetStore implements SnippetStore, SyncCollectionHealth {
     _loaded = true;
   }
 
-  Future<void> _flush() async {
+  Future<void> _flush(Map<String, Snippet> snapshot) async {
     await writeStringAtomically(
-        file, jsonEncode(_cache.values.map((s) => s.toJson()).toList()));
+        file, jsonEncode(snapshot.values.map((s) => s.toJson()).toList()));
   }
+
+  // FileConfigStore's rule (#661): operations run one at a time, and a
+  // change reaches memory only once its write succeeded, so a rejected
+  // change cannot ride a later, unrelated save.
+  Future<T> _serialize<T>(Future<T> Function() operation) {
+    final result = _operationTail.then((_) async {
+      await _load();
+      return operation();
+    });
+    _operationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
+  }
+
+  Future<void> _mutate(void Function(Map<String, Snippet>) update) =>
+      _serialize(() async {
+        final candidate = Map<String, Snippet>.of(_cache);
+        update(candidate);
+        await _flush(candidate);
+        _cache
+          ..clear()
+          ..addAll(candidate);
+      });
 
   @override
   bool get syncCollectionFailed => _syncCollectionFailed;
 
   @override
-  Future<void> markSyncCollectionRecovered() async {
-    await _load();
-    await _flush();
-    await clearSyncCollectionRecovery(file);
-    _syncCollectionFailed = false;
-  }
+  Future<void> markSyncCollectionRecovered() => _serialize(() async {
+        await _flush(_cache);
+        await clearSyncCollectionRecovery(file);
+        _syncCollectionFailed = false;
+      });
 
   @override
-  Future<List<Snippet>> listSnippets() async {
-    await _load();
-    final list = _cache.values.toList()
-      ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
-    return list;
-  }
+  Future<List<Snippet>> listSnippets() => _serialize(() async {
+        final list = _cache.values.toList()
+          ..sort(
+            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+          );
+        return list;
+      });
 
   @override
-  Future<Snippet?> getSnippet(String id) async {
-    await _load();
-    return _cache[id];
-  }
+  Future<Snippet?> getSnippet(String id) => _serialize(() async => _cache[id]);
 
   @override
-  Future<void> putSnippet(Snippet snippet) async {
-    await _load();
-    _cache[snippet.id] = snippet;
-    await _flush();
-  }
+  Future<void> putSnippet(Snippet snippet) =>
+      _mutate((candidate) => candidate[snippet.id] = snippet);
 
   @override
-  Future<void> deleteSnippet(String id) async {
-    await _load();
-    _cache.remove(id);
-    await _flush();
-  }
+  Future<void> deleteSnippet(String id) =>
+      _mutate((candidate) => candidate.remove(id));
 }
 
 /// JSON-file [TombstoneStore]: the deletions this device still owes the sync
@@ -194,6 +211,7 @@ class FileTombstoneStore implements TombstoneStore {
   final File file;
   final Map<String, EncryptedRecord> _cache = {};
   bool _loaded = false;
+  Future<void> _operationTail = Future<void>.value();
 
   FileTombstoneStore(this.file);
 
@@ -226,39 +244,63 @@ class FileTombstoneStore implements TombstoneStore {
     _loaded = true;
   }
 
-  Future<void> _flush() async {
+  Future<void> _flush(Map<String, EncryptedRecord> snapshot) async {
     await writeStringAtomically(
-        file, jsonEncode(_cache.values.map((r) => r.toJson()).toList()));
+        file, jsonEncode(snapshot.values.map((r) => r.toJson()).toList()));
   }
 
-  @override
-  Future<List<EncryptedRecord>> all() async {
-    await _load();
-    return _cache.values.toList();
+  // FileConfigStore's rule (#661): one operation at a time, and memory
+  // takes a change only once its write succeeded. A failed add must not
+  // ride a later one, and a failed removal keeps the deletion pending.
+  Future<T> _serialize<T>(Future<T> Function() operation) {
+    final result = _operationTail.then((_) async {
+      await _load();
+      return operation();
+    });
+    _operationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
   }
 
-  @override
-  Future<void> add(EncryptedRecord tombstone) async {
-    await _load();
-    final existing = _cache[tombstone.id];
-    // Monotonic (see [TombstoneStore]): a retry or double-delete after the row
-    // is gone recomputes a bare-"now" stamp that can trail a pending
-    // skew-beating tombstone; keeping the higher stamp stops a regression that
-    // would lose last-write-wins and resurrect the row.
-    if (existing != null && existing.updatedAt > tombstone.updatedAt) return;
-    _cache[tombstone.id] = tombstone;
-    await _flush();
-  }
+  /// Writes the candidate [update] makes when it reports a change, then
+  /// commits it to memory.
+  Future<void> _mutate(bool Function(Map<String, EncryptedRecord>) update) =>
+      _serialize(() async {
+        final candidate = Map<String, EncryptedRecord>.of(_cache);
+        if (!update(candidate)) return;
+        await _flush(candidate);
+        _cache
+          ..clear()
+          ..addAll(candidate);
+      });
 
   @override
-  Future<void> remove(String id) async {
-    await _load();
-    // Skip the rewrite when nothing was pending: saveServer/saveSnippet call
-    // remove() on every save, so without this a delete-free install would
-    // create and rewrite the file on each save.
-    if (_cache.remove(id) == null) return;
-    await _flush();
-  }
+  Future<List<EncryptedRecord>> all() =>
+      _serialize(() async => _cache.values.toList());
+
+  @override
+  Future<void> add(EncryptedRecord tombstone) => _mutate((candidate) {
+        final existing = candidate[tombstone.id];
+        // Monotonic (see [TombstoneStore]): a retry or double-delete after the
+        // row is gone recomputes a bare-"now" stamp that can trail a pending
+        // skew-beating tombstone; keeping the higher stamp stops a regression
+        // that would lose last-write-wins and resurrect the row.
+        if (existing != null && existing.updatedAt > tombstone.updatedAt) {
+          return false;
+        }
+        candidate[tombstone.id] = tombstone;
+        return true;
+      });
+
+  @override
+  Future<void> remove(String id) => _mutate(
+        // Skip the rewrite when nothing was pending: saveServer/saveSnippet
+        // call remove() on every save, so without this a delete-free install
+        // would create and rewrite the file on each save.
+        (candidate) => candidate.remove(id) != null,
+      );
 }
 
 /// What settling a staged re-key did with the journal it found.

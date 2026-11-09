@@ -229,10 +229,24 @@ abstract interface class SettingsStore {
   Future<void> save(AppSettings settings);
 }
 
+/// A [SettingsStore] that can say what its last [SettingsStore.load] found
+/// wrong, such as a damaged file it kept aside.
+abstract interface class SettingsLoadReport {
+  /// A sentence for the user, or null when the load found nothing to report.
+  String? get loadIssue;
+}
+
 /// The settings file, wherever the platform says a per-user application keeps
 /// one.
-final class LocalSettingsStore implements SettingsStore {
-  LocalSettingsStore(this.file);
+final class LocalSettingsStore implements SettingsStore, SettingsLoadReport {
+  LocalSettingsStore(this.file, {DateTime Function()? clock})
+    : _clock = clock ?? DateTime.now;
+
+  final DateTime Function() _clock;
+
+  @override
+  String? get loadIssue => _loadIssue;
+  String? _loadIssue;
 
   /// `settings.json` in the platform's per-user configuration directory. With
   /// no such directory to be found, the settings last for this session only.
@@ -250,13 +264,52 @@ final class LocalSettingsStore implements SettingsStore {
     // escape is the reason the application refuses to open. A file that is
     // missing, unreadable, or not settings at all is worth starting over from
     // rather than refusing to start.
+    _loadIssue = null;
     try {
       if (!await file.exists()) return null;
-      final decoded = jsonDecode(await file.readAsString());
-      if (decoded is! Map) return null;
+      final Object? decoded;
+      try {
+        decoded = jsonDecode(await file.readAsString());
+      } on FormatException {
+        await _keepDamaged();
+        return null;
+      }
+      if (decoded is! Map) {
+        await _keepDamaged();
+        return null;
+      }
       return AppSettings.fromJson(Map<String, Object?>.from(decoded));
     } on Exception {
+      // Unreadable rather than damaged (permissions, a locked file, bytes
+      // that are not text): say so, but leave the file where it is.
+      _loadIssue =
+          'Your settings file could not be read, so Planchette started with '
+          'its default settings.';
       return null;
+    }
+  }
+
+  /// Moves a file that is not settings JSON aside as
+  /// `settings.json.corrupt-<UTC time>` before the defaults take over, as
+  /// the siblings do, so the next save cannot overwrite a hand edit with a
+  /// typo in it. Best effort: a file that cannot be moved is left alone, and
+  /// the app still opens.
+  Future<void> _keepDamaged() async {
+    final stamp = _clock()
+        .toUtc()
+        .toIso8601String()
+        .replaceAll(':', '')
+        .replaceAll('.', '');
+    final aside = '${file.path}.corrupt-$stamp';
+    try {
+      await file.rename(aside);
+      _loadIssue =
+          'Your settings file could not be read, so Planchette started with '
+          'its default settings. The file was kept as $aside.';
+    } on FileSystemException {
+      _loadIssue =
+          'Your settings file could not be read, so Planchette started with '
+          'its default settings.';
     }
   }
 
@@ -342,6 +395,9 @@ final class SettingsController extends ChangeNotifier {
       _value = await store.load() ?? const AppSettings();
     } on Exception {
       _value = const AppSettings();
+    }
+    if (store case final SettingsLoadReport report) {
+      _error = report.loadIssue;
     }
     notifyListeners();
   }
