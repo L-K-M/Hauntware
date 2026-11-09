@@ -322,6 +322,9 @@ class _RecoveryCodeDialogState extends State<_RecoveryCodeDialog> {
                     labelText: 'Type the code\'s first four characters',
                   ),
                   onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) {
+                    if (_confirmed && !_saving) unawaited(_keep());
+                  },
                 ),
                 if (_error != null)
                   Padding(
@@ -376,6 +379,12 @@ class _RestoreDialogState extends State<_RestoreDialog> {
     super.dispose();
   }
 
+  void _choose() {
+    final code = _code.text.trim();
+    if (code.isEmpty) return;
+    Navigator.pop(context, (code, _policy));
+  }
+
   @override
   Widget build(BuildContext context) {
     final code = _code.text.trim();
@@ -401,6 +410,7 @@ class _RestoreDialogState extends State<_RestoreDialog> {
               style: _mono,
               decoration: const InputDecoration(labelText: 'Recovery code'),
               onChanged: (_) => setState(() {}),
+              onSubmitted: (_) => _choose(),
             ),
             const SizedBox(height: 12),
             const Text('Credentials this device already has:'),
@@ -431,9 +441,7 @@ class _RestoreDialogState extends State<_RestoreDialog> {
         ),
         FilledButton(
           key: const ValueKey('recovery.restore.choose'),
-          onPressed: code.isEmpty
-              ? null
-              : () => Navigator.pop(context, (code, _policy)),
+          onPressed: code.isEmpty ? null : _choose,
           child: const Text('Choose export…'),
         ),
       ],

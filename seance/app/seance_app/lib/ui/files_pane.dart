@@ -1506,77 +1506,11 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     final mode = entry.mode == null
         ? ''
         : (entry.mode! & 0xFFF).toRadixString(8).padLeft(4, '0');
-    final modeController = TextEditingController(text: mode);
-    String? validationError;
     final updatedMode = await showDialog<int>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(entry.name),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SelectableText(entry.path),
-                const SizedBox(height: 12),
-                Text('Type: ${entry.type.name}'),
-                if (entry.size != null)
-                  Text(
-                    'Size: ${ghostFormatFileSize(entry.size, platform: Theme.of(context).platform)}',
-                  ),
-                if (entry.uid != null || entry.gid != null)
-                  Text('Owner: ${entry.uid ?? '?'}:${entry.gid ?? '?'}'),
-                if (entry.modifiedAt != null)
-                  Text(
-                    'Modified: ${ghostFormatFileModified(entry.modifiedAt, now: DateTime.now(), localeName: Localizations.localeOf(context).toString(), today: (time) => 'Today at $time', yesterday: (time) => 'Yesterday at $time')}',
-                  ),
-                if (linkTarget != null) ...[
-                  const SizedBox(height: 8),
-                  const Text('Symbolic-link target'),
-                  SelectableText(linkTarget),
-                ],
-                if (!entry.isSymbolicLink) ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: modeController,
-                    decoration: InputDecoration(
-                      labelText: 'Permissions (octal)',
-                      hintText: '0644',
-                      errorText: validationError,
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-            if (!entry.isSymbolicLink)
-              FilledButton(
-                onPressed: () {
-                  final text = modeController.text.trim();
-                  final parsed = int.tryParse(text, radix: 8);
-                  if (parsed == null || parsed < 0 || parsed > 0xFFF) {
-                    setDialogState(() {
-                      validationError =
-                          'Enter an octal mode from 0000 to 7777.';
-                    });
-                    return;
-                  }
-                  Navigator.pop(context, parsed);
-                },
-                child: const Text('Apply mode'),
-              ),
-          ],
-        ),
-      ),
+      builder: (_) =>
+          _PropertiesDialog(entry: entry, linkTarget: linkTarget, mode: mode),
     );
-    modeController.dispose();
     if (updatedMode == null ||
         (entry.mode != null && updatedMode == (entry.mode! & 0xFFF))) {
       return;
@@ -2308,6 +2242,105 @@ class _DenseActionIcon extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// A remote entry's properties, with its permissions field. The dialog owns
+/// the field's controller, so it is disposed only once the route has gone,
+/// after the exit animation that still draws the field.
+class _PropertiesDialog extends StatefulWidget {
+  const _PropertiesDialog({
+    required this.entry,
+    required this.linkTarget,
+    required this.mode,
+  });
+
+  final RemoteFileEntry entry;
+  final String? linkTarget;
+
+  /// The entry's current mode as four octal digits, or empty when unknown.
+  final String mode;
+
+  @override
+  State<_PropertiesDialog> createState() => _PropertiesDialogState();
+}
+
+class _PropertiesDialogState extends State<_PropertiesDialog> {
+  late final _mode = TextEditingController(text: widget.mode);
+  String? _validationError;
+
+  @override
+  void dispose() {
+    _mode.dispose();
+    super.dispose();
+  }
+
+  /// Closes with the typed mode, or says why it is not one.
+  void _apply() {
+    final parsed = int.tryParse(_mode.text.trim(), radix: 8);
+    if (parsed == null || parsed < 0 || parsed > 0xFFF) {
+      setState(() {
+        _validationError = 'Enter an octal mode from 0000 to 7777.';
+      });
+      return;
+    }
+    Navigator.pop(context, parsed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final entry = widget.entry;
+    final linkTarget = widget.linkTarget;
+    return AlertDialog(
+      title: Text(entry.name),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SelectableText(entry.path),
+            const SizedBox(height: 12),
+            Text('Type: ${entry.type.name}'),
+            if (entry.size != null)
+              Text(
+                'Size: ${ghostFormatFileSize(entry.size, platform: Theme.of(context).platform)}',
+              ),
+            if (entry.uid != null || entry.gid != null)
+              Text('Owner: ${entry.uid ?? '?'}:${entry.gid ?? '?'}'),
+            if (entry.modifiedAt != null)
+              Text(
+                'Modified: ${ghostFormatFileModified(entry.modifiedAt, now: DateTime.now(), localeName: Localizations.localeOf(context).toString(), today: (time) => 'Today at $time', yesterday: (time) => 'Yesterday at $time')}',
+              ),
+            if (linkTarget != null) ...[
+              const SizedBox(height: 8),
+              const Text('Symbolic-link target'),
+              SelectableText(linkTarget),
+            ],
+            if (!entry.isSymbolicLink) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _mode,
+                decoration: InputDecoration(
+                  labelText: 'Permissions (octal)',
+                  hintText: '0644',
+                  errorText: _validationError,
+                ),
+                keyboardType: TextInputType.number,
+                onSubmitted: (_) => _apply(),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+        if (!entry.isSymbolicLink)
+          FilledButton(onPressed: _apply, child: const Text('Apply mode')),
+      ],
+    );
+  }
 }
 
 class _LocalCopiesPanel extends StatelessWidget {

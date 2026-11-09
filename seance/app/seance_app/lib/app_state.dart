@@ -2926,19 +2926,20 @@ class AppState extends ChangeNotifier {
   /// Re-evaluate suggestions after a settings change (e.g. the feature toggle).
   void refreshSuggestions() => _recomputeSuggestions();
 
-  /// Promote a suggested command to a real (syncable) snippet.
-  Future<void> addSuggestionAsSnippet(String command) async {
+  /// Promote a suggested command to a real (syncable) snippet, and return
+  /// it so the caller can record the creation for undo.
+  Future<Snippet> addSuggestionAsSnippet(String command) async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    await saveSnippet(
-      Snippet(
-        id: uuidV4(),
-        title: _snippetTitle(command),
-        body: command,
-        createdAt: now,
-        updatedAt: now,
-      ),
+    final snippet = Snippet(
+      id: uuidV4(),
+      title: _snippetTitle(command),
+      body: command,
+      createdAt: now,
+      updatedAt: now,
     );
+    await saveSnippet(snippet);
     _recomputeSuggestions(); // it's now an existing snippet, so it drops off
+    return snippet;
   }
 
   /// Permanently hide a suggestion.

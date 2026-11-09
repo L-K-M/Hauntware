@@ -171,7 +171,40 @@ void main() {
     await until(() => state.snippets.isNotEmpty);
     expect(state.snippets.single.title, 'Disk usage');
     expect(state.undoHistory.redoName, 'Delete snippet');
+    expect(find.text('Delete snippet undone'), findsOneWidget);
     // The notice's timer runs out before the test ends.
     await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('a suggestion saved as a snippet can be undone', (tester) async {
+    state.commandSuggestions = ['df -h'];
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: SeanceTheme.light(platform: TargetPlatform.linux),
+        home: AppScope(
+          state: state,
+          child: const Scaffold(body: SnippetsPane()),
+        ),
+      ),
+    );
+    /// Gives the snippet store's file writes real time until [done]. The
+    /// store queues its writes, so a step started here must also finish
+    /// here rather than be awaited inside runAsync.
+    Future<void> until(bool Function() done) async {
+      for (var i = 0; i < 40 && !done(); i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump();
+      }
+    }
+
+    await tester.tap(find.byTooltip('Save as snippet'));
+    await until(() => state.snippets.isNotEmpty);
+    expect(state.snippets, hasLength(1));
+    expect(state.undoHistory.undoName, 'New snippet');
+    unawaited(state.undoHistory.undo());
+    await until(() => state.snippets.isEmpty);
+    expect(state.snippets, isEmpty);
   });
 }
