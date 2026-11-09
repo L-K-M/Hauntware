@@ -1654,7 +1654,7 @@ void engineMain(
                 // The switch and name as they are now, when the user sees
                 // the plan; the preview lists the line among the steps.
                 final held = withHostAuditLine(
-                  plan,
+                  withAdminCredentials(plan, admin?.session(serverId)),
                   enabled:
                       safetyPolicy.servers[serverId]?.hostAuditLine ?? true,
                   deviceName: deviceName,

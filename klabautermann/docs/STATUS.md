@@ -1838,7 +1838,11 @@ is on main:
   a phone sheet, confirms by tier with typing for tier 2, runs the plan
   and toasts its end. An entry registry hides every action entry point
   unless actions are allowed and nothing is read-only. E21 and E22 add
-  the entry points.
+  the entry points. Where admin mode elevates without a password (a root
+  login or a NOPASSWD rule), the engine names the plan's elevated
+  credentials passwordless when it holds it, so the preview says the run
+  needs no password (`withAdminCredentials`, tested in
+  `operation_plan_test.dart`).
 - M4 admin mode in the app (E19b): the server header's admin chip
   turns admin mode on and off and follows the engine's states, tinted
   while on with its end time, and the header says why it failed or

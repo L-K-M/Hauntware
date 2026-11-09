@@ -108,10 +108,7 @@ final class OperationPlan {
     return _withAuditLine(argv);
   }
 
-  OperationPlan _withAuditLine(List<String> argv) => OperationPlan(
-    intent: intent,
-    kind: kind,
-    targetName: targetName,
+  OperationPlan _withAuditLine(List<String> argv) => _copy(
     steps: switch (steps) {
       [...final before, ShellStep(endsLink: true) && final last] => [
         ...before,
@@ -120,9 +117,31 @@ final class OperationPlan {
       ],
       _ => [...steps, ShellStep(argv, bestEffort: true)],
     },
-    requiredLevel: requiredLevel,
-    runner: runner,
     hostWrites: [...hostWrites, HostWriteRow.auditSyslog],
+  );
+
+  /// This plan with its runner's [credentials] in place of the planner's
+  /// (03 §8.3: a root login or a NOPASSWD rule needs no password).
+  OperationPlan withCredentials(RunnerCredentials credentials) => _copy(
+    runner: RunnerFacts(
+      identity: runner.identity,
+      engine: runner.engine,
+      credentials: credentials,
+    ),
+  );
+
+  OperationPlan _copy({
+    Iterable<PlanStep>? steps,
+    RunnerFacts? runner,
+    Iterable<HostWriteRow>? hostWrites,
+  }) => OperationPlan(
+    intent: intent,
+    kind: kind,
+    targetName: targetName,
+    steps: steps ?? this.steps,
+    requiredLevel: requiredLevel,
+    runner: runner ?? this.runner,
+    hostWrites: hostWrites ?? this.hostWrites,
     detachedRunner: detachedRunner,
     impact: impact,
     ownership: ownership,
