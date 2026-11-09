@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Activity shows the commands an action ran in the code font, as the
+  preview before it runs does.
 - The desktop header shows the selected server and controls the sidebar
   and inspector. View-menu commands, keyboard shortcuts and remembered
   visibility work across desktop platforms.
