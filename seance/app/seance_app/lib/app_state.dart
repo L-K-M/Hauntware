@@ -1557,20 +1557,44 @@ class AppState extends ChangeNotifier {
       final secretRef = server?.secretRef;
       if (secretRef != null &&
           !secretStillReferenced(secretRef, servers, excludingId: id)) {
-        // Fail-soft, like the coordinator's own secret deletes: the vault
-        // throws when the OS keyring is locked, and letting that escape now
-        // would skip the list refresh and leave the UI showing a server that
-        // no longer exists.
+        // Retracted from the sync account as well as removed here, as the
+        // shared CatalogWriter does for Poltergeist and Klabautermann: the
+        // `secret:` tombstone keeps new devices from adopting the credential
+        // of a server that no longer exists, and is durable before the vault
+        // entry goes. Fail-soft, like the coordinator's own secret deletes:
+        // the vault throws when the OS keyring is locked, and letting that
+        // escape now would skip the list refresh and leave the UI showing a
+        // server that no longer exists. A failed retirement is queued like an
+        // edit's, so a later launch or save retries it.
         try {
-          await services.vault.deleteSecret(secretRef);
+          await retireCredential(
+            vault: services.vault,
+            tombstones: services.tombstoneStore,
+            credentialId: secretRef,
+            deviceId: services.settings.deviceId,
+            servers: servers,
+            updatedAt: deletedAt,
+          );
         } catch (error, stackTrace) {
           developer.log(
-            'Could not remove the credential for the deleted server $id',
+            'Could not retract the credential for the deleted server $id; '
+            'the retraction is queued',
             name: 'seance.app',
             level: 900,
             error: error,
             stackTrace: stackTrace,
           );
+          try {
+            await _queueCredentialCleanup(secretRef);
+          } catch (error, stackTrace) {
+            developer.log(
+              'Could not queue the credential retraction for $id',
+              name: 'seance.app',
+              level: 900,
+              error: error,
+              stackTrace: stackTrace,
+            );
+          }
         }
       }
     });
