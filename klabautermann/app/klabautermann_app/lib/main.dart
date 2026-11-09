@@ -417,12 +417,18 @@ Future<void> main(List<String> args) async {
     save: settings.setFleetDensity,
   );
   // The desktop shell's side panes (03 §10.2), kept per device in
-  // settings.json like the density.
+  // settings.json like the density: whether they show and how wide they
+  // are; a width the file cannot read as one falls back to the layout's
+  // default.
   final windowPanes = WindowPanesController(
     sidebar: settings.shellSidebarShown,
     inspector: settings.shellInspectorShown,
+    sidebarWidth: settings.shellSidebarWidth,
+    inspectorWidth: settings.shellInspectorWidth,
     saveSidebar: settings.setShellSidebarShown,
     saveInspector: settings.setShellInspectorShown,
+    saveSidebarWidth: settings.setShellSidebarWidth,
+    saveInspectorWidth: settings.setShellInspectorWidth,
   );
   // The app's own undo history (K3): one for the run; edit.undo/redo and
   // the delete toast's Undo step it.

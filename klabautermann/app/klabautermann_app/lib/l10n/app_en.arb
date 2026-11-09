@@ -181,6 +181,24 @@
   "@windowPanesNotSaved": {
     "description": "Top toast when showing or hiding a desktop side pane applied but could not be written to the device's settings file; the change holds for this session."
   },
+  "sidebarResize": "Sidebar width. Use the left and right arrow keys to resize it.",
+  "@sidebarResize": {
+    "description": "Screen-reader label of the desktop shell's fleet rail edge, which a pointer drag or the arrow keys resize."
+  },
+  "inspectorResize": "Inspector width. Use the left and right arrow keys to resize it.",
+  "@inspectorResize": {
+    "description": "Screen-reader label of the desktop shell's inspector edge, which a pointer drag or the arrow keys resize."
+  },
+  "paneWidthPixels": "{width, plural, =1{1 pixel} other{{width} pixels}}",
+  "@paneWidthPixels": {
+    "description": "A desktop side pane's width as screen readers announce it while its edge is resized.",
+    "placeholders": {
+      "width": {
+        "type": "int",
+        "example": "260"
+      }
+    }
+  },
   "editUndo": "Undo",
   "@editUndo": {
     "description": "The Edit menu's Undo command while nothing can be undone, and the delete notice's Undo action."

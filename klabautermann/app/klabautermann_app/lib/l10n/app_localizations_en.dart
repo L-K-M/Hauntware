@@ -210,6 +210,25 @@ class AppLocalizationsEn extends AppLocalizations {
       'Klabautermann could not save your window layout, so the change lasts only until it quits.';
 
   @override
+  String get sidebarResize =>
+      'Sidebar width. Use the left and right arrow keys to resize it.';
+
+  @override
+  String get inspectorResize =>
+      'Inspector width. Use the left and right arrow keys to resize it.';
+
+  @override
+  String paneWidthPixels(int width) {
+    String _temp0 = intl.Intl.pluralLogic(
+      width,
+      locale: localeName,
+      other: '$width pixels',
+      one: '1 pixel',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get editUndo => 'Undo';
 
   @override

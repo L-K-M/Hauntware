@@ -58,3 +58,24 @@ Future<void> toggleWindowPane(
     }
   }
 }
+
+/// Saves [pane]'s [width] through [panes] the way [toggleWindowPane]
+/// saves its visibility: a width that applied but was not saved shows
+/// the same toast.
+Future<void> setWindowPaneWidth(
+  BuildContext context,
+  WindowPanesController panes,
+  WindowPane pane,
+  double width,
+) async {
+  try {
+    await panes.setWidth(pane, width);
+  } on WindowPanesNotSavedException {
+    if (context.mounted) {
+      showTopToastIn(
+        context,
+        message: AppLocalizations.of(context).windowPanesNotSaved,
+      );
+    }
+  }
+}

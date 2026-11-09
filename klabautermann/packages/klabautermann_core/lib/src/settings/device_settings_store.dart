@@ -54,6 +54,8 @@ const String _cadenceCapsKey = 'klabautermann.sampling.caps';
 const String _attentionKey = 'klabautermann.attention.acknowledged';
 const String _shellSidebarKey = 'klabautermann.shell.sidebar';
 const String _shellInspectorKey = 'klabautermann.shell.inspector';
+const String _shellSidebarWidthKey = 'klabautermann.shell.sidebarWidth';
+const String _shellInspectorWidthKey = 'klabautermann.shell.inspectorWidth';
 const String _adminMemoryKey = 'klabautermann.admin.remembered';
 
 // The fields of one server's entry under [_endpointOverridesKey].
@@ -475,6 +477,40 @@ final class DeviceSettingsStore {
   Future<void> setShellInspectorShown(bool shown) async {
     _values[_shellInspectorKey] = shown;
     await _save();
+  }
+
+  /// The fleet rail's width in the desktop shell
+  /// (`klabautermann.shell.sidebarWidth`), in logical pixels, or null
+  /// when there is none or it is not a finite positive number: anything
+  /// else reads as never resized, so a damaged or out-of-range value
+  /// falls back to the layout's default rather than feeding its width
+  /// math. The app clamps whatever it reads to the window.
+  double? get shellSidebarWidth => _paneWidth(_values[_shellSidebarWidthKey]);
+
+  /// Stores [width] and writes the document; throws as [setCadence] does.
+  Future<void> setShellSidebarWidth(double width) async {
+    _values[_shellSidebarWidthKey] = width;
+    await _save();
+  }
+
+  /// The inspector's width in the desktop shell
+  /// (`klabautermann.shell.inspectorWidth`), read as [shellSidebarWidth]
+  /// is.
+  double? get shellInspectorWidth =>
+      _paneWidth(_values[_shellInspectorWidthKey]);
+
+  /// Stores [width] and writes the document; throws as [setCadence] does.
+  Future<void> setShellInspectorWidth(double width) async {
+    _values[_shellInspectorWidthKey] = width;
+    await _save();
+  }
+
+  /// A stored pane width: only a finite positive number is usable, so a
+  /// width the document holds as something else reads as none.
+  static double? _paneWidth(Object? value) {
+    if (value is! num) return null;
+    final width = value.toDouble();
+    return width.isFinite && width > 0 ? width : null;
   }
 
   /// Each server's polling cap (SAF-19), `klabautermann.sampling.caps`:
