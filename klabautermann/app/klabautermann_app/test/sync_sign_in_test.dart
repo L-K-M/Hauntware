@@ -91,6 +91,22 @@ void main() {
     expect(harness.sync.account, testSyncAccount);
   });
 
+  testWidgets('the password and passphrase keep the keyboard from learning '
+      'them', (tester) async {
+    await pumpApp(tester);
+
+    await tester.tap(find.text('Synchronize'));
+    await tester.pumpAndSettle();
+    for (final label in ['Password', 'Encryption passphrase']) {
+      final secret = tester.widget<TextField>(
+        find.widgetWithText(TextField, label),
+      );
+      expect(secret.autocorrect, isFalse, reason: label);
+      expect(secret.enableSuggestions, isFalse, reason: label);
+      expect(secret.enableIMEPersonalizedLearning, isFalse, reason: label);
+    }
+  });
+
   testWidgets('a refused sign-in says why and keeps the sheet open', (
     tester,
   ) async {

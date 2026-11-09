@@ -65,6 +65,20 @@ void main() {
     },
   );
 
+  testWidgets('secret fields keep the keyboard from learning them', (
+    tester,
+  ) async {
+    final catalog = _Catalog();
+    addTearDown(catalog.dispose);
+    await open(tester, catalog);
+    for (final label in ['Account password', 'Encryption passphrase']) {
+      final secret = tester.widget<TextField>(field(label));
+      expect(secret.autocorrect, isFalse, reason: label);
+      expect(secret.enableSuggestions, isFalse, reason: label);
+      expect(secret.enableIMEPersonalizedLearning, isFalse, reason: label);
+    }
+  });
+
   testWidgets('first sign-in defaults credentials off and forwards the form', (
     tester,
   ) async {

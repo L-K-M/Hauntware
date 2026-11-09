@@ -76,6 +76,7 @@ class _ElevationDialogState extends State<_ElevationDialog> {
             obscureText: true,
             autocorrect: false,
             enableSuggestions: false,
+            enableIMEPersonalizedLearning: false,
             keyboardType: TextInputType.visiblePassword,
             decoration: InputDecoration(labelText: l10n.elevationPassword),
             onSubmitted: (_) => _submit(),

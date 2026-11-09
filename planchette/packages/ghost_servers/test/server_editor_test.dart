@@ -465,6 +465,31 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    testWidgets('secret fields keep the keyboard from learning them', (
+      tester,
+    ) async {
+      void expectNoLearning(String label) {
+        final secret = tester.widget<TextField>(
+          find.descendant(of: field(label), matching: find.byType(TextField)),
+        );
+        expect(secret.autocorrect, isFalse, reason: label);
+        expect(secret.enableSuggestions, isFalse, reason: label);
+        expect(secret.enableIMEPersonalizedLearning, isFalse, reason: label);
+      }
+
+      await openEditor(tester);
+      await fillRequired(tester);
+      await tester.tap(find.byType(DropdownButtonFormField<AuthMethod>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Password').last);
+      await tester.pumpAndSettle();
+      expectNoLearning('Password');
+
+      await pasteKey(tester);
+      expectNoLearning('Private key (PEM/OpenSSH)');
+      expectNoLearning('Key passphrase (optional)');
+    });
+
     testWidgets('Import from file fills the pasted key, which saves as a '
         'pasted one', (tester) async {
       delegate

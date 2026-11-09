@@ -533,6 +533,31 @@ void main() {
     }
   });
 
+  testWidgets('the API keys keep the keyboard from learning them', (
+    tester,
+  ) async {
+    await pumpScreen(tester, tab: SettingsTab.assistant);
+
+    void expectNoLearning(String label) {
+      final secret = tester.widget<TextField>(field(label));
+      expect(secret.autocorrect, isFalse, reason: label);
+      expect(secret.enableSuggestions, isFalse, reason: label);
+      expect(secret.enableIMEPersonalizedLearning, isFalse, reason: label);
+    }
+
+    expectNoLearning('API key (OS keystore; synced if assistant sync is on)');
+
+    // The Z.AI key shows only once its search is on.
+    final zai = find.widgetWithText(SwitchListTile, 'Z.AI Web Search Prime');
+    await tester.ensureVisible(zai);
+    await tester.pumpAndSettle();
+    await tester.tap(zai);
+    await tester.pumpAndSettle();
+    expectNoLearning(
+      'Z.AI API key (OS keystore; synced if assistant sync is on)',
+    );
+  });
+
   testWidgets('Save sends the form and clears a key once it is stored', (
     tester,
   ) async {
@@ -1436,6 +1461,26 @@ void main() {
     FilledButton done(WidgetTester tester) => tester.widget<FilledButton>(
       find.byKey(const ValueKey('recovery.code.done')),
     );
+
+    testWidgets('recovery codes keep the keyboard from learning them', (
+      tester,
+    ) async {
+      void expectNoLearning(String key) {
+        final secret = tester.widget<TextField>(find.byKey(ValueKey(key)));
+        expect(secret.autocorrect, isFalse, reason: key);
+        expect(secret.enableSuggestions, isFalse, reason: key);
+        expect(secret.enableIMEPersonalizedLearning, isFalse, reason: key);
+      }
+
+      await pumpScreen(tester, tab: SettingsTab.sync);
+      await tap(tester, 'recovery.setUp');
+      expectNoLearning('recovery.code.confirm');
+      Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+      await tester.pumpAndSettle();
+
+      await tap(tester, 'recovery.restore');
+      expectNoLearning('recovery.restore.code');
+    });
 
     testWidgets('the code shows once and is kept only after its first group', (
       tester,

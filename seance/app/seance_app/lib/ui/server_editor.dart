@@ -666,6 +666,9 @@ class _ServerEditorState extends State<_ServerEditor> {
           if (_credentialAction == CredentialEditAction.replace) ...[
             TextFormField(
               controller: _password,
+              autocorrect: false,
+              enableSuggestions: false,
+              enableIMEPersonalizedLearning: false,
               obscureText: true,
               decoration: const InputDecoration(labelText: 'Password'),
               validator: _required,
@@ -727,6 +730,9 @@ class _ServerEditorState extends State<_ServerEditor> {
           else if (_credentialAction == CredentialEditAction.replace)
             TextFormField(
               controller: _keyPem,
+              autocorrect: false,
+              enableSuggestions: false,
+              enableIMEPersonalizedLearning: false,
               maxLines: 5,
               style: SeanceTheme.mono.copyWith(fontSize: 12),
               decoration: const InputDecoration(
@@ -775,6 +781,9 @@ class _ServerEditorState extends State<_ServerEditor> {
             if (_passphraseAction == KeyPassphraseAction.replace)
               TextFormField(
                 controller: _keyPassphrase,
+                autocorrect: false,
+                enableSuggestions: false,
+                enableIMEPersonalizedLearning: false,
                 obscureText: true,
                 decoration: const InputDecoration(
                   labelText: 'New key passphrase',

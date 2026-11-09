@@ -557,6 +557,9 @@ class _ServerEditorState extends State<_ServerEditor> {
         return [
           TextFormField(
             controller: _password,
+            autocorrect: false,
+            enableSuggestions: false,
+            enableIMEPersonalizedLearning: false,
             obscureText: true,
             decoration: InputDecoration(labelText: _strings.passwordLabel),
           ),
@@ -602,6 +605,9 @@ class _ServerEditorState extends State<_ServerEditor> {
           else ...[
             TextFormField(
               controller: _keyPem,
+              autocorrect: false,
+              enableSuggestions: false,
+              enableIMEPersonalizedLearning: false,
               maxLines: 5,
               style: widget.monoStyle.copyWith(fontSize: 12),
               decoration: InputDecoration(
@@ -621,6 +627,9 @@ class _ServerEditorState extends State<_ServerEditor> {
           ],
           TextFormField(
             controller: _keyPassphrase,
+            autocorrect: false,
+            enableSuggestions: false,
+            enableIMEPersonalizedLearning: false,
             obscureText: true,
             decoration: InputDecoration(labelText: _strings.keyPassphrase),
           ),

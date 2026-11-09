@@ -275,11 +275,17 @@ class _SyncSignInDialogState extends State<SyncSignInDialog> {
     ),
     TextField(
       controller: _password,
+      autocorrect: false,
+      enableSuggestions: false,
+      enableIMEPersonalizedLearning: false,
       obscureText: true,
       decoration: InputDecoration(labelText: l10n.syncPassword),
     ),
     TextField(
       controller: _passphrase,
+      autocorrect: false,
+      enableSuggestions: false,
+      enableIMEPersonalizedLearning: false,
       obscureText: true,
       decoration: InputDecoration(
         labelText: l10n.syncPassphrase,
