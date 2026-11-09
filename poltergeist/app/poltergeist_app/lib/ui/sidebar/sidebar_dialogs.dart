@@ -217,8 +217,5 @@ void _showSidebarError(BuildContext context, AppLocalizations l10n) =>
     _showSidebarNotice(context, l10n.sidebarActionFailed);
 
 void _showSidebarNotice(BuildContext context, String message) {
-  if (!context.mounted) return;
-  ScaffoldMessenger.maybeOf(
-    context,
-  )?.showSnackBar(SnackBar(content: Text(message)));
+  showTopToastIn(context, message: message);
 }

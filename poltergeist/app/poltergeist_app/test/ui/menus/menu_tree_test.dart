@@ -356,6 +356,7 @@ const _desktopMenus = <AppMenuId, List<String>>{
     'Keyboard Shortcuts Ctrl+/',
     'Release Notes',
     'Report an Issue',
+    'About Poltergeist',
   ],
 };
 

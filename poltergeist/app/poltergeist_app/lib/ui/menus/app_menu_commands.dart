@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/material.dart' show showAboutDialog;
 import 'package:flutter/widgets.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:window_manager/window_manager.dart';
@@ -14,6 +15,9 @@ const kAppCheckForUpdatesCommandId = 'app.checkForUpdates';
 
 /// The Linux/Windows File menu's Quit (10 §8).
 const kAppQuitCommandId = 'app.quit';
+
+/// Help ▸ About Poltergeist on Linux and Windows.
+const kAppAboutCommandId = 'app.about';
 
 /// 10 §8's "Check for Updates…": D19's link-only check, run on demand.
 /// Register it on macOS only: the spec places it in the application
@@ -80,6 +84,31 @@ RegisteredCommand buildQuitCommand({Future<void> Function()? requestClose}) {
       menu: AppMenuId.file,
       order: 180,
       group: 6,
+    ),
+  );
+}
+
+/// Help ▸ About Poltergeist for Linux and Windows, where there is no
+/// application menu: the About dialog Klabautermann's Help menu opens
+/// there (name, version, legalese, and View licenses for every bundled
+/// notice). Register it there only: macOS has AppKit's About row.
+RegisteredCommand buildAboutCommand({required String? version}) {
+  return RegisteredCommand(
+    id: kAppAboutCommandId,
+    scope: CommandScope.app,
+    label: (l10n) => l10n.appAboutLabel,
+    run: (context) async {
+      final l10n = AppLocalizations.of(context);
+      showAboutDialog(
+        context: context,
+        applicationName: l10n.appTitle,
+        applicationVersion: version,
+        applicationLegalese: l10n.openSourceLicensesLegalese,
+      );
+    },
+    menuPlacement: const CommandMenuPlacement(
+      menu: AppMenuId.help,
+      order: 40,
     ),
   );
 }

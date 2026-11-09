@@ -1831,7 +1831,10 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         ),
       if (Theme.of(context).platform
           case TargetPlatform.linux || TargetPlatform.windows)
-        buildQuitCommand(requestClose: widget.window?.quitApplication),
+        ...[
+          buildAboutCommand(version: widget.appVersion),
+          buildQuitCommand(requestClose: widget.window?.quitApplication),
+        ],
       // 00 D39's File ▸ New Window and Close Window.
       if (widget.window case final window? when window.canOpenWindows)
         ...buildWindowCommands(window: window),

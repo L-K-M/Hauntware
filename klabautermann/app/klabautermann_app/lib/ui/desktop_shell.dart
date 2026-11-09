@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show macosTrafficLightsInset;
+import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostPaneEdge, GhostResizeHandle, formatShortcutActivator;
 import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
@@ -12,6 +13,7 @@ import '../controllers/monitoring_controller.dart';
 import '../controllers/sync_controller.dart';
 import '../controllers/window_panes.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/app_theme.dart' show klabautermannThemeStyle;
 import 'coverage.dart';
 import 'docker/container_details.dart';
 import 'docker/container_logs.dart';
@@ -829,11 +831,15 @@ class _Band extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: top + macosToolbarBandHeight,
-      child: Padding(
-        padding: EdgeInsets.only(top: top),
-        child: child,
+    // The suite's header fill, as Séance's and Poltergeist's headers paint.
+    return ColoredBox(
+      color: GhostChrome.of(context, klabautermannThemeStyle).headerBackground,
+      child: SizedBox(
+        height: top + macosToolbarBandHeight,
+        child: Padding(
+          padding: EdgeInsets.only(top: top),
+          child: child,
+        ),
       ),
     );
   }

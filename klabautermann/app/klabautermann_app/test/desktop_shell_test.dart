@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/theme/app_theme.dart'
+    show klabautermannThemeStyle;
 import 'package:klabautermann_app/ui/desktop_shell.dart';
 import 'package:klabautermann_app/ui/fleet_rail.dart';
 import 'package:klabautermann_app/ui/inspector_pane.dart';
@@ -22,6 +25,27 @@ void main() {
     expect(find.text('SERVERS'), findsOneWidget);
     expect(find.text('Select a server'), findsOneWidget);
     expect(find.text('Inspector'), findsOneWidget);
+  });
+
+  testWidgets('the header band paints the chrome header background', (
+    tester,
+  ) async {
+    await pumpApp(tester, size: const Size(1280, 800), servers: twoServers);
+
+    final context = tester.element(find.byType(DesktopShell));
+    final expected = GhostChrome.of(
+      context,
+      klabautermannThemeStyle,
+    ).headerBackground;
+    final fills = find
+        .descendant(
+          of: find.byType(DesktopShell),
+          matching: find.byType(ColoredBox),
+        )
+        .evaluate()
+        .map((e) => (e.widget as ColoredBox).color);
+
+    expect(fills, contains(expected));
   });
 
   testWidgets('the rail lists servers and selects one into the workspace', (

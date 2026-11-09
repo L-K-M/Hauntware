@@ -10803,6 +10803,10 @@
   "@appQuitLabel": {
     "description": "10 §8: the Linux/Windows File menu's Quit row, which closes the window through the same quit guard as the titlebar's close button."
   },
+  "appAboutLabel": "About Poltergeist",
+  "@appAboutLabel": {
+    "description": "The Linux/Windows Help menu's About row, which opens the licenses page with the app's name and version."
+  },
   "deepLinkReviewTitle": "Review connection link",
   "@deepLinkReviewTitle": {
     "description": "04 §7.1 anti-phishing interstitial title for a host-form poltergeist:// link."
