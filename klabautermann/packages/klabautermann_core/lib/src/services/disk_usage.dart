@@ -10,7 +10,6 @@ import 'dart:convert' show Utf8Decoder;
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:seance_core/seance_core.dart'
     show
-        ChannelOpenException,
         ElevationException,
         RemoteCommandException,
         RemoteCommandResult,
@@ -127,11 +126,9 @@ Future<DiskUsageTree?> readDiskUsageTree(
         HostCommands.commandLine(argv, quote: quoteShellWord),
       ),
     };
-  } on ElevationException {
-    return null;
-  } on RemoteCommandException {
-    return null;
-  } on ChannelOpenException {
+  } on Object {
+    // Refused elevation, no channel, or a channel slot that did not free
+    // in time: any of them reads folder by folder instead.
     return null;
   }
 
@@ -145,11 +142,8 @@ Future<DiskUsageTree?> readDiskUsageTree(
         .forEach(reader.add)
         .timeout(timeout);
     return reader.close();
-  } on DiskUsageExportException {
-    return null;
-  } on TimeoutException {
-    return null;
-  } on RemoteCommandException {
+  } on Object {
+    // Not an export, too large, past its time, or the channel failed.
     return null;
   } finally {
     unawaited(process.close().catchError((Object _) {}));
@@ -171,9 +165,10 @@ bool diskUsageFromTree({
   return !fresh && path.startsWith(root == '/' ? '/' : '$root/');
 }
 
-/// How long an export answers the explorer before a folder that opens
-/// reads the filesystem again [E]: the explorer reads a folder once until
-/// Read again, so this only matters when it opens again later.
+/// How long an export, or a failed one, answers the explorer after it
+/// ends before a folder that opens reads the filesystem again [E]: the
+/// explorer reads a folder once until Read again, so this only matters
+/// when it opens again later.
 const kDiskUsageTreeLifetime = Duration(minutes: 5);
 
 /// Each server's last whole-tree export (DSK-07): one per server, for
@@ -197,36 +192,42 @@ final class DiskUsageTrees {
     required Future<DiskUsageTree?> Function() read,
   }) {
     final held = _trees[serverId];
-    final now = _now();
     if (!fresh &&
         held != null &&
         held.root == root &&
         held.elevated == elevated &&
-        now.difference(held.started) < kDiskUsageTreeLifetime) {
+        held.current(_now())) {
       return held.tree;
     }
-    final tree = read();
-    final entry = _HeldTree(root, elevated, now, tree);
+    // A failed export answers null and is held like a tree, so the
+    // folders after it read with du at once rather than each waiting on
+    // another whole-filesystem scan; an error reads as a failure, never
+    // reaching the engine unhandled.
+    final entry = _HeldTree(root, elevated);
+    entry.tree = Future.sync(read)
+        .then<DiskUsageTree?>((tree) => tree, onError: (Object _) => null)
+        .whenComplete(() => entry.ended = _now());
     _trees[serverId] = entry;
-    // A failed export is not kept: the next folder tries again.
-    unawaited(
-      tree.then((read) {
-        if (read == null && identical(_trees[serverId], entry)) {
-          _trees.remove(serverId);
-        }
-      }),
-    );
-    return tree;
+    return entry.tree;
   }
 
   void forget(Iterable<String> serverIds) => serverIds.forEach(_trees.remove);
 }
 
 final class _HeldTree {
-  const _HeldTree(this.root, this.elevated, this.started, this.tree);
+  _HeldTree(this.root, this.elevated);
 
   final String root;
   final bool elevated;
-  final DateTime started;
-  final Future<DiskUsageTree?> tree;
+  late final Future<DiskUsageTree?> tree;
+
+  /// When the export ended; the lifetime counts from then, so a long
+  /// scan answers for the whole of it.
+  DateTime? ended;
+
+  /// Still answering at [now]: running, or ended within the lifetime.
+  bool current(DateTime now) => switch (ended) {
+    null => true,
+    final ended => now.difference(ended) < kDiskUsageTreeLifetime,
+  };
 }

@@ -115,6 +115,19 @@ void main() {
       expect(process.closeCalls, 1);
     });
 
+    test('when starting it throws anything else, as a channel slot that '
+        'does not free in time', () async {
+      final link = ScriptedLink()..startFailures.add(TimeoutException('slot'));
+      expect(
+        await readDiskUsageTree(
+          '/srv',
+          tool: DiskUsageExportTool.ncdu,
+          link: link,
+        ),
+        isNull,
+      );
+    });
+
     test('when no channel opens', () async {
       final link = ScriptedLink()
         ..startFailures.add(
@@ -194,18 +207,44 @@ void main() {
       expect(reads, 5);
     });
 
-    test(
-      'a failed export is not kept; a forgotten server reads again',
-      () async {
-        expect(await get('/srv', answer: () => null), isNull);
-        await Future<void>.delayed(Duration.zero);
-        await get('/srv');
-        expect(reads, 2);
+    test('a failed export, thrown or empty, is remembered so later folders '
+        'read with du at once; a forgotten server reads again', () async {
+      expect(await get('/srv', answer: () => null), isNull);
+      expect(await get('/srv'), isNull);
+      expect(reads, 1, reason: 'no second whole-filesystem scan');
 
-        trees.forget(['srv-1']);
-        await get('/srv');
-        expect(reads, 3);
-      },
-    );
+      trees.forget(['srv-1']);
+      expect(
+        await get('/srv', answer: () => throw TimeoutException('slot')),
+        isNull,
+        reason: 'an error answers as a failed export, never as an error',
+      );
+      expect(await get('/srv'), isNull);
+      expect(reads, 2);
+
+      now = now.add(kDiskUsageTreeLifetime);
+      expect(await get('/srv'), isNotNull);
+      expect(reads, 3);
+    });
+
+    test('the lifetime counts from when the export ends', () async {
+      final done = Completer<DiskUsageTree?>();
+      final first = trees.tree(
+        'srv-1',
+        '/srv',
+        elevated: false,
+        fresh: false,
+        read: () {
+          reads++;
+          return done.future;
+        },
+      );
+      now = now.add(const Duration(minutes: 3));
+      done.complete(tree('/srv'));
+      await first;
+      now = now.add(const Duration(minutes: 3));
+      expect(await get('/srv'), same(await first));
+      expect(reads, 1);
+    });
   });
 }

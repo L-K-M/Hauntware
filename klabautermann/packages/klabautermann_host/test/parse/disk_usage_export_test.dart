@@ -136,6 +136,43 @@ void main() {
     ]);
   });
 
+  test('a mount point ncdu writes as an excluded folder is left out, as '
+      'du -x leaves it out', () {
+    // `ncdu 1.19 -x -o - /dev`, recorded: other filesystems mounted below
+    // the scan come as folders whose description is excluded.
+    const text = '''
+[1,2,{"progname":"ncdu","progver":"1.19","timestamp":1794229955},
+[{"name":"/srv","asize":4096,"dsize":4096,"dev":5},
+[{"name":"pts","dev":26,"excluded":"othfs"}],
+[{"name":"shm","dev":27,"excluded":"othfs"}],
+{"name":"null","asize":0}]]
+''';
+    final tree = _read(text);
+    expect(tree.listing('/srv')!.entries.map((entry) => entry.name), ['null']);
+    expect(tree.listing('/srv')!.totalBytes, 4096);
+    expect(tree.listing('/srv/pts'), isNull);
+  });
+
+  test('gdu 5.37 and later write a folder\'s whole usage on it; the '
+      'reader counts only what lies under it', () {
+    const text = '''
+[1,2,{"progname":"gdu","progver":"5.38.0"},
+[{"name":"/srv","asize":610000,"dsize":323584},
+[{"name":"a","asize":305000,"dsize":311296},
+{"name":"big","asize":300000,"dsize":303104},
+[{"name":"b","asize":5000,"dsize":8192},
+{"name":"small","asize":5000,"dsize":8192}]],
+{"name":"notes","asize":3,"dsize":12288}]]
+''';
+    final tree = _read(text);
+    expect(tree.listing('/srv')!.totalBytes, 323584);
+    expect(_entries(tree.listing('/srv')!), [
+      ('a', 311296, true),
+      ('notes', 12288, false),
+    ]);
+    expect(tree.listing('/srv/a/b')!.totalBytes, 8192);
+  });
+
   test('the root folder\'s listing works for /', () {
     final reader = DiskUsageExportReader('/')
       ..add('[1,2,{},[{"name":"/","dsize":0},[{"name":"etc","dsize":8}]]]');

@@ -2604,10 +2604,14 @@ is on main:
   engine exports its whole filesystem once (`ncdu -x -o -`, else
   `gdu -x -o-`, as the login user or as root), streaming it through
   `DiskUsageExportReader`, which keeps each folder's total and largest
-  1,000 entries in `du`'s terms (hard links once, other filesystems out,
-  read errors marked) and refuses an export past 1,048,576 held entries.
-  One tree per server answers every folder under the mount point for 5
-  minutes; `du` reads a folder when no tool is installed, the export
+  1,000 entries in `du`'s terms (hard links once, except where gdu before
+  5.30 marks only later names; other filesystems out, including the
+  excluded folders ncdu writes for them; no own size from a gdu folder,
+  whose newer exports put the subtree's there; read errors marked) and
+  refuses an export past 1,048,576 held entries and hard links. One tree
+  per server answers every folder under the mount point for 5 minutes
+  after the export ends, and a failed export is held as long so later
+  folders go straight to `du`; `du` reads a folder when no tool is installed, the export
   fails, runs past 3 minutes or is too large, the folder was dropped, or
   Read again is pressed below the mount point. Tested in
   `disk_usage_export_test.dart` (recorded ncdu 1.19 and gdu 5.25 exports,

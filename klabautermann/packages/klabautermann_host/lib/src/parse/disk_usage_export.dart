@@ -115,6 +115,11 @@ final class DiskUsageExportReader {
   bool _done = false;
   bool _sawMetadata = false;
 
+  /// gdu 5.37 and later write a folder's whole usage on its description,
+  /// ncdu and older gdu only its own blocks or nothing: a gdu folder's
+  /// own size is not read, so its total is what lies under it.
+  bool _gdu = false;
+
   final _object = StringBuffer();
   int _objectDepth = 0;
   bool _inString = false;
@@ -205,6 +210,9 @@ final class DiskUsageExportReader {
     if (folder.name == null) _fail('a folder without its description');
     _kept -= folder.finish(keep);
     final parent = _arrays.last;
+    // Another filesystem mounted here, which ncdu writes as a folder: `du
+    // -x` does not list it either.
+    if (folder.excluded && parent != null) return;
     if (parent == null) {
       if (_top != null) _fail('a second top folder');
       _top = folder;
@@ -227,6 +235,7 @@ final class DiskUsageExportReader {
     if (current == null) {
       if (_arrays.length != 1 || _sawMetadata) _fail('a stray object');
       _sawMetadata = true;
+      _gdu = decoded['progname'] == 'gdu';
       return;
     }
 
@@ -242,8 +251,9 @@ final class DiskUsageExportReader {
       // The folder's own description: its name and its own blocks.
       current
         ..name = name
-        ..total = bytes
-        ..incomplete = readError;
+        ..total = _gdu ? 0 : bytes
+        ..incomplete = readError
+        ..excluded = decoded['excluded'] != null;
       return;
     }
 
@@ -254,7 +264,13 @@ final class DiskUsageExportReader {
     var counted = bytes;
     if (decoded['hlnkc'] == true) {
       if (decoded['ino'] case final int inode) {
-        if (!_linked.add(inode)) counted = 0;
+        if (_linked.add(inode)) {
+          // The set grows with the hard links, so it counts toward the
+          // bound as kept entries do.
+          if (++_kept > maxEntries) _fail('more than $maxEntries entries');
+        } else {
+          counted = 0;
+        }
       }
     }
     _keep(current, _Entry(name, counted, null));
@@ -296,6 +312,9 @@ final class _Folder {
   /// Every entry the export listed in this folder, kept or not.
   int count = 0;
   bool incomplete = false;
+
+  /// Another filesystem's mount point or an excluded path.
+  bool excluded = false;
   List<_Entry> entries = [];
 
   /// The entries this folder holds, its kept folders' included.
