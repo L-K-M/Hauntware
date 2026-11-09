@@ -2613,9 +2613,25 @@ is on main:
   in and step back up, never above the mount point; each is read once
   until Read again, within 3 minutes. In admin mode "Read as root" reads
   through the executor, and a lower bound says so and how to count the
-  rest. `ncdu -o -` and `gdu -o-` streaming is not built: a whole-tree
-  export passes the 1 MiB a host read keeps. Tested in the host parser,
-  a real-shell `du` test, the engine and the explorer page.
+  rest. Tested in the host parser, a real-shell `du` test, the engine
+  and the explorer page.
+- Whole-tree export for the explorer (DSK-07, 03 §7.3): where the probe
+  found ncdu or gdu, the explorer's reads name the mount point and the
+  engine exports its whole filesystem once (`ncdu -x -o -`, else
+  `gdu -x -o-`, as the login user or as root), streaming it through
+  `DiskUsageExportReader`, which keeps each folder's total and largest
+  1,000 entries in `du`'s terms (hard links once, except where gdu before
+  5.30 marks only later names; other filesystems out, including the
+  excluded folders ncdu writes for them; no own size from a gdu folder,
+  whose newer exports put the subtree's there; read errors marked) and
+  refuses an export past 1,048,576 held entries and hard links. One tree
+  per server answers every folder under the mount point for 5 minutes
+  after the export ends, and a failed export is held as long so later
+  folders go straight to `du`; `du` reads a folder when no tool is installed, the export
+  fails, runs past 3 minutes or is too large, the folder was dropped, or
+  Read again is pressed below the mount point. Tested in
+  `disk_usage_export_test.dart` (recorded ncdu 1.19 and gdu 5.25 exports,
+  any chunking), `disk_usage_tree_test.dart` and the explorer page.
 - Timer details (M6 N71, JOB-02, D57): opening a timer reads its
   `OnCalendar=` and monotonic triggers and randomized delay with
   `systemctl show`, then each calendar trigger's next five runs with
@@ -2769,8 +2785,7 @@ next runs (N71).
 | Y3: notification copy states the coverage limit | N51's `alert_notifications_test.dart` (the prompt and the switch say that rules are evaluated only while the app is open, before the system asks, and each notification carries the limit) and N50c's `alert_rules_test.dart` | met |
 | Y4: gap rendering covered by goldens | `time_series_goldens_test.dart` (a labelled hatched gap, a gap too narrow for its label, an open gap), N52b's `history_goldens_test.dart` (48 hours with a band per gap reason) and the chart and container log goldens | met |
 
-Left open: `ncdu` and `gdu` streaming for the explorer (N32, above);
-the Flatpak `~/.ssh:ro` grant, which waits on the owner (PLT-09); M4's
+Left open: the Flatpak `~/.ssh:ro` grant, which waits on the owner (PLT-09); M4's
 sudo rule scoped to `docker`; and the device checks below, which M6
 extends by notifications, the app lock, the share sheet, port forwards
 and the tablet split. FL-16's admin-mode memory, left open at M6 because

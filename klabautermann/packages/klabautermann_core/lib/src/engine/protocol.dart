@@ -1407,6 +1407,8 @@ final class ReadDiskUsage extends EngineRequest {
     this.path, {
     required this.requestId,
     this.elevated = false,
+    this.root,
+    this.fresh = false,
   });
 
   final String serverId;
@@ -1415,6 +1417,16 @@ final class ReadDiskUsage extends EngineRequest {
   final String path;
   final String requestId;
   final bool elevated;
+
+  /// The mount point the explorer started at, in [path]'s form. Where
+  /// ncdu or gdu is installed, the engine exports the whole filesystem
+  /// under it once and answers each folder under it from that export;
+  /// null reads [path] alone.
+  final String? root;
+
+  /// Reads again rather than answering from an earlier export: the
+  /// explorer's Read again.
+  final bool fresh;
 }
 
 /// Reads one timer's triggers on [serverId] for its details (JOB-02, 03

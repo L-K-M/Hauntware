@@ -3728,12 +3728,31 @@ the guarded kill needs it.
   point. Each folder is read once, when it first opens, with Read again
   for a fresh read; in admin mode "Read as root" reads the same folders
   as root. It says when sizes are a lower bound and how to count the
-  rest. *Not built:* streaming `ncdu -x -o -` or `gdu -o-`, which export
-  the whole tree in one run. On a large filesystem that export passes
-  the 1 MiB a host read keeps, and reading it needs a streamed parser,
-  so the explorer reads each folder as it opens instead, the fallback
-  this row names. The explorer is read-only; deleting stays with
-  DSK-08 (v1.x).
+  rest. The explorer is read-only; deleting stays with DSK-08 (v1.x).
+- **As built (whole-tree export).** Where the probe found ncdu or gdu
+  (ncdu first), the explorer's reads name its mount point
+  (`ReadDiskUsage.root`), and the engine runs `ncdu -x -o -` or
+  `gdu -x -o-` on it once, as the login user or through the executor in
+  admin mode, under the same 3 minute timeout. `DiskUsageExportReader`
+  reads the export as it streams, past the 1 MiB a host read keeps: each
+  folder keeps its total and its 1,000 largest entries, as `du` lists
+  them, counts a hard-linked file once (gdu before 5.30 marks only a
+  file's later names, so there it can count twice), leaves other
+  filesystems out (ncdu writes their mount points as excluded folders),
+  takes no own size from a gdu folder (gdu 5.37 and later write the whole
+  subtree's there), and marks a folder with a read error and those above
+  it incomplete.
+  Past 1,048,576 entries held in all (`kDiskUsageExportEntries` [E]) the
+  export reads as too large; the hard links it has seen count toward that
+  bound. `DiskUsageTrees` holds one tree per server, for one mount and one
+  reader, for 5 minutes after the export ends (`kDiskUsageTreeLifetime`
+  [E]), and holds a failed export, whatever failed, as long, so the
+  folders after it read with `du` at once instead of each waiting on
+  another scan. Every folder under the mount point answers from it without
+  another read. `du` reads the folder instead when no tool is installed,
+  the export fails, times out or is too large, the folder fell outside
+  its parent's largest entries, or Read again is pressed on a folder
+  below the mount point. Read again on the mount point exports again.
 - **v1.x.** "Open in Poltergeist" for deletion (DSK-08), layout (`lsblk -J
   -b`, LVM JSON reports with sudo), ZFS, mdraid, network mounts with
   stale-mount detection, cleanup suggestions with sizes and previews, fill

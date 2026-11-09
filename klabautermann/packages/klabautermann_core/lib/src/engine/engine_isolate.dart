@@ -290,6 +290,7 @@ void engineMain(
   // login uid, the session's path and its SSH port.
   final profiles = <String, HostProfile>{};
   final packageReports = PackageReports(now: () => DateTime.now().toUtc());
+  final diskTrees = DiskUsageTrees();
   OperationRunner? runner;
 
   // The running image pulls by plan id, which [CancelAction] stops
@@ -891,6 +892,7 @@ void engineMain(
     admin?.forget(forgotten);
     plans.forget(forgotten);
     packageReports.forget(forgotten);
+    diskTrees.forget(forgotten);
     profiles.removeWhere((id, _) => forgotten.contains(id));
     // Before the caller sends the fleet or an EndpointChanged, so no
     // probe of a server starts, and no answer for it goes out, once the
@@ -1812,6 +1814,8 @@ void engineMain(
         :final path,
         :final requestId,
         :final elevated,
+        :final root,
+        :final fresh,
       ):
         void fail(DiskUsageReportFailure failure) => uiPort.send(
           DiskUsageReport(
@@ -1834,19 +1838,56 @@ void engineMain(
           }
           admin?.touch(serverId);
         }
+        Future<DiskUsageReport> readFolder() => lendSession(
+          serverId,
+          () => readDiskUsage(
+            serverId,
+            path,
+            requestId: requestId,
+            link: link,
+            session: session,
+          ),
+        );
+        // A folder under the explorer's mount point answers from one
+        // export of the whole filesystem where ncdu or gdu is installed
+        // ([diskUsageFromTree]); any other read, or a folder the export
+        // dropped, reads with du.
+        final tool = diskUsageExportToolOf(profiles[serverId]);
+        Future<DiskUsageReport> read() async {
+          if (root != null &&
+              tool != null &&
+              diskUsageFromTree(path: path, root: root, fresh: fresh)) {
+            final tree = await diskTrees.tree(
+              serverId,
+              root,
+              elevated: elevated,
+              fresh: fresh,
+              read: () => lendSession(
+                serverId,
+                () => readDiskUsageTree(
+                  root,
+                  tool: tool,
+                  link: link,
+                  session: session,
+                ),
+              ),
+            );
+            if (tree?.listing(path) case final listing?) {
+              return DiskUsageReport(
+                serverId: serverId,
+                requestId: requestId,
+                path: path,
+                listing: listing,
+              );
+            }
+          }
+          return readFolder();
+        }
+
         // Not awaited, as the other reads; a lend that fails still
         // answers.
         unawaited(
-          lendSession(
-            serverId,
-            () => readDiskUsage(
-              serverId,
-              path,
-              requestId: requestId,
-              link: link,
-              session: session,
-            ),
-          ).then(
+          read().then(
             uiPort.send,
             onError: (Object _) => fail(DiskUsageReportFailure.transport),
           ),

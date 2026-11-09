@@ -30,6 +30,34 @@ void main() {
     });
   });
 
+  group('HostCommands.diskUsageExport', () {
+    test('exports one filesystem to stdout with each tool', () {
+      expect(HostCommands.diskUsageExport('/srv', DiskUsageExportTool.ncdu), [
+        'ncdu',
+        '-x',
+        '-o',
+        '-',
+        '/srv',
+      ]);
+      expect(HostCommands.diskUsageExport('/', DiskUsageExportTool.gdu), [
+        'gdu',
+        '-x',
+        '-o-',
+        '/',
+      ]);
+    });
+
+    test('refuses what diskUsage refuses', () {
+      for (final path in ['srv', '/srv/', '/a//b', '/a/../b']) {
+        expect(
+          () => HostCommands.diskUsageExport(path, DiskUsageExportTool.ncdu),
+          throwsA(isA<HostCommandError>()),
+          reason: path,
+        );
+      }
+    });
+  });
+
   group('parseDiskUsage', () {
     test('reads the total and the entries, largest first, in bytes', () {
       final parse = parseDiskUsage(
