@@ -18,12 +18,16 @@ final class DiskUsageReads {
   var _count = 0;
   bool _engineStopped = false;
 
-  /// [path] on [serverId] as it is now; as root through admin mode when
-  /// [elevated].
+  /// [path] on [serverId]; as root through admin mode when [elevated].
+  /// [root] is the mount point the explorer started at, whose whole
+  /// filesystem the engine may read once and answer each folder from;
+  /// [fresh] reads again rather than answering from that.
   Future<DiskUsageReport> read(
     String serverId,
     String path, {
     bool elevated = false,
+    String? root,
+    bool fresh = false,
   }) {
     final requestId = 'disk-usage-${_count++}';
     if (_engineStopped) {
@@ -33,7 +37,14 @@ final class DiskUsageReads {
     _pending[requestId] = (serverId, path, answer);
     try {
       _engine.send(
-        ReadDiskUsage(serverId, path, requestId: requestId, elevated: elevated),
+        ReadDiskUsage(
+          serverId,
+          path,
+          requestId: requestId,
+          elevated: elevated,
+          root: root,
+          fresh: fresh,
+        ),
       );
     } on StateError {
       _pending.remove(requestId);

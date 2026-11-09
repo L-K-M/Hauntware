@@ -137,7 +137,13 @@ class _DiskExplorerState extends State<DiskExplorer> {
     setState(() => _reading.add(key));
     unawaited(
       widget.monitoring.diskUsage
-          .read(widget.serverId, path, elevated: elevated)
+          .read(
+            widget.serverId,
+            path,
+            elevated: elevated,
+            root: widget.root,
+            fresh: again,
+          )
           .then((report) {
             if (!mounted) return;
             setState(() {

@@ -92,6 +92,10 @@ void main() {
     await pump(tester);
     expect(reads().single.path, '/var');
     expect(reads().single.elevated, isFalse);
+    // The mount point, so the engine can answer folders under it from one
+    // export where ncdu or gdu is installed (03 §7.3).
+    expect(reads().single.root, '/var');
+    expect(reads().single.fresh, isFalse);
     expect(find.textContaining('Reading /var'), findsOneWidget);
 
     await answer(
@@ -239,6 +243,8 @@ void main() {
     await tester.tap(find.byTooltip('Read again'));
     await tester.pump();
     expect(reads(), hasLength(2));
+    expect(reads().last.fresh, isTrue);
+    expect(reads().last.root, '/var');
     await answer(tester, failure: DiskUsageReportFailure.transport);
     expect(find.textContaining('ran past its 3 minutes'), findsOneWidget);
 

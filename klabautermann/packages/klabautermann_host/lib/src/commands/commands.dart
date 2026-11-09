@@ -386,6 +386,10 @@ const kMountsSwapsMarker = '== swaps';
 /// stderr, which `parseDiskUsage` reads for folders it could not read.
 const kDiskUsageErrorsMarker = '== du errors';
 
+/// The tools that export a whole filesystem for the explorer, in the
+/// order it prefers them; the capability probe names each it finds.
+enum DiskUsageExportTool { ncdu, gdu }
+
 /// The most entries one [HostCommands.diskUsage] read lists, largest
 /// first [E]: a folder of mail or cache files can hold far more than a
 /// list is useful for.
@@ -1139,11 +1143,27 @@ printf '%s\\n' "\$o"''';
   /// take the same flags. `parseDiskUsage` reads it. [path] is absolute
   /// and normalized, without a trailing slash unless it is `/`.
   static List<String> diskUsage(String path) {
+    _checkDiskUsagePath(path);
+    return ['sh', '-c', _kDiskUsageScript, 'klabautermann-du', path];
+  }
+
+  /// Exports the whole filesystem under [path] in ncdu's JSON format on
+  /// stdout (DSK-07, 03 §7.3), without crossing into other filesystems,
+  /// for `DiskUsageExportReader`. Both tools stay quiet without a
+  /// terminal when they export to stdout.
+  static List<String> diskUsageExport(String path, DiskUsageExportTool tool) {
+    _checkDiskUsagePath(path);
+    return switch (tool) {
+      DiskUsageExportTool.ncdu => ['ncdu', '-x', '-o', '-', path],
+      DiskUsageExportTool.gdu => ['gdu', '-x', '-o-', path],
+    };
+  }
+
+  static void _checkDiskUsagePath(String path) {
     _check(ArgValidators.absolutePath, path);
     if (path.contains('//') || (path.length > 1 && path.endsWith('/'))) {
       throw HostCommandError('path not normalized', argument: path);
     }
-    return ['sh', '-c', _kDiskUsageScript, 'klabautermann-du', path];
   }
 
   // fd 3 carries the listing past the command substitution, which keeps
