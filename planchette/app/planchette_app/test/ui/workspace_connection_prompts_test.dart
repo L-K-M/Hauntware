@@ -221,9 +221,7 @@ void main() {
       () => (context: key.currentContext!, workspace: workspace),
       pickKeyText: (_) async => null,
     );
-    unawaited(
-      prompts.credentials(server, _Scope()).then<Object?>((v) => v),
-    );
+    unawaited(prompts.credentials(server, _Scope()).then<Object?>((v) => v));
     await tester.pumpAndSettle();
     expect(find.text('Used for this connection only.'), findsNothing);
     expect(
