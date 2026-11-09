@@ -8571,6 +8571,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appQuitLabel => 'Quit';
 
   @override
+  String get appAboutLabel => 'About Poltergeist';
+
+  @override
   String get deepLinkReviewTitle => 'Review connection link';
 
   @override

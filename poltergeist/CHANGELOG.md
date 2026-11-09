@@ -193,6 +193,15 @@
 - **Paths draw in the code font.** The path bar's field, the folder name
   and its ancestors menu use the monospace stack, as Séance's path bar
   does.
+- **Return submits the backup forms.** In the backup sign-in and the
+  account switch, Return in the last field continues, as Continue does,
+  once the form is ready.
+- **About on Linux and Windows.** Help ▸ About Poltergeist opens an
+  About dialog with the version and the licences, as Klabautermann's
+  Help menu does there; macOS keeps its app menu's About.
+- **Sidebar failures notify at the top.** When a sidebar change such as
+  a rename or a saved location can't be saved, its notice appears at the
+  top of the window like the app's other notices, not at the bottom.
 
 ## 1.9.0 — first suite release (2026-10-04)
 

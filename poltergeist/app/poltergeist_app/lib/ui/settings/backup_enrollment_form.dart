@@ -6,6 +6,8 @@
 // outcomes verbatim — the KDF-downgrade refusal, the registration-closed
 // text, and (through the durable notice on the enrolled view) the
 // three-cause trial-decrypt warning.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -112,6 +114,11 @@ class _BackupEnrollmentFormState extends State<BackupEnrollmentForm> {
       !_busy &&
       (!_sharedSelected ||
           (widget.gate.sharedAccountOffered && _fleetConfirmed));
+
+  /// Return in the last field acts as Continue, under its gate.
+  void _submitFromKeyboard() {
+    if (_canContinue) unawaited(_submit());
+  }
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context);
@@ -328,6 +335,9 @@ class _BackupEnrollmentFormState extends State<BackupEnrollmentForm> {
                   _action == SyncEnrollmentMode.login
               ? TextInputAction.done
               : TextInputAction.next,
+          onSubmitted: _sharedSelected || _action == SyncEnrollmentMode.login
+              ? (_) => _submitFromKeyboard()
+              : null,
           decoration: InputDecoration(
             labelText: l10n.backupEncryptionPassphraseField,
             helperText: l10n.backupEncryptionPassphraseHelper,
@@ -343,6 +353,7 @@ class _BackupEnrollmentFormState extends State<BackupEnrollmentForm> {
             enabled: !_busy,
             obscureText: true,
             textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _submitFromKeyboard(),
             decoration: InputDecoration(
               labelText: l10n.backupConfirmPassphraseField,
             ),

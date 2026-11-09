@@ -12085,6 +12085,12 @@ abstract class AppLocalizations {
   /// **'Quit'**
   String get appQuitLabel;
 
+  /// The Linux/Windows Help menu's About row, which opens the licenses page with the app's name and version.
+  ///
+  /// In en, this message translates to:
+  /// **'About Poltergeist'**
+  String get appAboutLabel;
+
   /// 04 §7.1 anti-phishing interstitial title for a host-form poltergeist:// link.
   ///
   /// In en, this message translates to:

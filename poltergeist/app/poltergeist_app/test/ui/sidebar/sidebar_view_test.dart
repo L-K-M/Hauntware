@@ -982,6 +982,38 @@ void main() {
       expect(find.text('renamed'), findsOneWidget);
     });
 
+    testWidgets('a failed rename reports in a top toast, not a SnackBar', (
+      tester,
+    ) async {
+      store.bookmarks = [_remote('r1')];
+      store.saveFailure = StateError('disk full');
+      // The reporter forwards the failure to the framework; keep it from
+      // failing the test.
+      final onError = FlutterError.onError;
+      FlutterError.onError = (_) {};
+      addTearDown(() => FlutterError.onError = onError);
+      await pumpSidebar(tester);
+
+      await openMenu(tester, 'r1');
+      await tester.tap(find.byKey(const ValueKey('sidebar.menu.rename')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('sidebar.renameField')),
+        'renamed',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('sidebar.renameSave')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.text("That change couldn't be saved. Try again."),
+        findsOneWidget,
+      );
+      expect(find.byType(SnackBar), findsNothing);
+      await tester.pump(const Duration(seconds: 10));
+    });
+
     testWidgets('delete removes at once, toasts, and Undo restores', (
       tester,
     ) async {

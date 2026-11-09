@@ -458,6 +458,68 @@ void main() {
       );
     });
 
+    testWidgets('Return in the last field submits like Continue', (
+      tester,
+    ) async {
+      await _pumpSection(tester, h.service);
+      await tester.pumpAndSettle();
+      await _enterAll(tester);
+
+      await tester.showKeyboard(
+        find.byKey(const ValueKey('backup.enroll.confirm')),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await _settleRealAsync(tester);
+
+      expect(find.byKey(const ValueKey('backup.enrolled')), findsOneWidget);
+    });
+
+    testWidgets('Return in an earlier field moves on without submitting', (
+      tester,
+    ) async {
+      await _pumpSection(tester, h.service);
+      await tester.pumpAndSettle();
+      await _enterAll(tester);
+
+      await tester.showKeyboard(
+        find.byKey(const ValueKey('backup.enroll.url')),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.next);
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('backup.enrolled')), findsNothing);
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(
+                of: find.byKey(const ValueKey('backup.enroll.username')),
+                matching: find.byType(EditableText),
+              ),
+            )
+            .focusNode
+            .hasFocus,
+        isTrue,
+      );
+    });
+
+    testWidgets('Return stays inert while Continue is gated', (tester) async {
+      await _pumpSection(tester, h.service, gate: _gateOffered);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('backup.mode.shared')));
+      await tester.pumpAndSettle();
+      await _enterAll(tester);
+
+      await tester.showKeyboard(
+        find.byKey(const ValueKey('backup.enroll.passphrase')),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await _settleRealAsync(tester);
+
+      // The fleet assertion is unchecked: no submission, no status.
+      expect(find.byKey(const ValueKey('backup.enrolled')), findsNothing);
+      expect(find.byKey(const ValueKey('backup.enroll.status')), findsNothing);
+    });
+
     testWidgets('registration closed reports the verbatim §4.3 copy', (
       tester,
     ) async {
@@ -776,6 +838,44 @@ void main() {
       // No conflicts on an empty shared account → straight to done.
       expect(find.byKey(const ValueKey('backup.switch.done')), findsOneWidget);
       expect(service.account!.mode, SyncAccountMode.shared);
+    });
+
+    testWidgets('Return in the passphrase field submits like Continue', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(760, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final service = await h.enrolled();
+      await _pumpSection(tester, service, gate: _gateOffered);
+      await tester.pumpAndSettle();
+      await _tapVisible(tester, const ValueKey('backup.enrolled.switch'));
+      await tester.pumpAndSettle();
+      for (final field in ['username', 'password', 'passphrase']) {
+        await tester.enterText(
+          find.byKey(ValueKey('backup.switch.$field')),
+          field == 'username' ? 'fleet' : 'pw',
+        );
+      }
+
+      // Gated until the fleet assertion: Return does nothing.
+      await tester.showKeyboard(
+        find.byKey(const ValueKey('backup.switch.passphrase')),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await _settleRealAsync(tester);
+      expect(find.byKey(const ValueKey('backup.switch.done')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('backup.switch.fleet')));
+      await tester.pumpAndSettle();
+      await tester.showKeyboard(
+        find.byKey(const ValueKey('backup.switch.passphrase')),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await _settleRealAsync(tester);
+
+      expect(find.byKey(const ValueKey('backup.switch.done')), findsOneWidget);
     });
 
     testWidgets('a quarantined pull lands on the conflicts phase and '

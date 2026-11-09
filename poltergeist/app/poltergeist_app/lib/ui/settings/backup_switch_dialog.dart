@@ -5,6 +5,8 @@
 // optional separate-account delete stays on the enrolled view — it is
 // gated on the first successful shared sync, which this dialog cannot
 // prove.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -73,6 +75,13 @@ class _BackupSwitchDialogState extends State<BackupSwitchDialog> {
     _password.dispose();
     _passphrase.dispose();
     super.dispose();
+  }
+
+  /// Return in the last field acts as Continue, under its gate.
+  void _switchFromKeyboard() {
+    if (_fleetConfirmed && widget.gate.minimumSharedVersion != null) {
+      unawaited(_switch());
+    }
   }
 
   Future<void> _switch() async {
@@ -268,6 +277,7 @@ class _BackupSwitchDialogState extends State<BackupSwitchDialog> {
           enableIMEPersonalizedLearning: false,
           obscureText: true,
           textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _switchFromKeyboard(),
           decoration: InputDecoration(
             labelText: l10n.backupEncryptionPassphraseField,
             helperText: l10n.backupEncryptionPassphraseHelper,

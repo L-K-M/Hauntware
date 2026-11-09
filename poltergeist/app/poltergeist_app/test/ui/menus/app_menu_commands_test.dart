@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -92,6 +93,23 @@ void main() {
     }
   });
 
+  test('About Poltergeist ends the Linux/Windows Help menu', () {
+    for (final platform in [TargetPlatform.linux, TargetPlatform.windows]) {
+      final menus = buildAppMenus(
+        commands: [buildAboutCommand(version: '1.2.3')],
+        l10n: l10n,
+        platform: platform,
+      );
+      final help = menus.singleWhere((m) => m.id == AppMenuId.help);
+      expect(ids(help), [kAppAboutCommandId], reason: platform.name);
+      expect(
+        ghostRowCommand((help.groups.last.last as GhostCommandRow).command)
+            .label(l10n),
+        'About Poltergeist',
+      );
+    }
+  });
+
   group('running', () {
     late BuildContext context;
 
@@ -152,6 +170,20 @@ void main() {
         findsOneWidget,
       );
       await tester.pumpAndSettle(const Duration(seconds: 5));
+    });
+
+    testWidgets('About opens the About dialog with name and version', (
+      tester,
+    ) async {
+      await pumpHost(tester);
+
+      unawaited(buildAboutCommand(version: '1.2.3').run(context));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AboutDialog), findsOneWidget);
+      expect(find.text('Poltergeist'), findsWidgets);
+      expect(find.text('1.2.3'), findsOneWidget);
+      expect(find.text(l10n.openSourceLicensesLegalese), findsOneWidget);
     });
 
     testWidgets('Quit asks the window to close, never to destroy', (

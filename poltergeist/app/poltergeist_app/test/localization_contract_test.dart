@@ -500,6 +500,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // 10 §8's platform-row command ids (D21 plumbing), never rendered.
   'lib/ui/menus/app_menu_commands.dart': {
+    "'app.about'",
     "'app.checkForUpdates'",
     "'app.quit'",
   },
