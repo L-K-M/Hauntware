@@ -176,6 +176,8 @@ String? _disconnectTarget(WorkspaceController workspace) {
   return live ? server.id : null;
 }
 
+bool _dialogsAvailable() => true;
+
 List<RegisteredCommand> buildShellCommands({
   required WorkspaceController workspace,
   required PaneDropDelegate? Function() dropDelegate,
@@ -188,6 +190,10 @@ List<RegisteredCommand> buildShellCommands({
   required void Function(Object error) reportFailure,
   required String Function(PaneController pane) locationLabel,
   FileManagerRevealer revealer = const FileManagerRevealer(),
+
+  /// False while another command dialog is open, so a repeated Connect
+  /// activator cannot stack a second dialog.
+  bool Function() dialogAvailable = _dialogsAvailable,
 
   /// Drops the pool's reference for a server: the sidebar row's
   /// Disconnect, which Server ▸ Disconnect reuses. Null leaves the menu
@@ -589,6 +595,7 @@ List<RegisteredCommand> buildShellCommands({
         macOS: const [SingleActivator(LogicalKeyboardKey.keyK, meta: true)],
         other: const [SingleActivator(LogicalKeyboardKey.keyK, control: true)],
       ),
+      enabled: dialogAvailable,
       run: (_) async {
         await openConnect();
       },

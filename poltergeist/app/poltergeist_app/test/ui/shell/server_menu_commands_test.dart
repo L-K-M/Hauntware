@@ -69,6 +69,36 @@ RegisteredCommand _byId(List<RegisteredCommand> commands, String id) =>
     commands.singleWhere((command) => command.id == id);
 
 void main() {
+  group('connect.quickConnect', () {
+    testWidgets('is unavailable while another command dialog is open', (
+      tester,
+    ) async {
+      final lanes = controller_test.FakePaneLanes();
+      final pane = PaneController(paneTabId: 'pane.left.tab1', lanes: lanes);
+      addTearDown(pane.dispose);
+      final workspace = _workspace(lanes, pane);
+      var dialogOpen = false;
+      final connect = _byId(
+        buildShellCommands(
+          workspace: workspace,
+          dropDelegate: () => null,
+          openConnect: () async {},
+          dialogAvailable: () => !dialogOpen,
+          allCommands: () => const [],
+          openUrl: (_) async {},
+          fileOps: () => null,
+          reportFailure: (_) {},
+          locationLabel: (_) => '',
+        ),
+        kConnectQuickConnectCommandId,
+      );
+
+      expect(connect.enabled(), isTrue);
+      dialogOpen = true;
+      expect(connect.enabled(), isFalse);
+    });
+  });
+
   group('connect.disconnect', () {
     List<RegisteredCommand> shellCommands(
       WorkspaceController workspace,
