@@ -337,11 +337,9 @@ void main() {
         inspectorWidth: -4,
         saveSidebarWidth: (width) async => saved.add(width),
       );
+      addTearDown(panes.dispose);
       expect(panes.sidebarWidth, WindowPanesController.defaultSidebarWidth);
-      expect(
-        panes.inspectorWidth,
-        WindowPanesController.defaultInspectorWidth,
-      );
+      expect(panes.inspectorWidth, WindowPanesController.defaultInspectorWidth);
 
       for (final width in [double.nan, double.infinity, 0.0, -10.0]) {
         await panes.setWidth(WindowPane.sidebar, width);
