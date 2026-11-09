@@ -942,6 +942,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         passwordController: _syncPassword,
         encryptionPassphraseController: _syncEncryptionPassphrase,
         confirmationController: _syncEncryptionPassphraseConfirm,
+        onSubmit: _saving ? null : () => _sync(mode: _syncMode),
       ),
       const SizedBox(height: 8),
       Wrap(
@@ -1536,12 +1537,17 @@ class SyncEnrollmentFields extends StatelessWidget {
     required this.passwordController,
     required this.encryptionPassphraseController,
     required this.confirmationController,
+    this.onSubmit,
   });
 
   final SyncEnrollmentMode mode;
   final TextEditingController passwordController;
   final TextEditingController encryptionPassphraseController;
   final TextEditingController confirmationController;
+
+  /// Runs the primary action when Return is pressed in the last field of the
+  /// current mode. Null while that action is unavailable.
+  final VoidCallback? onSubmit;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -1553,6 +1559,7 @@ class SyncEnrollmentFields extends StatelessWidget {
         enableSuggestions: false,
         enableIMEPersonalizedLearning: false,
         obscureText: true,
+        textInputAction: TextInputAction.next,
         autofillHints: [
           mode == SyncEnrollmentMode.register
               ? AutofillHints.newPassword
@@ -1570,6 +1577,12 @@ class SyncEnrollmentFields extends StatelessWidget {
         enableSuggestions: false,
         enableIMEPersonalizedLearning: false,
         obscureText: true,
+        textInputAction: mode == SyncEnrollmentMode.register
+            ? TextInputAction.next
+            : TextInputAction.done,
+        onSubmitted: mode == SyncEnrollmentMode.register
+            ? null
+            : (_) => onSubmit?.call(),
         decoration: const InputDecoration(
           labelText: 'Vault encryption passphrase',
           helperText: 'Encrypts synced credentials; use it on every device.',
@@ -1583,6 +1596,8 @@ class SyncEnrollmentFields extends StatelessWidget {
           enableSuggestions: false,
           enableIMEPersonalizedLearning: false,
           obscureText: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => onSubmit?.call(),
           decoration: const InputDecoration(
             labelText: 'Confirm vault encryption passphrase',
           ),

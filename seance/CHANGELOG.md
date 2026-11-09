@@ -329,6 +329,8 @@
 - Return confirms the recovery code check, the restore code, a Command
   inbox app's name and a file's permissions, as their buttons do, and
   moves through a snippet's placeholders, inserting from the last.
+- Return in the last field of the sync sign-in or registration form
+  logs in or registers, as its button does.
 
 ## 1.9.0 (2026-10-04)
 
