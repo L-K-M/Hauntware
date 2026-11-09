@@ -11,11 +11,11 @@
 - Planchette, Poltergeist and Klabautermann follow the same window
   conventions. Hide the sidebar with Control+Command+S or Ctrl+Alt+S, and,
   where the app has one, the inspector with Option+Command+I or
-  Ctrl+Alt+I; each window remembers which panes show. Undo and Redo
-  cover app data such as favorites, pins and alert rules, and deleting
-  one offers Undo. Closing edited text asks Save, Don't save or Cancel,
-  and Save buttons wait for valid input. Each product's changelog has the
-  details.
+  Ctrl+Alt+I; each window remembers which panes show. In Poltergeist
+  and Klabautermann, Undo and Redo cover app data such as favorites,
+  pins and alert rules, and deleting one offers Undo. Closing edited
+  text asks Save, Don't save or Cancel, and Save buttons wait for valid
+  input. Each product's changelog has the details.
 
 - Séance and Poltergeist use dartssh2 4.1.0 instead of 3.0.2. Servers
   that offer only chacha20-poly1305 connect, strict key exchange is
