@@ -523,8 +523,9 @@ Do not "simplify" these away — they are load-bearing:
 - **Font families are resolved by name by the platform, not by Flutter.**
   `TextStyle.fontFamily` is handed to the OS font manager, which is why
   `SeanceTheme.monoFallback` can name Menlo and Consolas without the app
-  bundling either, and why the font picker
-  (`services/system_fonts.dart`) can offer any family it finds on disk. There
+  bundling either, and why the font picker (`ui/font_picker.dart`) can
+  offer, below the fonts Séance bundles, any installed family that
+  `services/system_fonts.dart` finds on disk. There
   is no Flutter API to *enumerate* installed fonts — the picker reads the
   `name` table out of the sfnt files in each desktop's font directories
   itself, which is also where `post.isFixedPitch` and the PANOSE proportion

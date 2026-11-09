@@ -2539,7 +2539,7 @@ the commit-level detail, without adding names to docs.
 - Lineage: `75b1e84bf231d149d64c295430a9dda9dc7f4ffb`, `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`
 - Identity: 36 lines; `sha256:dfd61c66b342aa5a8c2cf6fae85d417ec8cc79fd4eee2580fd80031d4e9d11fd`
 - Unmatched attributions: 1 lines; `sha256:41240f7bf814a29257ba1dcf6ca3af20d744a98f374fdd6781eef8d4950b4bab`
-- License scan: 538 lines; `sha256:7f8b39fcdcc2bcdefa699e6a746a8e7801cf9611eed49f0f237dda748a77b301`
+- License scan: 539 lines; `sha256:c56eede39f2e28a0aed5100158183196082e3080bfebd854a9bb034c22d55fe5`
 - Vendored paths: 156 lines; `sha256:eba91dd50f0d2540da08a8284a3390dbba09c014ad784ab8dad3ab65e44614c8`
 - Gitlinks: 0 lines; `sha256:8c9771035e10619d9c2e084cc0f914772bfff45bd0b0a37c831f98bdf4a94839`
 <!-- SEANCE_PIN_AUDIT_V3:END -->

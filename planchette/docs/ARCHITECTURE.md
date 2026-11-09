@@ -1,10 +1,12 @@
 # Shared editor architecture
 
 Planchette is both a standalone text editor and the source of the editor
-packages embedded by [Poltergeist](https://github.com/L-K-M/Poltergeist) and
-[Séance](https://github.com/L-K-M/Seance). This extraction was requested by
-the owner on 2026-09-27 so improvements reach all three applications through
-versioned dependency updates.
+packages embedded by [Poltergeist](https://github.com/L-K-M/Poltergeist),
+[Séance](https://github.com/L-K-M/Seance) and
+[Klabautermann](../../klabautermann/). This extraction was requested by the
+owner on 2026-09-27 so improvements reach every application through
+versioned dependency updates; Klabautermann joined the suite later and uses
+the same packages.
 
 ## Ownership
 
@@ -13,7 +15,7 @@ versioned dependency updates.
 | `planchette_core` | Language detection, tokenization, format checks, search ranges, document encoding metadata, bounded loading, guarded local-file writes |
 | `planchette_editor` | Editing state, highlighting, problem marks and navigation, search and replace, gutter, status, focus, editing surface, text-size range and zoom steps, and shared save/close contracts |
 | `ghost_ui` | Shared leaf UI primitives: family hues, WCAG contrast math, middle-ellipsis text, top toasts, the in-place tab view, the sidebar kit, ghost menus, and the file-list presentation helpers |
-| `ghost_desktop` | Desktop window lifecycle shared by all three apps: remembered frame, missing-monitor policy, maximized/full-screen restore, and the intercepted close path behind host-owned adapters |
+| `ghost_desktop` | Desktop window lifecycle shared by all four apps: remembered frame, missing-monitor policy, maximized/full-screen restore, and the intercepted close path behind host-owned adapters |
 | Planchette app | Document windows/tabs, optional folder/server workspaces, native menus, file-open events, guarded saves/publication, and application close/quit |
 | Host applications | Their own windows/tabs, localized chrome, remote sessions, managed working copies, uploads, conflict resolution, and notifications |
 
@@ -141,7 +143,7 @@ this determines Normalize Line Endings and final-newline insertion.
 Planchette keeps all three packages and its app in one repository. Local
 app development uses relative package paths. Consumers pin the shared
 packages to the same reviewed Git revision and commit their lockfiles. A
-package update is validated in both host apps before merging the adoption
+package update is validated in every host app before merging the adoption
 PRs.
 
 The standalone app targets Android, macOS, Windows, and Linux. Desktops use tabbed

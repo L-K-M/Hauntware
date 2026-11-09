@@ -13,6 +13,12 @@
   Séance keeps what is on disk, as it already did for servers. The
   update-check and command-suggestion switches go back when their save
   fails.
+- Pasting into the terminal strips control characters first, so a
+  clipboard holding `ESC[201~` can no longer end bracketed paste early
+  and run the rest as typed. Pasting several lines that look dangerous
+  asks first, as Klabautermann's container shell does: Paste all, First
+  line only or Cancel. A single line still pastes at once, and runs only
+  when you press Enter.
 - The window has the same layout on Linux, Windows, macOS and tablets: a
   header with the server's name, Generate command and buttons that hide
   the server list (the sidebar) and the side panel (the inspector), as a
@@ -164,7 +170,7 @@
 - The terminal draws in Iosevka Term, which ships with Séance, unless
   you chose a font. It is narrower than the fonts used before, so a
   window fits more columns at the same size. The font button beside the
-  terminal font field lists the four fonts Séance includes, also on
+  terminal font field lists the fonts Séance includes, also on
   iPhone, iPad and Android, above the installed ones on desktop. An
   installed font with the same name as an included one is not listed:
   the name always selects the included copy.
@@ -304,6 +310,17 @@
   files it does not accept are handled as above.
 - Settings > About shows the running build's version, and the
   open-source licenses page names it under the app name.
+- The built-in editor zooms: ⌘ or Ctrl with +, − and 0 in an editor tab,
+  or the editor text size slider in Settings. Every editor tab resizes
+  at once, and the size stays on this device.
+- Password, passphrase, private-key and API key fields, in the server
+  editor, the assistant settings, sync sign-in, recovery codes and the
+  connection prompts, turn off autocorrect, suggestions and keyboard
+  learning, so your keyboard does not learn or offer your secrets.
+- A key passphrase you type to sign in to a server is no longer kept in
+  memory for as long as the connection stays open.
+- On Windows, the app's file properties name the Unlicense, and a font
+  installed or removed while a window closes no longer crashes Séance.
 
 ## 1.9.0 (2026-10-04)
 

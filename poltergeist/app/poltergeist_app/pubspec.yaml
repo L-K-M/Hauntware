@@ -72,8 +72,9 @@ dependencies:
     path: ../../packages/poltergeist_core
   poltergeist_sync:
     path: ../../packages/poltergeist_sync
-  # The update banner's "View release" link — hands the releases URL to
-  # the OS browser; the app never downloads release assets (00 D23).
+  # Hands URLs to the OS: the Help menu's releases and issues pages, the
+  # update check's release page (on Android the user can instead download
+  # and install the release APK, 00 D23) and Séance links.
   url_launcher: 6.3.2
   uuid: 4.6.0
   window_manager: 0.5.2

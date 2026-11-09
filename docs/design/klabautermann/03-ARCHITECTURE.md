@@ -7758,10 +7758,10 @@ reading, in two columns from the System tab's 600 px panel width:
   says why above the last values rather than clearing them.
 - CPU: a busy gauge and session sparkline, then user, system and idle,
   then a bar per core in the host's numeric order, wrapping into as
-  many columns as fit, until `CoreHeatmap` (10.7) exists to compact
-  many cores on phones. Load: the 1, 5 and 15 minute averages and the
-  load per core, to two decimals, without a sparkline, since the charts
-  have no unitless scale yet. Memory: used on a bar out of the total,
+  many columns as fit; past 16 cores a `CoreHeatmap` (10.7) takes their
+  place, so a large host fits a phone. Load: a session sparkline of the
+  one-minute average on a unitless scale from 1, then the 1, 5 and 15
+  minute averages and the load per core, to two decimals. Memory: used on a bar out of the total,
   the total, available, buffers, cache and shared beside it, and
   MEM-01's "ZFS ARC counted as used" note. MEM-01 asks for a stacked
   bar, but used is the total less `MemAvailable` (7.1), which never
@@ -7789,7 +7789,8 @@ reading, in two columns from the System tab's 600 px panel width:
   with SYS-04's reason, once per card. With only the load per core
   withheld, the container's own load averages show and the note says
   the core count would be the host's.
-- No radial `Gauge` exists yet; the stacked bar is the gauge.
+- CPU busy, used memory and used swap each show a radial `Gauge`
+  (10.7) beside their sparkline, with the value in words under it.
 
 As built in M2 for the rest of OV-01 and OV-02 (the same file), the
 health card follows the freshness line: the failed units through the
@@ -8043,6 +8044,22 @@ light amber and orange measure a CIE76 distance of 2.0 under
 deuteranopia. Stale values turn every fill the family's graphite and drop
 the severity, since an old reading may no longer hold. Every fill holds
 3:1 on the track (`surfaceContainerHighest`).
+
+As built for the rest of 10.7 (`gauge.dart`, `core_heatmap.dart`):
+`Gauge` draws a value's share of its total on a three-quarter arc with
+the share in its middle and the value in words under it. It reads as a
+one-segment `StackedBar`: past a threshold the fill takes the severity
+colour with a 2 px stripe of the track along it and an icon under the
+share, ticks outside the arc mark the warning and critical levels, an
+unknown value hatches the arc, stale turns it graphite, and screen
+readers hear the stacked bar's summary. `CoreHeatmap` draws one 14 px
+cell per core, filled from the bottom to its busy share in the first
+series colour, so height carries the value rather than colour; an
+unknown core is hatched, each cell's tooltip names the core and its
+share, and screen readers hear the count, the average and the busiest
+core. `ChartUnit.decimal` gives sparklines a unitless scale (to two
+decimals, from 1 up by 1, 2 and 5 steps) for the load average. Neither
+new chart animates.
 
 ### 10.8 Log viewer
 

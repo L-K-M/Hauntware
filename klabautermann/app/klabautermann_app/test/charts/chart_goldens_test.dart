@@ -12,8 +12,8 @@ const _sceneKey = ValueKey('chart-scene');
 
 /// 03 §11.1's golden row for the charts, light and dark, with the bundled
 /// font: threshold bands and a gap, an automatic IEC scale, and min-max
-/// downsampling; stacked and pressure bars in their threshold, unknown and
-/// stale states. Baselines come from the Linux runner.
+/// downsampling; stacked and pressure bars, gauges and core heatmaps in
+/// their threshold, unknown and stale states. Baselines come from the Linux runner.
 void main() {
   setUpAll(() async {
     if (goldensCompareHere) await loadGoldenFonts();
@@ -227,6 +227,94 @@ void main() {
       await expectLater(
         find.byKey(_sceneKey),
         matchesGoldenFile('goldens/bars_${brightness.name}.png'),
+      );
+    }, skip: !goldensCompareHere);
+
+    testWidgets('gauges and a core heatmap in the ${brightness.name} theme', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(720, 300);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      const thresholds = ChartThresholds(warning: 80, critical: 90);
+      Widget gauge(double? busy, {bool stale = false, bool marks = true}) =>
+          Gauge(
+            label: 'CPU',
+            part: 'Busy',
+            value: busy,
+            total: 100,
+            unit: ChartUnit.percent,
+            strings: testChartStrings,
+            thresholds: marks ? thresholds : null,
+            stale: stale,
+          );
+      List<(String, double?)> cores({bool unknown = false}) => [
+        for (var core = 0; core < 32; core++)
+          (
+            'cpu$core',
+            unknown && core == 5 ? null : (core * 37 % 101).toDouble(),
+          ),
+      ];
+
+      await tester.pumpWidget(
+        chartFrame(
+          brightness: brightness,
+          fontFamily: goldenFontFamily,
+          RepaintBoundary(
+            key: _sceneKey,
+            child: ColoredBox(
+              color: chartTheme(brightness).colorScheme.surface,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  spacing: 16,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      spacing: 8,
+                      children: [
+                        gauge(42),
+                        gauge(85),
+                        gauge(96),
+                        gauge(null),
+                        gauge(96, stale: true),
+                        gauge(30, marks: false),
+                      ],
+                    ),
+                    SizedBox(
+                      width: 280,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        spacing: 8,
+                        children: [
+                          CoreHeatmap(
+                            label: 'Per core',
+                            cores: cores(unknown: true),
+                            strings: testChartStrings,
+                          ),
+                          CoreHeatmap(
+                            label: 'Per core',
+                            cores: cores(),
+                            strings: testChartStrings,
+                            stale: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await expectLater(
+        find.byKey(_sceneKey),
+        matchesGoldenFile('goldens/gauges_${brightness.name}.png'),
       );
     }, skip: !goldensCompareHere);
   }

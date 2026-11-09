@@ -1538,7 +1538,7 @@ class _SessionViewState extends State<_SessionView> {
             type: ContextMenuButtonType.paste,
             onPressed: () {
               _selectionToolbar.remove();
-              unawaited(terminalPaste(widget.tab));
+              unawaited(terminalPaste(widget.tab, context: context));
             },
           ),
           ContextMenuButtonItem(
@@ -1702,7 +1702,7 @@ class _SessionViewState extends State<_SessionView> {
           : KeyEventResult.ignored;
     }
     if (clip && event.logicalKey == LogicalKeyboardKey.keyV) {
-      terminalPaste(widget.tab);
+      unawaited(terminalPaste(widget.tab, context: context));
       return KeyEventResult.handled;
     }
     if (clip && event.logicalKey == LogicalKeyboardKey.keyA) {
@@ -1833,7 +1833,9 @@ class _SessionViewState extends State<_SessionView> {
       case 'copy':
         terminalCopy(widget.tab);
       case 'paste':
-        await terminalPaste(widget.tab);
+        if (context.mounted) {
+          await terminalPaste(widget.tab, context: context);
+        }
       case 'selectAll':
         terminalSelectAll(widget.tab);
       case 'find':

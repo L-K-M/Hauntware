@@ -2832,6 +2832,34 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String chartDecimal(double value) {
+    final intl.NumberFormat valueNumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 2,
+        );
+    final String valueString = valueNumberFormat.format(value);
+
+    return '$valueString';
+  }
+
+  @override
+  String chartHeatmapSummary(
+    String label,
+    int count,
+    String average,
+    String busiest,
+  ) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cores',
+      one: '1 core',
+    );
+    return '$label: $_temp0, average $average, busiest $busiest';
+  }
+
+  @override
   String get accessNeverRuns =>
       'Klabautermann never runs these fix commands. Copy one and run it yourself on the server.';
 
@@ -3819,6 +3847,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get overviewLoadTitle => 'Load';
+
+  @override
+  String get overviewLoadSparkline => '1 min load';
 
   @override
   String get overviewLoad1 => '1 min';

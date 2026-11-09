@@ -7,7 +7,7 @@ import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/overview_layout.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart'
-    show ChartSeverity, ChartThresholds, StackedBar;
+    show ChartSeverity, ChartThresholds, CoreHeatmap, Gauge, StackedBar;
 import 'package:klabautermann_app/ui/cpu_hints.dart';
 import 'package:klabautermann_app/ui/overview_cards.dart';
 import 'package:klabautermann_app/ui/overview_panel.dart';
@@ -288,6 +288,9 @@ Future<_Panel> _pump(
 Iterable<StackedBar> _bars(WidgetTester tester) =>
     tester.widgetList<StackedBar>(find.byType(StackedBar));
 
+Iterable<Gauge> _gauges(WidgetTester tester) =>
+    tester.widgetList<Gauge>(find.byType(Gauge));
+
 /// The card headed [title].
 Finder _card(String title) => find.byWidgetPredicate(
   (widget) => widget is PanelSection && widget.title == title,
@@ -478,10 +481,11 @@ void main() {
     expect(find.textContaining('MB'), findsNothing);
 
     // CPU and memory warn as the fleet row's pressure bar does.
-    final bars = {for (final bar in _bars(tester)) bar.label: bar};
-    expect(bars['CPU']!.thresholds, isNotNull);
-    expect(bars['Memory']!.thresholds, isNotNull);
-    expect(bars['Swap']!.thresholds, isNull);
+    final gauges = {for (final gauge in _gauges(tester)) gauge.label: gauge};
+    expect(gauges['CPU']!.thresholds, isNotNull);
+    expect(gauges['Memory']!.thresholds, isNotNull);
+    expect(gauges['Swap']!.thresholds, isNull);
+    expect(_gauges(tester).any((gauge) => gauge.stale), isFalse);
     expect(_bars(tester).any((bar) => bar.stale), isFalse);
     expect(find.text('Updated 0 s ago'), findsOneWidget);
   });
@@ -502,15 +506,11 @@ void main() {
     final panel = await _pump(tester);
     await panel.sample(tester, _core(memory: memory));
 
-    final bar = _bars(tester).singleWhere((bar) => bar.label == 'Memory');
-    final drawn = bar.segments.fold(
-      0.0,
-      (sum, segment) => sum + (segment.value ?? 0),
-    );
+    final gauge = _gauges(tester).singleWhere((g) => g.label == 'Memory');
     expect(
-      drawn,
+      gauge.value,
       lessThanOrEqualTo(memory.totalBytes! - memory.availableBytes!),
-      reason: 'the bar\'s empty part is at least what is available',
+      reason: 'the gauge\'s empty part is at least what is available',
     );
   });
 
@@ -686,8 +686,9 @@ void main() {
       await panel.sample(
         tester,
         _core(
+          // A bar each, up to the heatmap's sixteen cores.
           perCpu: {
-            for (var core = 0; core <= 101; core++) 'cpu$core': 7,
+            for (final core in [0, 9, 10, 99, 100, 101]) 'cpu$core': 7,
             // No kernel prints it: cut rather than overflow the card.
             'cpu99999999999999999999': 7,
           },
@@ -705,6 +706,56 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('past sixteen cores the card shows a core heatmap (CPU-02)', (
+    tester,
+  ) async {
+    final panel = await _pump(tester, size: _phone);
+    await panel.sample(
+      tester,
+      _core(
+        perCpu: {
+          for (var core = 0; core < 64; core++)
+            'cpu$core': core == 12 ? 98 : 10,
+        },
+      ),
+    );
+
+    final heatmap = tester.widget<CoreHeatmap>(find.byType(CoreHeatmap));
+    expect(heatmap.cores, hasLength(64));
+    expect(heatmap.cores.take(3).map((core) => core.$1), [
+      'cpu0',
+      'cpu1',
+      'cpu2',
+    ]);
+    // No bar per core: the summary and each cell's tooltip carry the values.
+    expect(_bars(tester).where((bar) => bar.label.startsWith('cpu')), isEmpty);
+    expect(
+      find.bySemanticsLabel(
+        'Per core: 64 cores, average 11%, busiest cpu12 98%',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Tooltip && widget.message == 'cpu12 98%',
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the load card draws the one-minute load (CPU-03)', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester, _core());
+
+    expect(
+      find.bySemanticsLabel(RegExp(r'^1 min load: now 0\.52, ')),
+      findsOneWidget,
+    );
+  });
 
   for (final textScale in [1.0, 2.0]) {
     testWidgets('every core\'s bar has one track length at '
@@ -869,6 +920,7 @@ void main() {
     await tester.pump();
     expect(find.text('Updated 19 s ago'), findsOneWidget);
     expect(_bars(tester).any((bar) => bar.stale), isFalse);
+    expect(_gauges(tester).any((gauge) => gauge.stale), isFalse);
     Color? loadColor() => tester.widget<Text>(find.text('0.52')).style?.color;
     final muted = Theme.of(
       tester.element(find.text('0.52')),
@@ -880,6 +932,7 @@ void main() {
     expect(find.text('Stale: updated 25 s ago'), findsOneWidget);
     expect(find.byIcon(Icons.history), findsOneWidget);
     expect(_bars(tester).every((bar) => bar.stale), isTrue);
+    expect(_gauges(tester).every((gauge) => gauge.stale), isTrue);
     expect(loadColor(), muted);
   });
 
@@ -894,6 +947,7 @@ void main() {
     expect(find.text('The server refused this reading.'), findsOneWidget);
     expect(find.text('Waiting for the first reading.'), findsNothing);
     expect(find.byType(StackedBar), findsNothing);
+    expect(find.byType(Gauge), findsNothing);
 
     await panel.sample(tester, _core());
     await panel.sample(

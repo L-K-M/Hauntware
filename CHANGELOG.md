@@ -22,6 +22,10 @@
 - Séance's terminal text size, font, ligatures and colour choice moved
   from Settings ▸ General to Settings ▸ Appearance. Its preview there now
   draws in the terminal's font instead of the code font.
+- Password, passphrase, private-key and API key fields in every app turn
+  off autocorrect, suggestions and keyboard learning, so your keyboard
+  does not learn or offer your secrets. The SSH client no longer keeps a
+  key passphrase in memory once sign-in is done.
 
 ### Added
 
@@ -45,12 +49,13 @@
   the device, like the editor's text size.
 - Every app ships open-source monospace fonts, including Iosevka Term,
   JetBrains Mono, Fira Code and Maple Mono, all with ligatures such as
-  `->` and `!=`. Code and editors in Planchette, Séance and Poltergeist
-  draw in JetBrains Mono on every platform, where they used to fall back
-  to Menlo, Cascadia Mono or DejaVu Sans Mono unless JetBrains Mono was
-  installed. Planchette's settings-file `fontFamily` and Séance's
-  terminal font accept the bundled families by name. The fonts are under the
-  SIL Open Font License; each app's licence notices include it.
+  `->` and `!=`. Code and editors in Planchette, Séance, Poltergeist and
+  Klabautermann draw in JetBrains Mono on every platform, where they
+  used to fall back to Menlo, Cascadia Mono or DejaVu Sans Mono unless
+  JetBrains Mono was installed. Planchette's settings-file `fontFamily`
+  and Séance's terminal font accept the bundled families by name. The
+  fonts are under the SIL Open Font License; each app's licence notices
+  include it.
 - Klabautermann, the fourth product: an agentless manager for servers
   and Docker over SSH, still in development. CI builds its Android, iOS,
   Linux, macOS and Windows clients on every pull request and launches

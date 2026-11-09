@@ -311,11 +311,20 @@ class _ShellViewState extends State<_ShellView> {
 
   Future<TerminalPasteChoice> _confirmPaste(TerminalPasteReview review) async {
     if (!mounted) return TerminalPasteChoice.cancel;
-    final choice = await showDialog<TerminalPasteChoice>(
-      context: context,
-      builder: (context) => _PasteReviewDialog(review: review),
+    final l10n = AppLocalizations.of(context);
+    return showTerminalPasteReview(
+      context,
+      review,
+      strings: TerminalPasteReviewStrings(
+        title: l10n.dockerShellPasteTitle,
+        findings: l10n.dockerShellPasteFindings,
+        unchecked: l10n.dockerShellPasteUnchecked,
+        finding: l10n.dockerShellPasteFinding,
+        pasteAll: l10n.dockerShellPasteAll,
+        firstLineOnly: l10n.dockerShellPasteFirstLine,
+        cancel: l10n.dockerShellPasteCancel,
+      ),
     );
-    return choice ?? TerminalPasteChoice.cancel;
   }
 
   Future<void> _contextMenu(Offset position) async {
@@ -476,66 +485,6 @@ class _ShellStatus extends StatelessWidget {
             ),
         ],
       ),
-    );
-  }
-}
-
-/// Asks about a multi-line paste the linter flagged, or could not check.
-class _PasteReviewDialog extends StatelessWidget {
-  const _PasteReviewDialog({required this.review});
-
-  final TerminalPasteReview review;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final findings = review.findings;
-    return AlertDialog(
-      title: Text(l10n.dockerShellPasteTitle(review.lineCount)),
-      content: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              findings == null
-                  ? l10n.dockerShellPasteUnchecked
-                  : l10n.dockerShellPasteFindings,
-            ),
-            for (final finding in findings ?? const <TerminalPasteFinding>[])
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  l10n.dockerShellPasteFinding(
-                    finding.line,
-                    finding.explanation,
-                  ),
-                  style: TextStyle(
-                    color: finding.severity == TerminalPasteSeverity.critical
-                        ? theme.colorScheme.error
-                        : null,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, TerminalPasteChoice.cancel),
-          child: Text(l10n.dockerShellPasteCancel),
-        ),
-        TextButton(
-          onPressed: () =>
-              Navigator.pop(context, TerminalPasteChoice.firstLineOnly),
-          child: Text(l10n.dockerShellPasteFirstLine),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, TerminalPasteChoice.pasteAll),
-          child: Text(l10n.dockerShellPasteAll),
-        ),
-      ],
     );
   }
 }
