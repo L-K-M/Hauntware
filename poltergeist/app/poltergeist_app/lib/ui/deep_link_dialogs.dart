@@ -57,6 +57,32 @@ Future<void> showDeepLinkFailureDialog(
   },
 );
 
+/// Reports links dropped at the queue limit once the queue has drained
+/// and no review was left to carry the count.
+Future<void> showDeepLinkIgnoredDialog(
+  BuildContext context,
+  int count, {
+  DeepLinkOperation operation = const _NeverCancelledDeepLinkOperation(),
+}) => _showCancellableDialog<void>(
+  context: context,
+  operation: operation,
+  builder: (dialogContext) {
+    final l10n = AppLocalizations.of(dialogContext);
+    return AlertDialog(
+      key: const ValueKey('deepLink.ignored'),
+      title: Text(l10n.deepLinkFailureTitle),
+      content: Text(l10n.deepLinkIgnoredLinks(count)),
+      actions: [
+        TextButton(
+          key: const ValueKey('deepLink.ignored.close'),
+          onPressed: () => Navigator.pop(dialogContext),
+          child: Text(l10n.deepLinkFailureClose),
+        ),
+      ],
+    );
+  },
+);
+
 Future<T?> _showCancellableDialog<T>({
   required BuildContext context,
   required DeepLinkOperation operation,
@@ -141,6 +167,13 @@ final class _DeepLinkReviewDialogState extends State<_DeepLinkReviewDialog> {
     // New hidden endpoints require another deliberate expansion.
     _overflowReviewed = false;
     _overflowRevision++;
+  }
+
+  void _decide(DeepLinkReviewDecision decision) {
+    // The snapshot on screen when the decision was made, not one a later
+    // frame may still draw while the dialog animates out.
+    widget.review.markSnapshotShown(widget.snapshot);
+    Navigator.pop(context, decision);
   }
 
   @override
@@ -230,6 +263,10 @@ final class _DeepLinkReviewDialogState extends State<_DeepLinkReviewDialog> {
                     ],
                   ),
                 ),
+              if (snapshot.ignoredCount > 0) ...[
+                const SizedBox(height: _fieldSpacing),
+                Text(l10n.deepLinkIgnoredLinks(snapshot.ignoredCount)),
+              ],
             ],
           ),
         ),
@@ -238,7 +275,7 @@ final class _DeepLinkReviewDialogState extends State<_DeepLinkReviewDialog> {
         TextButton(
           key: const ValueKey('deepLink.cancel'),
           onPressed: _actionsArmed
-              ? () => Navigator.pop(context, DeepLinkReviewDecision.cancel)
+              ? () => _decide(DeepLinkReviewDecision.cancel)
               : null,
           child: Text(l10n.deepLinkCancel),
         ),
@@ -247,20 +284,14 @@ final class _DeepLinkReviewDialogState extends State<_DeepLinkReviewDialog> {
             key: const ValueKey('deepLink.discardAll'),
             onPressed:
                 _actionsArmed && (overflowCount == 0 || _overflowReviewed)
-                ? () {
-                    widget.review.markRemainingReviewed(snapshot);
-                    Navigator.pop(
-                      context,
-                      DeepLinkReviewDecision.discardAllRemaining,
-                    );
-                  }
+                ? () => _decide(DeepLinkReviewDecision.discardAllRemaining)
                 : null,
             child: Text(l10n.deepLinkDiscardAll),
           ),
         FilledButton(
           key: const ValueKey('deepLink.connect'),
           onPressed: _actionsArmed
-              ? () => Navigator.pop(context, DeepLinkReviewDecision.connect)
+              ? () => _decide(DeepLinkReviewDecision.connect)
               : null,
           child: Text(l10n.deepLinkConnect),
         ),

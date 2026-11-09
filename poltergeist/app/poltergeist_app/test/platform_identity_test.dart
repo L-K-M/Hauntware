@@ -165,12 +165,15 @@ void main() {
       ),
     );
     final androidManifest = _read('android/app/src/main/AndroidManifest.xml');
+    // browse is the only authority the link parser accepts, so the filter
+    // names it: Android then never offers Poltergeist for a link the
+    // parser would refuse.
     final viewFilter = RegExp(
       r'<intent-filter>\s*'
       r'<action android:name="android\.intent\.action\.VIEW"/>\s*'
       r'<category android:name="android\.intent\.category\.DEFAULT"/>\s*'
       r'<category android:name="android\.intent\.category\.BROWSABLE"/>\s*'
-      r'<data android:scheme="poltergeist"/>\s*'
+      r'<data android:scheme="poltergeist" android:host="browse"/>\s*'
       r'</intent-filter>',
     );
     expect(androidManifest, matches(viewFilter));

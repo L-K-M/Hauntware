@@ -3951,6 +3951,23 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     );
   }
 
+  @override
+  Future<void> showIgnoredLinks(
+    int count,
+    DeepLinkOperation operation,
+  ) async {
+    if (!await _prepareDeepLinkOperation(operation)) return;
+
+    final promptContext = _deepLinkPromptContext;
+    if (!promptContext.mounted) return;
+
+    await showDeepLinkIgnoredDialog(
+      promptContext,
+      count,
+      operation: operation,
+    );
+  }
+
   BuildContext get _deepLinkPromptContext =>
       widget.window?.navigatorKey.currentContext ?? context;
 

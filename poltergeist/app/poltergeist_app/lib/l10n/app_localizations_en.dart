@@ -8642,6 +8642,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'Hidden direction or line-control characters were removed for display.';
 
   @override
+  String deepLinkIgnoredLinks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more links were ignored.',
+      one: '1 more link was ignored.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get deepLinkFailureTitle => 'Link can’t be opened';
 
   @override
