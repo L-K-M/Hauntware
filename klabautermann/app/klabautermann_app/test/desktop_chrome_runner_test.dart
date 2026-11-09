@@ -186,5 +186,22 @@ void main() {
       expect(restore, isNonNegative);
       expect(engine, greaterThan(restore));
     });
+
+    test('Linux views are transparent, so a resize shows no black flash', () {
+      // Poltergeist's and Planchette's runners do the same: the GTK window
+      // behind the view follows the desktop's light or dark theme.
+      for (final runner in [
+        'linux/runner/my_application.cc',
+        'linux/runner/settings_window.cc',
+      ]) {
+        final source = readSource(runner);
+        expect(
+          source,
+          contains('gdk_rgba_parse(&background_color, "#00000000");'),
+          reason: runner,
+        );
+        expect(source, isNot(contains('"#000000"')), reason: runner);
+      }
+    });
   });
 }

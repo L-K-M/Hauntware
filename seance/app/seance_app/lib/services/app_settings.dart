@@ -171,8 +171,9 @@ class AppSettings {
   AppLockMode appLock;
 
   /// On launch, check GitHub for a newer release and show a notification if
-  /// one exists. On by default; only ever offers a link to the releases page —
-  /// never downloads or installs anything.
+  /// one exists. On by default. The notification links to the releases page;
+  /// on Android it can also download the release APK and open the installer,
+  /// but only when the user chooses Update.
   bool checkForUpdates;
 
   /// Offer a shell on *this* machine, above the SSH servers. Off by default:

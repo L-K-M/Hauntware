@@ -71,8 +71,9 @@ dependencies:
   # Optional device-local gate; OS biometrics with device passcode fallback.
   local_auth: ^3.0.2
   path_provider: ^2.1.0
-  # The running app version (compared against the latest GitHub release to
-  # offer an update notification — never to download or install anything).
+  # The running app version, compared against the latest GitHub release to
+  # offer an update notification. Nothing downloads until the user chooses
+  # Update, on Android only (ghost_apk_update above).
   package_info_plus: ^8.0.0
   # Streams Android document-provider selections through a cached file instead
   # of requiring a stable filesystem path or loading the whole file into Dart.
@@ -86,7 +87,9 @@ dependencies:
   open_file: ^4.0.0
   # Native share sheets for exported remote files.
   share_plus: ^12.0.2
-  # Opens the releases page in the browser when an update is available.
+  # Opens http(s) links in the browser: links in terminal output
+  # (services/web_links.dart) and the releases page when an update is
+  # available.
   url_launcher: ^6.3.0
   # Delivers seance://connect links to the link intake (lib/services/
   # link_intake.dart). Pinned to the version Poltergeist runs.
