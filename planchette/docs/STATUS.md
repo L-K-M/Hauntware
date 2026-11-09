@@ -38,9 +38,9 @@ palette offers provider-supported actions; desktop workspaces stay host-owned.
 `ghost_fonts` bundles 23 families, all under the SIL Open Font License
 except 3270, which ships under BSD-3-Clause. The shared picker searches
 offline, previews real glyphs and emphasis, and confirms family and
-ligatures together.
-Planchette, Séance and Poltergeist use it. Defaults and stored family names
-are preserved; a saved ligatures-off choice stays off.
+ligatures together. Planchette, Séance and Poltergeist use the picker;
+Klabautermann bundles the fonts but has no font setting yet. Defaults and
+stored family names are preserved; a saved ligatures-off choice stays off.
 
 Rendering tests check every family's fixed-width metrics and each supported
 font's ligature switch. The additional release files and licenses are pinned
