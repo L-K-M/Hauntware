@@ -522,10 +522,12 @@ terminal yet, so it has no baseline to keep.
 7. Licenses: Klabautermann's lock gains the fork's hosted dependencies
    (`convert`, `meta`, `quiver`, `equatable`, `zmodem`; `XT/pubspec.yaml`)
    in M12. M12 runs the license gate in release mode for them.
-8. Séance follow-up, out of scope: its raw clipboard paste passes ESC
-   through, so a clipboard holding `ESC[201~` ends bracketed paste early
-   and the rest runs as typed (1.4). Adopting `TerminalPastePolicy` in
-   Séance would fix it; that is a behaviour change for its own PR.
+8. Séance follow-up, since done: its raw clipboard paste passed ESC
+   through, so a clipboard holding `ESC[201~` ended bracketed paste early
+   and the rest ran as typed (1.4). Séance's `terminalPaste` now goes
+   through `TerminalPastePolicy` with the danger linter, and both apps
+   show the package's `TerminalPasteReviewDialog`: Klabautermann in its
+   ARB strings, Séance in the package's English defaults.
 
 ## 11. Corrections to the plan
 

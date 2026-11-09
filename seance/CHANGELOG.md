@@ -13,6 +13,12 @@
   Séance keeps what is on disk, as it already did for servers. The
   update-check and command-suggestion switches go back when their save
   fails.
+- Pasting into the terminal strips control characters first, so a
+  clipboard holding `ESC[201~` can no longer end bracketed paste early
+  and run the rest as typed. Pasting several lines that look dangerous
+  asks first, as Klabautermann's container shell does: Paste all, First
+  line only or Cancel. A single line still pastes at once, and runs only
+  when you press Enter.
 - The window has the same layout on Linux, Windows, macOS and tablets: a
   header with the server's name, Generate command and buttons that hide
   the server list (the sidebar) and the side panel (the inspector), as a
