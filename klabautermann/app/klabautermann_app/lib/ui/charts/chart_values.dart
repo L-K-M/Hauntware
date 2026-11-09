@@ -15,6 +15,9 @@ enum ChartUnit {
 
   /// A whole number of things, as a container's PIDs.
   count,
+
+  /// A unitless figure to two decimals, as a load average.
+  decimal,
 }
 
 /// The words charts say, from the host's catalogue (03 D10: the charts
@@ -46,6 +49,8 @@ final class ChartStrings {
     required this.severityWarning,
     required this.severityCritical,
     required this.stale,
+    required this.decimal,
+    required this.heatmapSummary,
   });
 
   /// A series' screen-reader summary (A11Y-02): its label, the formatted
@@ -117,6 +122,15 @@ final class ChartStrings {
 
   /// A bar's summary while its values are stale (OV-04).
   final String Function(String summary) stale;
+
+  /// A unitless figure in the UI locale's number format, to two decimals.
+  final String Function(double value) decimal;
+
+  /// A core heatmap's summary: its label, how many cores it shows, their
+  /// formatted average and the busiest core as a [barPart], which may
+  /// carry its severity ([withSeverity]).
+  final String Function(String label, int count, String average, String busiest)
+  heatmapSummary;
 }
 
 /// [value] as axis or value text in [unit].
@@ -126,6 +140,7 @@ String formatChartValue(double value, ChartUnit unit, ChartStrings strings) =>
       ChartUnit.bytes => ghostFormatBinarySize(value.round()),
       ChartUnit.bytesPerSecond => ghostFormatBinaryRate(value),
       ChartUnit.count => value.round().toString(),
+      ChartUnit.decimal => strings.decimal(value),
     };
 
 /// The steps of an automatic scale within one IEC unit: 1, 2 and 5 times a
@@ -153,6 +168,7 @@ double chartScaleMax(double? dataMax, ChartUnit unit) {
 double uncheckedChartScaleMax(double? dataMax, ChartUnit unit) {
   if (unit == ChartUnit.percent) return 100;
   if (unit == ChartUnit.count) return _countScaleMax(dataMax);
+  if (unit == ChartUnit.decimal) return _decimalScaleMax(dataMax);
   // NaN would never meet a step and +Infinity would reach an infinite
   // decade, so neither may enter the search below.
   if (dataMax == null || !dataMax.isFinite || dataMax <= 0) return 1024;
@@ -178,6 +194,14 @@ double _countScaleMax(double? dataMax) {
     }
   }
 }
+
+/// A unitless figure's scale: the next 1, 2 or 5 times a power of ten at
+/// or above [dataMax], and never below 1, so an idle host's load reads on
+/// a scale to 1 rather than one that magnifies noise.
+double _decimalScaleMax(double? dataMax) =>
+    dataMax == null || !dataMax.isFinite || dataMax <= 1
+    ? 1
+    : _countScaleMax(dataMax);
 
 /// The screen-reader summary of a series labelled [label] (A11Y-02): its
 /// current, lowest and highest values and its trend on a scale spanning

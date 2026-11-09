@@ -3726,6 +3726,23 @@ abstract class AppLocalizations {
   /// **'{summary}, stale'**
   String chartStale(String summary);
 
+  /// A chart value without a unit, such as a load average, in the UI locale's number format with two decimals.
+  ///
+  /// In en, this message translates to:
+  /// **'{value}'**
+  String chartDecimal(double value);
+
+  /// A core heatmap's screen-reader summary: what it measures, how many cores it shows, their average busy share (already formatted) and the busiest core as a chartBarPart, which may carry a chartWithSeverity.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {count, plural, =1{1 core} other{{count} cores}}, average {average}, busiest {busiest}'**
+  String chartHeatmapSummary(
+    String label,
+    int count,
+    String average,
+    String busiest,
+  );
+
   /// Access tab: the note above the access rows saying the app only shows and copies fix commands and never runs them (CN-24).
   ///
   /// In en, this message translates to:
@@ -5021,6 +5038,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Load'**
   String get overviewLoadTitle;
+
+  /// The load card's session sparkline of the one-minute load average, as its screen-reader summary names it (CPU-03).
+  ///
+  /// In en, this message translates to:
+  /// **'1 min load'**
+  String get overviewLoadSparkline;
 
   /// The one-minute load average's label.
   ///

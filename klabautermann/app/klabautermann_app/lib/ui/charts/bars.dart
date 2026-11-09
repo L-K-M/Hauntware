@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'chart_marks.dart';
 import 'chart_style.dart';
 import 'chart_values.dart';
 
@@ -98,8 +99,10 @@ class StackedBar extends StatelessWidget {
     final palette = ChartPalette.of(context);
     assert(segments.length <= palette.series.length, 'a colour per segment');
 
-    final total = _reading(this.total);
-    final values = [for (final segment in segments) _reading(segment.value)];
+    final total = chartReading(this.total);
+    final values = [
+      for (final segment in segments) chartReading(segment.value),
+    ];
     final thresholds = this.thresholds;
     final primary = values.first;
     final severity =
@@ -123,7 +126,7 @@ class StackedBar extends StatelessWidget {
         : formatChartValue(value, unit, strings);
     final parts = [
       for (final (index, segment) in segments.indexed)
-        _withSeverity(
+        withSeverityWords(
           strings.barPart(segment.label, format(values[index])),
           index == 0 ? severity : ChartSeverity.normal,
           strings,
@@ -169,7 +172,7 @@ class StackedBar extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (thresholds != null) _severitySlot(severity, palette),
+                  if (thresholds != null) severitySlot(severity, palette),
                 ],
               ),
               if (showLegend)
@@ -322,7 +325,7 @@ class PressureBar extends StatelessWidget {
     final palette = ChartPalette.of(context);
     assert(cells.length <= palette.series.length, 'a colour per cell');
 
-    final percents = [for (final cell in cells) _reading(cell.percent)];
+    final percents = [for (final cell in cells) chartReading(cell.percent)];
     final severities = [
       for (final cell in cells) _pressureSeverity(cell, stale: stale),
     ];
@@ -369,7 +372,7 @@ class PressureBar extends StatelessWidget {
                 child: _bar(palette, cellCount: cells.length, runs: runs),
               ),
               if (cells.any((cell) => cell.thresholds != null))
-                _severitySlot(
+                severitySlot(
                   severities.reduce((a, b) => a.index >= b.index ? a : b),
                   palette,
                 ),
@@ -392,8 +395,8 @@ String pressureSummary(
 }) {
   final parts = [
     for (final cell in cells)
-      _withSeverity(
-        strings.barPart(cell.label, switch (_reading(cell.percent)) {
+      withSeverityWords(
+        strings.barPart(cell.label, switch (chartReading(cell.percent)) {
           null => strings.unknownValue,
           final percent => strings.percent(percent),
         }),
@@ -408,7 +411,7 @@ String pressureSummary(
 /// How far [cell] has crossed its thresholds; a stale or unknown value
 /// carries no severity.
 ChartSeverity _pressureSeverity(PressureCell cell, {required bool stale}) {
-  final percent = _reading(cell.percent);
+  final percent = chartReading(cell.percent);
   final thresholds = cell.thresholds;
   if (stale || thresholds == null || percent == null) {
     return ChartSeverity.normal;
@@ -416,59 +419,12 @@ ChartSeverity _pressureSeverity(PressureCell cell, {required bool stale}) {
   return thresholds.severityOf(percent);
 }
 
-/// A value the bars can draw: null, negative or not finite is no reading,
-/// shown as unknown rather than as zero (03 §10.4).
-double? _reading(double? value) =>
-    value != null && value.isFinite && value >= 0 ? value : null;
-
 /// A severe fill carries a stripe as well as its colour: the warning and
 /// critical tints are not held apart from the series tints under
 /// colour-vision deficiencies (light amber and orange nearly meet under
 /// deuteranopia), so the stripe shows which part crossed (A11Y-01).
 BarFill _fillOf(ChartSeverity severity) =>
     severity.alarms ? BarFill.severe : BarFill.solid;
-
-String _withSeverity(
-  String part,
-  ChartSeverity severity,
-  ChartStrings strings,
-) => switch (severity) {
-  ChartSeverity.normal => part,
-  ChartSeverity.careful => strings.withSeverity(part, strings.severityCareful),
-  ChartSeverity.warning => strings.withSeverity(part, strings.severityWarning),
-  ChartSeverity.critical => strings.withSeverity(
-    part,
-    strings.severityCritical,
-  ),
-};
-
-const _severityIconSize = 14.0;
-
-/// The icon beside a bar that shows its severity by shape as well as
-/// colour (A11Y-01): a triangle for warning, a circle for critical. The
-/// slot keeps its size when empty, so the bar never changes length.
-Widget _severitySlot(ChartSeverity severity, ChartPalette palette) =>
-    SizedBox.square(
-      dimension: _severityIconSize,
-      child: switch (severity) {
-        ChartSeverity.normal => null,
-        ChartSeverity.careful => Icon(
-          Icons.info_rounded,
-          size: _severityIconSize,
-          color: palette.scaleText,
-        ),
-        ChartSeverity.warning => Icon(
-          Icons.warning_rounded,
-          size: _severityIconSize,
-          color: palette.warning,
-        ),
-        ChartSeverity.critical => Icon(
-          Icons.error_rounded,
-          size: _severityIconSize,
-          color: palette.critical,
-        ),
-      },
-    );
 
 Widget _bar(
   ChartPalette palette, {

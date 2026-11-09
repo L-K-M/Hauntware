@@ -951,7 +951,11 @@ is on main:
   withholds says why once per card (SYS-04, D50). CPU and memory warn at
   80 and 90 %, as the fleet rows do. Every figure uses IEC units, and a
   test keeps `ghostFormatFileSize` and `ghostFormatByteRate` out of
-  `lib/`. Not yet: `CoreHeatmap`, a load sparkline and a radial `Gauge`.
+  `lib/`. CPU busy, used memory and used swap each show a radial `Gauge`
+  beside their sparkline; past 16 cores a `CoreHeatmap` replaces the bar
+  per core; and the load card draws the one-minute load average's
+  session sparkline on a unitless scale (Gauge and core heatmap,
+  below).
   Since K44b turned links on, the app's engine connects an opened server,
   samples it and sends its profile, so the header shows the live link
   state and the detected runtime and the Overview shows the readings.
@@ -1144,8 +1148,7 @@ is on main:
   motion when the platform asks (A11Y-11). The palette test holds the
   severity and series colours to 3:1 and keeps them apart under simulated
   colour-vision deficiencies (A11Y-04); light and dark goldens draw with
-  the Flutter SDK's Roboto and compare on Linux only. `Gauge` follows in
-  its own PR. The Overview (K32a, above) shows `MonitoringController`'s
+  the Flutter SDK's Roboto and compare on Linux only. The Overview (K32a, above) shows `MonitoringController`'s
   rings as session sparklines (OV-03).
 - Bars (03 §10.7, M2): `StackedBar` for the memory breakdown and disks
   (MEM-01, DSK-01) and the fleet rows' three-cell `PressureBar` (FL-07),
@@ -1156,6 +1159,16 @@ is on main:
   mount, and the Overview one-part `StackedBar`s for CPU busy, each
   core, used memory and used swap; it draws no memory breakdown, whose
   parts overlap (above).
+- Gauge and core heatmap (03 §10.7, OV-03, CPU-02, CPU-03): `Gauge`
+  draws a value's share of its total on a three-quarter arc with the
+  value in words under it, reading as a one-segment `StackedBar` does
+  (severity colour, stripe and icon past a threshold, ticks at the
+  warning and critical levels, hatched when unknown, graphite when
+  stale, the stacked bar's summary). `CoreHeatmap` draws a 14 px cell per
+  core filled from the bottom to its busy share, hatched when unknown,
+  with a tooltip per core and one summary (count, average, busiest).
+  `ChartUnit.decimal` scales the load sparkline from 1. Tested in
+  `gauge_test.dart`, the Overview tests and the `gauges` goldens.
 - Time-series chart (03 §10.7, §9.5 item 5, OV-03, M2, K12, #194):
   `TimeSeriesChart` draws one to four lanes of a `TimeSeriesRing` on a
   shared time axis with round local-time ticks and one IEC or percent
@@ -1167,8 +1180,7 @@ is on main:
   each series' summary, which reads "now unknown" while the right edge
   is in a gap, and each gap's span.
   Lanes differ by hue alone, which is still open against 03 §10.10. Not
-  yet: `CoreHeatmap`, 03 §10.7's crosshair and threshold bands on this
-  chart. The coverage card shows it (K39b, above).
+  yet: 03 §10.7's crosshair and threshold bands on this chart. The coverage card shows it (K39b, above).
 - Sortable table (M2): the app's `SortableTable`, which the M2 lists
   build on. The caller owns the sort (a header click flips it; ties keep
   the caller's order and unknown values sort last). A screen reader hears
@@ -2695,10 +2707,7 @@ planned.
 
 Left open: rank 3 and the refused root operation for an account whose
 only sudo rule is NOPASSWD `docker` (X5); the runner VM's own host write
-snapshot, beyond 03 §11.5's fixture host; the radial `Gauge`, the
-`CoreHeatmap` and a load sparkline of 03 §10.7, where bar gauges, per-core
-bars and the CPU and memory sparklines serve OV-03 and CPU-02 meanwhile;
-and the device and real-host checks below.
+snapshot, beyond 03 §11.5's fixture host; and the device and real-host checks below.
 
 ## M5 exit
 

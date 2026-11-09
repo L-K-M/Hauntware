@@ -3397,6 +3397,40 @@
       }
     }
   },
+  "chartDecimal": "{value}",
+  "@chartDecimal": {
+    "description": "A chart value without a unit, such as a load average, in the UI locale's number format with two decimals.",
+    "placeholders": {
+      "value": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 2
+        }
+      }
+    }
+  },
+  "chartHeatmapSummary": "{label}: {count, plural, =1{1 core} other{{count} cores}}, average {average}, busiest {busiest}",
+  "@chartHeatmapSummary": {
+    "description": "A core heatmap's screen-reader summary: what it measures, how many cores it shows, their average busy share (already formatted) and the busiest core as a chartBarPart, which may carry a chartWithSeverity.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Per core"
+      },
+      "count": {
+        "type": "int"
+      },
+      "average": {
+        "type": "String",
+        "example": "42%"
+      },
+      "busiest": {
+        "type": "String",
+        "example": "cpu12 98%"
+      }
+    }
+  },
   "accessNeverRuns": "Klabautermann never runs these fix commands. Copy one and run it yourself on the server.",
   "@accessNeverRuns": {
     "description": "Access tab: the note above the access rows saying the app only shows and copies fix commands and never runs them (CN-24)."
@@ -4548,6 +4582,10 @@
   "overviewLoadTitle": "Load",
   "@overviewLoadTitle": {
     "description": "Heading of the Overview's load card (CPU-03): the load averages."
+  },
+  "overviewLoadSparkline": "1 min load",
+  "@overviewLoadSparkline": {
+    "description": "The load card's session sparkline of the one-minute load average, as its screen-reader summary names it (CPU-03)."
   },
   "overviewLoad1": "1 min",
   "@overviewLoad1": {

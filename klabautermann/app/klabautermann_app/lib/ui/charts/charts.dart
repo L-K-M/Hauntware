@@ -8,6 +8,8 @@ export 'bars.dart'
     show BarSegment, PressureBar, PressureCell, StackedBar, pressureSummary;
 export 'chart_style.dart';
 export 'chart_values.dart' hide uncheckedChartScaleMax;
+export 'core_heatmap.dart' show CoreHeatmap;
+export 'gauge.dart' show Gauge;
 export 'series_ring.dart';
 export 'sparkline.dart' show Sparkline;
 export 'time_series.dart' hide timeSeriesRuns;

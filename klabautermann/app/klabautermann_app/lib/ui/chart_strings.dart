@@ -30,5 +30,7 @@ ChartStrings klabautermannChartStrings(AppLocalizations l10n) {
     severityWarning: l10n.chartSeverityWarning,
     severityCritical: l10n.chartSeverityCritical,
     stale: l10n.chartStale,
+    decimal: l10n.chartDecimal,
+    heatmapSummary: l10n.chartHeatmapSummary,
   );
 }

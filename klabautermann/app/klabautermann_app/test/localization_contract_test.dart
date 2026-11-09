@@ -499,6 +499,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/access/access_panel.dart': {r"r'^[A-Za-z0-9_./:@+,-]+$'", "' '"},
   // Chart assert messages, RangeError argument names and the read-only
   // ring view's UnsupportedError: programmer diagnostics, never rendered.
+  'lib/ui/charts/core_heatmap.dart': {"'a heatmap needs a core'"},
   'lib/ui/charts/bars.dart': {
     "'a stacked bar needs a segment'",
     "'a colour per segment'",
