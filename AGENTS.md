@@ -63,9 +63,10 @@ squash the initial migration PR: original source ancestry must reach main.
 ## Licensing
 
 - Hauntware's own code is Unlicense (`LICENSE`). Keep license statements in
-  the READMEs, the macOS `PRODUCT_COPYRIGHT`, the Linux copyright writers,
-  the licenses strings and the image label consistent with it; CI checks the
-  README and `PRODUCT_COPYRIGHT`.
+  the READMEs, the macOS `PRODUCT_COPYRIGHT`, the Windows `LegalCopyright`,
+  the Linux copyright writers, the licenses strings and the image label
+  consistent with it; CI checks the README, `PRODUCT_COPYRIGHT` and
+  `LegalCopyright`.
 - Before adding a dependency, vendored file or bundled asset (fonts, images,
   data), confirm its license allows redistribution in our artifacts. Never
   vendor third-party code without its license file.

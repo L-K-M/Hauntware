@@ -94,7 +94,7 @@ BEGIN
             VALUE "FileDescription", "Planchette" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "Planchette" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 ch.lkmc. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Unlicense" "\0"
             VALUE "OriginalFilename", "planchette.exe" "\0"
             VALUE "ProductName", "Planchette" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
