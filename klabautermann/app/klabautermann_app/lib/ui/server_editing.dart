@@ -7,7 +7,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:ghost_servers/ghost_servers.dart';
 import 'package:ghost_ui/ghost_ui.dart'
-    show kBadgeImageAppleExtensions, kBadgeImageExtensions, showTopToast;
+    show
+        GhostUndoDeclined,
+        GhostUndoHistory,
+        GhostUndoableChange,
+        kBadgeImageAppleExtensions,
+        kBadgeImageExtensions,
+        showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/fleet_controller.dart';
@@ -15,6 +21,7 @@ import '../controllers/server_editor_controller.dart';
 import '../controllers/sync_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
+import 'app_undo.dart' show UndoHistoryScope;
 import 'server_editor_strings.dart';
 
 /// In-app server editing for the surfaces under [ServerEditingScope]
@@ -126,9 +133,11 @@ Future<void> duplicateServer(
 ) async {
   final l10n = AppLocalizations.of(context);
   final overlay = Overlay.of(context, rootOverlay: true);
+  final history = UndoHistoryScope.maybeOf(context);
   final String message;
   try {
-    await editing.editor.duplicate(server.id);
+    final copy = await editing.editor.duplicate(server.id);
+    if (copy != null) _recordDuplicate(history, l10n, editing, server.id, copy);
     message = l10n.serverDuplicated(server.displayName);
   } on Object catch (error) {
     if (overlay.mounted) {
@@ -137,6 +146,33 @@ Future<void> duplicateServer(
     return;
   }
   if (overlay.mounted) showTopToast(overlay, message: message);
+}
+
+// Undo deletes the copy; Redo makes another, whose id the next Undo
+// deletes. A copy the user has selected is in use, so Undo waits.
+void _recordDuplicate(
+  GhostUndoHistory? history,
+  AppLocalizations l10n,
+  ServerEditing editing,
+  String sourceId,
+  String firstCopy,
+) {
+  if (history == null) return;
+  var latest = firstCopy;
+  history.record(
+    GhostUndoableChange(
+      name: l10n.changeDuplicateServer,
+      undo: () async {
+        if (editing.fleet.selectedServerId == latest) {
+          throw GhostUndoDeclined(l10n.changeDuplicateServerInUse);
+        }
+        await editing.editor.delete(latest);
+      },
+      redo: () async {
+        latest = await editing.editor.duplicate(sourceId) ?? latest;
+      },
+    ),
+  );
 }
 
 /// Asks before deleting [server] from the account, naming it, then

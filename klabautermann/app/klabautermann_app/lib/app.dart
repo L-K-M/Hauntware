@@ -86,6 +86,9 @@ const String kSettingsRoute = '/settings';
 /// the callers' own (03 §4.10, Séance's navigatorKey).
 final appNavigatorKey = GlobalKey<NavigatorState>();
 
+/// The app-level dialogs that open at most once at a time.
+enum _DialogKind { palette, keyboardMap, settingsRoute }
+
 /// The composition root's view (03 §10.1): one `MaterialApp` whose only
 /// rebuild input is [AppearanceController]; fleet, monitoring and prompt
 /// changes reach surfaces through their own listenables.
@@ -318,7 +321,28 @@ class KlabautermannApp extends StatelessWidget {
       }
     }
     if (!context.mounted) return;
-    unawaited(Navigator.of(context).pushNamed(kSettingsRoute));
+    unawaited(
+      _openOnce(
+        _DialogKind.settingsRoute,
+        () => Navigator.of(context).pushNamed(kSettingsRoute),
+      ),
+    );
+  }
+
+  /// The dialogs this run has up. The native macOS menu stays live under a
+  /// modal, so a second request for the same dialog is ignored instead of
+  /// stacking a copy. Keyed by the run's fleet, so each app instance (and
+  /// each test) has its own.
+  static final _openDialogs = Expando<Set<_DialogKind>>();
+
+  Future<void> _openOnce(_DialogKind kind, Future<void> Function() open) async {
+    final opened = _openDialogs[fleet] ??= {};
+    if (!opened.add(kind)) return;
+    try {
+      await open();
+    } finally {
+      opened.remove(kind);
+    }
   }
 
   /// [child] under the run results' toasts, which need the navigator's
@@ -537,18 +561,21 @@ class KlabautermannApp extends StatelessWidget {
                       undoHistory: undoHistory,
                       onOpenPalette: navigation == null
                           ? null
-                          : (context) => showCommandPalette(
-                              context,
-                              paletteCommands(
-                                l10n: AppLocalizations.of(context),
-                                platform: platform,
-                                context: context,
-                                actions: commands,
-                                fleet: fleet,
-                                monitoring: monitoring,
-                                navigation: navigation,
-                              ),
-                            ),
+                          : (context) =>
+                                _openOnce(_DialogKind.palette, () {
+                                  return showCommandPalette(
+                                    context,
+                                    paletteCommands(
+                                      l10n: AppLocalizations.of(context),
+                                      platform: platform,
+                                      context: context,
+                                      actions: commands,
+                                      fleet: fleet,
+                                      monitoring: monitoring,
+                                      navigation: navigation,
+                                    ),
+                                  );
+                                }),
                       onOpenPanel: navigation == null
                           ? null
                           : (context, panel) {
@@ -561,7 +588,10 @@ class KlabautermannApp extends StatelessWidget {
                               }
                               navigation.openPanel(selected.id, panel);
                             },
-                      onShowKeyboardMap: (context) => showKeyboardMap(context),
+                      onShowKeyboardMap: (context) => _openOnce(
+                        _DialogKind.keyboardMap,
+                        () => showKeyboardMap(context),
+                      ),
                     );
                     return AppMenuHost(
                       // Pane checks and undo labels follow their

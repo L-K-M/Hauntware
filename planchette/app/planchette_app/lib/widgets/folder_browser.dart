@@ -8,6 +8,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../services/app_settings.dart' show AppSettings;
 import '../services/folder_workspace.dart';
+import 'mono_text_style.dart';
 
 /// The suite's sidebar chord, one definition for everywhere it is bound or
 /// spelled: ⌃⌘S on Apple platforms, Ctrl+Alt+S elsewhere. Off Apple
@@ -203,7 +204,7 @@ class _FolderBrowserState extends State<FolderBrowser> {
                 workspace.displayPath,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: monoTextStyle.copyWith(fontSize: 12),
               ),
             ),
           ),

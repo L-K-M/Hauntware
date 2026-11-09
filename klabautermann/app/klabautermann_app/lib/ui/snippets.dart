@@ -243,6 +243,13 @@ class _SnippetFillDialogState extends State<SnippetFillDialog> {
                 autofocus: index == 0,
                 decoration: InputDecoration(labelText: name),
                 onChanged: (_) => setState(() {}),
+                // Return takes the same gate as Continue: an unfilled
+                // placeholder must not reach the terminal.
+                onSubmitted: (_) {
+                  if (_complete) {
+                    Navigator.of(context).pop(widget.snippet.fill(_values));
+                  }
+                },
               ),
             Text(
               l10n.snippetsFillCommand,

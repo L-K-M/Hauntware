@@ -466,6 +466,24 @@ abstract class AppLocalizations {
   /// **'Pin server'**
   String get changePinServer;
 
+  /// Tooltip of the button that opens the find bar in the read-only unit file and stack file views, which touch cannot reach by keyboard chord.
+  ///
+  /// In en, this message translates to:
+  /// **'Find'**
+  String get fileViewFind;
+
+  /// An undoable change's name: copying a server in the fleet.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate server'**
+  String get changeDuplicateServer;
+
+  /// Why Undo of a server duplicate waits: the copy is the selected server.
+  ///
+  /// In en, this message translates to:
+  /// **'The copy is open. Close it, then undo.'**
+  String get changeDuplicateServerInUse;
+
   /// An undoable change's name: taking a pinned server off the fleet rail's PINNED section.
   ///
   /// In en, this message translates to:

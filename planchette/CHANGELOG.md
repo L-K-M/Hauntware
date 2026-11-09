@@ -53,6 +53,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - On Windows, the app's file properties name the Unlicense, and a font
   installed or removed while a window closes no longer crashes
   Planchette.
+- The server sign-in prompt says the password is used for this workspace
+  session and never saved. It said this connection only, although
+  reconnects in the same session use it again.
+- Folder paths in the folder browser's header and the Open Folder on
+  server field draw in the bundled code font, as Séance's path bar does.
 
 ## [1.9.0] - 2026-10-04
 

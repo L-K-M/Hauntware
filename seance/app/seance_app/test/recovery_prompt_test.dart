@@ -152,6 +152,46 @@ void main() {
     expect(find.text('Set up a recovery code?'), findsNothing);
   });
 
+  testWidgets('Return in the confirmation field keeps the code once it '
+      'matches', (tester) async {
+    await pump(tester);
+
+    await tapAndSettle(
+      tester,
+      find.text('saved a credential'),
+      shows: find.text('Set up a recovery code?'),
+    );
+    await tapAndSettle(
+      tester,
+      find.byKey(const ValueKey('recovery.prompt.setUp')),
+      shows: find.byKey(const ValueKey('recovery.code')),
+    );
+    final code = tester
+        .widget<SelectableText>(find.byKey(const ValueKey('recovery.code')))
+        .data!;
+    final field = find.byKey(const ValueKey('recovery.code.confirm'));
+
+    // A wrong prefix does nothing, as the gated button does.
+    await tester.enterText(field, 'ZZZZ');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('recovery.code')), findsOneWidget);
+
+    await tester.enterText(field, code.split('-').first);
+    await tester.runAsync(
+      () => tester.testTextInput.receiveAction(TextInputAction.done),
+    );
+    for (var i = 0; i < 100; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pumpAndSettle();
+      if (find.byKey(const ValueKey('recovery.code')).evaluate().isEmpty) break;
+    }
+    expect(find.byKey(const ValueKey('recovery.code')), findsNothing);
+    expect(await tester.runAsync(() => state!.recoveryConfigured()), isTrue);
+  });
+
   testWidgets('app-lock rejection is visible and the offer can retry', (
     tester,
   ) async {

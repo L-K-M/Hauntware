@@ -5,12 +5,15 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ghost_ui/ghost_ui.dart' show GhostUndoableChange;
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostUndoHistory, GhostUndoableChange;
 import 'package:ghost_keystore/ghost_keystore.dart'
     show appLockBackgroundTimeout;
 import 'package:klabautermann_app/app.dart' show appNavigatorKey;
 import 'package:klabautermann_app/controllers/app_lock_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
+import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/ui/app_undo.dart' show stepUndoHistory;
 import 'package:klabautermann_app/ui/actions/quit_guard.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -254,6 +257,50 @@ void main() {
         TargetPlatform.windows,
       }),
     );
+  });
+
+  testWidgets('a menu Undo goes to a focused text field first', (
+    tester,
+  ) async {
+    final history = GhostUndoHistory();
+    var undone = 0;
+    history.record(
+      GhostUndoableChange(
+        name: 'Pin server',
+        undo: () async => undone++,
+        redo: () async {},
+      ),
+    );
+    var textUndone = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: Actions(
+          actions: {
+            UndoTextIntent: CallbackAction<UndoTextIntent>(
+              onInvoke: (_) => textUndone++,
+            ),
+          },
+          child: const Scaffold(body: TextField(autofocus: true)),
+        ),
+      ),
+    );
+    await tester.pump();
+    final overlay = Overlay.of(tester.element(find.byType(TextField)));
+
+    await stepUndoHistory(
+      overlay,
+      history,
+      direction: UndoDirection.undo,
+      yieldToFocusedText: true,
+    );
+    await tester.pump();
+    expect(undone, 0);
+    expect(textUndone, 1);
+
+    await stepUndoHistory(overlay, history, direction: UndoDirection.undo);
+    await tester.pumpAndSettle(const Duration(seconds: 5));
+    expect(undone, 1);
   });
 
   group('the quit guard (K4)', () {

@@ -188,6 +188,11 @@
 - **Passphrases are not kept after sign-in.** A key passphrase you type
   to sign in to a server is no longer kept in memory for as long as the
   connection stays open.
+- **Connect opens once.** Choosing Connect again while its dialog is open
+  does nothing, as with the other command dialogs.
+- **Paths draw in the code font.** The path bar's field, the folder name
+  and its ancestors menu use the monospace stack, as Séance's path bar
+  does.
 
 ## 1.9.0 — first suite release (2026-10-04)
 

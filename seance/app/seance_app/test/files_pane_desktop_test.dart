@@ -1159,6 +1159,37 @@ void main() {
   });
 
   platformTest(
+    'Return in the permissions field applies a valid mode and flags a bad one',
+    TargetPlatform.linux,
+    (tester) async {
+      final remote = _ListFileSystem();
+      await pumpFilesPane(tester, remote);
+
+      await tester.tap(find.text('a.txt'), buttons: kSecondaryMouseButton);
+      await tester.pump();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Properties…'));
+      await tester.pumpAndSettle();
+
+      final field = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      );
+      await tester.tap(field);
+      await tester.enterText(field, '9');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(find.text('Enter an octal mode from 0000 to 7777.'), findsOne);
+
+      await tester.enterText(field, '0600');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(remote.modes, {'$_home/a.txt': 384});
+    },
+  );
+
+  platformTest(
     'a right-click selects the row and shows its verbs',
     TargetPlatform.linux,
     (tester) async {
@@ -1518,6 +1549,12 @@ class _ListFileSystem implements RemoteFileSystem {
 
   final uploaded = <String, List<int>>{};
   final overwrites = <bool>[];
+  final modes = <String, int>{};
+
+  @override
+  Future<void> setMode(String path, int permissions) async {
+    modes[path] = permissions;
+  }
 
   @override
   Future<String> canonicalize(String path) async => path == '.' ? _home : path;

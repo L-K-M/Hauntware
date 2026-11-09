@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/ghost_fonts.dart' show ghostMonoFontFamily;
 import 'package:ghost_ui/ghost_ui.dart';
 import 'package:path/path.dart' as paths;
 import 'package:planchette_app/services/folder_workspace.dart';
@@ -117,6 +118,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(workspace.path, root);
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('path header draws the bundled mono stack', (tester) async {
+    await mount(tester);
+    final header = tester.widget<Text>(find.text(workspace.displayPath));
+    expect(header.style?.fontFamily, ghostMonoFontFamily);
+    expect(header.style?.fontSize, 12);
+  });
 
   testWidgets('disabled browser ignores selection movement', (tester) async {
     await mount(tester, enabled: false);

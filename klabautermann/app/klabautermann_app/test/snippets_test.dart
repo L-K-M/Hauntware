@@ -178,6 +178,32 @@ void main() {
     );
   });
 
+  testWidgets('Return in a placeholder continues only once all are filled', (
+    tester,
+  ) async {
+    engine.emit(const SnippetsChanged([_restart]));
+    await pump(tester, page());
+    await tester.pump();
+
+    await tester.tap(find.text('Restart a unit'));
+    await tester.pumpAndSettle();
+    final fields = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(fields.at(0), 'nginx.service');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(find.text('Fill in Restart a unit'), findsOneWidget);
+    expect(engine.sentOfType<PlanAction>(), isEmpty);
+
+    await tester.enterText(fields.at(1), '50');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(find.text('Fill in Restart a unit'), findsNothing);
+    expect(planned().command, contains('nginx.service'));
+  });
+
   testWidgets('cancelling the placeholders plans nothing', (tester) async {
     engine.emit(const SnippetsChanged([_restart]));
     await pump(tester, page());

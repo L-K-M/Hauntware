@@ -29,12 +29,22 @@ class UndoHistoryScope extends InheritedNotifier<GhostUndoHistory> {
 /// ("Delete alert rule undone"). The `edit.undo`/`edit.redo` commands run
 /// it; a delete toast's Undo action calls [GhostUndoHistory.undo]
 /// directly, guarded by `isNextUndo` for its own change only.
+///
+/// With [yieldToFocusedText], a text field that has the primary focus
+/// keeps its own history: the step goes to it instead, as the macOS native
+/// menu's retargeting and Poltergeist's Edit menu do, so a strip-menu
+/// click on Undo undoes the field's text and not the app's last change.
+/// [EditableText]'s own undo handlers are always enabled, so a focused
+/// read-only field takes the step and nothing changes; only a field whose
+/// handler is absent or disabled leaves the step to the app.
 Future<void> stepUndoHistory(
   OverlayState overlay,
   GhostUndoHistory history, {
   required UndoDirection direction,
+  bool yieldToFocusedText = false,
 }) async {
   final undo = direction == UndoDirection.undo;
+  if (yieldToFocusedText && _stepFocusedText(undo)) return;
   final l10n = AppLocalizations.of(overlay.context);
   final name = undo ? history.undoName : history.redoName;
   if (name == null) return;
@@ -55,6 +65,24 @@ Future<void> stepUndoHistory(
     overlay,
     message: undo ? l10n.toastChangeUndone(name) : l10n.toastChangeRedone(name),
   );
+}
+
+/// Forwards an undo or redo to the focused text field; false when no
+/// field is focused or its handler is absent or disabled (never the case
+/// for [EditableText]'s own handlers).
+bool _stepFocusedText(bool undo) {
+  final focus = FocusManager.instance.primaryFocus?.context;
+  if (focus == null ||
+      focus.findAncestorWidgetOfExactType<EditableText>() == null) {
+    return false;
+  }
+  final intent = undo
+      ? const UndoTextIntent(SelectionChangedCause.keyboard)
+      : const RedoTextIntent(SelectionChangedCause.keyboard);
+  final action = Actions.maybeFind(focus, intent: intent);
+  if (action == null || !action.isEnabled(intent)) return false;
+  Actions.invoke(focus, intent);
+  return true;
 }
 
 /// Pins [server] to the rail's PINNED section, or unpins it, as an

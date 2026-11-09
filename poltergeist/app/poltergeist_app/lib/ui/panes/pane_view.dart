@@ -2738,7 +2738,7 @@ class _LocationTitle extends StatelessWidget {
       name,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.titleSmall,
+      style: theme.textTheme.titleSmall?.merge(poltergeistMonoTextStyle),
     );
     title = Semantics(
       button: editable,
@@ -2838,7 +2838,10 @@ class _AncestorMenu extends StatelessWidget {
                     color: palette.glyph(FamilyHue.blue),
                   ),
             onPressed: () => controller.navigate(ancestors[i]),
-            child: Text(controller.pathLabel(ancestors[i], l10n)),
+            child: Text(
+              controller.pathLabel(ancestors[i], l10n),
+              style: poltergeistMonoTextStyle,
+            ),
           ),
       ],
       builder: (context, menu, _) => IconButton(
@@ -2974,7 +2977,7 @@ class _PathEditorFieldState extends State<_PathEditorField> {
             controller: _text,
             focusNode: widget.focusNode,
             autofocus: true,
-            style: Theme.of(context).textTheme.bodySmall,
+            style: poltergeistMonoTextStyle.copyWith(fontSize: 12),
             decoration: InputDecoration(
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(

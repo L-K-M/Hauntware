@@ -1672,6 +1672,40 @@ void main() {
       reason: 'the field swaps in inside the header',
     );
     expect(left.pathFieldSeed, '/home/tester');
+    // 02 §2.1: paths, including the path-bar editor, use the mono stack.
+    final editable = tester.widget<EditableText>(
+      find.descendant(of: field, matching: find.byType(EditableText)),
+    );
+    expect(editable.style.fontFamily, poltergeistMonoTextStyle.fontFamily);
+  });
+
+  testWidgets('the folder name and ancestor menu use the mono stack', (
+    tester,
+  ) async {
+    localChannelWithEntries();
+    await left.openLocalHome();
+    await pumpShell(tester);
+
+    final mono = poltergeistMonoTextStyle.fontFamily;
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byKey(const ValueKey('pane.left.path.name')),
+              matching: find.byType(Text),
+            ),
+          )
+          .style
+          ?.fontFamily,
+      mono,
+    );
+    await tester.tap(find.byKey(const ValueKey('pane.left.path.ancestors')));
+    await tester.pumpAndSettle();
+    final label = find.descendant(
+      of: find.byKey(const ValueKey('pane.left.path.ancestor.0')),
+      matching: find.byType(Text),
+    );
+    expect(tester.widget<Text>(label).style?.fontFamily, mono);
   });
 
   testWidgets('the header summarizes the selection: files-only bytes', (

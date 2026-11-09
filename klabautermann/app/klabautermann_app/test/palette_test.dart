@@ -7,6 +7,7 @@ import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/ui/docker/stacks_panel.dart'
     show StackOverview;
 import 'package:klabautermann_app/ui/menus/app_commands.dart';
+import 'package:klabautermann_app/ui/menus/app_menu_host.dart' show AppMenuHost;
 import 'package:klabautermann_app/ui/server_surfaces.dart' show ServerPanel;
 import 'package:klabautermann_app/ui/system_panel.dart';
 import 'package:klabautermann_app/ui/workspace_navigation.dart';
@@ -54,6 +55,27 @@ void main() {
       isNot(contains(kAppCommandPaletteCommandId)),
     );
   });
+
+  testWidgets('a second palette request while it is open is ignored', (
+    tester,
+  ) async {
+    await pumpApp(tester, servers: twoServers, palette: true);
+
+    await _openPalette(tester);
+    // The native macOS menu stays live under the dialog; run its command
+    // as a click on it would.
+    final host = tester.widget<AppMenuHost>(find.byType(AppMenuHost));
+    final palette = host.commands.singleWhere(
+      (command) => command.id == kAppCommandPaletteCommandId,
+    );
+    palette.run(tester.element(find.byKey(_query)));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(_query), findsOne);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byKey(_query), findsNothing, reason: 'one copy to dismiss');
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   testWidgets(
     'Ctrl+K lists commands, servers, tabs and containers; a row goes there',
