@@ -271,6 +271,18 @@
   "@changePinServer": {
     "description": "An undoable change's name: pinning a server to the fleet rail's PINNED section."
   },
+  "fileViewFind": "Find",
+  "@fileViewFind": {
+    "description": "Tooltip of the button that opens the find bar in the read-only unit file and stack file views, which touch cannot reach by keyboard chord."
+  },
+  "changeDuplicateServer": "Duplicate server",
+  "@changeDuplicateServer": {
+    "description": "An undoable change's name: copying a server in the fleet."
+  },
+  "changeDuplicateServerInUse": "The copy is open. Close it, then undo.",
+  "@changeDuplicateServerInUse": {
+    "description": "Why Undo of a server duplicate waits: the copy is the selected server."
+  },
   "changeUnpinServer": "Unpin server",
   "@changeUnpinServer": {
     "description": "An undoable change's name: taking a pinned server off the fleet rail's PINNED section."

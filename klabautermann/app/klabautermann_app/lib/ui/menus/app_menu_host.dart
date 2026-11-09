@@ -213,9 +213,10 @@ class _AppMenuHostState extends State<AppMenuHost> {
   /// text field sees the keystroke, so a chord a text surface owns
   /// outright (the suite's ⌘Z/⇧⌘Z, ghost_ui's `ghostEditingTextIntent`)
   /// re-dispatches the matching text intent to that field instead of
-  /// running the command. When the field's handler is absent or disabled
-  /// (a read-only field's Undo, say), the command runs as usual rather
-  /// than the key equivalent being swallowed.
+  /// running the command. Only when the field's handler is absent or
+  /// disabled does the command run as usual; [EditableText]'s own undo
+  /// handlers are always enabled, so a focused read-only field takes the
+  /// step and nothing changes.
   void _activateNative(String? id, MenuSerializableShortcut? shortcut) {
     final intent = shortcut == null ? null : ghostEditingTextIntent(shortcut);
     final focusContext = FocusManager.instance.primaryFocus?.context;

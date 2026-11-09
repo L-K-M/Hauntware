@@ -268,6 +268,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get changePinServer => 'Pin server';
 
   @override
+  String get fileViewFind => 'Find';
+
+  @override
+  String get changeDuplicateServer => 'Duplicate server';
+
+  @override
+  String get changeDuplicateServerInUse =>
+      'The copy is open. Close it, then undo.';
+
+  @override
   String get changeUnpinServer => 'Unpin server';
 
   @override

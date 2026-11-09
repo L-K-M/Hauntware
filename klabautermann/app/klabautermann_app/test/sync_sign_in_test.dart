@@ -91,6 +91,25 @@ void main() {
     expect(harness.sync.account, testSyncAccount);
   });
 
+  testWidgets('Return in any account field continues, as the last does', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+
+    await tester.tap(find.text('Synchronize'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Server address'),
+      'sync.example.com',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Enter the server address, starting with https:// or http://.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('the password and passphrase keep the keyboard from learning '
       'them', (tester) async {
     await pumpApp(tester);

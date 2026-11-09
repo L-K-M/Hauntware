@@ -311,6 +311,13 @@ class _StackFileViewState extends State<StackFileView> {
                 ),
               ),
             ),
+            if (_editor case final editor?)
+              IconButton(
+                tooltip: l10n.fileViewFind,
+                visualDensity: VisualDensity.compact,
+                onPressed: editor.openSearch,
+                icon: const Icon(Icons.search),
+              ),
             ActionEntry(
               serverId: widget.serverId,
               point: ActionEntryPoint.fileEdit,

@@ -309,6 +309,7 @@ List<AppCommand> buildAppCommands({
           Overlay.of(context, rootOverlay: true),
           undoHistory,
           direction: UndoDirection.undo,
+          yieldToFocusedText: true,
         ),
         menuPlacement: const CommandMenuPlacement(
           menu: AppMenuId.edit,
@@ -343,6 +344,7 @@ List<AppCommand> buildAppCommands({
           Overlay.of(context, rootOverlay: true),
           undoHistory,
           direction: UndoDirection.redo,
+          yieldToFocusedText: true,
         ),
         menuPlacement: const CommandMenuPlacement(
           menu: AppMenuId.edit,

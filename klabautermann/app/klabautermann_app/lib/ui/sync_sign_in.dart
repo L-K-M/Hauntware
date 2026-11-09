@@ -267,11 +267,13 @@ class _SyncSignInDialogState extends State<SyncSignInDialog> {
       keyboardType: TextInputType.url,
       autocorrect: false,
       decoration: InputDecoration(labelText: l10n.syncServerAddress),
+      onSubmitted: (_) => _continue(),
     ),
     TextField(
       controller: _username,
       autocorrect: false,
       decoration: InputDecoration(labelText: l10n.syncAccountName),
+      onSubmitted: (_) => _continue(),
     ),
     TextField(
       controller: _password,
@@ -280,6 +282,7 @@ class _SyncSignInDialogState extends State<SyncSignInDialog> {
       enableIMEPersonalizedLearning: false,
       obscureText: true,
       decoration: InputDecoration(labelText: l10n.syncPassword),
+      onSubmitted: (_) => _continue(),
     ),
     TextField(
       controller: _passphrase,

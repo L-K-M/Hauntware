@@ -202,6 +202,19 @@ void main() {
     );
   });
 
+  testWidgets('a Find button opens the editor\'s find bar', (tester) async {
+    final view = await _pump(tester);
+    await view.answer(tester, _composeFile());
+    final controller = tester
+        .widget<PlanchetteEditor>(find.byType(PlanchetteEditor))
+        .controller;
+    expect(controller.searchOpen, isFalse);
+
+    await tester.tap(find.byTooltip('Find'));
+    await tester.pumpAndSettle();
+    expect(controller.searchOpen, isTrue);
+  });
+
   testWidgets('reveals the values for 30 seconds, masks them again early '
       'on request and when the app turns inactive', (tester) async {
     final view = await _pump(tester);
