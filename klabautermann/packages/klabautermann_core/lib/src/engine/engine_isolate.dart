@@ -227,6 +227,8 @@ void engineMain(
   @visibleForTesting SyncTransportFactory syncTransport = httpSyncTransport,
   @visibleForTesting SamplingSubscriptions? subscriptions,
   @visibleForTesting EndpointPinStore? endpointPinStore,
+  @visibleForTesting
+  void Function(Future<void> Function() drain)? onSupportWrites,
 }) {
   final uiPort = start.uiPort;
   final commands = ReceivePort('klabautermann engine commands');
@@ -2262,6 +2264,7 @@ void engineMain(
         // isolate.
         await Future.wait([
           ?history?.flush().timeout(_shutdownGrace, onTimeout: () {}),
+          ?capabilities?.idle.timeout(_shutdownGrace, onTimeout: () {}),
           ?terminals?.dispose().timeout(_shutdownGrace, onTimeout: () {}),
         ]);
         unawaited(logs?.close());
@@ -2352,6 +2355,13 @@ void engineMain(
             ImportStoreIssueKind.recovered || null => CachePurge.removedServers,
           },
         );
+        // Tests run the engine in their own isolate, where Shutdown cannot
+        // exit it, so they drain the stores' queued writes before deleting
+        // the support directory.
+        onSupportWrites?.call(() async {
+          await capabilities?.idle;
+          await history?.idle;
+        });
         // Only a confirmed endpoint is dialed, so a profile cached for a
         // synced server not confirmed now describes another machine. One
         // whose pins could not be read keeps it until they read.
