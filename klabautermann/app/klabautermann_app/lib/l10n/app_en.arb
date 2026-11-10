@@ -9203,6 +9203,10 @@
   "@dockerImagesNoneUpdates": {
     "description": "Images list: the Updates filter hides every image."
   },
+  "dockerImagesUpdatesUnknown": "Which images have an update is not known yet.",
+  "@dockerImagesUpdatesUnknown": {
+    "description": "Images list: the Updates filter shows nothing because the update check failed, so no image's update is known."
+  },
   "dockerImagesUpdatesCheck": "Check for updates",
   "@dockerImagesUpdatesCheck": {
     "description": "Images list: the button that asks every tag's registry again, even within the six hours a check is kept."

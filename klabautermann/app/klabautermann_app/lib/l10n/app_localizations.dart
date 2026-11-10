@@ -9681,6 +9681,12 @@ abstract class AppLocalizations {
   /// **'No image has an update.'**
   String get dockerImagesNoneUpdates;
 
+  /// Images list: the Updates filter shows nothing because the update check failed, so no image's update is known.
+  ///
+  /// In en, this message translates to:
+  /// **'Which images have an update is not known yet.'**
+  String get dockerImagesUpdatesUnknown;
+
   /// Images list: the button that asks every tag's registry again, even within the six hours a check is kept.
   ///
   /// In en, this message translates to:

@@ -7608,6 +7608,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerImagesNoneUpdates => 'No image has an update.';
 
   @override
+  String get dockerImagesUpdatesUnknown =>
+      'Which images have an update is not known yet.';
+
+  @override
   String get dockerImagesUpdatesCheck => 'Check for updates';
 
   @override
