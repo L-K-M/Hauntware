@@ -5806,6 +5806,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'elevationRefused': 'admin mode refused the step.',
       'stepFailed': 'a step failed.',
       'transport': 'the connection failed during the run.',
+      'timedOut':
+          'a step ran past its time limit, so Klabautermann stopped waiting for it.',
       'unsupportedStep': 'this version cannot run one of its steps.',
       'adminRequired': 'it needs admin mode.',
       'launchFailed': 'its operation could not be started on the server.',
@@ -6204,6 +6206,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'elevationRefused': 'Admin mode refused the step.',
       'stepFailed': 'A step failed.',
       'transport': 'The connection failed during the run.',
+      'timedOut':
+          'A step ran past its time limit, so Klabautermann stopped waiting for it.',
       'unsupportedStep': 'This version could not run a step.',
       'adminRequired': 'It needed admin mode.',
       'launchFailed': 'Its operation could not be started on the server.',

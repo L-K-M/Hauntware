@@ -7362,7 +7362,7 @@ abstract class AppLocalizations {
   /// Toast when an action failed; failure is the engine's ActionFailure name.
   ///
   /// In en, this message translates to:
-  /// **'{target} did not finish: {failure, select, noLink{there is no connection to the server.} revalidation{the target changed since the preview.} elevationRefused{admin mode refused the step.} stepFailed{a step failed.} transport{the connection failed during the run.} unsupportedStep{this version cannot run one of its steps.} adminRequired{it needs admin mode.} launchFailed{its operation could not be started on the server.} other{it failed.}}'**
+  /// **'{target} did not finish: {failure, select, noLink{there is no connection to the server.} revalidation{the target changed since the preview.} elevationRefused{admin mode refused the step.} stepFailed{a step failed.} transport{the connection failed during the run.} timedOut{a step ran past its time limit, so Klabautermann stopped waiting for it.} unsupportedStep{this version cannot run one of its steps.} adminRequired{it needs admin mode.} launchFailed{its operation could not be started on the server.} other{it failed.}}'**
   String actionFailed(String target, String failure);
 
   /// Toast when an action failed without a typed reason.
@@ -7806,7 +7806,7 @@ abstract class AppLocalizations {
   /// Why a run failed, in the activity record's details; failure is the engine's ActionFailure name.
   ///
   /// In en, this message translates to:
-  /// **'{failure, select, noLink{No connection to the server.} revalidation{The target changed since the preview.} elevationRefused{Admin mode refused the step.} stepFailed{A step failed.} transport{The connection failed during the run.} unsupportedStep{This version could not run a step.} adminRequired{It needed admin mode.} launchFailed{Its operation could not be started on the server.} other{It failed.}}'**
+  /// **'{failure, select, noLink{No connection to the server.} revalidation{The target changed since the preview.} elevationRefused{Admin mode refused the step.} stepFailed{A step failed.} transport{The connection failed during the run.} timedOut{A step ran past its time limit, so Klabautermann stopped waiting for it.} unsupportedStep{This version could not run a step.} adminRequired{It needed admin mode.} launchFailed{Its operation could not be started on the server.} other{It failed.}}'**
   String activityFailure(String failure);
 
   /// A failed step's exit status in an activity record's details.

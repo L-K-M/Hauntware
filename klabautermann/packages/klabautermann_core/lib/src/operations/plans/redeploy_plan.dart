@@ -338,7 +338,14 @@ Future<PlanAttempt> planHostPull(
         intent: intent,
         kind: OperationKind.pullImage,
         targetName: reference,
-        steps: [ShellStep(argv, elevated: elevated, captureOutput: true)],
+        steps: [
+          ShellStep(
+            argv,
+            elevated: elevated,
+            captureOutput: true,
+            timeout: StepTimeout.long,
+          ),
+        ],
         requiredLevel: level,
         runner: RunnerFacts(
           identity: elevated ? 'root' : c.loginUser,

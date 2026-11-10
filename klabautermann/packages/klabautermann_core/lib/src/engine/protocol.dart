@@ -2922,8 +2922,12 @@ enum ActionFailure {
   /// not run.
   stepFailed,
 
-  /// The link failed or timed out during a step.
+  /// The link failed during a step.
   transport,
+
+  /// A step ran past its time limit (`StepTimeout`); the runner closed
+  /// its channel, which can stop the command on the host.
+  timedOut,
 
   /// The engine has no runner for an API step yet (M4 E15).
   unsupportedStep,
