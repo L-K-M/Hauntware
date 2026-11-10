@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'atomic_file.dart';
+import 'package:poltergeist_core/poltergeist_core.dart'
+    show AtomicFileWriter;
 
 final class SettingsStore {
   SettingsStore({
@@ -13,7 +14,7 @@ final class SettingsStore {
   }) : // Keep the filesystem path immutable and private.
        // ignore: prefer_initializing_formals
        _file = File(path),
-       _atomicWriter = atomicWriter ?? writeStringAtomically,
+       _atomicWriter = atomicWriter ?? const AtomicFileWriter().write,
        _now = now ?? DateTime.now,
        // Keep the callback private while allowing test-only error injection.
        // ignore: prefer_initializing_formals

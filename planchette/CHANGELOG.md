@@ -6,6 +6,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Settings and window state files use the shared atomic writer and
+  write through symbolic links.
+
 ### Added
 - Hide or show the folder sidebar from View, its toolbar buttons or
   `Ctrl+Alt+S` (`Control+Command+S` on macOS). Hiding keeps the workspace

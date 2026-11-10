@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Settings and bookmark files use the shared atomic writer and write
+  through symbolic links.
+
 - **Host-key conflicts show both keys.** When a synced host key differs
   from the one this device trusts, Settings and the account switch now
   show both fingerprints, so you can check them against the server's own

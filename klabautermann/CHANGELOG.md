@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Settings files use the shared atomic writer and write through
+  symbolic links.
+
 - Activity shows the commands an action ran in the code font, as the
   preview before it runs does.
 - On the desktop, drag the edge of the fleet rail or the inspector, or

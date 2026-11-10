@@ -87,4 +87,73 @@ void main() {
       },
     );
   }, skip: !Platform.isLinux && !Platform.isMacOS ? 'POSIX modes' : false);
+
+  test('writes through a symbolic link and keeps the link', () async {
+    if (Platform.isWindows) return;
+    final target = File(pathIn('target.json'));
+    await target.writeAsString('old');
+    final link = Link(pathIn('link.json'));
+    await link.create(target.path);
+
+    await const AtomicFileWriter().write(File(link.path), 'new');
+
+    expect(await target.readAsString(), 'new');
+    expect(
+      await FileSystemEntity.type(link.path, followLinks: false),
+      FileSystemEntityType.link,
+    );
+    expect(entries(), containsAll(['target.json', 'link.json']));
+  });
+
+  test('a link and its target share request order', () async {
+    final target = File(pathIn('target.json'));
+    await target.writeAsString('old');
+    final link = Link(pathIn('link.json'));
+    await link.create(target.path);
+
+    await Future.wait([
+      const AtomicFileWriter().write(File(link.path), 'first'),
+      const AtomicFileWriter().write(target, 'last'),
+    ]);
+
+    expect(await target.readAsString(), 'last');
+  }, skip: Platform.isWindows);
+
+  test('a chain of dangling relative links keeps every link', () async {
+    final target = File(pathIn('missing%20?.json'));
+    final middle = Link(pathIn('middle.json'));
+    final link = Link(pathIn('link.json'));
+    await middle.create('missing%20?.json');
+    await link.create('middle.json');
+
+    await const AtomicFileWriter().write(File(link.path), 'new');
+
+    expect(await target.readAsString(), 'new');
+    expect(await middle.target(), 'missing%20?.json');
+    expect(await link.target(), 'middle.json');
+  }, skip: Platform.isWindows);
+
+  test('a cyclic link fails without replacing a link', () async {
+    final first = Link(pathIn('first.json'));
+    final second = Link(pathIn('second.json'));
+    await first.create('second.json');
+    await second.create('first.json');
+
+    await expectLater(
+      const AtomicFileWriter().write(File(first.path), 'new'),
+      throwsA(isA<FileSystemException>()),
+    );
+    expect(await first.target(), 'second.json');
+    expect(await second.target(), 'first.json');
+  }, skip: Platform.isWindows);
+
+  test('concurrent writes keep the last requested snapshot', () async {
+    final file = File(pathIn('store.json'));
+    await Future.wait([
+      for (var i = 0; i < 20; i++)
+        const AtomicFileWriter().write(File(pathIn('store.json')), 'v$i'),
+    ]);
+    expect(await file.readAsString(), 'v19');
+    expect(entries(), ['store.json']);
+  });
 }

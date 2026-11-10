@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Settings and sync data files use the shared atomic writer and write
+  through symbolic links, and local store operations share one queue so
+  a failed save does not poison the next one.
+
 - Deleting a saved server retracts its credential from your sync account
   as well as from this device, unless another server still uses it, so a
   new device no longer picks up the password or key of a server that is
