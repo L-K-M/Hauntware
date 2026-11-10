@@ -64,7 +64,27 @@ class GhostResizeHandle extends StatefulWidget {
 }
 
 class _GhostResizeHandleState extends State<GhostResizeHandle> {
+  final _focusNode = FocusNode();
   bool _focused = false;
+  bool _dragging = false;
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _startDrag() {
+    _dragging = true;
+    widget.onStart();
+  }
+
+  void _finishDrag() {
+    // The drag recognizer also cancels when a tap wins the arena.
+    if (!_dragging) return;
+    _dragging = false;
+    widget.onEnd();
+  }
 
   double get _direction =>
       Directionality.of(context) == TextDirection.rtl ? -1 : 1;
@@ -107,6 +127,7 @@ class _GhostResizeHandleState extends State<GhostResizeHandle> {
           ? () => widget.onStep(-_resizeKeyStep * _grow)
           : null,
       child: Focus(
+        focusNode: _focusNode,
         onFocusChange: (focused) => setState(() => _focused = focused),
         onKeyEvent: _onKey,
         child: MouseRegion(
@@ -114,11 +135,12 @@ class _GhostResizeHandleState extends State<GhostResizeHandle> {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             dragStartBehavior: widget.dragStartBehavior,
-            onHorizontalDragStart: (_) => widget.onStart(),
+            onTap: _focusNode.requestFocus,
+            onHorizontalDragStart: (_) => _startDrag(),
             onHorizontalDragUpdate: (d) =>
                 widget.onDelta(d.delta.dx * _direction),
-            onHorizontalDragEnd: (_) => widget.onEnd(),
-            onHorizontalDragCancel: widget.onEnd,
+            onHorizontalDragEnd: (_) => _finishDrag(),
+            onHorizontalDragCancel: _finishDrag,
             onDoubleTap: widget.onReset,
             // The line itself is the layout's seam underneath; the handle
             // draws only its focus ring over it.

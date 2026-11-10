@@ -80,8 +80,44 @@ void main() {
     await tester.tap(find.byType(GhostResizeHandle));
     // Lets the recognizer's double-tap and minimum-interval timers expire.
     await tester.pump(kDoubleTapTimeout);
-    // Each tap also ends the drag it never started, the handle's cancel.
-    expect(calls, ['end', 'end', 'reset']);
+    expect(calls, ['reset']);
+  });
+
+  testWidgets('a tap focuses the handle without committing a drag', (
+    tester,
+  ) async {
+    final calls = await pump(tester, onReset: () {});
+    await tester.tap(find.byType(GhostResizeHandle));
+    await tester.pump(kDoubleTapTimeout);
+    await tester.pump();
+    expect(calls, isEmpty);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    expect(calls, ['step 16.0']);
+  });
+
+  testWidgets('a tapped handle resizes on the first arrow', (tester) async {
+    final calls = await pump(tester);
+    await tester.tap(find.byType(GhostResizeHandle));
+    await tester.pump();
+    calls.clear();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    expect(calls, ['step 16.0']);
+  });
+
+  testWidgets('cancelling a started drag commits it once', (tester) async {
+    final calls = await pump(tester);
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(GhostResizeHandle)),
+    );
+    await gesture.moveBy(const Offset(30, 0));
+    await tester.pump();
+    await gesture.cancel();
+    await tester.pump();
+    expect(calls.first, 'start');
+    expect(calls.last, 'end');
+    expect(calls.where((call) => call == 'end'), hasLength(1));
   });
 
   testWidgets('DragStartBehavior.down reports the whole drag', (tester) async {

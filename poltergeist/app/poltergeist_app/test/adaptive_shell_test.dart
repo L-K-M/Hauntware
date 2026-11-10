@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -134,13 +135,15 @@ void main() {
     expect(reports, [false, true, false]);
   });
 
-  testWidgets('keyboard-resizes the focused splitter', (tester) async {
+  testWidgets('a tapped splitter resizes on the first arrow', (tester) async {
     await _pumpShell(tester);
 
     final before = tester
         .getSize(find.byKey(AdaptiveShell.primaryPaneKey))
         .width;
-    await _focusSplitter(tester);
+    await tester.tap(find.byKey(AdaptiveShell.splitterKey));
+    await tester.pump(kDoubleTapTimeout);
+    await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
     final after = tester
