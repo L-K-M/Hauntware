@@ -8,6 +8,7 @@ import 'package:planchette_editor/planchette_editor.dart'
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'editor_strings.dart' show KlabautermannEditorStrings;
 import 'time_display.dart';
 import 'processes_panel.dart' show kRevealDuration;
 
@@ -406,6 +407,7 @@ class _UnitFileViewState extends State<UnitFileView> {
                   key: ObjectKey(editor),
                   controller: editor,
                   editingLocked: true,
+                  strings: KlabautermannEditorStrings(l10n),
                   showStatus: false,
                 ),
               ),

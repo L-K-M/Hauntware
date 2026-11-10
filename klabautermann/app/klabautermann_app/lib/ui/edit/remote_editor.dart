@@ -25,6 +25,7 @@ import '../actions/action_entry.dart' show OperationsScope;
 import '../actions/action_preview.dart' show startAction;
 import '../admin_mode_chip.dart' show TurnOnAdminModeButton;
 import '../docker/containers_panel.dart' show DockerNotice;
+import '../editor_strings.dart' show KlabautermannEditorStrings;
 
 /// Below this width the editor takes the whole screen, as on phones
 /// (03 §10.5).
@@ -510,6 +511,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
                     // A new text is a new editor.
                     key: ObjectKey(editor),
                     controller: editor,
+                    strings: KlabautermannEditorStrings(l10n),
                     showStatus: false,
                   ),
                 ),

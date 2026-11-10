@@ -11,6 +11,7 @@ import '../../l10n/app_localizations.dart';
 import '../actions/action_entry.dart';
 import '../admin_mode_chip.dart';
 import '../edit/remote_editor.dart';
+import '../editor_strings.dart' show KlabautermannEditorStrings;
 import '../processes_panel.dart' show kRevealDuration;
 import 'container_details.dart' show ContainerInspectionScope;
 import 'containers_panel.dart' show DockerNotice;
@@ -427,6 +428,7 @@ class _StackFileViewState extends State<StackFileView> {
                       key: ObjectKey(editor),
                       controller: editor,
                       editingLocked: true,
+                      strings: KlabautermannEditorStrings(l10n),
                       showStatus: false,
                     ),
                   ),
