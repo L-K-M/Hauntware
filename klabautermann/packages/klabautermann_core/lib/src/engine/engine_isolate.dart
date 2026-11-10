@@ -704,6 +704,10 @@ void engineMain(
               .forEach(uiPort.send);
           history?.observe(event.serverId, event.result, event.at);
         }
+        if (event is Gap) {
+          // Before the reading that resumes the streams, which follows.
+          alerts.gap(event.serverId, event.streams);
+        }
         if (event is Gap && event.streams.any(_historyStreams.contains)) {
           history?.gap(event.serverId, event.from, event.until, event.cause);
         }
