@@ -55,6 +55,12 @@ void main() {
       expect(counterDelta(150, 100, width: _u32), (1 << 32) - 50);
     });
 
+    test('a 32-bit decrease from past 2^32 is a reset, not a wrap', () {
+      // A 32-bit kernel still prints 64-bit /proc/net/dev counters.
+      expect(counterDelta(10 * (1 << 30), 100, width: _u32), isNull);
+      expect(counterDelta((1 << 32) + 5, (1 << 32) + 1, width: _u32), isNull);
+    });
+
     test('negative inputs are refused', () {
       expect(counterDelta(-1, 10), isNull);
       expect(counterDelta(10, -1), isNull);
@@ -247,6 +253,18 @@ void main() {
       expect(r.readAwaitMs, isNull);
       expect(r.writeAwaitMs, 2);
       expect(r.busyPercent, 100);
+    });
+
+    test('timings wrap at 2^32 ms even with 64-bit counters', () {
+      // The kernel prints ms reading, ms writing and ms doing I/O as
+      // unsigned int on every architecture (block/genhd.c).
+      final r = diskRates(
+        [timed(1000, 1000, readMs: (1 << 32) - 100, writeMs: 0, ioMs: 0)],
+        [timed(1100, 1000, readMs: 300, writeMs: 0, ioMs: 0)],
+        1,
+      )['nvme0n1']!;
+
+      expect(r.readAwaitMs, 4);
     });
 
     test('a four-counter row keeps throughput without latency or '

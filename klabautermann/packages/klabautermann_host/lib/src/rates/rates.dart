@@ -18,7 +18,9 @@ import '../parse/procs.dart' show ProcsSnapshot;
 /// A decrease means a wrap on a 32-bit counter (continued modulo 2^32)
 /// and a reset on a 64-bit one, which cannot wrap in practice: a reset
 /// yields `null` so the caller starts a new series instead of reporting a
-/// huge bogus rate.
+/// huge bogus rate. A reading at or past 2^32 shows the counter is wider
+/// than [width] says, as a 32-bit kernel's `/proc/net/dev` counters of a
+/// driver with 64-bit statistics are, so a decrease there is a reset too.
 int? counterDelta(
   int previous,
   int next, {
@@ -26,11 +28,14 @@ int? counterDelta(
 }) {
   if (previous < 0 || next < 0) return null;
   if (next >= previous) return next - previous;
-  if (width == CounterWidth.bits32) {
-    return (1 << 32) - previous + next;
+  if (width == CounterWidth.bits32 && previous < _wrap32 && next < _wrap32) {
+    return _wrap32 - previous + next;
   }
   return null;
 }
+
+/// Where a 32-bit counter wraps.
+const _wrap32 = 1 << 32;
 
 /// Whether the host rebooted between two readings (03 §6.4): a changed
 /// `btime` starts a new series. Unknown on either side stays false —
@@ -213,8 +218,8 @@ final class DiskRate {
 
 /// Per-device rates from /proc/diskstats counters (03 §6.4). Devices
 /// missing from either side, reset counters and a zero interval yield no
-/// entry; a device whose timings are missing on either side, or reset,
-/// keeps its throughput without latency and utilization.
+/// entry; a device whose timings are missing on either side keeps its
+/// throughput without latency and utilization.
 Map<String, DiskRate> diskRates(
   List<DiskStatEntry> previous,
   List<DiskStatEntry> next,
@@ -241,9 +246,12 @@ Map<String, DiskRate> diskRates(
     );
     if (rd == null || wr == null || reads == null || writes == null) continue;
 
+    // The kernel prints the timings as unsigned int on every architecture
+    // (`diskstats_show` in block/genhd.c), so they wrap at 2^32 ms even
+    // where the counters above are 64 bits wide.
     int? delta(int? before, int? after) => before == null || after == null
         ? null
-        : counterDelta(before, after, width: width);
+        : counterDelta(before, after, width: CounterWidth.bits32);
     final readMs = delta(p.readMs, n.readMs);
     final writeMs = delta(p.writeMs, n.writeMs);
     final ioMs = delta(p.ioMs, n.ioMs);
