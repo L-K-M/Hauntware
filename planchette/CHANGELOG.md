@@ -25,6 +25,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Shift+F8, or Find › Next Problem and Previous Problem, move between
   them.
 
+### Changed
+- The Linux package build uses the suite's shared packager and fails early
+  with a clear message when `objdump` is missing, instead of partway through.
+  The built `.deb` and AppImage are unchanged.
+
 ### Fixed
 - Host-key fingerprints and key paths in the server prompts draw in the
   bundled code font on macOS and Windows, as in Séance and Poltergeist.

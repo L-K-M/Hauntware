@@ -314,7 +314,9 @@ compiles the app for android/linux/macos/ios/windows on their native runners
   `scripts/build-flatpak.sh`. `--install` builds the host's app and installs
   it (macOS: `/Applications/Séance.app`; Linux: `~/.local/opt/seance`), then
   reveals the installed copy. `--help` prints the contract.
-- `scripts/package-linux.sh` — turns a built Flutter Linux bundle into
+- `scripts/package-linux.sh` — a thin wrapper over the suite's shared
+  `scripts/package-linux-common.sh`; it carries Séance's identities, desktop
+  entry and package metadata. It turns a built Flutter Linux bundle into
   installable artifacts: `seance_<version>-1_<arch>.deb` (dpkg-deb; Depends
   derived from the bundle's actual ELF headers via readelf/objdump — a
   soname→package table with t64 alternatives, glibc/libstdc++ symbol-version
