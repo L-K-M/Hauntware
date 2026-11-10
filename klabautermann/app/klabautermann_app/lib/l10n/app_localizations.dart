@@ -13719,6 +13719,12 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{Acknowledged (1)} other{Acknowledged ({count})}}'**
   String attentionAcknowledgedHeading(int count);
 
+  /// Toast: acknowledging a problem in the attention queue, or taking an acknowledgement back, could not be saved on this device. It still applies until the app quits.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save this acknowledgement, so it lasts only until it quits.'**
+  String get attentionNotSaved;
+
   /// Attention queue: closes it.
   ///
   /// In en, this message translates to:

@@ -10805,6 +10805,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get attentionNotSaved =>
+      'Klabautermann could not save this acknowledgement, so it lasts only until it quits.';
+
+  @override
   String get attentionClose => 'Close';
 
   @override

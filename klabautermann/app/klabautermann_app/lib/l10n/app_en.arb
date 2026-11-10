@@ -12951,6 +12951,10 @@
       }
     }
   },
+  "attentionNotSaved": "Klabautermann could not save this acknowledgement, so it lasts only until it quits.",
+  "@attentionNotSaved": {
+    "description": "Toast: acknowledging a problem in the attention queue, or taking an acknowledgement back, could not be saved on this device. It still applies until the app quits."
+  },
   "attentionClose": "Close",
   "@attentionClose": {
     "description": "Attention queue: closes it."
