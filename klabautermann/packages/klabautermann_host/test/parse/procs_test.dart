@@ -205,6 +205,33 @@ void main() {
     expect(r.value.processes.last.argv, ['/bin/next']);
   });
 
+  test('a command line at the meta block cap reads as truncated', () {
+    String raw({required bool capped}) => [
+      '== meta ==',
+      'total=2',
+      'selection=all',
+      if (capped) 'cmdline_cap=8',
+      '== rows ==',
+      _row(10, 'long'),
+      _row(11, 'short'),
+      '== cmdline ==',
+      '==> 10/cmdline <==',
+      'java\x1f-cp',
+      '==> 11/cmdline <==',
+      'ls\x1f',
+    ].join('\n');
+
+    final capped = parseProcs(raw(capped: true), _ctx).value;
+    expect(capped.cmdlineByteCap, 8);
+    expect(capped.processes.first.argv, ['java', '-cp']);
+    expect(capped.processes.first.argvTruncated, isTrue);
+    expect(capped.processes.last.argvTruncated, isFalse);
+
+    final whole = parseProcs(raw(capped: false), _ctx).value;
+    expect(whole.cmdlineByteCap, isNull);
+    expect(whole.processes.map((p) => p.argvTruncated), [false, false]);
+  });
+
   test('the timeout marker opening the cmdline block is not an argument', () {
     final raw = [
       '== rows ==',

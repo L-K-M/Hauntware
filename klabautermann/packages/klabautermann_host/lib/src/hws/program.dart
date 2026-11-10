@@ -47,13 +47,22 @@ const kSamplerStartCommand =
 /// Version 12 adds the slow `gpu` collector (HW-03).
 /// Version 13 adds NTP and NTPSynchronized to the probe's clock area
 /// (SYS-02).
-const kCollectorSetVersion = '13';
+/// Version 14 caps each `procs` command line at [kProcsCmdlineByteCap]
+/// bytes and reports the cap in the `meta` block (D48).
+const kCollectorSetVersion = '14';
 
 /// The most `procs` rows one reply carries (D48). With more processes the
 /// fragment keeps the union of the [kProcsRowCap] / 2 with the highest CPU
 /// share since their start and the [kProcsRowCap] / 2 with the most
 /// resident memory, and its `meta` block reports the total.
 const kProcsRowCap = 500;
+
+/// The most bytes of one `/proc/<pid>/cmdline` a `procs` reply carries
+/// (D48). [kProcsRowCap] rows of at most about 120 bytes, each with a
+/// `head` header of at most 25 bytes and this many argument bytes, stay
+/// near 830 KB, under the 1 MiB section cap, so long command lines (JVM
+/// class paths) can no longer turn the whole reply into a gap.
+const kProcsCmdlineByteCap = 1536;
 
 /// The `timeout` guard applied to forking collectors (03 §6.2).
 const kCollectorTimeoutSeconds = 10;
@@ -887,10 +896,13 @@ psec() {
 /// kernel's 128 KiB limit for one argument (above about 2,000 processes),
 /// which leaves the glob order.
 ///
-/// The kept rows' `/proc/<pid>/cmdline` go through one `head -n 1000`
-/// piped into `tr '\000' '\037'` (shell variables cannot hold NULs; 04
-/// App. A, E11), in the byte order of the pids, which is the glob's (03
-/// §7.2); without head or tr the fallbacks are
+/// The kept rows' `/proc/<pid>/cmdline` go through one `head -c 1536`
+/// ([kProcsCmdlineByteCap]) piped into `tr '\000' '\037'` (shell
+/// variables cannot hold NULs; 04 App. A, E11), in the byte order of the
+/// pids, which is the glob's (03 §7.2). The `meta` block's
+/// `cmdline_cap=` says the cap applied; a `head` without `-c`, which
+/// `HW_HC` caches for the sampler's life, falls back to the uncapped
+/// `head -n 1000` and leaves it out. Without head or tr the fallbacks are
 /// `ps -eo pid,ppid,user,stat,rss,args` then BusyBox `ps w`. The `==> `
 /// headers head prints and the forgery they enable are the parser's
 /// problem (03 §7.2).
@@ -944,7 +956,14 @@ c_procs() {
       if [ -n "$_s" ]; then _r=$_s; _sel=cpu_rss; fi
     fi
   fi
-  o="== meta ==${NL}total=$_n${NL}selection=$_sel$NL== rows =="
+  _ho='-n 1000'; _cap=
+  if command -v head >/dev/null 2>&1; then
+    if [ -z "$HW_HC" ]; then
+      HW_HC=n; head -c 1 </dev/null >/dev/null 2>&1 && HW_HC=y
+    fi
+    if [ "$HW_HC" = y ]; then _ho='-c 1536'; _cap="${NL}cmdline_cap=1536"; fi
+  fi
+  o="== meta ==${NL}total=$_n${NL}selection=$_sel$_cap$NL== rows =="
   _q=; _k=; _w=; _i=0; _j=0
   set -f; _ifs=$IFS; IFS=$NL
   for _l in $_r; do
@@ -958,7 +977,7 @@ c_procs() {
   IFS=$_ifs; set +f
   o="$o$NL== cmdline =="
   if command -v head >/dev/null 2>&1 && command -v tr >/dev/null 2>&1; then
-    _c=$(cd /proc 2>/dev/null && hw_run head -n 1000 $_q 2>/dev/null </dev/null | tr '\000' '\037')
+    _c=$(cd /proc 2>/dev/null && hw_run head $_ho $_q 2>/dev/null </dev/null | tr '\000' '\037')
     o="$o$NL$_c"
   elif command -v ps >/dev/null 2>&1; then
     _c=$(hw_run ps -eo pid,ppid,user,stat,rss,args </dev/null 2>&1)

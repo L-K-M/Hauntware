@@ -399,6 +399,51 @@ void main() {
         );
       });
 
+      test(
+        'long command lines do not push procs past the section cap',
+        () async {
+          // Ten processes with a 120 KB argument each hold 1.2 MB of command
+          // lines, more than one section may carry (D48).
+          final long = 'x' * (120 * 1024);
+          final sleepers = [
+            for (var i = 0; i < 10; i++)
+              await Process.start('/bin/sh', [
+                '-c',
+                'sleep 30; :',
+                'klab',
+                long,
+              ]),
+          ];
+          addTearDown(() {
+            for (final p in sleepers) {
+              p.kill();
+            }
+          });
+
+          final r = await _run(_samplerCommand(path), SamplerKind.slow, [
+            Collector.procs,
+          ], Collector.procs);
+          final parsed = parseProcs(
+            utf8.decode(r.ticks[1]!.section('procs')!.payload),
+            ParseContext.standard,
+          );
+          expect(parsed.value.cmdlineByteCap, kProcsCmdlineByteCap);
+          final pids = {for (final p in sleepers) p.pid};
+          final kept = [
+            for (final p in parsed.value.processes)
+              if (pids.contains(p.pid)) p,
+          ];
+          // Above kProcsRowCap processes the sleepers may not be kept.
+          if (parsed.value.selection == ProcsSelection.all) {
+            expect(kept, hasLength(sleepers.length));
+          }
+          for (final p in kept) {
+            expect(p.argvTruncated, isTrue);
+            expect(p.argv!.join('\x1f').length, kProcsCmdlineByteCap);
+          }
+        },
+      );
+
       test('the lxcfs area keeps only fuse.lxcfs mounts over /proc', () {
         // The program's own _probe_lxcfs, pointed at a hand-written
         // mounts table so the test does not need lxcfs on the host (D50).
