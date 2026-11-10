@@ -235,7 +235,7 @@ class LogSearch extends ChangeNotifier {
   RegExp? _compile() {
     if (!_regex || _query.isEmpty) return null;
     try {
-      return RegExp(_query, caseSensitive: _caseSensitive, unicode: true);
+      return RegExp(_query, caseSensitive: _caseSensitive);
     } on FormatException {
       return null;
     }

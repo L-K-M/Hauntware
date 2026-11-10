@@ -3741,6 +3741,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get logsPanelSearchInvalid => 'Not a valid regular expression';
 
   @override
+  String get logsPanelSearchInvalidLocal =>
+      'Not shown here: this engine cannot read the pattern, but the server may';
+
+  @override
   String get logsPanelSearchServer => 'Search the whole journal on the server';
 
   @override

@@ -167,6 +167,16 @@ void main() {
       expect(search.invalidPattern, isFalse);
     });
 
+    test('accepts an escaped literal that PCRE2 accepts too', () {
+      final (logs, search) = _logs();
+      logs.add(['a-b', 'a b']);
+      search
+        ..setRegex(true)
+        ..setQuery(r'a\-b');
+      expect(search.invalidPattern, isFalse);
+      expect(search.total, 1);
+    });
+
     test('a pattern that does not compile matches nothing and says so', () {
       final (logs, search) = _logs();
       logs.add(['a (b', 'c']);

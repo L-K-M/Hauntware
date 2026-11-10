@@ -4439,6 +4439,10 @@
   "@logsPanelSearchInvalid": {
     "description": "Error under the log search field when its text, read as a regular expression, does not compile."
   },
+  "logsPanelSearchInvalidLocal": "Not shown here: this engine cannot read the pattern, but the server may",
+  "@logsPanelSearchInvalidLocal": {
+    "description": "Error under the log search field in regular expression mode when the text does not compile locally but the journal's own PCRE2 search may still accept it, so Search on server stays available."
+  },
   "logsPanelSearchServer": "Search the whole journal on the server",
   "@logsPanelSearchServer": {
     "description": "Tooltip of the button that reads only the journal entries matching the search, matched by the server, rather than searching the entries already shown."
