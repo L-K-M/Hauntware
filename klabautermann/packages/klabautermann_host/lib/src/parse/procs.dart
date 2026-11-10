@@ -171,7 +171,13 @@ final class ProcsSnapshot {
 /// Parses a `procs` section payload; never throws (03 §6.5).
 ParseResult<ProcsSnapshot> parseProcs(String raw, ParseContext ctx) {
   final warnings = <String>[];
-  final split = splitBlocks(raw, kTimeoutAbsentMarker);
+  // The argv blocks come last and carry what any local user puts in their
+  // own command line, so a header there is argument text (03 §7.2).
+  final split = splitBlocks(
+    raw,
+    kTimeoutAbsentMarker,
+    verbatimBlocks: const {'cmdline', 'ps', 'ps_w'},
+  );
   if (split.timeoutAbsent) {
     warnings.add('procs ran without a timeout guard');
   }
@@ -315,9 +321,9 @@ _Row? _parseRow(String line, List<String> warnings) {
 }
 
 /// The `meta` block: the `total=` count and the `selection=` wire name.
-/// Only the first line of each counts: the fragment writes this block
-/// first, and a command line holding a `== meta ==` line reopens it
-/// (splitBlocks) to append forged lines.
+/// Only the first line of each counts. A command line holding a
+/// `== meta ==` line cannot reopen the block, since the argv blocks are
+/// verbatim, but a repeat still warns rather than overrides.
 ({int? total, ProcsSelection? selection}) _parseMeta(
   List<String>? lines,
   List<String> warnings,
