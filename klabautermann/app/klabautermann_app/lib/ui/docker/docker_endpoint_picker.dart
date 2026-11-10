@@ -321,35 +321,37 @@ class _PathDialogState extends State<_PathDialog> {
     final l10n = AppLocalizations.of(context);
     return AlertDialog(
       title: Text(widget.title),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 16,
-        children: [
-          Text(widget.body),
-          TextField(
-            controller: _path,
-            autofocus: true,
-            autocorrect: false,
-            enableSuggestions: false,
-            keyboardType: TextInputType.url,
-            decoration: InputDecoration(
-              labelText: widget.field,
-              hintText: widget.hint,
-              errorText: switch (_problem) {
-                DockerSocketPathProblem.notAbsolute =>
-                  l10n.dockerSocketPathNotAbsolute,
-                DockerSocketPathProblem.unsafeCharacter =>
-                  l10n.dockerSocketPathUnsafe,
-                null => null,
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 16,
+          children: [
+            Text(widget.body),
+            TextField(
+              controller: _path,
+              autofocus: true,
+              autocorrect: false,
+              enableSuggestions: false,
+              keyboardType: TextInputType.url,
+              decoration: InputDecoration(
+                labelText: widget.field,
+                hintText: widget.hint,
+                errorText: switch (_problem) {
+                  DockerSocketPathProblem.notAbsolute =>
+                    l10n.dockerSocketPathNotAbsolute,
+                  DockerSocketPathProblem.unsafeCharacter =>
+                    l10n.dockerSocketPathUnsafe,
+                  null => null,
+                },
+              ),
+              onChanged: (_) {
+                if (_problem != null) setState(() => _problem = null);
               },
+              onSubmitted: (_) => _submit(),
             ),
-            onChanged: (_) {
-              if (_problem != null) setState(() => _problem = null);
-            },
-            onSubmitted: (_) => _submit(),
-          ),
-        ],
+          ],
+        ),
       ),
       actions: [
         TextButton(
