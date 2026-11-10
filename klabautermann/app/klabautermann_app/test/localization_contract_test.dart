@@ -454,6 +454,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'No pin publication settings'",
     "'No app lock settings'",
     "'No admin memory settings'",
+    "'No recovery settings'",
     "'levels'",
     "'not valid bands'",
   },
@@ -1027,6 +1028,47 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // the probe's answer; the System tab shows ARB text for it
   // (systemVirtualizationNone).
   'lib/ui/system_view.dart': {"'none'"},
+  // CRED-05's Recovery section: widget keys, the summary's separator and
+  // the code's first-group split; plumbing, never rendered copy.
+  'lib/ui/settings/recovery_settings.dart': {
+    "', '",
+    "'-'",
+    "'recovery.replace.confirm'",
+    "'recovery.setUp'",
+    "'recovery.export'",
+    "'recovery.restore'",
+    "'recovery.message'",
+    "'recovery.code'",
+    "'recovery.code.confirm'",
+    "'recovery.code.cancel'",
+    "'recovery.code.done'",
+    "'recovery.restore.code'",
+    "'recovery.restore.choose'",
+  },
+  // CRED-05's recovery controller: request id prefixes matched in the
+  // engine's answers, and diagnostics that never render.
+  'lib/controllers/recovery_controller.dart': {
+    r"'RecoveryException: ${failure.name}'",
+    r"'$prefix-${_nextRequestId++}'",
+    "'recovery-new-code'",
+    "'recovery-save-code'",
+    "'recovery-export'",
+    "'recovery-restore'",
+    "'recovery-status'",
+    "'request'",
+    "'not a recovery request'",
+  },
+  // CRED-05's export file service: the file name's parts, the MIME type,
+  // the picker's extension filter and the file scheme, all machine data.
+  'lib/services/recovery_files.dart': {
+    r"'RecoveryFileException: ${failure.name}'",
+    "'0'",
+    r"'klabautermann-secrets-${now.year}-${two(now.month)}-'",
+    r"'${two(now.day)}.json'",
+    "'application/json'",
+    "'file'",
+    "'json'",
+  },
 };
 
 const _config = L10nContractConfig(

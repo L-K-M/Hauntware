@@ -100,6 +100,11 @@ export 'src/store/file_endpoint_pin_store.dart'
         FileEndpointPinStore,
         endpointPinsFileName;
 // The file primitives behind the stores' default writer, which
-// Poltergeist's local-file safety and transfer journal share.
+// Poltergeist's local-file safety and transfer journal share. The
+// writer itself is exported too, so a host that writes a secret file
+// (CRED-05's desktop export) applies the same owner-only privacy
+// instead of inventing its own writer.
+export 'src/catalog/atomic_file_writer.dart'
+    show AtomicFilePrivacy, AtomicFileWriter;
 export 'src/store/file_permissions.dart' show restrictLocalPathPermissions;
 export 'src/store/local_directory_sync.dart' show syncLocalDirectory;

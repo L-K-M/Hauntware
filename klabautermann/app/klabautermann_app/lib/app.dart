@@ -29,6 +29,7 @@ import 'controllers/cadence_controller.dart';
 import 'controllers/pinned_services.dart';
 import 'controllers/fleet_density.dart';
 import 'controllers/pin_publication_controller.dart';
+import 'controllers/recovery_controller.dart' show RecoverySettings;
 import 'controllers/safety_controller.dart';
 import 'controllers/appearance_controller.dart';
 import 'controllers/coverage_controller.dart';
@@ -117,6 +118,7 @@ class KlabautermannApp extends StatelessWidget {
     this.appLock,
     this.syncSecrets,
     this.pinPublication,
+    this.recovery,
     this.admin,
     this.alerts,
     this.alertRules,
@@ -209,6 +211,11 @@ class KlabautermannApp extends StatelessWidget {
   /// The host key sharing assertion (M5 plan M07), one engine run's like
   /// [sync]; null in tests that leave it out.
   final PinPublicationController? pinPublication;
+
+  /// CRED-05's recovery code section in Settings > Sync, one engine run's
+  /// like [fleet]; null in tests that leave it out, where the section is
+  /// absent.
+  final RecoverySettings? recovery;
 
   /// Admin mode per server (03 §8.2), one engine run's like [fleet]. Null
   /// in tests that leave it out, where the header shows no admin chip.
@@ -669,6 +676,7 @@ class KlabautermannApp extends StatelessWidget {
               syncSecrets: syncSecrets,
               pinPublication: pinPublication,
               accountSize: sync?.accountSize,
+              recovery: recovery,
             ),
           },
         );

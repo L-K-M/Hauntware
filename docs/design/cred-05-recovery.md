@@ -183,3 +183,22 @@ keeps the `seance-secrets` format token, so exports restore across
 Poltergeist and Séance. The recovery service resolves the vault key
 through the app lock, and the Settings window's snapshot carries only
 the configured flag, never a code or an export.
+
+## Landed in Klabautermann (2026-11-10)
+
+Klabautermann's recovery settings are Settings → Sync → Recovery, in
+the settings route and the desktop Settings window alike. The engine
+runs the CRED-05 operations inside `EngineVault.exclusive` over its one
+vault, with the master key read through the existing app-lock-guarded
+keystore responder; a locked or unavailable keystore refuses without
+minting a key. The app's `RecoveryController` correlates the requests by
+`requestId`, bounds each wait, and reports the fixed failure kinds. The
+section shows the configured state, offers the code once with a
+first-group retype check, asks before replacing an existing code, and
+restores with a keep-or-replace choice and a summary. The export keeps
+the `seance-secrets` format token, so exports restore across the apps.
+The Settings window's snapshot carries only the configured flag, never a
+code or an export. Automated tests cover the controller, the file
+service's cancellation and bounds, the dialogs and the settings-window
+link; real-device SAF, biometric and lock-screen validation remains
+manual.

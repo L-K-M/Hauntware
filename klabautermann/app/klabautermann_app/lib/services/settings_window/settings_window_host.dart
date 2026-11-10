@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show VaultRestorePolicy;
 
 import '../../controllers/account_size.dart';
 import '../../controllers/admin_memory.dart';
@@ -20,6 +22,7 @@ import '../../controllers/appearance_controller.dart';
 import '../../controllers/device_name.dart';
 import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart';
+import '../../controllers/recovery_controller.dart';
 import '../../controllers/safety_controller.dart';
 import '../../controllers/sync_secrets_controller.dart';
 import '../../controllers/threshold_controller.dart';
@@ -48,6 +51,7 @@ SettingsWindowHost? settingsWindowHostFor(
   AdminMemorySettings? adminMemory,
   LogDisplaySettings? logDisplay,
   TimeDisplaySettings? timeDisplay,
+  RecoverySettings? recovery,
 }) => switch (platform) {
   TargetPlatform.macOS ||
   TargetPlatform.linux ||
@@ -68,6 +72,7 @@ SettingsWindowHost? settingsWindowHostFor(
     adminMemory: adminMemory,
     logDisplay: logDisplay,
     timeDisplay: timeDisplay,
+    recovery: recovery,
   ),
   TargetPlatform.android ||
   TargetPlatform.iOS ||
@@ -102,6 +107,7 @@ final class SettingsWindowHost {
     AdminMemorySettings? adminMemory,
     LogDisplaySettings? logDisplay,
     TimeDisplaySettings? timeDisplay,
+    RecoverySettings? recovery,
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
@@ -119,7 +125,8 @@ final class SettingsWindowHost {
        _cadenceCaps = cadenceCaps,
        _adminMemory = adminMemory,
        _logDisplay = logDisplay,
-       _timeDisplay = timeDisplay {
+       _timeDisplay = timeDisplay,
+       _recovery = recovery {
     _engine = GhostSettingsWindowHost(
       control: control,
       link: link,
@@ -143,6 +150,7 @@ final class SettingsWindowHost {
           ?adminMemory,
           ?logDisplay,
           ?timeDisplay,
+          ?recovery,
         ],
       ),
       encodeError: encodeLinkError,
@@ -166,6 +174,7 @@ final class SettingsWindowHost {
   final AdminMemorySettings? _adminMemory;
   final LogDisplaySettings? _logDisplay;
   final TimeDisplaySettings? _timeDisplay;
+  final RecoverySettings? _recovery;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
 
   @visibleForTesting
@@ -225,7 +234,16 @@ final class SettingsWindowHost {
       final lock? => encodeAppLock(lock),
       null => null,
     },
+    // Only the configured flag crosses. The code, an export's bytes and
+    // the vault key stay in this isolate.
+    SettingsLinkKey.recovery.name: switch (_recovery) {
+      final recovery? => {SettingsLinkKey.configured.name: recovery.configured},
+      null => null,
+    },
   };
+
+  RecoverySettings _requireRecovery() =>
+      _recovery ?? (throw StateError('No recovery settings'));
 
   Future<Object?> _handleCall(String name, Object? argument) async {
     // A locked app changes nothing from the settings window, which covers
@@ -301,6 +319,21 @@ final class SettingsWindowHost {
         if (appLock == null) throw StateError('No app lock settings');
         // The device authentication runs here, in the app's window.
         return (await appLock.setEnabled(argument! as bool)).name;
+      case SettingsLinkMethod.newRecoveryCode:
+        return _requireRecovery().newCode();
+      case SettingsLinkMethod.saveRecoveryCode:
+        await _requireRecovery().saveCode(argument! as String);
+      case SettingsLinkMethod.exportSecrets:
+        return _requireRecovery().exportSecrets();
+      case SettingsLinkMethod.restoreSecrets:
+        final call = (argument! as Map).cast<String, Object?>();
+        final summary = await _requireRecovery().restoreSecrets(
+          code: call[SettingsLinkKey.code.name]! as String,
+          policy: VaultRestorePolicy.values.byName(
+            call[SettingsLinkKey.policy.name]! as String,
+          ),
+        );
+        return summary?.toJson();
       case SettingsLinkMethod.setServerSafety:
         final change = (argument! as Map).cast<String, Object?>();
         await _safety.setServerSafety(

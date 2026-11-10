@@ -2558,6 +2558,18 @@ is on main:
   largest first, as this device last pulled them. It appears once a sync
   operation has succeeded in this run. Tested in the core records, the
   Sync tab and the settings window.
+- Recovery (CRED-05): Settings > Sync > Recovery shows whether this
+  device has a recovery code, offers one once with a first-group retype
+  check, asks before replacing an existing code, and writes an encrypted
+  export that restores with a keep-or-replace choice and a summary of
+  what it added, replaced, kept and could not read. The engine runs the
+  operations inside its vault's exclusive queue over the
+  app-lock-guarded keystore; a locked or unavailable key refuses without
+  minting one. The desktop settings window carries only the configured
+  flag in its snapshot, and the export keeps the `seance-secrets` wire
+  format. Tested in the engine recovery, recovery controller, recovery
+  settings, file service and settings window tests. Real-device SAF,
+  biometric and lock-screen validation stays manual.
 - Share sheet (M6 N67c, PLT-08): the Overview's "Share status…" exports
   plain lines from the server's last readings, without its name and host
   name unless the user turns on "Name the server", and a container's Raw

@@ -37,6 +37,7 @@ import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
+import 'controllers/recovery_controller.dart';
 import 'controllers/server_editor_controller.dart';
 import 'controllers/server_prefs_controller.dart';
 import 'controllers/stack_folders.dart';
@@ -53,6 +54,7 @@ import 'services/engine_keystore.dart';
 import 'services/hand_off.dart';
 import 'services/instance_guard.dart';
 import 'services/macos_titlebar.dart';
+import 'services/recovery_files.dart';
 import 'services/settings_window/settings_window_host.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/ssh_config_source.dart';
@@ -518,6 +520,14 @@ Future<void> main(List<String> args) async {
     save: settings.setSyncSecrets,
   );
 
+  // CRED-05's recovery settings over the engine's vault, with the file
+  // panels beside it. The status reloads when the app lock releases a
+  // keystore that was locked at launch.
+  final recovery = RecoveryController(engine, PlatformRecoveryFiles());
+  appLock.addListener(() {
+    if (!appLock.locked) unawaited(recovery.refresh());
+  });
+
   // SAF-08's notice heads the Docker tab until dismissed on this device,
   // which settings.json keeps (03 §8.4).
   final dockerNotice = DockerNoticeController(
@@ -555,6 +565,7 @@ Future<void> main(List<String> args) async {
     adminMemory: adminMemory,
     logDisplay: logDisplay,
     timeDisplay: timeDisplay,
+    recovery: recovery,
   );
 
   runApp(
@@ -577,6 +588,7 @@ Future<void> main(List<String> args) async {
       appLock: appLock,
       syncSecrets: syncSecrets,
       pinPublication: pinPublication,
+      recovery: recovery,
       admin: admin,
       alerts: alerts,
       alertRules: alertRules,

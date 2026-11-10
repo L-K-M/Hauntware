@@ -13841,5 +13841,223 @@
   "appsForwardStart": "Forward",
   "@appsForwardStart": {
     "description": "Forward dialog button that starts the forward."
+  },
+  "recoveryTitle": "Recovery",
+  "@recoveryTitle": {
+    "description": "Settings > Sync: the recovery code section's title."
+  },
+  "recoveryDescription": "A recovery code opens an encrypted export of this device's saved passwords and keys, on this device or another one. Klabautermann shows the code once and cannot show it again. Without it, an export cannot be opened, by you or anyone else.",
+  "@recoveryDescription": {
+    "description": "Settings > Sync > Recovery: what a recovery code is for."
+  },
+  "recoveryChecking": "Checking…",
+  "@recoveryChecking": {
+    "description": "Settings > Sync > Recovery: the configured state is still loading."
+  },
+  "recoveryConfigured": "This device has a recovery code.",
+  "@recoveryConfigured": {
+    "description": "Settings > Sync > Recovery: this device has a stored recovery code."
+  },
+  "recoveryNotConfigured": "This device has no recovery code yet.",
+  "@recoveryNotConfigured": {
+    "description": "Settings > Sync > Recovery: this device has no stored recovery code."
+  },
+  "recoverySetUp": "Set up recovery…",
+  "@recoverySetUp": {
+    "description": "Settings > Sync > Recovery: the button that creates a first recovery code."
+  },
+  "recoveryReplace": "Replace recovery code…",
+  "@recoveryReplace": {
+    "description": "Settings > Sync > Recovery: the button that replaces an existing recovery code."
+  },
+  "recoveryExport": "Export secrets…",
+  "@recoveryExport": {
+    "description": "Settings > Sync > Recovery: the button that writes the encrypted export."
+  },
+  "recoveryRestore": "Restore secrets…",
+  "@recoveryRestore": {
+    "description": "Settings > Sync > Recovery: the button that opens an export and merges it."
+  },
+  "recoveryReplaceTitle": "Replace the recovery code?",
+  "@recoveryReplaceTitle": {
+    "description": "Settings > Sync > Recovery: the replace-code confirmation's title."
+  },
+  "recoveryReplaceBody": "Exports made with the current code still open with it. New exports open only with the new one.",
+  "@recoveryReplaceBody": {
+    "description": "Settings > Sync > Recovery: the replace-code confirmation's consequence."
+  },
+  "recoveryReplaceConfirm": "Replace",
+  "@recoveryReplaceConfirm": {
+    "description": "Settings > Sync > Recovery: the replace-code confirmation's confirm button."
+  },
+  "recoveryCancel": "Cancel",
+  "@recoveryCancel": {
+    "description": "Settings > Sync > Recovery: the shared cancel button."
+  },
+  "recoveryExportDone": "Exported to {destination}. It opens only with this device's recovery code.",
+  "@recoveryExportDone": {
+    "description": "Settings > Sync > Recovery: a successful export names where it was written.",
+    "placeholders": {
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
+  "recoveryRestoreAdded": "{count} added",
+  "@recoveryRestoreAdded": {
+    "description": "Settings > Sync > Recovery: a restore summary's added count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recoveryRestoreReplaced": "{count} replaced",
+  "@recoveryRestoreReplaced": {
+    "description": "Settings > Sync > Recovery: a restore summary's replaced count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recoveryRestoreKept": "{count} kept",
+  "@recoveryRestoreKept": {
+    "description": "Settings > Sync > Recovery: a restore summary's kept count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recoveryRestoreUnreadable": "{count} could not be read",
+  "@recoveryRestoreUnreadable": {
+    "description": "Settings > Sync > Recovery: a restore summary's unreadable count, shown only when nonzero.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recoveryRestoreSummary": "Restored: {parts}. A newer copy synced from another device still replaces a restored one.",
+  "@recoveryRestoreSummary": {
+    "description": "Settings > Sync > Recovery: a successful restore's summary sentence.",
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
+  "recoveryCodeTitle": "Your recovery code",
+  "@recoveryCodeTitle": {
+    "description": "Settings > Sync > Recovery: the show-once code dialog's title."
+  },
+  "recoveryCodeBody": "Write this code down and keep it somewhere safe, away from this device. It is shown only now. With it, an export of this device's secrets opens anywhere; without it, nowhere. Nothing changes until you confirm.",
+  "@recoveryCodeBody": {
+    "description": "Settings > Sync > Recovery: the show-once code dialog's warning."
+  },
+  "recoveryCodeCopy": "Copy code",
+  "@recoveryCodeCopy": {
+    "description": "Settings > Sync > Recovery: the copy button before it is used."
+  },
+  "recoveryCodeCopied": "Copied",
+  "@recoveryCodeCopied": {
+    "description": "Settings > Sync > Recovery: the copy button after it is used."
+  },
+  "recoveryCodeConfirmLabel": "Type the code's first four characters",
+  "@recoveryCodeConfirmLabel": {
+    "description": "Settings > Sync > Recovery: the confirmation field's label."
+  },
+  "recoveryCodeCancel": "Cancel",
+  "@recoveryCodeCancel": {
+    "description": "Settings > Sync > Recovery: the show-once code dialog's cancel button."
+  },
+  "recoveryCodeDone": "I saved it",
+  "@recoveryCodeDone": {
+    "description": "Settings > Sync > Recovery: the show-once code dialog's confirm button."
+  },
+  "recoveryRestoreTitle": "Restore secrets",
+  "@recoveryRestoreTitle": {
+    "description": "Settings > Sync > Recovery: the restore dialog's title."
+  },
+  "recoveryRestoreBody": "Enter the recovery code of the device the export came from, then choose the export file.",
+  "@recoveryRestoreBody": {
+    "description": "Settings > Sync > Recovery: the restore dialog's instructions."
+  },
+  "recoveryRestoreCodeLabel": "Recovery code",
+  "@recoveryRestoreCodeLabel": {
+    "description": "Settings > Sync > Recovery: the restore dialog's code field label."
+  },
+  "recoveryRestoreConflictLabel": "Credentials this device already has:",
+  "@recoveryRestoreConflictLabel": {
+    "description": "Settings > Sync > Recovery: the restore dialog's conflict-policy prompt."
+  },
+  "recoveryRestoreKeep": "Keep this device's",
+  "@recoveryRestoreKeep": {
+    "description": "Settings > Sync > Recovery: the restore dialog's keep-existing choice."
+  },
+  "recoveryRestoreReplace": "Use the export's",
+  "@recoveryRestoreReplace": {
+    "description": "Settings > Sync > Recovery: the restore dialog's replace-existing choice."
+  },
+  "recoveryRestoreChoose": "Choose export…",
+  "@recoveryRestoreChoose": {
+    "description": "Settings > Sync > Recovery: the restore dialog's confirm button."
+  },
+  "recoveryDirectoryShared": "Klabautermann's support directory is in use by another window. Close it and try again.",
+  "@recoveryDirectoryShared": {
+    "description": "Settings > Sync > Recovery: the vault could not be opened because another process holds the support directory."
+  },
+  "recoveryKeystoreUnavailable": "The system keystore is locked or unavailable, so the vault could not be opened. Unlock Klabautermann and try again.",
+  "@recoveryKeystoreUnavailable": {
+    "description": "Settings > Sync > Recovery: the OS keystore holds no vault key or could not answer."
+  },
+  "recoveryNotSetUp": "This device has no recovery code. Set one up before exporting.",
+  "@recoveryNotSetUp": {
+    "description": "Settings > Sync > Recovery: an export was asked for without a stored code."
+  },
+  "recoveryDamaged": "This device's recovery code can no longer open its vault. Replace it to export again.",
+  "@recoveryDamaged": {
+    "description": "Settings > Sync > Recovery: the stored recovery entry does not open under this vault's key."
+  },
+  "recoveryInvalidCode": "That is not a recovery code. Check it for typos.",
+  "@recoveryInvalidCode": {
+    "description": "Settings > Sync > Recovery: the typed code is not a well-formed recovery code."
+  },
+  "recoveryWrongCode": "That recovery code does not open this export.",
+  "@recoveryWrongCode": {
+    "description": "Settings > Sync > Recovery: a well-formed code that does not match the picked export."
+  },
+  "recoveryTampered": "That export was changed after it was made, so nothing was restored.",
+  "@recoveryTampered": {
+    "description": "Settings > Sync > Recovery: the picked export fails its integrity check."
+  },
+  "recoveryMalformed": "That file is not a Klabautermann secrets export.",
+  "@recoveryMalformed": {
+    "description": "Settings > Sync > Recovery: the picked file is not a secrets export or is damaged."
+  },
+  "recoveryUnsupportedVersion": "That export was written by a newer version of Klabautermann.",
+  "@recoveryUnsupportedVersion": {
+    "description": "Settings > Sync > Recovery: a picked export uses a newer wire format than this build reads."
+  },
+  "recoveryTooLarge": "That export is too large to read.",
+  "@recoveryTooLarge": {
+    "description": "Settings > Sync > Recovery: the picked export exceeds the size limit."
+  },
+  "recoveryFailed": "The recovery operation could not be completed.",
+  "@recoveryFailed": {
+    "description": "Settings > Sync > Recovery: a generic failure with no more specific kind."
+  },
+  "recoveryFileTooLarge": "That file is too large to be a Klabautermann secrets export.",
+  "@recoveryFileTooLarge": {
+    "description": "Settings > Sync > Recovery: a picked file exceeds the export size limit before it is loaded."
+  },
+  "recoveryFileUnreadable": "That file could not be read. Choose the export again.",
+  "@recoveryFileUnreadable": {
+    "description": "Settings > Sync > Recovery: the picked export could not be read."
+  },
+  "recoveryFileSaveFailed": "The export could not be saved there. Choose another location.",
+  "@recoveryFileSaveFailed": {
+    "description": "Settings > Sync > Recovery: the chosen export destination could not be written."
   }
 }

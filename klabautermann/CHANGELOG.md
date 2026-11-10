@@ -322,3 +322,8 @@
   in the server's zone, and your sync account's size.
 - Copy the commands an action runs, run Séance's synced snippets on a
   server, and export a redacted diagnostic bundle.
+- Settings → Sync → Recovery: a recovery code for this device's saved
+  passwords and keys, shown once and kept in the vault; an encrypted
+  export you can restore on this or another device, with a keep-or-replace
+  choice for credentials already here. The export keeps Séance's
+  `seance-secrets` wire format, so exports restore across the apps.

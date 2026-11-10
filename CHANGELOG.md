@@ -43,6 +43,12 @@
   another device; the export opens only with the code. The export keeps
   Séance's `seance-secrets` wire format, so an export made by either app
   opens in the other. Saving a first credential offers the code once.
+- Klabautermann can back up its saved passwords and keys with a recovery
+  code. Settings → Sync → Recovery shows the code once, keeps it in the
+  device's vault, and writes an encrypted export you can restore on
+  another device; the export opens only with the code. The export keeps
+  Séance's `seance-secrets` wire format, so an export made by either app
+  opens in the other.
 - The font catalog now has 23 families, including Cascadia Code, Victor
   Mono, Lilex, 0xProto, all five Monaspace faces, Ioskeley Mono, Nordwand
   Mono and 3270. A searchable picker previews code, ambiguous characters

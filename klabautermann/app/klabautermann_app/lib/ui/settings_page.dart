@@ -19,6 +19,7 @@ import '../controllers/log_display.dart';
 import '../controllers/monitor_set.dart';
 import '../controllers/pin_publication_controller.dart';
 import '../controllers/safety_controller.dart';
+import '../controllers/recovery_controller.dart';
 import '../controllers/sync_secrets_controller.dart';
 import '../controllers/threshold_controller.dart';
 import '../controllers/time_display.dart';
@@ -29,6 +30,7 @@ import 'app_lock_settings.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'appearance_tab.dart';
 import 'monitor_set_feedback.dart';
+import 'settings/recovery_settings.dart';
 import 'server_editing.dart';
 import 'thresholds_tab.dart';
 
@@ -37,9 +39,9 @@ import 'thresholds_tab.dart';
 /// Q6) and the about row (M16),
 /// Appearance, which already drives the app's appearance, Servers, which
 /// holds FL-21's monitor set (03 §4.3 step 4), Safety (M4 plan M4), and
-/// Sync, which holds the "sync passwords" switch (SYN-02). A
-/// route on phones (and wherever the desktop window cannot open); on
-/// desktop the same page fills the settings window
+/// Sync, which holds the "sync passwords" switch (SYN-02) and CRED-05's
+/// Recovery section. A route on phones (and wherever the desktop window
+/// cannot open); on desktop the same page fills the settings window
 /// (`settings_window_app.dart`).
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -60,6 +62,7 @@ class SettingsPage extends StatefulWidget {
     this.syncSecrets,
     this.pinPublication,
     this.accountSize,
+    this.recovery,
     this.initialTab = SettingsTab.general,
     this.tabRequests,
   });
@@ -111,6 +114,10 @@ class SettingsPage extends StatefulWidget {
   /// The sync account's size (SYN-09) in the Sync tab; null in tests that
   /// leave it out, and its value null until a sync operation succeeded.
   final ValueListenable<AccountSize?>? accountSize;
+
+  /// CRED-05's recovery code section in the Sync tab; null in tests that
+  /// leave it out, where the tab shows no recovery.
+  final RecoverySettings? recovery;
 
   /// The running build's version for the about row; null when the
   /// platform could not tell (`readAppVersion`).
@@ -203,6 +210,7 @@ class _SettingsPageState extends State<SettingsPage>
                 syncSecrets: widget.syncSecrets!,
                 pinPublication: widget.pinPublication,
                 accountSize: widget.accountSize,
+                recovery: widget.recovery,
               ),
               SettingsTab.safety when widget.safety != null => SafetyTab(
                 safety: widget.safety!,
@@ -675,6 +683,7 @@ class SyncTab extends StatelessWidget {
     required this.syncSecrets,
     this.pinPublication,
     this.accountSize,
+    this.recovery,
   });
 
   final SyncSecretsSettings syncSecrets;
@@ -682,6 +691,10 @@ class SyncTab extends StatelessWidget {
 
   /// As [SettingsPage.accountSize].
   final ValueListenable<AccountSize?>? accountSize;
+
+  /// CRED-05's Recovery section, shown whether or not a sync account is
+  /// enrolled; null in tests that leave it out.
+  final RecoverySettings? recovery;
 
   /// As [_set], for the host key sharing switch.
   Future<void> _assert(BuildContext context, bool asserted) async {
@@ -720,8 +733,14 @@ class SyncTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final pins = pinPublication;
+    final recovery = this.recovery;
     return ListenableBuilder(
-      listenable: Listenable.merge([syncSecrets, ?pins, ?accountSize]),
+      listenable: Listenable.merge([
+        syncSecrets,
+        ?pins,
+        ?accountSize,
+        ?recovery,
+      ]),
       builder: (context, _) => ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -764,6 +783,10 @@ class SyncTab extends StatelessWidget {
           if (accountSize?.value case final size?) ...[
             const SizedBox(height: 24),
             _AccountSizeSection(size: size),
+          ],
+          if (recovery case final recovery?) ...[
+            const SizedBox(height: 24),
+            RecoverySection(model: recovery),
           ],
         ],
       ),

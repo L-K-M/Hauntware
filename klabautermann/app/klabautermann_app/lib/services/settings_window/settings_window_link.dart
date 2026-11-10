@@ -11,6 +11,8 @@
 // the quit question; what is here is Klabautermann's own.
 import 'package:flutter/services.dart';
 import 'package:ghost_theme/ghost_theme.dart';
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show VaultRecoveryFailure;
 
 import '../../controllers/account_size.dart';
 import '../../controllers/admin_memory.dart' show AdminMemoryNotSavedException;
@@ -32,9 +34,12 @@ import '../../controllers/appearance_controller.dart'
 import '../../controllers/device_name.dart' show DeviceNameNotSavedException;
 import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart' show PinPublication;
+import '../../controllers/recovery_controller.dart' show RecoveryException;
 import '../../controllers/safety_controller.dart' show SafetyNotSavedException;
 import '../../controllers/sync_secrets_controller.dart'
     show SyncSecretsNotSavedException;
+import '../../services/recovery_files.dart'
+    show RecoveryFileException, RecoveryFileFailure;
 import '../../theme/app_theme.dart';
 
 /// On the app's engine only: `open` in, `closed` out.
@@ -131,6 +136,15 @@ enum SettingsLinkMethod {
   /// the answer an [AppLockChange] name. The device authentication it
   /// needs runs in the app's window.
   setAppLock,
+
+  /// CRED-05's Recovery actions. The code crosses in memory only, to be
+  /// shown once and kept in the app's vault; the export file is read and
+  /// written in the app's isolate, where the file panels and the vault
+  /// key live. The snapshot carries only the configured flag.
+  newRecoveryCode,
+  saveRecoveryCode,
+  exportSecrets,
+  restoreSecrets,
 }
 
 /// The keys of every JSON object on the link, spelled once for both sides.
@@ -196,6 +210,16 @@ enum SettingsLinkKey {
   enabled,
   support,
   locked,
+
+  /// CRED-05's Recovery section, an object of [configured], or null when
+  /// the app has no recovery service. No code, export or secret crosses.
+  recovery,
+  configured,
+
+  /// A recovery action's code, in memory only, and the restore policy's
+  /// name. Never part of a snapshot.
+  code,
+  policy,
 }
 
 /// The palette's stored form, bound to Klabautermann's style.
@@ -320,6 +344,15 @@ enum SettingsLinkError {
   /// [ThresholdsNotSavedException].
   thresholdsNotSaved,
 
+  /// As [notSaved], for a recovery action: the window rebuilds the
+  /// [RecoveryException] from the fixed failure name. The message is the
+  /// name, never diagnostic text.
+  recoveryFailed,
+
+  /// As [recoveryFailed], for a recovery export file: the window rebuilds
+  /// the [RecoveryFileException] from the fixed file failure name.
+  recoveryFileFailed,
+
   /// Anything else: the change did not happen.
   failed,
 }
@@ -344,9 +377,15 @@ PlatformException encodeLinkError(Object error) => PlatformException(
       SettingsLinkError.syncSecretsNotSaved.name,
     DeviceNameNotSavedException() => SettingsLinkError.deviceNameNotSaved.name,
     ThresholdsNotSavedException() => SettingsLinkError.thresholdsNotSaved.name,
+    RecoveryException() => SettingsLinkError.recoveryFailed.name,
+    RecoveryFileException() => SettingsLinkError.recoveryFileFailed.name,
     _ => SettingsLinkError.failed.name,
   },
-  message: '$error',
+  message: switch (error) {
+    RecoveryException(:final failure) => failure.name,
+    RecoveryFileException(:final failure) => failure.name,
+    _ => '$error',
+  },
 );
 
 /// [display] for the link: its text size and its [LogWrap] name.
@@ -448,6 +487,14 @@ Exception decodeLinkError(PlatformException error) {
     ),
     SettingsLinkError.thresholdsNotSaved => ThresholdsNotSavedException(
       message,
+    ),
+    SettingsLinkError.recoveryFailed => RecoveryException(
+      VaultRecoveryFailure.values.asNameMap()[message] ??
+          VaultRecoveryFailure.failed,
+    ),
+    SettingsLinkError.recoveryFileFailed => RecoveryFileException(
+      RecoveryFileFailure.values.asNameMap()[message] ??
+          RecoveryFileFailure.unreadable,
     ),
     SettingsLinkError.failed || null => SettingsLinkException(message),
   };
