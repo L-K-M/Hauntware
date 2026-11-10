@@ -1,5 +1,4 @@
 import 'dart:collection';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'api_version.dart';
@@ -160,28 +159,6 @@ final class LogLine {
   final String text;
 }
 
-/// Splits demultiplexed frames into lines (03 §5.6): UTF-8 decoded
-/// incrementally so multibyte characters survive frame splits, `\r\n`
-/// endings normalized, lines hard split at [maxLineChars].
-Stream<LogLine> splitLogLines(
-  Stream<StdcopyFrame> frames, {
-  int maxLineChars = defaultMaxLogLineChars,
-}) async* {
-  final states = <StdcopyKind, _LineState>{};
-
-  await for (final frame in frames) {
-    final state = states.putIfAbsent(frame.stream, _LineState.new);
-    for (final line in state.feed(frame.bytes, maxLineChars)) {
-      yield LogLine(frame.stream, line);
-    }
-  }
-  for (final e in states.entries) {
-    for (final line in e.value.flush()) {
-      yield LogLine(e.key, line);
-    }
-  }
-}
-
 /// The bounded ring behind a log view (03 §5.6): when the consumer falls
 /// behind, the oldest lines drop and [dropped] reports "dropped N lines".
 /// Bounded by line count and by characters.
@@ -226,68 +203,5 @@ final class BoundedLogRing {
   void clear() {
     _lines.clear();
     _chars = 0;
-  }
-}
-
-/// Per-stream decode and split state: an incremental UTF-8 sink plus the
-/// pending partial line.
-final class _LineState {
-  _LineState() {
-    // Malformed bytes are replaced, matching byteStreamToLines: one bad
-    // sequence must not kill a whole log stream. `fromStringSink` forwards
-    // each decoded chunk immediately; `withCallback` buffers until close
-    // and would defeat incremental line splitting.
-    _sink = const Utf8Decoder(
-      allowMalformed: true,
-    ).startChunkedConversion(StringConversionSink.fromStringSink(_pending));
-  }
-
-  late final ByteConversionSink _sink;
-  final StringBuffer _pending = StringBuffer();
-
-  Iterable<String> feed(Uint8List bytes, int maxLineChars) sync* {
-    _sink.add(bytes);
-    yield* _drain(maxLineChars);
-  }
-
-  Iterable<String> flush() sync* {
-    _sink.close();
-    if (_pending.isNotEmpty) {
-      yield _take(_pending.length);
-    }
-  }
-
-  Iterable<String> _drain(int maxLineChars) sync* {
-    while (true) {
-      final text = _pending.toString();
-      final nl = text.indexOf('\n');
-      if (nl < 0) {
-        if (text.length >= maxLineChars) {
-          // Hard split keeps memory bounded on overlong lines.
-          yield _take(maxLineChars);
-          continue;
-        }
-        return;
-      }
-      if (nl > maxLineChars) {
-        // Same hard split; the \n stays queued.
-        yield _take(maxLineChars);
-        continue;
-      }
-      final line = text.substring(
-        0,
-        nl > 0 && text[nl - 1] == '\r' ? nl - 1 : nl,
-      );
-      _take(nl + 1);
-      yield line;
-    }
-  }
-
-  String _take(int n) {
-    final s = _pending.toString();
-    _pending
-      ..clear()
-      ..write(s.substring(n));
-    return s.substring(0, n);
   }
 }
