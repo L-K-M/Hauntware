@@ -220,7 +220,8 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
           !result.hasUnsavedChanges &&
           !_editor.isBusy &&
           !_editor.isDirty;
-    } catch (_) {
+    } catch (error) {
+      if (mounted) showTopToastIn(context, message: error.toString());
       return false;
     }
   }

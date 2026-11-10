@@ -436,6 +436,7 @@ void main() {
 
     expect(await decision, isFalse);
     expect(settings.events, ['yield', 'restore']);
+    expect(find.textContaining('full'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
