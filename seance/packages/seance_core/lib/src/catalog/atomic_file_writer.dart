@@ -126,23 +126,28 @@ final class AtomicFileWriter {
     }
   }
 
-  Future<File> _resolveTarget(File file) async {
+  Future<File> _resolveTarget(File file, [Set<String>? links]) async {
     var current = file.absolute;
-    final visited = <String>{};
+    final visited = links ?? <String>{};
     const maxLinkDepth = 40;
-    for (var depth = 0; depth < maxLinkDepth; depth++) {
+    for (var depth = 0; depth <= maxLinkDepth; depth++) {
       final type = await FileSystemEntity.type(
         current.path,
         followLinks: false,
       );
       if (type == FileSystemEntityType.link) {
-        if (!visited.add(_queueKey(current.path))) {
+        final parent = await current.parent.resolveSymbolicLinks();
+        final linkPath = _joinPath(parent, _fileName(current));
+        if (!visited.add(linkPath)) {
           throw FileSystemException('Cyclic symbolic link', file.path);
+        }
+        if (visited.length > maxLinkDepth) {
+          throw FileSystemException('Too many symbolic links', file.path);
         }
         final linkTarget = await Link(current.path).target();
         current = File(linkTarget).isAbsolute
             ? File(linkTarget)
-            : File.fromUri(current.parent.uri.resolveUri(Uri.file(linkTarget)));
+            : File(_joinPath(current.parent.path, linkTarget));
         continue;
       }
       if (type != FileSystemEntityType.notFound) {
@@ -154,13 +159,29 @@ final class AtomicFileWriter {
       if (current.parent.path == current.path) {
         throw FileSystemException('Cannot resolve filesystem root', file.path);
       }
-      final parent = await _resolveTarget(File(current.parent.path));
-      final name = current.uri.pathSegments.last;
-      return File.fromUri(
-        Directory(parent.path).uri.resolveUri(Uri.file(name)),
-      );
+      final parent = await _resolveTarget(File(current.parent.path), visited);
+      return File(_joinPath(parent.path, _fileName(current)));
     }
     throw FileSystemException('Too many symbolic links', file.path);
+  }
+
+  // URI resolution would collapse '..' before the filesystem can follow
+  // a preceding directory symlink, potentially selecting a different file.
+  String _joinPath(String parent, String child) {
+    final trailingSeparator =
+        parent.endsWith(Platform.pathSeparator) ||
+        (Platform.isWindows && parent.endsWith('/'));
+    return trailingSeparator
+        ? '$parent$child'
+        : '$parent${Platform.pathSeparator}$child';
+  }
+
+  String _fileName(File file) {
+    final path = file.path;
+    final separator = Platform.isWindows
+        ? max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+        : path.lastIndexOf('/');
+    return path.substring(separator + 1);
   }
 
   String _queueKey(String path) {
