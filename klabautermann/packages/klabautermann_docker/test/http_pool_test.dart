@@ -640,6 +640,43 @@ void main() {
       expect(daemon.pair.clientReadPaused, isFalse);
       await sub.cancel();
     });
+
+    test('a body paused after its release leaves the connection', () async {
+      final farm = DaemonFarm();
+      final client = DockerHttpClient(
+        farm.opener,
+        defaultTimeout: const Duration(seconds: 2),
+      );
+      const lines = '{"a":1}\n{"a":2}\n';
+      final sent = client.sendLines(getX());
+      await farm.daemons[0].gotBytes(1);
+      farm.daemons[0].feed(
+        wireResponse(
+          '200 OK',
+          headers: {'Content-Length': '${lines.length}'},
+          body: utf8Of(lines),
+        ),
+      );
+      final res = await sent;
+
+      // The whole body is read and the connection is idle again while
+      // the consumer still holds the stream; it pauses, then stops.
+      await for (final _ in res.body) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        break;
+      }
+      await pumpEventQueue();
+      expect(farm.daemons[0].pair.clientReadPaused, isFalse);
+
+      final sentBefore = farm.daemons[0].received.length;
+      final next = client.sendBuffered(getX('/y'));
+      await farm.daemons[0].gotBytes(sentBefore + 1);
+      farm.daemons[0].feed(
+        wireResponse('200 OK', headers: {'Content-Length': '0'}),
+      );
+      await next;
+      expect(farm.opens, 1);
+    });
   });
 
   group('client close', () {

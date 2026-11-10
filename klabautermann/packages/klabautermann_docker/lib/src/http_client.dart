@@ -988,7 +988,9 @@ final class _Connection {
   /// Releases the connection after a fully consumed body.
   void release({required bool keepAlive}) {
     _busy = false;
+    final ctl = _bodyCtl;
     _bodyCtl = null;
+    ctl?.detach();
     onIdle(this, keepAlive: keepAlive);
   }
 
@@ -1059,19 +1061,23 @@ final class _Connection {
 
 /// The stream a body pump feeds. Pausing it pauses the duplex
 /// subscription (03 §5.5 backpressure); cancelling it aborts the
-/// connection, whose byte position is then unknowable.
+/// connection, whose byte position is then unknowable. Once the body is
+/// fully read the connection serves other requests, so a consumer that
+/// still holds the stream no longer pauses it ([detach]).
 final class _BodyCtl {
   _BodyCtl(this._conn) {
     controller = StreamController<List<int>>(
       onPause: () {
+        if (!_attached) return;
         _paused = true;
         _conn._sub.pause();
       },
       onResume: () {
-        _paused = false;
         final c = _resumed;
         _resumed = null;
         if (c != null && !c.isCompleted) c.complete();
+        if (!_paused) return;
+        _paused = false;
         _conn._sub.resume();
       },
       onCancel: () {
@@ -1088,6 +1094,16 @@ final class _BodyCtl {
   late final StreamController<List<int>> controller;
   bool _paused = false;
   Completer<void>? _resumed;
+
+  bool get _attached => identical(_conn._bodyCtl, this);
+
+  /// The connection was released: give back a pause this consumer holds
+  /// on its subscription.
+  void detach() {
+    if (!_paused) return;
+    _paused = false;
+    _conn._sub.resume();
+  }
 
   /// Wakes an emit stalled on a pause so the connection's death path
   /// can finish (the emit loop then sees `!alive` and throws).
