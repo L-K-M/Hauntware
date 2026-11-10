@@ -2,6 +2,8 @@
 // pair's excludes, the manager that creates, edits and deletes sets, and
 // the editor both use. A set is a template: adding one copies its lines
 // into the pair, so nothing here changes a pair after the fact.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -270,6 +272,12 @@ class _EditorDialogState extends State<_EditorDialog> {
     super.dispose();
   }
 
+  /// Return in the name field saves, under the same gate as Save. The
+  /// patterns field is multiline and keeps its newline.
+  void _saveFromKeyboard() {
+    if (!_saving) unawaited(_save());
+  }
+
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
     final name = _name.text.trim();
@@ -338,6 +346,8 @@ class _EditorDialogState extends State<_EditorDialog> {
                 key: const ValueKey(SkipRuleSetKey.editorName),
                 controller: _name,
                 autofocus: true,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _saveFromKeyboard(),
                 decoration: InputDecoration(
                   labelText: l10n.syncRuleSetName,
                   errorText: _nameError,

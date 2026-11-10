@@ -346,89 +346,120 @@ Future<ExternalEditorDefinition?> _editEditorDialog(
   BuildContext context, {
   required ExternalEditorDefinition editor,
   bool adding = false,
-}) {
-  final name = TextEditingController(text: editor.displayName);
-  final extensions = TextEditingController(
-    text: editor.acceptedExtensions.join(', '),
+}) =>
+    showDialog<ExternalEditorDefinition>(
+      context: context,
+      builder: (_) => _EditEditorDialog(editor: editor, adding: adding),
+    );
+
+/// The §8 edit dialog — display name plus the comma-separated
+/// extensions field. The controllers live in the State so they outlive
+/// the route's exit animation; a showDialog continuation would dispose
+/// them while the transition still builds the fields. Validation
+/// failures render inline under the name field, and only a valid result
+/// pops.
+final class _EditEditorDialog extends StatefulWidget {
+  const _EditEditorDialog({required this.editor, required this.adding});
+
+  final ExternalEditorDefinition editor;
+  final bool adding;
+
+  @override
+  State<_EditEditorDialog> createState() => _EditEditorDialogState();
+}
+
+final class _EditEditorDialogState extends State<_EditEditorDialog> {
+  late final _name = TextEditingController(text: widget.editor.displayName);
+  late final _extensions = TextEditingController(
+    text: widget.editor.acceptedExtensions.join(', '),
   );
-  String? validationError;
-  final l10n = AppLocalizations.of(context);
-  return showDialog<ExternalEditorDefinition>(
-    context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (dialogContext, setDialogState) => AlertDialog(
-        title: Text(
-          adding ? l10n.editorAddTitle : l10n.editorEditTitle,
-        ),
-        content: SizedBox(
-          width: 520,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: name,
-                autofocus: true,
-                onChanged: (_) {
-                  if (validationError != null) {
-                    setDialogState(() => validationError = null);
-                  }
-                },
-                textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  labelText: l10n.editorNameFieldLabel,
-                  errorText: validationError,
-                ),
-              ),
-              TextField(
-                controller: extensions,
-                onChanged: (_) {
-                  if (validationError != null) {
-                    setDialogState(() => validationError = null);
-                  }
-                },
-                decoration: InputDecoration(
-                  labelText: l10n.editorExtensionsFieldLabel,
-                  hintText: l10n.editorExtensionsFieldHint,
-                  helperText: l10n.editorExtensionsFieldHelper,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                editor.launchTarget,
-                style: Theme.of(dialogContext).textTheme.bodySmall,
-              ),
-            ],
+  String? _validationError;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _extensions.dispose();
+    super.dispose();
+  }
+
+  /// The Save button and Return in the last field share one action, so
+  /// both validate identically.
+  void _save() {
+    try {
+      Navigator.of(context).pop(
+        widget.editor.copyWith(
+          displayName: validateEditorDisplayName(_name.text),
+          acceptedExtensions: normalizeEditorExtensions(
+            _extensions.text.split(','),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(l10n.editorDialogCancel),
-          ),
-          FilledButton(
-            key: const ValueKey('editors.edit.save'),
-            onPressed: () {
-              try {
-                Navigator.of(dialogContext).pop(
-                  editor.copyWith(
-                    displayName: validateEditorDisplayName(name.text),
-                    acceptedExtensions: normalizeEditorExtensions(
-                      extensions.text.split(','),
-                    ),
-                  ),
-                );
-              } on FormatException catch (error) {
-                setDialogState(() => validationError = error.message);
-              }
-            },
-            child: Text(l10n.editorDialogSave),
-          ),
-        ],
+      );
+    } on FormatException catch (error) {
+      setState(() => _validationError = error.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(
+        widget.adding ? l10n.editorAddTitle : l10n.editorEditTitle,
       ),
-    ),
-  ).whenComplete(() {
-    name.dispose();
-    extensions.dispose();
-  });
+      content: SizedBox(
+        width: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _name,
+              autofocus: true,
+              onChanged: (_) {
+                if (_validationError != null) {
+                  setState(() => _validationError = null);
+                }
+              },
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                labelText: l10n.editorNameFieldLabel,
+                errorText: _validationError,
+              ),
+            ),
+            TextField(
+              controller: _extensions,
+              onChanged: (_) {
+                if (_validationError != null) {
+                  setState(() => _validationError = null);
+                }
+              },
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _save(),
+              decoration: InputDecoration(
+                labelText: l10n.editorExtensionsFieldLabel,
+                hintText: l10n.editorExtensionsFieldHint,
+                helperText: l10n.editorExtensionsFieldHelper,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              widget.editor.launchTarget,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.editorDialogCancel),
+        ),
+        FilledButton(
+          key: const ValueKey('editors.edit.save'),
+          onPressed: _save,
+          child: Text(l10n.editorDialogSave),
+        ),
+      ],
+    );
+  }
 }

@@ -542,6 +542,105 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('Return in the name field saves like Save', (tester) async {
+      final sets = _ruleSets(const []);
+      await _pumpSheet(tester, skipRuleSets: sets);
+      await _tapKey(tester, 'sync.sheet.editRules');
+      await _tapRuleSet(tester, SkipRuleSetKey.manage);
+      await _tapRuleSet(tester, SkipRuleSetKey.managerNew);
+      await tester.enterText(
+        find.byKey(const ValueKey(SkipRuleSetKey.editorName)),
+        'Build',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey(SkipRuleSetKey.editorPatterns)),
+        '*.tmp',
+      );
+      await tester.pump();
+
+      await tester.showKeyboard(
+        find.byKey(const ValueKey(SkipRuleSetKey.editorName)),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(sets.value, [
+        SkipRuleSet(name: 'Build', patterns: ['*.tmp']),
+      ]);
+      // Only the editor closed; the manager is still open.
+      expect(find.text('New Rule Set'), findsNothing);
+      expect(find.text('Rule Sets'), findsOneWidget);
+    });
+
+    testWidgets('Return with an empty name reports inline and saves nothing', (
+      tester,
+    ) async {
+      final sets = _ruleSets(const []);
+      await _pumpSheet(tester, skipRuleSets: sets);
+      await _tapKey(tester, 'sync.sheet.editRules');
+      await _tapRuleSet(tester, SkipRuleSetKey.manage);
+      await _tapRuleSet(tester, SkipRuleSetKey.managerNew);
+      await tester.enterText(
+        find.byKey(const ValueKey(SkipRuleSetKey.editorPatterns)),
+        '*.tmp',
+      );
+      await tester.pump();
+
+      await tester.showKeyboard(
+        find.byKey(const ValueKey(SkipRuleSetKey.editorName)),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Enter a name.'), findsOneWidget);
+      expect(find.text('New Rule Set'), findsOneWidget);
+      expect(sets.value, isEmpty);
+    });
+
+    testWidgets('Return stays inert while a save is writing', (tester) async {
+      final write = Completer<List<SkipRuleSet>>();
+      var puts = 0;
+      final sets = SkipRuleSetsController(
+        put: (_, {replacing}) {
+          puts++;
+          return write.future;
+        },
+      );
+      addTearDown(sets.dispose);
+      await _pumpSheet(tester, skipRuleSets: sets);
+      await _tapKey(tester, 'sync.sheet.editRules');
+      await _tapRuleSet(tester, SkipRuleSetKey.manage);
+      await _tapRuleSet(tester, SkipRuleSetKey.managerNew);
+      await tester.enterText(
+        find.byKey(const ValueKey(SkipRuleSetKey.editorName)),
+        'Logs',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey(SkipRuleSetKey.editorPatterns)),
+        '*.log',
+      );
+      await tester.pump();
+
+      await tester.showKeyboard(
+        find.byKey(const ValueKey(SkipRuleSetKey.editorName)),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(puts, 1);
+
+      // A second Return while the write is in flight saves nothing more.
+      await tester.showKeyboard(
+        find.byKey(const ValueKey(SkipRuleSetKey.editorName)),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(puts, 1);
+
+      write.complete([SkipRuleSet(name: 'Logs', patterns: ['*.log'])]);
+      await tester.pumpAndSettle();
+      expect(sets.value, [SkipRuleSet(name: 'Logs', patterns: ['*.log'])]);
+    });
+
     testWidgets('a name the store already holds is refused in the editor', (
       tester,
     ) async {
