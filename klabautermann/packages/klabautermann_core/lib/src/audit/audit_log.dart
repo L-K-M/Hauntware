@@ -6,6 +6,7 @@
 // otherwise the log lives in memory for this run. Not synced (D28).
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' show min;
 
 import 'package:seance_core/seance_core.dart' show SecretRedactor;
 
@@ -105,14 +106,13 @@ final class AuditLog {
     });
   }
 
-  /// [serverId]'s records that ended before [before], newest first, at
-  /// most [limit], and whether older ones remain. A file that cannot be
-  /// read is [unreadable]: the answer then holds only this run's memory.
-  Future<({List<AuditRecord> records, bool more, bool unreadable})> query(
-    String serverId, {
-    DateTime? before,
-    int limit = 100,
-  }) async {
+  /// A page of [serverId]'s records: at most [limit] from [after] on, in
+  /// end order, newest first, and records that ended together newest
+  /// append first; and the cursor of the next page, null when none
+  /// remain. A file that cannot be read is [unreadable]: the answer then
+  /// holds only this run's memory.
+  Future<({List<AuditRecord> records, AuditCursor? next, bool unreadable})>
+  query(String serverId, {AuditCursor? after, int limit = 100}) async {
     final file = _fileOf(serverId);
     var unreadable = false;
     final stored = <AuditRecord>[];
@@ -124,13 +124,43 @@ final class AuditLog {
       }
     }
     final all = [...stored, ...?_memory[serverId]];
-    final matching = [
-      for (final record in all.reversed)
-        if (before == null || record.endedAt.isBefore(before)) record,
-    ];
+    // Appends are not in end order (see AuditCursor), so the log is
+    // sorted; the append index orders records that ended together.
+    final ordered =
+        [for (var i = 0; i < all.length; i++) (index: i, record: all[i])]
+          ..sort((a, b) {
+            final byEnd = b.record.endedAt.compareTo(a.record.endedAt);
+            return byEnd != 0 ? byEnd : b.index.compareTo(a.index);
+          });
+    bool endsAt(int i, DateTime at) =>
+        ordered[i].record.endedAt.isAtSameMomentAs(at);
+
+    var start = 0;
+    if (after != null) {
+      while (start < ordered.length &&
+          ordered[start].record.endedAt.isAfter(after.endedAt)) {
+        start++;
+      }
+      for (var tied = 0; tied < after.seen; tied++) {
+        if (start == ordered.length || !endsAt(start, after.endedAt)) break;
+        start++;
+      }
+    }
+    final end = min(start + limit, ordered.length);
+    AuditCursor? next;
+    if (end < ordered.length) {
+      // Counted from the first record that ended with the page's last,
+      // which may be on an earlier page.
+      final last = ordered[end - 1].record.endedAt;
+      var seen = 0;
+      while (seen < end && endsAt(end - 1 - seen, last)) {
+        seen++;
+      }
+      next = AuditCursor(last, seen: seen);
+    }
     return (
-      records: matching.take(limit).toList(),
-      more: matching.length > limit,
+      records: [for (var i = start; i < end; i++) ordered[i].record],
+      next: next,
       unreadable: unreadable,
     );
   }

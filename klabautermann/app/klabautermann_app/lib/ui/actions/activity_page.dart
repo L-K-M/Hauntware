@@ -37,7 +37,9 @@ enum _Column { time, target, action, tier, result }
 
 class _ActivityPageState extends State<ActivityPage> {
   final List<AuditRecord> _records = [];
-  bool _more = false;
+
+  /// Where the next page starts, from the engine; null when none remain.
+  AuditCursor? _next;
   bool _unreadable = false;
   bool _reading = true;
   TableSort? _sort = TableSort(
@@ -55,12 +57,12 @@ class _ActivityPageState extends State<ActivityPage> {
     setState(() => _reading = true);
     final page = await widget.operations.readAudit(
       widget.serverId,
-      before: _records.lastOrNull?.endedAt,
+      after: _next,
     );
     if (!mounted) return;
     setState(() {
       _records.addAll(page.records);
-      _more = page.more;
+      _next = page.next;
       _unreadable = _unreadable || page.unreadable;
       _reading = false;
     });
@@ -170,7 +172,7 @@ class _ActivityPageState extends State<ActivityPage> {
                 ),
               ),
             ),
-            if (_more)
+            if (_next != null)
               Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: TextButton(

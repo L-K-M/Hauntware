@@ -199,13 +199,14 @@ final class OperationsController extends ChangeNotifier {
     _send(RunAction(planId, confirmation));
   }
 
-  /// [serverId]'s audit records that ended before [before], newest first
-  /// (SAF-11). A stopped engine answers none.
-  Future<AuditRecords> readAudit(String serverId, {DateTime? before}) {
+  /// A page of [serverId]'s audit records, newest first (SAF-11): the
+  /// first, or the one [after], a previous page's [AuditRecords.next],
+  /// names. A stopped engine answers none.
+  Future<AuditRecords> readAudit(String serverId, {AuditCursor? after}) {
     if (_engineStopped) return Future.value(AuditRecords(serverId, const []));
     final read = Completer<AuditRecords>();
     (_auditReads[serverId] ??= []).add(read);
-    _send(AuditQuery(serverId, before: before));
+    _send(AuditQuery(serverId, after: after));
     return read.future;
   }
 

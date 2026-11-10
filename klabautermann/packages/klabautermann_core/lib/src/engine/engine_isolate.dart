@@ -1711,14 +1711,14 @@ void engineMain(
             ),
           ),
         );
-      case AuditQuery(:final serverId, :final before, :final limit):
-        final (:records, :more, :unreadable) = await audit.query(
+      case AuditQuery(:final serverId, :final after, :final limit):
+        final (:records, :next, :unreadable) = await audit.query(
           serverId,
-          before: before,
+          after: after,
           limit: limit,
         );
         uiPort.send(
-          AuditRecords(serverId, records, more: more, unreadable: unreadable),
+          AuditRecords(serverId, records, next: next, unreadable: unreadable),
         );
       case AcknowledgeOperation(:final serverId, :final id):
         final tracker = operations;
