@@ -415,6 +415,29 @@ final class RunSyncRound extends EngineRequest {
   const RunSyncRound();
 }
 
+/// Asks for the host-key quarantine diff as it stands (03 §10.1, §4.9):
+/// every stored `hostkey:` record whose key differs from the pin this
+/// device trusts for the same `host:port`. The app reads it at startup and
+/// after a sync; answered by [PinConflictsChanged].
+final class ReadPinConflicts extends EngineRequest {
+  const ReadPinConflicts();
+}
+
+/// Resolves one host-key conflict (03 §10.1, §4.9): [keepLocal] keeps this
+/// device's pin and re-pushes it under a fresh tuple, and false trusts the
+/// pulled key. A locator that names no current conflict, or whose
+/// fingerprints no longer match, is a no-op. Answered by
+/// [PinConflictsChanged] with the diff afterwards, or [RequestRejected].
+final class ResolvePinConflict extends EngineRequest {
+  const ResolvePinConflict(this.locator, {required this.keepLocal});
+
+  /// `host:port` — the locator spelling a pin's record id carries.
+  final String locator;
+
+  /// Whether to keep this device's pin rather than trust the pulled key.
+  final bool keepLocal;
+}
+
 /// Imports the hosts of an OpenSSH client config as device-local fleet
 /// entries (FL-02, 03 §4.2). The UI reads the file and sends its [text]:
 /// which file to read, and whether the platform has one at all, stays the
@@ -1669,6 +1692,7 @@ final class SyncStatus extends EngineEvent {
     this.passphraseUnverified = false,
     this.detail,
     this.prefixBudget,
+    this.pinConflicts,
   });
 
   final SyncPhase phase;
@@ -1692,6 +1716,52 @@ final class SyncStatus extends EngineEvent {
   /// How much of the account the `klabautermann:` records take, after a
   /// succeeded operation; null otherwise.
   final SyncPrefixBudget? prefixBudget;
+
+  /// The host-key quarantine diff after a succeeded operation, or null when
+  /// it is unchanged: a failed round keeps the previous list, as Séance's
+  /// settings backend does. A resolution reports through
+  /// [PinConflictsChanged], not here.
+  final List<SyncPinConflict>? pinConflicts;
+}
+
+/// A pulled `hostkey:` record whose key differs from the pin this device
+/// trusts for the same `host:port` (03 §4.9). Re-derived on every round, so
+/// a dismissed warning re-arms until the user resolves it.
+final class SyncPinConflict {
+  const SyncPinConflict({
+    required this.locator,
+    required this.localFingerprintSha256,
+    required this.pulledFingerprintSha256,
+  });
+
+  /// `host:port` — the locator spelling a pin's record id carries.
+  final String locator;
+
+  /// The fingerprint of the pin this device trusts.
+  final String localFingerprintSha256;
+
+  /// The fingerprint the winning `hostkey:` record carries.
+  final String pulledFingerprintSha256;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SyncPinConflict &&
+      other.locator == locator &&
+      other.localFingerprintSha256 == localFingerprintSha256 &&
+      other.pulledFingerprintSha256 == pulledFingerprintSha256;
+
+  @override
+  int get hashCode =>
+      Object.hash(locator, localFingerprintSha256, pulledFingerprintSha256);
+}
+
+/// The host-key quarantine diff changed (03 §10.1): a [ReadPinConflicts] or
+/// a [ResolvePinConflict] answered, carrying the whole list as it stands.
+final class PinConflictsChanged extends EngineEvent {
+  PinConflictsChanged(Iterable<SyncPinConflict> conflicts)
+    : conflicts = List.unmodifiable(conflicts);
+
+  final List<SyncPinConflict> conflicts;
 }
 
 /// The account budget of the `klabautermann:` records (03 §4.8): at most

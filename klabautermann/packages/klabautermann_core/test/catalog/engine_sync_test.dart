@@ -8,7 +8,11 @@ import 'package:klabautermann_core/src/catalog/engine_vault.dart';
 import 'package:klabautermann_core/src/catalog/klabautermann_records.dart';
 import 'package:klabautermann_core/src/catalog/snippet_mirror.dart';
 import 'package:seance_core/catalog.dart'
-    show FileVaultStore, InMemoryConflictAwareHostKeyStore, RecordCrypto;
+    show
+        ConflictAwareHostKeyStore,
+        FileVaultStore,
+        InMemoryConflictAwareHostKeyStore,
+        RecordCrypto;
 import 'package:seance_core/seance_core.dart'
     show
         Argon2Params,
@@ -62,6 +66,7 @@ void main() {
   Future<EngineSync> open({
     SupportDirectoryAccess access = SupportDirectoryAccess.exclusive,
     String? deviceId = _deviceId,
+    ConflictAwareHostKeyStore? hostKeys,
   }) async {
     late final EngineSync sync;
     vault = EngineVault(
@@ -74,7 +79,7 @@ void main() {
       supportDirectory: support,
       access: access,
       deviceId: deviceId,
-      hostKeys: InMemoryConflictAwareHostKeyStore(),
+      hostKeys: hostKeys ?? InMemoryConflictAwareHostKeyStore(),
       keystore: keystore,
       vault: vault,
       transport: server.transport,
@@ -888,6 +893,121 @@ void main() {
         jsonDecode(file('sync_enrollment.json').readAsStringSync()),
         containsPair('seance56Asserted', release),
       );
+    });
+  });
+
+  group('pin conflicts (k4)', () {
+    HostKey pin(String host, String fingerprint) => HostKey(
+      host: host,
+      port: 22,
+      type: 'ssh-ed25519',
+      fingerprintSha256: fingerprint,
+      pinnedAt: 1000,
+    );
+
+    const locator = 'alpha.example.com:22';
+    const localFingerprint = 'SHA256:local';
+    const pulledFingerprint = 'SHA256:pulled';
+
+    Future<DecryptedRecord> openRecord(EncryptedRecord record) async =>
+        await RecordCrypto(RecordCodec(server.keys.vaultKey)).open(record);
+
+    /// An enrolled engine whose local pin differs from the account's pulled
+    /// pin, so the enrollment quarantines the pulled key.
+    Future<(EngineSync, ConflictAwareHostKeyStore)> conflicting() async {
+      final hostKeys = InMemoryConflictAwareHostKeyStore();
+      await hostKeys.put(pin('alpha.example.com', localFingerprint));
+      await server.seedServer(fakeServer('srv-a', 'alpha'));
+      await server.seedHostKey(pin('alpha.example.com', pulledFingerprint));
+      final sync = await open(hostKeys: hostKeys);
+      return (sync, hostKeys);
+    }
+
+    test(
+      'a round surfaces the conflict and acceptPulled installs the key',
+      () async {
+        final (sync, hostKeys) = await conflicting();
+
+        final status = await sync.enroll(_enroll);
+
+        expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+        expect(status.pinConflicts, [
+          const SyncPinConflict(
+            locator: locator,
+            localFingerprintSha256: localFingerprint,
+            pulledFingerprintSha256: pulledFingerprint,
+          ),
+        ]);
+        expect(
+          (await hostKeys.get('alpha.example.com', 22))!.fingerprintSha256,
+          localFingerprint,
+          reason: 'a conflicting pulled pin is quarantined',
+        );
+
+        final resolved = await sync.resolvePinConflict(
+          locator,
+          keepLocal: false,
+        );
+
+        expect(resolved, isEmpty);
+        expect(
+          (await hostKeys.get('alpha.example.com', 22))!.fingerprintSha256,
+          pulledFingerprint,
+        );
+      },
+    );
+
+    test(
+      "keepLocal keeps this device's pin and a round re-pushes it",
+      () async {
+        final (sync, hostKeys) = await conflicting();
+        await sync.enroll(_enroll);
+
+        final resolved = await sync.resolvePinConflict(
+          locator,
+          keepLocal: true,
+        );
+
+        expect(resolved, isEmpty);
+        expect(
+          (await hostKeys.get('alpha.example.com', 22))!.fingerprintSha256,
+          localFingerprint,
+        );
+
+        await sync.runRound();
+        final pushed = server.pushed.singleWhere(
+          (record) => record.id == 'hostkey:$locator',
+        );
+        final sealed = await openRecord(pushed);
+        expect(
+          HostKey.fromJson(sealed.data).fingerprintSha256,
+          localFingerprint,
+        );
+      },
+    );
+
+    test('a locator with no current conflict is a no-op', () async {
+      final sync = await open();
+      await sync.enroll(_enroll);
+
+      expect(
+        await sync.resolvePinConflict('ghost.example.com:22', keepLocal: true),
+        isEmpty,
+      );
+      await sync.runRound();
+      expect(server.pushed, isEmpty);
+    });
+
+    test('a failed round keeps the previous conflict list', () async {
+      final (sync, _) = await conflicting();
+      await sync.enroll(_enroll);
+      keystore.apiKeys['sync.token'] = 'revoked';
+
+      final status = await sync.runRound();
+
+      expect(status.failure, SyncFailure.sessionRejected);
+      expect(status.pinConflicts, isNull);
+      expect((await sync.pinConflicts()).single.locator, locator);
     });
   });
 
