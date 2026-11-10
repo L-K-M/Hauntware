@@ -6,6 +6,7 @@ import 'package:app_links/app_links.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_keystore/app_lock.dart';
 import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -26,7 +27,6 @@ import 'ui/app_menus.dart';
 import 'ui/host_key_dialog.dart';
 import 'ui/keyboard_interactive_dialog.dart';
 import 'ui/link_review_dialog.dart';
-import 'ui/macos_toolbar_band.dart';
 import 'ui/top_toast.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();

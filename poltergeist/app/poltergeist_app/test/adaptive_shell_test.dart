@@ -49,6 +49,14 @@ Future<void> _pumpShell(
   );
 }
 
+Future<void> _focusSplitter(WidgetTester tester) async {
+  Focus.of(tester.element(find.descendant(
+    of: find.byKey(AdaptiveShell.splitterKey),
+    matching: find.byType(MouseRegion),
+  ))).requestFocus();
+  await tester.pump();
+}
+
 void main() {
   testWidgets('exposes keyed panes and splitter', (tester) async {
     await _pumpShell(tester);
@@ -132,7 +140,7 @@ void main() {
     final before = tester
         .getSize(find.byKey(AdaptiveShell.primaryPaneKey))
         .width;
-    await tester.tap(find.byKey(AdaptiveShell.splitterKey));
+    await _focusSplitter(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
     final after = tester
@@ -142,25 +150,22 @@ void main() {
     expect(after - before, 16);
   });
 
-  testWidgets('draws the accent outline while focused', (tester) async {
+  testWidgets('draws the shared focus ring while focused', (tester) async {
     await _pumpShell(tester);
 
-    await tester.tap(find.byKey(AdaptiveShell.splitterKey));
+    await _focusSplitter(tester);
     await tester.pump();
 
     final primary = Theme.of(
       tester.element(find.byKey(AdaptiveShell.splitterKey)),
     ).colorScheme.primary;
-    final outline = find.byWidgetPredicate((widget) {
-      if (widget case DecoratedBox(decoration: final BoxDecoration box)) {
-        final border = box.border;
-        return border is Border &&
-            border.top.width == 2 &&
-            border.top.color == primary;
-      }
-
-      return false;
-    });
+    final outline = find.descendant(
+      of: find.byKey(AdaptiveShell.splitterKey),
+      matching: find.byWidgetPredicate((widget) => widget is Container &&
+          widget.color == primary &&
+          widget.constraints?.minWidth == 3 &&
+          widget.constraints?.maxWidth == 3),
+    );
     expect(outline, findsOneWidget);
   });
 
@@ -227,7 +232,7 @@ void main() {
     final savedRatios = <double>[];
     await _pumpShell(tester, onPaneRatioChanged: savedRatios.add);
 
-    await tester.tap(find.byKey(AdaptiveShell.splitterKey));
+    await _focusSplitter(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
 
@@ -249,7 +254,7 @@ void main() {
 
     final pane = find.byKey(AdaptiveShell.primaryPaneKey);
     final before = tester.getSize(pane).width;
-    await tester.tap(find.byKey(AdaptiveShell.splitterKey));
+    await _focusSplitter(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
     expect(tester.getSize(pane).width, before + 16);
@@ -281,6 +286,22 @@ void main() {
     expect(after - before, closeTo(32, 0.000001));
   });
 
+  testWidgets('keeps cumulative drag deltas when direction reverses before a frame', (tester) async {
+    await _pumpShell(tester);
+    final pane = find.byKey(AdaptiveShell.primaryPaneKey);
+    final before = tester.getSize(pane).width;
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(AdaptiveShell.splitterKey)),
+    );
+    await gesture.moveBy(const Offset(20, 0));
+    await gesture.moveBy(const Offset(12, 0));
+    await gesture.moveBy(const Offset(-5, 0));
+    await gesture.up();
+    await tester.pump();
+
+    expect(tester.getSize(pane).width - before, closeTo(27, 0.000001));
+  });
+
   testWidgets('persists one final ratio after a drag', (tester) async {
     final savedRatios = <double>[];
     await _pumpShell(tester, onPaneRatioChanged: savedRatios.add);
@@ -300,33 +321,37 @@ void main() {
     expect(savedRatios.single, closeTo(0.527280, 0.000001));
   });
 
-  testWidgets('persists one final ratio after key repeats', (tester) async {
+  testWidgets('persists each keyboard resize step', (tester) async {
     final savedRatios = <double>[];
     await _pumpShell(tester, onPaneRatioChanged: savedRatios.add);
 
-    await tester.tap(find.byKey(AdaptiveShell.splitterKey));
+    await _focusSplitter(tester);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight);
     await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowRight);
     await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
 
-    expect(savedRatios, isEmpty);
+    expect(savedRatios, hasLength(3));
+    expect(savedRatios, [
+      closeTo(0.513640, 0.000001),
+      closeTo(0.527280, 0.000001),
+      closeTo(0.540921, 0.000001),
+    ]);
 
     await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
 
-    expect(savedRatios, hasLength(1));
-    expect(savedRatios.single, closeTo(0.540921, 0.000001));
+    expect(savedRatios, hasLength(3));
   });
 
-  testWidgets('persists a held-key resize when focus leaves', (tester) async {
+  testWidgets('does not persist a keyboard step twice when focus leaves', (tester) async {
     final savedRatios = <double>[];
     await _pumpShell(tester, onPaneRatioChanged: savedRatios.add);
 
-    await tester.tap(find.byKey(AdaptiveShell.splitterKey));
+    await _focusSplitter(tester);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
-    expect(savedRatios, isEmpty);
+    expect(savedRatios, hasLength(1));
 
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump();
@@ -359,7 +384,7 @@ void main() {
     final savedRatios = <double>[];
     await _pumpShell(tester, onPaneRatioChanged: savedRatios.add);
 
-    await tester.tap(find.byKey(AdaptiveShell.splitterKey));
+    await _focusSplitter(tester);
     for (var i = 0; i < _keyboardResizeStepCountToEdge; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     }
@@ -388,7 +413,7 @@ void main() {
   testWidgets('moves inward immediately from the right edge', (tester) async {
     await _pumpShell(tester);
 
-    await tester.tap(find.byKey(AdaptiveShell.splitterKey));
+    await _focusSplitter(tester);
     for (var i = 0; i < _keyboardResizeStepCountToEdge; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     }
@@ -409,7 +434,7 @@ void main() {
   testWidgets('drags inward immediately from the right edge', (tester) async {
     await _pumpShell(tester);
 
-    await tester.tap(find.byKey(AdaptiveShell.splitterKey));
+    await _focusSplitter(tester);
     for (var i = 0; i < _keyboardResizeStepCountToEdge; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     }
@@ -434,7 +459,7 @@ void main() {
     final savedRatios = <double>[];
     await _pumpShell(tester, onPaneRatioChanged: savedRatios.add);
 
-    await tester.tap(find.byKey(AdaptiveShell.splitterKey));
+    await _focusSplitter(tester);
     for (var i = 0; i < _keyboardResizeStepCountToEdge; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     }

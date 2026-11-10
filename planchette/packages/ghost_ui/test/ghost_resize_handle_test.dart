@@ -1,5 +1,7 @@
 import 'dart:ui' show SemanticsAction;
 
+import 'package:flutter/gestures.dart'
+    show DragStartBehavior, kDoubleTapMinTime, kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,31 +13,41 @@ void main() {
     GhostPaneEdge edge = GhostPaneEdge.leading,
     TextDirection direction = TextDirection.ltr,
     double width = 200,
+    VoidCallback? onReset,
+    DragStartBehavior dragStartBehavior = DragStartBehavior.start,
+    bool compete = false,
   }) async {
     final calls = <String>[];
+    Widget handle = GhostResizeHandle(
+      label: 'Resize list',
+      width: width,
+      minimumWidth: 100,
+      maximumWidth: 300,
+      edge: edge,
+      widthAfterStep: (delta) => width + delta,
+      onStep: (delta) => calls.add('step $delta'),
+      onStart: () => calls.add('start'),
+      onDelta: (delta) => calls.add('delta $delta'),
+      onEnd: () => calls.add('end'),
+      onReset: onReset == null ? null : () => calls.add('reset'),
+      dragStartBehavior: dragStartBehavior,
+      handleWidth: 10,
+      valueText: (w) => '${w.round()} px',
+    );
+    if (compete) {
+      // A tap recognizer keeps the arena open past the touch slop, which is
+      // where the two drag-start behaviours diverge.
+      handle = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {},
+        child: handle,
+      );
+    }
     await tester.pumpWidget(
       MaterialApp(
         home: Directionality(
           textDirection: direction,
-          child: Center(
-            child: SizedBox(
-              height: 100,
-              child: GhostResizeHandle(
-                label: 'Resize list',
-                width: width,
-                minimumWidth: 100,
-                maximumWidth: 300,
-                edge: edge,
-                widthAfterStep: (delta) => width + delta,
-                onStep: (delta) => calls.add('step $delta'),
-                onStart: () => calls.add('start'),
-                onDelta: (delta) => calls.add('delta $delta'),
-                onEnd: () => calls.add('end'),
-                handleWidth: 10,
-                valueText: (w) => '${w.round()} px',
-              ),
-            ),
-          ),
+          child: Center(child: SizedBox(height: 100, child: handle)),
         ),
       ),
     );
@@ -59,6 +71,43 @@ void main() {
     final rtl = await pump(tester, direction: TextDirection.rtl);
     await tester.drag(find.byType(GhostResizeHandle), const Offset(30, 0));
     expect(rtl.where((c) => c.startsWith('delta -')), isNotEmpty);
+  });
+
+  testWidgets('a double tap calls onReset', (tester) async {
+    final calls = await pump(tester, onReset: () {});
+    await tester.tap(find.byType(GhostResizeHandle));
+    await tester.pump(kDoubleTapMinTime);
+    await tester.tap(find.byType(GhostResizeHandle));
+    // Lets the recognizer's double-tap and minimum-interval timers expire.
+    await tester.pump(kDoubleTapTimeout);
+    // Each tap also ends the drag it never started, the handle's cancel.
+    expect(calls, ['end', 'end', 'reset']);
+  });
+
+  testWidgets('DragStartBehavior.down reports the whole drag', (tester) async {
+    final down = await pump(
+      tester,
+      compete: true,
+      dragStartBehavior: DragStartBehavior.down,
+    );
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(GhostResizeHandle)),
+    );
+    await gesture.moveBy(const Offset(20, 0));
+    await gesture.up();
+    await tester.pump();
+    expect(down, ['start', 'delta 20.0', 'end']);
+
+    // With the default start behaviour the pre-threshold move is dropped
+    // and the drag begins where the recognizer wins the arena.
+    final start = await pump(tester, compete: true);
+    final other = await tester.startGesture(
+      tester.getCenter(find.byType(GhostResizeHandle)),
+    );
+    await other.moveBy(const Offset(20, 0));
+    await other.up();
+    await tester.pump();
+    expect(start, ['start', 'end']);
   });
 
   testWidgets('arrow keys step by 16 once focused, and modified arrows '

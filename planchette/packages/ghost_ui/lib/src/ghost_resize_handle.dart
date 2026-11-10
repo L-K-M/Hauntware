@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -11,6 +12,7 @@ const double _resizeKeyStep = 16;
 /// A labelled, keyboard-adjustable divider with the same clamping and
 /// persistence boundary as a pointer drag. Physical arrow direction follows
 /// the divider; assistive increase/decrease follows the owned pane's width.
+/// A double tap calls [onReset] for the owner's default width.
 class GhostResizeHandle extends StatefulWidget {
   final String label;
   final double width;
@@ -29,6 +31,16 @@ class GhostResizeHandle extends StatefulWidget {
   /// [width] as assistive technology reads it, such as `320 pixels`.
   final String Function(double width) valueText;
 
+  /// A double tap: the owner's default width, when it has one.
+  final VoidCallback? onReset;
+
+  /// When the drag begins. Only observable while another gesture competes
+  /// for the pointer: [DragStartBehavior.down] reports the whole drag from
+  /// the pointer-down position, the default [DragStartBehavior.start] the
+  /// drag from where this recognizer wins the arena, dropping the move
+  /// made before it did.
+  final DragStartBehavior dragStartBehavior;
+
   const GhostResizeHandle({
     super.key,
     required this.label,
@@ -43,6 +55,8 @@ class GhostResizeHandle extends StatefulWidget {
     required this.onEnd,
     required this.handleWidth,
     required this.valueText,
+    this.onReset,
+    this.dragStartBehavior = DragStartBehavior.start,
   });
 
   @override
@@ -99,11 +113,13 @@ class _GhostResizeHandleState extends State<GhostResizeHandle> {
           cursor: SystemMouseCursors.resizeColumn,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
+            dragStartBehavior: widget.dragStartBehavior,
             onHorizontalDragStart: (_) => widget.onStart(),
             onHorizontalDragUpdate: (d) =>
                 widget.onDelta(d.delta.dx * _direction),
             onHorizontalDragEnd: (_) => widget.onEnd(),
             onHorizontalDragCancel: widget.onEnd,
+            onDoubleTap: widget.onReset,
             // The line itself is the layout's seam underneath; the handle
             // draws only its focus ring over it.
             child: SizedBox(
