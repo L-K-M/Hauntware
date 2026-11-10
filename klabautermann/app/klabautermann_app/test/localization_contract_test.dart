@@ -76,6 +76,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // Instance-lock debugPrint diagnostics; AlreadyRunningApp and
     // StartupIssueNotice tell the user in ARB text.
     "'Klabautermann is already running; this instance quits.'",
+    // Engine start debugPrint diagnostic; EngineFailedApp tells the user
+    // in ARB text.
+    r"'The engine did not start: $error'",
     r"'$instanceLockFileName: ${issue.error}'",
     // Sync state file debugPrint diagnostics; StartupIssueNotice tells
     // the user in ARB text.

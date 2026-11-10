@@ -810,6 +810,28 @@
   "@alreadyRunningQuit": {
     "description": "Button on the already-running screen that quits the second copy."
   },
+  "engineFailedTitle": "Klabautermann could not start",
+  "@engineFailedTitle": {
+    "description": "Heading of the only screen the app shows when its background engine fails to start."
+  },
+  "engineFailedBody": "Its background engine did not start, so no servers can be shown. Quit and open Klabautermann again. If this keeps happening, reinstall it and include the details below in a bug report.",
+  "@engineFailedBody": {
+    "description": "Body of the screen shown when the app's background engine fails to start: what it means and what to do."
+  },
+  "engineFailedDetail": "Details: {detail}",
+  "@engineFailedDetail": {
+    "description": "The technical reason the background engine did not start, in English, for a bug report.",
+    "placeholders": {
+      "detail": {
+        "type": "String",
+        "example": "Bad state: engine isolate exited before answering Hello"
+      }
+    }
+  },
+  "engineFailedQuit": "Quit",
+  "@engineFailedQuit": {
+    "description": "Button on the engine-failed screen that quits the app."
+  },
   "settingsWindowUnreachable": "Settings cannot reach Klabautermann. Close this window and open Settings again.",
   "@settingsWindowUnreachable": {
     "description": "Shown in the desktop settings window when the app does not answer it."
