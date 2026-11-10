@@ -4,8 +4,6 @@ import 'dart:io';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:seance_app/services/download_provenance.dart';
-import 'package:seance_app/services/external_file_opener.dart';
 import 'package:seance_app/services/managed_remote_file_store.dart';
 import 'package:seance_app/services/remote_files_controller.dart';
 import 'package:seance_app/services/shell_location.dart';
@@ -1374,7 +1372,8 @@ void main() {
         editSessionId: 'session',
         // Marking as macOS does records each file without touching the OS.
         provenance: DownloadProvenance.forHost(
-          EditorHostPlatform.macos,
+          ProvenancePlatform.macos,
+          agent: 'Seance',
           runProcess: (_, arguments) async {
             marked.add(arguments.last);
             return ProcessResult(0, 0, '', '');
@@ -1440,7 +1439,8 @@ void main() {
         serverId: 'server',
         editSessionId: 'other',
         provenance: DownloadProvenance.forHost(
-          EditorHostPlatform.macos,
+          ProvenancePlatform.macos,
+          agent: 'Seance',
           runProcess: (_, _) => throw const ProcessException('xattr', []),
         ),
       );
