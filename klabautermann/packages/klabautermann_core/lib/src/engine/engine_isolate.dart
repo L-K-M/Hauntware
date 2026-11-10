@@ -2374,6 +2374,20 @@ void engineMain(
       keystore.answer(message);
       return;
     }
-    queue = queue.then((_) => handle(message));
+    // A handler that throws costs its own request, not the engine: left
+    // in the chain, the error would skip every later request and, being
+    // unhandled, end the isolate with every link and shell.
+    queue = queue.then(
+      (_) => handle(message).catchError((Object error) {
+        uiPort.send(
+          RequestRejected(
+            message is EngineRequest
+                ? message.runtimeType.toString()
+                : '<unknown>',
+            'engine error: $error',
+          ),
+        );
+      }),
+    );
   });
 }

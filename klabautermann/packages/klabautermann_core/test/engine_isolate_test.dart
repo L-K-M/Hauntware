@@ -5,7 +5,10 @@ import 'dart:isolate';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/capabilities/capability_cache.dart';
+import 'package:klabautermann_core/src/audit/audit_log.dart'
+    show auditDirectoryName;
 import 'package:klabautermann_core/src/engine/engine_isolate.dart';
+import 'package:klabautermann_core/src/fleet/server_file_stem.dart';
 import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart'
     show sshConfigImportsFileName, sshConfigImportsSchemaVersion;
 import 'package:test/test.dart';
@@ -160,6 +163,34 @@ void main() {
       expect(answer.serverId, 'ssh-config:web');
       expect(answer.records, isEmpty);
       expect(answer.more, isFalse);
+    });
+
+    test('a request that fails is answered, and the engine keeps serving '
+        '(03 §8.10)', () async {
+      // A record cut inside a multi-byte character, as an append torn by
+      // a crash or power loss leaves it.
+      final audit = Directory('${support.path}/$auditDirectoryName')
+        ..createSync();
+      File(
+        '${audit.path}/${serverFileStem('ssh-config:web')}.jsonl',
+      ).writeAsBytesSync([...utf8.encode('{"v":1,"target":"caf'), 0xC3]);
+      final client = await spawnEngine(
+        access: SupportDirectoryAccess.exclusive,
+      );
+      final (:events, fleet: _) = await started(client);
+
+      client
+        ..send(const AuditQuery('ssh-config:web'))
+        ..send(const Connect('srv-1'));
+
+      final audited = await next(events);
+      expect(
+        audited,
+        anyOf(isA<AuditRecords>(), isA<RequestRejected>()),
+        reason: 'the query is answered',
+      );
+      final connect = (await next(events)) as RequestRejected;
+      expect(connect.requestName, 'Connect', reason: 'the engine still serves');
     });
 
     test('a history read answers empty before any reading (HIS-01)', () async {
