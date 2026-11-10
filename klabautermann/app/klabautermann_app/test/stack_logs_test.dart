@@ -7,6 +7,7 @@ import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/ui/docker/stack_logs.dart';
 import 'package:klabautermann_app/ui/logs/log_text.dart' show logRowText;
+import 'package:klabautermann_app/ui/logs/log_view.dart' show LogView;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/docker.dart';
@@ -233,5 +234,46 @@ void main() {
       hasLength(1),
       reason: 'leaving the page closes the follow still open',
     );
+  });
+
+  testWidgets('at three times the text size on a phone the header scrolls '
+      'and the log keeps its room', (tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final monitoring = MonitoringController(engine);
+    addTearDown(monitoring.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(3)),
+          child: child!,
+        ),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: StackLogsPage(
+          monitoring: monitoring,
+          serverId: _serverId,
+          project: 'web',
+          containers: [
+            for (var i = 0; i < kStackLogsMax + 2; i++)
+              StackLogContainer(id: 'c$i', name: 'service-$i'),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    engine.emit(
+      containerLogBatch(containerLogOpens(engine.sent, 'c0').last.streamId, [
+        containerLine('ready', at: _at(1)),
+      ]),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(tester.getSize(find.byType(LogView)).height, greaterThan(100));
   });
 }

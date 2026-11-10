@@ -25,6 +25,10 @@ const kStackLogsWindow = 200;
 /// The merged lines a stack's logs keep, oldest dropped first.
 const kStackLogsKept = 10000;
 
+/// The share of its height the header takes before it scrolls, so large
+/// text never pushes the log out of sight.
+const double _headerShare = 0.4;
+
 /// The xterm colours the containers' names take, in order: distinct
 /// hues without red, which reads as an error. The log view holds each to
 /// its contrast floor (03 §10.8).
@@ -379,60 +383,69 @@ class _StackLogsPageState extends State<StackLogsPage> {
       body: SafeArea(
         child: ListenableBuilder(
           listenable: _logs,
-          builder: (context, _) => Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  spacing: 8,
-                  children: [
-                    if (_logs.containers.isEmpty)
-                      DockerNotice(
-                        icon: Icons.info_outline,
-                        text: l10n.dockerStackLogsNone,
-                      ),
-                    if (_logs.omitted > 0)
-                      DockerNotice(
-                        icon: Icons.info_outline,
-                        text: l10n.dockerStackLogsOmitted(
-                          kStackLogsMax,
-                          _logs.omitted,
-                        ),
-                      ),
-                    Wrap(
+          builder: (context, _) => LayoutBuilder(
+            builder: (context, constraints) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight * _headerShare,
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       spacing: 8,
-                      runSpacing: 8,
                       children: [
-                        for (final container in _logs.containers)
-                          FilterChip(
-                            label: Text(switch (_logs.stateOf(container.id)) {
-                              StackLogState.running ||
-                              StackLogState.opening => container.name,
-                              final state => l10n.dockerStackLogsState(
-                                container.name,
-                                state.name,
-                              ),
-                            }),
-                            selected: !_logs.hidden.contains(container.id),
-                            onSelected: (_) => _logs.toggle(container.id),
+                        if (_logs.containers.isEmpty)
+                          DockerNotice(
+                            icon: Icons.info_outline,
+                            text: l10n.dockerStackLogsNone,
                           ),
+                        if (_logs.omitted > 0)
+                          DockerNotice(
+                            icon: Icons.info_outline,
+                            text: l10n.dockerStackLogsOmitted(
+                              kStackLogsMax,
+                              _logs.omitted,
+                            ),
+                          ),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final container in _logs.containers)
+                              FilterChip(
+                                label: Text(switch (_logs.stateOf(
+                                  container.id,
+                                )) {
+                                  StackLogState.running ||
+                                  StackLogState.opening => container.name,
+                                  final state => l10n.dockerStackLogsState(
+                                    container.name,
+                                    state.name,
+                                  ),
+                                }),
+                                selected: !_logs.hidden.contains(container.id),
+                                onSelected: (_) => _logs.toggle(container.id),
+                              ),
+                          ],
+                        ),
+                        LogSearchField(search: _logs.search),
                       ],
                     ),
-                    LogSearchField(search: _logs.search),
-                  ],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: LogView(
-                  controller: _logs.logs,
-                  search: _logs.search,
-                  levelOf: _logs.lines.levelOf,
-                  fieldsOf: _logs.lines.fieldsOf,
+                Expanded(
+                  child: LogView(
+                    controller: _logs.logs,
+                    search: _logs.search,
+                    levelOf: _logs.lines.levelOf,
+                    fieldsOf: _logs.lines.fieldsOf,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
