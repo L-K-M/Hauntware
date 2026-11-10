@@ -1,6 +1,7 @@
 // The device audit log (03 §8.10, M4 plan M12): append-only per server,
 // redacted steps, newest-first queries, the 90-day prune, a damaged file
 // quarantined, and memory only without the support directory to itself.
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -178,6 +179,56 @@ void main() {
     ).listSync().where((e) => e.path.contains('.corrupt-'));
     expect(copies, hasLength(1));
     expect(fileOf(_server).readAsLinesSync(), hasLength(2));
+  });
+
+  test('quarantines a line torn inside a character and keeps the rest '
+      '(03 §8.10)', () async {
+    final audit = log();
+    await audit.append(record(now));
+    // An append cut by a crash inside a two-byte character.
+    fileOf(_server).writeAsBytesSync([
+      ...utf8.encode('{"v":1,"target":"caf'),
+      0xC3,
+    ], mode: FileMode.append);
+
+    final read = await audit.query(_server);
+
+    expect([for (final r in read.records) r.endedAt], [now]);
+    expect(read.unreadable, isFalse);
+    expect(fileOf(_server).readAsLinesSync(), hasLength(1));
+    final copies = Directory(
+      '${root.path}/$auditDirectoryName',
+    ).listSync().where((e) => e.path.contains('.corrupt-'));
+    expect(copies, hasLength(1));
+  });
+
+  test('a file that cannot be read answers unreadable', () async {
+    final audit = log();
+    // A directory where the file belongs reads as an I/O error.
+    Directory(fileOf(_server).path).createSync(recursive: true);
+
+    final read = await audit.query(_server);
+
+    expect(read.records, isEmpty);
+    expect(read.unreadable, isTrue);
+  });
+
+  test('keeps the lines of a newer record version verbatim', () async {
+    final audit = log();
+    const newer =
+        '{"v":2,"serverId":"ssh-config:web","endedAt":"2025-01-01T00:00:00Z"}';
+    await audit.append(record(now.subtract(const Duration(days: 91))));
+    fileOf(_server).writeAsStringSync('$newer\n', mode: FileMode.append);
+    await audit.append(record(now));
+    // A damaged line makes the read rewrite the file, and the prune
+    // drops the old record: neither may drop the newer line.
+    fileOf(_server).writeAsStringSync('{"v":1,"half\n', mode: FileMode.append);
+    await audit.prune();
+
+    final read = await audit.query(_server);
+
+    expect([for (final r in read.records) r.endedAt], [now]);
+    expect(fileOf(_server).readAsLinesSync(), [newer, isNotEmpty]);
   });
 
   test('an append during a query that heals the file is kept', () async {

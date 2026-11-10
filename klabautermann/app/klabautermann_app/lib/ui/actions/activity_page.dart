@@ -38,6 +38,7 @@ enum _Column { time, target, action, tier, result }
 class _ActivityPageState extends State<ActivityPage> {
   final List<AuditRecord> _records = [];
   bool _more = false;
+  bool _unreadable = false;
   bool _reading = true;
   TableSort? _sort = TableSort(
     _Column.time.name,
@@ -60,6 +61,7 @@ class _ActivityPageState extends State<ActivityPage> {
     setState(() {
       _records.addAll(page.records);
       _more = page.more;
+      _unreadable = _unreadable || page.unreadable;
       _reading = false;
     });
   }
@@ -144,6 +146,8 @@ class _ActivityPageState extends State<ActivityPage> {
           children: [
             Text(l10n.activityDetail),
             if (widget.operations.auditInMemory) Text(l10n.activityInMemory),
+            if (_unreadable && _records.isNotEmpty)
+              Text(l10n.activityUnreadable),
             Expanded(
               child: SortableTable<AuditRecord>(
                 tableId: 'activity',
@@ -157,7 +161,11 @@ class _ActivityPageState extends State<ActivityPage> {
                 empty: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Text(
-                    _reading ? l10n.activityReading : l10n.activityEmpty,
+                    _reading
+                        ? l10n.activityReading
+                        : _unreadable
+                        ? l10n.activityUnreadable
+                        : l10n.activityEmpty,
                   ),
                 ),
               ),

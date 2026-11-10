@@ -3518,11 +3518,16 @@ final class AuditRecords extends EngineEvent {
     this.serverId,
     Iterable<AuditRecord> records, {
     this.more = false,
+    this.unreadable = false,
   }) : records = List.unmodifiable(records);
 
   final String serverId;
   final List<AuditRecord> records;
   final bool more;
+
+  /// The server's log file could not be read, so [records] lacks what it
+  /// holds; the file is left as it is for a later read.
+  final bool unreadable;
 }
 
 /// One finished or refused run in the device audit log (03 §8.10): the

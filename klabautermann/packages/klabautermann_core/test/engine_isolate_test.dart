@@ -165,8 +165,8 @@ void main() {
       expect(answer.more, isFalse);
     });
 
-    test('a request that fails is answered, and the engine keeps serving '
-        '(03 §8.10)', () async {
+    test('an audit file torn inside a character is answered, and the '
+        'engine keeps serving (03 §8.10)', () async {
       // A record cut inside a multi-byte character, as an append torn by
       // a crash or power loss leaves it.
       final audit = Directory('${support.path}/$auditDirectoryName')
@@ -183,12 +183,9 @@ void main() {
         ..send(const AuditQuery('ssh-config:web'))
         ..send(const Connect('srv-1'));
 
-      final audited = await next(events);
-      expect(
-        audited,
-        anyOf(isA<AuditRecords>(), isA<RequestRejected>()),
-        reason: 'the query is answered',
-      );
+      final audited = (await next(events)) as AuditRecords;
+      expect(audited.records, isEmpty, reason: 'its one line is damaged');
+      expect(audited.unreadable, isFalse);
       final connect = (await next(events)) as RequestRejected;
       expect(connect.requestName, 'Connect', reason: 'the engine still serves');
     });

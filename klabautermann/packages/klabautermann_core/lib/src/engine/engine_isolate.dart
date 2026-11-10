@@ -1703,12 +1703,14 @@ void engineMain(
           ),
         );
       case AuditQuery(:final serverId, :final before, :final limit):
-        final (:records, :more) = await audit.query(
+        final (:records, :more, :unreadable) = await audit.query(
           serverId,
           before: before,
           limit: limit,
         );
-        uiPort.send(AuditRecords(serverId, records, more: more));
+        uiPort.send(
+          AuditRecords(serverId, records, more: more, unreadable: unreadable),
+        );
       case AcknowledgeOperation(:final serverId, :final id):
         final tracker = operations;
         if (tracker == null) {

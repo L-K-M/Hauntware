@@ -129,6 +129,21 @@ void main() {
       expect(older.before, _ended.subtract(const Duration(minutes: 5)));
     });
 
+    testWidgets('says when the log file could not be read', (tester) async {
+      await open(tester);
+      engine.emit(AuditRecords(_server, const [], unreadable: true));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('The log file could not be read, so records are missing.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Nothing has run on this server from this device.'),
+        findsNothing,
+      );
+    });
+
     testWidgets('copies the stored records, secrets already removed', (
       tester,
     ) async {
