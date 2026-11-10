@@ -1,5 +1,24 @@
 # Séance ports and pin audits
 
+## Keep-alive plugin move (2026-11-10)
+
+Séance's app-private Android keep-alive (the `seance/keepalive` channel,
+`KeepAliveService.kt` and the `MainActivity` permission ask) moves to the
+shared `planchette/packages/ghost_keepalive` plugin as the `ghost_keepalive`
+channel in Java, and Poltergeist anchors its transfer queue through it
+(D32's transfer foreground service). Séance deletes its private copy and
+consumes the plugin; its notification channel id, wording and icon are
+parameters, so `seance.keepalive` and its strings are unchanged for
+existing users.
+
+No Poltergeist source is copied and no Séance source is ported into
+Poltergeist: the moved code lives in the shared package, outside both
+products. `seance/` itself changed (`KeepAliveService.kt` deleted,
+`MainActivity.kt` and `AndroidManifest.xml` slimmed), so the
+`SEANCE_PIN_AUDIT_V3` record below drifts until it is re-recorded once
+with `scripts/audit-seance-pin.sh --write-record`; no contributor,
+licence, vendored path or gitlink changed.
+
 ## Suite links, F5d (2026-10-21)
 
 The link grammar Poltergeist owned since "Cross-app deep links"

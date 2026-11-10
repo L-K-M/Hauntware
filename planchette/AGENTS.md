@@ -58,6 +58,12 @@ packages/
                           download a release APK, verify its size and
                           SHA-256, open the system installer (a Java
                           plugin); outside the workspace
+  ghost_keepalive/       the Android background keep-alive shared by
+                          Séance and Poltergeist: a dataSync foreground
+                          service anchors the process while sessions or
+                          transfers are live (a Java plugin); the apps
+                          keep the channel id and every user-facing
+                          string; outside the workspace
 app/
   planchette_app/         Flutter client — NOT a workspace member (it needs
                           the Flutter SDK; members must not).
@@ -92,6 +98,7 @@ dart test    packages/planchette_core
 (cd packages/ghost_servers && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_keystore && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_apk_update && flutter pub get && flutter analyze && flutter test)
+(cd packages/ghost_keepalive && flutter pub get && flutter analyze && flutter test)
 (cd app/planchette_app && flutter pub get && flutter analyze && flutter test)
 
 # Desktop app for this host, staged into dist/

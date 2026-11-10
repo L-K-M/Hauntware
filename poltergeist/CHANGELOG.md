@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Transfers keep running in the background on Android.** While the
+  queue has live work (transfers, sync runs, archive jobs), a
+  transfer keep-alive notification anchors the process so Android
+  cannot freeze it; the service stops when the queue drains. It comes
+  from the ghost_keepalive plugin shared with Séance's session
+  keep-alive.
 - **Host-key conflicts show both keys.** When a synced host key differs
   from the one this device trusts, Settings and the account switch now
   show both fingerprints, so you can check them against the server's own

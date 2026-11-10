@@ -18,7 +18,8 @@ import 'package:xterm/xterm.dart' show TerminalController;
 import 'services/app_services.dart';
 import 'services/app_settings.dart';
 import 'services/assistant_settings_sync.dart';
-import 'services/background_keep_alive.dart';
+import 'package:ghost_keepalive/ghost_keepalive.dart';
+import 'services/keep_alive_strings.dart';
 import 'services/chat_session.dart';
 import 'services/credential_retirement.dart';
 import 'services/default_snippets.dart';
@@ -801,7 +802,8 @@ class AppState extends ChangeNotifier {
     this._claimInboxProposal,
   }) : _updateChecker = updateChecker ?? UpdateChecker(),
        apkUpdater = apkUpdater ?? (Platform.isAndroid ? ApkUpdater() : null),
-       _keepAlive = keepAlive ?? BackgroundKeepAlive();
+       _keepAlive = keepAlive ??
+           BackgroundKeepAlive(strings: const SeanceKeepAliveStrings());
 
   /// The host-key prompt as the SSH layer wants it, reading [hostKeyPrompter]
   /// at call time so the root widget can wire it after this state exists.

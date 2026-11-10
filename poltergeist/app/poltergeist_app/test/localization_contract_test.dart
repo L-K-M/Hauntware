@@ -2533,6 +2533,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The drag image's ellipsis glyph: typography, not copy.
   'lib/ui/panes/drag_out_image.dart': {"'\u2026'"},
+  // The keep-alive's notification channel id (stored user data, never
+  // rendered) and its status-bar drawable's resource name.
+  'lib/services/transfer_keep_alive.dart': {
+    "'poltergeist.keepalive'",
+    "'ic_stat_transfer_keep_alive'",
+  },
 };
 
 const _config = L10nContractConfig(

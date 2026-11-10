@@ -24,8 +24,6 @@ Windows, Linux, and Android. Built as a sibling of
   1.0.1, with these gaps until each lands
   ([STATUS open item 33](docs/STATUS.md)):
   - the local pane is the app's own storage, not the whole device;
-  - transfers stop when you leave the app, because Android freezes a
-    backgrounded app that runs no foreground service;
   - there is no Share button, no "share to Poltergeist" upload, and no
     way for other apps to open your servers' files.
 - **Linux screen readers.** Flutter's Linux embedder exposes semantics
