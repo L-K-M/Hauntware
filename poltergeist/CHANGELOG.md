@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Ask for a key's passphrase at connect.** An encrypted saved SSH key
+  with a missing or wrong passphrase asks only for the passphrase. A
+  wrong answer asks again. Save in vault keeps the answer without
+  replacing the key or other current fields; otherwise it is used for
+  this connection without a vault write.
+- **Return submits the remaining dialogs.** The typed-name backup account
+  deletions, external-editor settings, sync rule-set name and final
+  sync-pair field use the primary button's validation and busy gates.
 - **Host-key conflicts show both keys.** When a synced host key differs
   from the one this device trusts, Settings and the account switch now
   show both fingerprints, so you can check them against the server's own

@@ -520,6 +520,10 @@ class SshConnectException implements Exception {
   final SshConnectionLog log;
   final SshConnectFailureKind kind;
 
+  /// The configured host whose key failed to load, including a jump host.
+  /// Null for failures that do not identify a local credential source.
+  final String? serverId;
+
   // [kind] is named and optional because other products construct this
   // exception positionally for failures of their own.
   SshConnectException(
@@ -527,6 +531,7 @@ class SshConnectException implements Exception {
     this.cause,
     this.log, {
     this.kind = SshConnectFailureKind.other,
+    this.serverId,
   });
 
   /// The connection stopped at host-key verification: the user (or the
@@ -1332,6 +1337,7 @@ Future<_PreparedSshHost> _prepareSshHost(
         error,
         log ?? SshConnectionLog(),
         kind: _keyLoadFailureKind(error, credentials),
+        serverId: config.id,
       );
     }
     if (identities.isEmpty) {

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- An encrypted SSH key with a missing or wrong passphrase offers Enter
+  passphrase on the connection error, including when the key belongs to
+  a jump host. A wrong answer asks again. Use the answer for one attempt
+  without writing it to the vault, or choose Save in vault to keep it in
+  the key's own passphrase slot. Referenced key files stay referenced.
 - Deleting a saved server retracts its credential from your sync account
   as well as from this device, unless another server still uses it, so a
   new device no longer picks up the password or key of a server that is

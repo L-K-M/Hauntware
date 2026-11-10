@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Séance and Poltergeist ask for an encrypted SSH key's passphrase when
+  the saved one is missing or wrong. Use it for one connection, or choose
+  to save it in the vault without replacing the key.
 - Séance's window has one layout on every platform: a header with
   sidebar and inspector buttons and their shortcuts, undo for snippet
   and server-list changes, and Save, Don't save or Cancel when a tab
