@@ -328,6 +328,24 @@ abstract class AppLocalizations {
   /// **'Passphrase'**
   String get credentialPassphraseField;
 
+  /// Title of the dialog that asks for the passphrase of an encrypted private key when connecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Key passphrase for {label}'**
+  String credentialPassphraseTitle(String label);
+
+  /// Line under the key passphrase dialog's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Used for this connection only and never saved. Poltergeist asks again next time.'**
+  String get credentialPassphraseExplanation;
+
+  /// Line under the key passphrase dialog's title when the previous passphrase did not open the key.
+  ///
+  /// In en, this message translates to:
+  /// **'That passphrase did not open the key. Try again. It is used for this connection only and never saved.'**
+  String get credentialPassphraseRetryExplanation;
+
   /// Checkbox storing the entered secret in the local vault.
   ///
   /// In en, this message translates to:

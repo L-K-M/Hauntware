@@ -39,6 +39,9 @@ export 'package:seance_core/seance_core.dart'
         UpdateInfo,
         Argon2Params,
         AuthKind,
+        // Connect-time key passphrase validation shared with seance_core.
+        privateKeyNeedsPassphrase,
+        privateKeyPassphraseOpens,
         // The suite's link grammar (docs/design/suite-links.md section 5):
         // the browse parser, outbound Séance links and display safety.
         DeepLinkFailure,

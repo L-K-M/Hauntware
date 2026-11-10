@@ -36,17 +36,26 @@ class CredentialDialogResult {
 /// a key-file path plus passphrase; [readKeyFile] (the coordinator's
 /// audited identity-file reader, D18) is injected so the dialog never
 /// touches the filesystem itself and tests need no files.
+///
+/// Pass [request] and [retry] for the passphrase-only form, which asks for
+/// the passphrase of a key whose material is already known.
 Future<CredentialDialogResult?> showCredentialDialog(
   BuildContext context,
   CredentialPromptData data, {
-  required Future<String> Function(String path) readKeyFile,
+  GhostCredentialRequest? request,
+  bool retry = false,
+  Future<String> Function(String path)? readKeyFile,
   bool vaultUnavailable = false,
   GlobalKey? dialogKey,
 }) async {
+  final l10n = AppLocalizations.of(context);
+  final passphraseOnly = request?.keyField == GhostKeyField.passphraseOnly;
   final reply = await showGhostCredentialDialog(
     context,
-    ghostCredentialRequestOf(data, vaultUnavailable: vaultUnavailable),
-    strings: poltergeistCredentialStrings(AppLocalizations.of(context)),
+    request ?? ghostCredentialRequestOf(data, vaultUnavailable: vaultUnavailable),
+    strings: passphraseOnly
+        ? poltergeistPassphraseStrings(l10n, retry: retry)
+        : poltergeistCredentialStrings(l10n),
     readKeyFile: readKeyFile,
     monoStyle: poltergeistMonoTextStyle,
     dialogKey: dialogKey,
@@ -54,10 +63,6 @@ Future<CredentialDialogResult?> showCredentialDialog(
   return _resultOf(reply);
 }
 
-// Kept beside the answer type rather than in the adapter, which would
-// otherwise import this file back. [GhostKeyPassphraseReply] never comes:
-// it answers only the passphrase-only form, and ghostCredentialRequestOf
-// always asks for a key file.
 CredentialDialogResult? _resultOf(GhostCredentialReply? reply) =>
     switch (reply) {
       null => null,
@@ -73,7 +78,9 @@ CredentialDialogResult? _resultOf(GhostCredentialReply? reply) =>
           keyPassphrase: keyPassphrase,
           saveToVault: saveToVault,
         ),
-      GhostKeyPassphraseReply() => throw StateError(
-        'Poltergeist never raises the passphrase-only credential prompt',
-      ),
+      GhostKeyPassphraseReply(:final keyPassphrase, :final saveToVault) =>
+        CredentialDialogResult(
+          keyPassphrase: keyPassphrase,
+          saveToVault: saveToVault,
+        ),
     };
