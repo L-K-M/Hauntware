@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:klabautermann_docker/klabautermann_docker.dart';
+import 'package:klabautermann_docker/src/json_streams.dart'
+    show maxJsonStreamItemBytes;
 import 'package:test/test.dart';
 
 import 'harness.dart';
@@ -86,6 +88,37 @@ void main() {
       ]);
     });
 
+    test('a line over the cap is a protocol error that ends the stream', () {
+      for (final tail in ['', '\n{"after":1}\n']) {
+        final source = StreamController<List<int>>();
+        final events = collectEvents(byteStreamToLines(source.stream));
+        source
+          ..add(utf8Of('{"a":1}\n'))
+          ..add(utf8Of('x' * (maxJsonStreamItemBytes + 1)))
+          ..add(utf8Of(tail));
+        unawaited(source.close());
+        expect(
+          events,
+          completion(['{"a":1}', isA<DockerProtocolException>()]),
+          reason: 'tail ${tail.length}',
+        );
+      }
+    });
+
+    test('a long line in many chunks is scanned once', () async {
+      const chunk = 1024;
+      final piece = utf8Of('x' * chunk);
+      final watch = Stopwatch()..start();
+      final lines = await byteStreamToLines(
+        Stream.fromIterable([
+          for (var n = 0; n < maxJsonStreamItemBytes ~/ chunk - 1; n++) piece,
+          utf8Of('\n'),
+        ]),
+      ).toList();
+      expect(lines.single.length, maxJsonStreamItemBytes - chunk);
+      expect(watch.elapsed, lessThan(const Duration(seconds: 1)));
+    });
+
     test('malformed UTF-8 is replaced, not thrown', () async {
       final bytes = <int>[...utf8Of('{"x":"'), 0xFF, 0xFE, ...utf8Of('"}\n')];
       final lines = await byteStreamToLines(Stream.value(bytes)).toList();
@@ -160,6 +193,23 @@ void main() {
       expect(events.first, {'ok': 1});
       expect(events.last, isA<DockerProtocolException>());
     });
+
+    test(
+      'a value over the cap is a protocol error that ends the stream',
+      () async {
+        final source = StreamController<List<int>>();
+        final events = collectEvents(byteStreamToJsonValues(source.stream));
+        source
+          ..add(utf8Of('{"a":1}{"b":"'))
+          ..add(utf8Of('x' * maxJsonStreamItemBytes))
+          ..add(utf8Of('"}{"after":1}'));
+        unawaited(source.close());
+        expect(await events, [
+          {'a': 1},
+          isA<DockerProtocolException>(),
+        ]);
+      },
+    );
 
     test('a truncated final value at EOF is a protocol error', () async {
       final bytes = utf8Of('{"a":1} {"b":');
