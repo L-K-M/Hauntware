@@ -122,6 +122,9 @@ final class WorkspaceRemoteFiles {
           tofu: TofuVerifier(catalog.hostKeys),
           onHostKey: _prompts.trustHost,
           onKeyboardInteractive: _prompts.keyboardInteractive,
+          // Trust before secrets (02 §10): an unpinned endpoint's host key
+          // is verified before the credential resolver can prompt.
+          hostKeyPreflight: preflightDartSshHostKey,
         );
     final store = ManagedRemoteFileStore(
       indexFile: File(paths.join(_directory.path, 'managed_remote_files.json')),
