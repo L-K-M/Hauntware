@@ -486,6 +486,72 @@ void main() {
     });
   });
 
+  group('duplex done before its stream ends', () {
+    // Both production duplexes complete `done` apart from their stream:
+    // the SSH channel's close can win over bytes still queued behind a
+    // paused subscription. Only the stream's own end is EOF.
+    test('a hijacked stream still delivers the queued tail', () async {
+      final duplex = _EarlyDoneDuplex();
+      final client = DockerHttpClient(() async => duplex);
+      final sent = client.sendHijack(
+        const DockerHttpRequest(method: 'POST', path: '/x', upgrade: true),
+      );
+      await duplex.gotRequest;
+      duplex.inbound.add(latin1.encode('HTTP/1.1 101 UPGRADED\r\n\r\n'));
+      final res = await sent;
+
+      final received = StringBuffer();
+      final ended = Completer<void>();
+      final sub = res.body.stream.listen(
+        (c) => received.write(latin1.decode(c)),
+        onDone: ended.complete,
+      );
+      sub.pause();
+      duplex.inbound
+        ..add(utf8Of('one\n'))
+        ..add(utf8Of('two\n'));
+      unawaited(duplex.inbound.close());
+      duplex.finish();
+      await pumpEventQueue();
+      sub.resume();
+
+      await ended.future.timeout(const Duration(seconds: 2));
+      expect(received.toString(), 'one\ntwo\n');
+    });
+
+    test('a length body still reads the queued bytes', () async {
+      final duplex = _EarlyDoneDuplex();
+      final client = DockerHttpClient(() async => duplex);
+      final sent = client.sendBytes(getX());
+      await duplex.gotRequest;
+      duplex.inbound.add(
+        wireResponse('200 OK', headers: {'Content-Length': '6'}),
+      );
+      final res = await sent;
+
+      final received = <int>[];
+      Object? error;
+      final ended = Completer<void>();
+      final sub = res.body.listen(
+        received.addAll,
+        onError: (Object e) => error = e,
+        onDone: ended.complete,
+      );
+      sub.pause();
+      duplex.inbound
+        ..add(utf8Of('abc'))
+        ..add(utf8Of('def'));
+      unawaited(duplex.inbound.close());
+      duplex.finish();
+      await pumpEventQueue();
+      sub.resume();
+
+      await ended.future.timeout(const Duration(seconds: 2));
+      expect(error, isNull);
+      expect(utf8.decode(received), 'abcdef');
+    });
+  });
+
   group('backpressure', () {
     test('a paused body stream pauses the duplex subscription', () async {
       final daemon = FakeDaemon();
@@ -520,4 +586,42 @@ void main() {
       await expectThrows<DockerTransportException>(r2);
     });
   });
+}
+
+/// A duplex whose [done] the test completes on its own, apart from the
+/// end of [stream], as an SSH channel's close or a relay's exit does.
+final class _EarlyDoneDuplex implements ByteDuplex {
+  final inbound = StreamController<List<int>>();
+  final _outbound = StreamController<List<int>>();
+  final _done = Completer<void>();
+  final _request = Completer<void>();
+
+  _EarlyDoneDuplex() {
+    _outbound.stream.listen((_) {
+      if (!_request.isCompleted) _request.complete();
+    });
+  }
+
+  /// Completes once the client wrote its request.
+  Future<void> get gotRequest => _request.future;
+
+  /// The channel closed: `done` completes now, whatever is still queued.
+  void finish() {
+    if (!_done.isCompleted) _done.complete();
+  }
+
+  @override
+  Stream<List<int>> get stream => inbound.stream;
+
+  @override
+  StreamSink<List<int>> get sink => _outbound.sink;
+
+  @override
+  Future<void> get done => _done.future;
+
+  @override
+  Future<void> closeWrite() async {}
+
+  @override
+  Future<void> close() async => finish();
 }

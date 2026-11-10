@@ -575,18 +575,17 @@ final class _Head {
 
 /// One keep-alive HTTP/1.1 connection over a [ByteDuplex]. Reads are
 /// serialized: inbound bytes are buffered and the parser pulls.
+///
+/// Only the end of the duplex's stream is EOF, never [ByteDuplex.done]:
+/// an SSH channel's close or a relay's exit can complete `done` while
+/// bytes still wait behind a paused subscription, and those bytes are
+/// the tail of a body or of a hijacked exec's output.
 final class _Connection {
   _Connection(this._duplex, {required this.onIdle, required this.onDead}) {
     _sub = _duplex.stream.listen(
       _onData,
       onError: _onReadError,
       onDone: _onReadDone,
-    );
-    unawaited(
-      _duplex.done.then(
-        (_) => _remoteClosed(),
-        onError: (_, _) => _remoteClosed(),
-      ),
     );
   }
 
@@ -637,13 +636,6 @@ final class _Connection {
   }
 
   void _onReadDone() {
-    _eof = true;
-    _closeHijackCtl();
-    _wake();
-    if (!_busy) onDead(this);
-  }
-
-  void _remoteClosed() {
     _eof = true;
     _closeHijackCtl();
     _wake();
