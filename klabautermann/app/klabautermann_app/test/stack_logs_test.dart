@@ -122,7 +122,6 @@ void main() {
         switch (logs.logs[i]) {
           final LogLine line => logRowText(line),
           LogDroppedLines(:final count) => 'dropped $count',
-          _ => '?',
         },
     ];
 
