@@ -14,10 +14,9 @@ existing users.
 No Poltergeist source is copied and no Séance source is ported into
 Poltergeist: the moved code lives in the shared package, outside both
 products. `seance/` itself changed (`KeepAliveService.kt` deleted,
-`MainActivity.kt` and `AndroidManifest.xml` slimmed), so the
-`SEANCE_PIN_AUDIT_V3` record below drifts until it is re-recorded once
-with `scripts/audit-seance-pin.sh --write-record`; no contributor,
-licence, vendored path or gitlink changed.
+`MainActivity.kt` and `AndroidManifest.xml` slimmed), but the
+`SEANCE_PIN_AUDIT_V3` record below still matches: no contributor,
+licence, vendored path or gitlink changed, so no re-record is needed.
 
 ## Suite links, F5d (2026-10-21)
 
