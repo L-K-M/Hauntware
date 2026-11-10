@@ -1732,9 +1732,12 @@ void engineMain(
       case ReadHistory(:final serverId, :final tier, :final requestId):
         const nothing = HistoryRange(buckets: [], gaps: []);
         // The app waits on the answer, so a read that fails answers
-        // nothing recorded rather than nothing at all.
+        // nothing recorded rather than nothing at all. A server outside
+        // the fleet, such as one a view still shows while it is removed,
+        // has no history to read.
+        final store = fleetIds.contains(serverId) ? history : null;
         final range =
-            await (history?.read(serverId, tier, now: DateTime.now().toUtc()) ??
+            await (store?.read(serverId, tier, now: DateTime.now().toUtc()) ??
                     Future.value(nothing))
                 .catchError((Object _) => nothing);
         uiPort.send(

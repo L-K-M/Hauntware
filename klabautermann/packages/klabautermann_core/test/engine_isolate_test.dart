@@ -210,6 +210,13 @@ void main() {
       );
       expect(answer.range.buckets, isEmpty);
       expect(answer.range.gaps, isEmpty);
+      // The server is outside the fleet, so the read opens no rings.
+      expect(
+        Directory(
+          '${support.path}/history/${serverFileStem('ssh-config:web')}',
+        ).existsSync(),
+        isFalse,
+      );
     });
 
     test('an export redacts its lines in the engine (LOG-10)', () async {

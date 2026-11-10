@@ -222,10 +222,12 @@ final class _Accumulator {
 /// The history the engine records and answers from. It rolls each
 /// server's readings into the current 1-minute bucket, writes the bucket
 /// once a reading of a later minute arrives, and folds written minutes
-/// into the current 10-minute bucket the same way. Reads include the
-/// buckets still filling. It writes files only with exclusive access to
-/// the support directory, one file operation at a time in call order;
-/// otherwise it keeps the rings in memory for the run.
+/// into the current 10-minute bucket, which it writes with each minute.
+/// A bucket continued after a restart keeps its earlier readings. Reads
+/// include the buckets still filling. It writes files only with exclusive
+/// access to the support directory, one file operation at a time in call
+/// order, reads included; otherwise it keeps the rings in memory for the
+/// run.
 final class HistoryStore {
   HistoryStore._(this._directory, this._access, this._purge);
 
@@ -284,14 +286,20 @@ final class HistoryStore {
     final start = HistoryTier.minute.bucketOf(at);
     final held = _minute[serverId];
     if (held != null && held.start != start) {
-      // A reading from before the held minute, as across a clock change,
-      // starts nothing new and is dropped.
-      if (start.isBefore(held.start)) return;
+      // A reading from the minute just before the held one, as a small
+      // clock correction gives, starts nothing new and is dropped. One
+      // from further back means the clock was stepped back: the held
+      // minute closes and recording goes on at the clock's time, rather
+      // than stopping until the clock is back at the held minute.
+      if (start.isBefore(held.start) &&
+          !start.isBefore(held.start.subtract(HistoryTier.minute.bucket))) {
+        return;
+      }
       _closeMinute(serverId, held);
     }
     final bucket = _minute.putIfAbsent(
       serverId,
-      () => _Accumulator(start, HistoryProvenance.liveSampler),
+      () => _begin(serverId, HistoryTier.minute, start),
     );
     for (final MapEntry(key: metric, :value) in values.entries) {
       bucket.add(
@@ -321,32 +329,34 @@ final class HistoryStore {
       });
 
   /// Writes the buckets still filling, as when the engine stops: each
-  /// minute closes into its 10-minute bucket first, so that one holds
-  /// every reading too.
+  /// minute closes into its 10-minute bucket, which is written with it,
+  /// so that one holds every reading too.
   Future<void> flush() {
     for (final MapEntry(key: serverId, value: minute)
         in _minute.entries.toList()) {
       _closeMinute(serverId, minute);
     }
-    for (final MapEntry(key: serverId, value: ten) in _tenMinutes.entries) {
-      _write(serverId, HistoryTier.tenMinutes, ten.bucket);
-    }
     return _tail;
   }
 
   /// [serverId]'s buckets and gaps in [tier], oldest first: those within
-  /// the tier's span before [now], the filling bucket included.
+  /// the tier's span up to [now], the filling bucket included. Times
+  /// after [now] were written under a clock since stepped back, and are
+  /// left out. A server with no rings gets none created.
   Future<HistoryRange> read(
     String serverId,
     HistoryTier tier, {
     required DateTime now,
   }) async {
-    await _tail;
-    final rings = await _ringsOf(serverId);
-    final from = now.toUtc().subtract(tier.span);
+    final until = now.toUtc();
+    final from = until.subtract(tier.span);
     final buckets = <DateTime, HistoryBucket>{};
     final gaps = <HistoryGap>[];
-    if (rings != null) {
+    // In the queue, as the writes are: a file ring takes one operation
+    // at a time, and a write beside the read would fail.
+    await _inTurn(() async {
+      final rings = await _existingRingsOf(serverId);
+      if (rings == null) return;
       final bytes = await rings.tiers[tier]!.read(0, _ringBytes(tier));
       final data = ByteData.sublistView(bytes);
       for (var slot = 0; slot < tier.slots; slot++) {
@@ -354,7 +364,11 @@ final class HistoryStore {
           data,
           _headerBytes + slot * _bucketSlotBytes,
         );
-        if (bucket == null || bucket.start.isBefore(from)) continue;
+        if (bucket == null ||
+            bucket.start.isBefore(from) ||
+            bucket.start.isAfter(until)) {
+          continue;
+        }
         buckets[bucket.start] = bucket;
       }
       final gapData = ByteData.sublistView(
@@ -364,18 +378,23 @@ final class HistoryStore {
         final offset = _headerBytes + slot * _gapSlotBytes;
         final start = gapData.getInt64(offset);
         if (start == 0) continue;
-        final until = _fromSeconds(gapData.getInt64(offset + 8));
+        final gapFrom = _fromSeconds(start);
+        final gapUntil = _fromSeconds(gapData.getInt64(offset + 8));
         final cause = gapData.getUint8(offset + 16);
-        if (until.isBefore(from) || cause >= GapCause.values.length) continue;
+        if (gapUntil.isBefore(from) ||
+            gapFrom.isAfter(until) ||
+            cause >= GapCause.values.length) {
+          continue;
+        }
         gaps.add(
           HistoryGap(
-            from: _fromSeconds(start),
-            until: until,
+            from: gapFrom,
+            until: gapUntil,
             cause: GapCause.values[cause],
           ),
         );
       }
-    }
+    });
     final filling = switch (tier) {
       HistoryTier.minute => _minute[serverId],
       HistoryTier.tenMinutes => _tenMinutes[serverId],
@@ -421,32 +440,63 @@ final class HistoryStore {
     return _tail;
   }
 
+  /// Writes [minute] and folds it into its 10-minute bucket, which is
+  /// written too: an exit without [flush] then costs only the filling
+  /// minute. A held 10-minute bucket of another start was written when
+  /// its last minute closed.
   void _closeMinute(String serverId, _Accumulator minute) {
-    _write(serverId, HistoryTier.minute, minute.bucket);
+    _write(serverId, HistoryTier.minute, minute);
 
     final start = HistoryTier.tenMinutes.bucketOf(minute.start);
-    final held = _tenMinutes[serverId];
-    if (held != null && held.start != start) {
-      _write(serverId, HistoryTier.tenMinutes, held.bucket);
-      _tenMinutes.remove(serverId);
-    }
+    if (_tenMinutes[serverId]?.start != start) _tenMinutes.remove(serverId);
     final ten = _tenMinutes.putIfAbsent(
       serverId,
-      () => _Accumulator(start, HistoryProvenance.sessionRollup),
+      () => _begin(serverId, HistoryTier.tenMinutes, start),
     );
     minute.values.forEach(ten.add);
+    _write(serverId, HistoryTier.tenMinutes, ten);
     _minute.remove(serverId);
   }
 
-  void _write(String serverId, HistoryTier tier, HistoryBucket bucket) =>
-      _queue(serverId, (rings) {
-        final slot =
-            (_seconds(bucket.start) ~/ tier.bucket.inSeconds) % tier.slots;
-        return rings.tiers[tier]!.write(
-          _headerBytes + slot * _bucketSlotBytes,
-          _encodeBucket(bucket),
-        );
-      });
+  /// A new accumulator for [serverId]'s [tier] bucket at [start]. A write
+  /// replaces the whole slot, so the slot's readings from before, those of
+  /// a run before a restart or of this run before a clock step, are
+  /// merged in first; the writes queue after this.
+  _Accumulator _begin(String serverId, HistoryTier tier, DateTime start) {
+    final accumulator = _Accumulator(start, switch (tier) {
+      HistoryTier.minute => HistoryProvenance.liveSampler,
+      HistoryTier.tenMinutes => HistoryProvenance.sessionRollup,
+    });
+    _queue(serverId, (rings) async {
+      final stored = _decodeBucket(
+        ByteData.sublistView(
+          await rings.tiers[tier]!.read(
+            _slotOffset(tier, start),
+            _bucketSlotBytes,
+          ),
+        ),
+        0,
+      );
+      if (stored?.start == start) stored!.values.forEach(accumulator.add);
+    });
+    return accumulator;
+  }
+
+  /// Writes [accumulator]'s bucket as it stands when the write runs, so
+  /// it holds the readings [_begin] merged in before it.
+  void _write(String serverId, HistoryTier tier, _Accumulator accumulator) =>
+      _queue(
+        serverId,
+        (rings) => rings.tiers[tier]!.write(
+          _slotOffset(tier, accumulator.start),
+          _encodeBucket(accumulator.bucket),
+        ),
+      );
+
+  static int _slotOffset(HistoryTier tier, DateTime start) {
+    final slot = (_seconds(start) ~/ tier.bucket.inSeconds) % tier.slots;
+    return _headerBytes + slot * _bucketSlotBytes;
+  }
 
   void _queue(String serverId, Future<void> Function(_ServerRings) body) {
     final generation = _generations[serverId] ?? 0;
@@ -462,8 +512,27 @@ final class HistoryStore {
     });
   }
 
+  /// Runs [operation] after every file operation asked for before it, and
+  /// answers its result.
+  Future<T> _inTurn<T>(Future<T> Function() operation) {
+    final next = _tail.then((_) => operation());
+    _tail = next.then((_) {}, onError: (Object _) {});
+    return next;
+  }
+
   Future<_ServerRings?> _ringsOf(String serverId) =>
       _rings.putIfAbsent(serverId, () => _openRings(serverId));
+
+  /// [serverId]'s rings when it has any: open, or as files from an earlier
+  /// run. A read alone never creates them.
+  Future<_ServerRings?> _existingRingsOf(String serverId) async {
+    if (_rings[serverId] case final open?) return open;
+    final directory = _serverDirectory(serverId);
+    if (!_writesFiles || directory == null || !await directory.exists()) {
+      return null;
+    }
+    return _ringsOf(serverId);
+  }
 
   Future<_ServerRings?> _openRings(String serverId) async {
     if (!_writesFiles) {
