@@ -846,10 +846,12 @@ void engineMain(
 
   // Rebuilds the fleet from the store. A server that left it is forgotten
   // (03 §5.1): its samplers, link and attempts end and its subscriptions
-  // go. One that keeps its id under another endpoint loses its cached
-  // profile and its Docker session, which describe another machine
+  // go. One that keeps its id under another endpoint, an import whose
+  // endpoint changed or a synced server in [moved], loses what the engine
+  // learned or chose for that machine: its cached profile and history,
+  // Docker session and choices, admin state, reports and forwards
   // (SYN-08).
-  void refreshFleet() {
+  void refreshFleet({Set<String> moved = const {}}) {
     final previous = fleetIds.isEmpty ? null : fleet;
     fleet = ImportedFleet(
       imports.hosts,
@@ -881,6 +883,7 @@ void engineMain(
     final forgotten = {
       for (final id in before)
         if (!fleetIds.contains(id) ||
+            moved.contains(id) ||
             previous?.endpointOf(id) != fleet.endpointOf(id))
           id,
     };
@@ -934,8 +937,8 @@ void engineMain(
   // Takes [next] as the synced fleet. A trusted server that the account
   // still holds and that is no longer confirmed, with its pins read, had
   // its endpoint changed by a sync (03 §4.7, SYN-08): the app hears it,
-  // its link and log streams close, and its cached profile goes, which
-  // describes another machine. Nothing redials it until the user
+  // its link and log streams close, and refreshFleet forgets what the
+  // engine held for the old machine, as for a moved import. Nothing redials it until the user
   // confirms it again. One whose pins could not be read is only not
   // dialed for now: a store failure is no endpoint change. A server the
   // account no longer holds needs nothing here: refreshFleet drops it
@@ -955,15 +958,11 @@ void engineMain(
         if (next.unreadableIds.contains(id)) id,
     };
     synced = next;
-    refreshFleet();
+    refreshFleet(moved: changed);
     for (final id in changed) {
       uiPort.send(EndpointChanged(id));
       logs?.disconnect(id);
       links?.disconnect(id);
-    }
-    if (changed.isNotEmpty) {
-      unawaited(capabilities?.forget(changed));
-      unawaited(history?.forget(changed));
     }
   }
 

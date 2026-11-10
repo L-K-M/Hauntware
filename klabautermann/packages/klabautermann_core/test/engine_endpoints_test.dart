@@ -256,6 +256,15 @@ void main() {
       ..send(const Connect(_srv));
     await engine.until<Sample>();
     expect([for (final config in dials) config.host], ['alpha.example.com']);
+    engine.send(
+      const OpenPortForward(
+        serverId: _srv,
+        forwardId: 'f-1',
+        host: '127.0.0.1',
+        port: 8080,
+      ),
+    );
+    expect((await engine.until<PortForwardState>()).ended, isNull);
 
     // Another device moves the server.
     await server.seedServer(
@@ -280,6 +289,11 @@ void main() {
     );
     expect(links.single.running, isEmpty, reason: 'sampling stopped');
     expect(links.single.closes, 1);
+    // What the engine held for the old machine goes with it (03 §5.11).
+    expect(
+      round.whereType<PortForwardState>().single.ended,
+      PortForwardEnd.serverForgotten,
+    );
 
     engine.send(const Connect(_srv));
     final again = await engine.until<ConnectRejected>();
