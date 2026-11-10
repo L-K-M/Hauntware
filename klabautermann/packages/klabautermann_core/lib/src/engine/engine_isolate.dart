@@ -1376,13 +1376,24 @@ void engineMain(
             saved: saved,
           ),
         );
-      case ConfirmEndpoints(:final serverIds):
+      case ConfirmEndpoints(:final serverIds, :final shown):
+        // A server whose endpoint a sync changed since the user looked
+        // is left unconfirmed, so nothing pins what nobody saw; the fleet
+        // that answers lists it as waiting again.
+        final seen = shown == null
+            ? serverIds
+            : [
+                for (final entry in synced.entries)
+                  if (serverIds.contains(entry.serverId) &&
+                      shown[entry.serverId] == ShownEndpoint.of(entry))
+                    entry.serverId,
+              ];
         // Each pin is saved before it counts. One that cannot be saved
         // leaves its server unconfirmed, and the app is told before the
         // fleet, so the fleet's answer ends the request either way; the
         // others still count.
         Object? failure;
-        for (final pin in synced.pinsFor(serverIds, DateTime.now())) {
+        for (final pin in synced.pinsFor(seen, DateTime.now())) {
           try {
             await endpointPins.confirm(pin);
           } on Object catch (error) {

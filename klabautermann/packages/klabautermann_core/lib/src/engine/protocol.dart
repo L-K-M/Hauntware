@@ -343,6 +343,10 @@ import '../operations/plan_types.dart';
 /// and [RunSyncRound] gained an optional `requestId` that each
 /// [SyncStatus] answering them echoes, so a round the engine starts after
 /// a catalog write, which carries none, answers no request.
+///
+/// [ConfirmEndpoints] then gained `shown`, the endpoints the user looked
+/// at as [ShownEndpoint]s, within v3 the same way (03 §4.7, SAF-09): the
+/// engine confirms no server whose endpoint changed since.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -454,10 +458,60 @@ final class ImportSshConfig extends EngineRequest {
 /// (03 §4.9). Answered by [CatalogReplaced] with the new
 /// [FleetEntry.endpoint] values, after a [RequestRejected] when a pin
 /// could not be saved.
+///
+/// With [shown], the endpoints the user looked at by server id, a server
+/// is confirmed only while its endpoint still matches the one shown: a
+/// sync that changed it in the meantime leaves it unconfirmed, and the
+/// fleet that answers lists it as waiting again. The app always sends
+/// [shown]; without it, as in tests, each endpoint is taken as it stands.
 final class ConfirmEndpoints extends EngineRequest {
-  const ConfirmEndpoints(this.serverIds);
+  const ConfirmEndpoints(this.serverIds, {this.shown});
 
   final List<String> serverIds;
+  final Map<String, ShownEndpoint>? shown;
+}
+
+/// A synced server's endpoint as the confirmation list showed it
+/// ([ConfirmEndpoints.shown]): the [FleetEntry] fields a confirmation
+/// pins.
+@immutable
+final class ShownEndpoint {
+  const ShownEndpoint({
+    required this.host,
+    required this.port,
+    this.user,
+    this.jumpRoute,
+  });
+
+  /// [entry]'s endpoint.
+  ShownEndpoint.of(FleetEntry entry)
+    : host = entry.host,
+      port = entry.port,
+      user = entry.user,
+      jumpRoute = entry.jumpRoute;
+
+  final String host;
+  final int port;
+  final String? user;
+
+  /// As [FleetEntry.jumpRoute]. Pass an unmodifiable list.
+  final List<String>? jumpRoute;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ShownEndpoint &&
+      host == other.host &&
+      port == other.port &&
+      user == other.user &&
+      _sameItems(jumpRoute, other.jumpRoute);
+
+  @override
+  int get hashCode => Object.hash(
+    host,
+    port,
+    user,
+    jumpRoute == null ? null : Object.hashAll(jumpRoute!),
+  );
 }
 
 /// Sets FL-21's monitor set (03 §4.3 step 4, §6.4): the servers whose

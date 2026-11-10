@@ -5951,6 +5951,12 @@ abstract class AppLocalizations {
   /// **'Some servers still need confirming: confirm the jump hosts they go through too.'**
   String get endpointsStillPending;
 
+  /// Under the endpoint confirmation list when a sync changed a server's host, port, user or jump route after the user looked, so that server was not confirmed and its row now shows the new address.
+  ///
+  /// In en, this message translates to:
+  /// **'A server\'s address changed while you confirmed it. Check it again, then confirm.'**
+  String get endpointsChangedMeanwhile;
+
   /// Under the endpoint confirmation list when the engine could not save the confirmation or stopped before answering.
   ///
   /// In en, this message translates to:

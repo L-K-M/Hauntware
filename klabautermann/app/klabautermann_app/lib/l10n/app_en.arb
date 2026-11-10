@@ -5706,6 +5706,10 @@
   "@endpointsStillPending": {
     "description": "Under the endpoint confirmation list when a confirmed server stays listed because a jump host on its route changed and needs its own confirmation (D64)."
   },
+  "endpointsChangedMeanwhile": "A server's address changed while you confirmed it. Check it again, then confirm.",
+  "@endpointsChangedMeanwhile": {
+    "description": "Under the endpoint confirmation list when a sync changed a server's host, port, user or jump route after the user looked, so that server was not confirmed and its row now shows the new address."
+  },
   "endpointsFailed": "The confirmation could not be saved on this device, so these servers stay unconfirmed. Try again.",
   "@endpointsFailed": {
     "description": "Under the endpoint confirmation list when the engine could not save the confirmation or stopped before answering."

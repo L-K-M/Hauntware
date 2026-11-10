@@ -4663,6 +4663,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Some servers still need confirming: confirm the jump hosts they go through too.';
 
   @override
+  String get endpointsChangedMeanwhile =>
+      'A server\'s address changed while you confirmed it. Check it again, then confirm.';
+
+  @override
   String get endpointsFailed =>
       'The confirmation could not be saved on this device, so these servers stay unconfirmed. Try again.';
 
