@@ -7,6 +7,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- The workspace server list offers Keep this device's key and Trust the new
+  key when another device synced a different host key, so the conflict can be
+  resolved instead of only warned about.
 - Settings › About shows the running build's version, and the open-source
   licenses page repeats it under the app name.
 - Hide or show the folder sidebar from View, its toolbar buttons or
