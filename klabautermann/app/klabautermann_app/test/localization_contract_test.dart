@@ -348,7 +348,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'/'",
     "'..'",
   },
-  'lib/controllers/sync_controller.dart': {"'the engine stopped'"},
+  // A sign-in's or round's request id, matched in the engine's answer.
+  'lib/controllers/sync_controller.dart': {
+    "'the engine stopped'",
+    r"'sync-${_count++}'",
+  },
   // TRI-03's acknowledgement keys (kind and subject) and the fields they
   // are stored under in settings.json.
   'lib/controllers/attention.dart': {

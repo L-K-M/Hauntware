@@ -338,6 +338,11 @@ import '../operations/plan_types.dart';
 /// [KeyPassphrasePromptRequest] asks for the passphrase of an encrypted
 /// private key, the server's or a jump host's, and is answered with
 /// [PromptSecretAnswer], whose `save` it never honours.
+///
+/// Sync request ids then joined v3 the same way (03 §10.1): [EnrollSync]
+/// and [RunSyncRound] gained an optional `requestId` that each
+/// [SyncStatus] answering them echoes, so a round the engine starts after
+/// a catalog write, which carries none, answers no request.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -391,7 +396,11 @@ final class EnrollSync extends EngineRequest {
     required this.username,
     required this.password,
     required this.encryptionPassphrase,
+    this.requestId,
   });
+
+  /// Echoed by the [SyncStatus] events that answer this request.
+  final String? requestId;
 
   /// The sync server's address, as Séance's account settings show it.
   final String baseUrl;
@@ -412,7 +421,10 @@ final class EnrollSync extends EngineRequest {
 /// [CatalogReplaced] when it succeeds. Alert inbox fetches ride inside it
 /// (v1.x, D42).
 final class RunSyncRound extends EngineRequest {
-  const RunSyncRound();
+  const RunSyncRound({this.requestId});
+
+  /// Echoed by the [SyncStatus] events that answer this request.
+  final String? requestId;
 }
 
 /// Imports the hosts of an OpenSSH client config as device-local fleet
@@ -1659,11 +1671,13 @@ final class SshConfigImported extends EngineEvent {
 
 /// A sync operation started or ended (03 §10.1). Operations run one at a
 /// time in request order, each reported [SyncPhase.running] and then
-/// [SyncPhase.succeeded] or [SyncPhase.failed].
+/// [SyncPhase.succeeded] or [SyncPhase.failed]. Besides the requested
+/// ones, the engine runs a round after each catalog write it took.
 final class SyncStatus extends EngineEvent {
   const SyncStatus(
     this.phase, {
     required this.operation,
+    this.requestId,
     this.account,
     this.failure,
     this.passphraseUnverified = false,
@@ -1673,6 +1687,11 @@ final class SyncStatus extends EngineEvent {
 
   final SyncPhase phase;
   final SyncOperation operation;
+
+  /// The id of the [EnrollSync] or [RunSyncRound] this operation answers;
+  /// null for a round the engine started itself, or a request sent
+  /// without one.
+  final String? requestId;
 
   /// The enrolled account as the operation leaves it, or null when this
   /// device is not enrolled.
@@ -1692,6 +1711,18 @@ final class SyncStatus extends EngineEvent {
   /// How much of the account the `klabautermann:` records take, after a
   /// succeeded operation; null otherwise.
   final SyncPrefixBudget? prefixBudget;
+
+  /// This status as the answer to the request [requestId].
+  SyncStatus answering(String? requestId) => SyncStatus(
+    phase,
+    operation: operation,
+    requestId: requestId,
+    account: account,
+    failure: failure,
+    passphraseUnverified: passphraseUnverified,
+    detail: detail,
+    prefixBudget: prefixBudget,
+  );
 }
 
 /// The account budget of the `klabautermann:` records (03 §4.8): at most

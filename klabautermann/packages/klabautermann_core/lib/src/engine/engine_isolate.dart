@@ -1006,12 +1006,19 @@ void engineMain(
     );
   }
 
-  void runSync(SyncOperation operation, Future<SyncStatus> Function() body) {
+  // [requestId] is the request's own, echoed on each status; null for a
+  // round the engine starts itself.
+  void runSync(
+    SyncOperation operation,
+    Future<SyncStatus> Function() body, {
+    String? requestId,
+  }) {
     syncTail = syncTail.then((_) async {
       uiPort.send(
         SyncStatus(
           SyncPhase.running,
           operation: operation,
+          requestId: requestId,
           account: sync.account,
         ),
       );
@@ -1031,6 +1038,7 @@ void engineMain(
           SyncStatus(
             SyncPhase.failed,
             operation: operation,
+            requestId: requestId,
             account: sync.account,
             failure: SyncFailure.other,
             detail: '$error',
@@ -1042,7 +1050,7 @@ void engineMain(
         uiPort.send(CatalogReplaced(fleetEntries()));
         await sendServerPrefs();
       }
-      uiPort.send(status);
+      uiPort.send(status.answering(requestId));
     });
   }
 
@@ -1401,10 +1409,14 @@ void engineMain(
         if (skipped.isNotEmpty) {
           reject(message, 'not eligible fleet servers: ${skipped.join(', ')}');
         }
-      case EnrollSync():
-        runSync(SyncOperation.enroll, () => sync.enroll(message));
-      case RunSyncRound():
-        runSync(SyncOperation.round, sync.runRound);
+      case EnrollSync(:final requestId):
+        runSync(
+          SyncOperation.enroll,
+          () => sync.enroll(message),
+          requestId: requestId,
+        );
+      case RunSyncRound(:final requestId):
+        runSync(SyncOperation.round, sync.runRound, requestId: requestId);
       case ReadServerDraft(:final requestId, :final serverId):
         uiPort.send(
           ServerDraftRead(
