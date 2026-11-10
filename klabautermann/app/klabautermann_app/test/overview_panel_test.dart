@@ -3,9 +3,11 @@ import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/controllers/app_lock_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/overview_layout.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/ui/app_lock_gate.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart'
     show ChartSeverity, ChartThresholds, CoreHeatmap, Gauge, StackedBar;
 import 'package:klabautermann_app/ui/cpu_hints.dart';
@@ -17,6 +19,7 @@ import 'package:klabautermann_app/ui/system_panel.dart' show PanelSection;
 import 'package:klabautermann_app/ui/threshold_announcer.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'support/device_authenticator.dart';
 import 'support/charts.dart'
     show chartTheme, goldenFontFamily, goldensCompareHere, loadGoldenFonts;
 import 'support/docker.dart';
@@ -227,6 +230,7 @@ Future<_Panel> _pump(
   bool visible = true,
   ValueNotifier<bool>? announce,
   OverviewLayoutController? layout,
+  AppLockController? lock,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -249,6 +253,14 @@ Future<_Panel> _pump(
       theme: theme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      // As KlabautermannApp mounts the lock screen, over the Navigator.
+      builder: switch (lock) {
+        final lock? => (context, child) => AppLockGate(
+          lock: lock,
+          child: child!,
+        ),
+        null => null,
+      },
       home: MediaQuery.withClampedTextScaling(
         minScaleFactor: textScale,
         maxScaleFactor: textScale,
@@ -1683,6 +1695,44 @@ void main() {
 
       // Back on stage: where the value stands now is the start.
       navigator.pop();
+      await tester.pumpAndSettle();
+      await cpu(16, 95);
+      await cpu(28, 95);
+      expect(heard(tester), isEmpty);
+      await cpu(30, 50);
+      await cpu(42, 50);
+      expect(heard(tester), ['CPU 50%: back to normal']);
+    });
+
+    testWidgets('nothing is heard while the app is locked (03 §8.13)', (
+      tester,
+    ) async {
+      final announce = ValueNotifier(true);
+      addTearDown(announce.dispose);
+      final device = FakeDeviceAuthenticator()..accept = false;
+      final lock = AppLockController(
+        authenticator: device,
+        supported: true,
+        enabled: true,
+      );
+      addTearDown(lock.dispose);
+      final panel = await _pump(tester, announce: announce, lock: lock);
+      expect(lock.locked, isTrue);
+      Future<void> cpu(int seconds, double percent) => panel.sample(
+        tester,
+        busy(percent),
+        at: _start.add(Duration(seconds: seconds)),
+      );
+
+      // The screen reader would speak to whoever stands at the device.
+      await cpu(0, 50);
+      await cpu(2, 95);
+      await cpu(14, 95);
+      expect(heard(tester), isEmpty);
+
+      // Unlocked: where the value stands now is the start.
+      device.accept = true;
+      await lock.unlock();
       await tester.pumpAndSettle();
       await cpu(16, 95);
       await cpu(28, 95);
