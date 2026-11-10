@@ -406,6 +406,11 @@ final class StackSources {
         projectDirectory: project.workingDir,
         configFiles: project.configFiles,
         envFiles: project.environmentFiles,
+        // Every profile, so a service only a profile enables prints its
+        // hash too: a stack whose running services all come from
+        // profiles is otherwise left with nothing to compare. A service
+        // hash does not depend on the active profiles.
+        profiles: const ['*'],
         hash: '*',
       );
     } on ArgumentError {
@@ -503,10 +508,10 @@ final class StackSources {
     );
   }
 
-  /// Runs `config --hash '*'` and compares each service's hash with its
-  /// containers' labels. A service it does not print is one the files no
-  /// longer name, or one only a profile enables: STK-06 lists it, and it
-  /// says nothing about the files. Its error text is read only to tell a
+  /// Runs `--profile '*' config --hash '*'` and compares each service's
+  /// hash with its containers' labels. A service it does not print is one
+  /// the files no longer name: STK-06 lists it, and it says nothing about
+  /// the files. Its error text is read only to tell a
   /// CLI without the flag form from a config that fails.
   Future<StackVerdict> _compareHashes(
     ComposeInvocation invocation,

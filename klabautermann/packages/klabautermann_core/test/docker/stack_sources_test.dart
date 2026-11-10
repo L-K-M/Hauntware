@@ -198,6 +198,10 @@ final class _Harness {
     exitCode: 0,
   );
 
+  /// `config --hash`'s answer with every profile enabled; [hashes] when
+  /// null.
+  RemoteCommandResult? allProfileHashes;
+
   /// `config --profiles`' answer (STK-09).
   RemoteCommandResult profiles = const RemoteCommandResult(
     stdout: 'tools\ndebug\n',
@@ -237,7 +241,8 @@ final class _Harness {
         exitCode: 0,
       ),
       _Run.cli => RemoteCommandResult(stdout: cli, exitCode: 0),
-      _Run.config => hashes,
+      _Run.config =>
+        argv.contains('--profile') ? allProfileHashes ?? hashes : hashes,
       _Run.profiles => profiles,
       _Run.scan => scan,
     };
@@ -328,10 +333,26 @@ void main() {
         '/srv/demo',
         '-f',
         _compose,
+        '--profile',
+        '*',
         'config',
         '--hash',
         '*',
       ]);
+    });
+
+    test('a project whose running services all come from a profile is '
+        'verified against every profile', () async {
+      final h = _Harness([
+        _container('t1', _labels(service: 'tools', hash: 'feed03')),
+      ]);
+      // Without a profile the CLI prints only the default services.
+      h.allProfileHashes = const RemoteCommandResult(
+        stdout: 'db feed02\ntools feed03\nweb feed01\n',
+        exitCode: 0,
+      );
+      final last = await h.verified();
+      expect(last.verdicts['demo'], isA<StackVerified>());
     });
 
     test("the CLI check and compose commands run the server's docker "
