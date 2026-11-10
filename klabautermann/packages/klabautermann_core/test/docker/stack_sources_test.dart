@@ -957,6 +957,29 @@ void main() {
     );
   });
 
+  test('a check that failed with an error runs again next time', () async {
+    var failing = true;
+    final sources = StackSources(
+      socketPath: _socket,
+      run: (command, {required timeout, required maxOutputBytes}) async {
+        if (failing) throw StateError('the runner broke');
+        return const RemoteCommandResult(stdout: '0\n', exitCode: 0);
+      },
+      openFileSystem: () => throw UnimplementedError(),
+    );
+    final project = groupComposeProjects([
+      ContainerSummary(
+        id: 'w1',
+        labels: maskedLabels(_labels(service: 'web', hash: 'feed01')),
+      ),
+    ]).projects.single;
+
+    await expectLater(sources.verdict(project), throwsStateError);
+    failing = false;
+    final again = sources.verdict(project);
+    await expectLater(again, completion(isA<StackVerdict>()));
+  });
+
   test('the file checks quote paths through a real sh', () async {
     final dir = await Directory.systemTemp.createTemp('klab stacks ');
     addTearDown(() => dir.delete(recursive: true));

@@ -168,20 +168,28 @@ final class StackSources {
     if (_known(project) case final known?) return Future.value(known);
     final key = _keyOf(project);
     final generation = _generation;
-    return _checking[key] ??= _checkOrWait(project).then((verdict) {
-      if (generation == _generation) {
-        _checking.remove(key);
-        // A check that waited for a channel decided nothing: the next
-        // stacks list checks again.
-        if (verdict is StackVerifying) {
-          _waiting.add(key);
-        } else {
-          _waiting.remove(key);
-          _verdicts[project.name] = (key: key, verdict: verdict);
+    return _checking[key] ??= _checkOrWait(project).then(
+      (verdict) {
+        if (generation == _generation) {
+          _checking.remove(key);
+          // A check that waited for a channel decided nothing: the next
+          // stacks list checks again.
+          if (verdict is StackVerifying) {
+            _waiting.add(key);
+          } else {
+            _waiting.remove(key);
+            _verdicts[project.name] = (key: key, verdict: verdict);
+          }
         }
-      }
-      return verdict;
-    });
+        return verdict;
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        // A check that broke decided nothing: the next asks again rather
+        // than receive the same error forever.
+        if (generation == _generation) _checking.remove(key);
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
   }
 
   StackVerdict? _known(ComposeProject project) {
