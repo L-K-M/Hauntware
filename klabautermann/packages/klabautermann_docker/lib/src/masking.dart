@@ -9,8 +9,11 @@ final RegExp secretKeyPattern = RegExp(
 );
 
 /// 03 §8.9: the `user:pass@` of `scheme://user:pass@` credentials, read
-/// after the `://`.
-final RegExp _urlCredentialPattern = RegExp(r'([^/@\s:]+):[^/@\s]+@');
+/// after the `://`. The user may be empty (`redis://:pass@host`). The
+/// password runs to the last `@` before the authority ends at `/`, `?`,
+/// `#` or whitespace, so an unescaped `@` in it stays hidden; a URL
+/// without an `@` in its authority matches nothing.
+final RegExp _urlCredentialPattern = RegExp(r'([^/@\s:]*):[^/?#\s]+@');
 
 /// Whether the code unit [unit] is an ASCII letter, which a URL scheme
 /// starts with. Code units, not a regular expression per character,
