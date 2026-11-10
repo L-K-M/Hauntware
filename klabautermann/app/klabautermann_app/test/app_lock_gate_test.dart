@@ -1,12 +1,16 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_keystore/ghost_keystore.dart'
     show appLockBackgroundTimeout;
 import 'package:klabautermann_app/controllers/app_lock_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/app_lock_gate.dart';
+import 'package:klabautermann_app/ui/menus/app_commands.dart';
+import 'package:klabautermann_app/ui/menus/app_menu_host.dart';
 
 import 'support/device_authenticator.dart';
 
@@ -194,5 +198,118 @@ void main() {
     device.hold!.complete();
     await tester.pumpAndSettle();
     expect(find.text(_title), findsNothing);
+  });
+
+  group('the app menus behind the lock (03 §8.13)', () {
+    late List<String> runs;
+
+    AppCommand command(
+      String id, {
+      required int order,
+      List<ShortcutActivator> keys = const [],
+    }) => AppCommand(
+      id: id,
+      label: (_) => id,
+      activators: (_) => keys,
+      run: (_) async => runs.add(id),
+      menuPlacement: CommandMenuPlacement(menu: AppMenuId.edit, order: order),
+    );
+
+    /// The app's shape: the menu host inside the gate's child, as
+    /// KlabautermannApp mounts it, over a lock that stays locked.
+    Future<AppLockController> pumpMenus(WidgetTester tester) async {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.menu,
+        (_) async => null,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.menu,
+          null,
+        ),
+      );
+      runs = [];
+      device.accept = false;
+      final lock = AppLockController(
+        authenticator: device,
+        supported: true,
+        enabled: true,
+        elapsed: () => elapsed,
+        wallClock: () => wall,
+      );
+      addTearDown(lock.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(platform: defaultTargetPlatform),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => AppLockGate(lock: lock, child: child!),
+          home: AppMenuHost(
+            locked: () => lock.locked,
+            listenable: lock,
+            commands: [
+              command(
+                kEditUndoCommandId,
+                order: 10,
+                keys: const [
+                  SingleActivator(LogicalKeyboardKey.keyZ, meta: true),
+                ],
+              ),
+              command(kAppSettingsCommandId, order: 20),
+            ],
+            child: const Scaffold(body: Text(_content)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(lock.locked, isTrue);
+      return lock;
+    }
+
+    PlatformMenuItem item(WidgetTester tester, String label) {
+      final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
+      PlatformMenuItem? search(List<PlatformMenuItem> items) {
+        for (final item in items) {
+          if (item.label == label && item is! PlatformMenu) return item;
+          final children = switch (item) {
+            PlatformMenu(:final menus) => menus,
+            PlatformMenuItemGroup(:final members) => members,
+            _ => const <PlatformMenuItem>[],
+          };
+          if (search(children) case final found?) return found;
+        }
+        return null;
+      }
+
+      return search(bar.menus)!;
+    }
+
+    testWidgets('macOS: while locked the native items are disabled but '
+        'Settings, and come back on unlock', (tester) async {
+      final lock = await pumpMenus(tester);
+
+      expect(item(tester, kEditUndoCommandId).onSelected, isNull);
+      // Settings shows its own locked notice in its window.
+      item(tester, kAppSettingsCommandId).onSelected!();
+      await tester.pump();
+      expect(runs, [kAppSettingsCommandId]);
+
+      device.accept = true;
+      await lock.unlock();
+      await tester.pumpAndSettle();
+      item(tester, kEditUndoCommandId).onSelected!();
+      await tester.pump();
+      expect(runs, [kAppSettingsCommandId, kEditUndoCommandId]);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+    testWidgets('a command chord runs nothing while locked', (tester) async {
+      await pumpMenus(tester);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pump();
+      expect(runs, isEmpty);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
   });
 }
