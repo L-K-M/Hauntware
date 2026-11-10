@@ -709,34 +709,52 @@ void main() {
       expect(connectorCalled, isFalse);
     });
 
-    test('a jump-key failure identifies the host that needs a passphrase', () async {
-      final target = _server().copyWith(jumpHostId: 'jump');
-      const jump = ServerConfig(
-        id: 'jump', label: 'Jump', host: 'jump.invalid', username: 'deploy',
-        authMethod: AuthMethod.privateKey, createdAt: 1, updatedAt: 1,
-      );
-      var dialed = false;
-      await expectLater(
-        openAuthenticatedClient(
-          config: target,
-          credentials: const SshCredentials.password('password'),
-          tofu: TofuVerifier(InMemoryHostKeyStore()),
-          onHostKey: (_) async => true,
-          resolveJumpHost: (id) async => id == jump.id
-              ? ResolvedSshHost(jump,
-                  SshCredentials.privateKey(_generatedKeyPem(passphrase: 'right')))
-              : null,
-          connect: (_, _, _) async {
-            dialed = true;
-            throw StateError('must not dial');
-          },
-        ),
-        throwsA(isA<SshConnectException>()
-            .having((e) => e.kind, 'kind', SshConnectFailureKind.keyPassphraseRequired)
-            .having((e) => e.serverId, 'serverId', jump.id)),
-      );
-      expect(dialed, isFalse);
-    });
+    test(
+      'a jump-key failure identifies the host that needs a passphrase',
+      () async {
+        final target = _server().copyWith(jumpHostId: 'jump');
+        const jump = ServerConfig(
+          id: 'jump',
+          label: 'Jump',
+          host: 'jump.invalid',
+          username: 'deploy',
+          authMethod: AuthMethod.privateKey,
+          createdAt: 1,
+          updatedAt: 1,
+        );
+        var dialed = false;
+        await expectLater(
+          openAuthenticatedClient(
+            config: target,
+            credentials: const SshCredentials.password('password'),
+            tofu: TofuVerifier(InMemoryHostKeyStore()),
+            onHostKey: (_) async => true,
+            resolveJumpHost: (id) async => id == jump.id
+                ? ResolvedSshHost(
+                    jump,
+                    SshCredentials.privateKey(
+                      _generatedKeyPem(passphrase: 'right'),
+                    ),
+                  )
+                : null,
+            connect: (_, _, _) async {
+              dialed = true;
+              throw StateError('must not dial');
+            },
+          ),
+          throwsA(
+            isA<SshConnectException>()
+                .having(
+                  (e) => e.kind,
+                  'kind',
+                  SshConnectFailureKind.keyPassphraseRequired,
+                )
+                .having((e) => e.serverId, 'serverId', jump.id),
+          ),
+        );
+        expect(dialed, isFalse);
+      },
+    );
 
     test('an encrypted key with its passphrase loads and dials', () async {
       // The fixture's own check: every key the helper encrypts is one its
