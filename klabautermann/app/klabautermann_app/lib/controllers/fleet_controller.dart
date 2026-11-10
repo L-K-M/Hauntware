@@ -218,6 +218,52 @@ final class FleetController extends ChangeNotifier {
   final Map<String, ReachabilityStatus> _reachability = {};
   String? _selectedServerId;
 
+  /// The rail's filter query (FL-05), kept here so hiding and showing the
+  /// rail does not drop it.
+  String get filterQuery => _filterQuery;
+  String _filterQuery = '';
+
+  /// The folded sections and groups, by key, kept here so hiding and
+  /// showing the rail does not unfold them.
+  Set<String> get collapsedSections => _collapsedSections;
+  Set<String> _collapsedSections = const {};
+
+  /// FL-10's faults-only toggle, kept here like [filterQuery].
+  bool get faultsOnly => _faultsOnly;
+  bool _faultsOnly = false;
+
+  /// FL-10's attention-first toggle, kept here like [faultsOnly].
+  bool get attentionFirst => _attentionFirst;
+  bool _attentionFirst = false;
+
+  set filterQuery(String value) {
+    if (value == _filterQuery) return;
+    _filterQuery = value;
+    notifyListeners();
+  }
+
+  /// Folds or unfolds [key]. A search draws every header open, so a tap
+  /// during one changes nothing rather than a fold the user cannot see.
+  void toggleSection(String key) {
+    if (_filterQuery.isNotEmpty) return;
+    final next = {..._collapsedSections};
+    if (!next.remove(key)) next.add(key);
+    _collapsedSections = Set.unmodifiable(next);
+    notifyListeners();
+  }
+
+  set faultsOnly(bool value) {
+    if (value == _faultsOnly) return;
+    _faultsOnly = value;
+    notifyListeners();
+  }
+
+  set attentionFirst(bool value) {
+    if (value == _attentionFirst) return;
+    _attentionFirst = value;
+    notifyListeners();
+  }
+
   /// The running import, from reading the file to the engine's answer.
   Future<SshConfigImportOutcome>? _import;
 
