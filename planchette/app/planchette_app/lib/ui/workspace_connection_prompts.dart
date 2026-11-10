@@ -61,8 +61,9 @@ final class AppWorkspaceConnectionPrompts
   @override
   Future<CredentialDraft?> credentials(
     ServerConfig server,
-    CredentialResolutionScope scope,
-  ) => _withHost<CredentialDraft?>(null, (host) async {
+    CredentialResolutionScope scope, {
+    bool retry = false,
+  }) => _withHost<CredentialDraft?>(null, (host) async {
     final context = host.context;
     final dialogKey = GlobalKey();
     var finished = false;
@@ -98,8 +99,11 @@ final class AppWorkspaceConnectionPrompts
         pickKeyText: server.identityFilePath == null
             ? () => _pickKeyText(host.workspace)
             : null,
-        strings: const GhostCredentialStrings(
-          explanation: 'Used for this workspace session and never saved.',
+        strings: GhostCredentialStrings(
+          explanation: retry
+              ? 'That passphrase did not open the key. Try again. It is used '
+                    'for this workspace session and never saved.'
+              : 'Used for this workspace session and never saved.',
           connect: 'Connect',
         ),
       );
