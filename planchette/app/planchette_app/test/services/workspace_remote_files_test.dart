@@ -281,6 +281,28 @@ void main() {
     expect(copy.publication, same(opened.document.publication));
   });
 
+  test('a managed checkout carries the download mark', () async {
+    final marked = <String>[];
+    await files.close();
+    files = WorkspaceRemoteFiles(
+      directory: Directory(paths.join(directory.path, 'managed-marked')),
+      catalog: catalog,
+      prompts: _NoPrompts(),
+      connections: connections,
+      isDocumentOpen: (path) => workspace.tabForPath(path) != null,
+      provenance: DownloadProvenance.forHost(
+        ProvenancePlatform.macos,
+        agent: 'Planchette',
+        runProcess: (_, arguments) async {
+          marked.add(arguments.last);
+          return ProcessResult(0, 0, '', '');
+        },
+      ),
+    );
+    final opened = await open();
+    expect(marked, [opened.document.path]);
+  });
+
   test(
     'a managed copy replaced by a symlink never opens its local target',
     () async {

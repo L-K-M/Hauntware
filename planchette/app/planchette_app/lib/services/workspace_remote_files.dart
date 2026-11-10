@@ -44,6 +44,7 @@ final class WorkspaceRemoteFiles {
     required WorkspaceConnectionPrompts prompts,
     ConnectionManager? connections,
     bool Function(String path)? isDocumentOpen,
+    DownloadProvenance? provenance,
     this.onError,
   }) : // Collaborator names are public; ownership stays private.
        // ignore: prefer_initializing_formals
@@ -51,6 +52,7 @@ final class WorkspaceRemoteFiles {
        // ignore: prefer_initializing_formals
        _prompts = prompts,
        _injectedConnections = connections,
+       _provenance = provenance ?? DownloadProvenance(agent: 'Planchette'),
        // ignore: prefer_initializing_formals
        _isDocumentOpen = isDocumentOpen;
 
@@ -58,6 +60,10 @@ final class WorkspaceRemoteFiles {
   final WorkspaceConnectionPrompts _prompts;
   final ConnectionManager? _injectedConnections;
   final bool Function(String path)? _isDocumentOpen;
+
+  /// P1-03a's download mark the checkout queue puts on every file it
+  /// lands from a server.
+  final DownloadProvenance _provenance;
   final WorkspaceCatalog catalog;
   final void Function(Object, StackTrace)? onError;
   final Map<String, ServerConfig> _servers = {};
@@ -128,7 +134,7 @@ final class WorkspaceRemoteFiles {
       checkoutRoot: Directory(paths.join(_directory.path, 'checkouts')),
     );
     final guarded = _FailWhileReconnecting(connections);
-    final queue = TransferQueue(connections: guarded);
+    final queue = TransferQueue(connections: guarded, provenance: _provenance);
     final checkouts = CheckoutManager(
       store: store,
       connections: guarded,
