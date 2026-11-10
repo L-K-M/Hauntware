@@ -3326,7 +3326,7 @@
       }
     }
   },
-  "backupSwitchAdoptFleet": "Use shared key",
+  "backupSwitchAdoptFleet": "Trust the new key",
   "@backupSwitchAdoptFleet": {
     "description": "Resolves a held locator by adopting the fleet pin — no re-seal for that host (04 §4.4)."
   },
