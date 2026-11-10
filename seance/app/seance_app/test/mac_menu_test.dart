@@ -1,12 +1,17 @@
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostUndoableChange;
 import 'package:seance_app/app_state.dart';
+import 'package:seance_app/main.dart' show navigatorKey;
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/ui/app_menus.dart';
+import 'package:seance_app/ui/built_in_text_editor.dart';
 import 'package:seance_app/ui/server_list_density.dart';
+import 'package:seance_core/seance_core.dart' show ServerConfig;
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
@@ -108,5 +113,181 @@ void main() {
     final count = sent.length;
     state!.notifyListeners();
     expect(sent, hasLength(count));
+  });
+
+  EditorTab editorTab() => EditorTab(
+    id: 'motd-editor',
+    serverId: 'alpha',
+    config: ServerConfig(
+      id: 'alpha',
+      label: 'alpha',
+      host: 'alpha.example.com',
+      username: 'deploy',
+      createdAt: 1,
+      updatedAt: 1,
+    ),
+    remotePath: '/etc/motd',
+    localPath: 'motd',
+    ownerEditSessionId: 'edit-session',
+  );
+
+  testWidgets('the native menu follows the editor tab and the history', (
+    tester,
+  ) async {
+    await boot(tester);
+    final sent = <MethodCall>[];
+    messenger.setMockMethodCallHandler(macMenuChannel, (call) async {
+      sent.add(call);
+      return null;
+    });
+    installMacMenu(state!);
+
+    final editor = editorTab();
+    state!.tabs.add(editor);
+    state!.focusTab(editor.id);
+    await tester.pump();
+    expect(sent, contains(isMethodCall('setEditorActive', arguments: true)));
+
+    await tester.runAsync(() async {
+      state!.undoHistory.record(
+        GhostUndoableChange(
+          name: 'Pin to top',
+          undo: () async {},
+          redo: () async {},
+        ),
+      );
+    });
+    await tester.pump();
+    expect(
+      sent,
+      contains(
+        isMethodCall('setUndoItem', arguments: {
+          'title': 'Undo Pin to top',
+          'enabled': true,
+        }),
+      ),
+    );
+    expect(
+      sent,
+      contains(
+        isMethodCall('setRedoItem', arguments: {
+          'title': 'Redo',
+          'enabled': false,
+        }),
+      ),
+    );
+  });
+
+  testWidgets('editSave and editFind reach the mounted editor', (
+    tester,
+  ) async {
+    await boot(tester);
+    messenger.setMockMethodCallHandler(macMenuChannel, (call) async => null);
+    installMacMenu(state!);
+    final editor = editorTab();
+    state!.tabs.add(editor);
+    state!.focusTab(editor.id);
+    final file = File('${directory!.path}/motd');
+    await tester.runAsync(() => file.writeAsString('one\n'));
+    String? savedText;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BuiltInTextEditorScreen(
+          key: editor.editorKey,
+          file: file,
+          remotePath: editor.remotePath,
+          initialText: 'one\n',
+          saveDocument: (_, text) async => savedText = text,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await fromNative(tester, 'editSave');
+    await tester.pump();
+    expect(savedText, 'one\n');
+
+    await fromNative(tester, 'editFind');
+    await tester.pumpAndSettle();
+    expect(find.text('Find in file'), findsOneWidget);
+  });
+
+  testWidgets('editSave and editFind no-op without an editor tab', (
+    tester,
+  ) async {
+    await boot(tester);
+    messenger.setMockMethodCallHandler(macMenuChannel, (call) async => null);
+    installMacMenu(state!);
+
+    await fromNative(tester, 'editSave');
+    await fromNative(tester, 'editFind');
+  });
+
+  testWidgets('the native palette, shortcut and update items open their '
+      'surfaces', (tester) async {
+    await boot(tester);
+    messenger.setMockMethodCallHandler(macMenuChannel, (call) async => null);
+    installMacMenu(state!);
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        home: const Scaffold(body: SizedBox()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await fromNative(tester, 'keyboardShortcuts');
+    await tester.pumpAndSettle();
+    expect(find.text('Keyboard shortcuts'), findsWidgets);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+
+    await fromNative(tester, 'commandPalette');
+    await tester.pumpAndSettle();
+    expect(find.text('Type a command'), findsOneWidget);
+
+    await fromNative(tester, 'checkForUpdates');
+    await tester.pump();
+    expect(
+      find.text(
+        'No newer version was found. If you’re offline, try again later.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('editUndo steps the history, or yields to a focused field', (
+    tester,
+  ) async {
+    await boot(tester);
+    messenger.setMockMethodCallHandler(macMenuChannel, (call) async => null);
+    installMacMenu(state!);
+    var undone = 0;
+    GhostUndoableChange change(String name) => GhostUndoableChange(
+      name: name,
+      undo: () async => undone++,
+      redo: () async {},
+    );
+    state!.undoHistory.record(change('Pin to top'));
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        home: const Scaffold(body: TextField()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await fromNative(tester, 'editUndo');
+    await tester.pump();
+    expect(undone, 1);
+    expect(find.text('Pin to top undone'), findsOneWidget);
+
+    state!.undoHistory.record(change('Pin to top'));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'typed');
+    await tester.pump();
+    await fromNative(tester, 'editUndo');
+    await tester.pump();
+    expect(undone, 1, reason: 'the field kept the step for its own history');
   });
 }

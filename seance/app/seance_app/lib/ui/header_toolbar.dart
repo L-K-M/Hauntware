@@ -9,6 +9,7 @@ import '../family_hues.dart';
 import '../main.dart';
 import '../theme.dart';
 import 'adaptive_shell.dart' show PaneVisibility;
+import 'app_commands.dart';
 import 'app_menus.dart';
 import 'macos_toolbar_band.dart';
 import 'server_appearance.dart';
@@ -139,6 +140,12 @@ class HeaderToolbar extends StatelessWidget {
                     visible: state.inspectorVisible,
                   ),
                 ),
+                // macOS has the native menu bar; elsewhere the ☰ ends the
+                // row.
+                if (platform != TargetPlatform.macOS) ...[
+                  const SizedBox(width: _gap),
+                  const SeanceMenuButton(),
+                ],
               ],
             ),
           ),

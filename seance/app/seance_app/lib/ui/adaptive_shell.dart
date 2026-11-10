@@ -347,8 +347,30 @@ class AdaptivePaneLayout extends StatefulWidget {
     'adaptive-utility-resize-handle',
   );
 
+  /// Whether the layout currently shows its [narrowPane]: the phone-like
+  /// arrangement with screens instead of side panes. Surfaces that read
+  /// posture without a layout of their own (the palette's command list)
+  /// take it from here; below the first [AdaptivePaneLayout] it is exact,
+  /// above it the default answers wide.
+  static bool isNarrow(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<_AdaptiveNarrow>()
+          ?.narrow ??
+      false;
+
   @override
   State<AdaptivePaneLayout> createState() => _AdaptivePaneLayoutState();
+}
+
+/// Marks which arrangement the layout built this frame.
+class _AdaptiveNarrow extends InheritedWidget {
+  const _AdaptiveNarrow({required this.narrow, required super.child});
+
+  final bool narrow;
+
+  @override
+  bool updateShouldNotify(_AdaptiveNarrow oldWidget) =>
+      narrow != oldWidget.narrow;
 }
 
 class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
@@ -372,9 +394,12 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
       builder: (context, constraints) {
         final widths = _allocate(constraints.maxWidth);
         if (widths == null) {
-          return KeyedSubtree(
-            key: AdaptivePaneLayout.narrowPaneKey,
-            child: widget.narrowPane,
+          return _AdaptiveNarrow(
+            narrow: true,
+            child: KeyedSubtree(
+              key: AdaptivePaneLayout.narrowPaneKey,
+              child: widget.narrowPane,
+            ),
           );
         }
         AdaptivePaneWidths currentWidths() =>
@@ -534,9 +559,10 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
           handle: listHandle,
           start: widths.list,
         );
-        return header == null
+        final shell = header == null
             ? Scaffold(body: body)
             : ClaimMacosToolbarBand(child: Scaffold(body: body));
+        return _AdaptiveNarrow(narrow: false, child: shell);
       },
     );
   }

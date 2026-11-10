@@ -3089,6 +3089,20 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// The menu's Check for Updates…: the user asked, so it runs even while
+  /// the launch check is opted out, and a newer release sets [updateInfo]
+  /// exactly as the launch check's would. Returns that release, or null:
+  /// the checker answers null both when this is the latest version and
+  /// when GitHub could not be reached, so the caller must not claim either.
+  Future<UpdateInfo?> checkNow(String currentVersion) async {
+    final info = await _updateChecker.check(currentVersion);
+    if (info != null) {
+      updateInfo = info;
+      notifyListeners();
+    }
+    return info;
+  }
+
   // --- Terminal appearance ---
 
   /// Change the terminal font size by [delta] points (the ⌘+ / ⌘− shortcuts),

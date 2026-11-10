@@ -218,6 +218,14 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
     }
   });
 
+  /// Save the document, uploading when the editor opened from a remote
+  /// checkout, as ⌘S in the tab does.
+  Future<void> save() => _save(upload: widget.onUpload != null);
+
+  /// Open the editor's find bar, as its Find button and search chords do.
+  /// A no-op while the document is loading or failed to load.
+  void openSearch() => _editor.openSearch();
+
   Future<void> _save({bool upload = false}) async {
     if (_reloading) return;
     try {

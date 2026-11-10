@@ -3,6 +3,19 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Menus and command palette (2026-11-10)
+
+Linux, Windows and phones get a ☰ menu in the header and the phone home's
+app bar; macOS keeps its native menu, which now carries File ▸ Save, a
+retargeted Find…, named and enabled Undo/Redo rows, View ▸ Command
+Palette…, Help ▸ Keyboard Shortcuts and Check for Updates…. The command
+palette (⇧⌘P or Ctrl+Shift+P) lists every command with its menu path and
+chord, and Help ▸ Keyboard Shortcuts (⌘/ or Ctrl+/) opens the shortcut
+list. The native menu's behavior on a real Mac (item validation, the
+Save/Find gate on the editor tab, Undo/Redo yielding to a focused field)
+is covered by the channel tests and the macOS build; the menu bar itself
+still needs a manual pass.
+
 ## Font catalog and previews (2026-10-17)
 
 Terminal and editor settings use `ghost_fonts`' shared, searchable 20-family

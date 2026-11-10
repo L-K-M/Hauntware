@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostUndoHistory, ghostForwardUndoToFocusedText;
 
 import '../../l10n/app_localizations.dart';
 import '../../services/registered_command.dart';
@@ -96,7 +97,8 @@ List<ShortcutActivator> Function(TargetPlatform) _perPlatform({
 /// an [EditableText] the step forwards the text intent there instead, so
 /// a menu click on Undo undoes the field's text rather than the app's
 /// change — and a field that cannot take the intent swallows the step,
-/// the same stand-down the native menu's retargeting applies.
+/// the same stand-down the native menu's retargeting applies
+/// ([ghostForwardUndoToFocusedText]).
 Future<void> stepEditHistory(
   OverlayState overlay,
   GhostUndoHistory history, {
@@ -105,17 +107,8 @@ Future<void> stepEditHistory(
 }) async {
   if (!overlay.mounted) return;
   final undo = direction == UndoDirection.undo;
-  final focus = FocusManager.instance.primaryFocus?.context;
   if (target == EditHistoryTarget.focusedControl &&
-      focus != null &&
-      focus.findAncestorWidgetOfExactType<EditableText>() != null) {
-    final intent = undo
-        ? const UndoTextIntent(SelectionChangedCause.keyboard)
-        : const RedoTextIntent(SelectionChangedCause.keyboard);
-    final action = Actions.maybeFind(focus, intent: intent);
-    if (action != null && action.isEnabled(intent)) {
-      Actions.invoke(focus, intent);
-    }
+      ghostForwardUndoToFocusedText(undo)) {
     return;
   }
   final name = undo ? history.undoName : history.redoName;

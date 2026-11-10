@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show UndoDirection;
 import 'package:ghost_ui/ghost_ui.dart'
-    show GhostUndoableChange, GhostUndoHistory, GhostUndoDeclined, showTopToast;
+    show
+        GhostUndoableChange,
+        GhostUndoHistory,
+        GhostUndoDeclined,
+        ghostForwardUndoToFocusedText,
+        showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show SyncedRule, uuidV4;
 
@@ -33,10 +38,8 @@ class UndoHistoryScope extends InheritedNotifier<GhostUndoHistory> {
 /// With [yieldToFocusedText], a text field that has the primary focus
 /// keeps its own history: the step goes to it instead, as the macOS native
 /// menu's retargeting and Poltergeist's Edit menu do, so a strip-menu
-/// click on Undo undoes the field's text and not the app's last change.
-/// [EditableText]'s own undo handlers are always enabled, so a focused
-/// read-only field takes the step and nothing changes; only a field whose
-/// handler is absent or disabled leaves the step to the app.
+/// click on Undo undoes the field's text and not the app's last change
+/// ([ghostForwardUndoToFocusedText]).
 Future<void> stepUndoHistory(
   OverlayState overlay,
   GhostUndoHistory history, {
@@ -44,7 +47,7 @@ Future<void> stepUndoHistory(
   bool yieldToFocusedText = false,
 }) async {
   final undo = direction == UndoDirection.undo;
-  if (yieldToFocusedText && _stepFocusedText(undo)) return;
+  if (yieldToFocusedText && ghostForwardUndoToFocusedText(undo)) return;
   final l10n = AppLocalizations.of(overlay.context);
   final name = undo ? history.undoName : history.redoName;
   if (name == null) return;
@@ -65,24 +68,6 @@ Future<void> stepUndoHistory(
     overlay,
     message: undo ? l10n.toastChangeUndone(name) : l10n.toastChangeRedone(name),
   );
-}
-
-/// Forwards an undo or redo to the focused text field; false when no
-/// field is focused or its handler is absent or disabled (never the case
-/// for [EditableText]'s own handlers).
-bool _stepFocusedText(bool undo) {
-  final focus = FocusManager.instance.primaryFocus?.context;
-  if (focus == null ||
-      focus.findAncestorWidgetOfExactType<EditableText>() == null) {
-    return false;
-  }
-  final intent = undo
-      ? const UndoTextIntent(SelectionChangedCause.keyboard)
-      : const RedoTextIntent(SelectionChangedCause.keyboard);
-  final action = Actions.maybeFind(focus, intent: intent);
-  if (action == null || !action.isEnabled(intent)) return false;
-  Actions.invoke(focus, intent);
-  return true;
 }
 
 /// Pins [server] to the rail's PINNED section, or unpins it, as an

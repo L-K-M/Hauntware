@@ -255,6 +255,58 @@ void main() {
     expect(find.textContaining('Saved locally'), findsOneWidget);
   });
 
+  testWidgets('save() saves as the tab\'s ⌘S does, uploading when the '
+      'editor can', (tester) async {
+    var uploads = 0;
+    String? savedText;
+    final key = GlobalKey<BuiltInTextEditorScreenState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BuiltInTextEditorScreen(
+          key: key,
+          file: file,
+          remotePath: '/etc/config.txt',
+          initialText: 'one\ntwo\n',
+          saveDocument: (_, text) async => savedText = text,
+          onUpload: () async {
+            uploads++;
+            return true;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'edited\n');
+    await tester.pump();
+    await key.currentState!.save();
+    await tester.pumpAndSettle();
+
+    expect(savedText, 'edited\n');
+    expect(uploads, 1);
+    expect(find.text('Saved and uploaded.'), findsOneWidget);
+  });
+
+  testWidgets('openSearch() opens the find bar', (tester) async {
+    final key = GlobalKey<BuiltInTextEditorScreenState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BuiltInTextEditorScreen(
+          key: key,
+          file: file,
+          remotePath: '/etc/config.txt',
+          initialText: 'one\n',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    key.currentState!.openSearch();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Find in file'), findsOneWidget);
+  });
+
   testWidgets('draws at the app\'s text size and zooms by chord', (
     tester,
   ) async {

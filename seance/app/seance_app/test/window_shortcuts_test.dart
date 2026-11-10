@@ -269,6 +269,68 @@ void main() {
       );
       expect(state!.undoHistory.undoName, 'Duplicate server');
     });
+
+    testWidgets('Ctrl+Shift+P opens the palette from the terminal and runs '
+        'the picked command', (tester) async {
+      await boot(tester, TargetPlatform.linux);
+
+      await press(tester, LogicalKeyboardKey.keyP, [ctrl, shift]);
+      expect(
+        find.byKey(const ValueKey('planchette.palette.query')),
+        findsOneWidget,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('planchette.palette.query')),
+        'Hide Sidebar',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await settle(tester);
+
+      expect(state!.sidebarVisible, isFalse);
+      expect(listShown(), isFalse);
+    });
+
+    testWidgets('Ctrl+/ in the terminal stays the shell’s readline undo', (
+      tester,
+    ) async {
+      await boot(tester, TargetPlatform.linux);
+
+      await press(tester, LogicalKeyboardKey.slash, [ctrl]);
+      // The app must not take the chord: xterm maps no byte for Ctrl+/
+      // itself, so an empty shell input is the shell's to receive.
+      expect(shellInput, isEmpty);
+      expect(find.text('Keyboard shortcuts'), findsNothing);
+    });
+
+    testWidgets('outside the terminal Ctrl+/ opens the shortcut list', (
+      tester,
+    ) async {
+      await bootPlain(tester, TargetPlatform.linux);
+
+      await press(tester, LogicalKeyboardKey.slash, [ctrl]);
+      expect(find.text('Keyboard shortcuts'), findsAtLeastNWidgets(1));
+    });
+
+    testWidgets('a disabled palette row answers where it is and does not run', (
+      tester,
+    ) async {
+      await boot(tester, TargetPlatform.linux);
+
+      await press(tester, LogicalKeyboardKey.keyP, [ctrl, shift]);
+      await tester.enterText(
+        find.byKey(const ValueKey('planchette.palette.query')),
+        'Undo',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await settle(tester);
+
+      expect(
+        find.byKey(const ValueKey('planchette.palette.query')),
+        findsOneWidget,
+      );
+      expect(find.text('Undo undone'), findsNothing);
+    });
   });
 
   testWidgets('on Apple platforms: ⌃⌘S, ⌥⌘I and ⌥⌘digit from the terminal, '
@@ -289,6 +351,28 @@ void main() {
     expect(counts.undone, 1);
     await press(tester, LogicalKeyboardKey.keyZ, [meta, shift]);
     expect(counts.redone, 1);
+    expect(shellInput, isEmpty);
+  });
+
+  testWidgets('on Apple platforms ⇧⌘P opens the palette and ⌘/ the shortcut '
+      'list', (tester) async {
+    await boot(tester, TargetPlatform.macOS);
+
+    await press(tester, LogicalKeyboardKey.keyP, [meta, shift]);
+    expect(
+      find.byKey(const ValueKey('planchette.palette.query')),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('planchette.palette.query')),
+      'Hide Sidebar',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(state!.sidebarVisible, isFalse);
+
+    await press(tester, LogicalKeyboardKey.slash, [meta]);
+    expect(find.text('Keyboard shortcuts'), findsAtLeastNWidgets(1));
     expect(shellInput, isEmpty);
   });
 
