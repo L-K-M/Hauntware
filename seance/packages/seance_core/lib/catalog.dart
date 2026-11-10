@@ -83,6 +83,15 @@ export 'src/sync/sync_engine.dart' show SyncCursorRejectedException;
 export 'src/store/file_host_key_store.dart' show FileHostKeyStore;
 export 'src/store/file_vault_store.dart'
     show FileVaultStore, VaultRekeyJournal, VaultRekeyOutcome;
+// CRED-05's recovery-code operations over a vault store, shared by every
+// app's credential vault.
+export 'src/vault/vault_recovery.dart'
+    show
+        RecoveryDamagedException,
+        RecoveryNotSetUpException,
+        RestoreConflictPolicy,
+        SecretsRestoreSummary,
+        VaultRecovery;
 // The endpoint pins' file store (D16, 03-ARCHITECTURE.md 4.7), beside
 // the host-key store whose conventions it shares.
 export 'src/store/file_endpoint_pin_store.dart'
