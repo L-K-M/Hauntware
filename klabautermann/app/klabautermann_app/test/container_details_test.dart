@@ -5,14 +5,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_fonts/testing.dart' show loadBundledMonoFonts;
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/operations_controller.dart';
+import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/services/hand_off.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/docker/container_details.dart';
 import 'package:klabautermann_app/ui/docker/container_details_view.dart';
+import 'package:klabautermann_app/ui/docker/container_usage_charts.dart';
 import 'package:klabautermann_app/ui/docker/containers_panel.dart';
+import 'package:klabautermann_app/ui/actions/action_entry.dart'
+    show OperationsScope;
 import 'package:klabautermann_app/ui/hand_off_actions.dart' show HandOffScope;
 import 'package:klabautermann_app/ui/processes_panel.dart' show kRevealDuration;
+import 'package:klabautermann_app/ui/server_safety.dart' show SafetyScope;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/charts.dart'
@@ -74,6 +80,7 @@ Future<_Harness> _pump(
   TargetPlatform platform = TargetPlatform.linux,
   bool phone = false,
   HandOffLauncher? launcher,
+  bool actions = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -82,7 +89,16 @@ Future<_Harness> _pump(
   final engine = FakeEngineClient();
   final monitoring = MonitoringController(engine, now: () => _now);
   final inspection = ValueNotifier<InspectedContainer?>(null);
+  final operations = OperationsController(engine);
+  final safety = SafetyController(
+    initial: SafetyPolicy(
+      servers: {_serverId: const ServerSafety(management: true)},
+    ),
+    apply: (_) {},
+  );
   addTearDown(() async {
+    safety.dispose();
+    operations.dispose();
     monitoring.dispose();
     inspection.dispose();
     await engine.close();
@@ -105,9 +121,18 @@ Future<_Harness> _pump(
       theme: theme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      builder: launcher == null
-          ? null
-          : (context, child) => HandOffScope(launcher: launcher, child: child!),
+      builder: (context, child) {
+        var wrapped = child!;
+        if (launcher != null) {
+          wrapped = HandOffScope(launcher: launcher, child: wrapped);
+        }
+        if (!actions) return wrapped;
+
+        return SafetyScope(
+          safety: safety,
+          child: OperationsScope(operations: operations, child: wrapped),
+        );
+      },
       home: Scaffold(
         body: phone
             ? panel
@@ -620,6 +645,42 @@ void main() {
       findsNothing,
     );
   });
+
+  for (final phone in [false, true]) {
+    testWidgets('a removed container offers no actions, charts or shell '
+        '(${phone ? 'phone page' : 'inspector'})', (tester) async {
+      final harness = await _pump(
+        tester,
+        // Tall enough that the lazy list builds the charts.
+        size: phone ? const Size(390, 3200) : _desktop,
+        phone: phone,
+        actions: true,
+      );
+      await _open(tester);
+      await harness.answer(
+        tester,
+        DockerContainerPayload(dockerContainerDetails(_id)),
+      );
+      expect(find.widgetWithText(OutlinedButton, 'Stop'), findsOne);
+      expect(find.byTooltip('Open a shell'), findsOne);
+      expect(find.byType(ContainerUsageCharts, skipOffstage: false), findsOne);
+
+      await harness.emit(
+        tester,
+        dockerContainerList(_serverId, [
+          dockerContainer('a1f3c2e4b5d6', name: 'web-frontend', project: 'web'),
+        ], at: _now),
+      );
+      expect(_inDetails(find.text('This container was removed.')), findsOne);
+      expect(find.widgetWithText(OutlinedButton, 'Stop'), findsNothing);
+      expect(find.byTooltip('Open a shell'), findsNothing);
+      expect(
+        find.byType(ContainerUsageCharts, skipOffstage: false),
+        findsNothing,
+      );
+      expect(_inDetails(find.text('POSTGRES_USER')), findsOneWidget);
+    });
+  }
 
   for (final phone in [false, true]) {
     testWidgets('details open on a server that leaves the fleet say so, '
