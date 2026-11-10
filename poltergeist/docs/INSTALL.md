@@ -79,8 +79,8 @@ Keyring or KWallet. Without one the app runs fine but refuses to store
 secrets rather than writing them somewhere weaker (that is deliberate).
 The `.deb` declares the library; AppImage and tarball users may need to
 install `libsecret-1-0` (Debian/Ubuntu), `libsecret` (Fedora/Arch), or
-equivalent themselves. The Flatpak talks to the host keyring through the
-Secret Service portal — no extra package needed.
+equivalent themselves. The Flatpak talks to the host keyring's
+Secret Service over the session bus, so it needs no extra package.
 
 ## Android
 

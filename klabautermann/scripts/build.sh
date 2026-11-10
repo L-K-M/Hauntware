@@ -3,7 +3,7 @@
 # Build every Klabautermann target this host can build, and print one clear
 # summary. The single local entry point; CI builds the same targets in the
 # klabautermann_client legs of .github/workflows/ci.yml, and release.yml
-# gains them with the preview release job at M4 (04 §12.1, decision 16).
+# ships them as previews until v1 (04 §12.1, decision 16).
 # Klabautermann has no server component, so like Poltergeist's
 # build.sh (the pattern this follows) there are only client targets:
 #
@@ -18,7 +18,9 @@
 #            app target first when no dist/ .deb exists yet)
 #
 # Usage:
-#   scripts/build.sh                 # every target this host can build
+#   scripts/build.sh                 # the app and the APK, where this host
+#                                    # can build them
+#   scripts/build.sh all             # the Flatpak too
 #   scripts/build.sh app             # just this one (naming a target turns an
 #                                    # infeasible target into an error, not a skip)
 #   scripts/build.sh --debug app     # debug-mode Flutter builds
@@ -84,7 +86,8 @@ if $INSTALL; then
   fi
 fi
 
-# Default to all targets; feasibility is decided per-target below.
+# Default to the app and the APK (`all` adds the Flatpak); feasibility is
+# decided per target below.
 if [[ ${#REQUESTED[@]} -eq 0 ]]; then
   REQUESTED=(app apk)
 fi

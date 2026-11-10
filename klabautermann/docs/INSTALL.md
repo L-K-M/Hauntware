@@ -82,8 +82,8 @@ plus a provider such as GNOME Keyring or KWallet. Without one the app
 runs, but it refuses to store secrets rather than write them somewhere
 weaker. The `.deb` declares the library; with the AppImage or the tarball,
 install `libsecret-1-0` (Debian, Ubuntu) or `libsecret` (Fedora, Arch)
-yourself. The Flatpak reaches the keyring through the Secret Service
-portal.
+yourself. The Flatpak reaches the keyring's Secret Service over the
+session bus.
 
 The Flatpak sandbox reads only `~/.ssh/config`, not the rest of `~/.ssh`.
 A server whose `IdentityFile` lies there connects through your SSH agent

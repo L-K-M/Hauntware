@@ -35,8 +35,9 @@ media-sources/            the owner-supplied master icon
 ```
 
 The layout deliberately mirrors the siblings' shape (`packages/` + `app/`),
-so knowledge and tooling transfer both ways. Shared implementations are
-never copied into Klabautermann; the app reaches `seance_core` types only
+so knowledge and tooling transfer both ways. Shared library
+implementations are never copied into Klabautermann (the native runner
+files that are copies are ledgered in [docs/SHARED.md](docs/SHARED.md)); the app reaches `seance_core` types only
 through `klabautermann_core`'s curated barrel (03 §3.2), and only behind
 `show` lists.
 

@@ -15,7 +15,9 @@
 #            app target first when no dist/ .deb exists yet)
 #
 # Usage:
-#   scripts/build.sh                 # every target this host can build
+#   scripts/build.sh                 # the app and the APK, where this host
+#                                    # can build them
+#   scripts/build.sh all             # the Flatpak too
 #   scripts/build.sh app             # just this one (naming a target turns an
 #                                    # infeasible target into an error, not a skip)
 #   scripts/build.sh --debug app     # debug-mode Flutter builds
@@ -76,7 +78,8 @@ if $INSTALL; then
   fi
 fi
 
-# Default to all targets; feasibility is decided per-target below.
+# Default to the app and the APK (`all` adds the Flatpak); feasibility is
+# decided per target below.
 if [[ ${#REQUESTED[@]} -eq 0 ]]; then
   REQUESTED=(app apk)
 fi

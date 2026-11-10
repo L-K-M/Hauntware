@@ -17,8 +17,8 @@
 # product-prefixed artifacts into dist/ (the same names
 # scripts/release-manifest.txt expects on a release). The products are
 # Planchette, Séance, Poltergeist and Klabautermann; Klabautermann's
-# names carry the preview label, and the manifest lists them only once
-# its release job lands at M4 (docs/design/klabautermann, decision 16).
+# names carry the preview label until its v1 (docs/design/klabautermann,
+# decision 16).
 # A product whose build script is absent is skipped on a default run and
 # fails when named explicitly; tool/toolchain feasibility inside a
 # product stays that product's own decision (see each
