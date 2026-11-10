@@ -307,15 +307,16 @@ class _RemoteEditorState extends State<RemoteEditor> {
         text: text,
         baseSha256: base.sha256,
       ),
-      onRun: (planId, _) => _follow(planId),
+      onRun: (planId, _) => _follow(planId, text),
       onRefused: _refused,
     );
   }
 
-  /// Follows the save's run: a finished save reads the new base, and a
-  /// target changed right before the rename opens the conflict sheet.
+  /// Follows the save's run: a finished save takes the written [text] as
+  /// the base at once and reads the authoritative new base after it, and
+  /// a target changed right before the rename opens the conflict sheet.
   /// Other ends are the result toasts' to tell.
-  void _follow(String planId) {
+  void _follow(String planId, String text) {
     final operations = _operations;
     if (operations == null) return;
 
@@ -327,6 +328,22 @@ class _RemoteEditorState extends State<RemoteEditor> {
       switch (end.$2) {
         case RunFinished(:final finished)
             when finished.outcome == ActionOutcome.succeeded:
+          // The write is known, so the written text is the base now: a
+          // follow-up read that fails could not leave the save looking
+          // unsaved, and a next save plans against the written hash.
+          final base = _base;
+          if (base != null) {
+            setState(() {
+              _base = EditContent.written(
+                text,
+                privileged: base.privileged,
+                uid: base.uid,
+                gid: base.gid,
+                mode: base.mode,
+              );
+              _dirty = _editor?.text.text != text;
+            });
+          }
           unawaited(_read(keepMine: true));
         case RunFinished(:final finished)
             when finished.revalidation == RevalidationFailure.contentChanged:

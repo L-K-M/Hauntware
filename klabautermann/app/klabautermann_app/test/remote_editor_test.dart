@@ -343,6 +343,71 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
   });
 
+  testWidgets('a finished save whose new-base read fails keeps the saved '
+      'text and claims nothing unsaved', (tester) async {
+    final editor = await _pump(tester);
+    await editor.answer(tester, _content(_original));
+    const mine = '$_original# mine\n';
+    await editor.type(tester, mine);
+    await editor.review(tester);
+    await tester.tap(find.text('Save to server'));
+    await tester.pump();
+    editor.engine.emit(ActionPlanned('plan-1', _preview(editor.plans.single)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Run'));
+    await tester.pumpAndSettle();
+
+    editor.engine.emit(
+      const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
+    );
+    await tester.pumpAndSettle();
+    expect(editor.reads, hasLength(2));
+    await editor.answer(tester, const EditReadFailed(EditReadFailure.noLink));
+
+    // The write ran, so nothing is unsaved even without the new base.
+    expect(editor.text(tester), mine);
+    expect(find.text('Not saved'), findsNothing);
+    expect(editor.operations.unsavedEdits, isEmpty);
+    expect(find.text('There is no connection to this server.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('a save after a finished save whose read failed plans against '
+      'the written text\'s hash', (tester) async {
+    final editor = await _pump(tester);
+    await editor.answer(tester, _content(_original));
+    const mine = '$_original# mine\n';
+    await editor.type(tester, mine);
+    await editor.review(tester);
+    await tester.tap(find.text('Save to server'));
+    await tester.pump();
+    editor.engine.emit(ActionPlanned('plan-1', _preview(editor.plans.single)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Run'));
+    await tester.pumpAndSettle();
+    editor.engine.emit(
+      const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
+    );
+    await tester.pumpAndSettle();
+    await editor.answer(tester, const EditReadFailed(EditReadFailure.noLink));
+
+    const more = '$mine# more\n';
+    await editor.type(tester, more);
+    await editor.review(tester);
+    await tester.tap(find.text('Save to server'));
+    await tester.pumpAndSettle();
+
+    // The stale base would send the old hash and bounce through the
+    // conflict sheet on the server side.
+    expect(editor.plans, hasLength(2));
+    expect(editor.plans.last.text, more);
+    expect(
+      editor.plans.last.baseSha256,
+      'c3871b7a0db71e18a13b2b42d4130da60d998441f4715331d7d6f37ef1f37804',
+    );
+    await tester.pump(const Duration(seconds: 10));
+  });
+
   testWidgets('a review opened while a finished save reads the new base '
       'saves against that base', (tester) async {
     final editor = await _pump(tester);
