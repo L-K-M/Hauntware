@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Klabautermann checks the suite's GitHub releases once per launch and
+  offers a newer version in a banner: every platform links to the release
+  page, and on Android the banner downloads and installs the release APK
+  once you choose Update. Turn the check off in Settings > General, or
+  pick Help > Check for Updates… to ask again.
 - Activity shows the commands an action ran in the code font, as the
   preview before it runs does.
 - Saved log and diagnostic exports, and the staged copy a share hands on,

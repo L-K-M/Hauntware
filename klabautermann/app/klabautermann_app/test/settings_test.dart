@@ -3,6 +3,7 @@ import 'dart:io' show FileSystemException;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
+import 'package:ghost_update/ghost_update.dart';
 import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/cadence_controller.dart';
@@ -151,6 +152,78 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 10));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('the General tab switches the update check (D19/D23)', (
+    tester,
+  ) async {
+    final updateChecks = _FakeUpdateChecks();
+    final announcements = AnnouncementController();
+    addTearDown(() {
+      updateChecks.dispose();
+      announcements.dispose();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: GeneralTab(
+            announcements: announcements,
+            updateChecks: updateChecks,
+            appVersion: null,
+          ),
+        ),
+      ),
+    );
+
+    final tile = find.widgetWithText(SwitchListTile, 'Check for updates');
+    expect(tester.widget<SwitchListTile>(tile).value, isTrue);
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+
+    expect(updateChecks.enabled, isFalse);
+    expect(updateChecks.applied, [false]);
+    expect(tester.widget<SwitchListTile>(tile).value, isFalse);
+  });
+
+  testWidgets('an update-check change that does not apply leaves the switch '
+      'and says so', (tester) async {
+    final updateChecks = _FakeUpdateChecks(refuse: true);
+    final announcements = AnnouncementController();
+    addTearDown(() {
+      updateChecks.dispose();
+      announcements.dispose();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: GeneralTab(
+            announcements: announcements,
+            updateChecks: updateChecks,
+            appVersion: null,
+          ),
+        ),
+      ),
+    );
+
+    final tile = find.widgetWithText(SwitchListTile, 'Check for updates');
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+
+    expect(find.text('The setting could not be changed.'), findsOneWidget);
+    expect(tester.widget<SwitchListTile>(tile).value, isTrue);
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('without an update check the General tab leaves its switch '
+      'out', (tester) async {
+    await openSettings(tester);
+
+    expect(find.text('Check for updates'), findsNothing);
   });
 
   Future<void> pumpGeneralTab(
@@ -471,4 +544,24 @@ final class _RefusingAnnouncements extends ValueNotifier<bool>
   @override
   Future<void> setAnnounceThresholdBands(bool announce) async =>
       throw Exception('The settings link is gone.');
+}
+
+/// D19/D23's switch as a test seam: records each change, can refuse one.
+final class _FakeUpdateChecks extends ChangeNotifier
+    implements UpdateCheckSettings {
+  _FakeUpdateChecks({this.refuse = false});
+
+  final bool refuse;
+
+  @override
+  bool enabled = true;
+  final List<bool> applied = [];
+
+  @override
+  Future<void> setEnabled(bool enabled) async {
+    applied.add(enabled);
+    if (refuse) throw Exception('The settings link is gone.');
+    this.enabled = enabled;
+    notifyListeners();
+  }
 }

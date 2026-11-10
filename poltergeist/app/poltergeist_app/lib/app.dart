@@ -3,6 +3,7 @@ import 'dart:async' show FutureOr;
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:ghost_update/ghost_update.dart';
 import 'package:poltergeist_core/poltergeist_core.dart'
     show
         BookmarkStore,
@@ -50,7 +51,6 @@ import 'services/sync_environment.dart';
 import 'services/sync_queue_facade.dart';
 import 'services/third_party_bookmark_import_setup.dart';
 import 'services/transfer_limits_controller.dart';
-import 'services/update_check_controller.dart';
 import 'services/workspace_library.dart';
 import 'services/workspace_windows/workspace_windows.dart';
 import 'theme/app_appearance.dart';

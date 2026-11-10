@@ -70,11 +70,22 @@ products:
     dartssh2_dependents: []
     # The ghost_* Flutter packages are shared with Séance and Poltergeist;
     # none may pull in seance_core (and with it dartssh2), and ghost_ui
-    # stays below ghost_theme in the package stack. Every matching key
-    # applies, so ghost_ui gets both lists.
+    # stays below ghost_theme in the package stack. The packages are
+    # listed rather than globbed so ghost_update can be the stated
+    # exception: the update session cannot redeclare seance_core's
+    # UpdateChecker/UpdateInfo/ReleaseAsset, and every consumer resolves
+    # seance_core anyway.
     forbidden_dependencies:
-      "ghost_*": [seance_core]
-      ghost_ui: [ghost_theme]
+      ghost_apk_update: [seance_core]
+      ghost_desktop: [seance_core]
+      ghost_fonts: [seance_core]
+      ghost_keystore: [seance_core]
+      ghost_licenses: [seance_core]
+      ghost_marks: [seance_core]
+      ghost_marks_picker: [seance_core]
+      ghost_servers: [seance_core]
+      ghost_theme: [seance_core]
+      ghost_ui: [seance_core, ghost_theme]
     # The Klabautermann app reaches ghost_servers through its contract,
     # so the package stays on the protocol records, the shared UI and the
     # marks (docs/design/ghost-servers-part2.md, F5a-3).

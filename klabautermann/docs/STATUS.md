@@ -2929,6 +2929,14 @@ between PRs. M1 adds gates of its own:
   no menu. On every OS, Settings > General's about row shows the
   build's version, in the settings window too, and opens the dialog. Open: needs a person on each OS; the widget tests check the
   model and the Flutter side of `PlatformMenuBar`, not AppKit's menu.
+- Update check and Android self-update (c3 §shells, D19/D23), on a real
+  Android device and on a desktop. The launch check and Help > Check for
+  Updates… report a newer suite release, and the banner links to its page
+  on every platform. On Android the banner downloads the release APK only
+  after Update is chosen, verifies its size and SHA-256, and opens the
+  system installer; the install completes and the app runs the new
+  version. Open: needs a person with a device; CI builds the APK and the
+  widget tests cover the banner's model, not the installer.
 - Single desktop instance (03 §4.10), once per desktop OS from a build
   that includes the lock. With Klabautermann running, launch it again
   (on macOS with `open -n`, since Finder would only activate the first):

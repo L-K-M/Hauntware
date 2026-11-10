@@ -1,4 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:ghost_apk_update/ghost_apk_update.dart';
+import 'package:ghost_ui/ghost_ui.dart' show ghostFormatBinarySize;
+import 'package:ghost_update/ghost_update.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
@@ -326,6 +331,148 @@ class NoticeBanner extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// D19/D23's update banner over the workspace and the phone's fleet list:
+/// the newer release the launch check found, with the one action that
+/// resolves it. On Android the banner downloads and installs the release
+/// APK once the user chooses Update; every other platform links to the
+/// release page. Dismissing also stops a running download.
+class UpdateNoticeBanner extends StatelessWidget {
+  const UpdateNoticeBanner({
+    super.key,
+    required this.updates,
+    required this.openRelease,
+  });
+
+  final UpdateCheckController updates;
+  final Future<void> Function(Uri url) openRelease;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ListenableBuilder(
+      listenable: updates,
+      builder: (context, _) {
+        final info = updates.update;
+        if (info == null) return const SizedBox.shrink();
+        final apk = updates.updateApk;
+        final download = updates.download;
+        String size(int bytes) => ghostFormatBinarySize(bytes);
+        final (title, detail, verbs) = switch ((apk, download)) {
+          (final apk?, ApkUpdateDownloading(:final received, :final total)) => (
+            l10n.alertUpdateDownloading(info.latestVersion),
+            l10n.alertUpdateProgress(size(received), size(total)),
+            [(l10n.alertActionCancel, updates.cancelUpdate)],
+          ),
+          (final apk?, ApkUpdateReady()) => (
+            l10n.alertUpdateReady(info.latestVersion),
+            null,
+            [(l10n.alertActionInstall, updates.installUpdate)],
+          ),
+          (final apk?, ApkUpdateFailed(:final failure)) => (
+            l10n.alertUpdateFailed(info.latestVersion),
+            switch (failure) {
+              ApkUpdateFailure.download => l10n.alertUpdateFailedDownload,
+              ApkUpdateFailure.verification =>
+                l10n.alertUpdateFailedVerification,
+              ApkUpdateFailure.installer => l10n.alertUpdateFailedInstaller,
+            },
+            [(l10n.alertActionRetry, updates.installUpdate)],
+          ),
+          (final apk?, ApkUpdateIdle()) => (
+            l10n.alertUpdateAvailable(info.latestVersion),
+            l10n.alertUpdateDownloadSize(size(apk.size)),
+            [(l10n.alertActionUpdate, updates.installUpdate)],
+          ),
+          (null, _) => (
+            l10n.alertUpdateAvailable(info.latestVersion),
+            null,
+            [
+              (
+                l10n.alertActionViewRelease,
+                () => unawaited(openRelease(info.releasesUrl)),
+              ),
+            ],
+          ),
+        };
+        final theme = Theme.of(context);
+        final colors = theme.colorScheme;
+        return Material(
+          color: colors.secondaryContainer,
+          // Past its share of the screen it scrolls, as NoticeBanner does
+          // (A11Y-09).
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * _bannerMaxShare,
+            ),
+            child: SingleChildScrollView(
+              primary: false,
+              padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 8, 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 12,
+                children: [
+                  Icon(
+                    Icons.system_update_alt,
+                    color: colors.onSecondaryContainer,
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Semantics(
+                          liveRegion: true,
+                          child: Text(
+                            title,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colors.onSecondaryContainer,
+                            ),
+                          ),
+                        ),
+                        if (detail != null)
+                          Text(
+                            detail,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colors.onSecondaryContainer,
+                            ),
+                          ),
+                        if (verbs.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: [
+                              for (final (label, run) in verbs)
+                                TextButton(
+                                  style: TextButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    minimumSize: const Size(0, 28),
+                                  ),
+                                  onPressed: run,
+                                  child: Text(label),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: updates.dismiss,
+                    child: Text(l10n.alertActionDismiss),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

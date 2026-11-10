@@ -1,12 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:ghost_apk_update/ghost_apk_update.dart';
+import 'package:ghost_update/ghost_update.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'activity_panel_controller.dart';
 import 'checkout_session.dart';
 import 'connection_status_controller.dart';
 import 'drag_out_controller.dart';
-import 'update_check_controller.dart';
 
 /// How loudly an alert asks for attention (D32 §3's Alerts tab).
 enum AlertSeverity { error, warning, info }
