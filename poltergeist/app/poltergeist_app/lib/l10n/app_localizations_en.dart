@@ -141,7 +141,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get credentialPassphraseExplanation =>
-      'Used for this connection only and never saved. Poltergeist asks again next time.';
+      'Unlock the key saved in your vault. Used for this connection only unless you choose to save the passphrase.';
 
   @override
   String get credentialPassphraseRetryExplanation =>

@@ -334,10 +334,10 @@ abstract class AppLocalizations {
   /// **'Key passphrase for {label}'**
   String credentialPassphraseTitle(String label);
 
-  /// Line under the key passphrase dialog's title.
+  /// Explains the vault-first saved key and optional passphrase saving.
   ///
   /// In en, this message translates to:
-  /// **'Used for this connection only and never saved. Poltergeist asks again next time.'**
+  /// **'Unlock the key saved in your vault. Used for this connection only unless you choose to save the passphrase.'**
   String get credentialPassphraseExplanation;
 
   /// Line under the key passphrase dialog's title when the previous passphrase did not open the key.

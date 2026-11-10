@@ -194,9 +194,9 @@
       }
     }
   },
-  "credentialPassphraseExplanation": "Used for this connection only and never saved. Poltergeist asks again next time.",
+  "credentialPassphraseExplanation": "Unlock the key saved in your vault. Used for this connection only unless you choose to save the passphrase.",
   "@credentialPassphraseExplanation": {
-    "description": "Line under the key passphrase dialog's title."
+    "description": "Explains the vault-first saved key and optional passphrase saving."
   },
   "credentialPassphraseRetryExplanation": "That passphrase did not open the key. Try again. It is used for this connection only and never saved.",
   "@credentialPassphraseRetryExplanation": {

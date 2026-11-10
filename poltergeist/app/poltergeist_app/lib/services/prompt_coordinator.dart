@@ -380,8 +380,6 @@ class PromptCoordinator {
     Secret stored,
   ) async {
     final pem = stored.value;
-    final keyPath = stored.identityFilePath;
-    final hasKeyFile = keyPath != null && keyPath.isNotEmpty;
     var retry = false;
 
     while (true) {
@@ -406,8 +404,9 @@ class PromptCoordinator {
           host: data.host,
           port: data.port,
           username: data.username,
-          hasKeyFile: hasKeyFile,
-          initialKeyPath: keyPath,
+          // Vault-first authenticates the saved PEM, not a file binding
+          // retained for switching the server back to its other key source.
+          hasKeyFile: false,
           offerVaultSave: true,
         ),
         retry: retry,

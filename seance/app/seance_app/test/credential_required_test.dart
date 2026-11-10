@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart';
 import 'package:seance_app/services/app_services.dart';
+import 'package:seance_app/services/app_settings.dart';
 import 'package:seance_app/services/missing_credential.dart';
 import 'package:seance_app/theme.dart';
 import 'package:seance_app/ui/terminal_pane.dart';
@@ -15,6 +16,7 @@ import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 const _menuChannel = MethodChannel('seance/menu');
+const _bookmarkChannel = MethodChannel('seance/secure_bookmarks');
 
 // Keep widget routing independent of filesystem futures in fake-async.
 // The real vault writes and retry credential consumption are tested below.
@@ -66,7 +68,8 @@ void main() {
     services = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       ..setMockMethodCallHandler(_pathChannel, null)
-      ..setMockMethodCallHandler(_menuChannel, null);
+      ..setMockMethodCallHandler(_menuChannel, null)
+      ..setMockMethodCallHandler(_bookmarkChannel, null);
     FlutterSecureStorage.setMockInitialValues({});
     try {
       await directory?.delete(recursive: true);
@@ -475,6 +478,138 @@ void main() {
       expect(credentials.keyPassphrase, 'right');
     },
   );
+
+  test(
+    'saving a file-key passphrase keeps the grant for that path',
+    () async {
+      await boot(
+        passphraseChecker: (pem, phrase) =>
+            pem == 'FILE PEM' && phrase == 'right',
+      );
+      final file = File('${directory!.path}/identity');
+      await file.writeAsString('FILE PEM');
+      const grant = 'Z3JhbnQ=';
+      final bookmark = IdentityFileBookmark(path: file.path, bookmark: grant);
+      // A fake resolver standing in for the native NSOpenPanel bookmark: the
+      // grant opens the picked file. It records the grants it was asked to
+      // open, so the test can tell the grant was consulted.
+      final resolved = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(_bookmarkChannel, (call) async {
+        if (call.method == 'resolveBookmark') {
+          resolved.add(call.arguments['bookmark'] as String);
+          return {'path': file.path, 'token': 'token'};
+        }
+        return null;
+      });
+      await state!.saveServer(
+        server.copyWith(
+          authMethod: AuthMethod.privateKey,
+          identityFilePath: file.path,
+        ),
+        secret: Secret(
+          id: 'saved-elsewhere',
+          kind: SecretKind.privateKey,
+          value: 'PASTED PEM',
+          keyPassphrase: 'pasted-phrase',
+          identityFilePath: file.path,
+          identityFilePassphrase: 'old-file-phrase',
+        ),
+        identityFileBookmark: bookmark,
+      );
+      final before = await services!.vault.getSecret('saved-elsewhere');
+
+      expect(
+        await state!.provideKeyPassphrase(
+          'box',
+          const KeyPassphraseAnswer('right', saveToVault: true),
+        ),
+        isTrue,
+      );
+
+      // The grant opened the key, and the save kept it for the next connect
+      // rather than clearing it. Only consulted where the platform has
+      // security-scoped bookmarks.
+      if (services!.identityBookmarks.isSupported) {
+        expect(resolved, [grant]);
+      }
+      expect(services!.settings.identityFileBookmarks['box'], bookmark);
+      final saved = (await services!.vault.getSecret('saved-elsewhere'))!;
+      expect(saved.value, 'PASTED PEM');
+      expect(saved.keyPassphrase, 'pasted-phrase');
+      expect(saved.identityFilePath, file.path);
+      expect(saved.identityFilePassphrase, 'right');
+      expect(saved.updatedAt, greaterThan(before!.updatedAt));
+    },
+  );
+
+  test(
+    'saving a file-key passphrase drops a grant for a different path',
+    () async {
+      await boot(
+        passphraseChecker: (pem, phrase) =>
+            pem == 'FILE PEM' && phrase == 'right',
+      );
+      final file = File('${directory!.path}/identity');
+      await file.writeAsString('FILE PEM');
+      await state!.saveServer(
+        server.copyWith(
+          authMethod: AuthMethod.privateKey,
+          identityFilePath: file.path,
+        ),
+        secret: Secret(
+          id: 'saved-elsewhere',
+          kind: SecretKind.privateKey,
+          value: '',
+          identityFilePath: file.path,
+          identityFilePassphrase: 'old-file-phrase',
+        ),
+      );
+      // A grant left over from a previous key file: the save points the
+      // server at a different path, so it must not survive.
+      services!.settings.identityFileBookmarks['box'] =
+          const IdentityFileBookmark(path: '/keys/old', bookmark: 'stale');
+      await services!.saveSettings();
+
+      expect(
+        await state!.provideKeyPassphrase(
+          'box',
+          const KeyPassphraseAnswer('right', saveToVault: true),
+        ),
+        isTrue,
+      );
+
+      expect(services!.settings.identityFileBookmarks['box'], isNull);
+    },
+  );
+
+  test('saving a pasted-key passphrase drops a leftover file grant', () async {
+    await boot(
+      passphraseChecker: (pem, phrase) => pem == 'PEM' && phrase == 'right',
+    );
+    await state!.saveServer(
+      server.copyWith(authMethod: AuthMethod.privateKey),
+      secret: const Secret(
+        id: 'saved-elsewhere',
+        kind: SecretKind.privateKey,
+        value: 'PEM',
+        keyPassphrase: 'old',
+      ),
+    );
+    services!.settings.identityFileBookmarks['box'] =
+        const IdentityFileBookmark(path: '/keys/old', bookmark: 'stale');
+    await services!.saveSettings();
+
+    expect(
+      await state!.provideKeyPassphrase(
+        'box',
+        const KeyPassphraseAnswer('right', saveToVault: true),
+      ),
+      isTrue,
+    );
+
+    expect(services!.settings.identityFileBookmarks['box'], isNull);
+  });
 
   test('a connection-only passphrase is consumed by one retry', () async {
     final attempts = <String?>[];

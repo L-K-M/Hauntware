@@ -1150,14 +1150,16 @@ void main() {
           username: 'deploy',
           authMethod: AuthMethod.privateKey,
           secretRef: 'secret-7',
+          identityFilePath: '~/.ssh/active-file',
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('credential.keyPath')), findsOneWidget);
-    expect(find.text('Key file'), findsOneWidget);
-    expect(find.text('~/.ssh/id_ed25519'), findsOneWidget);
+    expect(find.byKey(const ValueKey('credential.keyPath')), findsNothing);
+    expect(find.text('Key file'), findsNothing);
+    expect(find.text('~/.ssh/id_ed25519'), findsNothing);
+    expect(find.textContaining('key saved in your vault'), findsOneWidget);
 
     // Sync can update metadata while the passphrase question is open.
     vault.secret = vault.secret!.copyWith(
@@ -1184,6 +1186,7 @@ void main() {
     expect(saved.identityFilePath, '~/.ssh/current_key');
     expect(saved.identityFilePassphrase, 'current-file-phrase');
     expect(saved.updatedAt, greaterThan(987));
+    expect(reader.reads, isEmpty, reason: 'vault-first keeps its stored PEM');
 
     final reply = bridge.replies.single.$3 as CredentialPromptReply;
     expect(reply.privateKeyPem, 'ENCRYPTED PEM');

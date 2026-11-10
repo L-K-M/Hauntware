@@ -3711,6 +3711,16 @@ class AppState extends ChangeNotifier {
             identityFilePassphrase: answer.passphrase,
           )
         : base.copyWith(keyPassphrase: answer.passphrase);
+
+    // Saving a passphrase must not revoke the matching security-scoped
+    // file grant. Keep the read path's exact-match rule; an inactive or
+    // stale grant should still be cleared.
+    final savedBookmark = services.settings.identityFileBookmarks[server.id];
+    final identityFileBookmark =
+        hasFile && savedBookmark != null && savedBookmark.path == path
+        ? savedBookmark
+        : null;
+
     final now = DateTime.now().millisecondsSinceEpoch;
     await _saveServerNow(
       server.copyWith(
@@ -3718,6 +3728,7 @@ class AppState extends ChangeNotifier {
         updatedAt: now > server.updatedAt ? now : server.updatedAt + 1,
       ),
       secret: secret,
+      identityFileBookmark: identityFileBookmark,
     );
     return true;
   });
