@@ -1,4 +1,5 @@
 import 'dart:ui';
+import '../theme/theme_presets.dart';
 
 import 'package:planchette_editor/planchette_editor.dart'
     show EditorLigatures, EditorTextSize;
@@ -11,7 +12,6 @@ import 'package:poltergeist_core/poltergeist_core.dart'
 
 import '../theme/app_appearance.dart';
 import 'editor_font.dart';
-import '../theme/theme_palette.dart';
 import 'double_click_action.dart';
 import 'pane_tabs_controller.dart' show NewTabTarget;
 import 'settings_store.dart';
@@ -451,7 +451,7 @@ class AppPreferences {
   /// for the screen and the room in front of it, so it is in no sync or
   /// backup record, and Copy theme / Paste theme carry it between devices
   /// on request. Lenient all the way down: a hand-edited palette costs at
-  /// most its own bad values ([ThemePalette.decodeStored]), an unknown mode
+  /// most its own bad values ([poltergeistThemeCodec.decodeStored]), an unknown mode
   /// reads as System, and an unreadable store as the default theme, never
   /// a failed launch.
   Future<AppAppearance> loadAppearance() async {
@@ -461,10 +461,10 @@ class AppPreferences {
       palette = await _store.get<Object>(_themePaletteKey);
       mode = await _store.get<String>(_themeModeKey);
     } catch (_) {
-      return AppAppearance.initial;
+      return poltergeistInitialAppearance;
     }
     return AppAppearance(
-      palette: ThemePalette.decodeStored(palette),
+      palette: poltergeistThemeCodec.decodeStored(palette),
       mode: ThemeModePreference.values.firstWhere(
         (value) => value.name == mode,
         orElse: () => ThemeModePreference.system,

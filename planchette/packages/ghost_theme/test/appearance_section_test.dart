@@ -196,6 +196,13 @@ void main() {
     expect(find.text('Reset to Terminal (arr)'), findsOneWidget);
   });
 
+  testWidgets('the interface font field keeps the appearance key', (
+    tester,
+  ) async {
+    await _pump(tester);
+    expect(find.byKey(const ValueKey('appearance.fontFamily')), findsOneWidget);
+  });
+
   testWidgets('a clipboard without a theme leaves the palette alone', (
     tester,
   ) async {

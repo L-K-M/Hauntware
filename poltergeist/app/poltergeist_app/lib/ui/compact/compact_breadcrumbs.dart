@@ -66,7 +66,7 @@ class _CompactBreadcrumbsState extends State<CompactBreadcrumbs> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final theme = Theme.of(context);
     final controller = widget.controller;
     final path = controller.location?.path;

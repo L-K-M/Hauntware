@@ -231,6 +231,7 @@ void main() {
 
     final chrome = PoltergeistChrome.of(
       tester.element(find.byKey(const ValueKey('sync.plan.table'))),
+      poltergeistThemeStyle,
     );
     final fill = chrome.selectionFill;
     for (final path in ['a.txt', 'b.txt', 'gone.txt', 'c.txt']) {

@@ -1,10 +1,9 @@
-// Adapted from Séance app/seance_app/test/settings_screen_test.dart's
-// Appearance group @ 8714859; see docs/PORTS.md. The section runs over a
-// fake model here rather than Séance's fake settings backend, and adds the
-// cases Poltergeist's port has of its own: a Séance theme pasted with its
-// terminal block, coalesced writes, localized preset names, the font field
-// and the phone-sized Settings dialog.
-import 'dart:async';
+// Poltergeist's Appearance editor is ghost_theme's shared section over a
+// fake model; see docs/PORTS.md. These tests cover what is Poltergeist's
+// own: the model adapter, the ARB words and preset names, the font field,
+// a Séance theme pasted with its terminal block, a failed write, and the
+// phone-sized Settings dialog. The shared section's controls and writes
+// are tested in ghost_theme.
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -37,16 +36,12 @@ final class _FakeAppearance extends ChangeNotifier
   /// Thrown by every write while set.
   Object? failWith;
 
-  /// While set, each write waits for it, so a test can hold one in flight.
-  Completer<void>? gate;
-
   @override
   Future<void> setAppearance(
     ThemePalette palette,
     ThemeModePreference mode,
   ) async {
     writes.add(AppAppearance(palette: palette, mode: mode));
-    await gate?.future;
     final failure = failWith;
     if (failure != null) throw failure;
     value = AppAppearance(palette: palette, mode: mode);
@@ -82,10 +77,6 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Finder automatic(String label) => find.byWidgetPredicate(
-    (w) => w is Checkbox && w.semanticLabel == '$label: Automatic',
-  );
-
   /// What the clipboard holds, as the platform channel answers for it.
   String? clipboard;
   setUp(() => clipboard = null);
@@ -111,6 +102,20 @@ void main() {
     );
   }
 
+  testWidgets('every preset is named from the ARB', (tester) async {
+    final l10n = lookupAppLocalizations(const Locale('en'));
+    final strings = PoltergeistAppearanceStrings(l10n);
+    // English shows the stored names, which is what makes them safe to
+    // store: a translation changes what is shown, never what is written.
+    for (final preset in ThemePresets.all) {
+      expect(strings.presetLabel(preset.name), preset.name);
+    }
+    await pumpSection(tester);
+    for (final preset in ThemePresets.all) {
+      expect(find.byTooltip('Use the ${preset.name} theme'), findsOneWidget);
+    }
+  });
+
   testWidgets('picking a preset writes that preset', (tester) async {
     await pumpSection(tester);
     expect(find.text('Using Poltergeist.'), findsOneWidget);
@@ -126,177 +131,6 @@ void main() {
     );
     expect(mode.onSelectionChanged, isNull);
     expect(find.textContaining('always dark'), findsOneWidget);
-  });
-
-  testWidgets('every preset is named from the ARB', (tester) async {
-    final l10n = lookupAppLocalizations(const Locale('en'));
-    final labels = presetLabels(l10n);
-    expect(labels.keys, unorderedEquals(ThemePresets.all));
-    // English shows the stored names, which is what makes them safe to
-    // store: a translation changes what is shown, never what is written.
-    for (final preset in ThemePresets.all) {
-      expect(labels[preset], preset.name);
-    }
-    await pumpSection(tester);
-    for (final preset in ThemePresets.all) {
-      expect(find.byTooltip('Use the ${preset.name} theme'), findsOneWidget);
-    }
-  });
-
-  testWidgets('the selected preset says so to a screen reader', (tester) async {
-    // Released in `finally`, not by a tear-down: the tester checks for a
-    // live handle before tear-downs run.
-    final handle = tester.ensureSemantics();
-    try {
-      await pumpSection(
-        tester,
-        start: AppAppearance(palette: ThemePresets.paper),
-      );
-
-      expect(
-        tester.getSemantics(find.byTooltip('Use the Paper theme')),
-        matchesSemantics(
-          label: 'Paper',
-          tooltip: 'Use the Paper theme',
-          isButton: true,
-          hasSelectedState: true,
-          isSelected: true,
-          isFocusable: true,
-          hasTapAction: true,
-          hasFocusAction: true,
-        ),
-      );
-    } finally {
-      handle.dispose();
-    }
-  });
-
-  testWidgets('the mode writes through while the surface is Automatic', (
-    tester,
-  ) async {
-    await pumpSection(tester);
-
-    await tester.tap(find.text('Dark'));
-    await tester.pumpAndSettle();
-
-    expect(model.writes.last.mode, ThemeModePreference.dark);
-    expect(lastPalette(), ThemePresets.poltergeist);
-  });
-
-  testWidgets('Automatic hands a colour back, and back again restores it', (
-    tester,
-  ) async {
-    await pumpSection(
-      tester,
-      start: AppAppearance(palette: ThemePresets.paper),
-    );
-
-    await tester.tap(automatic('Sidebar'));
-    await tester.pumpAndSettle();
-    expect(lastPalette().sidebar, isNull);
-    expect(lastPalette().name, ThemePalette.customName);
-    expect(find.text('Using your own colours.'), findsOneWidget);
-
-    await tester.tap(automatic('Sidebar'));
-    await tester.pumpAndSettle();
-    expect(lastPalette().sidebar, ThemePresets.paper.sidebar);
-    // Back to exactly the preset, it is the preset again.
-    expect(lastPalette(), ThemePresets.paper);
-  });
-
-  testWidgets('leaving Automatic starts from the colour drawn now', (
-    tester,
-  ) async {
-    await pumpSection(tester);
-
-    await tester.tap(automatic('Text'));
-    await tester.pumpAndSettle();
-
-    // The test's platform is light, so Automatic text is the light
-    // table's, not black and not the dark table's.
-    expect(
-      lastPalette().text,
-      resolvedThemeSlots(
-        ThemePresets.poltergeist,
-        Brightness.light,
-      )[ThemeSlot.text],
-    );
-  });
-
-  testWidgets('a swatch opens the picker and writes what it returns', (
-    tester,
-  ) async {
-    await pumpSection(tester);
-
-    await tester.tap(find.byTooltip('Choose the Accent colour'));
-    await tester.pumpAndSettle();
-    expect(find.widgetWithText(AlertDialog, 'Accent'), findsOneWidget);
-    await tester.enterText(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byType(TextField),
-      ),
-      '1e90ff',
-    );
-    await tester.tap(find.text('Use colour'));
-    await tester.pumpAndSettle();
-
-    expect(lastPalette().accent, const Color(0xFF1E90FF));
-    expect(lastPalette().name, ThemePalette.customName);
-  });
-
-  testWidgets('a status colour is picked like any other', (tester) async {
-    await pumpSection(tester);
-
-    await tester.tap(
-      find.byTooltip('Choose a Failed or offline colour (now Automatic)'),
-    );
-    await tester.pumpAndSettle();
-    // Opaque: a status colour carries the dots' contrast.
-    expect(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byType(Slider),
-      ),
-      findsNWidgets(3),
-    );
-    await tester.enterText(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byType(TextField),
-      ),
-      'cc0000',
-    );
-    await tester.tap(find.text('Use colour'));
-    await tester.pumpAndSettle();
-
-    expect(lastPalette().offline, const Color(0xFFCC0000));
-  });
-
-  testWidgets('the lines colour may be translucent', (tester) async {
-    await pumpSection(tester);
-
-    await tester.tap(find.byTooltip('Choose a Lines colour (now Automatic)'));
-    await tester.pumpAndSettle();
-    // Hue, saturation, brightness and opacity.
-    expect(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byType(Slider),
-      ),
-      findsNWidgets(4),
-    );
-    await tester.enterText(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byType(TextField),
-      ),
-      '11223380',
-    );
-    await tester.tap(find.text('Use colour'));
-    await tester.pumpAndSettle();
-
-    expect(lastPalette().hairline, const Color(0x80112233));
   });
 
   testWidgets('the interface font writes on submit, blank for the default', (
@@ -317,117 +151,25 @@ void main() {
     expect(lastPalette(), ThemePresets.poltergeist);
   });
 
-  testWidgets('the corners slider writes the scale', (tester) async {
-    await pumpSection(tester);
-    final slider = find.byWidgetPredicate(
-      (w) => w is Slider && w.max == ThemePalette.maxCornerScale,
-    );
-
-    await tester.drag(slider, Offset(-tester.getSize(slider).width, 0));
-    await tester.pumpAndSettle();
-
-    expect(lastPalette().cornerScale, 0);
-    expect(find.text('Square'), findsWidgets);
-  });
-
-  testWidgets('writes coalesce: one in flight, then one of what is current', (
+  testWidgets('a low-contrast accent names its adjustment from the ARB', (
     tester,
   ) async {
-    await pumpSection(tester);
-    model.gate = Completer<void>();
-
-    await tester.tap(find.byTooltip('Use the Graphite theme'));
-    await tester.pump();
-    await tester.tap(find.byTooltip('Use the Paper theme'));
-    await tester.pump();
-    await tester.tap(find.byTooltip('Use the Vapor theme'));
-    await tester.pump();
-    // Only the first is in flight; the two after it wait as one.
-    expect(model.writes.map((w) => w.palette), [ThemePresets.graphite]);
-
-    model.gate!.complete();
-    model.gate = null;
-    await tester.pumpAndSettle();
-    expect(model.writes.map((w) => w.palette), [
-      ThemePresets.graphite,
-      ThemePresets.vapor,
-    ]);
-  });
-
-  testWidgets('reset asks first, and keeps the mode', (tester) async {
     await pumpSection(
       tester,
       start: AppAppearance(
-        palette: ThemePresets.midnight,
-        mode: ThemeModePreference.dark,
+        palette: ThemePresets.poltergeist.copyWith(
+          accent: const Color(0xFFFFD600),
+        ),
       ),
     );
 
-    await tester.tap(find.text('Reset to Vapor'));
-    await tester.pumpAndSettle();
-    expect(find.text('Reset the theme?'), findsOneWidget);
-    await tester.tap(find.text('Cancel'));
-    await tester.pumpAndSettle();
-    expect(model.writes, isEmpty);
-
-    await tester.tap(find.text('Reset to Vapor'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Reset'));
-    await tester.pumpAndSettle();
-    expect(model.writes, [
-      AppAppearance(
-        palette: ThemePresets.initial,
-        mode: ThemeModePreference.dark,
-      ),
-    ]);
-  });
-
-  testWidgets('copy puts the theme on the clipboard as JSON', (tester) async {
-    mockClipboard(tester);
-    await pumpSection(
-      tester,
-      start: AppAppearance(palette: ThemePresets.solarized),
-    );
-
-    await tester.tap(find.text('Copy theme'));
-    await tester.pumpAndSettle();
-
     expect(
-      ThemePalette.decodeStored(jsonDecode(clipboard!)),
-      ThemePresets.solarized,
-    );
-    expect(find.text('Theme copied.'), findsOneWidget);
-    await tester.pump(const Duration(seconds: 5));
-  });
-
-  testWidgets('pasting something that is not a theme changes nothing', (
-    tester,
-  ) async {
-    mockClipboard(tester);
-    clipboard = 'sftp://deploy@web.example.com/var/www';
-    await pumpSection(tester);
-
-    await tester.tap(find.text('Paste theme'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.textContaining('The clipboard does not hold a theme'),
+      find.text('Low contrast: links and indicators use an adjusted colour.'),
       findsOneWidget,
     );
-    expect(model.writes, isEmpty);
-    await tester.pump(const Duration(seconds: 5));
-  });
-
-  testWidgets('pasting a theme adopts it whole', (tester) async {
-    mockClipboard(tester);
-    clipboard = jsonEncode(ThemePresets.terminal.toJson());
-    await pumpSection(tester);
-
-    await tester.tap(find.text('Paste theme'));
-    await tester.pumpAndSettle();
-
-    expect(lastPalette(), ThemePresets.terminal);
-    expect(find.text('Using Terminal.'), findsOneWidget);
+    expect(find.bySemanticsLabel('Chosen accent'), findsOneWidget);
+    expect(find.bySemanticsLabel('Adjusted interface colour'), findsOneWidget);
+    expect(find.text('Use adjusted colour'), findsOneWidget);
   });
 
   testWidgets('a theme copied in Séance pastes, all but its terminal', (
@@ -487,28 +229,6 @@ void main() {
     await tester.tap(find.byTooltip('Use the Graphite theme'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Appearance not saved: Bad state: disk full'),
-      findsOneWidget,
-    );
-    await tester.pump(const Duration(seconds: 5));
-  });
-
-  testWidgets('a failing streak says so once, for the last write', (
-    tester,
-  ) async {
-    model.failWith = StateError('disk full');
-    await pumpSection(tester);
-    model.gate = Completer<void>();
-
-    await tester.tap(find.byTooltip('Use the Graphite theme'));
-    await tester.pump();
-    await tester.tap(find.byTooltip('Use the Paper theme'));
-    await tester.pump();
-    model.gate!.complete();
-    await tester.pumpAndSettle();
-
-    expect(model.writes, hasLength(2));
     expect(
       find.text('Appearance not saved: Bad state: disk full'),
       findsOneWidget,

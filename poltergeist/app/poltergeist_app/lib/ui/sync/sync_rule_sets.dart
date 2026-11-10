@@ -164,7 +164,7 @@ class _ManagerDialogState extends State<_ManagerDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     return AlertDialog(
       title: Text(l10n.syncRuleSetsTitle),
       scrollable: true,

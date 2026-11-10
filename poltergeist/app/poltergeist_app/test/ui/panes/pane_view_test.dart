@@ -108,7 +108,7 @@ void main() {
         // PoltergeistChrome.of.
         home: Builder(
           builder: (context) {
-            final chrome = PoltergeistChrome.of(context);
+            final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
             return Theme(
               data: Theme.of(context).copyWith(
                 extensions: <ThemeExtension<dynamic>>[
@@ -1899,6 +1899,7 @@ void main() {
 
     final chrome = PoltergeistChrome.of(
       tester.element(find.byKey(const ValueKey('pane.left.path'))),
+      poltergeistThemeStyle,
     );
     expect(rowFill('report.txt'), chrome.selectionFill);
     expect(

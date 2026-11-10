@@ -417,7 +417,7 @@ class _SidebarViewState extends State<SidebarView> {
   }
 
   Widget _buildRail(BuildContext context, AppLocalizations l10n) {
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final data = _SidebarData(
       state: this,
       context: context,
@@ -993,7 +993,7 @@ _serverIndicator(
   ProbeStatus? probe,
 }) => sidebarServerIndicator(
   l10n,
-  PoltergeistChrome.of(context),
+  PoltergeistChrome.of(context, poltergeistThemeStyle),
   status: status,
   probe: probe,
 );
@@ -1015,7 +1015,7 @@ class _SidebarHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final textTheme = Theme.of(context).textTheme;
     final home = presentation == SidebarPresentation.home;
     return Padding(

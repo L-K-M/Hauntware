@@ -217,6 +217,12 @@
 - **Sidebar failures notify at the top.** When a sidebar change such as
   a rename or a saved location can't be saved, its notice appears at the
   top of the window like the app's other notices, not at the bottom.
+- **The theme stack is shared.** The theme model, presets, builder and
+  Appearance editor now come from the shared `ghost_theme` package, as
+  Séance's and Klabautermann's do. Stored themes, preset names and the
+  JSON a copied theme carries are unchanged. A chosen accent with low
+  contrast now explains that links and indicators use an adjusted
+  colour, with a button to take the suggested accessible colour.
 
 ## 1.9.0 — first suite release (2026-10-04)
 
