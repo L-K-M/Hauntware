@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **The update check moved into the suite.** The once-per-launch
+  latest-release check and its Android in-place update now live in the
+  shared `ghost_update` package, which Klabautermann also uses; behavior
+  is unchanged.
 - **Host-key conflicts show both keys.** When a synced host key differs
   from the one this device trusts, Settings and the account switch now
   show both fingerprints, so you can check them against the server's own

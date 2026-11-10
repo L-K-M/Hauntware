@@ -179,6 +179,7 @@ if [[ "$scope" != dart ]]; then
                packages/ghost_marks_picker packages/ghost_theme \
                packages/ghost_servers packages/ghost_keystore \
                packages/ghost_apk_update packages/ghost_licenses \
+               packages/ghost_update \
                app/planchette_app; do
       (cd "$dir" && run flutter pub get)
     done
@@ -187,6 +188,7 @@ if [[ "$scope" != dart ]]; then
                packages/ghost_marks_picker packages/ghost_theme \
                packages/ghost_servers packages/ghost_keystore \
                packages/ghost_apk_update packages/ghost_licenses \
+               packages/ghost_update \
                app/planchette_app; do
       (cd "$dir" && run flutter analyze && run flutter test)
     done
@@ -196,6 +198,7 @@ if [[ "$scope" != dart ]]; then
       packages/ghost_marks packages/ghost_marks_picker packages/ghost_theme \
       packages/ghost_servers \
       packages/ghost_keystore packages/ghost_apk_update packages/ghost_licenses \
+      packages/ghost_update \
       app/planchette_app
   )
 

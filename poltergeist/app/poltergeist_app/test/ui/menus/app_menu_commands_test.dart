@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart' as http_testing;
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/registered_command.dart';
-import 'package:poltergeist_app/services/update_check_controller.dart';
+import 'package:ghost_update/ghost_update.dart';
 import 'package:poltergeist_app/ui/menus/app_menu_commands.dart';
 import 'package:poltergeist_app/ui/menus/app_menus.dart';
 import 'package:poltergeist_app/ui/settings/app_settings_command.dart';
@@ -25,6 +25,7 @@ void main() {
 
   UpdateCheckController controllerAnswering(String tag) =>
       UpdateCheckController(
+        androidReleaseAsset: poltergeistAndroidReleaseAsset,
         // The launch check is off: the menu row must still work.
         enabled: false,
         checker: UpdateChecker(
