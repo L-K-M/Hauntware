@@ -8709,6 +8709,66 @@ abstract class AppLocalizations {
   /// **'Use the {name} theme'**
   String appearancePresetTooltip(String name);
 
+  /// Shown name of the Klabautermann theme preset (the default: Klabautermann's sea blue, following light or dark). A copied theme stores the English name, the same in Séance, whatever this says.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann'**
+  String get themePresetKlabautermann;
+
+  /// Shown name of the Graphite theme preset (a muted blue-grey accent). A copied theme stores the English name, the same in Séance, whatever this says.
+  ///
+  /// In en, this message translates to:
+  /// **'Graphite'**
+  String get themePresetGraphite;
+
+  /// Shown name of the Paper theme preset (warm and light). A copied theme stores the English name, the same in Séance, whatever this says.
+  ///
+  /// In en, this message translates to:
+  /// **'Paper'**
+  String get themePresetPaper;
+
+  /// Shown name of the Newsprint theme preset (black, white and red). A copied theme stores the English name, the same in Séance, whatever this says.
+  ///
+  /// In en, this message translates to:
+  /// **'Newsprint'**
+  String get themePresetNewsprint;
+
+  /// Shown name of the Solarized theme preset (Solarized dark). A copied theme stores the English name, the same in Séance, whatever this says.
+  ///
+  /// In en, this message translates to:
+  /// **'Solarized'**
+  String get themePresetSolarized;
+
+  /// Shown name of the Midnight theme preset (deep blue). A copied theme stores the English name, the same in Séance, whatever this says.
+  ///
+  /// In en, this message translates to:
+  /// **'Midnight'**
+  String get themePresetMidnight;
+
+  /// Shown name of the Terminal theme preset (green on black). A copied theme stores the English name, the same in Séance, whatever this says.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal'**
+  String get themePresetTerminal;
+
+  /// Shown name of the Vapor theme preset (magenta and cyan over violet-black). A copied theme stores the English name, the same in Séance, whatever this says.
+  ///
+  /// In en, this message translates to:
+  /// **'Vapor'**
+  String get themePresetVapor;
+
+  /// Shown name of the Bubblegum theme preset (pink and purple). A copied theme stores the English name, the same in Séance, whatever this says.
+  ///
+  /// In en, this message translates to:
+  /// **'Bubblegum'**
+  String get themePresetBubblegum;
+
+  /// Shown name of the High contrast theme preset (black and white with yellow). A copied theme stores the English name, the same in Séance, whatever this says.
+  ///
+  /// In en, this message translates to:
+  /// **'High contrast'**
+  String get themePresetHighContrast;
+
   /// Appearance tab: heading of the light/dark mode section.
   ///
   /// In en, this message translates to:

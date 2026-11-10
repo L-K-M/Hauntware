@@ -8291,6 +8291,46 @@
       }
     }
   },
+  "themePresetKlabautermann": "Klabautermann",
+  "@themePresetKlabautermann": {
+    "description": "Shown name of the Klabautermann theme preset (the default: Klabautermann's sea blue, following light or dark). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetGraphite": "Graphite",
+  "@themePresetGraphite": {
+    "description": "Shown name of the Graphite theme preset (a muted blue-grey accent). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetPaper": "Paper",
+  "@themePresetPaper": {
+    "description": "Shown name of the Paper theme preset (warm and light). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetNewsprint": "Newsprint",
+  "@themePresetNewsprint": {
+    "description": "Shown name of the Newsprint theme preset (black, white and red). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetSolarized": "Solarized",
+  "@themePresetSolarized": {
+    "description": "Shown name of the Solarized theme preset (Solarized dark). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetMidnight": "Midnight",
+  "@themePresetMidnight": {
+    "description": "Shown name of the Midnight theme preset (deep blue). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetTerminal": "Terminal",
+  "@themePresetTerminal": {
+    "description": "Shown name of the Terminal theme preset (green on black). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetVapor": "Vapor",
+  "@themePresetVapor": {
+    "description": "Shown name of the Vapor theme preset (magenta and cyan over violet-black). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetBubblegum": "Bubblegum",
+  "@themePresetBubblegum": {
+    "description": "Shown name of the Bubblegum theme preset (pink and purple). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetHighContrast": "High contrast",
+  "@themePresetHighContrast": {
+    "description": "Shown name of the High contrast theme preset (black and white with yellow). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
   "appearanceModeTitle": "Mode",
   "@appearanceModeTitle": {
     "description": "Appearance tab: heading of the light/dark mode section."

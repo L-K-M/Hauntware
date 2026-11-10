@@ -6906,6 +6906,36 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get themePresetKlabautermann => 'Klabautermann';
+
+  @override
+  String get themePresetGraphite => 'Graphite';
+
+  @override
+  String get themePresetPaper => 'Paper';
+
+  @override
+  String get themePresetNewsprint => 'Newsprint';
+
+  @override
+  String get themePresetSolarized => 'Solarized';
+
+  @override
+  String get themePresetMidnight => 'Midnight';
+
+  @override
+  String get themePresetTerminal => 'Terminal';
+
+  @override
+  String get themePresetVapor => 'Vapor';
+
+  @override
+  String get themePresetBubblegum => 'Bubblegum';
+
+  @override
+  String get themePresetHighContrast => 'High contrast';
+
+  @override
   String get appearanceModeTitle => 'Mode';
 
   @override

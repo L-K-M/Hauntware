@@ -5,6 +5,10 @@
 - On Android 13 and later, the system back gesture runs the app's own back
   steps, as in Séance and Poltergeist: the disk explorer steps up a folder
   and an editor with unsaved changes asks first.
+- The Appearance tab's theme presets are named in the app's words, as
+  Poltergeist's are: Klabautermann, Graphite, Paper, Newsprint, Solarized,
+  Midnight, Terminal, Vapor, Bubblegum and High contrast. The name stored
+  in a copied theme stays English.
 - Activity shows the commands an action ran in the code font, as the
   preview before it runs does.
 - On the desktop, drag the edge of the fleet rail or the inspector, or
