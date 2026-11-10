@@ -84,7 +84,8 @@ class StackLogsController extends ChangeNotifier {
     for (var i = 0; i < containers.length; i++) _Stream(this, i),
   ];
 
-  /// Every line read, merged by time, oldest first.
+  /// Every line read, merged by time, oldest first, with a marker where
+  /// a container's stream dropped lines.
   final List<_Entry> _merged = [];
   bool _visible = false;
 
@@ -123,7 +124,7 @@ class StackLogsController extends ChangeNotifier {
       containers.indexWhere((container) => container.id == containerId);
 
   void _take(int index, List<ContainerRecord> records, {int dropped = 0}) {
-    if (records.isEmpty) return;
+    if (records.isEmpty && dropped == 0) return;
     final newest = _merged.isEmpty ? null : _merged.last.at;
     // A line without a time sorts where it arrived: after the line before
     // it, or after the newest shown.
@@ -134,7 +135,13 @@ class StackLogsController extends ChangeNotifier {
     final inOrder =
         newest == null ||
         added.every((entry) => entry.at == null || !entry.at!.isBefore(newest));
-    _merged.addAll(added);
+    // The engine dropped the lines before this batch's: the marker sorts
+    // with its first line, or after the newest one for a batch of none.
+    _merged.addAll([
+      if (dropped > 0)
+        _Entry.gap(index, added.firstOrNull?.at ?? newest, dropped),
+      ...added,
+    ]);
     if (inOrder) {
       _trim();
       if (!_hidden.contains(index)) {
@@ -156,10 +163,24 @@ class StackLogsController extends ChangeNotifier {
     }
   }
 
-  void _rebuild() => logs.replaceContainer([
-    for (final entry in _merged)
-      if (!_hidden.contains(entry.index)) _named(entry.index, entry.record),
-  ]);
+  void _rebuild() {
+    final records = <ContainerRecord>[];
+    final droppedBefore = <int, int>{};
+    for (final entry in _merged) {
+      if (_hidden.contains(entry.index)) continue;
+      switch (entry.record) {
+        case final record?:
+          records.add(_named(entry.index, record));
+        case null:
+          droppedBefore.update(
+            records.length,
+            (count) => count + entry.dropped,
+            ifAbsent: () => entry.dropped,
+          );
+      }
+    }
+    logs.replaceContainer(records, droppedBefore: droppedBefore);
+  }
 
   ContainerRecord _named(int index, ContainerRecord record) {
     final colour = _nameColours[index % _nameColours.length];
@@ -189,14 +210,19 @@ String _labelled(int colour, String name, String text) =>
     '\x1b[38;5;${colour}m$name\x1b[0m $text';
 
 /// One line read, with the container it came from and the time it sorts
-/// by: its own, or for a line without one the time before it.
+/// by: its own, or for a line without one the time before it. A gap
+/// ([record] null) stands for [dropped] lines the container's stream
+/// lost at that point.
 @immutable
 final class _Entry {
-  const _Entry(this.index, this.record, this.at);
+  const _Entry(this.index, ContainerRecord this.record, this.at) : dropped = 0;
+
+  const _Entry.gap(this.index, this.at, this.dropped) : record = null;
 
   final int index;
-  final ContainerRecord record;
+  final ContainerRecord? record;
   final DateTime? at;
+  final int dropped;
 
   /// By time, keeping arrival order among equals ([mergeSort] is
   /// stable); entries before the first timed line sort first.

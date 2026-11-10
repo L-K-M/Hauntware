@@ -106,6 +106,56 @@ void main() {
     },
   );
 
+  test('lines the engine dropped keep their marker through out-of-order '
+      'batches, rebuilds and a hidden container', () async {
+    final logs = StackLogsController(
+      streams: streams,
+      serverId: _serverId,
+      containers: [_web, _db],
+    )..setVisible(true);
+    addTearDown(logs.dispose);
+
+    /// The merged view as text, a gap as `dropped N`.
+    List<String> view() => [
+      for (var i = 0; i < logs.logs.length; i++)
+        switch (logs.logs[i]) {
+          final LogLine line => logRowText(line),
+          LogDroppedLines(:final count) => 'dropped $count',
+          _ => '?',
+        },
+    ];
+
+    await batch('web1', [containerLine('a', at: _at(1))]);
+    await batch('web1', [containerLine('d', at: _at(4))]);
+    engine.emit(
+      containerLogBatch(streamOf('db1'), [
+        containerLine('b', at: _at(2)),
+      ], dropped: 5),
+    );
+    await pumpEventQueue();
+    expect(view(), ['web-1 a', 'dropped 5', 'db-1 b', 'web-1 d']);
+
+    // A later out-of-order batch rebuilds the view and keeps the marker.
+    await batch('web1', [containerLine('c', at: _at(3))]);
+    expect(view(), ['web-1 a', 'dropped 5', 'db-1 b', 'web-1 c', 'web-1 d']);
+
+    // A hidden container's marker goes with its lines and returns.
+    logs.toggle('db1');
+    expect(view(), ['web-1 a', 'web-1 c', 'web-1 d']);
+    engine.emit(containerLogBatch(streamOf('db1'), const [], dropped: 2));
+    await pumpEventQueue();
+    expect(view(), ['web-1 a', 'web-1 c', 'web-1 d']);
+    logs.toggle('db1');
+    expect(view(), [
+      'web-1 a',
+      'dropped 5',
+      'db-1 b',
+      'web-1 c',
+      'web-1 d',
+      'dropped 2',
+    ]);
+  });
+
   test(
     'each stream says how it stands, and hiding the page closes them',
     () async {
