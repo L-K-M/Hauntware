@@ -1021,6 +1021,34 @@ void main() {
       );
     });
 
+    testWidgets('scrolling the section away and back reads once', (
+      tester,
+    ) async {
+      final harness = await _pump(
+        tester,
+        size: const Size(390, 500),
+        phone: true,
+      );
+      await _open(tester);
+      await harness.answer(
+        tester,
+        DockerContainerPayload(dockerContainerDetails(_id)),
+      );
+
+      // The list builds the section as it reaches it.
+      final details = find.byType(ListView).last;
+      await tester.drag(details, const Offset(0, -20000));
+      await tester.pumpAndSettle();
+      await harness.emit(tester, dockerAnswer(tops(harness).last, top));
+      for (var i = 0; i < 2; i++) {
+        await tester.drag(details, const Offset(0, -20000));
+        await tester.pumpAndSettle();
+        await tester.drag(details, const Offset(0, 20000));
+        await tester.pumpAndSettle();
+      }
+      expect(tops(harness), hasLength(1));
+    });
+
     testWidgets('a stopped container reads none and says why', (tester) async {
       final harness = await _pump(tester);
       await harness.emit(
