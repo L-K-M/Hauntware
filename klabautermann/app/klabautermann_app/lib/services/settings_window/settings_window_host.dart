@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show SyncPinConflict;
 
 import '../../controllers/account_size.dart';
 import '../../controllers/admin_memory.dart';
@@ -21,8 +23,7 @@ import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart';
 import '../../controllers/safety_controller.dart';
 import '../../controllers/sync_secrets_controller.dart';
-import '../../controllers/sync_controller.dart'
-    show PinConflictsSettings;
+import '../../controllers/sync_controller.dart' show PinConflictsSettings;
 import '../../controllers/threshold_controller.dart';
 import '../../ui/threshold_scope.dart' show ThresholdMetric;
 import '../stored_safety.dart';
@@ -304,7 +305,13 @@ final class SettingsWindowHost {
           throw StateError('No pin conflict settings');
         }
         await pinConflicts.resolvePinConflict(
-          change[SettingsLinkKey.locator.name]! as String,
+          SyncPinConflict(
+            locator: change[SettingsLinkKey.locator.name]! as String,
+            localFingerprintSha256:
+                change[SettingsLinkKey.localFingerprintSha256.name]! as String,
+            pulledFingerprintSha256:
+                change[SettingsLinkKey.pulledFingerprintSha256.name]! as String,
+          ),
           keepLocal: change[SettingsLinkKey.keepLocal.name]! as bool,
         );
       case SettingsLinkMethod.setMonitored:

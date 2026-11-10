@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Settings > Sync shows a synced host key that conflicts with the one
+  this device trusts, with both fingerprints, and resolves it by keeping
+  this device's key or trusting the new one, in the settings route and
+  the desktop settings window.
 - Activity shows the commands an action ran in the code font, as the
   preview before it runs does.
 - On the desktop, drag the edge of the fleet rail or the inspector, or

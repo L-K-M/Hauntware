@@ -114,12 +114,12 @@ final class _PinConflicts extends ChangeNotifier
 
   @override
   Future<void> resolvePinConflict(
-    String locator, {
+    SyncPinConflict conflict, {
     required bool keepLocal,
   }) async {
     resolving = true;
     notifyListeners();
-    asked.add((locator, keepLocal));
+    asked.add((conflict.locator, keepLocal));
     conflicts = const [];
     resolving = false;
     notifyListeners();

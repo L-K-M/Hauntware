@@ -947,6 +947,8 @@ void main() {
         final resolved = await sync.resolvePinConflict(
           locator,
           keepLocal: false,
+          localFingerprintSha256: localFingerprint,
+          pulledFingerprintSha256: pulledFingerprint,
         );
 
         expect(resolved, isEmpty);
@@ -966,6 +968,8 @@ void main() {
         final resolved = await sync.resolvePinConflict(
           locator,
           keepLocal: true,
+          localFingerprintSha256: localFingerprint,
+          pulledFingerprintSha256: pulledFingerprint,
         );
 
         expect(resolved, isEmpty);
@@ -991,7 +995,12 @@ void main() {
       await sync.enroll(_enroll);
 
       expect(
-        await sync.resolvePinConflict('ghost.example.com:22', keepLocal: true),
+        await sync.resolvePinConflict(
+          'ghost.example.com:22',
+          keepLocal: true,
+          localFingerprintSha256: localFingerprint,
+          pulledFingerprintSha256: pulledFingerprint,
+        ),
         isEmpty,
       );
       await sync.runRound();
@@ -1008,6 +1017,32 @@ void main() {
       expect(status.failure, SyncFailure.sessionRejected);
       expect(status.pinConflicts, isNull);
       expect((await sync.pinConflicts()).single.locator, locator);
+    });
+
+    test('a resolution is a no-op when the pulled key changed between '
+        'surfacing and resolving', () async {
+      final (sync, hostKeys) = await conflicting();
+      await sync.enroll(_enroll);
+
+      final shown = (await sync.pinConflicts()).single;
+      await server.seedHostKey(
+        pin('alpha.example.com', 'SHA256:newer'),
+        updatedAt: 10,
+      );
+      await sync.runRound();
+
+      final resolved = await sync.resolvePinConflict(
+        locator,
+        keepLocal: false,
+        localFingerprintSha256: shown.localFingerprintSha256,
+        pulledFingerprintSha256: shown.pulledFingerprintSha256,
+      );
+
+      expect(resolved.single.pulledFingerprintSha256, 'SHA256:newer');
+      expect(
+        (await hostKeys.get('alpha.example.com', 22))!.fingerprintSha256,
+        localFingerprint,
+      );
     });
   });
 

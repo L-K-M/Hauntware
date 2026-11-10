@@ -20,8 +20,7 @@ import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart';
 import '../../controllers/safety_controller.dart';
 import '../../controllers/sync_secrets_controller.dart';
-import '../../controllers/sync_controller.dart'
-    show PinConflictsSettings;
+import '../../controllers/sync_controller.dart' show PinConflictsSettings;
 import '../../controllers/threshold_controller.dart';
 import '../../ui/charts/charts.dart' show ChartThresholds;
 import '../../ui/threshold_scope.dart';
@@ -147,13 +146,17 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
 
   /// The Sync tab's host-key conflicts, from the latest snapshot.
   late final RemotePinConflicts pinConflicts = RemotePinConflicts._(
-    (locator, keepLocal) => invoke(
-      SettingsLinkMethod.resolvePinConflict.name,
-      {
-        SettingsLinkKey.locator.name: locator,
-        SettingsLinkKey.keepLocal.name: keepLocal,
-      },
-    ),
+    (locator, localFingerprintSha256, pulledFingerprintSha256, keepLocal) =>
+        invoke(
+          SettingsLinkMethod.resolvePinConflict.name,
+          {
+            SettingsLinkKey.locator.name: locator,
+            SettingsLinkKey.localFingerprintSha256.name: localFingerprintSha256,
+            SettingsLinkKey.pulledFingerprintSha256.name:
+                pulledFingerprintSha256,
+            SettingsLinkKey.keepLocal.name: keepLocal,
+          },
+        ),
   );
 
   /// The Sync tab's account size (SYN-09), from the latest snapshot.
@@ -211,7 +214,8 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     );
     pinConflicts._apply(
       decodePinConflicts(snapshot[SettingsLinkKey.pinConflicts.name]),
-    );    accountSize.value = decodeAccountSize(
+    );
+    accountSize.value = decodeAccountSize(
       snapshot[SettingsLinkKey.accountSize.name],
     );
     monitorSet._apply(
@@ -545,7 +549,12 @@ final class RemotePinConflicts extends ChangeNotifier
     implements PinConflictsSettings {
   RemotePinConflicts._(this._call);
 
-  final Future<Object?> Function(String locator, bool keepLocal) _call;
+  final Future<Object?> Function(
+    String locator,
+    String localFingerprintSha256,
+    String pulledFingerprintSha256,
+    bool keepLocal,
+  ) _call;
 
   List<SyncPinConflict> _value = const [];
   bool _resolving = false;
@@ -564,13 +573,18 @@ final class RemotePinConflicts extends ChangeNotifier
 
   @override
   Future<void> resolvePinConflict(
-    String locator, {
+    SyncPinConflict conflict, {
     required bool keepLocal,
   }) async {
     _resolving = true;
     notifyListeners();
     try {
-      await _call(locator, keepLocal);
+      await _call(
+        conflict.locator,
+        conflict.localFingerprintSha256,
+        conflict.pulledFingerprintSha256,
+        keepLocal,
+      );
     } finally {
       _resolving = false;
       notifyListeners();

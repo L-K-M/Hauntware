@@ -660,7 +660,14 @@ void main() {
       final read = await untilPinConflictsChanged(client, events, keystore);
       expect(read.conflicts.single.pulledFingerprintSha256, 'SHA256:pulled');
 
-      client.send(const ResolvePinConflict(locator, keepLocal: false));
+      client.send(
+        const ResolvePinConflict(
+          locator,
+          keepLocal: false,
+          localFingerprintSha256: 'SHA256:local',
+          pulledFingerprintSha256: 'SHA256:pulled',
+        ),
+      );
       final resolved = await untilPinConflictsChanged(client, events, keystore);
       expect(resolved.conflicts, isEmpty);
     });

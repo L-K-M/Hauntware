@@ -111,7 +111,10 @@ enum SettingsLinkMethod {
   setPinPublication,
 
   /// The Sync tab's host-key conflict resolution (03 §4.9); the argument is
-  /// an object of [SettingsLinkKey.locator] and [SettingsLinkKey.keepLocal].
+  /// an object of [SettingsLinkKey.locator],
+  /// [SettingsLinkKey.localFingerprintSha256],
+  /// [SettingsLinkKey.pulledFingerprintSha256] and
+  /// [SettingsLinkKey.keepLocal].
   resolvePinConflict,
 
   /// A Servers tab toggle of FL-21's monitor set; the argument is an

@@ -82,7 +82,12 @@ void main() {
         ),
         const RunSyncRound(),
         const ReadPinConflicts(),
-        const ResolvePinConflict('alpha.example.com:22', keepLocal: true),
+        const ResolvePinConflict(
+          'alpha.example.com:22',
+          keepLocal: true,
+          localFingerprintSha256: 'SHA256:local',
+          pulledFingerprintSha256: 'SHA256:pulled',
+        ),
         AnswerKeystore(3, KeystoreMasterKey(Uint8List.fromList([1, 2]))),
         const ConfirmEndpoints(['a', 'b']),
         const SetMonitorSet(['a']),

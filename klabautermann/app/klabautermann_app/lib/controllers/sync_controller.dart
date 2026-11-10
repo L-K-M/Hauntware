@@ -22,7 +22,7 @@ abstract interface class PinConflictsSettings implements Listenable {
   /// [PinConflictNotResolvedException] when the engine refuses or the
   /// conflict no longer stands.
   Future<void> resolvePinConflict(
-    String locator, {
+    SyncPinConflict conflict, {
     required bool keepLocal,
   });
 }
@@ -143,35 +143,42 @@ final class SyncController extends ChangeNotifier
 
   @override
   Future<void> resolvePinConflict(
-    String locator, {
+    SyncPinConflict conflict, {
     required bool keepLocal,
   }) async {
     if (_engineStopped) {
       throw const PinConflictNotResolvedException('The engine stopped');
     }
-    if (_resolving.contains(locator)) {
+    if (_resolving.contains(conflict.locator)) {
       throw const PinConflictNotResolvedException(
         'That conflict is already being resolved',
       );
     }
     final answered = Completer<void>();
-    _resolving.add(locator);
-    _pinRequests.add((locator, answered));
+    _resolving.add(conflict.locator);
+    _pinRequests.add((conflict.locator, answered));
     notifyListeners();
     try {
-      _engine.send(ResolvePinConflict(locator, keepLocal: keepLocal));
+      _engine.send(
+        ResolvePinConflict(
+          conflict.locator,
+          keepLocal: keepLocal,
+          localFingerprintSha256: conflict.localFingerprintSha256,
+          pulledFingerprintSha256: conflict.pulledFingerprintSha256,
+        ),
+      );
     } on StateError {
       _pinRequests.removeWhere(
         (pending) => identical(pending.$2, answered),
       );
-      _resolving.remove(locator);
+      _resolving.remove(conflict.locator);
       notifyListeners();
       throw const PinConflictNotResolvedException('The engine stopped');
     }
     try {
       await answered.future;
     } finally {
-      _resolving.remove(locator);
+      _resolving.remove(conflict.locator);
       notifyListeners();
     }
   }

@@ -425,17 +425,30 @@ final class ReadPinConflicts extends EngineRequest {
 
 /// Resolves one host-key conflict (03 §10.1, §4.9): [keepLocal] keeps this
 /// device's pin and re-pushes it under a fresh tuple, and false trusts the
-/// pulled key. A locator that names no current conflict, or whose
-/// fingerprints no longer match, is a no-op. Answered by
-/// [PinConflictsChanged] with the diff afterwards, or [RequestRejected].
+/// pulled key. The fingerprints are the ones the user saw: a locator that
+/// names no current conflict, or whose conflict now holds other keys, is a
+/// no-op, so a decision never applies to a key that arrived after it was
+/// made. Answered by [PinConflictsChanged] with the diff afterwards, or
+/// [RequestRejected].
 final class ResolvePinConflict extends EngineRequest {
-  const ResolvePinConflict(this.locator, {required this.keepLocal});
+  const ResolvePinConflict(
+    this.locator, {
+    required this.keepLocal,
+    required this.localFingerprintSha256,
+    required this.pulledFingerprintSha256,
+  });
 
   /// `host:port` — the locator spelling a pin's record id carries.
   final String locator;
 
   /// Whether to keep this device's pin rather than trust the pulled key.
   final bool keepLocal;
+
+  /// The fingerprint this device trusted when the conflict was shown.
+  final String localFingerprintSha256;
+
+  /// The fingerprint the pulled key carried when the conflict was shown.
+  final String pulledFingerprintSha256;
 }
 
 /// Imports the hosts of an OpenSSH client config as device-local fleet

@@ -29,7 +29,7 @@ class PinConflictCard extends StatelessWidget {
       context,
     ).settingsPinConflictNotResolved;
     try {
-      await settings.resolvePinConflict(conflict.locator, keepLocal: keepLocal);
+      await settings.resolvePinConflict(conflict, keepLocal: keepLocal);
     } on Exception catch (error) {
       debugPrint('$error');
       if (overlay.mounted) showTopToast(overlay, message: notResolved);

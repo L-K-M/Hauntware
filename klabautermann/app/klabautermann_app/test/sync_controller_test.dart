@@ -64,7 +64,7 @@ void main() {
     final sync = SyncController(engine);
 
     final resolved = sync.resolvePinConflict(
-      _conflict.locator,
+      _conflict,
       keepLocal: true,
     );
 
@@ -83,9 +83,9 @@ void main() {
     final engine = FakeEngineClient();
     final sync = SyncController(engine);
 
-    final first = sync.resolvePinConflict(_conflict.locator, keepLocal: true);
+    final first = sync.resolvePinConflict(_conflict, keepLocal: true);
     await expectLater(
-      sync.resolvePinConflict(_conflict.locator, keepLocal: false),
+      sync.resolvePinConflict(_conflict, keepLocal: false),
       throwsA(isA<PinConflictNotResolvedException>()),
     );
     expect(engine.sentOfType<ResolvePinConflict>(), hasLength(1));
@@ -100,7 +100,7 @@ void main() {
     final sync = SyncController(engine);
 
     final resolved = sync.resolvePinConflict(
-      _conflict.locator,
+      _conflict,
       keepLocal: false,
     );
     engine.emit(const RequestRejected('ResolvePinConflict', 'no vault key'));

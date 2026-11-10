@@ -512,12 +512,15 @@ final class EngineSync {
 
   /// Resolves the conflict at [locator] and returns the quarantine diff as
   /// it stands afterwards. [keepLocal] keeps this device's pin and re-pushes
-  /// it; otherwise the pulled key is trusted. Throws when the engine holds
-  /// no exclusive access, no enrollment, or no vault key, so the isolate
-  /// can answer [RequestRejected].
+  /// it; otherwise the pulled key is trusted. A resolution whose
+  /// fingerprints no longer match the ones shown is a no-op. Throws when
+  /// the engine holds no exclusive access, no enrollment, or no vault key,
+  /// so the isolate can answer [RequestRejected].
   Future<List<SyncPinConflict>> resolvePinConflict(
     String locator, {
     required bool keepLocal,
+    required String localFingerprintSha256,
+    required String pulledFingerprintSha256,
   }) async {
     if (_refusal(SyncOperation.round) case final refused?) {
       throw StateError(refused.detail ?? refused.failure?.name ?? 'refused');
@@ -528,7 +531,9 @@ final class EngineSync {
     return _vault.exclusive(() async {
       HostKeyConflict? conflict;
       for (final candidate in await coordinator.pinConflicts()) {
-        if (candidate.locator == locator) {
+        if (candidate.locator == locator &&
+            candidate.local.fingerprintSha256 == localFingerprintSha256 &&
+            candidate.pulled.fingerprintSha256 == pulledFingerprintSha256) {
           conflict = candidate;
           break;
         }
