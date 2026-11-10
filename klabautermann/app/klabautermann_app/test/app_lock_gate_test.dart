@@ -200,6 +200,51 @@ void main() {
     expect(find.text(_title), findsNothing);
   });
 
+  testWidgets('a dialog open when the lock engages stays covered and gives '
+      'up focus', (tester) async {
+    final lock = await pump(tester);
+    await tester.pumpAndSettle();
+    var dialogTaps = 0;
+    unawaited(
+      showDialog<void>(
+        context: tester.element(find.text(_content)),
+        builder: (_) => AlertDialog(
+          content: TextButton(
+            autofocus: true,
+            onPressed: () => dialogTaps++,
+            child: const Text('dialog action'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final action = find.text('dialog action');
+    expect(Focus.of(tester.element(action)).hasFocus, isTrue);
+
+    device.hold = Completer<void>();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    elapsed += appLockBackgroundTimeout;
+    wall = wall.add(appLockBackgroundTimeout);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await tester.pump();
+
+    expect(lock.locked, isTrue);
+    expect(find.text(_title), findsOneWidget);
+    expect(Focus.of(tester.element(action)).hasFocus, isFalse);
+    await tester.tap(action, warnIfMissed: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect(dialogTaps, 0);
+
+    device.hold!.complete();
+    await tester.pumpAndSettle();
+    expect(find.text(_title), findsNothing);
+    await tester.tap(action);
+    expect(dialogTaps, 1);
+  });
+
   group('the app menus behind the lock (03 §8.13)', () {
     late List<String> runs;
 
