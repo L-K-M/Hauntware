@@ -59,6 +59,7 @@ void main() {
     int taskRetryLimit = 5,
     bool Function(FsLocation)? isCaseInsensitiveDestination,
     Duration nameProbeCleanupTimeout = const Duration(seconds: 5),
+    DownloadProvenance? provenance,
   }) {
     connections.leaseCap = leaseCap;
     final created = TransferQueue(
@@ -69,6 +70,7 @@ void main() {
       pipeBufferBytes: pipeBufferBytes ?? 4 * 1024 * 1024,
       isCaseInsensitiveDestination: isCaseInsensitiveDestination,
       nameProbeCleanupTimeout: nameProbeCleanupTimeout,
+      provenance: provenance,
     );
     createdQueues.add(created);
     return created;
@@ -3070,6 +3072,79 @@ void main() {
         isTrue,
         reason: 'the dir-removal failure must surface as an item event',
       );
+    });
+  });
+
+  group('download provenance', () {
+    DownloadProvenance recorder(List<String> marked) =>
+        DownloadProvenance.forHost(
+          ProvenancePlatform.macos,
+          agent: 'Poltergeist',
+          runProcess: (_, arguments) async {
+            marked.add(arguments.last);
+            return ProcessResult(0, 0, '', '');
+          },
+        );
+
+    test('a remote→local copy marks the landed file', () async {
+      final marked = <String>[];
+      queue = newQueue(provenance: recorder(marked));
+      final localDest = Directory('${tempDir.path}/dl')..createSync();
+      s1.addFile('/src/a.txt', 'aaa'.codeUnits);
+
+      final task = enqueue(
+        copySpec(
+          source: const ServerFsLocation('s1'),
+          destination: const LocalFsLocation(),
+          rootPaths: ['/src/a.txt'],
+          destinationDir: localDest.path,
+        ),
+      );
+      await awaitTaskDone(task);
+
+      expect(task.state, TransferTaskState.completed);
+      // The mark lands on the path the commit wrote, before the item
+      // reported complete.
+      expect(marked, [task.items.single.destinationPath]);
+    });
+
+    test('a local→local copy marks nothing', () async {
+      final marked = <String>[];
+      queue = newQueue(provenance: recorder(marked));
+      writeLocal('b.txt', [1, 2]);
+      final localDest = Directory('${tempDir.path}/ll')..createSync();
+
+      final task = enqueue(
+        copySpec(
+          source: const LocalFsLocation(),
+          destination: const LocalFsLocation(),
+          rootPaths: ['${localSrc.path}/b.txt'],
+          destinationDir: localDest.path,
+        ),
+      );
+      await awaitTaskDone(task);
+
+      expect(task.state, TransferTaskState.completed);
+      expect(marked, isEmpty);
+    });
+
+    test('an upload marks nothing', () async {
+      final marked = <String>[];
+      queue = newQueue(provenance: recorder(marked));
+      writeLocal('u.txt', [1]);
+
+      final task = enqueue(
+        copySpec(
+          source: const LocalFsLocation(),
+          destination: const ServerFsLocation('s1'),
+          rootPaths: ['${localSrc.path}/u.txt'],
+          destinationDir: '/dst',
+        ),
+      );
+      await awaitTaskDone(task);
+
+      expect(task.state, TransferTaskState.completed);
+      expect(marked, isEmpty);
     });
   });
 }

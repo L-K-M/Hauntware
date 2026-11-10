@@ -14,6 +14,7 @@ import '../fs/local_file_system.dart';
 import '../fs/local_fs_safety.dart';
 import '../preview/preview_kinds.dart';
 import '../preview/preview_produce.dart';
+import '../product.dart';
 import 'bandwidth_limiter.dart';
 import 'bounded_transfer_sink.dart';
 import 'conflict_policy.dart';
@@ -109,6 +110,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     this.deleteQuantifyTimeout = const Duration(seconds: 10),
     this.nameProbeCleanupTimeout = const Duration(seconds: 5),
     this.persistence,
+    DownloadProvenance? provenance,
   }) : _localFileSystem = localFileSystem ?? LocalFileSystem(),
        _isCaseInsensitiveDestination = isCaseInsensitiveDestination?.call,
        _isFlaggedEntry = isFlaggedEntry ?? _noFlags,
@@ -122,7 +124,8 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
        _maxInFlightFiles = maxInFlightFiles,
        _maxPendingConflicts = maxPendingConflicts,
        downloadLimiter = downloadLimiter ?? BandwidthLimiter(),
-       uploadLimiter = uploadLimiter ?? BandwidthLimiter() {
+       uploadLimiter = uploadLimiter ?? BandwidthLimiter(),
+       _provenance = provenance ?? DownloadProvenance(agent: productName) {
     if (maxInFlightFiles < 1) {
       throw ArgumentError.value(
         maxInFlightFiles,
@@ -143,6 +146,11 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   /// channels through `leaseTransferChannel` (03 §4.3).
   final ConnectionManager connections;
   final RemoteFileSystem _localFileSystem;
+
+  /// Marks every remote→local hop's landed file the way browsers mark
+  /// downloads (P1-03a) — awaited per file so the mark is on before the
+  /// item reports complete; failures stay logged inside it.
+  final DownloadProvenance _provenance;
 
   /// The budget constants the queue enforces — today only
   /// `taskRetryLimit` (the §3.3 reconnect-cycle bound per task).
@@ -3794,6 +3802,9 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       // unwind artifact off the zone's unhandled-error path.
       sink.close().ignore();
       final destinationResult = await uploadFuture;
+      if (destination is LocalFileSystem && source is! LocalFileSystem) {
+        await _provenance.markDownloaded(destinationPath);
+      }
       return (source: sourceResult, destination: destinationResult);
     } catch (error) {
       // A real upload failure beats the sink's incidental close error on
