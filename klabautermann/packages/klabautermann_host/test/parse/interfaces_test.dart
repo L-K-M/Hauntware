@@ -205,6 +205,22 @@ void main() {
     expect(read.sockets.udp, 6);
   });
 
+  test('numbers past int range skip their line instead of throwing', () {
+    final huge = '9' * 20;
+    final read = parseInterfaces(
+      _read(
+        links: _link('eth0'),
+        addr: [
+          '2: eth0    inet 10.0.0.5/$huge scope global eth0',
+          '2: eth0    inet 10.0.0.6/24 scope global eth0',
+        ].join('\n'),
+        tcp: ['01 $huge', '0A 3'],
+      ),
+    )!;
+    expect(read.interfaces.single.addresses.single.address, '10.0.0.6');
+    expect(read.sockets.tcp, {TcpState.listen: 3});
+  });
+
   test('an unreadable /proc/net leaves the counts empty', () {
     final read = parseInterfaces(_read())!;
     expect(read.sockets.tcp, isEmpty);
