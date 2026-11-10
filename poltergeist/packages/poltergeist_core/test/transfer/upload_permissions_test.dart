@@ -155,6 +155,38 @@ void main() {
     await awaitTaskDone(task);
 
     expect(task.state, TransferTaskState.completed, reason: task.error);
-    expect((await File('${local.path}/gh').stat()).mode & 0xFFF, mode);
+    expect(
+      (await File('${local.path}/gh').stat()).mode & 0xFFF,
+      mode & _umaskAllowed(local),
+    );
   }, skip: Platform.isWindows ? 'Windows has no Unix mode bits.' : false);
+
+  test('downloads drop setuid, setgid, sticky and what the umask '
+      'withholds', () async {
+    const mode = 0xFFF; // 07777, as a hostile server may report
+    remote.addFile('/src/tool', [1, 2, 3], mode: mode);
+
+    final task = transfer(
+      source: const ServerFsLocation('server'),
+      destination: const LocalFsLocation(),
+      sourcePath: '/src/tool',
+      destinationDir: local.path,
+    );
+    await awaitTaskDone(task);
+
+    expect(task.state, TransferTaskState.completed, reason: task.error);
+    expect(
+      (await File('${local.path}/tool').stat()).mode & 0xFFF,
+      0x1FF & _umaskAllowed(local),
+    );
+  }, skip: Platform.isWindows ? 'Windows has no Unix mode bits.' : false);
+}
+
+/// The rwx bits this process's umask grants: a fresh file's mode is 0666
+/// under it, and a class keeps execute where it keeps read.
+int _umaskAllowed(Directory dir) {
+  final probe = File('${dir.path}/.umask-probe')..createSync();
+  final granted = probe.statSync().mode & 0x1B6;
+  probe.deleteSync();
+  return granted | ((granted & 0x124) >> 2);
 }

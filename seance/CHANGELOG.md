@@ -19,6 +19,18 @@
   asks first, as Klabautermann's container shell does: Paste all, First
   line only or Cancel. A single line still pastes at once, and runs only
   when you press Enter.
+- The built-in editor and the font picker draw one scrollbar on macOS,
+  Windows and Linux; they drew two side by side.
+- The Files pane takes Home, End, Page Up and Page Down; Command+Up
+  (Alt+Up or Backspace elsewhere) opens the parent folder and
+  Command+Down opens the item. An empty folder keeps the keyboard, the
+  phone and tablet listing takes a hardware keyboard too, and the
+  Keyboard shortcuts list names the file keys.
+- Import SSH config reads repeated settings as ssh does: the first
+  `HostName`, `User`, `Port` or `IdentityFile` in a block wins, where
+  the last one did. `IdentityFile none` signs in through the agent
+  instead of naming a key file called "none", and `HostName %h.example`
+  becomes the host's own name with that domain.
 - The window has the same layout on Linux, Windows, macOS and tablets: a
   header with the server's name, Generate command and buttons that hide
   the server list (the sidebar) and the side panel (the inspector), as a

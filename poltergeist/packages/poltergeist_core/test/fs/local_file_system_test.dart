@@ -1009,9 +1009,41 @@ void main() {
       expect(siblingLitter(), isEmpty);
     });
 
+    /// The rwx bits this process's umask grants: a fresh file's mode is
+    /// 0666 under it, and a class keeps execute where it keeps read.
+    int umaskAllowed() {
+      final probe = File(pathOf('umask-probe'))..createSync();
+      final granted = modeOf(probe.path);
+      probe.deleteSync();
+      return granted | ((granted & oct('444')) >> 2);
+    }
+
     testWithPosixTools('honors preserveMode', () async {
       await fs.upload(pathOf('out'), Stream.value([1]), preserveMode: oct('755'));
-      expect(modeOf(pathOf('out')), oct('755'));
+      expect(modeOf(pathOf('out')), oct('755') & umaskAllowed());
+    });
+
+    testWithPosixTools('a preserved mode never brings setuid, setgid, sticky or bits the umask withholds', () async {
+      final allowed = umaskAllowed();
+
+      await fs.upload(pathOf('tool'), Stream.value([1]), preserveMode: oct('4755'));
+      expect(modeOf(pathOf('tool')), oct('755') & allowed);
+      expect(modeOf(pathOf('tool')) & oct('7000'), 0);
+
+      await fs.upload(pathOf('shared'), Stream.value([1]), preserveMode: oct('7777'));
+      expect(modeOf(pathOf('shared')), oct('777') & allowed);
+      if (allowed & oct('002') == 0) {
+        expect(modeOf(pathOf('shared')) & oct('002'), 0, reason: 'the umask withholds world write');
+      }
+    });
+
+    testWithPosixTools('a replaced file keeps its own setuid bit', () async {
+      // setuid, not setgid: BSD gives a new file its directory's group,
+      // which the owner need not belong to, and chmod then drops setgid.
+      final file = await putFile('existing');
+      await fs.setMode(file.path, oct('4750'));
+      await fs.upload(file.path, Stream.value(utf8.encode('new')), overwrite: true);
+      expect(modeOf(file.path), oct('4750'));
     });
 
     testWithPosixTools('carries the existing mode over an overwrite by default', () async {

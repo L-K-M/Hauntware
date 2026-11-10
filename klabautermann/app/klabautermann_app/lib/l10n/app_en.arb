@@ -299,6 +299,32 @@
   "@changeNewAlertRule": {
     "description": "An undoable change's name: adding an alert rule."
   },
+  "quitWithUnsavedEditsTitle": "{count, plural, =1{Quit and discard unsaved changes?} other{Quit and discard unsaved changes to {count} files?}}",
+  "@quitWithUnsavedEditsTitle": {
+    "description": "The quit confirmation's title while remote file editors hold changes not saved to their servers; count is how many files.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "quitWithUnsavedEditsBody": "Your changes to {paths} are not saved to the server and will be lost.",
+  "@quitWithUnsavedEditsBody": {
+    "description": "The unsaved-changes quit confirmation's body; paths lists the edited remote files.",
+    "placeholders": {
+      "paths": {
+        "type": "String"
+      }
+    }
+  },
+  "quitWithUnsavedEditsSeparator": ", ",
+  "@quitWithUnsavedEditsSeparator": {
+    "description": "Joins the edited remote file paths in the unsaved-changes quit confirmation's body."
+  },
+  "quitWithUnsavedEditsQuit": "Discard and quit",
+  "@quitWithUnsavedEditsQuit": {
+    "description": "The unsaved-changes quit confirmation's button that quits and loses the edits."
+  },
   "quitWhileRunningTitle": "{count, plural, =1{Quit while 1 operation is running?} other{Quit while {count} operations are running?}}",
   "@quitWhileRunningTitle": {
     "description": "The quit confirmation's title while detached operations still run; count is how many.",
@@ -10822,6 +10848,14 @@
   "editUnsaved": "Not saved",
   "@editUnsaved": {
     "description": "Remote editor: shown while the text differs from the server's."
+  },
+  "editFind": "Find",
+  "@editFind": {
+    "description": "Remote editor: tooltip of the button that opens the shared editor's find bar, the way Séance's and Poltergeist's editors offer it."
+  },
+  "editTextTools": "Browse Text Tools…",
+  "@editTextTools": {
+    "description": "Remote editor: tooltip of the button that opens the shared editor's text tools, in the shared editor's words."
   },
   "editEditorLabel": "Editor for {path}",
   "@editEditorLabel": {

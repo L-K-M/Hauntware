@@ -154,6 +154,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   /// same row inside it opens the entry.
   Duration _lastPrimaryDownAt = Duration.zero;
   String? _lastPrimaryDownPath;
+  Offset _lastPrimaryDownPosition = Offset.zero;
 
   final FocusNode _listFocus = FocusNode();
   final ScrollController _listScroll = ScrollController();
@@ -550,6 +551,9 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     if (controller.loading || controller.error != null) return;
     _setCursor(entry.path);
     if (event.buttons & kSecondaryMouseButton != 0) {
+      // Any press that is not a plain primary one ends a pending pair, as
+      // in Poltergeist's rows: the next plain press is a first click.
+      _lastPrimaryDownPath = null;
       // A right-click on an unselected row selects it first, like the
       // file managers: the menu then names what it acts on.
       if (!controller.selectedPaths.contains(entry.path)) {
@@ -570,10 +574,12 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
         pressed.contains(LogicalKeyboardKey.shiftLeft) ||
         pressed.contains(LogicalKeyboardKey.shiftRight);
     if (shift) {
+      _lastPrimaryDownPath = null;
       controller.selectRangeTo(entry.path);
       return;
     }
     if (toggle) {
+      _lastPrimaryDownPath = null;
       controller.toggleSelection(entry.path);
       return;
     }
@@ -587,12 +593,17 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     // next press could otherwise pair with it across the break. Zero
     // counts as inside — taps from tests and coarsely stamped synthetic
     // input share a stamp.
+    // The two presses must also land within kDoubleTapSlop of each other,
+    // as Poltergeist's rows require.
     final sinceLast = event.timeStamp - _lastPrimaryDownAt;
     final doubleClick =
         _lastPrimaryDownPath == entry.path &&
         !sinceLast.isNegative &&
-        sinceLast <= kDoubleTapTimeout;
+        sinceLast <= kDoubleTapTimeout &&
+        (event.position - _lastPrimaryDownPosition).distance <=
+            kDoubleTapSlop;
     _lastPrimaryDownAt = event.timeStamp;
+    _lastPrimaryDownPosition = event.position;
     _lastPrimaryDownPath = sinceLast.isNegative ? null : entry.path;
     controller.selectOnly(entry.path);
     if (doubleClick) {

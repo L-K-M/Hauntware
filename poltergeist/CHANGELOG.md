@@ -17,6 +17,21 @@
   program, bookmark imports, and choosing a key file or a server's image
   showed no panel: file_picker refused them in the unsandboxed app, as it
   did in Séance.
+- **Downloads keep no setuid bit.** A downloaded file took the server's
+  whole mode, so a hostile server could leave a setuid or world-writable
+  file on your disk. Downloads now keep only the read, write and execute
+  bits your umask allows, as `sftp get` and Séance do.
+- **The keyboard follows a sidebar location.** Choosing a location or a
+  saved workspace in the sidebar now moves the keyboard to its file list,
+  so the arrow keys move through files instead of the sidebar. Page Up
+  and Page Down move by a screen, keypad Enter opens, and the compact
+  listing takes a hardware keyboard.
+- **One scrollbar in the editor.** The built-in editor and the font
+  picker drew two scrollbars on macOS, Windows and Linux.
+- **ssh_config import reads repeated settings as ssh does.** The first
+  `HostName`, `User`, `Port` or `IdentityFile` in a block wins, where the
+  last one did. `IdentityFile none` uses the agent instead of a key file
+  called "none", and `%h` in `HostName` becomes the host's own name.
 - Undo and Redo cover favorite deletion, renaming, grouping, ordering,
   pins and server duplication. Deleting a favorite offers Undo; failed
   restores explain the error. Undo preserves other windows' later changes

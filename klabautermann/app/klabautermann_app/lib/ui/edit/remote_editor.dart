@@ -175,7 +175,24 @@ class _RemoteEditorState extends State<RemoteEditor> {
   /// Counts reads, so an answer a newer read replaced is dropped.
   int _reads = 0;
 
-  bool _dirty = false;
+  bool _unsaved = false;
+
+  /// The controller holding this editor's unsaved mark, so dispose can
+  /// clear it without looking the scope up.
+  OperationsController? _markedIn;
+
+  bool get _dirty => _unsaved;
+
+  /// Every change also reaches the quit guard, which asks before
+  /// quitting would lose the text.
+  set _dirty(bool dirty) {
+    _unsaved = dirty;
+    _markedIn?.markSaved(this);
+    _markedIn = null;
+    if (!dirty) return;
+
+    _markedIn = _operations?..markUnsaved(this, _path);
+  }
 
   /// Whether [RemoteEditor.proposedText] still waits for the first read.
   late bool _proposing = widget.proposedText != null;
@@ -197,6 +214,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
 
   @override
   void dispose() {
+    _markedIn?.markSaved(this);
     unawaited(_run?.cancel());
     _editor?.dispose();
     super.dispose();
@@ -443,6 +461,21 @@ class _RemoteEditorState extends State<RemoteEditor> {
                     color: theme.colorScheme.tertiary,
                   ),
                 ),
+              // The shared editor's find bar and text tools, which touch
+              // cannot reach by chord, as Séance's and Poltergeist's
+              // editors offer them.
+              IconButton(
+                tooltip: l10n.editTextTools,
+                visualDensity: VisualDensity.compact,
+                onPressed: editor.openTextTools,
+                icon: const Icon(Icons.construction_outlined),
+              ),
+              IconButton(
+                tooltip: l10n.editFind,
+                visualDensity: VisualDensity.compact,
+                onPressed: editor.openSearch,
+                icon: const Icon(Icons.search),
+              ),
             ],
           ),
           Expanded(

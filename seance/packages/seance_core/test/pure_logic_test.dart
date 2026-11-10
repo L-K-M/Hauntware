@@ -27,6 +27,60 @@ typedef _DangerRuleCase = ({
 
 void main() {
   group('SshConfigImporter', () {
+    test('the first value of a repeated setting wins, as in ssh', () {
+      // ssh keeps the first value it obtains for each setting; the
+      // importer used to keep the last, as Klabautermann's does not.
+      const text = '''
+Host x
+  HostName first.example.com
+  HostName second.example.com
+  User first
+  User second
+  Port 2201
+  Port 2202
+  IdentityFile ~/.ssh/first
+  IdentityFile ~/.ssh/second
+''';
+      final h = SshConfigImporter.parse(text).hosts.single;
+      expect(h.hostName, 'first.example.com');
+      expect(h.user, 'first');
+      expect(h.port, 2201);
+      expect(h.identityFile, '~/.ssh/first');
+    });
+
+    test('a later bad Port still refuses the block', () {
+      final result = SshConfigImporter.parse('Host x\n  Port 22\n  Port 22a\n');
+      expect(result.hosts, isEmpty);
+      expect(result.skipped.single.value, '22a');
+    });
+
+    test('IdentityFile none uses no key file', () {
+      final h = SshConfigImporter.parse(
+        'Host x\n  IdentityFile none\n',
+      ).hosts.single;
+      expect(h.identityFile, isNull);
+      expect(h.toServerConfig(id: 'x', now: 1).authMethod, AuthMethod.agent);
+      // ssh compares the keyword's argument case-insensitively.
+      expect(
+        SshConfigImporter.parse(
+          'Host y\n  IdentityFile NONE\n',
+        ).hosts.single.identityFile,
+        isNull,
+      );
+    });
+
+    test('HostName expands %h to the host name and %% to a percent', () {
+      final hosts = SshConfigImporter.parse(
+        'Host web db\n  HostName %h.example.com\n'
+        'Host odd\n  HostName 100%%.example.com\n',
+      ).hosts;
+      expect(hosts.map((h) => h.effectiveHost), [
+        'web.example.com',
+        'db.example.com',
+        '100%.example.com',
+      ]);
+    });
+
     test('parses hosts, ignores wildcard-only defaults and comments', () {
       const text = '''
 # global defaults

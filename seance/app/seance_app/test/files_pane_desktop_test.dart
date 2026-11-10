@@ -611,6 +611,52 @@ void main() {
   );
 
   platformTest(
+    'a Shift-click between two presses starts no double-click',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      final docs = tester.getCenter(find.text('docs'));
+
+      // Poltergeist's rows disarm a pending pair on any press that is not
+      // a plain primary one; the plain press after the Shift-click is a
+      // fresh first click.
+      await pressAt(tester, docs, const Duration(milliseconds: 100));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await pressAt(tester, docs, const Duration(milliseconds: 150));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await pressAt(tester, docs, const Duration(milliseconds: 200));
+      await tester.runAsync(() async {});
+      await tester.pump();
+      expect(files.currentPath, _home);
+    },
+  );
+
+  platformTest(
+    'presses further apart than the double-tap slop are two clicks',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(
+        tester,
+        _ListFileSystem(),
+        paneWidth: 800,
+      );
+      final docs = tester.getCenter(find.text('docs'));
+
+      // The same row, but further than kDoubleTapSlop from the first
+      // press, as Poltergeist's rows require.
+      await pressAt(tester, docs, const Duration(milliseconds: 100));
+      await pressAt(
+        tester,
+        docs + const Offset(kDoubleTapSlop + 20, 0),
+        const Duration(milliseconds: 150),
+      );
+      await tester.runAsync(() async {});
+      await tester.pump();
+      expect(files.currentPath, _home);
+    },
+  );
+
+  platformTest(
     'a press sharing its predecessor\'s stamp still double-clicks',
     TargetPlatform.linux,
     (tester) async {

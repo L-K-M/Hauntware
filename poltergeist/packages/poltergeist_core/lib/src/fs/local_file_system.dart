@@ -680,11 +680,22 @@ class LocalFileSystem implements RemoteFileSystem {
 
           final mode = preserveMode ?? existing?.mode;
           if (mode != null && !Platform.isWindows) {
-            final result = await _runUtility('chmod', [
-              (mode & 0xFFF).toRadixString(8),
-              tempPath,
-            ]);
-            _throwForUtilityExit(result, 'upload', tempPath);
+            final created = (await temp.stat()).mode & _modeBits;
+            // A replaced local file keeps its own mode whole. A mode from
+            // the other side (a server's, for a download) brings only
+            // the permission bits the local umask allows, as `sftp get`
+            // and `cp` do (deep review P1-05): a hostile server cannot
+            // plant a setuid binary or a world-writable file.
+            final wanted = preserveMode == null
+                ? mode & _modeBits
+                : _incomingMode(preserveMode, created);
+            if (wanted != created) {
+              final result = await _runUtility('chmod', [
+                wanted.toRadixString(8),
+                tempPath,
+              ]);
+              _throwForUtilityExit(result, 'upload', tempPath);
+            }
           }
 
           final latest = await _statOrNull(path);
@@ -1388,4 +1399,20 @@ class _DigestSink implements Sink<Digest> {
 
   @override
   void close() {}
+}
+
+/// Permission bits plus setuid, setgid and sticky: what chmod sets.
+const int _modeBits = 0xFFF; // 07777
+
+/// What a file written from another side's [incoming] mode keeps: the
+/// rwx bits (0777), and of those only what the umask grants. [created]
+/// is a freshly created file's mode, which `open(2)` made 0666 under the
+/// umask; a class keeps its execute bit where it kept read access, which
+/// holds for the usual umasks (022, 002, 027, 077).
+int _incomingMode(int incoming, int created) {
+  const readWrite = 0x1B6; // 0666
+  const read = 0x124; // 0444
+  final granted = created & readWrite;
+  final allowed = granted | ((granted & read) >> 2);
+  return incoming & 0x1FF & allowed;
 }

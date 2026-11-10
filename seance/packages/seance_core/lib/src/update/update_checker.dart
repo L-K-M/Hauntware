@@ -93,8 +93,13 @@ class UpdateChecker {
   /// `owner/repo` whose releases are checked.
   final String repo;
 
+  /// The `User-Agent` the check sends, which GitHub requires: each app
+  /// names itself, so Poltergeist's checks do not arrive as Séance's.
+  final String userAgent;
+
   UpdateChecker({
     this.repo = hauntwareUpdateRepo,
+    this.userAgent = 'Seance-update-check',
     http.Client? client,
     this.timeout = const Duration(seconds: 15),
   }) : _client = client ?? http.Client();
@@ -113,10 +118,10 @@ class UpdateChecker {
     try {
       final res = await _client.get(
         _latestReleaseApi,
-        headers: const {
+        headers: {
           'Accept': 'application/vnd.github+json',
           // GitHub requires a User-Agent or it returns 403.
-          'User-Agent': 'Seance-update-check',
+          'User-Agent': userAgent,
         },
       ).timeout(timeout);
 
