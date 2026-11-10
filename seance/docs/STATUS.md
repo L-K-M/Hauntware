@@ -94,7 +94,7 @@ the error and warning colours. Details in Planchette's `docs/STATUS.md`.
 
 Finding P1-03a: files Séance writes from a server carried no download
 mark, so the OS treated them as local files. `DownloadProvenance`
-(`lib/services/download_provenance.dart`) now marks new checkouts,
+(`seance_core/lib/src/store/download_provenance.dart`) now marks new checkouts,
 refreshed checkouts, Download targets and Save as destinations: a
 `Zone.Identifier` stream with `ZoneId=3` on Windows (no `HostUrl`, so
 the server's address does not travel with copies) and

@@ -882,6 +882,16 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
     r"'$text\n'",
     "'text/plain'",
+    // A failed owner-only chmod diagnostic; the export itself saved.
+    r"'Could not restrict a saved export to the owner: $error'",
+    // The share sheet's staged copy: its temporary directory prefix, its
+    // path under that directory, and the quarantine agent field's product
+    // name.
+    "'klabautermann-export-'",
+    r"'${directory.path}${Platform.pathSeparator}$fileName'",
+    "'Klabautermann'",
+    // The URI scheme of a save that has a local path to mark.
+    "'file'",
   },
   'lib/ui/logs/log_text.dart': {
     // A row's unit and PID prefix in classic syslog notation, as

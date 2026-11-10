@@ -21,6 +21,11 @@
   whole mode, so a hostile server could leave a setuid or world-writable
   file on your disk. Downloads now keep only the read, write and execute
   bits your umask allows, as `sftp get` and Séance do.
+- **Downloads are marked as untrusted.** Files Poltergeist writes from a
+  server, including Download To, sync downloads and managed checkouts,
+  now carry a Windows Mark-of-the-Web stream or a macOS quarantine
+  attribute, as Séance's downloads do. Marking is best effort and only
+  logged on failure.
 - **The keyboard follows a sidebar location.** Choosing a location or a
   saved workspace in the sidebar now moves the keyboard to its file list,
   so the arrow keys move through files instead of the sidebar. Page Up

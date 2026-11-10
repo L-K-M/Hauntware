@@ -65,6 +65,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Folder paths in the folder browser's header and the Open Folder on
   server field draw in the bundled code font, as Séance's path bar does.
 
+### Security
+- Files Planchette writes from a remote workspace, including remote
+  checkouts, a Save-a-Local-Copy of a remote document and an HTML export
+  of one, now carry a Windows Mark-of-the-Web stream or a macOS
+  quarantine attribute, as Séance's downloads do. Marking is best effort
+  and only logged on failure.
+
 ## [1.9.0] - 2026-10-04
 
 ### Added
