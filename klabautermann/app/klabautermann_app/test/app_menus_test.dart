@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart';
+import 'package:ghost_update/ghost_update.dart';
 import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
@@ -176,6 +177,111 @@ void main() {
       await quit.run(_NoContext());
 
       expect(closes, 1);
+    });
+
+    group('Check for Updates', () {
+      final release = UpdateInfo(
+        latestVersion: '2.0.0',
+        releasesUrl: Uri.parse(
+          'https://github.com/L-K-M/Hauntware/releases/latest',
+        ),
+      );
+
+      UpdateCheckController controllerWith(UpdateInfo? info) =>
+          UpdateCheckController(
+            checker: _FakeChecker(info),
+            androidReleaseAsset: 'klabautermann-preview-android.apk',
+          );
+
+      List<AppCommand> commandsWith(
+        UpdateInfo? info,
+        Future<void> Function(Uri url) openRelease,
+      ) => buildAppCommands(
+        platform: TargetPlatform.linux,
+        fleet: fleet(sshConfig: FakeSshConfigSource.text(_config)),
+        onOpenSettings: () {},
+        appVersion: _version,
+        updates: controllerWith(info),
+        onOpenRelease: openRelease,
+      );
+
+      test('sits in Help on every platform that has an update check', () {
+        for (final platform in [
+          TargetPlatform.macOS,
+          TargetPlatform.linux,
+          TargetPlatform.windows,
+          TargetPlatform.android,
+          TargetPlatform.iOS,
+        ]) {
+          final command = buildAppCommands(
+            platform: platform,
+            fleet: fleet(sshConfig: FakeSshConfigSource.text(_config)),
+            onOpenSettings: () {},
+            appVersion: _version,
+            updates: controllerWith(null),
+            onOpenRelease: (_) async {},
+          ).singleWhere(
+            (command) => command.id == kAppCheckForUpdatesCommandId,
+          );
+          expect(command.menuPlacement.menu, AppMenuId.help, reason: '$platform');
+          expect(command.menuPlacement.order, 30, reason: '$platform');
+          expect(command.menuPlacement.appMenuOnMac, isTrue, reason: '$platform');
+          expect(command.enabled(), isTrue, reason: '$platform');
+        }
+      });
+
+      test('is absent without an update check', () {
+        expect(
+          commands(TargetPlatform.linux)
+              .where((command) => command.id == kAppCheckForUpdatesCommandId),
+          isEmpty,
+        );
+      });
+
+      testWidgets('reports a newer release with a link, and none without one', (
+        tester,
+      ) async {
+        final opened = <Uri>[];
+
+        Future<void> run(UpdateInfo? info) async {
+          final command = commandsWith(info, (url) async => opened.add(url))
+              .singleWhere(
+                (command) => command.id == kAppCheckForUpdatesCommandId,
+              );
+          await tester.pumpWidget(
+            MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: Builder(
+                builder: (context) => ElevatedButton(
+                  onPressed: () => unawaited(command.run(context)),
+                  child: const Text('run'),
+                ),
+              ),
+            ),
+          );
+          await tester.tap(find.text('run'));
+          await tester.pumpAndSettle();
+        }
+
+        await run(release);
+        expect(find.text('Klabautermann 2.0.0 is available'), findsOneWidget);
+        expect(find.text('View Release'), findsOneWidget);
+        await tester.tap(find.text('View Release'));
+        await tester.pumpAndSettle();
+        expect(opened, [release.releasesUrl]);
+
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+
+        await run(null);
+        expect(
+          find.text(
+            'No newer version was found. If you’re offline, try again later.',
+          ),
+          findsOneWidget,
+        );
+      });
     });
 
     group('rendered as menus', () {
@@ -728,3 +834,13 @@ void _expectAboutDialog({required String version}) {
 
 /// Quit never reads its context.
 final class _NoContext extends Fake implements BuildContext {}
+
+/// An update checker that answers with [info] without touching the network.
+final class _FakeChecker extends UpdateChecker {
+  _FakeChecker(this.info);
+
+  final UpdateInfo? info;
+
+  @override
+  Future<UpdateInfo?> check(String currentVersion) async => info;
+}

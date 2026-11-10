@@ -5,3 +5,4 @@
 library;
 
 export 'src/update_check_controller.dart';
+export 'src/update_check_settings.dart';

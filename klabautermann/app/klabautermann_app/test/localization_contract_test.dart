@@ -918,6 +918,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The command registry's ids, keys of the menus and shortcuts.
   'lib/ui/menus/app_commands.dart': {
     "'app.about'",
+    "'app.checkForUpdates'",
     "'app.settings'",
     "'fleet.importSshConfig'",
     "'app.quit'",

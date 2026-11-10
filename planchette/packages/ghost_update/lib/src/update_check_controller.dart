@@ -10,11 +10,14 @@ import 'package:flutter/foundation.dart';
 import 'package:ghost_apk_update/ghost_apk_update.dart';
 import 'package:seance_core/seance_core.dart';
 
+import 'update_check_settings.dart';
+
 /// Session state for the update check: [update] is the banner's content
 /// (null means "nothing to show" — up to date, check failed, dismissed,
 /// or opted out), and [enabled] is the persisted opt-out. Every failure
 /// mode reads as "no banner"; the check is best-effort by contract.
-class UpdateCheckController extends ChangeNotifier {
+class UpdateCheckController extends ChangeNotifier
+    implements UpdateCheckSettings {
   UpdateCheckController({
     // The release lookup, pinned by the app to its repository and
     // user agent.
@@ -41,6 +44,7 @@ class UpdateCheckController extends ChangeNotifier {
   UpdateInfo? _update;
 
   /// The opt-out setting (default ON per D19/D23).
+  @override
   bool get enabled => _enabled;
 
   /// The newer release to banner, or null when there is nothing to say.
@@ -103,6 +107,7 @@ class UpdateCheckController extends ChangeNotifier {
   /// field commits, so a failed save rethrows for the caller's
   /// revert idiom and the in-memory flag never diverges from disk.
   /// Opting out clears a banner already showing this session.
+  @override
   Future<void> setEnabled(bool value) async {
     if (value == _enabled) return;
     await _onEnabledChanged?.call(value);
