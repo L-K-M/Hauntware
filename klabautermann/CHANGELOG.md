@@ -9,6 +9,9 @@
   Poltergeist's are: Klabautermann, Graphite, Paper, Newsprint, Solarized,
   Midnight, Terminal, Vapor, Bubblegum and High contrast. The name stored
   in a copied theme stays English.
+- The fleet rail keeps its search text, its folded sections and the
+  needs-attention filters when you hide it and show it again, as Séance's
+  and Poltergeist's rails do.
 - Activity shows the commands an action ran in the code font, as the
   preview before it runs does.
 - On the desktop, drag the edge of the fleet rail or the inspector, or
