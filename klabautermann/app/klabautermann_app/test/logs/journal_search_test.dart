@@ -167,6 +167,17 @@ void main() {
       expect(search.invalidPattern, isFalse);
     });
 
+    test('reads a Unicode property class as the server does', () {
+      final (logs, search) = _logs();
+      logs.add(['Ärger', 'ärger']);
+      search
+        ..setRegex(true)
+        ..setCaseSensitive(true)
+        ..setQuery(r'\p{Lu}rger');
+      expect(search.invalidPattern, isFalse);
+      expect(search.total, 1);
+    });
+
     test('accepts an escaped literal that PCRE2 accepts too', () {
       final (logs, search) = _logs();
       logs.add(['a-b', 'a b']);
