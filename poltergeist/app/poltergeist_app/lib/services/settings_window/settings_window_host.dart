@@ -27,6 +27,7 @@ final class SettingsWindowSources {
     this.opener = const ExternalFileOpener(),
     this.previewDownloads,
     this.backup,
+    this.recovery,
     this.gate = const SyncAccountGate.production(),
     this.appearance,
     this.editorTextSize,
@@ -50,6 +51,10 @@ final class SettingsWindowSources {
   final PreviewDownloadsSettings? Function()? previewDownloads;
 
   final BackupSettingsModel? backup;
+
+  /// CRED-05's Recovery section, read afresh at each use. Null leaves the
+  /// section out.
+  final RecoverySettingsModel? recovery;
 
   final SyncAccountGate gate;
 
@@ -128,6 +133,7 @@ class SettingsWindowHost {
         changes: [
           ?sources.editors,
           ?sources.backup,
+          ?sources.recovery,
           ?sources.appearance,
           ?sources.editorTextSize,
           ?sources.editorFont,
@@ -179,6 +185,12 @@ class SettingsWindowHost {
       SettingsLinkKey.backup.name: backup == null
           ? null
           : _backupSnapshot(backup),
+      SettingsLinkKey.recovery.name: switch (_sources.recovery) {
+        final recovery? => {
+          SettingsLinkKey.configured.name: recovery.configured,
+        },
+        null => null,
+      },
       SettingsLinkKey.gate.name: {
         SettingsLinkKey.minimumSharedVersion.name: gate.minimumSharedVersion,
         SettingsLinkKey.sharedIncludesSeance56Fix.name:
@@ -233,6 +245,7 @@ class SettingsWindowHost {
     Map<String, Object?> map() => (argument! as Map).cast<String, Object?>();
     String text(String key) => map()[key]! as String;
     final backup = _sources.backup;
+    final recovery = _sources.recovery;
     final editors = _sources.editors;
     switch (method) {
       case SettingsLinkMethod.setCheckForUpdates:
@@ -338,6 +351,21 @@ class SettingsWindowHost {
         if (appLock == null) throw StateError('No app lock settings');
         // The device authentication runs here, in the app's window.
         return (await appLock.setEnabled(argument! as bool)).name;
+      case SettingsLinkMethod.newRecoveryCode:
+        return _require(recovery).newCode();
+      case SettingsLinkMethod.saveRecoveryCode:
+        await _require(recovery).saveCode(argument! as String);
+      case SettingsLinkMethod.exportSecrets:
+        return _require(recovery).exportSecrets();
+      case SettingsLinkMethod.restoreSecrets:
+        final json = map();
+        final summary = await _require(recovery).restoreSecrets(
+          code: json[SettingsLinkKey.code.name]! as String,
+          policy: RestoreConflictPolicy.values.byName(
+            json[SettingsLinkKey.policy.name]! as String,
+          ),
+        );
+        return summary?.toJson();
     }
     return null;
   }

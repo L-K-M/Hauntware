@@ -42,7 +42,8 @@ import 'services/settings_models.dart'
         DirectoryGroupingModel,
         DoubleClickActionModel,
         EditorFontModel,
-        EditorTextSizeModel;
+        EditorTextSizeModel,
+        RecoverySettingsModel;
 import 'services/settings_window/settings_window_host.dart';
 import 'services/sidebar_controller.dart'
     show CollapsedSectionWriter, PinnedServerWriter, SidebarDensity;
@@ -82,6 +83,7 @@ class PoltergeistApp extends StatefulWidget {
     this.sshConfigImport,
     this.thirdPartyBookmarkImport,
     this.bookmarkBackup,
+    this.recovery,
     this.serverEditor,
     this.bookmarks,
     this.workspaces,
@@ -183,6 +185,11 @@ class PoltergeistApp extends StatefulWidget {
   /// leaves `open-settings-backup` unregistered; `main.dart` supplies
   /// it from the app-support stores and the OS keystore.
   final BookmarkBackupService? bookmarkBackup;
+
+  /// CRED-05's Recovery section, shown inside Settings → Backup and
+  /// offered after the first saved credential. Null leaves the section
+  /// and the offer unwired.
+  final RecoverySettingsModel? recovery;
 
   /// The server editor's application layer (04 §4.2's management
   /// verbs): add/edit on the catalog rows and the editor's own saves
@@ -558,6 +565,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       sshConfigImport: widget.sshConfigImport,
       thirdPartyBookmarkImport: widget.thirdPartyBookmarkImport,
       bookmarkBackup: widget.bookmarkBackup,
+      recovery: widget.recovery,
       serverEditor: widget.serverEditor,
       bookmarks: widget.bookmarks,
       workspaces: widget.workspaces,

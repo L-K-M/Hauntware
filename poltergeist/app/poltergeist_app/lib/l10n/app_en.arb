@@ -10957,5 +10957,228 @@
   "settingsWindowLocked": "Unlock it in its main window to change settings.",
   "@settingsWindowLocked": {
     "description": "The desktop settings window while the app is locked, under the title that it is locked."
+  },
+  "secretsExportTooLargeVault": "This device has too many saved secrets to export in one file.",
+  "@secretsExportTooLargeVault": {
+    "description": "Settings > Backup > Recovery: building an export failed because the vault is past the export caps."
+  },
+  "secretsExportMalformed": "That file is not a Poltergeist secrets export, or it is damaged.",
+  "@secretsExportMalformed": {
+    "description": "Settings > Backup > Recovery: a picked file is not a readable secrets export."
+  },
+  "secretsExportUnsupportedVersion": "That export was made by a newer version of Poltergeist. Update Poltergeist and try again.",
+  "@secretsExportUnsupportedVersion": {
+    "description": "Settings > Backup > Recovery: a picked export uses a newer wire format than this build reads."
+  },
+  "secretsExportFileTooLarge": "That file is too large to be a Poltergeist secrets export.",
+  "@secretsExportFileTooLarge": {
+    "description": "Settings > Backup > Recovery: a picked file exceeds the export size limit."
+  },
+  "secretsExportInvalidCode": "That is not a recovery code. Check it for typos.",
+  "@secretsExportInvalidCode": {
+    "description": "Settings > Backup > Recovery: the typed code is not a well-formed recovery code."
+  },
+  "secretsExportWrongCode": "That recovery code does not open this export.",
+  "@secretsExportWrongCode": {
+    "description": "Settings > Backup > Recovery: a well-formed code that does not match the picked export."
+  },
+  "secretsExportTampered": "That export was changed after it was made, so nothing was restored.",
+  "@secretsExportTampered": {
+    "description": "Settings > Backup > Recovery: the picked export fails its integrity check."
+  },
+  "recoveryTitle": "Recovery",
+  "@recoveryTitle": {
+    "description": "Settings > Backup: the recovery code section's title."
+  },
+  "recoveryDescription": "A recovery code opens an encrypted export of this device's saved passwords and keys, on this device or another one. Poltergeist shows the code once and cannot show it again. Without it, an export cannot be opened, by you or anyone else.",
+  "@recoveryDescription": {
+    "description": "Settings > Backup > Recovery: what a recovery code is for."
+  },
+  "recoveryChecking": "Checking…",
+  "@recoveryChecking": {
+    "description": "Settings > Backup > Recovery: the configured state is still loading."
+  },
+  "recoveryConfigured": "This device has a recovery code.",
+  "@recoveryConfigured": {
+    "description": "Settings > Backup > Recovery: this device has a stored recovery code."
+  },
+  "recoveryNotConfigured": "This device has no recovery code yet.",
+  "@recoveryNotConfigured": {
+    "description": "Settings > Backup > Recovery: this device has no stored recovery code."
+  },
+  "recoverySetUp": "Set up recovery…",
+  "@recoverySetUp": {
+    "description": "Settings > Backup > Recovery: the button that creates a first recovery code."
+  },
+  "recoveryReplace": "Replace recovery code…",
+  "@recoveryReplace": {
+    "description": "Settings > Backup > Recovery: the button that replaces an existing recovery code."
+  },
+  "recoveryExport": "Export secrets…",
+  "@recoveryExport": {
+    "description": "Settings > Backup > Recovery: the button that writes the encrypted export."
+  },
+  "recoveryRestore": "Restore secrets…",
+  "@recoveryRestore": {
+    "description": "Settings > Backup > Recovery: the button that opens an export and merges it."
+  },
+  "recoveryReplaceTitle": "Replace the recovery code?",
+  "@recoveryReplaceTitle": {
+    "description": "Settings > Backup > Recovery: the replace-code confirmation's title."
+  },
+  "recoveryReplaceBody": "Exports made with the current code still open with it. New exports open only with the new one.",
+  "@recoveryReplaceBody": {
+    "description": "Settings > Backup > Recovery: the replace-code confirmation's consequence."
+  },
+  "recoveryReplaceConfirm": "Replace",
+  "@recoveryReplaceConfirm": {
+    "description": "Settings > Backup > Recovery: the replace-code confirmation's confirm button."
+  },
+  "recoveryCancel": "Cancel",
+  "@recoveryCancel": {
+    "description": "Settings > Backup > Recovery: the shared cancel button."
+  },
+  "recoveryExportDone": "Exported to {destination}. It opens only with this device's recovery code.",
+  "@recoveryExportDone": {
+    "description": "Settings > Backup > Recovery: a successful export names where it was written.",
+    "placeholders": {
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
+  "recoveryRestoreAdded": "{count} added",
+  "@recoveryRestoreAdded": {
+    "description": "Settings > Backup > Recovery: a restore summary's added count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recoveryRestoreReplaced": "{count} replaced",
+  "@recoveryRestoreReplaced": {
+    "description": "Settings > Backup > Recovery: a restore summary's replaced count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recoveryRestoreKept": "{count} kept",
+  "@recoveryRestoreKept": {
+    "description": "Settings > Backup > Recovery: a restore summary's kept count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recoveryRestoreUnreadable": "{count} could not be read",
+  "@recoveryRestoreUnreadable": {
+    "description": "Settings > Backup > Recovery: a restore summary's unreadable count, shown only when nonzero.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recoveryRestoreSummary": "Restored: {parts}. A newer copy synced from another device still replaces a restored one.",
+  "@recoveryRestoreSummary": {
+    "description": "Settings > Backup > Recovery: a successful restore's summary sentence.",
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
+  "recoveryCodeTitle": "Your recovery code",
+  "@recoveryCodeTitle": {
+    "description": "Settings > Backup > Recovery: the show-once code dialog's title."
+  },
+  "recoveryCodeBody": "Write this code down and keep it somewhere safe, away from this device. It is shown only now. With it, an export of this device's secrets opens anywhere; without it, nowhere. Nothing changes until you confirm.",
+  "@recoveryCodeBody": {
+    "description": "Settings > Backup > Recovery: the show-once code dialog's warning."
+  },
+  "recoveryCodeCopy": "Copy code",
+  "@recoveryCodeCopy": {
+    "description": "Settings > Backup > Recovery: the copy button before it is used."
+  },
+  "recoveryCodeCopied": "Copied",
+  "@recoveryCodeCopied": {
+    "description": "Settings > Backup > Recovery: the copy button after it is used."
+  },
+  "recoveryCodeConfirmLabel": "Type the code's first four characters",
+  "@recoveryCodeConfirmLabel": {
+    "description": "Settings > Backup > Recovery: the confirmation field's label."
+  },
+  "recoveryCodeCancel": "Cancel",
+  "@recoveryCodeCancel": {
+    "description": "Settings > Backup > Recovery: the show-once code dialog's cancel button."
+  },
+  "recoveryCodeDone": "I saved it",
+  "@recoveryCodeDone": {
+    "description": "Settings > Backup > Recovery: the show-once code dialog's confirm button."
+  },
+  "recoveryRestoreTitle": "Restore secrets",
+  "@recoveryRestoreTitle": {
+    "description": "Settings > Backup > Recovery: the restore dialog's title."
+  },
+  "recoveryRestoreBody": "Enter the recovery code of the device the export came from, then choose the export file.",
+  "@recoveryRestoreBody": {
+    "description": "Settings > Backup > Recovery: the restore dialog's instructions."
+  },
+  "recoveryRestoreCodeLabel": "Recovery code",
+  "@recoveryRestoreCodeLabel": {
+    "description": "Settings > Backup > Recovery: the restore dialog's code field label."
+  },
+  "recoveryRestoreConflictLabel": "Credentials this device already has:",
+  "@recoveryRestoreConflictLabel": {
+    "description": "Settings > Backup > Recovery: the restore dialog's conflict-policy prompt."
+  },
+  "recoveryRestoreKeep": "Keep this device's",
+  "@recoveryRestoreKeep": {
+    "description": "Settings > Backup > Recovery: the restore dialog's keep-existing choice."
+  },
+  "recoveryRestoreReplace": "Use the export's",
+  "@recoveryRestoreReplace": {
+    "description": "Settings > Backup > Recovery: the restore dialog's replace-existing choice."
+  },
+  "recoveryRestoreChoose": "Choose export…",
+  "@recoveryRestoreChoose": {
+    "description": "Settings > Backup > Recovery: the restore dialog's confirm button."
+  },
+  "recoveryPromptTitle": "Set up a recovery code?",
+  "@recoveryPromptTitle": {
+    "description": "The enrolment prompt's title after a credential is saved."
+  },
+  "recoveryPromptBody": "Passwords and keys saved here stay on this device unless you sync them. A recovery code lets you export them, encrypted, and restore them on another device, or on this one after a reinstall.",
+  "@recoveryPromptBody": {
+    "description": "The enrolment prompt's explanation after a credential is saved."
+  },
+  "recoveryPromptNotNow": "Not now",
+  "@recoveryPromptNotNow": {
+    "description": "The enrolment prompt's decline button, remembered."
+  },
+  "recoveryPromptSetUp": "Set up…",
+  "@recoveryPromptSetUp": {
+    "description": "The enrolment prompt's confirm button."
+  },
+  "recoveryPromptDeclineFailed": "Could not save your answer: {error}",
+  "@recoveryPromptDeclineFailed": {
+    "description": "The enrolment prompt's toast when the decline answer could not be persisted.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "recoveryPromptFailed": "Could not check for a recovery code.",
+  "@recoveryPromptFailed": {
+    "description": "The enrolment prompt's toast when the configured check failed."
+  },
+  "recoveryPromptRetry": "Retry",
+  "@recoveryPromptRetry": {
+    "description": "The enrolment prompt's retry action."
   }
 }

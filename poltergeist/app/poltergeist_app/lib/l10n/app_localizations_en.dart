@@ -8768,4 +8768,173 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsWindowLocked =>
       'Unlock it in its main window to change settings.';
+
+  @override
+  String get secretsExportTooLargeVault =>
+      'This device has too many saved secrets to export in one file.';
+
+  @override
+  String get secretsExportMalformed =>
+      'That file is not a Poltergeist secrets export, or it is damaged.';
+
+  @override
+  String get secretsExportUnsupportedVersion =>
+      'That export was made by a newer version of Poltergeist. Update Poltergeist and try again.';
+
+  @override
+  String get secretsExportFileTooLarge =>
+      'That file is too large to be a Poltergeist secrets export.';
+
+  @override
+  String get secretsExportInvalidCode =>
+      'That is not a recovery code. Check it for typos.';
+
+  @override
+  String get secretsExportWrongCode =>
+      'That recovery code does not open this export.';
+
+  @override
+  String get secretsExportTampered =>
+      'That export was changed after it was made, so nothing was restored.';
+
+  @override
+  String get recoveryTitle => 'Recovery';
+
+  @override
+  String get recoveryDescription =>
+      'A recovery code opens an encrypted export of this device\'s saved passwords and keys, on this device or another one. Poltergeist shows the code once and cannot show it again. Without it, an export cannot be opened, by you or anyone else.';
+
+  @override
+  String get recoveryChecking => 'Checking…';
+
+  @override
+  String get recoveryConfigured => 'This device has a recovery code.';
+
+  @override
+  String get recoveryNotConfigured => 'This device has no recovery code yet.';
+
+  @override
+  String get recoverySetUp => 'Set up recovery…';
+
+  @override
+  String get recoveryReplace => 'Replace recovery code…';
+
+  @override
+  String get recoveryExport => 'Export secrets…';
+
+  @override
+  String get recoveryRestore => 'Restore secrets…';
+
+  @override
+  String get recoveryReplaceTitle => 'Replace the recovery code?';
+
+  @override
+  String get recoveryReplaceBody =>
+      'Exports made with the current code still open with it. New exports open only with the new one.';
+
+  @override
+  String get recoveryReplaceConfirm => 'Replace';
+
+  @override
+  String get recoveryCancel => 'Cancel';
+
+  @override
+  String recoveryExportDone(String destination) {
+    return 'Exported to $destination. It opens only with this device\'s recovery code.';
+  }
+
+  @override
+  String recoveryRestoreAdded(int count) {
+    return '$count added';
+  }
+
+  @override
+  String recoveryRestoreReplaced(int count) {
+    return '$count replaced';
+  }
+
+  @override
+  String recoveryRestoreKept(int count) {
+    return '$count kept';
+  }
+
+  @override
+  String recoveryRestoreUnreadable(int count) {
+    return '$count could not be read';
+  }
+
+  @override
+  String recoveryRestoreSummary(String parts) {
+    return 'Restored: $parts. A newer copy synced from another device still replaces a restored one.';
+  }
+
+  @override
+  String get recoveryCodeTitle => 'Your recovery code';
+
+  @override
+  String get recoveryCodeBody =>
+      'Write this code down and keep it somewhere safe, away from this device. It is shown only now. With it, an export of this device\'s secrets opens anywhere; without it, nowhere. Nothing changes until you confirm.';
+
+  @override
+  String get recoveryCodeCopy => 'Copy code';
+
+  @override
+  String get recoveryCodeCopied => 'Copied';
+
+  @override
+  String get recoveryCodeConfirmLabel =>
+      'Type the code\'s first four characters';
+
+  @override
+  String get recoveryCodeCancel => 'Cancel';
+
+  @override
+  String get recoveryCodeDone => 'I saved it';
+
+  @override
+  String get recoveryRestoreTitle => 'Restore secrets';
+
+  @override
+  String get recoveryRestoreBody =>
+      'Enter the recovery code of the device the export came from, then choose the export file.';
+
+  @override
+  String get recoveryRestoreCodeLabel => 'Recovery code';
+
+  @override
+  String get recoveryRestoreConflictLabel =>
+      'Credentials this device already has:';
+
+  @override
+  String get recoveryRestoreKeep => 'Keep this device\'s';
+
+  @override
+  String get recoveryRestoreReplace => 'Use the export\'s';
+
+  @override
+  String get recoveryRestoreChoose => 'Choose export…';
+
+  @override
+  String get recoveryPromptTitle => 'Set up a recovery code?';
+
+  @override
+  String get recoveryPromptBody =>
+      'Passwords and keys saved here stay on this device unless you sync them. A recovery code lets you export them, encrypted, and restore them on another device, or on this one after a reinstall.';
+
+  @override
+  String get recoveryPromptNotNow => 'Not now';
+
+  @override
+  String get recoveryPromptSetUp => 'Set up…';
+
+  @override
+  String recoveryPromptDeclineFailed(String error) {
+    return 'Could not save your answer: $error';
+  }
+
+  @override
+  String get recoveryPromptFailed => 'Could not check for a recovery code.';
+
+  @override
+  String get recoveryPromptRetry => 'Retry';
 }

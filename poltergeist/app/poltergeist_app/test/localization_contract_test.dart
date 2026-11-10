@@ -227,6 +227,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'updates.checkEnabled'",
     // The app lock switch (cred-05) — a settings.json key.
     "'poltergeist.appLock'",
+    // CRED-05's enrolment-prompt answer — a settings.json key.
+    "'poltergeist.recoveryPromptDeclined'",
     // The device theme and its mode (Device themes): settings.json keys.
     "'theme.palette'",
     "'theme.mode'",
@@ -2041,6 +2043,32 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'backup.settings.dialog'",
     "'backup.settings.close'",
   },
+  // CRED-05's Recovery section: widget keys, the code dialog's group
+  // separator, the summary's list join, and the error interpolation
+  // (reported faults, never authored copy): plumbing and machine data.
+  'lib/ui/settings/recovery_settings.dart': {
+    r"'$error'",
+    "'-'",
+    "', '",
+    "'recovery.replace.confirm'",
+    "'recovery.setUp'",
+    "'recovery.export'",
+    "'recovery.restore'",
+    "'recovery.message'",
+    "'recovery.code'",
+    "'recovery.code.confirm'",
+    "'recovery.code.cancel'",
+    "'recovery.code.done'",
+    "'recovery.restore.code'",
+    "'recovery.restore.choose'",
+  },
+  // CRED-05's enrolment prompt: widget keys and the decline-failure
+  // interpolation: plumbing and a reported fault, never authored copy.
+  'lib/ui/recovery_prompt.dart': {
+    r"'$error'",
+    "'recovery.prompt.notNow'",
+    "'recovery.prompt.setUp'",
+  },
   // The registered command id (D21 plumbing).
   'lib/ui/settings/backup_settings_command.dart': {"'open-settings-backup'"},
   // The Editing sections' bounded mount (06 §8): widget keys, the
@@ -2552,6 +2580,40 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // error for the debug log — never rendered as authored copy. The empty
   // reason and the note's line join are formatting, not copy.
   'lib/ui/settings/app_lock_settings.dart': {r"'$error'", "''", r"'\n'"},
+  // CRED-05's recovery file plumbing (cred-05): the export file name's
+  // pieces, the SAF staging path, the channel's method names and its
+  // diagnostics are machine text, never rendered copy.
+  'lib/services/secrets_recovery.dart': {
+    "'0'",
+    r"'poltergeist-secrets-${now.year}-${two(now.month)}-${two(now.day)}'",
+    "'.json'",
+    "'application/json'",
+    "'secrets-export-'",
+    r"'${directory.path}/$fileName'",
+    "'That file could not be read.'",
+    "'The file exceeds the export size limit'",
+  },
+  // The ported Android SAF channel (cred-05): channel and method names,
+  // argument keys, error codes and diagnostics are protocol plumbing.
+  'lib/services/file_export_service.dart': {
+    "'poltergeist/files'",
+    "'pickExportDirectory'",
+    "'hasExportDirectoryAccess'",
+    "'exportFile'",
+    "'releaseExportDirectory'",
+    "'sourcePath'",
+    "'fileName'",
+    "'mimeType'",
+    "'INVALID_RESULT'",
+    "'Android returned no directory selection result.'",
+    "'Android returned no directory access result.'",
+    "'Android returned no exported document URI.'",
+    "'The staged export file no longer exists.'",
+  },
+  // The picked file's no-data diagnostic, never rendered copy.
+  'lib/services/picked_file_bytes.dart': {
+    "'The picker provided no readable data'",
+  },
 };
 
 const _config = L10nContractConfig(

@@ -49,6 +49,8 @@ import 'services/os_drag_out.dart' show DragOutRouter, platformDragOutBackend;
 import 'services/probe_settings_store.dart';
 import 'services/quit_guard.dart';
 import 'services/recent_locations.dart';
+import 'services/recovery_settings.dart';
+import 'services/secrets_recovery.dart';
 import 'services/seance_links.dart';
 import 'services/secure_master_key.dart';
 import 'services/server_config_source.dart';
@@ -194,23 +196,36 @@ Future<void> main(List<String> args) async {
       errorReporter.report(error, stack);
     }
   }
+  // The vault under the app lock: every key read and re-key settle runs
+  // inside appLock.read, so a locked app never reaches the keystore. The
+  // dynamic vault and CRED-05's recovery service share this one guarded
+  // provider, so recovery exports, restores and code replacement keep the
+  // same boundary.
+  Future<SecretVault?> guardedVault() async {
+    try {
+      return await appLock.read(() async {
+        final key = await masterKeys.probeKeystore();
+        if (key == null) return null;
+        await vaultStore.settleRekey(key);
+        return SecretVault(vaultStore, key);
+      });
+    } on AppLockException {
+      // The lock refused: the vault reads as locked, and the first
+      // unlocked read probes and settles instead.
+      return null;
+    }
+  }
+
   final dynamicVault = DynamicSecretVault(
     vaultStore,
-    () async {
-      try {
-        return await appLock.read(() async {
-          final key = await masterKeys.probeKeystore();
-          if (key == null) return null;
-          await vaultStore.settleRekey(key);
-          return SecretVault(vaultStore, key);
-        });
-      } on AppLockException {
-        // The lock refused: the vault reads as locked, and the first
-        // unlocked read probes and settles instead.
-        return null;
-      }
-    },
+    guardedVault,
     onError: errorReporter.report,
+  );
+  final recovery = RecoverySettings(
+    recovery: SecretsRecovery(vaultStore, guardedVault),
+    files: PlatformSecretsExportFiles(),
+    promptDeclined: await preferences.loadRecoveryPromptDeclined(),
+    savePromptDeclined: preferences.saveRecoveryPromptDeclined,
   );
   // The external-editor registry (06 §4.1): one versioned document in
   // the shared settings.json — the Open With ▸ submenu and the remote
@@ -374,6 +389,7 @@ Future<void> main(List<String> args) async {
     navigatorKey: navigatorKey,
     scaffoldMessengerKey: scaffoldMessengerKey,
     vault: dynamicVault,
+    recovery: recovery,
     onError: errorReporter.report,
   );
 
@@ -709,6 +725,7 @@ Future<void> main(List<String> args) async {
       recentLocations: recentLocations,
       engineSession: engineSession,
       bookmarkBackup: bookmarkBackup,
+      recovery: recovery,
       serverEditor: serverEditor,
       navigatorKey: navigatorKey,
       scaffoldMessengerKey: scaffoldMessengerKey,

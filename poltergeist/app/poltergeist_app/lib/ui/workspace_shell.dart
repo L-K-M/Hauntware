@@ -62,7 +62,8 @@ import '../services/settings_models.dart'
         DirectoryGroupingModel,
         DoubleClickActionModel,
         EditorFontModel,
-        EditorTextSizeModel;
+        EditorTextSizeModel,
+        RecoverySettingsModel;
 import '../services/settings_window/settings_window_host.dart';
 import '../services/settings_window/settings_window_link.dart';
 import '../services/sidebar_controller.dart';
@@ -161,6 +162,7 @@ class WorkspaceShell extends StatefulWidget {
     this.sshConfigImport,
     this.thirdPartyBookmarkImport,
     this.bookmarkBackup,
+    this.recovery,
     this.serverEditor,
     this.bookmarks,
     this.workspaces,
@@ -271,6 +273,11 @@ class WorkspaceShell extends StatefulWidget {
   /// Null leaves the command unregistered — tests and engine-less boots
   /// opt out.
   final BookmarkBackupService? bookmarkBackup;
+
+  /// CRED-05's Recovery section, shown inside Settings → Backup and
+  /// offered after the first saved credential. Null leaves the section
+  /// and the offer unwired.
+  final RecoverySettingsModel? recovery;
 
   /// The server editor's application layer (04 §4.2's management
   /// verbs): the catalog section's add/edit/duplicate/delete route
@@ -1739,6 +1746,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     opener: widget.externalOpener,
     previewDownloads: _previewDownloadsSettings,
     backup: widget.bookmarkBackup,
+    recovery: widget.recovery,
     appearance: widget.appearance,
     editorTextSize: widget.editorTextSize,
     editorFont: widget.editorFont,
@@ -1807,6 +1815,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       if (widget.bookmarkBackup != null)
         buildOpenSettingsBackupCommand(
           service: widget.bookmarkBackup!,
+          recovery: widget.recovery,
           enabled: () => !_commandSessionActive,
           openWindow: _openSettingsWindow,
         ),

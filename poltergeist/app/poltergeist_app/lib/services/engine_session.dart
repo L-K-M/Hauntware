@@ -10,6 +10,7 @@ import 'atomic_file.dart';
 import 'identity_file_reader.dart';
 import 'pane_engine_lanes.dart';
 import 'prompt_coordinator.dart';
+import 'recovery_settings.dart';
 import 'trash_channel.dart';
 
 /// File names inside the app-support directory, one store per file (03 §6):
@@ -363,6 +364,7 @@ final class EngineSession {
     required IdentityFileReader identityReader,
     this.fallbackHome,
     SecretVault? vault,
+    this.recovery,
     this._trashServer,
   }) : _engine = engine,
        _pinStore = _ObservedHostKeyStore(pinStore, initialPins) {
@@ -374,6 +376,7 @@ final class EngineSession {
       scaffoldMessengerKey: scaffoldMessengerKey,
       identityReader: identityReader,
       vault: vault,
+      recovery: recovery,
       errorReporter: _errors,
     );
     // Prompts subscribe before the session is returned: a connect that
@@ -393,6 +396,10 @@ final class EngineSession {
   /// The app-owned local home, resolved when readable, used to label
   /// restored tabs before their browse channels open.
   final String? fallbackHome;
+
+  /// CRED-05's recovery model, offered after a credential is saved and
+  /// this device has no recovery code. Null leaves the offer unwired.
+  final RecoverySettings? recovery;
 
   /// The UI-isolate end of the D15 trash channel (03 §7.1): serves the
   /// engine's channel invocations on the SendPort the spawn config
@@ -738,6 +745,7 @@ Future<EngineSession?> startEngineSession({
   HostKeyStore? pinStore,
   IncidentStore? incidentStore,
   SecretVault? vault,
+  RecoverySettings? recovery,
   TrashChannelServer? Function()? trashServerBinder,
   void Function(Object error, StackTrace)? onError,
 }) async {
@@ -823,6 +831,7 @@ Future<EngineSession?> startEngineSession({
         ),
       ),
       vault: vault,
+      recovery: recovery,
       trashServer: trashServer,
     );
   } on Object catch (error, stackTrace) {

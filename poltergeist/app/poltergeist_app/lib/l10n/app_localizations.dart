@@ -12354,6 +12354,288 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unlock it in its main window to change settings.'**
   String get settingsWindowLocked;
+
+  /// Settings > Backup > Recovery: building an export failed because the vault is past the export caps.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has too many saved secrets to export in one file.'**
+  String get secretsExportTooLargeVault;
+
+  /// Settings > Backup > Recovery: a picked file is not a readable secrets export.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is not a Poltergeist secrets export, or it is damaged.'**
+  String get secretsExportMalformed;
+
+  /// Settings > Backup > Recovery: a picked export uses a newer wire format than this build reads.
+  ///
+  /// In en, this message translates to:
+  /// **'That export was made by a newer version of Poltergeist. Update Poltergeist and try again.'**
+  String get secretsExportUnsupportedVersion;
+
+  /// Settings > Backup > Recovery: a picked file exceeds the export size limit.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is too large to be a Poltergeist secrets export.'**
+  String get secretsExportFileTooLarge;
+
+  /// Settings > Backup > Recovery: the typed code is not a well-formed recovery code.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not a recovery code. Check it for typos.'**
+  String get secretsExportInvalidCode;
+
+  /// Settings > Backup > Recovery: a well-formed code that does not match the picked export.
+  ///
+  /// In en, this message translates to:
+  /// **'That recovery code does not open this export.'**
+  String get secretsExportWrongCode;
+
+  /// Settings > Backup > Recovery: the picked export fails its integrity check.
+  ///
+  /// In en, this message translates to:
+  /// **'That export was changed after it was made, so nothing was restored.'**
+  String get secretsExportTampered;
+
+  /// Settings > Backup: the recovery code section's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery'**
+  String get recoveryTitle;
+
+  /// Settings > Backup > Recovery: what a recovery code is for.
+  ///
+  /// In en, this message translates to:
+  /// **'A recovery code opens an encrypted export of this device\'s saved passwords and keys, on this device or another one. Poltergeist shows the code once and cannot show it again. Without it, an export cannot be opened, by you or anyone else.'**
+  String get recoveryDescription;
+
+  /// Settings > Backup > Recovery: the configured state is still loading.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get recoveryChecking;
+
+  /// Settings > Backup > Recovery: this device has a stored recovery code.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has a recovery code.'**
+  String get recoveryConfigured;
+
+  /// Settings > Backup > Recovery: this device has no stored recovery code.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no recovery code yet.'**
+  String get recoveryNotConfigured;
+
+  /// Settings > Backup > Recovery: the button that creates a first recovery code.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up recovery…'**
+  String get recoverySetUp;
+
+  /// Settings > Backup > Recovery: the button that replaces an existing recovery code.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace recovery code…'**
+  String get recoveryReplace;
+
+  /// Settings > Backup > Recovery: the button that writes the encrypted export.
+  ///
+  /// In en, this message translates to:
+  /// **'Export secrets…'**
+  String get recoveryExport;
+
+  /// Settings > Backup > Recovery: the button that opens an export and merges it.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore secrets…'**
+  String get recoveryRestore;
+
+  /// Settings > Backup > Recovery: the replace-code confirmation's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace the recovery code?'**
+  String get recoveryReplaceTitle;
+
+  /// Settings > Backup > Recovery: the replace-code confirmation's consequence.
+  ///
+  /// In en, this message translates to:
+  /// **'Exports made with the current code still open with it. New exports open only with the new one.'**
+  String get recoveryReplaceBody;
+
+  /// Settings > Backup > Recovery: the replace-code confirmation's confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace'**
+  String get recoveryReplaceConfirm;
+
+  /// Settings > Backup > Recovery: the shared cancel button.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get recoveryCancel;
+
+  /// Settings > Backup > Recovery: a successful export names where it was written.
+  ///
+  /// In en, this message translates to:
+  /// **'Exported to {destination}. It opens only with this device\'s recovery code.'**
+  String recoveryExportDone(String destination);
+
+  /// Settings > Backup > Recovery: a restore summary's added count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} added'**
+  String recoveryRestoreAdded(int count);
+
+  /// Settings > Backup > Recovery: a restore summary's replaced count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} replaced'**
+  String recoveryRestoreReplaced(int count);
+
+  /// Settings > Backup > Recovery: a restore summary's kept count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} kept'**
+  String recoveryRestoreKept(int count);
+
+  /// Settings > Backup > Recovery: a restore summary's unreadable count, shown only when nonzero.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} could not be read'**
+  String recoveryRestoreUnreadable(int count);
+
+  /// Settings > Backup > Recovery: a successful restore's summary sentence.
+  ///
+  /// In en, this message translates to:
+  /// **'Restored: {parts}. A newer copy synced from another device still replaces a restored one.'**
+  String recoveryRestoreSummary(String parts);
+
+  /// Settings > Backup > Recovery: the show-once code dialog's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Your recovery code'**
+  String get recoveryCodeTitle;
+
+  /// Settings > Backup > Recovery: the show-once code dialog's warning.
+  ///
+  /// In en, this message translates to:
+  /// **'Write this code down and keep it somewhere safe, away from this device. It is shown only now. With it, an export of this device\'s secrets opens anywhere; without it, nowhere. Nothing changes until you confirm.'**
+  String get recoveryCodeBody;
+
+  /// Settings > Backup > Recovery: the copy button before it is used.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy code'**
+  String get recoveryCodeCopy;
+
+  /// Settings > Backup > Recovery: the copy button after it is used.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get recoveryCodeCopied;
+
+  /// Settings > Backup > Recovery: the confirmation field's label.
+  ///
+  /// In en, this message translates to:
+  /// **'Type the code\'s first four characters'**
+  String get recoveryCodeConfirmLabel;
+
+  /// Settings > Backup > Recovery: the show-once code dialog's cancel button.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get recoveryCodeCancel;
+
+  /// Settings > Backup > Recovery: the show-once code dialog's confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'I saved it'**
+  String get recoveryCodeDone;
+
+  /// Settings > Backup > Recovery: the restore dialog's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore secrets'**
+  String get recoveryRestoreTitle;
+
+  /// Settings > Backup > Recovery: the restore dialog's instructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the recovery code of the device the export came from, then choose the export file.'**
+  String get recoveryRestoreBody;
+
+  /// Settings > Backup > Recovery: the restore dialog's code field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery code'**
+  String get recoveryRestoreCodeLabel;
+
+  /// Settings > Backup > Recovery: the restore dialog's conflict-policy prompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Credentials this device already has:'**
+  String get recoveryRestoreConflictLabel;
+
+  /// Settings > Backup > Recovery: the restore dialog's keep-existing choice.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this device\'s'**
+  String get recoveryRestoreKeep;
+
+  /// Settings > Backup > Recovery: the restore dialog's replace-existing choice.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the export\'s'**
+  String get recoveryRestoreReplace;
+
+  /// Settings > Backup > Recovery: the restore dialog's confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose export…'**
+  String get recoveryRestoreChoose;
+
+  /// The enrolment prompt's title after a credential is saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up a recovery code?'**
+  String get recoveryPromptTitle;
+
+  /// The enrolment prompt's explanation after a credential is saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords and keys saved here stay on this device unless you sync them. A recovery code lets you export them, encrypted, and restore them on another device, or on this one after a reinstall.'**
+  String get recoveryPromptBody;
+
+  /// The enrolment prompt's decline button, remembered.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get recoveryPromptNotNow;
+
+  /// The enrolment prompt's confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up…'**
+  String get recoveryPromptSetUp;
+
+  /// The enrolment prompt's toast when the decline answer could not be persisted.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save your answer: {error}'**
+  String recoveryPromptDeclineFailed(String error);
+
+  /// The enrolment prompt's toast when the configured check failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check for a recovery code.'**
+  String get recoveryPromptFailed;
+
+  /// The enrolment prompt's retry action.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get recoveryPromptRetry;
 }
 
 class _AppLocalizationsDelegate

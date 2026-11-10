@@ -169,3 +169,17 @@ in three PRs (wrap + export/restore, enrolment + inline prompt, app lock).
 - **Rotation.** Settings offers "Replace recovery code": a new code
   replaces the stored W; exports made earlier still open with the old
   code.
+
+## Landed in Poltergeist (2026-11-10)
+
+Poltergeist's recovery UI is Settings → Backup → Recovery, in the
+Backup dialog and the desktop Settings window's Sync tab alike. It
+shows the configured state whether or not the backup account is
+enrolled, offers the code once with a first-group retype check, asks
+before replacing an existing code, and restores with a keep-or-replace
+choice for credentials this device already has. Saving a first
+credential offers the code once; "Not now" is remembered. The export
+keeps the `seance-secrets` format token, so exports restore across
+Poltergeist and Séance. The recovery service resolves the vault key
+through the app lock, and the Settings window's snapshot carries only
+the configured flag, never a code or an export.

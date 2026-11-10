@@ -9,8 +9,10 @@ import '../l10n/app_localizations.dart';
 import '../ui/prompts/credential_dialog.dart';
 import '../ui/prompts/host_key_dialog.dart';
 import '../ui/prompts/keyboard_interactive_dialog.dart';
+import '../ui/recovery_prompt.dart';
 import 'application_error_reporter.dart';
 import 'identity_file_reader.dart';
+import 'recovery_settings.dart';
 
 /// One prompt flowing through the coordinator: the engine event plus the
 /// `dismissed` flag every post-await path rechecks (09 §3.1) — the engine
@@ -48,6 +50,10 @@ class PromptCoordinator {
   /// then fails with a readable read error instead of touching the disk.
   final IdentityFileReader? identityReader;
 
+  /// CRED-05's recovery model, offered after a credential is saved and
+  /// this device has no recovery code. Null leaves the offer unwired.
+  final RecoverySettings? recovery;
+
   final GlobalKey<NavigatorState> navigatorKey;
 
   /// Notices (vault-save failures) ride the root scaffold messenger.
@@ -65,6 +71,7 @@ class PromptCoordinator {
     required this.navigatorKey,
     this.vault,
     this.identityReader,
+    this.recovery,
     this.scaffoldMessengerKey,
     ApplicationErrorReporter? errorReporter,
   }) : _errorReporter = errorReporter ?? ApplicationErrorReporter();
@@ -328,7 +335,12 @@ class PromptCoordinator {
       return;
     }
 
-    if (result.saveToVault) await _saveToVault(data, result);
+    // The credential reaches the engine before the offer: the connect
+    // proceeds while the user answers, and the offer still waits for
+    // this prompt's turn, so dialogs never stack.
+    final savedToVault = result.saveToVault
+        ? await _saveToVault(data, result)
+        : false;
     if (!_wasDismissed(pending)) {
       _reply(
         pending,
@@ -340,6 +352,7 @@ class PromptCoordinator {
         ),
       );
     }
+    if (savedToVault) await _offerRecoveryCode();
     _finishShowing();
   }
 
@@ -366,7 +379,19 @@ class PromptCoordinator {
     );
   }
 
-  Future<void> _saveToVault(
+  /// Offers CRED-05's recovery code after the first saved credential, on
+  /// the root navigator. A queued prompt waits: the offer is a dialog
+  /// like any other, and dialogs never stack.
+  Future<void> _offerRecoveryCode() async {
+    final context = _context;
+    final recovery = this.recovery;
+    if (context == null || recovery == null) return;
+    await offerRecoveryCode(context, recovery);
+  }
+
+  /// Writes the credential to the vault. Returns whether one was saved,
+  /// so the caller can offer the recovery code only then.
+  Future<bool> _saveToVault(
     CredentialPromptData data,
     CredentialDialogResult result,
   ) async {
@@ -376,7 +401,7 @@ class PromptCoordinator {
     final secretId = data.secretRef;
     final vault = this.vault;
     if (value == null || value.isEmpty || secretId == null || vault == null) {
-      return;
+      return false;
     }
 
     try {
@@ -390,6 +415,7 @@ class PromptCoordinator {
           keyPassphrase: result.keyPassphrase,
         ),
       );
+      return true;
     } on Object catch (error, stackTrace) {
       // Saving is an offer, not a requirement: the connect proceeds with
       // the entered secret; only the save failed, and that failure is
@@ -400,6 +426,7 @@ class PromptCoordinator {
       } on Object {
         // Teardown can remove the notice surface; the answer still proceeds.
       }
+      return false;
     }
   }
 

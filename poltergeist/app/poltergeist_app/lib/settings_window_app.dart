@@ -269,7 +269,11 @@ class _SettingsWindowScreenState extends State<SettingsWindowScreen>
         ];
       case SettingsWindowTab.sync:
         children = [
-          BackupSettingsSection(service: remote.backup!, gate: remote.gate),
+          BackupSettingsSection(
+            service: remote.backup!,
+            recovery: remote.recovery,
+            gate: remote.gate,
+          ),
         ];
     }
     // The dialogs' 560 px column, centred in a window the user may widen.

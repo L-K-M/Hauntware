@@ -29,6 +29,8 @@ import 'package:poltergeist_app/ui/settings/general_settings.dart';
 import 'package:poltergeist_app/ui/settings/preview_settings.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
+import '../support/fake_recovery_settings.dart';
+
 // One engine in a test, so each end of the link gets a channel of its own
 // and a relay between them stands in for the runners' forwarding.
 const _appLink = MethodChannel('test/settings_link/app');
@@ -220,6 +222,7 @@ void main() {
   late DoubleClickActionController doubleClickAction;
   late List<DoubleClickAction> savedActions;
   late _ManualAppLock appLock;
+  late FakeRecoverySettings recovery;
   late List<AppAppearance> savedAppearances;
   Object? appearanceSaveFailure;
 
@@ -271,6 +274,7 @@ void main() {
     directoryGrouping: directoryGrouping,
     doubleClickAction: doubleClickAction,
     appLock: appLock,
+    recovery: recovery,
   );
 
   setUp(() {
@@ -291,6 +295,8 @@ void main() {
     addTearDown(doubleClickAction.dispose);
     appLock = _ManualAppLock();
     addTearDown(appLock.dispose);
+    recovery = FakeRecoverySettings();
+    addTearDown(recovery.dispose);
     savedTextSizes = [];
     editorTextSize = EditorTextSizeController(
       save: (size) async => savedTextSizes.add(size),
@@ -390,6 +396,7 @@ void main() {
     expect(remote.editors, isNull);
     expect(remote.previewDownloads, isNull);
     expect(remote.backup, isNull);
+    expect(remote.recovery, isNull);
     // No Appearance tab, and the window draws the default theme.
     expect(remote.appearance, isNull);
     expect(remote.editorTextSize, isNull);
@@ -797,6 +804,68 @@ void main() {
         ),
       );
       expect(checkForUpdates, isTrue);
+    });
+  });
+
+  group('recovery', () {
+    test('crosses in the first snapshot', () async {
+      recovery.configured = false;
+
+      final remote = await openWindow();
+
+      expect(remote.recovery?.configured, isFalse);
+    });
+
+    test('set up in the window keeps the code in the app', () async {
+      final remote = await openWindow();
+
+      final code = await remote.recovery!.newCode();
+      await remote.recovery!.saveCode(code);
+
+      expect(code, recovery.code);
+      expect(recovery.calls, ['newRecoveryCode', 'saveRecoveryCode']);
+      expect(recovery.configured, isTrue);
+    });
+
+    test('export and restore run in the app', () async {
+      recovery.destination = '/tmp/export.json';
+      recovery.summary = const SecretsRestoreSummary(
+        added: 1,
+        replaced: 2,
+        kept: 3,
+        unreadable: 0,
+      );
+      final remote = await openWindow();
+
+      expect(await remote.recovery!.exportSecrets(), '/tmp/export.json');
+      final summary = await remote.recovery!.restoreSecrets(
+        code: 'CODE',
+        policy: RestoreConflictPolicy.replaceExisting,
+      );
+
+      expect(recovery.calls, ['exportSecrets', 'restoreSecrets']);
+      expect(summary?.added, 1);
+      expect(summary?.replaced, 2);
+      expect(summary?.kept, 3);
+    });
+
+    test('while the app is locked the app refuses recovery calls', () async {
+      final remote = await openWindow();
+      appLock.locked = true;
+      appLock.notifyListeners();
+      await pumpEventQueue();
+
+      await expectLater(
+        remote.recovery!.newCode(),
+        throwsA(
+          isA<SettingsLinkException>().having(
+            (e) => '$e',
+            'message',
+            'The app is locked',
+          ),
+        ),
+      );
+      expect(recovery.calls, isEmpty);
     });
   });
 

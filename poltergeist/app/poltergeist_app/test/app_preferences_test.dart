@@ -441,6 +441,22 @@ void main() {
     expect(await preferences.loadAppLock(), isFalse);
   });
 
+  test('the recovery prompt answer reads back what was saved', () async {
+    final preferences = AppPreferences(
+      store: SettingsStore(path: settingsFile.path),
+    );
+
+    expect(await preferences.loadRecoveryPromptDeclined(), isFalse);
+
+    await preferences.saveRecoveryPromptDeclined(true);
+    expect(
+      await AppPreferences(
+        store: SettingsStore(path: settingsFile.path),
+      ).loadRecoveryPromptDeclined(),
+      isTrue,
+    );
+  });
+
   group('a startup read that failed', () {
     // The file is unreadable at launch (invalid UTF-8 here, an IO error
     // in the field) and readable again by the user's first edit: the

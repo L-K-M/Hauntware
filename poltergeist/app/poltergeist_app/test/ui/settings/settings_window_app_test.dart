@@ -20,13 +20,18 @@ import 'package:poltergeist_app/theme/app_appearance.dart';
 import 'package:poltergeist_app/theme/theme_presets.dart';
 import 'package:poltergeist_app/ui/settings/app_lock_settings.dart';
 import 'package:poltergeist_app/ui/settings/appearance_settings.dart';
+import 'package:poltergeist_app/ui/settings/backup_settings.dart';
 import 'package:poltergeist_app/ui/settings/directory_grouping_settings.dart';
 import 'package:poltergeist_app/ui/settings/double_click_action_settings.dart';
 import 'package:poltergeist_app/ui/settings/editor_font_settings.dart';
 import 'package:poltergeist_app/ui/settings/editor_text_size_settings.dart';
 import 'package:poltergeist_app/ui/settings/general_settings.dart';
 import 'package:poltergeist_app/ui/settings/preview_settings.dart';
+import 'package:poltergeist_app/ui/settings/recovery_settings.dart';
 import 'package:poltergeist_core/poltergeist_core.dart' show DirectoryGrouping;
+
+import '../../support/fake_backup_settings.dart';
+import '../../support/fake_recovery_settings.dart';
 
 const _appLink = MethodChannel('test/settings_window_app/app');
 const _windowLink = MethodChannel('test/settings_window_app/window');
@@ -65,6 +70,8 @@ void main() {
   late DirectoryGroupingController directoryGrouping;
   late DoubleClickActionController doubleClickAction;
   late _ManualAppLock appLock;
+  late FakeBackupSettings backup;
+  late FakeRecoverySettings recovery;
   late bool checkForUpdates;
   final updates = ChangeNotifier();
 
@@ -98,6 +105,10 @@ void main() {
     addTearDown(doubleClickAction.dispose);
     appLock = _ManualAppLock();
     addTearDown(appLock.dispose);
+    backup = FakeBackupSettings();
+    addTearDown(backup.dispose);
+    recovery = FakeRecoverySettings();
+    addTearDown(recovery.dispose);
     host = SettingsWindowHost(control: _control, link: _appLink)
       ..attach(
         SettingsWindowSources(
@@ -111,6 +122,8 @@ void main() {
           directoryGrouping: directoryGrouping,
           doubleClickAction: doubleClickAction,
           appLock: appLock,
+          backup: backup,
+          recovery: recovery,
           changes: [updates],
           previewDownloads: () => PreviewDownloadsSettings(
             available: true,
@@ -154,16 +167,16 @@ void main() {
     expect(find.widgetWithText(Tab, 'General'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Appearance'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Editing'), findsOneWidget);
-    // In SettingsWindowTab's order: Appearance follows General.
+    // In SettingsWindowTab's order: Appearance follows General, and
+    // Sync follows Editing now that the app has the Backup service.
     expect(
       tester
           .widget<TabBar>(find.byType(TabBar))
           .tabs
           .map((tab) => (tab as Tab).text),
-      ['General', 'Appearance', 'Editing'],
+      ['General', 'Appearance', 'Editing', 'Sync'],
     );
-    // No backup service in this app, so no Sync tab.
-    expect(find.widgetWithText(Tab, 'Sync'), findsNothing);
+    expect(find.widgetWithText(Tab, 'Sync'), findsOneWidget);
     expect(find.text('Preview cache limit'), findsOneWidget);
   });
 
@@ -334,6 +347,38 @@ void main() {
 
     expect(directoryGrouping.value, DirectoryGrouping.mixed);
     expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
+  });
+
+  testWidgets('the Sync tab carries Recovery beside the Backup section, '
+      'and its actions run in the app', (tester) async {
+    await pumpWindow(tester, SettingsWindowTab.sync);
+
+    expect(find.byType(BackupSettingsSection), findsOneWidget);
+    expect(find.byType(RecoverySection), findsOneWidget);
+    expect(find.text('Recovery'), findsOneWidget);
+    expect(find.text('This device has no recovery code yet.'), findsOneWidget);
+
+    final setUp = find.byKey(const ValueKey('recovery.setUp'));
+    await tester.ensureVisible(setUp);
+    await tester.pumpAndSettle();
+    await tester.tap(setUp);
+    // The code crosses the link to the app's isolate and back.
+    await tester.runAsync(pumpEventQueue);
+    await tester.pumpAndSettle();
+    final code = tester
+        .widget<SelectableText>(find.byKey(const ValueKey('recovery.code')))
+        .data!;
+    await tester.enterText(
+      find.byKey(const ValueKey('recovery.code.confirm')),
+      code.split('-').first,
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('recovery.code.done')));
+    await tester.runAsync(pumpEventQueue);
+    await tester.pumpAndSettle();
+
+    expect(recovery.calls, ['newRecoveryCode', 'saveRecoveryCode']);
+    expect(recovery.configured, isTrue);
   });
 
   testWidgets('the General tab\'s app lock switch asks in the app and '

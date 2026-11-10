@@ -76,6 +76,15 @@ enum SettingsLinkMethod {
   /// the answer an [AppLockChange] name. The device authentication it
   /// needs runs in the app's window.
   setAppLock,
+
+  /// CRED-05's Recovery actions. The code crosses in memory only, to be
+  /// shown once and kept in the app's vault; the export file is read and
+  /// written in the app's isolate, where the file panels and the vault
+  /// key live.
+  newRecoveryCode,
+  saveRecoveryCode,
+  exportSecrets,
+  restoreSecrets,
 }
 
 /// The keys of every JSON object on the link, spelled once for both sides:
@@ -136,6 +145,13 @@ enum SettingsLinkKey {
   enabled,
   support,
   locked,
+
+  /// CRED-05's Recovery section, an object of [configured], or null when
+  /// the app has no recovery service. No code, export or secret crosses.
+  recovery,
+  configured,
+  code,
+  policy,
 }
 
 /// Why a call failed in the app's isolate, as the error code of the

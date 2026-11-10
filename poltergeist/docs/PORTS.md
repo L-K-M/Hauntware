@@ -1,5 +1,44 @@
 # Séance ports and pin audits
 
+## Secrets recovery files and SAF export, CRED-05 (2026-11-10)
+
+Poltergeist's recovery-code export (cred-05) takes its file plumbing from
+Séance: `picked_file_bytes.dart` and `file_export_service.dart` are ports,
+and `secrets_recovery.dart` carries `PlatformSecretsExportFiles` (the
+desktop save panel, iOS's byte-saving picker, Android's SAF tree) and the
+`SecretsRecovery` binding of `seance_core`'s `VaultRecovery` to
+Poltergeist's vault store and app-lock-guarded key resolve.
+
+| Left Séance | Now Poltergeist |
+|---|---|
+| `seance_app/lib/services/picked_file_bytes.dart` | `poltergeist_app/lib/services/picked_file_bytes.dart` |
+| `seance_app/lib/services/file_export_service.dart` | `poltergeist_app/lib/services/file_export_service.dart`, channel `poltergeist/files` |
+| `seance_app/lib/services/secrets_recovery.dart`, file half | `poltergeist_app/lib/services/secrets_recovery.dart` |
+| `seance_app/android/.../MainActivity.kt`, SAF methods | `poltergeist_app/android/.../MainActivity.kt` |
+
+- The export wire format is unchanged: `SecretsExport.format` stays
+  `seance-secrets`, so an export restores in Séance, Poltergeist and
+  Klabautermann. Only the file name gains Poltergeist's prefix,
+  `poltergeist-secrets-YYYY-MM-DD.json`.
+- `SecretsRecovery` resolves the vault key through the app's provider on
+  every call; a null result (a locked vault) reads as
+  `VaultLockedException` for every operation except `configured`, which
+  reports whether the reserved entry exists without a key.
+- The Android handler ports Séance's SAF methods (`pickExportDirectory`,
+  `hasExportDirectoryAccess`, `exportFile`, `releaseExportDirectory`)
+  under the existing `poltergeist/files` channel, with Poltergeist's
+  `poltergeist_file_exports` preference. The keep-alive methods stay in
+  Séance: Poltergeist has none.
+- `poltergeist_core` re-exports the recovery types (`VaultRecovery`,
+  `SecretsExport`, `RecoveryKey`, `RecoveryWrapKey`, the failure and
+  summary types, `recoveryWrapKeyId`, `isReservedVaultId`), so app code
+  keeps importing them from the barrel.
+- Tests: `poltergeist_app/test/services/secrets_recovery_test.dart` covers
+  the file name, the failure copy, the vault round trip (keep/replace,
+  wrong code, altered file, locked vault, configured without a key) and
+  the picked-file read budget. The crypto matrix stays in
+  `seance_core/test/vault/vault_recovery_test.dart`.
+
 ## Suite links, F5d (2026-10-21)
 
 The link grammar Poltergeist owned since "Cross-app deep links"

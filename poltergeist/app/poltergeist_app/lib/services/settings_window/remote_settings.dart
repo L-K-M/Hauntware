@@ -73,6 +73,8 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
   Map<String, Object?>? _preview;
   RemoteEditorRegistry? _editors;
   RemoteBackupSettings? _backup;
+  bool _hasRecovery = false;
+  late final RemoteRecovery _recovery = RemoteRecovery._(_link);
   late final RemoteAppearanceSettings _appearance = RemoteAppearanceSettings._(
     _link,
   );
@@ -129,6 +131,10 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
   /// The Backup section's model, or null when the app has no backup
   /// service.
   BackupSettingsModel? get backup => _backup;
+
+  /// The Recovery section's model, or null when the app has no recovery
+  /// service.
+  RecoverySettingsModel? get recovery => _hasRecovery ? _recovery : null;
 
   /// The Appearance tab's model, or null when the app has no theme seam.
   AppearanceSettingsModel? get appearance =>
@@ -196,6 +202,11 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
       (_backup ??= RemoteBackupSettings._(_link))._apply(backup);
     }
 
+    final recovery = (snapshot[SettingsLinkKey.recovery.name] as Map?)
+        ?.cast<String, Object?>();
+    _hasRecovery = recovery != null;
+    _recovery._apply(recovery);
+
     final appearance = (snapshot[SettingsLinkKey.appearance.name] as Map?)
         ?.cast<String, Object?>();
     _hasAppearance = appearance != null;
@@ -245,6 +256,7 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
     _doubleClickAction.dispose();
     _editorTextSize.dispose();
     _editorFont.dispose();
+    _recovery.dispose();
     appLock.dispose();
     super.dispose();
   }
@@ -565,6 +577,59 @@ final class RemoteBackupSettings extends ChangeNotifier
   @override
   Future<void> declineRetainedDelete() =>
       _link.call(SettingsLinkMethod.declineRetainedDelete);
+}
+
+/// [RecoverySettingsModel] over the link: the app's configured flag as
+/// the latest snapshot carries it, and the explicit actions run in the
+/// app's isolate, where the file panels and the vault key live.
+final class RemoteRecovery extends ChangeNotifier
+    implements RecoverySettingsModel {
+  RemoteRecovery._(this._link);
+
+  final _Link _link;
+  bool? _configured;
+
+  void _apply(Map<Object?, Object?>? json) {
+    final configured = json?[SettingsLinkKey.configured.name] as bool?;
+    if (configured == _configured) return;
+    _configured = configured;
+    notifyListeners();
+  }
+
+  @override
+  bool? get configured => _configured;
+
+  @override
+  Future<String> newCode() async =>
+      (await _link.call(SettingsLinkMethod.newRecoveryCode))! as String;
+
+  /// The code crosses to the app's isolate in memory only, to be kept
+  /// there; nothing on the link is persisted.
+  @override
+  Future<void> saveCode(String code) =>
+      _link.call(SettingsLinkMethod.saveRecoveryCode, code);
+
+  @override
+  Future<String?> exportSecrets() async =>
+      await _link.call(SettingsLinkMethod.exportSecrets) as String?;
+
+  /// The code crosses to the app's isolate in memory only; the file is
+  /// read there and never crosses.
+  @override
+  Future<SecretsRestoreSummary?> restoreSecrets({
+    required String code,
+    required RestoreConflictPolicy policy,
+  }) async {
+    final json = await _link.call(SettingsLinkMethod.restoreSecrets, {
+      SettingsLinkKey.code.name: code,
+      SettingsLinkKey.policy.name: policy.name,
+    });
+    return json == null
+        ? null
+        : SecretsRestoreSummary.fromJson(
+            (json as Map).cast<String, dynamic>(),
+          );
+  }
 }
 
 /// [AppLockSettings] over the link: the app's lock as the latest snapshot

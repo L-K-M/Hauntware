@@ -103,6 +103,35 @@ abstract interface class EditorRegistryModel implements Listenable {
 typedef EditorPicker =
     Future<ExternalEditorDefinition?> Function({required String dialogTitle});
 
+/// The Settings → Backup → Recovery section's model: [RecoverySettings]
+/// in the app, `RemoteRecovery` in the Settings window. The section
+/// renders [configured] and calls the explicit actions; the file panels
+/// and the vault key stay in the app's isolate.
+abstract interface class RecoverySettingsModel implements Listenable {
+  /// Whether this device has a recovery code an export can use; null
+  /// until the first answer.
+  bool? get configured;
+
+  /// A new recovery code, formatted, to be shown once. Nothing is stored
+  /// until [saveCode].
+  Future<String> newCode();
+
+  /// Keeps [code] as this device's recovery code, replacing an earlier
+  /// one; exports made with that one still open with it.
+  Future<void> saveCode(String code);
+
+  /// Builds the encrypted export and saves it where the user chooses.
+  /// The saved location, or null when the user cancelled.
+  Future<String?> exportSecrets();
+
+  /// Opens the chosen export with [code] and merges its credentials into
+  /// this device's vault. Null when the user cancelled the file panel.
+  Future<SecretsRestoreSummary?> restoreSecrets({
+    required String code,
+    required RestoreConflictPolicy policy,
+  });
+}
+
 /// The Settings → Backup section's model: [BookmarkBackupService] in the
 /// app. Every mutating call throws on failure, leaving the durable state —
 /// and so what the section renders — unchanged.
