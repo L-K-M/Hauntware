@@ -112,6 +112,11 @@ above matters. If the key is ever replaced, existing installs must
 uninstall and reinstall (Android rejects the signature change), and the
 release notes will say so.
 
+Android's backup and phone-to-phone transfer do not carry Poltergeist's
+data: the key that seals your saved credentials never leaves the phone.
+To move to a new phone, install the app there and sign in to sync, or
+add your servers again.
+
 The [README](../README.md#known-issues) lists what the Android build
 does not do yet.
 

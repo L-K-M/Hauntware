@@ -109,6 +109,11 @@ A later release's APK installs over the current one and keeps your
 servers and settings. Install it the same way: Klabautermann does not
 download updates.
 
+Android's backup and phone-to-phone transfer do not carry Klabautermann's
+data: the key that seals your saved credentials never leaves the phone.
+To move to a new phone, install the app there and sign in to sync, or
+add your servers again.
+
 The APK is signed with a committed, deliberately public key. That is what
 lets each release's APK upgrade an installed one in place; it also means
 anyone can build an APK that Android accepts as an update, so a matching
