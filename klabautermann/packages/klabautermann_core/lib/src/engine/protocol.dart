@@ -3450,11 +3450,13 @@ enum DetachedOperationState {
   done,
 
   /// Its record says running but its wrapper is gone, or its PID now
-  /// names another process: it was killed before it could record a
-  /// result (at logout, or by a reboot).
+  /// names another process, in two listings in a row: it was killed
+  /// before it could record a result (at logout, or by a reboot).
   lost,
 
-  /// Its record says running and the engine could not check the wrapper.
+  /// Its record says running and the engine could not check the wrapper,
+  /// or found it gone once: it may have ended after the listing was read,
+  /// which the next listing, 15 s later, shows.
   unknown,
 }
 
