@@ -18,6 +18,7 @@ import '../controllers/log_display.dart';
 import '../controllers/monitor_set.dart';
 import '../controllers/pin_publication_controller.dart';
 import '../controllers/safety_controller.dart';
+import '../controllers/sync_controller.dart' show PinConflictsSettings;
 import '../controllers/sync_secrets_controller.dart';
 import '../controllers/threshold_controller.dart';
 import '../controllers/time_display.dart';
@@ -28,6 +29,7 @@ import 'app_lock_settings.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'appearance_tab.dart';
 import 'monitor_set_feedback.dart';
+import 'pin_conflict_card.dart';
 import 'server_editing.dart';
 import 'thresholds_tab.dart';
 
@@ -58,6 +60,7 @@ class SettingsPage extends StatefulWidget {
     this.appLock,
     this.syncSecrets,
     this.pinPublication,
+    this.pinConflicts,
     this.accountSize,
     this.initialTab = SettingsTab.general,
     this.tabRequests,
@@ -106,6 +109,10 @@ class SettingsPage extends StatefulWidget {
 
   /// The host key sharing assertion; null in tests that leave it out.
   final PinPublicationSettings? pinPublication;
+
+  /// The host-key quarantine diff (03 §4.9) in the Sync tab; null in tests
+  /// that leave it out, where the tab shows no conflict cards.
+  final PinConflictsSettings? pinConflicts;
 
   /// The sync account's size (SYN-09) in the Sync tab; null in tests that
   /// leave it out, and its value null until a sync operation succeeded.
@@ -201,6 +208,7 @@ class _SettingsPageState extends State<SettingsPage>
               SettingsTab.sync when widget.syncSecrets != null => SyncTab(
                 syncSecrets: widget.syncSecrets!,
                 pinPublication: widget.pinPublication,
+                pinConflicts: widget.pinConflicts,
                 accountSize: widget.accountSize,
               ),
               SettingsTab.safety when widget.safety != null => SafetyTab(
@@ -673,11 +681,16 @@ class SyncTab extends StatelessWidget {
     super.key,
     required this.syncSecrets,
     this.pinPublication,
+    this.pinConflicts,
     this.accountSize,
   });
 
   final SyncSecretsSettings syncSecrets;
   final PinPublicationSettings? pinPublication;
+
+  /// The host-key quarantine diff (03 §4.9); null in tests that leave it
+  /// out, where the tab shows no conflict cards.
+  final PinConflictsSettings? pinConflicts;
 
   /// As [SettingsPage.accountSize].
   final ValueListenable<AccountSize?>? accountSize;
@@ -719,11 +732,22 @@ class SyncTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final pins = pinPublication;
+    final conflicts = pinConflicts;
     return ListenableBuilder(
-      listenable: Listenable.merge([syncSecrets, ?pins, ?accountSize]),
+      listenable: Listenable.merge([
+        syncSecrets,
+        ?pins,
+        ?conflicts,
+        ?accountSize,
+      ]),
       builder: (context, _) => ListView(
         padding: const EdgeInsets.all(24),
         children: [
+          if (conflicts != null && conflicts.conflicts.isNotEmpty) ...[
+            for (final conflict in conflicts.conflicts)
+              PinConflictCard(conflict: conflict, settings: conflicts),
+            const SizedBox(height: 24),
+          ],
           Semantics(
             header: true,
             child: Text(

@@ -358,6 +358,9 @@ Future<void> main(List<String> args) async {
     klabautermannMasterKeyManager(),
     guard: appLock.read,
   );
+  // The quarantine diff at startup: the engine needs the keystore above to
+  // read the account's host-key records, so the read follows it.
+  unawaited(sync.readPinConflicts());
   for (final issue in engine.ready.syncStoreIssues) {
     debugPrint('${issue.fileName}: ${issue.kind.name} ${issue.detail ?? ''}');
   }
@@ -549,6 +552,7 @@ Future<void> main(List<String> args) async {
     appLock: appLock,
     syncSecrets: syncSecrets,
     pinPublication: pinPublication,
+    pinConflicts: sync,
     accountSize: sync.accountSize,
     cadence: cadence,
     cadenceCaps: cadenceCaps,
