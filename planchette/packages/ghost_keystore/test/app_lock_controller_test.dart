@@ -62,6 +62,27 @@ void main() {
     expect(device.prompts, 1);
   });
 
+  test('a read that authenticates notifies pending unlock observers', () async {
+    final lock = controller();
+    addTearDown(lock.dispose);
+    var changes = 0;
+    lock.addListener(() => changes++);
+    expect(await lock.read(() async => 'key'), 'key');
+    expect(lock.locked, isFalse);
+    expect(changes, 1);
+  });
+
+  test('finishing an admitted read after disposal does not notify', () async {
+    final lock = controller();
+    await lock.unlock();
+    final pending = Completer<String>();
+    final read = lock.read(() => pending.future);
+    await pumpEventQueue();
+    lock.dispose();
+    pending.complete('key');
+    expect(await read, 'key');
+  });
+
   test('a keystore read while locked asks once, sharing the lock '
       'screen prompt', () async {
     final lock = controller();

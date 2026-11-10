@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:ghost_keystore/app_lock.dart' show AppLockController;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'application_error_reporter.dart';
@@ -365,6 +366,7 @@ final class EngineSession {
     this.fallbackHome,
     SecretVault? vault,
     this.recovery,
+    AppLockController? appLock,
     this._trashServer,
   }) : _engine = engine,
        _pinStore = _ObservedHostKeyStore(pinStore, initialPins) {
@@ -377,6 +379,7 @@ final class EngineSession {
       identityReader: identityReader,
       vault: vault,
       recovery: recovery,
+      appLock: appLock,
       errorReporter: _errors,
     );
     // Prompts subscribe before the session is returned: a connect that
@@ -746,6 +749,7 @@ Future<EngineSession?> startEngineSession({
   IncidentStore? incidentStore,
   SecretVault? vault,
   RecoverySettings? recovery,
+  AppLockController? appLock,
   TrashChannelServer? Function()? trashServerBinder,
   void Function(Object error, StackTrace)? onError,
 }) async {
@@ -832,6 +836,7 @@ Future<EngineSession?> startEngineSession({
       ),
       vault: vault,
       recovery: recovery,
+      appLock: appLock,
       trashServer: trashServer,
     );
   } on Object catch (error, stackTrace) {

@@ -120,6 +120,14 @@ final class _FakeRecovery extends ChangeNotifier implements RecoverySettings {
   String? restoredCode;
   VaultRestorePolicy? restoredPolicy;
   int newCodeCalls = 0;
+  int refreshes = 0;
+
+  @override
+  Future<void> refresh() async {
+    refreshes++;
+    configured ??= false;
+    notifyListeners();
+  }
 
   @override
   Future<String> newCode() async {
@@ -1425,6 +1433,19 @@ void main() {
       expect(find.text('This device has a recovery code.'), findsOneWidget);
     });
 
+    testWidgets('recovery status refresh runs in the app', (tester) async {
+      final recovery = _FakeRecovery(configured: false);
+      host.dispose();
+      await tester.runAsync(() async {
+        host = newRecoveryHost(appearance, recovery);
+      });
+      final remote = await pumpWindow(tester, SettingsTab.sync);
+      await tester.runAsync(() async => remote.recovery!.refresh());
+      await tester.pumpAndSettle();
+      expect(recovery.refreshes, 1);
+      expect(remote.recovery!.configured, isFalse);
+    });
+
     testWidgets('the recovery snapshot carries only the configured flag', (
       tester,
     ) async {
@@ -1495,6 +1516,15 @@ void main() {
       });
 
       expect(recovery.newCodeCalls, 0);
+      expect(tester.takeException(), isA<AppLockedException>());
+
+      await tester.runAsync(() async {
+        await expectLater(
+          remote.recovery!.refresh(),
+          throwsA(isA<SettingsLinkException>()),
+        );
+      });
+      expect(recovery.refreshes, 0);
       expect(tester.takeException(), isA<AppLockedException>());
     });
   });

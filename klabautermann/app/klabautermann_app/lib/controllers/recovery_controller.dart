@@ -20,6 +20,10 @@ abstract interface class RecoverySettings implements Listenable {
   /// until the first answer.
   bool? get configured;
 
+  /// Refetches the status, reporting a failure rather than treating it as
+  /// an absent code. The section can retry this explicitly.
+  Future<void> refresh();
+
   /// A new recovery code, formatted, to be shown once. Nothing is stored
   /// until [saveCode].
   Future<String> newCode();
@@ -63,7 +67,7 @@ final class RecoveryController extends ChangeNotifier
     this._requestTimeout = const Duration(seconds: 20),
   }) : _now = now ?? DateTime.now {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
-    unawaited(_loadConfigured());
+    unawaited(_loadConfigured().catchError((Object _) {}));
   }
 
   final EngineClient _engine;
@@ -82,15 +86,18 @@ final class RecoveryController extends ChangeNotifier
   bool? get configured => _configured;
 
   /// The configured answer, loading it when the first answer has not
-  /// arrived. A vault that cannot be read this session (locked, no
-  /// keystore) reads as no code; the next action reports the real fault.
+  /// arrived. An unsuccessful status read remains a failure, not an
+  /// absent code; [refresh] can retry it.
   Future<bool> recoveryConfigured() async {
+    final configured = _configured;
+    if (configured != null) return configured;
     await _loadConfigured();
     return _configured ?? false;
   }
 
   /// Reads the configured flag again, after the app lock releases a
   /// keystore that was locked at launch.
+  @override
   Future<void> refresh() => _requestStatus();
 
   String _id(String prefix) => '$prefix-${_nextRequestId++}';
@@ -157,16 +164,11 @@ final class RecoveryController extends ChangeNotifier
 
   Future<void> _requestStatus() async {
     if (_disposed) return;
-    try {
-      final event = await _request(
-        RecoveryStatusRequest(requestId: _id('recovery-status')),
-        (event) => event is RecoveryStatus ? event : null,
-      );
-      _applyConfigured(event.configured);
-    } on Object {
-      // A locked or unavailable keystore reads as no code this session;
-      // the next action reports the real fault.
-    }
+    final event = await _request(
+      RecoveryStatusRequest(requestId: _id('recovery-status')),
+      (event) => event is RecoveryStatus ? event : null,
+    );
+    _applyConfigured(event.configured);
   }
 
   void _applyConfigured(bool configured) {

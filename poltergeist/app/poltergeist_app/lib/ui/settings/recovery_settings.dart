@@ -28,11 +28,13 @@ class _RecoverySectionState extends State<RecoverySection> {
   String? _message;
   bool _failed = false;
   bool _busy = false;
+  Object? _statusError;
 
   @override
   void initState() {
     super.initState();
     widget.model.addListener(_modelChanged);
+    if (widget.model.configured == null) unawaited(_refreshStatus());
   }
 
   @override
@@ -41,6 +43,9 @@ class _RecoverySectionState extends State<RecoverySection> {
     if (identical(oldWidget.model, widget.model)) return;
     oldWidget.model.removeListener(_modelChanged);
     widget.model.addListener(_modelChanged);
+    _busy = false;
+    _statusError = null;
+    if (widget.model.configured == null) unawaited(_refreshStatus());
   }
 
   @override
@@ -51,6 +56,25 @@ class _RecoverySectionState extends State<RecoverySection> {
 
   void _modelChanged() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _refreshStatus() async {
+    final model = widget.model;
+    setState(() {
+      _busy = true;
+      _statusError = null;
+    });
+    try {
+      await model.refresh();
+    } on Object catch (error) {
+      if (mounted && identical(model, widget.model)) {
+        setState(() => _statusError = error);
+      }
+    } finally {
+      if (mounted && identical(model, widget.model)) {
+        setState(() => _busy = false);
+      }
+    }
   }
 
   void _report(String message, {required bool failed}) {
@@ -86,7 +110,8 @@ class _RecoverySectionState extends State<RecoverySection> {
         failure,
         l10n,
       ),
-      _ => '$error',
+      RecoveryStatusException() => l10n.recoveryStatusFailed,
+      _ => l10n.recoveryFailed,
     };
   }
 
@@ -160,6 +185,7 @@ class _RecoverySectionState extends State<RecoverySection> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final configured = widget.model.configured;
+    final statusError = _statusError;
     final message = _message;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -168,11 +194,28 @@ class _RecoverySectionState extends State<RecoverySection> {
         const SizedBox(height: 4),
         Text(l10n.recoveryDescription, style: theme.textTheme.bodySmall),
         const SizedBox(height: 8),
-        Text(switch (configured) {
-          null => l10n.recoveryChecking,
-          true => l10n.recoveryConfigured,
-          false => l10n.recoveryNotConfigured,
-        }),
+        if (statusError == null)
+          Text(switch (configured) {
+            null => l10n.recoveryChecking,
+            true => l10n.recoveryConfigured,
+            false => l10n.recoveryNotConfigured,
+          })
+        else
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.recoveryStatusFailed,
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+              ),
+              TextButton(
+                key: const ValueKey('recovery.status.retry'),
+                onPressed: _busy ? null : _refreshStatus,
+                child: Text(l10n.recoveryRetry),
+              ),
+            ],
+          ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -180,14 +223,18 @@ class _RecoverySectionState extends State<RecoverySection> {
           children: [
             FilledButton.tonal(
               key: const ValueKey('recovery.setUp'),
-              onPressed: _busy || configured == null ? null : _setUp,
+              onPressed: _busy || statusError != null || configured == null
+                  ? null
+                  : _setUp,
               child: Text(
                 configured == true ? l10n.recoveryReplace : l10n.recoverySetUp,
               ),
             ),
             OutlinedButton(
               key: const ValueKey('recovery.export'),
-              onPressed: _busy || configured != true ? null : _export,
+              onPressed: _busy || statusError != null || configured != true
+                  ? null
+                  : _export,
               child: Text(l10n.recoveryExport),
             ),
             OutlinedButton(
@@ -262,11 +309,11 @@ class _RecoveryCodeDialogState extends State<_RecoveryCodeDialog> {
     try {
       await widget.save();
       if (mounted) Navigator.pop(context, true);
-    } on Object catch (error) {
+    } on Object {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = '$error';
+          _error = AppLocalizations.of(context).recoveryFailed;
         });
       }
     }

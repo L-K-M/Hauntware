@@ -6,6 +6,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show TargetPlatform;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/services/recovery_files.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -69,6 +70,7 @@ final class _FakePicker extends FilePickerPlatform {
   PlatformFile? picked;
   Uri? savedUri;
   Object? saveError;
+  int saveCalls = 0;
   Uint8List? savedBytes;
   String? savedName;
   String? savedMimeType;
@@ -104,6 +106,7 @@ final class _FakePicker extends FilePickerPlatform {
     LinuxOptions linuxOptions = const LinuxOptions(),
     WebOptions webOptions = const WebOptions(),
   }) async {
+    saveCalls++;
     final error = saveError;
     if (error != null) throw error;
     final uri = savedUri;
@@ -111,8 +114,7 @@ final class _FakePicker extends FilePickerPlatform {
     savedBytes = bytes;
     savedName = fileName;
     savedMimeType = mimeType;
-    // The plugin writes the bytes itself; the service then tightens the
-    // desktop file's permissions.
+    // The plugin writes before returning, as file_picker 13 does.
     if (uri.isScheme('file')) {
       await File(uri.toFilePath()).writeAsBytes(bytes, flush: true);
     }
@@ -123,10 +125,19 @@ final class _FakePicker extends FilePickerPlatform {
 void main() {
   late _FakePicker picker;
   late PlatformRecoveryFiles files;
+  String? suggestedName;
 
   setUp(() {
     picker = _FakePicker();
-    files = PlatformRecoveryFiles(platform: picker);
+    suggestedName = null;
+    files = PlatformRecoveryFiles(
+      platform: picker,
+      targetPlatform: TargetPlatform.macOS,
+      desktopDestination: (name) async {
+        suggestedName = name;
+        return picker.savedUri?.toFilePath();
+      },
+    );
   });
 
   group('export file name', () {
@@ -156,7 +167,7 @@ void main() {
       },
     );
 
-    test('a desktop file is rewritten owner-only', () async {
+    test('a desktop file has one owner-only atomic writer', () async {
       final directory = await Directory.systemTemp.createTemp(
         'recovery-files-',
       );
@@ -168,8 +179,8 @@ void main() {
       final saved = await files.save(bytes, 'export.json');
 
       expect(saved, destination.path);
-      expect(picker.savedName, 'export.json');
-      expect(picker.savedMimeType, 'application/json');
+      expect(suggestedName, 'export.json');
+      expect(picker.saveCalls, 0);
       expect(destination.readAsBytesSync(), bytes);
       // 0600 in Unix mode bits; Windows keeps its per-user ACLs.
       if (Platform.isLinux || Platform.isMacOS) {
@@ -177,13 +188,44 @@ void main() {
       }
     });
 
+    test('a failed atomic save leaves the old export untouched', () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'recovery-files-preserve-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final destination = File('${directory.path}/export.json');
+      await destination.writeAsString('{"previous":true}');
+      picker.savedUri = destination.uri;
+      files = PlatformRecoveryFiles(
+        platform: picker,
+        targetPlatform: TargetPlatform.macOS,
+        desktopDestination: (_) async => destination.path,
+        writeExport: (_, _) async => throw const FileSystemException('refused'),
+      );
+
+      await expectLater(
+        files.save(Uint8List.fromList('{"new":true}'.codeUnits), 'export.json'),
+        throwsA(isA<RecoveryFileException>()),
+      );
+      expect(await destination.readAsString(), '{"previous":true}');
+      expect(picker.saveCalls, 0);
+    });
+
     test('a content uri is reported without a rewrite', () async {
       picker.savedUri = Uri(scheme: 'content', path: 'export');
+      files = PlatformRecoveryFiles(
+        platform: picker,
+        targetPlatform: TargetPlatform.android,
+        desktopDestination: (_) async => fail('A mobile save needs no path'),
+      );
 
       expect(
         await files.save(Uint8List.fromList([1]), 'export.json'),
         'content:export',
       );
+      expect(picker.saveCalls, 1);
+      expect(picker.savedName, 'export.json');
+      expect(picker.savedMimeType, 'application/json');
     });
 
     test('a write failure crosses as a fixed save failure', () async {

@@ -18,6 +18,15 @@ final class FakeRecoverySettings extends ChangeNotifier
   Object? failure;
 
   @override
+  Future<void> refresh() async {
+    calls.add('refreshRecoveryStatus');
+    final failure = this.failure;
+    if (failure != null) throw failure;
+    configured ??= false;
+    notifyListeners();
+  }
+
+  @override
   Future<String> newCode() async {
     calls.add('newRecoveryCode');
     return code;

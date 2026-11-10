@@ -1,13 +1,15 @@
 // CRED-05's export file service for Klabautermann: the platform save and
-// open panels behind file_picker 13, with a read bounded by the shared
-// export size before anything is loaded, and a desktop save rewritten
-// through seance_core's AtomicFileWriter so the encrypted export is
-// owner-only like the vault itself.
+// open/mobile panels behind file_picker 13 and a path-only desktop
+// save panel. The shared writer is the only writer on desktop, keeping
+// an earlier export intact until the owner-only replacement commits.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart' show getSaveLocation;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 /// Why a recovery export file could not be read or written. The kind is
@@ -49,49 +51,56 @@ String recoveryExportFileName(DateTime now) {
 
 /// [RecoveryFiles] through the platform's save and open panels.
 final class PlatformRecoveryFiles implements RecoveryFiles {
-  PlatformRecoveryFiles({FilePickerPlatform? platform})
-    : _platform = platform ?? FilePickerPlatform.instance;
+  PlatformRecoveryFiles({
+    FilePickerPlatform? platform,
+    TargetPlatform? targetPlatform,
+    this._desktopDestination = _chooseDesktopDestination,
+    this._writeExport = _writeOwnerOnlyExport,
+  }) : _platform = platform ?? FilePickerPlatform.instance,
+       _targetPlatform = targetPlatform ?? defaultTargetPlatform;
 
   final FilePickerPlatform _platform;
+  final TargetPlatform _targetPlatform;
+  final Future<String?> Function(String) _desktopDestination;
+  final Future<void> Function(File, Uint8List) _writeExport;
 
-  /// Desktop platforms rewrite the chosen file through the shared
-  /// owner-only writer; Android and iOS keep the plugin's own write,
-  /// which lands in their per-app or document-provider storage.
-  static bool get _rewritesDesktop =>
-      Platform.isLinux || Platform.isMacOS || Platform.isWindows;
+  bool get _isDesktop => switch (_targetPlatform) {
+    TargetPlatform.linux ||
+    TargetPlatform.macOS ||
+    TargetPlatform.windows => true,
+    _ => false,
+  };
 
   @override
   Future<String?> save(Uint8List bytes, String fileName) async {
-    if (Platform.isMacOS) await _platform.skipEntitlementsChecks();
-    final Uri? saved;
     try {
-      saved = await _platform.saveFile(
+      if (_isDesktop) {
+        // file_picker 13 writes before returning, so it cannot choose a
+        // destination for an atomic save without first truncating it.
+        final path = await _desktopDestination(fileName);
+        if (path == null) return null;
+        await _writeExport(File(path), bytes);
+        return path;
+      }
+      final saved = await _platform.saveFile(
         fileName: fileName,
         bytes: bytes,
         mimeType: 'application/json',
       );
+      if (saved == null) return null;
+      return saved.isScheme('file') ? saved.toFilePath() : saved.toString();
     } on Object {
       throw const RecoveryFileException(RecoveryFileFailure.saveFailed);
     }
-    if (saved == null) return null;
-    if (saved.isScheme('file') && _rewritesDesktop) {
-      try {
-        await const AtomicFileWriter().write(
-          File(saved.toFilePath()),
-          utf8.decode(bytes),
-          privacy: AtomicFilePrivacy.ownerOnly,
-        );
-      } on Object {
-        throw const RecoveryFileException(RecoveryFileFailure.saveFailed);
-      }
-    }
-    return saved.isScheme('file') ? saved.toFilePath() : saved.toString();
   }
 
   @override
   Future<Uint8List?> open() async {
     final PlatformFile? picked;
     try {
+      if (_targetPlatform == TargetPlatform.macOS) {
+        await _platform.skipEntitlementsChecks();
+      }
       picked = await _platform.pickFile(
         type: FileType.custom,
         allowedExtensions: const ['json'],
@@ -103,6 +112,18 @@ final class PlatformRecoveryFiles implements RecoveryFiles {
     return readBoundedExport(picked);
   }
 }
+
+Future<String?> _chooseDesktopDestination(String fileName) async {
+  final location = await getSaveLocation(suggestedName: fileName);
+  return location?.path;
+}
+
+Future<void> _writeOwnerOnlyExport(File destination, Uint8List bytes) =>
+    const AtomicFileWriter().write(
+      destination,
+      utf8.decode(bytes),
+      privacy: AtomicFilePrivacy.ownerOnly,
+    );
 
 /// Reads [file] as an export, refusing more than
 /// [SecretsExport.maxBytes] before the whole file is loaded. The

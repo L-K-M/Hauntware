@@ -11424,6 +11424,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'A recovery code opens an encrypted export of this device\'s saved passwords and keys, on this device or another one. Klabautermann shows the code once and cannot show it again. Without it, an export cannot be opened, by you or anyone else.';
 
   @override
+  String get recoveryStatusFailed =>
+      'Could not check recovery settings. Try again.';
+
+  @override
+  String get recoveryRetry => 'Retry';
+
+  @override
   String get recoveryChecking => 'Checking…';
 
   @override

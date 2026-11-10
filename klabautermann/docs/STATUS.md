@@ -2567,9 +2567,13 @@ is on main:
   app-lock-guarded keystore; a locked or unavailable key refuses without
   minting one. The desktop settings window carries only the configured
   flag in its snapshot, and the export keeps the `seance-secrets` wire
-  format. Tested in the engine recovery, recovery controller, recovery
-  settings, file service and settings window tests. Real-device SAF,
-  biometric and lock-screen validation stays manual.
+  format. Desktop export chooses a path before one owner-only atomic
+  write, leaving an older export intact when writing fails. A failed
+  status check shows a fixed error and Retry. The Android host themes
+  use AppCompat for local_auth's older-API fallback. Tested in the engine
+  recovery, recovery controller, recovery settings, file service,
+  settings window and Android host-contract tests. Real-device SAF,
+  biometric, native-dialog and lock-screen validation stays manual.
 - Share sheet (M6 N67c, PLT-08): the Overview's "Share status…" exports
   plain lines from the server's last readings, without its name and host
   name unless the user turns on "Name the server", and a container's Raw

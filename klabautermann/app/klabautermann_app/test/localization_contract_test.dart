@@ -1034,6 +1034,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "', '",
     "'-'",
     "'recovery.replace.confirm'",
+    "'recovery.status.retry'",
     "'recovery.setUp'",
     "'recovery.export'",
     "'recovery.restore'",

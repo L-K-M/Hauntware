@@ -26,6 +26,16 @@ final class _FakeFiles implements SecretsExportFiles {
   Future<Uint8List?> open() async => next;
 }
 
+final class _FailingStore extends InMemoryVaultStore {
+  bool failReads = true;
+
+  @override
+  Future<Uint8List?> getSecretBlob(String id) async {
+    if (failReads) throw const FormatException('untrusted record');
+    return super.getSecretBlob(id);
+  }
+}
+
 void main() {
   late InMemoryVaultStore store;
   late SecretVault vault;
@@ -62,6 +72,22 @@ void main() {
     await settings.saveCode(code);
 
     expect(await settings.recoveryConfigured(), isTrue);
+  });
+
+  test('a failed status read is not a missing recovery code', () async {
+    final failing = _FailingStore();
+    recovery = SecretsRecovery(
+      failing,
+      () async => SecretVault(failing, Uint8List(32)),
+    );
+    final settings = model();
+    addTearDown(settings.dispose);
+
+    await expectLater(settings.recoveryConfigured(), throwsA(isA<Exception>()));
+    expect(settings.configured, isNull);
+    failing.failReads = false;
+    expect(await settings.recoveryConfigured(), isFalse);
+    expect(settings.configured, isFalse);
   });
 
   test('export builds the bytes and saves them under the dated name', () async {

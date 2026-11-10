@@ -28,15 +28,29 @@ final class _FakeRecovery extends ChangeNotifier
   SecretsRestoreSummary? summary;
   Object? exportError;
   Object? restoreError;
+  Object? statusError;
+  Object? saveError;
+  int refreshes = 0;
   String? savedCode;
   String? restoredCode;
   RestoreConflictPolicy? restoredPolicy;
+
+  @override
+  Future<void> refresh() async {
+    refreshes++;
+    final error = statusError;
+    if (error != null) throw error;
+    configured ??= false;
+    notifyListeners();
+  }
 
   @override
   Future<String> newCode() async => code;
 
   @override
   Future<void> saveCode(String code) async {
+    final error = saveError;
+    if (error != null) throw error;
     savedCode = code;
     configured = true;
     notifyListeners();
@@ -75,6 +89,62 @@ void main() {
     await tester.pumpWidget(wrap(RecoverySection(model: recovery)));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('a failed status check is visible and retryable', (tester) async {
+    final recovery = _FakeRecovery()
+      ..statusError = StateError('untrusted diagnostic');
+    await pumpSection(tester, recovery);
+
+    expect(find.byKey(const ValueKey('recovery.status.retry')), findsOneWidget);
+    expect(find.text(l10n.recoveryChecking), findsNothing);
+    expect(find.textContaining('untrusted diagnostic'), findsNothing);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('recovery.setUp')))
+          .onPressed,
+      isNull,
+    );
+
+    recovery.statusError = null;
+    await tester.tap(find.byKey(const ValueKey('recovery.status.retry')));
+    await tester.pumpAndSettle();
+    expect(recovery.refreshes, 2);
+    expect(find.text(l10n.recoveryNotConfigured), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('recovery.setUp')))
+          .onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('recovery failures do not echo secret-bearing diagnostics', (
+    tester,
+  ) async {
+    final recovery = _FakeRecovery(configured: true)
+      ..exportError = StateError('untrusted diagnostic');
+    await pumpSection(tester, recovery);
+    await tester.tap(find.byKey(const ValueKey('recovery.export')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('untrusted diagnostic'), findsNothing);
+    expect(find.text(l10n.recoveryFailed), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('recovery.setUp')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('recovery.replace.confirm')));
+    await tester.pumpAndSettle();
+    recovery.saveError = StateError('untrusted diagnostic');
+    await tester.enterText(
+      find.byKey(const ValueKey('recovery.code.confirm')),
+      _code.split('-').first,
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('recovery.code.done')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('untrusted diagnostic'), findsNothing);
+    expect(find.text(l10n.recoveryFailed), findsWidgets);
+    expect(recovery.savedCode, isNull);
+  });
 
   testWidgets('shows the status and the three actions', (tester) async {
     final recovery = _FakeRecovery(configured: false);

@@ -18,6 +18,8 @@ import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/bookmark_backup_service.dart'
     show BackupSwitchOutcome, RetainedBackupAccount;
 import 'package:poltergeist_app/services/external_file_opener.dart';
+import 'package:poltergeist_app/services/secrets_recovery.dart'
+    show RecoveryStatusException;
 import 'package:poltergeist_app/services/settings_models.dart';
 import 'package:poltergeist_app/services/settings_window/remote_settings.dart';
 import 'package:poltergeist_app/services/settings_window/settings_window_host.dart';
@@ -816,6 +818,13 @@ void main() {
       expect(remote.recovery?.configured, isFalse);
     });
 
+    test('refreshes recovery status in the app', () async {
+      final remote = await openWindow();
+      await remote.recovery!.refresh();
+      expect(recovery.calls, ['refreshRecoveryStatus']);
+      expect(remote.recovery!.configured, isFalse);
+    });
+
     test('set up in the window keeps the code in the app', () async {
       final remote = await openWindow();
 
@@ -864,6 +873,11 @@ void main() {
             'The app is locked',
           ),
         ),
+      );
+      expect(recovery.calls, isEmpty);
+      await expectLater(
+        remote.recovery!.refresh(),
+        throwsA(isA<RecoveryStatusException>()),
       );
       expect(recovery.calls, isEmpty);
     });

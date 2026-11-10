@@ -11,7 +11,7 @@ import 'package:flutter/widgets.dart';
 import 'package:ghost_apk_update/ghost_apk_update.dart' show ApkUpdater;
 import 'package:ghost_desktop/ghost_desktop.dart' show MacosToolbarBandChannel;
 import 'package:ghost_keystore/app_lock.dart'
-    show AppLockController, AppLockException;
+    show AppLockController;
 import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:ghost_ui/ghost_ui.dart' show CheckedPlatformMenuDelegate;
 import 'package:package_info_plus/package_info_plus.dart';
@@ -201,25 +201,18 @@ Future<void> main(List<String> args) async {
   // dynamic vault and CRED-05's recovery service share this one guarded
   // provider, so recovery exports, restores and code replacement keep the
   // same boundary.
-  Future<SecretVault?> guardedVault() async {
-    try {
-      return await appLock.read(() async {
-        final key = await masterKeys.probeKeystore();
-        if (key == null) return null;
-        await vaultStore.settleRekey(key);
-        return SecretVault(vaultStore, key);
-      });
-    } on AppLockException {
-      // The lock refused: the vault reads as locked, and the first
-      // unlocked read probes and settles instead.
-      return null;
-    }
-  }
+  Future<SecretVault?> guardedVault() => appLock.read(() async {
+    final key = await masterKeys.probeKeystore();
+    if (key == null) return null;
+    await vaultStore.settleRekey(key);
+    return SecretVault(vaultStore, key);
+  });
 
   final dynamicVault = DynamicSecretVault(
     vaultStore,
     guardedVault,
     onError: errorReporter.report,
+    readGuard: appLock.read,
   );
   final recovery = RecoverySettings(
     recovery: SecretsRecovery(vaultStore, guardedVault),
@@ -390,6 +383,7 @@ Future<void> main(List<String> args) async {
     scaffoldMessengerKey: scaffoldMessengerKey,
     vault: dynamicVault,
     recovery: recovery,
+    appLock: appLock,
     onError: errorReporter.report,
   );
 

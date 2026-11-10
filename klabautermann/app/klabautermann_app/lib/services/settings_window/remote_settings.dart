@@ -747,6 +747,9 @@ final class RemoteRecovery extends ChangeNotifier implements RecoverySettings {
   bool? get configured => _configured;
 
   @override
+  Future<void> refresh() => _call(SettingsLinkMethod.refreshRecoveryStatus, null);
+
+  @override
   Future<String> newCode() async =>
       (await _call(SettingsLinkMethod.newRecoveryCode, null))! as String;
 

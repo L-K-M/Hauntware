@@ -18,6 +18,15 @@ import 'file_export_service.dart';
 import 'picked_file_bytes.dart';
 import 'secure_master_key.dart';
 
+/// Recovery status could not be read. No underlying diagnostic crosses
+/// the settings link or reaches the optional setup offer.
+final class RecoveryStatusException implements Exception {
+  const RecoveryStatusException();
+
+  @override
+  String toString() => 'Could not read recovery status.';
+}
+
 /// The picked file could not be read at all.
 class SecretsExportUnreadableException implements Exception {
   const SecretsExportUnreadableException();

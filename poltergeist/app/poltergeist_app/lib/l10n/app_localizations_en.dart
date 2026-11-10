@@ -8805,6 +8805,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'A recovery code opens an encrypted export of this device\'s saved passwords and keys, on this device or another one. Poltergeist shows the code once and cannot show it again. Without it, an export cannot be opened, by you or anyone else.';
 
   @override
+  String get recoveryStatusFailed =>
+      'Could not check recovery settings. Try again.';
+
+  @override
+  String get recoveryRetry => 'Retry';
+
+  @override
+  String get recoveryFailed =>
+      'The recovery operation could not be completed. Try again.';
+
+  @override
   String get recoveryChecking => 'Checking…';
 
   @override
@@ -8928,9 +8939,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get recoveryPromptSetUp => 'Set up…';
 
   @override
-  String recoveryPromptDeclineFailed(String error) {
-    return 'Could not save your answer: $error';
-  }
+  String get recoveryPromptDeclineFailed =>
+      'Could not save your answer. Try again.';
 
   @override
   String get recoveryPromptFailed => 'Could not check for a recovery code.';

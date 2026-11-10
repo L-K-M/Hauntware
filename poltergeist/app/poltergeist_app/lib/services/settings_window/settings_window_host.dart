@@ -13,6 +13,7 @@ import '../../ui/settings/general_settings.dart';
 import '../../ui/settings/preview_settings.dart';
 import '../double_click_action.dart';
 import '../external_file_opener.dart';
+import '../secrets_recovery.dart' show RecoveryStatusException;
 import '../settings_models.dart';
 import '../sync_account_gate.dart';
 import 'settings_window_link.dart';
@@ -351,6 +352,12 @@ class SettingsWindowHost {
         if (appLock == null) throw StateError('No app lock settings');
         // The device authentication runs here, in the app's window.
         return (await appLock.setEnabled(argument! as bool)).name;
+      case SettingsLinkMethod.refreshRecoveryStatus:
+        try {
+          await _require(recovery).refresh();
+        } on Object {
+          throw const RecoveryStatusException();
+        }
       case SettingsLinkMethod.newRecoveryCode:
         return _require(recovery).newCode();
       case SettingsLinkMethod.saveRecoveryCode:

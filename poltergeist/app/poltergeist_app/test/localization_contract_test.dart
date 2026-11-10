@@ -2044,13 +2044,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'backup.settings.close'",
   },
   // CRED-05's Recovery section: widget keys, the code dialog's group
-  // separator, the summary's list join, and the error interpolation
-  // (reported faults, never authored copy): plumbing and machine data.
+  // separator and summary's list join: plumbing and machine data.
   'lib/ui/settings/recovery_settings.dart': {
-    r"'$error'",
     "'-'",
     "', '",
     "'recovery.replace.confirm'",
+    "'recovery.status.retry'",
     "'recovery.setUp'",
     "'recovery.export'",
     "'recovery.restore'",
@@ -2062,10 +2061,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'recovery.restore.code'",
     "'recovery.restore.choose'",
   },
-  // CRED-05's enrolment prompt: widget keys and the decline-failure
-  // interpolation: plumbing and a reported fault, never authored copy.
+  // CRED-05's enrolment prompt: widget keys, never rendered copy.
   'lib/ui/recovery_prompt.dart': {
-    r"'$error'",
     "'recovery.prompt.notNow'",
     "'recovery.prompt.setUp'",
   },
@@ -2591,6 +2588,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'secrets-export-'",
     r"'${directory.path}/$fileName'",
     "'That file could not be read.'",
+    // A fixed protocol diagnostic; the settings UI renders ARB copy.
+    "'Could not read recovery status.'",
     "'The file exceeds the export size limit'",
   },
   // The ported Android SAF channel (cred-05): channel and method names,

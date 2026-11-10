@@ -51,13 +51,13 @@ final class RecoverySettings extends ChangeNotifier
   bool get promptDeclined => _promptDeclined;
 
   /// The configured answer, loading it when the first answer has not
-  /// arrived. A vault that cannot be read this session (locked, no
-  /// keystore) reads as no code; the next action reports the real fault.
+  /// arrived. An unsuccessful status read remains a failure, not an
+  /// absent code, so the offer cannot replace an existing code blindly.
   Future<bool> recoveryConfigured() async {
     final configured = _configured;
     if (configured != null) return configured;
-    await _reload();
-    return _configured ?? false;
+    await refresh();
+    return _configured!;
   }
 
   /// Remembers "Not now" to the enrolment offer. Not remembered on disk
@@ -74,18 +74,26 @@ final class RecoverySettings extends ChangeNotifier
     notifyListeners();
   }
 
-  Future<void> _reload() async {
+  @override
+  Future<void> refresh() async {
     final bool configured;
     try {
       configured = await _recovery.configured();
     } on Object {
-      // The section keeps "Checking…" and the next action reports the
-      // real failure; the offer reads this as no code.
-      return;
+      throw const RecoveryStatusException();
     }
     if (configured == _configured) return;
     _configured = configured;
     notifyListeners();
+  }
+
+  Future<void> _reload() async {
+    try {
+      await refresh();
+    } on RecoveryStatusException {
+      // Optional background reloads must not mask an action's failure.
+      // The explicit settings check and setup offer report their own.
+    }
   }
 
   @override

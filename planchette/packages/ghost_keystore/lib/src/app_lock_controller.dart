@@ -93,6 +93,7 @@ final class AppLockController extends ChangeNotifier
   final VoidCallback? _onLocked;
   bool _enabled;
   bool _wasLocked = false;
+  bool _disposed = false;
 
   /// Notices the lock engaging while the app stays hidden on a desktop,
   /// where timers keep running; a phone's resume notices it instead.
@@ -139,7 +140,13 @@ final class AppLockController extends ChangeNotifier
   /// Runs [operation], a keystore read, once unlocked, and drops its
   /// result if the lock engaged meanwhile; throws [AppLockException] when
   /// the app stays locked.
-  Future<T> read<T>(Future<T> Function() operation) => _lock.read(operation);
+  Future<T> read<T>(Future<T> Function() operation) async {
+    try {
+      return await _lock.read(operation);
+    } finally {
+      _check();
+    }
+  }
 
   void onLifecycle(AppLifecycleState state) {
     _lock.onLifecycle(switch (state) {
@@ -200,6 +207,7 @@ final class AppLockController extends ChangeNotifier
   /// Notifies when the lock engaged or released, and runs [_onLocked] when
   /// it engaged.
   void _check() {
+    if (_disposed) return;
     final locked = _lock.requiresAuthentication;
     if (locked == _wasLocked) return;
     _wasLocked = locked;
@@ -209,6 +217,7 @@ final class AppLockController extends ChangeNotifier
 
   @override
   void dispose() {
+    _disposed = true;
     _background?.cancel();
     super.dispose();
   }

@@ -14595,6 +14595,18 @@ abstract class AppLocalizations {
   /// **'A recovery code opens an encrypted export of this device\'s saved passwords and keys, on this device or another one. Klabautermann shows the code once and cannot show it again. Without it, an export cannot be opened, by you or anyone else.'**
   String get recoveryDescription;
 
+  /// Recovery status could not be loaded; no diagnostic data is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check recovery settings. Try again.'**
+  String get recoveryStatusFailed;
+
+  /// Retry reading this device's recovery status.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get recoveryRetry;
+
   /// Settings > Sync > Recovery: the configured state is still loading.
   ///
   /// In en, this message translates to:

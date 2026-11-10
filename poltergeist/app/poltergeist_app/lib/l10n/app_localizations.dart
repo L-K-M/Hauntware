@@ -12409,6 +12409,24 @@ abstract class AppLocalizations {
   /// **'A recovery code opens an encrypted export of this device\'s saved passwords and keys, on this device or another one. Poltergeist shows the code once and cannot show it again. Without it, an export cannot be opened, by you or anyone else.'**
   String get recoveryDescription;
 
+  /// Recovery status could not be loaded; no diagnostic data is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check recovery settings. Try again.'**
+  String get recoveryStatusFailed;
+
+  /// Retry reading this device's recovery status.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get recoveryRetry;
+
+  /// A recovery action failed; no diagnostic data is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'The recovery operation could not be completed. Try again.'**
+  String get recoveryFailed;
+
   /// Settings > Backup > Recovery: the configured state is still loading.
   ///
   /// In en, this message translates to:
@@ -12619,11 +12637,11 @@ abstract class AppLocalizations {
   /// **'Set up…'**
   String get recoveryPromptSetUp;
 
-  /// The enrolment prompt's toast when the decline answer could not be persisted.
+  /// The enrolment prompt's fixed toast when the decline answer could not be persisted.
   ///
   /// In en, this message translates to:
-  /// **'Could not save your answer: {error}'**
-  String recoveryPromptDeclineFailed(String error);
+  /// **'Could not save your answer. Try again.'**
+  String get recoveryPromptDeclineFailed;
 
   /// The enrolment prompt's toast when the configured check failed.
   ///

@@ -8,7 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show VaultRestorePolicy;
+    show VaultRecoveryFailure, VaultRestorePolicy;
 
 import '../../controllers/account_size.dart';
 import '../../controllers/admin_memory.dart';
@@ -319,6 +319,14 @@ final class SettingsWindowHost {
         if (appLock == null) throw StateError('No app lock settings');
         // The device authentication runs here, in the app's window.
         return (await appLock.setEnabled(argument! as bool)).name;
+      case SettingsLinkMethod.refreshRecoveryStatus:
+        try {
+          await _requireRecovery().refresh();
+        } on RecoveryException {
+          rethrow;
+        } on Object {
+          throw const RecoveryException(VaultRecoveryFailure.failed);
+        }
       case SettingsLinkMethod.newRecoveryCode:
         return _requireRecovery().newCode();
       case SettingsLinkMethod.saveRecoveryCode:

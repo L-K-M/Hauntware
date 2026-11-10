@@ -13850,6 +13850,14 @@
   "@recoveryDescription": {
     "description": "Settings > Sync > Recovery: what a recovery code is for."
   },
+  "recoveryStatusFailed": "Could not check recovery settings. Try again.",
+  "@recoveryStatusFailed": {
+    "description": "Recovery status could not be loaded; no diagnostic data is shown."
+  },
+  "recoveryRetry": "Retry",
+  "@recoveryRetry": {
+    "description": "Retry reading this device's recovery status."
+  },
   "recoveryChecking": "Checking…",
   "@recoveryChecking": {
     "description": "Settings > Sync > Recovery: the configured state is still loading."

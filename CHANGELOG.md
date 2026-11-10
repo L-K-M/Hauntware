@@ -37,15 +37,18 @@
 
 ### Added
 
+- Poltergeist has an optional device-authentication lock, off by default.
+  It guards future saved-credential reads, including their asynchronous
+  I/O, without closing existing connections.
 - Poltergeist can back up its saved passwords and keys with a recovery
-  code. Settings → Backup → Recovery shows the code once, keeps it in
-  the device's vault, and writes an encrypted export you can restore on
+  code. Settings → Backup → Recovery shows the code once, keeps its setup
+  in the device's vault, and writes an encrypted export you can restore on
   another device; the export opens only with the code. The export keeps
   Séance's `seance-secrets` wire format, so an export made by either app
   opens in the other. Saving a first credential offers the code once.
 - Klabautermann can back up its saved passwords and keys with a recovery
-  code. Settings → Sync → Recovery shows the code once, keeps it in the
-  device's vault, and writes an encrypted export you can restore on
+  code. Settings → Sync → Recovery shows the code once, keeps its setup in
+  the device's vault, and writes an encrypted export you can restore on
   another device; the export opens only with the code. The export keeps
   Séance's `seance-secrets` wire format, so an export made by either app
   opens in the other.

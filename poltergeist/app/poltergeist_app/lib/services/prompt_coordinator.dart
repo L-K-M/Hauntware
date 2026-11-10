@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:ghost_keystore/app_lock.dart'
+    show AppLockController, AppLockException;
 
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -54,6 +56,10 @@ class PromptCoordinator {
   /// this device has no recovery code. Null leaves the offer unwired.
   final RecoverySettings? recovery;
 
+  /// The app's explicit unlock gate. Pending credential reads wait here,
+  /// rather than treating authentication refusal as a keystore fault.
+  final AppLockController? appLock;
+
   final GlobalKey<NavigatorState> navigatorKey;
 
   /// Notices (vault-save failures) ride the root scaffold messenger.
@@ -65,6 +71,7 @@ class PromptCoordinator {
   StreamSubscription<EnginePromptEvent>? _prompts;
   StreamSubscription<PromptDismissedEvent>? _dismissals;
   bool _disposed = false;
+  Completer<void>? _unlockWait;
 
   PromptCoordinator({
     required this.engine,
@@ -72,6 +79,7 @@ class PromptCoordinator {
     this.vault,
     this.identityReader,
     this.recovery,
+    this.appLock,
     this.scaffoldMessengerKey,
     ApplicationErrorReporter? errorReporter,
   }) : _errorReporter = errorReporter ?? ApplicationErrorReporter();
@@ -88,6 +96,7 @@ class PromptCoordinator {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _releaseUnlockWait();
     unawaited(_prompts?.cancel());
     unawaited(_dismissals?.cancel());
     _closeShowingDialog();
@@ -110,6 +119,7 @@ class PromptCoordinator {
     final showing = _showing;
     if (showing?.event.promptId == event.promptId) {
       showing!.dismissed = true;
+      _releaseUnlockWait();
       _closeShowingDialog();
     }
   }
@@ -277,6 +287,31 @@ class PromptCoordinator {
     _finishShowing();
   }
 
+  void _releaseUnlockWait() {
+    final waiting = _unlockWait;
+    if (waiting != null && !waiting.isCompleted) waiting.complete();
+  }
+
+  Future<void> _waitForUnlock(
+    _PendingPrompt pending,
+    AppLockController lock,
+  ) async {
+    if (_wasDismissed(pending) || !lock.locked) return;
+    final waiting = Completer<void>();
+    _unlockWait = waiting;
+    void check() {
+      if (_wasDismissed(pending) || !lock.locked) _releaseUnlockWait();
+    }
+    lock.addListener(check);
+    check();
+    try {
+      await waiting.future;
+    } finally {
+      lock.removeListener(check);
+      if (identical(_unlockWait, waiting)) _unlockWait = null;
+    }
+  }
+
   Future<void> _showCredential(_PendingPrompt pending) async {
     final data = pending.event.data as CredentialPromptData;
 
@@ -286,8 +321,18 @@ class PromptCoordinator {
     if (data.authMethod != AuthMethod.agent &&
         data.secretRef != null &&
         vault != null) {
+      final lock = appLock;
+      if (lock != null) {
+        await _waitForUnlock(pending, lock);
+        if (_wasDismissed(pending)) {
+          _finishShowing();
+          return;
+        }
+      }
       try {
-        final stored = await _storedCredentials(vault!, data);
+        final stored = await (lock == null
+            ? _storedCredentials(vault!, data)
+            : lock.read(() => _storedCredentials(vault!, data)));
         if (stored != null) {
           if (!_wasDismissed(pending)) {
             _reply(pending, _storedReply(stored));
@@ -295,6 +340,18 @@ class PromptCoordinator {
           _finishShowing();
           return;
         }
+      } on AppLockException {
+        if (lock == null || !lock.locked) {
+          if (!_wasDismissed(pending)) _reply(pending, _cancelledCredentialReply);
+          _finishShowing();
+          return;
+        }
+        await _waitForUnlock(pending, lock);
+        if (_wasDismissed(pending)) {
+          _finishShowing();
+          return;
+        }
+        return _showCredential(pending);
       } on Object {
         // The dialog's banner renders the ported keystore failure through
         // ARB (D20), never the raw exception message.
@@ -372,11 +429,13 @@ class PromptCoordinator {
         FileSystemException('No identity-file reader is wired', path),
       );
     }
-    return reader.read(
+    Future<String> read() => reader.read(
       serverId: data.secretRef ?? data.host,
       serverLabel: '${data.username}@${data.host}',
       identityFilePath: path,
     );
+    final lock = appLock;
+    return lock == null ? read() : lock.read(read);
   }
 
   /// Offers CRED-05's recovery code after the first saved credential, on

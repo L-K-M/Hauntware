@@ -112,6 +112,9 @@ abstract interface class RecoverySettingsModel implements Listenable {
   /// until the first answer.
   bool? get configured;
 
+  /// Refetches the status, reporting a failure rather than an absent code.
+  Future<void> refresh();
+
   /// A new recovery code, formatted, to be shown once. Nothing is stored
   /// until [saveCode].
   Future<String> newCode();

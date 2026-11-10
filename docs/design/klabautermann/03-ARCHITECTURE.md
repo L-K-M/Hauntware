@@ -6622,7 +6622,10 @@ key. The app's `RecoveryController` correlates every request by
 `requestId`, bounds each wait, and reports the fixed
 `VaultRecoveryFailure` kinds; the settings window carries only the
 configured flag in its snapshot, and the export keeps the
-`seance-secrets` wire format.
+`seance-secrets` wire format. Explicit status refreshes surface a fixed
+failure and retry path rather than treating an unsuccessful read as no
+code. Desktop export uses a path-only save panel and one shared atomic
+owner-only write; the mobile document provider owns its save.
 
 The `LinkState`, `Subscribe` and `Sample` rows carry what D43 to D46
 decide, in their version 3 shapes (below).

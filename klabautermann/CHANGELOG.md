@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Android's device-authentication host uses AppCompat launch and normal
+  themes in light and dark modes, matching Séance's required setup for
+  the biometric fallback on supported older Android versions.
 - Activity shows the commands an action ran in the code font, as the
   preview before it runs does.
 - On the desktop, drag the edge of the fleet rail or the inspector, or
@@ -323,7 +326,7 @@
 - Copy the commands an action runs, run Séance's synced snippets on a
   server, and export a redacted diagnostic bundle.
 - Settings → Sync → Recovery: a recovery code for this device's saved
-  passwords and keys, shown once and kept in the vault; an encrypted
-  export you can restore on this or another device, with a keep-or-replace
+  passwords and keys, shown once with its setup kept in the vault; an
+  encrypted export you can restore on this or another device, with a keep-or-replace
   choice for credentials already here. The export keeps Séance's
   `seance-secrets` wire format, so exports restore across the apps.

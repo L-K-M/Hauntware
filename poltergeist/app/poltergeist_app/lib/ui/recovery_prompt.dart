@@ -61,12 +61,9 @@ Future<void> offerRecoveryCode(
   if (!setUp) {
     try {
       await recovery.declinePrompt();
-    } on Object catch (error) {
+    } on Object {
       if (context.mounted) {
-        showTopToastIn(
-          context,
-          message: l10n.recoveryPromptDeclineFailed('$error'),
-        );
+        showTopToastIn(context, message: l10n.recoveryPromptDeclineFailed);
       }
     }
     return;

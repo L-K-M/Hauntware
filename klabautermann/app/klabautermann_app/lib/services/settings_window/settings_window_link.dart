@@ -141,6 +141,7 @@ enum SettingsLinkMethod {
   /// shown once and kept in the app's vault; the export file is read and
   /// written in the app's isolate, where the file panels and the vault
   /// key live. The snapshot carries only the configured flag.
+  refreshRecoveryStatus,
   newRecoveryCode,
   saveRecoveryCode,
   exportSecrets,

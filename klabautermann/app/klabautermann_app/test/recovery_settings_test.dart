@@ -27,9 +27,20 @@ final class _FakeRecovery extends ChangeNotifier implements RecoverySettings {
   SecretsRestoreSummary? summary;
   Object? exportError;
   Object? restoreError;
+  Object? statusError;
+  int refreshes = 0;
   String? savedCode;
   String? restoredCode;
   VaultRestorePolicy? restoredPolicy;
+
+  @override
+  Future<void> refresh() async {
+    refreshes++;
+    final error = statusError;
+    if (error != null) throw error;
+    configured ??= false;
+    notifyListeners();
+  }
 
   @override
   Future<String> newCode() async => code;
@@ -74,6 +85,34 @@ void main() {
     await tester.pumpWidget(wrap(RecoverySection(model: recovery)));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('a failed status check is visible and retryable', (tester) async {
+    final recovery = _FakeRecovery()
+      ..statusError = StateError('untrusted diagnostic');
+    await pumpSection(tester, recovery);
+
+    expect(find.byKey(const ValueKey('recovery.status.retry')), findsOneWidget);
+    expect(find.text(l10n.recoveryChecking), findsNothing);
+    expect(find.textContaining('untrusted diagnostic'), findsNothing);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('recovery.setUp')))
+          .onPressed,
+      isNull,
+    );
+
+    recovery.statusError = null;
+    await tester.tap(find.byKey(const ValueKey('recovery.status.retry')));
+    await tester.pumpAndSettle();
+    expect(recovery.refreshes, 2);
+    expect(find.text(l10n.recoveryNotConfigured), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('recovery.setUp')))
+          .onPressed,
+      isNotNull,
+    );
+  });
 
   testWidgets('shows the status and the three actions', (tester) async {
     final recovery = _FakeRecovery(configured: false);

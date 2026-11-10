@@ -20,6 +20,7 @@ import '../bookmark_backup_service.dart'
 import '../double_click_action.dart';
 import '../editor_font.dart';
 import '../external_file_opener.dart';
+import '../secrets_recovery.dart' show RecoveryStatusException;
 import '../settings_models.dart';
 import '../sync_account_gate.dart';
 import 'settings_window_link.dart';
@@ -598,6 +599,15 @@ final class RemoteRecovery extends ChangeNotifier
 
   @override
   bool? get configured => _configured;
+
+  @override
+  Future<void> refresh() async {
+    try {
+      await _link.call(SettingsLinkMethod.refreshRecoveryStatus);
+    } on Object {
+      throw const RecoveryStatusException();
+    }
+  }
 
   @override
   Future<String> newCode() async =>
