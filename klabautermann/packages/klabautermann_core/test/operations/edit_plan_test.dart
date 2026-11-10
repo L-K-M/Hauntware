@@ -148,6 +148,25 @@ void main() {
       expect(await failure('var/relative'), EditReadFailure.invalidTarget);
     });
 
+    test(
+      'a symlink is refused rather than read as the file it names',
+      () async {
+        host.files['/etc/resolv.conf'] = (
+          uid: 0,
+          mode: '644',
+          text: 'nameserver 127.0.0.53\n',
+          rootOnly: false,
+        );
+        host.symlinks.add('/etc/resolv.conf');
+
+        final read = await readEditable(
+          const FileTarget('/etc/resolv.conf'),
+          context(),
+        );
+        expect((read as EditReadFailed).failure, EditReadFailure.symlink);
+      },
+    );
+
     test('an absent crontab reads as empty; another account\'s needs admin '
         'mode', () async {
       final own = await readEditable(const CrontabTarget(), context());
@@ -231,6 +250,7 @@ void main() {
       });
       expect((p.steps.last as ShellStep).exitMeanings, {
         EditExit.hashMismatch: RevalidationFailure.contentChanged,
+        EditExit.symlink: RevalidationFailure.contentChanged,
       });
       expect(p.cleanup.map((s) => s.argv), [EditCommands.removeTemp(temp)]);
       expect(p.steps.every((s) => !(s as ShellStep).elevated), isTrue);
@@ -463,6 +483,70 @@ void main() {
         isNot(contains('systemd-analyze')),
       );
       expect(p.warnings, isEmpty);
+    });
+
+    test("root's file in a directory another account can change is "
+        'refused; one reached through a symlinked directory is written '
+        'where it is', () async {
+      adminOn();
+      host.files['/srv/www/.htaccess'] = (
+        uid: 0,
+        mode: '644',
+        text: 'a\n',
+        rootOnly: false,
+      );
+      host.openDirectories.add('/srv/www');
+      expect(
+        (await plan(
+          const FileTarget('/srv/www/.htaccess'),
+          'b\n',
+          _sha('a\n'),
+        )).refusal,
+        ActionRefusalReason.userWritableDirectory,
+      );
+      expect(
+        host.commands.where((c) => c.contains('klabautermann-directory')),
+        everyElement(contains(' elevate ')),
+      );
+
+      // Debian 12's /lib is a link to /usr/lib: the steps name the file
+      // under the resolved directory, so none passes through a link.
+      const path = '/lib/systemd/system/app.service';
+      const real = '/usr/lib/systemd/system/app.service';
+      host.files[path] = (uid: 0, mode: '644', text: 'a\n', rootOnly: false);
+      host.physicalDirectories['/lib/systemd/system'] =
+          '/usr/lib/systemd/system';
+      final p = (await plan(const FileTarget(path), 'b\n', _sha('a\n'))).plan!;
+      final temp = tempOf(p);
+      expect(temp, startsWith('/usr/lib/systemd/system/.app.service'));
+      expect(p.targetName, real);
+      expect(argvs(p), [
+        EditCommands.backupFile(real, kRootBackupsDir),
+        EditCommands.manifestWrite(kRootManifestPath, _sha('')),
+        EditCommands.writeTemp(temp),
+        EditCommands.copyAttributes(real, temp),
+        EditCommands.replaceIfHash(real, temp, _sha('a\n')),
+      ]);
+      expect(p.cleanup.single.argv, EditCommands.removeTemp(temp));
+      expect((p.steps.last as ShellStep).exitMeanings, {
+        EditExit.hashMismatch: RevalidationFailure.contentChanged,
+        EditExit.symlink: RevalidationFailure.contentChanged,
+      });
+
+      // The login user's own file keeps its path: the check is root's.
+      host.files['/home/deploy/a'] = (
+        uid: 1000,
+        mode: '644',
+        text: 'a\n',
+        rootOnly: false,
+      );
+      host.openDirectories.add('/home/deploy');
+      final own = (await plan(
+        const FileTarget('/home/deploy/a'),
+        'b\n',
+        _sha('a\n'),
+      )).plan!;
+      expect(own.targetName, '/home/deploy/a');
     });
 
     test('a target that changed since the read, a bad path and a file only '

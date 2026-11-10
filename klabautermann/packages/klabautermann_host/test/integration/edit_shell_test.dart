@@ -161,6 +161,75 @@ void main() {
         expect(File(temp).existsSync(), isFalse);
       });
 
+      test('a symlinked target is refused by the read and never replaced '
+          'by the swap', () async {
+        // The link names a file elsewhere: a read would describe the link
+        // and print the file, and the rename would replace the link with
+        // a detached copy while the file stays as it was.
+        final real = '${dir.path}/real.conf';
+        File(real).writeAsStringSync('real\n');
+        final link = '${dir.path}/link.conf';
+        Link(link).createSync('real.conf');
+        final linkTemp = EditCommands.tempPathFor(link, _tempId);
+
+        final read = await run(EditCommands.readFile(link));
+        expect(read.exitCode, EditExit.symlink, reason: '${read.stderr}');
+        expect(read.stdout, '');
+
+        final hash = _sha256Of(real);
+        await run(EditCommands.writeTemp(linkTemp), stdin: 'edited\n');
+        final swap = await run(
+          EditCommands.replaceIfHash(link, linkTemp, hash),
+        );
+        expect(swap.exitCode, EditExit.symlink);
+        expect(FileSystemEntity.isLinkSync(link), isTrue);
+        expect(File(real).readAsStringSync(), 'real\n');
+        expect(File(linkTemp).existsSync(), isFalse);
+      });
+
+      test('the root-only check resolves the directory and refuses one '
+          'another account could write', () async {
+        final safe = await run(
+          EditCommands.rootOnlyDirectory('/etc/klabautermann-none.conf'),
+        );
+        expect(safe.exitCode, 0, reason: '${safe.stderr}');
+        expect(safe.stdout, '/etc\n');
+
+        // The scratch directory is under the sticky, world-writable /tmp.
+        final open = await run(EditCommands.rootOnlyDirectory(target));
+        expect(open.exitCode, EditExit.userWritableDirectory);
+
+        // A link to a root-only directory resolves to it: the steps then
+        // write there, never through the link.
+        Link('${dir.path}/etc').createSync('/etc');
+        final linked = await run(
+          EditCommands.rootOnlyDirectory('${dir.path}/etc/app.conf'),
+        );
+        expect(linked.exitCode, 0, reason: '${linked.stderr}');
+        expect(linked.stdout, '/etc\n');
+
+        // Owners and modes the scratch host cannot make, through `stat`.
+        for (final (owner, verdict) in [
+          ('1000 755', EditExit.userWritableDirectory),
+          ('0 775', EditExit.userWritableDirectory),
+          ('0 757', EditExit.userWritableDirectory),
+          ('0 1777', EditExit.userWritableDirectory),
+          ('0 7', EditExit.userWritableDirectory),
+          ('0 2755', 0),
+          ('0 750', 0),
+        ]) {
+          shim(
+            'stat',
+            'case \$4 in /etc) echo "$owner" ;; '
+                '*) exec /usr/bin/stat "\$@" ;; esac',
+          );
+          final checked = await run(
+            EditCommands.rootOnlyDirectory('/etc/app.conf'),
+          );
+          expect(checked.exitCode, verdict, reason: owner);
+        }
+      });
+
       test('a changed target is never replaced, and the temp goes', () async {
         final hash = _sha256Of(target);
         await run(EditCommands.writeTemp(temp), stdin: 'edited\n');

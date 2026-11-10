@@ -5858,6 +5858,8 @@ class AppLocalizationsEn extends AppLocalizations {
           'Only the legacy docker-compose is installed, which Klabautermann does not run.',
       'sudoRightMissing':
           'This needs root, and your sudo rule allows only docker.',
+      'userWritableDirectory':
+          'Another account can change this folder, so Klabautermann does not write there as root.',
       'other': 'The action was refused.',
     });
     return '$_temp0';
@@ -9006,6 +9008,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'notText': 'This file is not text.',
       'stackUnverified':
           'This stack\'s files are not its verified source, so Klabautermann does not edit them.',
+      'symlink':
+          'This path is a symbolic link. Open the file it points to instead.',
       'failed': 'The file could not be read.',
       'other': 'The file could not be read.',
     });

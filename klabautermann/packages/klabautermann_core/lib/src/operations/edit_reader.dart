@@ -9,6 +9,7 @@ import 'package:crypto/crypto.dart' show sha256;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         EditCommands,
+        EditExit,
         HostCommandError,
         HostCommands,
         HostProfile,
@@ -65,6 +66,9 @@ Future<EditReadResult> _readFile(String path, EditContext c) async {
   final result = await _runMaybeElevated(argv, c);
   if (result == null) {
     return const EditReadFailed(EditReadFailure.adminRequired);
+  }
+  if (result.exitCode == EditExit.symlink) {
+    return const EditReadFailed(EditReadFailure.symlink);
   }
   if (result.exitCode != 0) {
     return EditReadFailed(

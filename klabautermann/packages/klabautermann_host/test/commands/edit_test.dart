@@ -262,8 +262,18 @@ void main() {
   test('the scripts exit with the EditExit codes', () {
     expect(
       EditCommands.replaceIfHash(_target, _temp, _hash)[2],
-      allOf(contains('exit ${EditExit.hashMismatch};')),
+      allOf(
+        contains('exit ${EditExit.hashMismatch};'),
+        contains('exit ${EditExit.symlink};'),
+      ),
     );
+    expect(
+      EditCommands.readFile(_target)[2],
+      contains('exit ${EditExit.symlink}\n'),
+    );
+    final directory = EditCommands.rootOnlyDirectory(_target)[2];
+    expect(directory, contains('exit ${EditExit.userWritableDirectory}\n'));
+    expect(directory, contains('exit ${EditExit.userWritableDirectory} ;'));
     final attributes = EditCommands.copyAttributes(_target, _temp)[2];
     expect(attributes, contains('exit ${EditExit.aclNotCarried}\n'));
     expect(attributes, contains('exit ${EditExit.xattrNotCarried}\n'));

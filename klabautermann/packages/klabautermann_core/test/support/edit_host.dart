@@ -6,6 +6,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart' show sha256;
+import 'package:klabautermann_host/klabautermann_host.dart' show EditExit;
 import 'package:seance_core/seance_core.dart' show RemoteCommandResult;
 
 import 'scripted_link.dart';
@@ -33,6 +34,16 @@ final class EditHost extends TestLinkBase {
   /// Directories the presence check sees.
   final directories = <String>{};
 
+  /// Paths the read script finds to be symlinks.
+  final symlinks = <String>{};
+
+  /// What the root-only directory check resolves a directory to; one not
+  /// named here resolves to itself.
+  final physicalDirectories = <String, String>{};
+
+  /// Resolved directories an account other than root can change.
+  final openDirectories = <String>{};
+
   final commands = <String>[];
   bool enforcing = false;
 
@@ -58,7 +69,21 @@ final class EditHost extends TestLinkBase {
       );
     }
     if (command.contains('klabautermann-read')) {
+      if (symlinks.any(names)) {
+        return const RemoteCommandResult(exitCode: EditExit.symlink);
+      }
       return _read(files.keys.where(names).firstOrNull, elevated);
+    }
+    if (command.contains('klabautermann-directory')) {
+      final path = files.keys.where(names).first;
+      final directory = path.substring(0, path.lastIndexOf('/'));
+      final physical = physicalDirectories[directory] ?? directory;
+      return RemoteCommandResult(
+        exitCode: openDirectories.contains(physical)
+            ? EditExit.userWritableDirectory
+            : 0,
+        stdout: '$physical\n',
+      );
     }
     if (command.contains("'crontab' '-l'")) return _crontab(command);
     if (command.contains('XDG_CONFIG_HOME')) return _ok('$kHostUserManifest\n');

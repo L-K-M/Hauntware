@@ -2775,6 +2775,11 @@ enum EditReadFailure {
   /// A [StackFileTarget]'s project is not a verified source (STK-07).
   stackUnverified,
 
+  /// The path is a symbolic link. A write through it would replace the
+  /// link with a copy and leave the file it names unchanged, so the user
+  /// opens that file instead.
+  symlink,
+
   /// The read failed otherwise.
   failed,
 }
@@ -3057,6 +3062,11 @@ enum ActionRefusalReason {
   /// sudo reaches only `docker`, which cannot start a root runner (03
   /// §7.17).
   sudoRightMissing,
+
+  /// Root would write into a directory that an account other than root
+  /// can change, where a swapped symlink could redirect its writes (03
+  /// §7.17, §9).
+  userWritableDirectory,
 }
 
 /// Why [UserCrontabs] read no crontab.

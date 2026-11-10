@@ -14,6 +14,10 @@
 ///     ─▶ copyAttributes ─▶ replaceIfHash ─▶ restorecon (SELinux enforcing)
 ///   any failure after writeTemp ─▶ removeTemp
 /// ```
+///
+/// A root-run write first passes [EditCommands.rootOnlyDirectory] and
+/// then names the target under the directory it prints. No write goes
+/// through a symlinked target ([EditExit.symlink]).
 library;
 
 import '../hws/collector.dart' show ArgValidators;
@@ -111,6 +115,17 @@ abstract final class EditExit {
   /// [EditCommands.sha256List]: a path exists but `sha256sum` could not
   /// read it, so the list is incomplete.
   static const int unreadable = 104;
+
+  /// [EditCommands.readFile] and [EditCommands.replaceIfHash]: the target
+  /// is a symbolic link. Writing through it would replace the link with
+  /// a detached copy and leave the file it names as it was, so the edit
+  /// names that file instead.
+  static const int symlink = 105;
+
+  /// [EditCommands.rootOnlyDirectory]: an account other than root could
+  /// change the directory's entries, so root must not write there (03
+  /// §7.17, §9's threat table).
+  static const int userWritableDirectory = 106;
 }
 
 /// What [EditCommands.readFile]'s first line says of the file: its
@@ -161,8 +176,11 @@ final _unitName = RegExp(r'^[A-Za-z0-9_.@\\-]+$');
 /// Prints `<size> <uid> <gid> <mode> <sha256>` and then, when the size is
 /// at most the cap, the content. The hash is of the file as `sha256sum` read it; the
 /// engine checks it against the bytes `cat` printed, which a concurrent
-/// write may have changed between the two reads.
+/// write may have changed between the two reads. A symlink exits
+/// [EditExit.symlink]: `stat` would describe the link while `cat` printed
+/// the file it names.
 const String _kReadScript = r'''
+[ ! -L "$1" ] || exit 105
 i=$(stat -c '%s %u %g %a' -- "$1") || exit
 h=$(sha256sum -- "$1") || exit
 printf '%s %s\n' "$i" "${h%% *}"
@@ -195,10 +213,32 @@ fi
 o=$(stat -c %u:%g -- "$t") && m=$(stat -c %a -- "$t") || exit
 chown -- "$o" "$tmp" && chmod -- "$m" "$tmp"''';
 
+/// Prints the target's directory with every symlink resolved, then exits
+/// 0 when it and each directory above it is owned by root and writable by
+/// no group or other account, or [EditExit.userWritableDirectory]. `%a`
+/// prints no leading zeros, so the group digit may be absent; a sticky
+/// directory such as `/tmp` is other-writable and refused too. Matching
+/// the mode as text keeps octal arithmetic, which mksh reads as decimal,
+/// out of it.
+const String _kRootOnlyDirectoryScript = r'''
+d=${1%/*}
+d=$(cd -P "${d:-/}" && pwd -P) || exit
+printf '%s\n' "$d"
+while :; do
+  i=$(stat -c '%u %a' -- "$d") || exit
+  [ "${i%% *}" = 0 ] || exit 106
+  case ${i#* } in *[2367]|*[2367]?) exit 106 ;; esac
+  [ "$d" != / ] || exit 0
+  d=${d%/*}
+  d=${d:-/}
+done''';
+
 /// Re-checks the target's hash right before the rename (03 §8.5's
 /// compare-and-swap); a mismatch exits [EditExit.hashMismatch], and it or
-/// a failed rename removes the temp.
+/// a failed rename removes the temp. A target that has become a symlink
+/// exits [EditExit.symlink], since the rename would replace the link.
 const String _kReplaceIfHashScript = r'''
+if [ -L "$1" ]; then rm -f -- "$2"; exit 105; fi
 h=$(sha256sum -- "$1") || { s=$?; rm -f -- "$2"; exit "$s"; }
 if [ "${h%% *}" != "$3" ]; then rm -f -- "$2"; exit 101; fi
 mv -f -- "$2" "$1" || { s=$?; rm -f -- "$2"; exit "$s"; }''';
@@ -303,7 +343,8 @@ abstract final class EditCommands {
 
   /// `<size> <uid> <gid> <mode> <sha256>` of [path], then its content
   /// when it is at most [cap] bytes (03 §8.5); [parseReadHeader] reads
-  /// the first line.
+  /// the first line. A symlink exits [EditExit.symlink] and prints
+  /// nothing.
   static List<String> readFile(String path, {int cap = kEditReadMaxBytes}) {
     _checkPath(path);
     if (cap < 0) throw HostCommandError('negative cap', argument: '$cap');
@@ -334,8 +375,9 @@ abstract final class EditCommands {
   }
 
   /// Renames [temp] over [target] while [target]'s hash is still
-  /// [sha256]; otherwise exits [EditExit.hashMismatch]. A mismatch or a
-  /// failed rename removes [temp].
+  /// [sha256] and it is no symlink; otherwise exits
+  /// [EditExit.hashMismatch] or [EditExit.symlink]. Either, or a failed
+  /// rename, removes [temp].
   static List<String> replaceIfHash(String target, String temp, String sha256) {
     _checkPair(target, temp);
     if (!_sha256.hasMatch(sha256)) {
@@ -385,6 +427,23 @@ abstract final class EditCommands {
   static List<String> restorecon(String path) {
     _checkPath(path);
     return ['restorecon', '--', path];
+  }
+
+  /// The directory a privileged write of [path] goes into, with its
+  /// symlinks resolved, and whether only root can change it (03 §7.17):
+  /// exits 0 when it and every directory above it are root's alone, else
+  /// [EditExit.userWritableDirectory]. A root-run step in a directory
+  /// another account can write could have its temp file swapped for a
+  /// symlink between steps, redirecting root's writes.
+  static List<String> rootOnlyDirectory(String path) {
+    _checkPath(path);
+    return [
+      'sh',
+      '-c',
+      _kRootOnlyDirectoryScript,
+      'klabautermann-directory',
+      path,
+    ];
   }
 
   /// Removes [temp] after a failed write.

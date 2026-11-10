@@ -47,6 +47,13 @@ const _contentChanged = {
   EditExit.hashMismatch: RevalidationFailure.contentChanged,
 };
 
+/// The swap's exits that mean the target changed under the edit: its
+/// content, or a symlink in its place.
+const _targetChanged = {
+  ..._contentChanged,
+  EditExit.symlink: RevalidationFailure.contentChanged,
+};
+
 /// Plans [intent], or says why it cannot be planned. [random] draws the
 /// temp file's token; tests pass a seeded one. A [StackFileTarget] is
 /// looked up through [stacks], as its read was.
@@ -133,8 +140,7 @@ Future<PlanAttempt> _planFile(
 }) async {
   // Validates the path before anything reads it.
   final token = _token(random);
-  final temp = EditCommands.tempPathFor(path, token);
-  final checkArgv = check?.call(temp);
+  EditCommands.tempPathFor(path, token);
 
   final current = await readEditable(FileTarget(path), c);
   if (current is! EditContent || current.sha256 != intent.baseSha256) {
@@ -146,6 +152,17 @@ Future<PlanAttempt> _planFile(
   if (privileged && c.admin == null) {
     return _refused(ActionRefusalReason.adminRequired);
   }
+  // Root writes only where root alone can change the directory's entries
+  // (03 §7.17), and names the file there, so no step passes through a
+  // symlink that could be swapped between steps.
+  var target = path;
+  if (privileged) {
+    final (:resolved, :refusal) = await _rootOnlyPath(path, c);
+    if (resolved == null) return _refused(refusal);
+    target = resolved;
+  }
+  final temp = EditCommands.tempPathFor(target, token);
+  final checkArgv = check?.call(temp);
 
   final backups = privileged ? kRootBackupsDir : await _userBackupsDir(c);
   if (backups == null) return _refused(ActionRefusalReason.noLink);
@@ -155,7 +172,7 @@ Future<PlanAttempt> _planFile(
   // A unit file is checked as its unit before the rename where the
   // host's systemd can load the temp under the unit's name; elsewhere the
   // preview says it is not.
-  final unit = unitFileName(path);
+  final unit = unitFileName(target);
   final verifyUnit =
       unit != null &&
       !temp.contains(':') &&
@@ -166,29 +183,29 @@ Future<PlanAttempt> _planFile(
         argv,
         elevated: privileged,
         input: input,
-        exitMeanings: cas ? _contentChanged : const {},
+        exitMeanings: cas ? _targetChanged : const {},
       );
 
   return _planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.editFile,
-      targetName: path,
+      targetName: target,
       steps: [
-        step(EditCommands.backupFile(path, backups)),
+        step(EditCommands.backupFile(target, backups)),
         if (manifest case _ManifestWrite(:final step)) step,
         step(EditCommands.writeTemp(temp), input: utf8.encode(intent.text)),
-        if (_isSudoers(path)) step(['visudo', '-c', '-f', temp]),
+        if (_isSudoers(target)) step(['visudo', '-c', '-f', temp]),
         if (verifyUnit) step(EditCommands.verifyUnit(temp, unit)),
-        step(EditCommands.copyAttributes(path, temp)),
+        step(EditCommands.copyAttributes(target, temp)),
         // Status only: compose's errors can quote interpolated values.
         if (checkArgv != null)
           ShellStep(checkArgv, elevated: privileged, discardOutput: true),
         step(
-          EditCommands.replaceIfHash(path, temp, intent.baseSha256),
+          EditCommands.replaceIfHash(target, temp, intent.baseSha256),
           cas: true,
         ),
-        if (relabel) step(EditCommands.restorecon(path)),
+        if (relabel) step(EditCommands.restorecon(target)),
       ],
       cleanup: [step(EditCommands.removeTemp(temp))],
       requiredLevel: privileged ? RequiredLevel.admin : RequiredLevel.login,
@@ -200,7 +217,9 @@ Future<PlanAttempt> _planFile(
         if (manifest is _ManifestWrite) HostWriteRow.footprintManifest,
         HostWriteRow.loginRecords,
       ],
-      protected: isProtectedEditPath(path) ? ProtectedReason.builtIn : null,
+      protected: isProtectedEditPath(path) || isProtectedEditPath(target)
+          ? ProtectedReason.builtIn
+          : null,
       warnings: [if (unit != null && !verifyUnit) PlanWarning.unitNotVerified],
     ),
   );
@@ -269,7 +288,9 @@ PlanAttempt _readRefusal(EditReadResult current) => _refused(switch (current) {
     EditReadFailure.invalidTarget ||
     EditReadFailure.tooLarge ||
     EditReadFailure.notText => ActionRefusalReason.invalidTarget,
-    EditReadFailure.notFound => ActionRefusalReason.targetChanged,
+    // The editor read a file there; none, or a link, is a changed target.
+    EditReadFailure.notFound ||
+    EditReadFailure.symlink => ActionRefusalReason.targetChanged,
     EditReadFailure.stackUnverified => ActionRefusalReason.stackUnverified,
   },
 });
@@ -352,6 +373,36 @@ Future<_Manifest> _manifestStep(
       input: utf8.encode(encodeFootprintManifest(rows)),
       exitMeanings: _contentChanged,
     ),
+  );
+}
+
+/// [path] under its directory with every symlink resolved, when only
+/// root can change that directory or any above it; otherwise why a root
+/// edit there is refused ([refusal] means nothing once [resolved] is
+/// set). The check runs as root, which can search any directory.
+Future<({String? resolved, ActionRefusalReason refusal})> _rootOnlyPath(
+  String path,
+  EditContext c,
+) async {
+  final admin = c.admin!;
+  final result = await admin.executor.run(
+    EditCommands.rootOnlyDirectory(path),
+    password: admin.password,
+  );
+  if (result.exitCode == EditExit.userWritableDirectory) {
+    return (resolved: null, refusal: ActionRefusalReason.userWritableDirectory);
+  }
+  final directory = result.stdout.endsWith('\n')
+      ? result.stdout.substring(0, result.stdout.length - 1)
+      : '';
+  if (result.exitCode != 0 || !directory.startsWith('/')) {
+    return (resolved: null, refusal: ActionRefusalReason.noLink);
+  }
+  final name = path.substring(path.lastIndexOf('/') + 1);
+  // The caller's tempPathFor validates the result as a path.
+  return (
+    resolved: directory == '/' ? '/$name' : '$directory/$name',
+    refusal: ActionRefusalReason.noLink,
   );
 }
 
