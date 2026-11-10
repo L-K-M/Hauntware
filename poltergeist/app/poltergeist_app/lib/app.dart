@@ -3,6 +3,9 @@ import 'dart:async' show FutureOr;
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:ghost_keystore/app_lock.dart' show AppLockController;
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostAppLockGate, GhostAppLockStrings;
 import 'package:poltergeist_core/poltergeist_core.dart'
     show
         BookmarkStore,
@@ -56,6 +59,7 @@ import 'services/workspace_windows/workspace_windows.dart';
 import 'theme/app_appearance.dart';
 import 'theme/app_theme.dart';
 import 'ui/adaptive_shell.dart';
+import 'ui/app_lock_gate.dart';
 import 'ui/inspector/inspector_view.dart' show inspectorDefaultWidth;
 import 'ui/server_editor.dart' show ServerEditorDelegate;
 import 'ui/shell/macos_toolbar_band.dart';
@@ -124,6 +128,7 @@ class PoltergeistApp extends StatefulWidget {
     this.syncTasks,
     this.updateCheck,
     this.appVersion,
+    this.appLock,
     this.settingsWindow,
     this.toolbarBand,
     this.window,
@@ -344,6 +349,10 @@ class PoltergeistApp extends StatefulWidget {
   /// link's snapshot. Null where the platform cannot tell.
   final String? appVersion;
 
+  /// The app lock (cred-05): its gate covers the app while locked, and
+  /// its switch sits in Settings → General. Null leaves both unwired.
+  final AppLockController? appLock;
+
   /// The desktop Settings window (see [WorkspaceShell.settingsWindow]).
   final SettingsWindowHost? settingsWindow;
 
@@ -505,8 +514,23 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       builder: (context, child) {
         final reserved = ReserveMacosToolbarBand(child: child!);
         final band = widget.toolbarBand;
-        if (band == null) return reserved;
-        return MacosToolbarBandScope(band: band, child: reserved);
+        final withBand = band == null
+            ? reserved
+            : MacosToolbarBandScope(band: band, child: reserved);
+        final appLock = widget.appLock;
+        if (appLock == null) return withBand;
+        final l10n = AppLocalizations.of(context);
+        return GhostAppLockGate(
+          model: AppLockGateModel(appLock),
+          strings: GhostAppLockStrings(
+            title: l10n.appLockTitle,
+            detail: l10n.appLockDetail,
+            unlock: l10n.appLockUnlock,
+            failed: l10n.appLockFailed,
+            unavailable: l10n.appLockUnavailable,
+          ),
+          child: withBand,
+        );
       },
       // ...except the shell, which draws under the transparent titlebar
       // (the full-size content view), passes its header controls
@@ -582,6 +606,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       syncTasks: widget.syncTasks,
       updateCheck: widget.updateCheck,
       appVersion: widget.appVersion,
+      appLock: widget.appLock,
       settingsWindow: widget.settingsWindow,
       window: widget.window,
       probeOwner: widget.probeOwner,

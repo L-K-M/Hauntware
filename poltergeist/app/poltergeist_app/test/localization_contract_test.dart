@@ -225,6 +225,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'preview.largeDownloadThresholdBytes'",
     // The D19 update-check opt-out (02 §5) — a settings.json key.
     "'updates.checkEnabled'",
+    // The app lock switch (cred-05) — a settings.json key.
+    "'poltergeist.appLock'",
     // The device theme and its mode (Device themes): settings.json keys.
     "'theme.palette'",
     "'theme.mode'",
@@ -490,10 +492,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // What the failed call printed, carried to the window verbatim, as
     // the dialog shows it.
     r"'$error'",
+    // The locked app's refusal as the link carries it; the window covers
+    // itself rather than rendering this.
+    "'The app is locked'",
   },
   'lib/services/settings_window/settings_window_host.dart': {
     r"'No Settings window method $name'",
     "'This section is not available.'",
+    // A window could only have shown the switch if the app had it.
+    "'No app lock settings'",
   },
   'lib/services/settings_window/remote_settings.dart': {
     "'Settings link closed'",
@@ -2533,6 +2540,18 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The drag image's ellipsis glyph: typography, not copy.
   'lib/ui/panes/drag_out_image.dart': {"'\u2026'"},
+  // The app lock's device-authentication diagnostics (cred-05): they
+  // reach no rendered surface, whose screens word failures from
+  // AppLockAvailability alone.
+  'lib/services/device_authenticator.dart': {
+    "'device authentication is unavailable'",
+    r"'device authentication failed: ${error.code}'",
+    "'device authentication was rejected'",
+  },
+  // The app lock switch's failed-change toast interpolates the caught
+  // error for the debug log — never rendered as authored copy. The empty
+  // reason and the note's line join are formatting, not copy.
+  'lib/ui/settings/app_lock_settings.dart': {r"'$error'", "''", r"'\n'"},
 };
 
 const _config = L10nContractConfig(

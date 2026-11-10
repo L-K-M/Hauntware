@@ -15,6 +15,7 @@ import 'theme/app_appearance.dart';
 import 'theme/app_theme.dart';
 import 'ui/selected_tab_view.dart';
 import 'ui/settings/appearance_settings.dart';
+import 'ui/settings/app_lock_settings.dart';
 import 'ui/settings/backup_settings.dart';
 import 'ui/settings/directory_grouping_settings.dart';
 import 'ui/settings/double_click_action_settings.dart';
@@ -81,10 +82,12 @@ class _SettingsWindowAppState extends State<SettingsWindowApp> {
     // themes: the screen showing is the one an edit came from, and it keeps
     // its state through the change.
     final home = ListenableBuilder(
-      listenable: Listenable.merge([remote, remote.page]),
+      listenable: Listenable.merge([remote, remote.page, remote.appLock]),
       builder: (context, _) {
         final page = remote.page.value;
         if (remote.lost) return const _Message(unreachable: true);
+        // A locked app's settings stay behind its lock screen (cred-05).
+        if (remote.appLock.locked) return const _Locked();
         return page == null
             // Hidden: no screen, so nothing typed into it outlives the
             // window being closed.
@@ -228,8 +231,9 @@ class _SettingsWindowScreenState extends State<SettingsWindowScreen>
         final directoryGrouping = remote.directoryGrouping;
         children = [
           if (general != null) GeneralSection(settings: general),
-          if (general != null && directoryGrouping != null)
-            const SizedBox(height: 16),
+          if (general != null) const SizedBox(height: 16),
+          AppLockSection(lock: remote.appLock),
+          if (directoryGrouping != null) const SizedBox(height: 16),
           if (directoryGrouping != null)
             DirectoryGroupingSection(model: directoryGrouping),
         ];
@@ -277,6 +281,37 @@ class _SettingsWindowScreenState extends State<SettingsWindowScreen>
           key: PageStorageKey(tab),
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
           children: children,
+        ),
+      ),
+    );
+  }
+}
+
+/// What the window shows while the app is locked: its settings wait for
+/// the unlock in the app's own window.
+class _Locked extends StatelessWidget {
+  const _Locked();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            spacing: 12,
+            children: [
+              const Icon(Icons.lock_outline, size: 48),
+              Text(
+                l10n.appLockTitle,
+                style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center,
+              ),
+              Text(l10n.settingsWindowLocked, textAlign: TextAlign.center),
+            ],
+          ),
         ),
       ),
     );

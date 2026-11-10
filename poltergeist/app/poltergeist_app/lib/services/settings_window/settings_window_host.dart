@@ -6,6 +6,7 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
+import 'package:ghost_keystore/app_lock.dart' show AppLockSettings;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../ui/settings/general_settings.dart';
@@ -32,6 +33,7 @@ final class SettingsWindowSources {
     this.editorFont,
     this.directoryGrouping,
     this.doubleClickAction,
+    this.appLock,
     this.changes = const [],
   });
 
@@ -66,6 +68,10 @@ final class SettingsWindowSources {
 
   /// What opening a file does: the Editing tab's first row.
   final DoubleClickActionModel? doubleClickAction;
+
+  /// The app lock behind Settings → General, read afresh at each use.
+  /// Null leaves the section out.
+  final AppLockSettings? appLock;
 
   /// What else moves a value the window shows (the update-check
   /// controller behind [general]); [editors], [backup], [appearance],
@@ -127,6 +133,7 @@ class SettingsWindowHost {
           ?sources.editorFont,
           ?sources.directoryGrouping,
           ?sources.doubleClickAction,
+          ?sources.appLock,
           ...sources.changes,
         ],
       );
@@ -151,6 +158,10 @@ class SettingsWindowHost {
           _sources.directoryGrouping?.value.name,
       SettingsLinkKey.doubleClickAction.name:
           _sources.doubleClickAction?.value.name,
+      SettingsLinkKey.appLock.name: switch (_sources.appLock) {
+        final lock? => encodeAppLock(lock),
+        null => null,
+      },
       SettingsLinkKey.general.name: general == null
           ? null
           : {
@@ -207,6 +218,10 @@ class SettingsWindowHost {
   }
 
   Future<Object?> _handleCall(String name, Object? argument) async {
+    // A locked app changes nothing from the settings window, which covers
+    // itself then; a call already on its way when the lock engaged is
+    // refused here.
+    if (_sources.appLock?.locked ?? false) throw const AppLockedException();
     final method = SettingsLinkMethod.values.asNameMap()[name];
     if (method == null) {
       throw MissingPluginException('No Settings window method $name');
@@ -318,6 +333,11 @@ class SettingsWindowHost {
         ).deleteRetainedSeparateAccount(confirmedName: argument! as String);
       case SettingsLinkMethod.declineRetainedDelete:
         await _require(backup).declineRetainedDelete();
+      case SettingsLinkMethod.setAppLock:
+        final appLock = _sources.appLock;
+        if (appLock == null) throw StateError('No app lock settings');
+        // The device authentication runs here, in the app's window.
+        return (await appLock.setEnabled(argument! as bool)).name;
     }
     return null;
   }

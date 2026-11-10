@@ -57,6 +57,11 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# local_auth_windows 2.0.2 uses /await's legacy return syntax. VS 18 rejects
+# its deprecation by default; opt in only for this plugin until it migrates.
+target_compile_definitions(local_auth_windows_plugin PRIVATE
+  _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+
 
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can

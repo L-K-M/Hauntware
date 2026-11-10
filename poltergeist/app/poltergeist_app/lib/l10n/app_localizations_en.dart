@@ -8704,4 +8704,68 @@ class AppLocalizationsEn extends AppLocalizations {
   String syncSessionDeviceName(String platform) {
     return 'Poltergeist on $platform';
   }
+
+  @override
+  String get appLockTitle => 'Poltergeist is locked';
+
+  @override
+  String get appLockDetail =>
+      'Unlock with this device\'s passcode, PIN or biometrics. Connections already open keep running.';
+
+  @override
+  String get appLockUnlock => 'Unlock';
+
+  @override
+  String get appLockFailed =>
+      'Authentication failed or was cancelled. Try again.';
+
+  @override
+  String get appLockUnavailable =>
+      'This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.';
+
+  @override
+  String get appLockReason => 'Unlock Poltergeist';
+
+  @override
+  String get settingsAppLockTitle => 'App lock';
+
+  @override
+  String get settingsAppLock => 'Require device authentication';
+
+  @override
+  String settingsAppLockDetail(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutes minutes',
+      one: '1 minute',
+    );
+    return 'Ask for this device\'s passcode, PIN or biometrics when Poltergeist opens and after $_temp0 in the background.';
+  }
+
+  @override
+  String get settingsAppLockUnsupported =>
+      'This platform has no device authentication Poltergeist can ask for.';
+
+  @override
+  String get settingsAppLockUnavailable =>
+      'Set up a passcode, PIN or biometrics on this device to use the app lock.';
+
+  @override
+  String settingsAppLockNotChanged(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notAuthenticated':
+          'The app lock did not change: authentication failed or was cancelled.',
+      'unavailable':
+          'The app lock did not change: this device has no authentication to ask for.',
+      'notSaved':
+          'The app lock did not change: the setting could not be saved.',
+      'other': 'The app lock did not change.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get settingsWindowLocked =>
+      'Unlock it in its main window to change settings.';
 }

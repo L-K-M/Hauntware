@@ -4,11 +4,14 @@ import 'dart:ui' show AppExitType, PlatformDispatcher;
 
 import 'package:app_links/app_links.dart';
 import 'package:file_picker/file_picker.dart' show FilePicker;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart' show GlobalKey, ScaffoldMessengerState;
 import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:flutter/widgets.dart';
 import 'package:ghost_apk_update/ghost_apk_update.dart' show ApkUpdater;
 import 'package:ghost_desktop/ghost_desktop.dart' show MacosToolbarBandChannel;
+import 'package:ghost_keystore/app_lock.dart'
+    show AppLockController, AppLockException;
 import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:ghost_ui/ghost_ui.dart' show CheckedPlatformMenuDelegate;
 import 'package:package_info_plus/package_info_plus.dart';
@@ -23,6 +26,7 @@ import 'services/atomic_file.dart';
 import 'services/app_session_lifecycle.dart';
 import 'services/archive_queue_tasks.dart';
 import 'services/appearance_controller.dart';
+import 'services/device_authenticator.dart';
 import 'services/directory_grouping_controller.dart';
 import 'services/double_click_action_controller.dart';
 import 'services/editor_font_controller.dart';
@@ -149,6 +153,7 @@ Future<void> main(List<String> args) async {
     onError: errorReporter.report,
     syncDeviceId: () => syncEnrollmentState.cachedDeviceId,
   );
+  final preferences = AppPreferences(store: settingsStore);
   // The credential vault: one FileVaultStore beside the settings file
   // feeds every consumer so its serialized-write discipline covers all
   // of them. DynamicSecretVault re-resolves the key per call —
@@ -158,25 +163,55 @@ Future<void> main(List<String> args) async {
   final vaultStore = FileVaultStore(
     File('${supportDirectory.path}${Platform.pathSeparator}vault.json'),
   );
+  // The app lock (cred-05), device-local in settings.json: the keystore's
+  // credential reads wait for it, and the app opens behind its lock
+  // screen.
+  final appLock = AppLockController(
+    authenticator: LocalDeviceAuthenticator(
+      reason: () => lookupAppLocalizations(
+        basicLocaleListResolution(
+          PlatformDispatcher.instance.locales,
+          AppLocalizations.supportedLocales,
+        ),
+      ).appLockReason,
+    ),
+    supported: appLockSupportedOn(defaultTargetPlatform),
+    enabled: await preferences.loadAppLock(),
+    save: preferences.saveAppLock,
+  );
+  masterKeys.protectCredentialReads(appLock.read);
   // Settle an interrupted re-key before anything else reads the vault:
   // a crash between the keystore swap and the settle leaves .rekey
   // behind, and whichever sealed generation the installed key still
-  // opens wins.
-  try {
-    final vaultKey = await masterKeys.probeKeystore();
-    if (vaultKey != null) await vaultStore.settleRekey(vaultKey);
-  } on Object catch (error, stack) {
-    errorReporter.report(error, stack);
+  // opens wins. A locked app defers this to its first unlocked read: the
+  // vault's provider settles under the lock, so no boot read reaches the
+  // keystore while locked.
+  if (!appLock.locked) {
+    try {
+      final vaultKey = await appLock.read(masterKeys.probeKeystore);
+      if (vaultKey != null) await vaultStore.settleRekey(vaultKey);
+    } on Object catch (error, stack) {
+      errorReporter.report(error, stack);
+    }
   }
   final dynamicVault = DynamicSecretVault(
     vaultStore,
     () async {
-      final key = await masterKeys.probeKeystore();
-      return key == null ? null : SecretVault(vaultStore, key);
+      try {
+        return await appLock.read(() async {
+          final key = await masterKeys.probeKeystore();
+          if (key == null) return null;
+          await vaultStore.settleRekey(key);
+          return SecretVault(vaultStore, key);
+        });
+      } on AppLockException {
+        // The lock refused: the vault reads as locked, and the first
+        // unlocked read probes and settles instead.
+        return null;
+      }
     },
     onError: errorReporter.report,
   );
-  final preferences = AppPreferences(store: settingsStore);
   // The external-editor registry (06 §4.1): one versioned document in
   // the shared settings.json — the Open With ▸ submenu and the remote
   // Open verb resolve through it. Tolerant decode: a malformed document
@@ -746,6 +781,7 @@ Future<void> main(List<String> args) async {
       syncTasks: syncTasks,
       updateCheck: updateCheck,
       appVersion: appVersion,
+      appLock: appLock,
       appearance: appearance,
       editorTextSize: editorTextSize,
       editorFont: editorFont,

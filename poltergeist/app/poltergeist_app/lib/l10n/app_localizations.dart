@@ -12276,6 +12276,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Poltergeist on {platform}'**
   String syncSessionDeviceName(String platform);
+
+  /// App lock screen (cred-05): its heading, shown over the whole app while the app lock is engaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Poltergeist is locked'**
+  String get appLockTitle;
+
+  /// App lock screen: what unlocking asks for, and that open connections are not closed by the lock.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock with this device\'s passcode, PIN or biometrics. Connections already open keep running.'**
+  String get appLockDetail;
+
+  /// App lock screen: the button that asks for device authentication again.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get appLockUnlock;
+
+  /// App lock screen: the last device authentication was rejected or dismissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication failed or was cancelled. Try again.'**
+  String get appLockFailed;
+
+  /// App lock screen: device authentication is not set up or not available, so the lock cannot be opened yet.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.'**
+  String get appLockUnavailable;
+
+  /// The reason line the operating system's authentication prompt shows when the app lock asks for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock Poltergeist'**
+  String get appLockReason;
+
+  /// Settings > General: the heading over the app lock switch (cred-05).
+  ///
+  /// In en, this message translates to:
+  /// **'App lock'**
+  String get settingsAppLockTitle;
+
+  /// Settings > General: the app lock switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Require device authentication'**
+  String get settingsAppLock;
+
+  /// Settings > General: what the app lock switch does.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for this device\'s passcode, PIN or biometrics when Poltergeist opens and after {minutes, plural, =1{1 minute} other{{minutes} minutes}} in the background.'**
+  String settingsAppLockDetail(int minutes);
+
+  /// Settings > General: why the app lock switch is off and disabled on Linux.
+  ///
+  /// In en, this message translates to:
+  /// **'This platform has no device authentication Poltergeist can ask for.'**
+  String get settingsAppLockUnsupported;
+
+  /// Settings > General: why the app lock switch cannot be turned on right now.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up a passcode, PIN or biometrics on this device to use the app lock.'**
+  String get settingsAppLockUnavailable;
+
+  /// Settings > General: a toast after turning the app lock on or off did not take effect, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notAuthenticated{The app lock did not change: authentication failed or was cancelled.} unavailable{The app lock did not change: this device has no authentication to ask for.} notSaved{The app lock did not change: the setting could not be saved.} other{The app lock did not change.}}'**
+  String settingsAppLockNotChanged(String reason);
+
+  /// The desktop settings window while the app is locked, under the title that it is locked.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock it in its main window to change settings.'**
+  String get settingsWindowLocked;
 }
 
 class _AppLocalizationsDelegate

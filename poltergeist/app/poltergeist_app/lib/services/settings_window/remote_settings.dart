@@ -6,6 +6,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
+import 'package:ghost_keystore/app_lock.dart'
+    show AppLockChange, AppLockSettings, AppLockSupport;
 import 'package:planchette_editor/planchette_editor.dart' show EditorTextSize;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -87,6 +89,9 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
   late final RemoteDoubleClickAction _doubleClickAction =
       RemoteDoubleClickAction._(_link);
   bool _hasDoubleClickAction = false;
+  late final RemoteAppLock appLock = RemoteAppLock._(
+    (enabled) => _link.call(SettingsLinkMethod.setAppLock, enabled),
+  );
   SyncAccountGate _gate = const SyncAccountGate.production();
 
   /// The General rows, or null when the app has none.
@@ -219,6 +224,10 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
       _doubleClickAction._apply(DoubleClickAction.values.byName(action));
     }
 
+    appLock._apply(
+      snapshot[SettingsLinkKey.appLock.name] as Map<Object?, Object?>?,
+    );
+
     final gate = (snapshot[SettingsLinkKey.gate.name]! as Map)
         .cast<String, Object?>();
     _gate = SyncAccountGate(
@@ -236,6 +245,7 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
     _doubleClickAction.dispose();
     _editorTextSize.dispose();
     _editorFont.dispose();
+    appLock.dispose();
     super.dispose();
   }
 }
@@ -555,4 +565,46 @@ final class RemoteBackupSettings extends ChangeNotifier
   @override
   Future<void> declineRetainedDelete() =>
       _link.call(SettingsLinkMethod.declineRetainedDelete);
+}
+
+/// [AppLockSettings] over the link: the app's lock as the latest snapshot
+/// carries it, and a change whose device authentication runs in the
+/// app's window. An app that offers no lock reads as unsupported.
+final class RemoteAppLock extends ChangeNotifier implements AppLockSettings {
+  RemoteAppLock._(this._call);
+
+  final Future<Object?> Function(bool enabled) _call;
+
+  bool _enabled = false;
+  AppLockSupport _support = AppLockSupport.unsupported;
+  bool _locked = false;
+
+  void _apply(Map<Object?, Object?>? json) {
+    final enabled = json?[SettingsLinkKey.enabled.name] as bool? ?? false;
+    final support = switch (json?[SettingsLinkKey.support.name]) {
+      final String name => AppLockSupport.values.byName(name),
+      _ => AppLockSupport.unsupported,
+    };
+    final locked = json?[SettingsLinkKey.locked.name] as bool? ?? false;
+    if (enabled == _enabled && support == _support && locked == _locked) {
+      return;
+    }
+    _enabled = enabled;
+    _support = support;
+    _locked = locked;
+    notifyListeners();
+  }
+
+  @override
+  bool get enabled => _enabled;
+
+  @override
+  bool get locked => _locked;
+
+  @override
+  AppLockSupport get support => _support;
+
+  @override
+  Future<AppLockChange> setEnabled(bool enabled) async =>
+      AppLockChange.values.byName((await _call(enabled))! as String);
 }

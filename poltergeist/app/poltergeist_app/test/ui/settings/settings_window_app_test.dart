@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_keystore/app_lock.dart'
+    show AppLockChange, AppLockSettings, AppLockSupport;
 import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:poltergeist_app/services/appearance_controller.dart';
 import 'package:poltergeist_app/services/directory_grouping_controller.dart';
@@ -16,6 +18,7 @@ import 'package:poltergeist_app/services/settings_window/settings_window_link.da
 import 'package:poltergeist_app/settings_window_app.dart';
 import 'package:poltergeist_app/theme/app_appearance.dart';
 import 'package:poltergeist_app/theme/theme_presets.dart';
+import 'package:poltergeist_app/ui/settings/app_lock_settings.dart';
 import 'package:poltergeist_app/ui/settings/appearance_settings.dart';
 import 'package:poltergeist_app/ui/settings/directory_grouping_settings.dart';
 import 'package:poltergeist_app/ui/settings/double_click_action_settings.dart';
@@ -28,6 +31,25 @@ import 'package:poltergeist_core/poltergeist_core.dart' show DirectoryGrouping;
 const _appLink = MethodChannel('test/settings_window_app/app');
 const _windowLink = MethodChannel('test/settings_window_app/window');
 const _control = MethodChannel('test/settings_window_app/control');
+
+/// The app lock with scripted state, notifying like the controller does.
+final class _ManualAppLock extends ChangeNotifier implements AppLockSettings {
+  @override
+  bool enabled = false;
+
+  @override
+  bool locked = false;
+
+  @override
+  AppLockSupport get support => AppLockSupport.available;
+
+  @override
+  Future<AppLockChange> setEnabled(bool enabled) async {
+    this.enabled = enabled;
+    notifyListeners();
+    return AppLockChange.changed;
+  }
+}
 
 /// The Settings window's own app over a real host: the tabs follow the
 /// sections the app has, a tab request switches them, and a window that
@@ -42,6 +64,7 @@ void main() {
   late EditorFontController editorFont;
   late DirectoryGroupingController directoryGrouping;
   late DoubleClickActionController doubleClickAction;
+  late _ManualAppLock appLock;
   late bool checkForUpdates;
   final updates = ChangeNotifier();
 
@@ -73,6 +96,8 @@ void main() {
     addTearDown(directoryGrouping.dispose);
     doubleClickAction = DoubleClickActionController();
     addTearDown(doubleClickAction.dispose);
+    appLock = _ManualAppLock();
+    addTearDown(appLock.dispose);
     host = SettingsWindowHost(control: _control, link: _appLink)
       ..attach(
         SettingsWindowSources(
@@ -85,6 +110,7 @@ void main() {
           editorFont: editorFont,
           directoryGrouping: directoryGrouping,
           doubleClickAction: doubleClickAction,
+          appLock: appLock,
           changes: [updates],
           previewDownloads: () => PreviewDownloadsSettings(
             available: true,
@@ -308,6 +334,72 @@ void main() {
 
     expect(directoryGrouping.value, DirectoryGrouping.mixed);
     expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
+  });
+
+  testWidgets('the General tab\'s app lock switch asks in the app and '
+      'follows it', (tester) async {
+    final remote = await pumpWindow(tester, SettingsWindowTab.general);
+    expect(find.byType(AppLockSection), findsOneWidget);
+    SwitchListTile lockSwitch() => tester.widget<SwitchListTile>(
+      find.ancestor(
+        of: find.text('Require device authentication'),
+        matching: find.byType(SwitchListTile),
+      ),
+    );
+    expect(lockSwitch().value, isFalse);
+    expect(remote.appLock.support, AppLockSupport.available);
+
+    await tester.tap(find.text('Require device authentication'));
+    await tester.runAsync(pumpEventQueue);
+    await tester.pumpAndSettle();
+
+    expect(appLock.enabled, isTrue);
+    expect(remote.appLock.enabled, isTrue);
+    expect(lockSwitch().value, isTrue);
+  });
+
+  testWidgets('while the app is locked the window covers its settings and '
+      'the app refuses its calls', (tester) async {
+    final remote = await pumpWindow(tester, SettingsWindowTab.general);
+    expect(find.byType(GeneralSection), findsOneWidget);
+
+    await tester.runAsync(() async {
+      appLock.locked = true;
+      appLock.notifyListeners();
+      await pumpEventQueue();
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('Poltergeist is locked'), findsOneWidget);
+    expect(find.byType(GeneralSection), findsNothing);
+
+    // A call already on its way when the lock engaged changes nothing.
+    await tester.runAsync(() async {
+      await expectLater(
+        remote.general!.onCheckForUpdatesChanged(false),
+        throwsA(isA<SettingsLinkException>()),
+      );
+    });
+    // The app's error reporter hears of the refusal, as of any other.
+    expect(tester.takeException(), isA<AppLockedException>());
+    expect(checkForUpdates, isTrue);
+
+    await tester.runAsync(() async {
+      appLock.locked = false;
+      appLock.notifyListeners();
+      await pumpEventQueue();
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('Poltergeist is locked'), findsNothing);
+    expect(find.byType(GeneralSection), findsOneWidget);
+  });
+
+  testWidgets('a window opened while the app is locked shows the notice '
+      'from its first frame', (tester) async {
+    appLock.locked = true;
+    await pumpWindow(tester, SettingsWindowTab.general);
+
+    expect(find.text('Poltergeist is locked'), findsOneWidget);
+    expect(find.byType(GeneralSection), findsNothing);
   });
 
   testWidgets('the window follows the app\'s theme, and only its theme', (

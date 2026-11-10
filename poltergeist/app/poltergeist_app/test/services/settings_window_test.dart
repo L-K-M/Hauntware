@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
+import 'package:ghost_keystore/app_lock.dart'
+    show AppLockChange, AppLockSettings, AppLockSupport;
 import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:poltergeist_app/services/appearance_controller.dart';
 import 'package:poltergeist_app/services/directory_grouping_controller.dart';
@@ -171,6 +173,29 @@ final class _FakeEditors extends ChangeNotifier implements EditorRegistryModel {
   Future<void> setDefault(String id) async => calls.add('setDefault($id)');
 }
 
+/// The app lock with scripted state, recording each change and notifying
+/// like the controller does.
+final class _ManualAppLock extends ChangeNotifier implements AppLockSettings {
+  final List<bool> saved = [];
+
+  @override
+  bool enabled = false;
+
+  @override
+  bool locked = false;
+
+  @override
+  AppLockSupport get support => AppLockSupport.available;
+
+  @override
+  Future<AppLockChange> setEnabled(bool enabled) async {
+    this.enabled = enabled;
+    saved.add(enabled);
+    notifyListeners();
+    return AppLockChange.changed;
+  }
+}
+
 /// The Settings window's link, end to end: [SettingsWindowHost] in the app,
 /// [RemoteSettings] in the window, and the runner's relay between them.
 void main() {
@@ -194,6 +219,7 @@ void main() {
   Object? groupingSaveFailure;
   late DoubleClickActionController doubleClickAction;
   late List<DoubleClickAction> savedActions;
+  late _ManualAppLock appLock;
   late List<AppAppearance> savedAppearances;
   Object? appearanceSaveFailure;
 
@@ -244,6 +270,7 @@ void main() {
     editorFont: editorFont,
     directoryGrouping: directoryGrouping,
     doubleClickAction: doubleClickAction,
+    appLock: appLock,
   );
 
   setUp(() {
@@ -262,6 +289,8 @@ void main() {
       save: (action) async => savedActions.add(action),
     );
     addTearDown(doubleClickAction.dispose);
+    appLock = _ManualAppLock();
+    addTearDown(appLock.dispose);
     savedTextSizes = [];
     editorTextSize = EditorTextSizeController(
       save: (size) async => savedTextSizes.add(size),
@@ -726,6 +755,49 @@ void main() {
     expect(second.generation, isNot(first.generation));
     expect(remote.general?.checkForUpdates, isFalse);
     expect(remote.backup!.syncing, isTrue);
+  });
+
+  group('the app lock', () {
+    test('crosses in the first snapshot', () async {
+      await appLock.setEnabled(true);
+
+      final remote = await openWindow();
+
+      expect(remote.appLock.enabled, isTrue);
+      expect(remote.appLock.support, AppLockSupport.available);
+      expect(remote.appLock.locked, isFalse);
+    });
+
+    test("set in the window, reaches the app's lock", () async {
+      final remote = await openWindow();
+
+      await remote.appLock.setEnabled(true);
+
+      expect(appLock.enabled, isTrue);
+      expect(appLock.saved, [true]);
+      await pumpEventQueue();
+      expect(remote.appLock.enabled, isTrue);
+    });
+
+    test('while the app is locked the app refuses its calls', () async {
+      final remote = await openWindow();
+      appLock.locked = true;
+      appLock.notifyListeners();
+      await pumpEventQueue();
+      expect(remote.appLock.locked, isTrue);
+
+      await expectLater(
+        remote.general!.onCheckForUpdatesChanged(false),
+        throwsA(
+          isA<SettingsLinkException>().having(
+            (e) => '$e',
+            'message',
+            'The app is locked',
+          ),
+        ),
+      );
+      expect(checkForUpdates, isTrue);
+    });
   });
 
   test('a request to quit is the app\'s to answer', () async {

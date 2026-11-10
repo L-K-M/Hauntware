@@ -415,6 +415,32 @@ void main() {
     );
   });
 
+  test('the app lock is off until saved, and reads back what was saved',
+      () async {
+    final preferences = AppPreferences(
+      store: SettingsStore(path: settingsFile.path),
+    );
+
+    expect(await preferences.loadAppLock(), isFalse);
+
+    await preferences.saveAppLock(true);
+    expect(
+      await AppPreferences(
+        store: SettingsStore(path: settingsFile.path),
+      ).loadAppLock(),
+      isTrue,
+    );
+  });
+
+  test('an unreadable store reads the app lock as off', () async {
+    await settingsFile.writeAsBytes([0xff]);
+    final preferences = AppPreferences(
+      store: SettingsStore(path: settingsFile.path, onError: (_, _) {}),
+    );
+
+    expect(await preferences.loadAppLock(), isFalse);
+  });
+
   group('a startup read that failed', () {
     // The file is unreadable at launch (invalid UTF-8 here, an IO error
     // in the field) and readable again by the user's first edit: the

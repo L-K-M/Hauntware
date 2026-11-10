@@ -9,6 +9,7 @@
 // ghost_desktop's link engine owns the handshake, the snapshots and the quit
 // question; what is here is Poltergeist's own.
 import 'package:flutter/services.dart';
+import 'package:ghost_keystore/app_lock.dart' show AppLockSettings;
 import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -70,6 +71,11 @@ enum SettingsLinkMethod {
   resolvePinConflict,
   deleteRetainedSeparateAccount,
   declineRetainedDelete,
+
+  /// The General tab's app lock switch (cred-05); the argument is a bool,
+  /// the answer an [AppLockChange] name. The device authentication it
+  /// needs runs in the app's window.
+  setAppLock,
 }
 
 /// The keys of every JSON object on the link, spelled once for both sides:
@@ -123,6 +129,13 @@ enum SettingsLinkKey {
   thresholdBytes,
   trippedIds,
   username,
+
+  /// The app lock, an object of [enabled], [support] and [locked], or
+  /// null when the app offers none.
+  appLock,
+  enabled,
+  support,
+  locked,
 }
 
 /// Why a call failed in the app's isolate, as the error code of the
@@ -285,3 +298,20 @@ BackupSwitchOutcome decodeSwitchOutcome(Map<String, Object?> json) =>
       passphraseWarning:
           json[SettingsLinkKey.passphraseWarning.name] as String?,
     );
+
+/// The app lock as the snapshot carries it, its support by name.
+Map<String, Object?> encodeAppLock(AppLockSettings lock) => {
+  SettingsLinkKey.enabled.name: lock.enabled,
+  SettingsLinkKey.support.name: lock.support.name,
+  SettingsLinkKey.locked.name: lock.locked,
+};
+
+/// A settings window call the app refused because it is locked (cred-05):
+/// the window covers itself then, and changes nothing until the app is
+/// unlocked in its own window.
+final class AppLockedException implements Exception {
+  const AppLockedException();
+
+  @override
+  String toString() => 'The app is locked';
+}
