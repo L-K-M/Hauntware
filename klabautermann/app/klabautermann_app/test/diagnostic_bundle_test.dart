@@ -109,6 +109,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Diagnostic bundle for web-1: 2 sections'), findsOne);
     expect(find.textContaining('read it before you share it'), findsOne);
+    // What the file carries beyond processes and mounts.
+    expect(find.textContaining('host name and machine ID'), findsOne);
+    expect(find.textContaining('crontab entries'), findsOne);
+    expect(find.textContaining('command lines of its processes'), findsOne);
     expect(find.textContaining('No answer from: gpu'), findsOne);
 
     await tester.tap(find.text('Save…'));

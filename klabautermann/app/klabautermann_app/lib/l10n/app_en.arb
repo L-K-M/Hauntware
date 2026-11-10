@@ -11140,9 +11140,9 @@
       "count": {"type": "int", "example": "14"}
     }
   },
-  "diagnosticsHint": "The raw output of each collector, for a parser bug report. It names this server's processes, units, mounts and paths, so read it before you share it.",
+  "diagnosticsHint": "The raw output of each collector, for a parser bug report. It carries this server's host name and machine ID, the command lines of its processes, crontab entries and cron jobs, and its units, mounts and paths. Redaction catches secret-shaped values, not host names or internal addresses, so read it before you share it.",
   "@diagnosticsHint": {
-    "description": "Diagnostic bundle sheet: what the bundle holds and why to check it before sharing."
+    "description": "Diagnostic bundle sheet: what the bundle holds (identity, process command lines, crontabs, units, mounts, paths) and why to check it before sharing, since redaction only catches secret-shaped values."
   },
   "diagnosticsMissing": "No answer from: {collectors}",
   "@diagnosticsMissing": {
