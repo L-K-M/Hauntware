@@ -8597,6 +8597,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerShellClearScrollback => 'Clear scrollback';
 
   @override
+  String get shellEndRunningTitle => 'End the running shell?';
+
+  @override
+  String shellEndRunningBody(String container) {
+    return 'Closing this ends the shell in “$container”.';
+  }
+
+  @override
+  String get shellEndRunningConfirm => 'End shell';
+
+  @override
   String get dockerShellKeyEscape => 'Escape';
 
   @override

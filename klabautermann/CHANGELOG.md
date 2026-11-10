@@ -12,6 +12,8 @@
 - The fleet rail keeps its search text, its folded sections and the
   needs-attention filters when you hide it and show it again, as Séance's
   and Poltergeist's rails do.
+- Closing a container shell's dock tab or leaving its page while it runs
+  asks first and names the container, as closing a Séance tab does.
 - Activity shows the commands an action ran in the code font, as the
   preview before it runs does.
 - On the desktop, drag the edge of the fleet rail or the inspector, or

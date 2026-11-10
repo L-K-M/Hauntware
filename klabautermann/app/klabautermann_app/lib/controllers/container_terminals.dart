@@ -46,6 +46,7 @@ final class ContainerShell {
     this.id, {
     required this.serverId,
     required this.containerId,
+    required this.containerName,
   });
 
   final ContainerTerminals _terminals;
@@ -54,6 +55,9 @@ final class ContainerShell {
   final String id;
   final String serverId;
   final String containerId;
+
+  /// The container's display name, for the close guard to name it.
+  final String containerName;
 
   final _state = ValueNotifier<ContainerShellState>(
     const ContainerShellOpening(),
@@ -68,6 +72,13 @@ final class ContainerShell {
 
   bool get _ended => _state.value is ContainerShellEnded;
   bool _closing = false;
+
+  /// Whether the shell's exec is up and runs a command; an opening shell
+  /// has heard nothing yet.
+  bool get isRunning => _state.value is ContainerShellRunning;
+
+  /// Whether the shell is still open: opening or running, not ended.
+  bool get isLive => !_ended;
 
   /// Keystrokes and pastes, as the terminal encoded them. Dropped once
   /// the shell ended.
@@ -138,12 +149,24 @@ final class ContainerTerminals {
 
   final Map<String, ContainerShell> _shells = {};
 
+  /// The live shell open in [containerId], or null when there is none.
+  ContainerShell? shellFor(String containerId) {
+    for (final shell in _shells.values) {
+      if (shell.containerId == containerId) return shell;
+    }
+    return null;
+  }
+
+  /// Every live shell, in the order each was opened.
+  List<ContainerShell> get shells => List.unmodifiable(_shells.values);
+
   /// Opens a shell in [containerId] on [serverId] at [columns] by [rows]:
   /// [shell] null or blank lets the engine pick `/bin/bash` or `/bin/sh`,
   /// [user] null or blank runs as the container's user.
   ContainerShell open({
     required String serverId,
     required String containerId,
+    required String containerName,
     String? shell,
     String? user,
     required int columns,
@@ -155,6 +178,7 @@ final class ContainerTerminals {
       id,
       serverId: serverId,
       containerId: containerId,
+      containerName: containerName,
     );
     if (_stopped) {
       opened._end(const ContainerShellEnded(null));

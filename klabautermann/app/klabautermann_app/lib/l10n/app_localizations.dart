@@ -10875,6 +10875,24 @@ abstract class AppLocalizations {
   /// **'Clear scrollback'**
   String get dockerShellClearScrollback;
 
+  /// Title of the dialog that asks before closing a container shell that still runs (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'End the running shell?'**
+  String get shellEndRunningTitle;
+
+  /// Body of the dialog that asks before closing a running container shell; container is its name.
+  ///
+  /// In en, this message translates to:
+  /// **'Closing this ends the shell in “{container}”.'**
+  String shellEndRunningBody(String container);
+
+  /// Button that closes the tab or page and ends the running container shell.
+  ///
+  /// In en, this message translates to:
+  /// **'End shell'**
+  String get shellEndRunningConfirm;
+
   /// Semantics label of the esc key in the container shell's keyboard bar (CTX-07).
   ///
   /// In en, this message translates to:

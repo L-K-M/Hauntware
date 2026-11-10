@@ -10343,6 +10343,24 @@
   "@dockerShellClearScrollback": {
     "description": "Context menu item that drops the terminal lines scrolled off the top, keeping the visible screen (CTX-07)."
   },
+  "shellEndRunningTitle": "End the running shell?",
+  "@shellEndRunningTitle": {
+    "description": "Title of the dialog that asks before closing a container shell that still runs (CTX-07)."
+  },
+  "shellEndRunningBody": "Closing this ends the shell in “{container}”.",
+  "@shellEndRunningBody": {
+    "description": "Body of the dialog that asks before closing a running container shell; container is its name.",
+    "placeholders": {
+      "container": {
+        "type": "String",
+        "example": "web-db"
+      }
+    }
+  },
+  "shellEndRunningConfirm": "End shell",
+  "@shellEndRunningConfirm": {
+    "description": "Button that closes the tab or page and ends the running container shell."
+  },
   "dockerShellKeyEscape": "Escape",
   "@dockerShellKeyEscape": {
     "description": "Semantics label of the esc key in the container shell's keyboard bar (CTX-07)."
