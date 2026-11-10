@@ -64,6 +64,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reconnects in the same session use it again.
 - Folder paths in the folder browser's header and the Open Folder on
   server field draw in the bundled code font, as Séance's path bar does.
+- On Linux and Windows, Planchette runs once. Opening a file while it
+  runs hands the file to the running Planchette, and launching it again
+  raises its window, instead of starting a second copy that writes the
+  same settings and window state.
 
 ## [1.9.0] - 2026-10-04
 
