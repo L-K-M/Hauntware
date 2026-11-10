@@ -283,6 +283,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'/'",
     // A problem without a subject or detail fills its slot with nothing.
     "''",
+    // The status row's line-ending and encoding names, which the shared
+    // surface spells the same way, and the separator between its facts.
+    "'CRLF'",
+    "'LF'",
+    "'UTF-8 BOM'",
+    "'UTF-8'",
+    "' · '",
     // The unified diff's line break and its line markers, which pick a
     // row's tint; the rows show the diff's own text.
     r"'\n'",

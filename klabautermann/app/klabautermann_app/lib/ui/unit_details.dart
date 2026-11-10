@@ -408,7 +408,6 @@ class _UnitFileViewState extends State<UnitFileView> {
                   controller: editor,
                   editingLocked: true,
                   strings: KlabautermannEditorStrings(l10n),
-                  showStatus: false,
                 ),
               ),
             ),

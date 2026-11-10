@@ -429,7 +429,6 @@ class _StackFileViewState extends State<StackFileView> {
                       controller: editor,
                       editingLocked: true,
                       strings: KlabautermannEditorStrings(l10n),
-                      showStatus: false,
                     ),
                   ),
                 ),

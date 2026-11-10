@@ -5,8 +5,10 @@ import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:planchette_core/planchette_core.dart'
     show
+        LineEnding,
         TextProblem,
         TextProblemSeverity,
+        Utf8Bom,
         UnifiedDiffResult,
         UnifiedDiffStatus,
         boundedUnifiedDiff,
@@ -16,7 +18,7 @@ import 'package:planchette_core/planchette_core.dart'
         textFormatFor,
         validateText;
 import 'package:planchette_editor/planchette_editor.dart'
-    show EditorController, PlanchetteEditor;
+    show EditorController, EditorStatusLead, PlanchetteEditor;
 
 import '../../controllers/operations_controller.dart';
 import '../../l10n/app_localizations.dart';
@@ -472,13 +474,6 @@ class _RemoteEditorState extends State<RemoteEditor> {
                   label: Text(l10n.editRootFile),
                   visualDensity: VisualDensity.compact,
                 ),
-              if (_dirty)
-                Text(
-                  l10n.editUnsaved,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.tertiary,
-                  ),
-                ),
               // The shared editor's find bar and text tools, which touch
               // cannot reach by chord, as Séance's and Poltergeist's
               // editors offer them.
@@ -512,7 +507,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
                     key: ObjectKey(editor),
                     controller: editor,
                     strings: KlabautermannEditorStrings(l10n),
-                    showStatus: false,
+                    statusBuilder: _statusBar,
                   ),
                 ),
               ),
@@ -536,6 +531,68 @@ class _RemoteEditorState extends State<RemoteEditor> {
           ),
         ];
     }
+  }
+
+  /// The editor's status row, as the shared surface draws it, with this
+  /// host's dirty mark: the shared controller's own `isDirty` follows the
+  /// installed text, which a save through the engine never updates, while
+  /// the base this save is planned against is [_dirty]'s. Saves are engine
+  /// runs, so the row has no saving state to show.
+  Widget _statusBar(BuildContext context, EditorController editor) {
+    final l10n = AppLocalizations.of(context);
+    final strings = KlabautermannEditorStrings(l10n);
+    final theme = Theme.of(context);
+    final (line, column) = editor.caretLineColumn;
+    final selected = editor.selectionStats;
+    final status = [
+      if (selected.characters > 0)
+        strings.selectionSummary(selected.characters, selected.lines),
+      if (_dirty) strings.unsaved,
+      editor.metadata.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
+      editor.metadata.utf8Bom == Utf8Bom.present ? 'UTF-8 BOM' : 'UTF-8',
+      strings.indentation(editor.indentation),
+      strings.languageName(editor.text.language),
+      if (!editor.highlightingEnabled) strings.largeFile,
+    ];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: EditorStatusLead(
+              controller: editor,
+              strings: strings,
+              position: Tooltip(
+                message: strings.goToLine,
+                child: InkWell(
+                  onTap: editor.openGoToLine,
+                  borderRadius: BorderRadius.circular(4),
+                  child: Text(
+                    strings.documentPosition(
+                      line,
+                      column,
+                      editor.lineStarts.length,
+                      editor.fileByteCount,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Flexible(
+            child: Text(
+              status.join(' · '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

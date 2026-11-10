@@ -187,15 +187,59 @@ void main() {
     expect(editor.text(tester), _original);
     final review = find.widgetWithText(FilledButton, 'Review changes');
     expect(tester.widget<FilledButton>(review).onPressed, isNull);
-    expect(find.text('Not saved'), findsNothing);
+    expect(find.textContaining('Not saved'), findsNothing);
 
     await editor.type(tester, '$_original    restart: always\n');
     expect(tester.widget<FilledButton>(review).onPressed, isNotNull);
-    expect(find.text('Not saved'), findsOneWidget);
+    expect(find.textContaining('Not saved'), findsOneWidget);
 
     // Back to the server's text is nothing to save.
     await editor.type(tester, _original);
     expect(tester.widget<FilledButton>(review).onPressed, isNull);
+  });
+
+  testWidgets('the status row shows the position and the file facts, and '
+      '"Not saved" clears on discard', (tester) async {
+    final editor = await _pump(tester);
+    await editor.answer(tester, _content(_original));
+
+    expect(find.textContaining('Ln 1, Col 1'), findsOneWidget);
+    expect(find.textContaining('UTF-8'), findsOneWidget);
+    expect(find.textContaining('YAML'), findsOneWidget);
+    expect(find.textContaining('Not saved'), findsNothing);
+
+    await editor.type(tester, '$_original    restart: always\n');
+    expect(find.textContaining('Not saved'), findsOneWidget);
+
+    await tester.tap(find.text('Discard changes'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Discard changes'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(editor.text(tester), _original);
+    expect(find.textContaining('Not saved'), findsNothing);
+  });
+
+  testWidgets('the status row carries the document\'s problems', (
+    tester,
+  ) async {
+    final editor = await _pump(tester);
+    await editor.answer(tester, _content(_original));
+    // A key set twice in one mapping.
+    await editor.type(
+      tester,
+      'services:\n  web:\n    image: nginx:1.28\n    image: nginx:1.29\n',
+    );
+    // The view checks once typing pauses.
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('1 problem'), findsOneWidget);
   });
 
   testWidgets('Find and the text tools have buttons, as in the siblings\' '
@@ -277,7 +321,7 @@ void main() {
     await editor.answer(tester, _content('$_original# theirs\n', sha: 'b'));
 
     expect(editor.text(tester), '$_original# theirs\n');
-    expect(find.text('Not saved'), findsNothing);
+    expect(find.textContaining('Not saved'), findsNothing);
   });
 
   testWidgets('a file changed right before the rename opens the conflict '
@@ -339,7 +383,7 @@ void main() {
     await editor.answer(tester, _content(mine, sha: 'saved'));
 
     expect(editor.text(tester), mine);
-    expect(find.text('Not saved'), findsNothing);
+    expect(find.textContaining('Not saved'), findsNothing);
     await tester.pump(const Duration(seconds: 10));
   });
 
@@ -366,7 +410,7 @@ void main() {
 
     // The write ran, so nothing is unsaved even without the new base.
     expect(editor.text(tester), mine);
-    expect(find.text('Not saved'), findsNothing);
+    expect(find.textContaining('Not saved'), findsNothing);
     expect(editor.operations.unsavedEdits, isEmpty);
     expect(find.text('There is no connection to this server.'), findsOneWidget);
     await tester.pump(const Duration(seconds: 10));
