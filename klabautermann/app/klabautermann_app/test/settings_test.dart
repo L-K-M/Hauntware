@@ -6,12 +6,17 @@ import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 import 'package:ghost_update/ghost_update.dart';
 import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
+import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/cadence_controller.dart';
+import 'package:klabautermann_app/controllers/editor_display.dart';
 import 'package:klabautermann_app/controllers/log_display.dart';
 import 'package:klabautermann_app/controllers/time_display.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/ui/appearance_tab.dart';
 import 'package:klabautermann_app/ui/settings_page.dart';
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorLigatures, EditorTextSize;
 
 import 'support/fake_engine.dart';
 import 'support/harness.dart';
@@ -516,6 +521,62 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Refresh limits'), findsNothing);
+  });
+
+  testWidgets('the Appearance tab sets the file editor display (03 §8.5)', (
+    tester,
+  ) async {
+    final appearance = AppearanceController();
+    final display = EditorDisplayController();
+    addTearDown(() {
+      appearance.dispose();
+      display.dispose();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: AppearanceTab(appearance: appearance, editorDisplay: display),
+        ),
+      ),
+    );
+
+    // A ListView builds a little past its viewport, so scrollUntilVisible
+    // can stop with the target just off-screen; ensureVisible then brings
+    // it fully in before a tap.
+    Future<void> reveal(Finder finder) async {
+      await tester.scrollUntilVisible(
+        finder,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.ensureVisible(finder);
+      await tester.pumpAndSettle();
+    }
+
+    await reveal(find.byKey(const ValueKey('editor.font')));
+    expect(find.text('File editor'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('editor.font')));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a font'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    await reveal(find.text('Ligatures'));
+    await tester.tap(find.text('Ligatures'));
+    await tester.pumpAndSettle();
+    expect(display.value.ligatures, EditorLigatures.off);
+
+    await reveal(find.byKey(const ValueKey('editor.textSize')));
+    expect(find.text('14 pt'), findsOneWidget);
+    await tester.drag(
+      find.byKey(const ValueKey('editor.textSize')),
+      const Offset(40, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(display.value.textSize, greaterThan(EditorTextSize.standard));
   });
 
   testWidgets('back returns to the shell', (tester) async {

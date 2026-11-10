@@ -32,6 +32,7 @@ import 'controllers/appearance_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/device_name.dart';
 import 'controllers/docker_notice_controller.dart';
+import 'controllers/editor_display.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
@@ -62,6 +63,7 @@ import 'ui/snippets.dart' show SnippetsScope;
 import 'ui/alerts.dart' show AlertScope;
 import 'ui/app_lock_gate.dart';
 import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
+import 'ui/edit/editor_display_scope.dart' show EditorDisplayScope;
 import 'ui/hand_off_actions.dart' show HandOffScope;
 import 'ui/keyboard_map.dart';
 import 'ui/macos_toolbar_band.dart';
@@ -120,6 +122,7 @@ class KlabautermannApp extends StatelessWidget {
     this.alertRules,
     this.snippets,
     this.logDisplay,
+    this.editorDisplay,
     this.timeDisplay,
     this.alertNotifications,
     this.operations,
@@ -231,6 +234,11 @@ class KlabautermannApp extends StatelessWidget {
   /// General; null in tests that leave it out, where logs keep their
   /// defaults.
   final LogDisplayController? logDisplay;
+
+  /// Every file editor's font and text size (03 §8.5), set in Settings →
+  /// Appearance; null in tests that leave it out, where the editors keep
+  /// their defaults.
+  final EditorDisplayController? editorDisplay;
 
   /// Which zone server times show in (A11Y-07), set in Settings >
   /// General; null in tests that leave it out, where every time shows in
@@ -490,13 +498,20 @@ class KlabautermannApp extends StatelessWidget {
               ),
               null => withSnippets,
             };
+            final withEditorDisplay = switch (editorDisplay) {
+              final display? => EditorDisplayScope(
+                display: display,
+                child: withLogDisplay,
+              ),
+              null => withLogDisplay,
+            };
             final withTimeDisplay = switch (timeDisplay) {
               final display? => TimeDisplayScope(
                 display: display,
                 serverProfile: monitoring.profileFor,
-                child: withLogDisplay,
+                child: withEditorDisplay,
               ),
-              null => withLogDisplay,
+              null => withEditorDisplay,
             };
             final withNotifications = switch (alertNotifications) {
               final notifications? => AlertNotificationsScope(
@@ -666,6 +681,7 @@ class KlabautermannApp extends StatelessWidget {
               cadenceCaps: cadenceCaps,
               adminMemory: adminMemory,
               logDisplay: logDisplay,
+              editorDisplay: editorDisplay,
               timeDisplay: timeDisplay,
               deviceName: deviceName,
               appVersion: appVersion,

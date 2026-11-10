@@ -345,3 +345,17 @@
   in the server's zone, and your sync account's size.
 - Copy the commands an action runs, run Séance's synced snippets on a
   server, and export a redacted diagnostic bundle.
+- The remote file editor has a status row, as Séance's and Poltergeist's
+  editors do: the caret's line and column (tap it to go to a line), the
+  selection's size, an unsaved mark, the line ending, the encoding, the
+  indentation, the language and a large-file note. The read-only stack
+  and unit file views show their position and file facts too.
+- The remote file editor's words follow the app's language: Find, Text
+  Tools, the status row, the go-to-line prompt and the other editor
+  controls are translated with the app.
+- Settings > Appearance has a File editor section: choose a font, turn
+  ligatures on or off, and set the text size. Every file editor and the
+  compare view draw in the choice, kept on this device only.
+- A file editor no longer claims unsaved changes after a save whose
+  follow-up read fails. The written text is kept as the base, so the
+  editor, the close prompt and quitting agree that nothing is unsaved.

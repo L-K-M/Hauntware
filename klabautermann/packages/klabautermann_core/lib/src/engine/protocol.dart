@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart' show sha256;
 
 // Only plain-data host types cross (D52): none here holds a function, as
 // `Collector` (its argument validators) and `ServerZone` (`offsetAt`) do.
@@ -2738,11 +2741,33 @@ final class EditContent extends EditReadResult {
     this.mode,
   });
 
+  /// The content an [EditFile] that ran wrote: [text] with its SHA-256
+  /// recomputed, so the next save plans against it before the follow-up
+  /// read answers, and still does when that read fails.
+  factory EditContent.written(
+    String text, {
+    required bool privileged,
+    int? uid,
+    int? gid,
+    int? mode,
+  }) => EditContent(
+    text: text,
+    sha256: _sha256OfText(text),
+    privileged: privileged,
+    uid: uid,
+    gid: gid,
+    mode: mode,
+  );
+
   final String text;
   final String sha256;
   final bool privileged;
   final int? uid, gid, mode;
 }
+
+/// [text]'s UTF-8 SHA-256, the hash an [EditFile]'s compare-and-swap names.
+String _sha256OfText(String text) =>
+    sha256.convert(utf8.encode(text)).toString();
 
 /// A [ReadEditable] that read nothing; [detail] is the end of stderr.
 final class EditReadFailed extends EditReadResult {

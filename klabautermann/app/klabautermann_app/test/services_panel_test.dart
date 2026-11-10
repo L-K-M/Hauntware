@@ -911,6 +911,8 @@ void main() {
           .text;
       expect(find.text('nginx.service file'), findsOneWidget);
       expect(text(), '[Service]\nEnvironment=********\n');
+      expect(find.textContaining('Ln 1, Col 1'), findsOneWidget);
+      expect(find.textContaining('INI'), findsOneWidget);
       await tester.tap(find.text('Reveal values'));
       await tester.pumpAndSettle();
       expect(text(), '[Service]\nEnvironment=TOKEN=abc\n');
