@@ -38,6 +38,7 @@ final class AlertNotificationsController extends ChangeNotifier {
   }) : _notifications = notifications,
        _enabled = enabled && notifications != null {
     _events = engine.events.listen(_onEngineEvent);
+    if (_enabled) unawaited(_recheckPermission());
   }
 
   final SystemNotifications? _notifications;
@@ -45,6 +46,10 @@ final class AlertNotificationsController extends ChangeNotifier {
   final Future<void> Function(bool enabled)? _save;
   late final StreamSubscription<EngineEvent> _events;
   bool _enabled;
+
+  /// Whether [setEnabled] ran, whose answer then outranks the launch's
+  /// permission check.
+  bool _set = false;
 
   /// The raised alerts' notification ids, so a clear withdraws only what
   /// this run posted.
@@ -60,6 +65,7 @@ final class AlertNotificationsController extends ChangeNotifier {
   /// that applied but was not saved lasts until the app restarts, and the
   /// save's error is rethrown.
   Future<AlertNotificationsOutcome> setEnabled(bool enabled) async {
+    _set = true;
     final notifications = _notifications;
     if (enabled) {
       if (notifications == null) return AlertNotificationsOutcome.unavailable;
@@ -73,6 +79,31 @@ final class AlertNotificationsController extends ChangeNotifier {
     }
     await _save?.call(enabled);
     return AlertNotificationsOutcome.enabled;
+  }
+
+  /// The stored "on" holds only while the system still allows posts: the
+  /// user may have revoked that in the system's settings since, and the
+  /// posts would then vanish without a word. The switch shows off for
+  /// this run, and the stored choice stays, so a permission given back
+  /// turns them on again at the next launch. Nothing is asked here.
+  Future<void> _recheckPermission() async {
+    final bool permitted;
+    try {
+      permitted = await _notifications!.permitted();
+    } on Object catch (error, stackTrace) {
+      // Unknown: the stored choice stands, as before the check.
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while checking notification permission'),
+        ),
+      );
+      return;
+    }
+    if (permitted || _set || !_enabled) return;
+    _enabled = false;
+    notifyListeners();
   }
 
   /// One id per rule and server, stable within the run.

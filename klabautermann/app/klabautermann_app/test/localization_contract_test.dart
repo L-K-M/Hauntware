@@ -206,9 +206,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // A migration the engine refused, printed; it is tried again.
     r"'Safety preferences of $serverId stay on this device: $error'",
   },
-  // A refused post's diagnostic, printed.
+  // A refused post's and a failed permission check's diagnostics, printed.
   'lib/controllers/alert_notifications.dart': {
     "'while posting an alert notification'",
+    "'while checking notification permission'",
   },
   // The plugin's start-up diagnostic, the Android icon resource, the
   // Windows toast identity (the product name, the application id of
