@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Settings › About shows the running build's version, and the open-source
+  licenses page repeats it under the app name.
 - Hide or show the folder sidebar from View, its toolbar buttons or
   `Ctrl+Alt+S` (`Control+Command+S` on macOS). Hiding keeps the workspace
   connected. Its visibility and width survive a restart, and the divider
