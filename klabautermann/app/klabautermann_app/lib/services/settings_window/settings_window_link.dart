@@ -24,7 +24,9 @@ import '../../controllers/log_display.dart'
     show LogDisplay, LogDisplayNotSavedException, LogWrap;
 import '../../controllers/time_display.dart'
     show TimeDisplay, TimeDisplayNotSavedException;
-import '../../controllers/app_lock_controller.dart';
+import 'package:ghost_keystore/app_lock.dart'
+    show AppLockSettings;
+
 import '../../controllers/appearance_controller.dart'
     show AppearanceNotSavedException;
 import '../../controllers/device_name.dart' show DeviceNameNotSavedException;

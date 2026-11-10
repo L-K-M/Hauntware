@@ -5,6 +5,7 @@ import 'dart:ui' show AppExitType, PlatformDispatcher;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show ServicesBinding;
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show CheckedPlatformMenuDelegate, GhostUndoHistory;
@@ -20,7 +21,6 @@ import 'controllers/alert_rules_controller.dart';
 import 'controllers/log_display.dart';
 import 'controllers/snippets_controller.dart';
 import 'controllers/announcement_controller.dart';
-import 'controllers/app_lock_controller.dart';
 import 'controllers/attention.dart';
 import 'controllers/cadence_controller.dart';
 import 'controllers/overview_layout.dart';

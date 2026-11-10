@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:klabautermann_app/controllers/app_lock_controller.dart';
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:klabautermann_app/services/engine_keystore.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 

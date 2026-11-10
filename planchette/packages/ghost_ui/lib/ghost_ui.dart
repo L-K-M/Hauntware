@@ -12,6 +12,7 @@ export 'src/badge_image.dart';
 export 'src/color_picker.dart';
 export 'src/contrast.dart';
 export 'src/family_hues.dart';
+export 'src/ghost_app_lock.dart';
 export 'src/ghost_chords.dart';
 export 'src/ghost_command_menu.dart';
 export 'src/ghost_command_palette.dart';

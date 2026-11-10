@@ -2,9 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ghost_keystore/ghost_keystore.dart'
-    show AppLockException, appLockBackgroundTimeout;
-import 'package:klabautermann_app/controllers/app_lock_controller.dart';
+import 'package:ghost_keystore/app_lock.dart';
 
 import 'support/device_authenticator.dart';
 

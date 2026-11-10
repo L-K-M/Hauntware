@@ -1,15 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
-import 'package:ghost_keystore/ghost_keystore.dart'
-    show
-        AppLock,
-        AppLockAvailability,
-        AppLockException,
-        AppLockLifecycle,
-        AppLockMode,
-        DeviceAuthenticator,
-        appLockBackgroundTimeout;
+
+import 'app_lock.dart';
 
 /// Whether this device can lock the app (SAF-20).
 enum AppLockSupport {
@@ -60,17 +53,17 @@ abstract interface class AppLockSettings implements Listenable {
   Future<AppLockChange> setEnabled(bool enabled);
 }
 
-/// The app lock (03 §8.2, SAF-20) over the suite's [AppLock]: with the
-/// lock on, the app opens behind the lock screen, which asks for device
+/// The app lock (SAF-20) over the suite's [AppLock]: with the lock on,
+/// the app opens behind the lock screen, which asks for device
 /// authentication, and it locks again once it has been in the background
 /// or hidden for [appLockBackgroundTimeout]. The keystore's reads go
 /// through [read], so a locked app hands the engine no credential; links
 /// already open keep running, as in Séance.
 ///
 /// [onLocked] runs each time the lock engages after an unlock, for the
-/// admin windows that end then (03 §8.2). [save] stores the setting; a
-/// change is in force only once it is saved. Without it, as in tests, the
-/// setting is held in memory.
+/// admin windows that end then. [save] stores the setting; a change is in
+/// force only once it is saved. Without it, as in tests, the setting is
+/// held in memory.
 final class AppLockController extends ChangeNotifier
     implements AppLockSettings {
   AppLockController({

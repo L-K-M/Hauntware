@@ -2,8 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:ghost_keystore/app_lock.dart' show AppLockController;
 import 'package:ghost_ui/ghost_ui.dart'
-    show GhostUndoHistory, showCommandPalette;
+    show
+        GhostAppLockGate,
+        GhostAppLockStrings,
+        GhostUndoHistory,
+        showCommandPalette;
 import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show
@@ -23,7 +28,6 @@ import 'controllers/announcement_controller.dart';
 import 'controllers/cadence_controller.dart';
 import 'controllers/pinned_services.dart';
 import 'controllers/fleet_density.dart';
-import 'controllers/app_lock_controller.dart';
 import 'controllers/pin_publication_controller.dart';
 import 'controllers/safety_controller.dart';
 import 'controllers/appearance_controller.dart';
@@ -517,8 +521,17 @@ class KlabautermannApp extends StatelessWidget {
             return UndoHistoryScope(
               history: undoHistory,
               child: switch (appLock) {
-                final appLock? => AppLockGate(
-                  lock: appLock,
+                final appLock? => GhostAppLockGate(
+                  model: AppLockGateModel(appLock),
+                  strings: GhostAppLockStrings(
+                    title: AppLocalizations.of(context).appLockTitle,
+                    detail: AppLocalizations.of(context).appLockDetail,
+                    unlock: AppLocalizations.of(context).appLockUnlock,
+                    failed: AppLocalizations.of(context).appLockFailed,
+                    unavailable: AppLocalizations.of(
+                      context,
+                    ).appLockUnavailable,
+                  ),
                   child: withHandOff,
                 ),
                 null => withHandOff,

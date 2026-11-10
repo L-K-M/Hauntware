@@ -13,7 +13,7 @@ import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/admin_memory.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
-import 'package:klabautermann_app/controllers/app_lock_controller.dart';
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:klabautermann_app/controllers/account_size.dart';
 import 'package:klabautermann_app/controllers/cadence_controller.dart';
 import 'package:klabautermann_app/controllers/log_display.dart';

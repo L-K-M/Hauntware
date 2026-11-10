@@ -3,8 +3,9 @@ import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 
+import 'package:ghost_keystore/app_lock.dart' show AppLockSettings;
+
 import '../../controllers/operations_controller.dart';
-import '../../controllers/app_lock_controller.dart';
 import '../../l10n/app_localizations.dart';
 
 /// Window close, application Quit and the Settings engine share one

@@ -14,7 +14,8 @@ import '../../controllers/announcement_controller.dart';
 import '../../controllers/cadence_controller.dart';
 import '../../controllers/log_display.dart';
 import '../../controllers/time_display.dart';
-import '../../controllers/app_lock_controller.dart';
+import 'package:ghost_keystore/app_lock.dart' show AppLockSettings;
+
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/device_name.dart';
 import '../../controllers/monitor_set.dart';
