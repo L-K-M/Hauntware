@@ -342,6 +342,35 @@
   "@quitWhileRunningQuit": {
     "description": "The quit confirmation's button that closes the window anyway."
   },
+  "quitWithShellsTitle": "{count, plural, =1{Quit and end 1 shell?} other{Quit and end {count} shells?}}",
+  "@quitWithShellsTitle": {
+    "description": "The quit confirmation's title while container shells are open; count is how many.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "quitWithShellsBody": "{count, plural, =1{The shell in {names} is open. Quitting ends it.} other{The shells in {names} are open. Quitting ends them.}}",
+  "@quitWithShellsBody": {
+    "description": "The quit confirmation's body while container shells are open; count is how many and names lists their containers.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "quitWithShellsSeparator": ", ",
+  "@quitWithShellsSeparator": {
+    "description": "Joins the container names in the shell quit confirmation's body."
+  },
+  "quitWithShellsQuit": "Quit",
+  "@quitWithShellsQuit": {
+    "description": "The quit confirmation's button that closes the window and ends the open shells."
+  },
   "menuWindow": "Window",
   "@menuWindow": {
     "description": "Title of the Window menu (macOS, where it holds Minimize, Zoom and Bring All to Front)."

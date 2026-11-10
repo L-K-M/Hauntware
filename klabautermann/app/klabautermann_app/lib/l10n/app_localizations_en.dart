@@ -330,6 +330,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quitWhileRunningQuit => 'Quit';
 
   @override
+  String quitWithShellsTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Quit and end $count shells?',
+      one: 'Quit and end 1 shell?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String quitWithShellsBody(int count, String names) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'The shells in $names are open. Quitting ends them.',
+      one: 'The shell in $names is open. Quitting ends it.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get quitWithShellsSeparator => ', ';
+
+  @override
+  String get quitWithShellsQuit => 'Quit';
+
+  @override
   String get menuWindow => 'Window';
 
   @override

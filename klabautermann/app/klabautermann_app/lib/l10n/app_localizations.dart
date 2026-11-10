@@ -550,6 +550,30 @@ abstract class AppLocalizations {
   /// **'Quit'**
   String get quitWhileRunningQuit;
 
+  /// The quit confirmation's title while container shells are open; count is how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Quit and end 1 shell?} other{Quit and end {count} shells?}}'**
+  String quitWithShellsTitle(int count);
+
+  /// The quit confirmation's body while container shells are open; count is how many and names lists their containers.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{The shell in {names} is open. Quitting ends it.} other{The shells in {names} are open. Quitting ends them.}}'**
+  String quitWithShellsBody(int count, String names);
+
+  /// Joins the container names in the shell quit confirmation's body.
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get quitWithShellsSeparator;
+
+  /// The quit confirmation's button that closes the window and ends the open shells.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit'**
+  String get quitWithShellsQuit;
+
   /// Title of the Window menu (macOS, where it holds Minimize, Zoom and Bring All to Front).
   ///
   /// In en, this message translates to:
