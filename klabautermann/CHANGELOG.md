@@ -4,6 +4,10 @@
 
 - Activity shows the commands an action ran in the code font, as the
   preview before it runs does.
+- Saved log and diagnostic exports, and the staged copy a share hands on,
+  now carry a Windows Mark-of-the-Web stream or a macOS quarantine
+  attribute, and are owner-only (0600) on macOS and Linux, as Séance's
+  downloads are. Marking is best effort and only logged on failure.
 - On the desktop, drag the edge of the fleet rail or the inspector, or
   focus it and use the arrow keys, to make the pane wider, as in Séance
   and Poltergeist. Each width is kept on this device across restarts,

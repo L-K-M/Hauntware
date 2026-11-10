@@ -85,6 +85,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   raises its window, instead of starting a second copy that writes the
   same settings and window state.
 
+### Security
+- Files Planchette writes from a remote workspace, including remote
+  checkouts, a Save-a-Local-Copy of a remote document and an HTML export
+  of one, now carry a Windows Mark-of-the-Web stream or a macOS
+  quarantine attribute, as Séance's downloads do. Marking is best effort
+  and only logged on failure.
+
 ## [1.9.0] - 2026-10-04
 
 ### Added

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../controllers/monitoring_controller.dart';
@@ -29,9 +31,56 @@ abstract interface class LogExportHost {
   Future<void> share(String fileName, Uint8List bytes, {Rect? origin});
 }
 
+/// Marks an export file as remote-sourced and owner-only, best effort:
+/// neither a failed mode change nor a failed mark may report a save that
+/// wrote the file as failed (P1-03a).
+Future<void> markSavedExport(String path, DownloadProvenance provenance) async {
+  try {
+    restrictFileToOwner(File(path));
+  } on Object catch (error) {
+    debugPrint('Could not restrict a saved export to the owner: $error');
+  }
+  try {
+    await provenance.markDownloaded(path);
+  } on Object {
+    // markDownloaded logs its own failures; a mark never fails a save.
+  }
+}
+
+/// The local path behind a saved export, or null when the platform's
+/// picker handed back a document URI with no path to mark (Android's
+/// `content://`, whose provider owns the file).
+String? savedExportPath(Uri saved) =>
+    saved.isScheme('file') ? saved.toFilePath() : null;
+
+/// Writes [bytes] as [fileName] under a fresh temporary directory, marked
+/// and owner-only like a saved export, so the share sheet hands on a file
+/// the OS treats as untrusted (P1-03a).
+Future<File> stageMarkedExport(
+  String fileName,
+  Uint8List bytes,
+  DownloadProvenance provenance,
+) async {
+  final root = await getTemporaryDirectory();
+  final directory = await root.createTemp('klabautermann-export-');
+  final file = File('${directory.path}${Platform.pathSeparator}$fileName');
+  await file.writeAsBytes(bytes, flush: true);
+  await markSavedExport(file.path, provenance);
+  return file;
+}
+
 /// [LogExportHost] over `file_picker`'s save dialog and `share_plus`.
 final class PluginLogExportHost implements LogExportHost {
-  const PluginLogExportHost();
+  PluginLogExportHost({
+    DownloadProvenance? provenance,
+    this.stagedRetention = const Duration(hours: 1),
+  }) : provenance = provenance ?? DownloadProvenance(agent: 'Klabautermann');
+
+  /// Stamps what this host writes; injectable for tests.
+  final DownloadProvenance provenance;
+
+  /// How long a shared staged export stays on disk so the sheet can read it.
+  final Duration stagedRetention;
 
   @override
   bool get canShare => Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
@@ -46,18 +95,39 @@ final class PluginLogExportHost implements LogExportHost {
       bytes: bytes,
       mimeType: 'text/plain',
     );
-    return saved != null;
+    if (saved == null) return false;
+    final path = savedExportPath(saved);
+    if (path != null) await markSavedExport(path, provenance);
+    return true;
   }
 
   @override
   Future<void> share(String fileName, Uint8List bytes, {Rect? origin}) async {
-    await SharePlus.instance.share(
-      ShareParams(
-        files: [XFile.fromData(bytes, name: fileName, mimeType: 'text/plain')],
-        fileNameOverrides: [fileName],
-        sharePositionOrigin: origin,
-      ),
-    );
+    final file = await stageMarkedExport(fileName, bytes, provenance);
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType: 'text/plain')],
+          fileNameOverrides: [fileName],
+          sharePositionOrigin: origin,
+        ),
+      );
+      final directory = file.parent;
+      Timer(stagedRetention, () {
+        unawaited(_deleteStagedExport(directory));
+      });
+    } catch (_) {
+      await _deleteStagedExport(file.parent);
+      rethrow;
+    }
+  }
+
+  static Future<void> _deleteStagedExport(Directory directory) async {
+    try {
+      if (await directory.exists()) await directory.delete(recursive: true);
+    } catch (_) {
+      // Temporary exports are also subject to normal OS cache eviction.
+    }
   }
 }
 
@@ -70,7 +140,7 @@ class LogExportScope extends InheritedWidget {
   /// The host in scope, or the plugins' when none is.
   static LogExportHost of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<LogExportScope>()?.host ??
-      const PluginLogExportHost();
+      PluginLogExportHost();
 
   @override
   bool updateShouldNotify(LogExportScope oldWidget) => oldWidget.host != host;
