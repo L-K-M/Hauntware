@@ -23,23 +23,6 @@ DiskStatEntry _disk(String name, int sectorsRead, int sectorsWritten) =>
 CoreCpuTimes _core1(String name, int busy, int idle) =>
     CoreCpuTimes(name, busy: busy, idle: idle);
 
-CoreSnapshot _core({
-  CpuTimes? cpu,
-  Map<String, CoreCpuTimes>? perCpu,
-  int? btime,
-  List<NetDevEntry>? netdev,
-  List<DiskStatEntry>? diskstats,
-  double? uptime,
-}) => CoreSnapshot(
-  cpu: cpu,
-  perCpu: perCpu,
-  btime: btime,
-  meminfo: MemInfo(const {}),
-  netdev: netdev,
-  diskstats: diskstats,
-  uptimeSeconds: uptime,
-);
-
 void main() {
   group('counterDelta', () {
     test('a normal increase yields the difference', () {
@@ -64,18 +47,6 @@ void main() {
     test('negative inputs are refused', () {
       expect(counterDelta(-1, 10), isNull);
       expect(counterDelta(10, -1), isNull);
-    });
-  });
-
-  group('seriesReset', () {
-    test('a changed btime is a reboot', () {
-      expect(seriesReset(100, 101), isTrue);
-    });
-
-    test('an unchanged or unknown btime is not a reboot', () {
-      expect(seriesReset(100, 100), isFalse);
-      expect(seriesReset(null, 100), isFalse);
-      expect(seriesReset(100, null), isFalse);
     });
   });
 
@@ -286,57 +257,6 @@ void main() {
       expect(old.writeAwaitMs, isNull);
       expect(old.busyPercent, isNull);
       expect(old.toJson().containsKey('busyPercent'), isFalse);
-    });
-  });
-
-  group('diffCoreSnapshots', () {
-    test('a changed btime yields a reboot with no rates', () {
-      final d = diffCoreSnapshots(
-        _core(btime: 100, uptime: 10, netdev: [_net('eth0', 1, 1)]),
-        _core(btime: 200, uptime: 20, netdev: [_net('eth0', 2, 2)]),
-      );
-      expect(d.rebooted, isTrue);
-      expect(d.net, isEmpty);
-      expect(d.disk, isEmpty);
-    });
-
-    test('a missing uptime yields no elapsed time', () {
-      final d = diffCoreSnapshots(_core(btime: 100), _core(btime: 100));
-      expect(d.elapsedSeconds, isNull);
-      expect(d.net, isEmpty);
-    });
-
-    test('a zero uptime delta yields no rates', () {
-      final d = diffCoreSnapshots(
-        _core(btime: 100, uptime: 5),
-        _core(btime: 100, uptime: 5),
-      );
-      expect(d.elapsedSeconds, 0);
-      expect(d.net, isEmpty);
-    });
-
-    test('a normal pair yields cpu, net and disk rates', () {
-      final d = diffCoreSnapshots(
-        _core(
-          btime: 100,
-          uptime: 10,
-          cpu: _cpu('cpu', [100, 0, 100, 800]),
-          netdev: [_net('eth0', 1000, 2000)],
-          diskstats: [_disk('sda', 100, 200)],
-        ),
-        _core(
-          btime: 100,
-          uptime: 12,
-          cpu: _cpu('cpu', [200, 0, 200, 1600]),
-          netdev: [_net('eth0', 3000, 6000)],
-          diskstats: [_disk('sda', 300, 500)],
-        ),
-      );
-      expect(d.rebooted, isFalse);
-      expect(d.elapsedSeconds, 2);
-      expect(d.cpu, isNotNull);
-      expect(d.net['eth0']!.rxBytesPerSecond, 1000);
-      expect(d.disk['sda']!.readBytesPerSecond, 200 * 512 / 2);
     });
   });
 

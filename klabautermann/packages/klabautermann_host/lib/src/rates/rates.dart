@@ -8,7 +8,6 @@ library;
 
 import 'package:meta/meta.dart';
 
-import '../parse/metrics.dart' show CoreSnapshot;
 import '../parse/models.dart';
 import '../parse/parse_result.dart';
 import '../parse/procs.dart' show ProcsSnapshot;
@@ -36,12 +35,6 @@ int? counterDelta(
 
 /// Where a 32-bit counter wraps.
 const _wrap32 = 1 << 32;
-
-/// Whether the host rebooted between two readings (03 §6.4): a changed
-/// `btime` starts a new series. Unknown on either side stays false —
-/// without both boot times a reboot cannot be told from a plain gap.
-bool seriesReset(int? previousBtime, int? nextBtime) =>
-    previousBtime != null && nextBtime != null && previousBtime != nextBtime;
 
 /// Per-field CPU occupancy in percent of the jiffy delta between two
 /// `/proc/stat` readings (03 §6.4, §7.1). Percentages of the fields sum
@@ -270,73 +263,6 @@ Map<String, DiskRate> diskRates(
     );
   }
   return out;
-}
-
-/// All rates between two `core` snapshots (03 §6.4), or the pieces that
-/// are computable: a changed `btime` or a zero/negative uptime delta
-/// yields empty rate maps (the tick is a gap, not a stale value).
-@immutable
-final class CoreDelta {
-  const CoreDelta({
-    required this.rebooted,
-    required this.elapsedSeconds,
-    this.cpu,
-    required this.perCpu,
-    required this.net,
-    required this.disk,
-  });
-
-  /// `btime` changed: the host rebooted and every counter restarted.
-  final bool rebooted;
-
-  /// Uptime delta between the two ticks, null when either side lacks it.
-  final double? elapsedSeconds;
-
-  /// Aggregate CPU occupancy.
-  final CpuPercentages? cpu;
-
-  /// Per-core busy percent.
-  final Map<String, double> perCpu;
-
-  /// Per-interface byte rates.
-  final Map<String, NetRate> net;
-
-  /// Per-device byte rates.
-  final Map<String, DiskRate> disk;
-}
-
-/// Diffs two `core` snapshots against each other and their uptimes
-/// (03 §6.4).
-CoreDelta diffCoreSnapshots(
-  CoreSnapshot previous,
-  CoreSnapshot next, {
-  CounterWidth width = CounterWidth.bits64,
-}) {
-  final rebooted = seriesReset(previous.btime, next.btime);
-  final prevUp = previous.uptimeSeconds;
-  final nextUp = next.uptimeSeconds;
-  final elapsed = prevUp != null && nextUp != null ? nextUp - prevUp : null;
-  if (rebooted || elapsed == null || elapsed <= 0) {
-    return CoreDelta(
-      rebooted: rebooted,
-      elapsedSeconds: elapsed,
-      perCpu: const {},
-      net: const {},
-      disk: const {},
-    );
-  }
-  final prevCpu = previous.cpu;
-  final nextCpu = next.cpu;
-  return CoreDelta(
-    rebooted: false,
-    elapsedSeconds: elapsed,
-    cpu: prevCpu != null && nextCpu != null
-        ? cpuDeltaPercent(prevCpu, nextCpu)
-        : null,
-    perCpu: perCpuBusyPercent(previous.perCpu, next.perCpu),
-    net: netRates(previous.netdev, next.netdev, elapsed, width: width),
-    disk: diskRates(previous.diskstats, next.diskstats, elapsed, width: width),
-  );
 }
 
 /// Per-pid CPU occupancy between two `procs` snapshots in percent of one
