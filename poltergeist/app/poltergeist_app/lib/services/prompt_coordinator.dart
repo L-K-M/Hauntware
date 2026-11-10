@@ -517,14 +517,24 @@ class PromptCoordinator {
     }
   }
 
-  /// Writes only the passphrase slot of [stored]; the key material and every
-  /// other field stay as they are, so saving cannot clear or rewrite them.
+  /// Saves a local edit to the current key, not the snapshot shown before
+  /// the question. A deleted or rotated key must not be recreated.
   Future<void> _savePassphraseToVault(Secret stored, String passphrase) async {
     final vault = this.vault;
     if (vault == null) return;
 
     try {
-      await vault.putSecret(stored.copyWith(keyPassphrase: passphrase));
+      final current = await vault.getSecret(stored.id);
+      if (current == null ||
+          current.kind != stored.kind ||
+          current.value != stored.value) {
+        _showNotice();
+        return;
+      }
+      await vault.putLocalSecret(
+        current.copyWith(keyPassphrase: passphrase),
+        updatedAt: DateTime.now().toUtc().millisecondsSinceEpoch,
+      );
     } on Object catch (error, stackTrace) {
       // Saving is an offer, not a requirement: the connect proceeds with
       // the entered passphrase; only the save failed (02 §10).

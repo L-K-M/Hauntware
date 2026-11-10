@@ -1123,7 +1123,7 @@ void main() {
     expect(reply.keyPassphrase, 'right');
   });
 
-  testWidgets('saving a typed passphrase writes only keyPassphrase', (
+  testWidgets('saving a passphrase preserves current key fields and advances its version', (
     tester,
   ) async {
     await _pumpHost(tester, navigatorKey, messengerKey);
@@ -1159,6 +1159,12 @@ void main() {
     expect(find.text('Key file'), findsOneWidget);
     expect(find.text('~/.ssh/id_ed25519'), findsOneWidget);
 
+    // Sync can update metadata while the passphrase question is open.
+    vault.secret = vault.secret!.copyWith(
+      identityFilePath: '~/.ssh/current_key',
+      identityFilePassphrase: 'current-file-phrase',
+      updatedAt: 987,
+    );
     await tester.enterText(
       find.widgetWithText(TextField, 'Passphrase'),
       'right',
@@ -1175,14 +1181,47 @@ void main() {
     expect(saved.kind, SecretKind.privateKey);
     expect(saved.value, 'ENCRYPTED PEM');
     expect(saved.keyPassphrase, 'right');
-    expect(saved.identityFilePath, '~/.ssh/id_ed25519');
-    expect(saved.identityFilePassphrase, 'file-phrase');
-    expect(saved.updatedAt, 123);
+    expect(saved.identityFilePath, '~/.ssh/current_key');
+    expect(saved.identityFilePassphrase, 'current-file-phrase');
+    expect(saved.updatedAt, greaterThan(987));
 
     final reply = bridge.replies.single.$3 as CredentialPromptReply;
     expect(reply.privateKeyPem, 'ENCRYPTED PEM');
     expect(reply.keyPassphrase, 'right');
   });
+
+  for (final deleted in [false, true]) {
+    testWidgets('a passphrase answer does not overwrite a ${deleted ? 'deleted' : 'rotated'} key', (tester) async {
+      await _pumpHost(tester, navigatorKey, messengerKey);
+      PromptCoordinator.keyPassphraseUsable = (pem, phrase) => phrase == 'right';
+      coordinator.start();
+      vault.secret = const Secret(
+        id: 'secret-7', kind: SecretKind.privateKey, value: 'ENCRYPTED PEM',
+      );
+      bridge.emit(_event(
+        'changed-key', EnginePromptKind.credentialNeeded,
+        const CredentialPromptData(
+          host: 'example.com', port: 2222, username: 'deploy',
+          authMethod: AuthMethod.privateKey, secretRef: 'secret-7',
+        ),
+      ));
+      await tester.pumpAndSettle();
+      vault.secret = deleted ? null : vault.secret!.copyWith(value: 'NEW KEY');
+
+      await tester.enterText(find.widgetWithText(TextField, 'Passphrase'), 'right');
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pump();
+      await tester.tap(dialogConnect);
+      await tester.pumpAndSettle();
+
+      expect(vault.puts, isEmpty);
+      expect(vault.secret?.value, deleted ? null : 'NEW KEY');
+      expect(find.textContaining('Could not save the secret to the vault'), findsOneWidget);
+      final reply = bridge.replies.single.$3 as CredentialPromptReply;
+      expect(reply.privateKeyPem, 'ENCRYPTED PEM');
+      expect(reply.keyPassphrase, 'right');
+    });
+  }
 
   testWidgets('cancelling the passphrase prompt answers cancelled', (
     tester,
