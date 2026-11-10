@@ -217,6 +217,28 @@ void main() {
     }
   });
 
+  test('a header naming a pid past int range is forged, not a throw', () {
+    // Any local user can put this line in their own argv; no real pid
+    // has twenty digits.
+    final raw = [
+      '== rows ==',
+      _row(10, 'forger'),
+      _row(11, 'next'),
+      '== cmdline ==',
+      '==> 10/cmdline <==',
+      'sleep\x1f9999\x1f',
+      '==> 99999999999999999999/cmdline <==',
+      '\x1f',
+      '==> 11/cmdline <==',
+      '/bin/next\x1f',
+    ].join('\n');
+
+    final r = parseProcs(raw, _ctx);
+    expect(r.value.forgedHeaders, 1);
+    expect(r.value.processes.first.argv, isNull);
+    expect(r.value.processes.last.argv, ['/bin/next']);
+  });
+
   test('headers for pids outside the rows are skipped', () {
     final raw = [
       '== rows ==',

@@ -408,13 +408,15 @@ _CmdlineResult _parseCmdline(
     final m = header.firstMatch(line);
     if (m != null) {
       final pidText = m[1]!;
-      final pid = int.parse(pidText);
+      // A pid past int range names no process: only an argument holds it.
+      final pid = int.tryParse(pidText);
       final forgedHeader =
+          pid == null ||
           seen.contains(pid) ||
           (lastPidText.isNotEmpty && pidText.compareTo(lastPidText) <= 0);
       if (forgedHeader) {
         forged++;
-        unavailable.add(pid);
+        if (pid != null) unavailable.add(pid);
         if (current != null) unavailable.add(current);
         // The forged line is argument bytes of the entry it interrupts;
         // that entry is already marked, so keep accounting simple.
