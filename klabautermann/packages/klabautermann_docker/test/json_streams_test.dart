@@ -106,7 +106,9 @@ void main() {
     });
 
     test('a long line in many chunks is scanned once', () async {
-      const chunk = 1024;
+      // Small chunks: rescanning from the start on each one would take
+      // seconds here, where one pass takes milliseconds.
+      const chunk = 256;
       final piece = utf8Of('x' * chunk);
       final watch = Stopwatch()..start();
       final lines = await byteStreamToLines(
