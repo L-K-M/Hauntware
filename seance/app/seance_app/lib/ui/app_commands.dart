@@ -336,6 +336,9 @@ List<PaletteCommand> seancePaletteCommands(
 
 /// The palette over every command this posture has: ⇧⌘P / Ctrl+Shift+P,
 /// the ☰ row, or its own palette entry (which is listed, but not in it).
+/// The posture comes from [AppState.shellNarrow], published by the shell's
+/// layout: this context can sit above the layout (the root chord, the native
+/// menu handler), where an inherited lookup would answer wide.
 Future<void> openCommandPalette(BuildContext context, AppState state) {
   final platform = Theme.of(context).platform;
   return showCommandPalette(
@@ -343,11 +346,7 @@ Future<void> openCommandPalette(BuildContext context, AppState state) {
     seancePaletteCommands(
       context,
       state,
-      seanceCommands(
-        state,
-        platform,
-        wide: !AdaptivePaneLayout.isNarrow(context),
-      ),
+      seanceCommands(state, platform, wide: !state.shellNarrow.value),
     ),
   );
 }
@@ -425,9 +424,15 @@ class SeanceMenuButton extends StatelessWidget {
     }
     final state = AppScope.of(context);
     return ListenableBuilder(
-      // The undo rows read the history's names, so a step or a recorded
-      // change refreshes the menu even when the state itself is silent.
-      listenable: Listenable.merge([state, state.undoHistory]),
+      // The undo rows read the history's names, and the Find row the active
+      // editor's mounted state, so a step, a recorded change, or an editor
+      // coming or going refreshes the menu even when the state itself is
+      // silent about it.
+      listenable: Listenable.merge([
+        state,
+        state.undoHistory,
+        state.editorMountRevision,
+      ]),
       builder: (context, _) {
         final commands = seanceCommands(
           state,

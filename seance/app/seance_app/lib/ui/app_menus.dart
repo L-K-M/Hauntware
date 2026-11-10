@@ -242,7 +242,9 @@ void installMacMenu(AppState state, {MethodChannel channel = macMenuChannel}) {
 
   // Retitled on every density change, from the menu or either switch, and
   // on nothing else: the state notifies for far more than this. The
-  // editor's active tab rides the same notification.
+  // editor's mounted state rides the same notification plus its own mount
+  // revision, which fires when a tab's editor comes or goes without the
+  // active tab changing (the narrow screen switch).
   ServerListDensity? titled;
   var editorActive = false;
   void retitle() {
@@ -258,7 +260,11 @@ void installMacMenu(AppState state, {MethodChannel channel = macMenuChannel}) {
   }
 
   void pushEditorActive() {
-    final active = state.activeTab is EditorTab;
+    // The active tab alone is not enough: in the narrow posture the editor
+    // can be unmounted by the screen switch while its tab stays active, and
+    // the native items must not validate with nothing to act on.
+    final tab = state.activeTab;
+    final active = tab is EditorTab && tab.editorKey.currentState != null;
     if (active == editorActive) return;
     editorActive = active;
     unawaited(channel.invokeMethod<void>('setEditorActive', active));
@@ -294,6 +300,7 @@ void installMacMenu(AppState state, {MethodChannel channel = macMenuChannel}) {
   }
 
   state.undoHistory.addListener(pushHistoryItems);
+  state.editorMountRevision.addListener(pushEditorActive);
 }
 
 /// The View menu's density item at [current]: the choice it switches to.

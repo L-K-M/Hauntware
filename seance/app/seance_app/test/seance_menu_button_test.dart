@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart' show GhostUndoableChange;
@@ -8,8 +10,9 @@ import 'package:seance_app/services/app_settings.dart';
 import 'package:seance_app/theme.dart';
 import 'package:seance_app/ui/adaptive_shell.dart' show PaneVisibility;
 import 'package:seance_app/ui/app_commands.dart';
+import 'package:seance_app/ui/built_in_text_editor.dart';
 import 'package:seance_app/ui/header_toolbar.dart';
-import 'package:seance_core/seance_core.dart' show ProbeService;
+import 'package:seance_core/seance_core.dart' show ProbeService, ServerConfig;
 
 /// The least [AppState] needs: its settings, the save they call, and the
 /// probe service its dispose touches.
@@ -132,6 +135,79 @@ void main() {
     );
     expect(redo.onPressed, isNull);
     expect(find.text('Redo'), findsOneWidget);
+  });
+
+  testWidgets('the ☰ Find row follows the editor mounting and unmounting', (
+    tester,
+  ) async {
+    final state = AppState(_Services());
+    addTearDown(state.dispose);
+    final editor = EditorTab(
+      id: 'motd-editor',
+      serverId: 'alpha',
+      config: ServerConfig(
+        id: 'alpha',
+        label: 'alpha',
+        host: 'alpha.example.com',
+        username: 'deploy',
+        createdAt: 1,
+        updatedAt: 1,
+      ),
+      remotePath: '/etc/motd',
+      localPath: 'motd',
+      ownerEditSessionId: 'edit-session',
+    );
+    state.tabs.add(editor);
+    state.focusTab(editor.id);
+
+    Future<void> pumpHarness(
+      WidgetTester tester, {
+      required bool mounted,
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: SeanceTheme.light(platform: TargetPlatform.linux),
+          builder: (context, child) => AppScope(state: state, child: child!),
+          home: Scaffold(
+            body: Column(
+              children: [
+                const SeanceMenuButton(),
+                if (mounted)
+                  Expanded(
+                    child: BuiltInTextEditorScreen(
+                      key: editor.editorKey,
+                      file: File('/nonexistent/motd'),
+                      remotePath: editor.remotePath,
+                      initialText: 'one\n',
+                      mountRevision: state.editorMountRevision,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    final findItem = find.byKey(const ValueKey('menu.item.edit.findInEditor'));
+
+    await pumpHarness(tester, mounted: true);
+    await openButton(tester);
+    await openSubmenu(tester, 'Edit');
+    expect(
+      tester.widget<MenuItemButton>(findItem).onPressed,
+      isNotNull,
+      reason: 'the editor is mounted, so Find must be enabled',
+    );
+    await tester.tap(findItem);
+    await tester.pumpAndSettle();
+    expect(find.text('Find in file'), findsOneWidget);
+
+    await pumpHarness(tester, mounted: false);
+    await openButton(tester);
+    await openSubmenu(tester, 'Edit');
+    expect(tester.widget<MenuItemButton>(findItem).onPressed, isNull);
   });
 
   testWidgets('a narrow ☰ keeps the commands that need no panes', (

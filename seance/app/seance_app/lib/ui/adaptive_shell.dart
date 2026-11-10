@@ -67,6 +67,10 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
               utilityWidth: utilityWidth,
             ),
           ),
+          // The palette's root-chord and native-menu callers sit above this
+          // layout, so they cannot look the posture up; the shell publishes
+          // it on their behalf.
+          onNarrowChanged: (narrow) => state.shellNarrow.value = narrow,
           listPane: ServerListPane(
             posture: ServerListPosture.rail,
             onOpen: (s) => _open(state, s),
@@ -301,6 +305,7 @@ class AdaptivePaneLayout extends StatefulWidget {
     this.initialListWidth = AdaptiveShell.defaultListWidth,
     this.initialUtilityWidth = AdaptiveShell.defaultUtilityWidth,
     this.onPaneWidthsChanged,
+    this.onNarrowChanged,
   });
 
   final Widget listPane;
@@ -337,6 +342,13 @@ class AdaptivePaneLayout extends StatefulWidget {
   /// current window).
   final void Function(double listWidth, double utilityWidth)?
   onPaneWidthsChanged;
+
+  /// Fired when the layout's posture changes (wide to narrow or back), with
+  /// the new [AdaptiveShell] posture. The shell publishes this to surfaces
+  /// whose context sits above the layout, such as the root chord and native
+  /// menu handler, so they read the shell's real posture rather than an
+  /// inherited lookup that answers wide from above the provider.
+  final ValueChanged<bool>? onNarrowChanged;
 
   static const listPaneKey = ValueKey('adaptive-list-pane');
   static const terminalPaneKey = ValueKey('adaptive-terminal-pane');
@@ -378,6 +390,7 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
   late double _requestedUtilityWidth = widget.initialUtilityWidth;
   double? _temporaryListWidth;
   double? _temporaryUtilityWidth;
+  bool? _lastNarrow;
 
   AdaptivePaneWidths? _allocate(double availableWidth) =>
       allocateAdaptivePaneWidths(
@@ -393,6 +406,11 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final widths = _allocate(constraints.maxWidth);
+        final narrow = widths == null;
+        if (_lastNarrow != narrow) {
+          _lastNarrow = narrow;
+          widget.onNarrowChanged?.call(narrow);
+        }
         if (widths == null) {
           return _AdaptiveNarrow(
             narrow: true,

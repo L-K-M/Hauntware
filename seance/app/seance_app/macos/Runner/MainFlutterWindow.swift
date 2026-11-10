@@ -48,8 +48,8 @@ class MainFlutterWindow: NSWindow {
   /// terminal, and otherwise fall back to the native behaviour (text fields).
   private var terminalFocused = false
 
-  /// Whether the built-in editor's tab is active. Pushed from Dart so
-  /// File ▸ Save and Edit ▸ Find… validate only while the editor is up.
+  /// Whether the active tab's built-in editor is mounted. Pushed from Dart
+  /// so File ▸ Save and Edit ▸ Find… validate only while the editor is up.
   private var editorActive = false
 
   /// The Edit menu's Undo and Redo rows: Dart owns their titles and
@@ -475,11 +475,11 @@ class MainFlutterWindow: NSWindow {
     }
   }
 
-  /// Save and Find… are valid only while the built-in editor's tab is
-  /// active and this window is key; the Settings window keeps its own
-  /// keys, and the handlers no-op without a mounted editor. Undo and
-  /// Redo carry the enabled state Dart pushes, which the menu's own
-  /// autoenabling would otherwise ignore.
+  /// Save and Find… are valid only while the active tab's built-in editor
+  /// is mounted and this window is key; the Settings window keeps its own
+  /// keys, and the handlers no-op without it. Undo and Redo carry the
+  /// enabled state Dart pushes, which the menu's own autoenabling would
+  /// otherwise ignore.
   override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
     if menuItem === saveItem || menuItem === findItem {
       return editorActive && isKeyWindow

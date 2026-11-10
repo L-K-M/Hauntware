@@ -32,6 +32,11 @@ class BuiltInTextEditorScreen extends StatefulWidget {
   /// strip draws its modified marker from it.
   final ValueNotifier<bool>? dirtyNotifier;
 
+  /// Bumped once this editor has mounted and once it has unmounted, so the
+  /// ☰ menu and the native macOS menu can gate their editor commands on a
+  /// usable editor without polling. Null where no surface needs it.
+  final ValueNotifier<int>? mountRevision;
+
   /// False while another tab is front-most, so autofocus and
   /// focus-on-activation never fight the tab that is actually showing.
   final bool isActive;
@@ -60,6 +65,7 @@ class BuiltInTextEditorScreen extends StatefulWidget {
     this.onSaved,
     this.onUpload,
     this.dirtyNotifier,
+    this.mountRevision,
     this.isActive = true,
     this.fontSize = EditorTextSize.standard,
     this.fontFamily = '',
@@ -129,8 +135,13 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
     unawaited(_editor.initialize());
     // Initial text is installed before listeners attach. Prime the tab marker
     // after its host finishes building, without invalidating an ancestor.
+    // The mount revision rides the same callback: notifying during build
+    // would mark an unrelated menu dirty in the middle of the frame.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.dirtyNotifier?.value = _editor.isDirty;
+      if (!mounted) return;
+      widget.dirtyNotifier?.value = _editor.isDirty;
+      final mountRevision = widget.mountRevision;
+      if (mountRevision != null) mountRevision.value++;
     });
     _checkRemoteDrift();
   }
@@ -171,6 +182,16 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
     WidgetsBinding.instance.removeObserver(this);
     _editor.removeListener(_changed);
     _editor.dispose();
+    // Unmount after the frame, for the same reason the mount notice waits:
+    // dispose runs during the host's build, and a synchronous notification
+    // would rebuild a menu in the middle of it. The GlobalKey is already
+    // unregistered, so a listener reads no mounted editor.
+    final mountRevision = widget.mountRevision;
+    if (mountRevision != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        mountRevision.value++;
+      });
+    }
     super.dispose();
   }
 
