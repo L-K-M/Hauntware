@@ -596,8 +596,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/services/prompt_coordinator.dart': {
     "'No identity-file reader is wired'",
     "'\${data.username}@\${data.host}'",
-    // An unreachable seam's programming-error text, never shown.
-    "'the vault-first branch reads no identity files'",
   },
   // Monospace rendering of machine data (fingerprints, endpoints,
   // transcripts) plus list joins — no authored copy.
