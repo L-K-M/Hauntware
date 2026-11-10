@@ -13684,4 +13684,72 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editorUndoLabel => 'Undo';
+
+  @override
+  String get editorTextSizeSection => 'File editor';
+
+  @override
+  String get editorTextSizeLabel => 'Text size';
+
+  @override
+  String editorTextSizeValue(int size) {
+    return '$size pt';
+  }
+
+  @override
+  String get editorFontPickerTitle => 'Choose a font';
+
+  @override
+  String get editorFontPickerSearch => 'Search fonts';
+
+  @override
+  String get editorFontPickerIncluded => 'Included fonts';
+
+  @override
+  String get editorFontPickerInstalled => 'Installed fonts';
+
+  @override
+  String get editorFontPickerEmpty => 'No fonts match your search.';
+
+  @override
+  String get editorFontPickerUse => 'Use font';
+
+  @override
+  String get editorFontPickerDefault => 'default';
+
+  @override
+  String get editorFontPickerMonospace => 'Monospace only';
+
+  @override
+  String get editorFontPickerNoLigatures =>
+      'This font has no programming ligatures.';
+
+  @override
+  String get editorFontLabel => 'Font';
+
+  @override
+  String editorFontDefault(String font) {
+    return '$font (default)';
+  }
+
+  @override
+  String get editorLigaturesLabel => 'Ligatures';
+
+  @override
+  String get editorLigaturesSubtitle =>
+      'Join character pairs such as -> and != into one symbol, in fonts that draw them.';
+
+  @override
+  String get editorDialogCancel => 'Cancel';
+
+  @override
+  String get previewPanelLabel => 'Preview';
+
+  @override
+  String get settingsEditorDisplayNotSaved =>
+      'The file editor settings changed but could not be saved. They last until Klabautermann quits.';
+
+  @override
+  String get settingsEditorDisplayNotChanged =>
+      'The file editor settings could not be changed.';
 }

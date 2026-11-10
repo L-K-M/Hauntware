@@ -22,12 +22,12 @@ import 'package:planchette_editor/planchette_editor.dart'
 
 import '../../controllers/operations_controller.dart';
 import '../../l10n/app_localizations.dart';
-import '../../theme/app_theme.dart' show klabautermannThemeStyle;
 import '../actions/action_entry.dart' show OperationsScope;
 import '../actions/action_preview.dart' show startAction;
 import '../admin_mode_chip.dart' show TurnOnAdminModeButton;
 import '../docker/containers_panel.dart' show DockerNotice;
 import '../editor_strings.dart' show KlabautermannEditorStrings;
+import 'editor_display_scope.dart';
 
 /// Below this width the editor takes the whole screen, as on phones
 /// (03 §10.5).
@@ -424,6 +424,8 @@ class _RemoteEditorState extends State<RemoteEditor> {
       child: Text(l10n.editRetry),
     );
     final theme = Theme.of(context);
+    final display =
+        EditorDisplayScope.maybeOf(context) ?? EditorDisplay.standard;
     final pathLine = Text(
       switch (widget.target) {
         FileTarget(:final path) || StackFileTarget(:final path) => path,
@@ -507,6 +509,8 @@ class _RemoteEditorState extends State<RemoteEditor> {
                     key: ObjectKey(editor),
                     controller: editor,
                     strings: KlabautermannEditorStrings(l10n),
+                    textStyle: editorDisplayTextStyle(display),
+                    ligatures: display.ligatures,
                     statusBuilder: _statusBar,
                   ),
                 ),
@@ -817,12 +821,12 @@ class _DiffBody extends StatelessWidget {
 
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final mono = theme.textTheme.bodySmall?.copyWith(
-      fontFamily: klabautermannThemeStyle.monoFontFamilies.first,
-      fontFamilyFallback: klabautermannThemeStyle.monoFontFamilies
-          .skip(1)
-          .toList(),
+    final display =
+        EditorDisplayScope.maybeOf(context) ?? EditorDisplay.standard;
+    final base = theme.textTheme.bodySmall?.merge(
+      editorDisplayTextStyle(display),
     );
+    final mono = base == null ? null : display.ligatures.applyTo(base);
     final lines = result.text.split('\n');
     if (lines.last.isEmpty) lines.removeLast();
     return DecoratedBox(

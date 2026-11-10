@@ -16555,5 +16555,74 @@
   "@editorLanguageCStyle": {
     "description": "Editor status row language name for C, C++, Java and similar brace languages."
   },
-  "editorUndoLabel": "Undo"
+  "editorUndoLabel": "Undo",
+  "editorTextSizeSection": "File editor",
+  "@editorTextSizeSection": {
+    "description": "Settings → Appearance section header for the file editors' font and text size."
+  },
+  "editorTextSizeLabel": "Text size",
+  "@editorTextSizeLabel": {
+    "description": "Label beside the file editors' text size slider in Settings → Appearance."
+  },
+  "editorTextSizeValue": "{size} pt",
+  "@editorTextSizeValue": {
+    "description": "The file editors' text size as the slider shows and announces it.",
+    "placeholders": {
+      "size": {
+        "type": "int"
+      }
+    }
+  },
+  "editorFontPickerTitle": "Choose a font",
+  "@editorFontPickerTitle": {"description": "Shared monospace font picker title"},
+  "editorFontPickerSearch": "Search fonts",
+  "@editorFontPickerSearch": {"description": "Font search field hint"},
+  "editorFontPickerIncluded": "Included fonts",
+  "@editorFontPickerIncluded": {"description": "Bundled font section heading"},
+  "editorFontPickerInstalled": "Installed fonts",
+  "@editorFontPickerInstalled": {"description": "Installed font section heading"},
+  "editorFontPickerEmpty": "No fonts match your search.",
+  "@editorFontPickerEmpty": {"description": "Empty font search result"},
+  "editorFontPickerUse": "Use font",
+  "@editorFontPickerUse": {"description": "Confirm the previewed font and ligatures"},
+  "editorFontPickerDefault": "default",
+  "@editorFontPickerDefault": {"description": "Default font choice suffix"},
+  "editorFontPickerMonospace": "Monospace only",
+  "@editorFontPickerMonospace": {"description": "Installed font filter label"},
+  "editorFontPickerNoLigatures": "This font has no programming ligatures.",
+  "@editorFontPickerNoLigatures": {"description": "Notice for a font without coding ligatures"},
+  "editorFontLabel": "Font",
+  "@editorFontLabel": {
+    "description": "Label beside the file editors' font menu in Settings → Appearance."
+  },
+  "editorFontDefault": "{font} (default)",
+  "@editorFontDefault": {
+    "description": "The font menu entry for the editors' default font, which ships with the app.",
+    "placeholders": {
+      "font": {
+        "type": "String",
+        "example": "JetBrains Mono"
+      }
+    }
+  },
+  "editorLigaturesLabel": "Ligatures",
+  "@editorLigaturesLabel": {
+    "description": "Switch in Settings → Appearance: whether the file editors' font joins character pairs into ligatures."
+  },
+  "editorLigaturesSubtitle": "Join character pairs such as -> and != into one symbol, in fonts that draw them.",
+  "@editorLigaturesSubtitle": {
+    "description": "Explains the file editors' Ligatures switch; -> and != are typed characters, not to be translated."
+  },
+  "editorDialogCancel": "Cancel",
+  "@editorDialogCancel": {"description": "Font picker's cancel button."},
+  "previewPanelLabel": "Preview",
+  "@previewPanelLabel": {"description": "Font picker's preview pane heading."},
+  "settingsEditorDisplayNotSaved": "The file editor settings changed but could not be saved. They last until Klabautermann quits.",
+  "@settingsEditorDisplayNotSaved": {
+    "description": "Toast when a file editor display change the app took could not be written to settings.json."
+  },
+  "settingsEditorDisplayNotChanged": "The file editor settings could not be changed.",
+  "@settingsEditorDisplayNotChanged": {
+    "description": "Toast when a file editor display change was refused."
+  }
 }

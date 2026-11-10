@@ -17303,6 +17303,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Undo'**
   String get editorUndoLabel;
+
+  /// Settings → Appearance section header for the file editors' font and text size.
+  ///
+  /// In en, this message translates to:
+  /// **'File editor'**
+  String get editorTextSizeSection;
+
+  /// Label beside the file editors' text size slider in Settings → Appearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Text size'**
+  String get editorTextSizeLabel;
+
+  /// The file editors' text size as the slider shows and announces it.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} pt'**
+  String editorTextSizeValue(int size);
+
+  /// Shared monospace font picker title
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a font'**
+  String get editorFontPickerTitle;
+
+  /// Font search field hint
+  ///
+  /// In en, this message translates to:
+  /// **'Search fonts'**
+  String get editorFontPickerSearch;
+
+  /// Bundled font section heading
+  ///
+  /// In en, this message translates to:
+  /// **'Included fonts'**
+  String get editorFontPickerIncluded;
+
+  /// Installed font section heading
+  ///
+  /// In en, this message translates to:
+  /// **'Installed fonts'**
+  String get editorFontPickerInstalled;
+
+  /// Empty font search result
+  ///
+  /// In en, this message translates to:
+  /// **'No fonts match your search.'**
+  String get editorFontPickerEmpty;
+
+  /// Confirm the previewed font and ligatures
+  ///
+  /// In en, this message translates to:
+  /// **'Use font'**
+  String get editorFontPickerUse;
+
+  /// Default font choice suffix
+  ///
+  /// In en, this message translates to:
+  /// **'default'**
+  String get editorFontPickerDefault;
+
+  /// Installed font filter label
+  ///
+  /// In en, this message translates to:
+  /// **'Monospace only'**
+  String get editorFontPickerMonospace;
+
+  /// Notice for a font without coding ligatures
+  ///
+  /// In en, this message translates to:
+  /// **'This font has no programming ligatures.'**
+  String get editorFontPickerNoLigatures;
+
+  /// Label beside the file editors' font menu in Settings → Appearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Font'**
+  String get editorFontLabel;
+
+  /// The font menu entry for the editors' default font, which ships with the app.
+  ///
+  /// In en, this message translates to:
+  /// **'{font} (default)'**
+  String editorFontDefault(String font);
+
+  /// Switch in Settings → Appearance: whether the file editors' font joins character pairs into ligatures.
+  ///
+  /// In en, this message translates to:
+  /// **'Ligatures'**
+  String get editorLigaturesLabel;
+
+  /// Explains the file editors' Ligatures switch; -> and != are typed characters, not to be translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Join character pairs such as -> and != into one symbol, in fonts that draw them.'**
+  String get editorLigaturesSubtitle;
+
+  /// Font picker's cancel button.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get editorDialogCancel;
+
+  /// Font picker's preview pane heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get previewPanelLabel;
+
+  /// Toast when a file editor display change the app took could not be written to settings.json.
+  ///
+  /// In en, this message translates to:
+  /// **'The file editor settings changed but could not be saved. They last until Klabautermann quits.'**
+  String get settingsEditorDisplayNotSaved;
+
+  /// Toast when a file editor display change was refused.
+  ///
+  /// In en, this message translates to:
+  /// **'The file editor settings could not be changed.'**
+  String get settingsEditorDisplayNotChanged;
 }
 
 class _AppLocalizationsDelegate

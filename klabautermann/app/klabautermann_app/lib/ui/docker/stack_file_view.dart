@@ -10,6 +10,7 @@ import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../actions/action_entry.dart';
 import '../admin_mode_chip.dart';
+import '../edit/editor_display_scope.dart';
 import '../edit/remote_editor.dart';
 import '../editor_strings.dart' show KlabautermannEditorStrings;
 import '../processes_panel.dart' show kRevealDuration;
@@ -337,6 +338,8 @@ class _StackFileViewState extends State<StackFileView> {
 
   List<Widget> _body(BuildContext context, AppLocalizations l10n, String name) {
     final retry = TextButton(onPressed: _retry, child: Text(l10n.dockerRetry));
+    final display =
+        EditorDisplayScope.maybeOf(context) ?? EditorDisplay.standard;
     switch (_answer) {
       case null:
         return [
@@ -429,6 +432,8 @@ class _StackFileViewState extends State<StackFileView> {
                       controller: editor,
                       editingLocked: true,
                       strings: KlabautermannEditorStrings(l10n),
+                      textStyle: editorDisplayTextStyle(display),
+                      ligatures: display.ligatures,
                     ),
                   ),
                 ),

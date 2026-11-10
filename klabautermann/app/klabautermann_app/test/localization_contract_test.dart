@@ -137,6 +137,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/log_display.dart': {
     r"'The log display was not saved: $error'",
   },
+  // The not-saved diagnostic; the Appearance tab prints it and shows its
+  // own ARB text (settingsEditorDisplayNotSaved). The empty default family,
+  // which reads as the editor's own.
+  'lib/controllers/editor_display.dart': {
+    r"'The editor display was not saved: $error'",
+    "''",
+  },
   // The Overview layout's not-saved diagnostic; the cards sheet shows its
   // own ARB toast (overviewCardsNotSaved).
   'lib/controllers/overview_layout.dart': {
@@ -415,6 +422,16 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     '\'lines\'',
     '\'unmapped:\'',
     'r\'\\u{…}\'',
+  },
+  // The file editor settings section: its ValueKeys, the picker's empty
+  // default family, and the not-saved diagnostic it prints while showing
+  // its own ARB toast.
+  'lib/ui/settings/editor_settings.dart': {
+    "'editor.font'",
+    "'editor.ligatures'",
+    "'editor.textSize'",
+    "''",
+    r"'$error'",
   },
   // The Activity table's key prefix, never shown, and the copied log's
   // line break between JSON records.
