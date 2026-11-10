@@ -285,15 +285,21 @@ final class DockerHttpClient {
     // waiter handoffs could overshoot it.
     if (_all.length + _opening < _maxConnections) {
       _opening++;
+      final _Connection c;
       try {
-        final c = await _open(scope);
-        _all.add(c);
-        c.markBusy();
-        scope.bind(c);
-        return c;
-      } finally {
+        c = await _open(scope);
+      } catch (_) {
         _opening--;
+        // The slot this open held is free again; a request queued behind
+        // it would otherwise wait for a release that may never come.
+        _serveWaiters();
+        rethrow;
       }
+      _opening--;
+      _all.add(c);
+      c.markBusy();
+      scope.bind(c);
+      return c;
     }
     final w = _Waiter(scope);
     _waiters.add(w);
@@ -343,6 +349,13 @@ final class DockerHttpClient {
   void _drop(_Connection conn) {
     _all.remove(conn);
     _idle.remove(conn);
+    _serveWaiters();
+  }
+
+  /// Opens a duplex for each queued request that free capacity allows.
+  /// Runs whenever capacity comes back: a dropped connection or a failed
+  /// open.
+  void _serveWaiters() {
     while (_waiters.isNotEmpty &&
         _all.length + _opening < _maxConnections &&
         !_closed) {
@@ -359,6 +372,7 @@ final class DockerHttpClient {
             .onError((Object e, StackTrace st) {
               _opening--;
               w.fail(e);
+              _serveWaiters();
             }),
       );
     }

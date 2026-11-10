@@ -339,6 +339,75 @@ void main() {
       await expectThrows<DockerTransportException>(client.sendBuffered(getX()));
     });
 
+    test('a failed open serves the request queued behind it', () async {
+      var opens = 0;
+      final daemon = FakeDaemon();
+      final client = DockerHttpClient(
+        () async {
+          opens++;
+          if (opens == 1) {
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+            throw StateError('relay could not start');
+          }
+          return daemon.pair.client;
+        },
+        maxConnections: 1,
+        defaultTimeout: const Duration(seconds: 2),
+      );
+      final first = client.sendBuffered(getX('/a'));
+      final queued = client.sendBuffered(getX('/b'));
+      await expectThrows<DockerTransportException>(first);
+
+      // The freed slot opens a duplex for the queued request at once,
+      // instead of leaving it to wait out its timeout.
+      await daemon.gotText('GET /b').timeout(const Duration(seconds: 1));
+      daemon.feed(wireResponse('200 OK', headers: {'Content-Length': '0'}));
+      await queued;
+      expect(opens, 2);
+    });
+
+    test('a failed waiter open serves the next queued request', () async {
+      final farm = DaemonFarm();
+      var failNext = false;
+      final client = DockerHttpClient(
+        () async {
+          if (failNext) {
+            failNext = false;
+            throw StateError('relay could not start');
+          }
+          return farm.opener();
+        },
+        maxConnections: 1,
+        defaultTimeout: const Duration(seconds: 2),
+      );
+      final first = client.sendBuffered(getX('/a'));
+      await farm.daemons[0].gotBytes(1);
+      final second = client.sendBuffered(getX('/b'));
+      final third = client.sendBuffered(getX('/c'));
+      await pumpEventQueue();
+
+      // The first connection retires; the open for /b fails, and /c must
+      // get the slot back rather than wait out its timeout.
+      failNext = true;
+      farm.daemons[0].feed(
+        wireResponse(
+          '200 OK',
+          headers: {'Content-Length': '0', 'Connection': 'close'},
+        ),
+      );
+      await first;
+      await expectThrows<DockerTransportException>(second);
+      await pumpEventQueue();
+      expect(farm.daemons, hasLength(2));
+      await farm.daemons[1]
+          .gotText('GET /c')
+          .timeout(const Duration(seconds: 1));
+      farm.daemons[1].feed(
+        wireResponse('200 OK', headers: {'Content-Length': '0'}),
+      );
+      await third;
+    });
+
     test('a per-request timeout fails and closes the duplex', () async {
       final daemon = FakeDaemon();
       final client = DockerHttpClient(() async => daemon.pair.client);
