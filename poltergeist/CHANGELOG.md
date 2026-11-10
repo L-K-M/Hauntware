@@ -39,6 +39,8 @@
   Text fields keep their own editing history.
 - Closing edited text offers Save, Don't save or Cancel. A failed save
   or upload keeps the editor open, including when you choose Save during Quit.
+- The editor's close dialog comes from the shared Ghost UI package, as in
+  Planchette and Séance; its labels are unchanged.
 - Leading controls stay clear of the full-screen traffic lights. AltGr
   types characters without triggering the Ctrl+Alt pane shortcuts.
 - **The header band lines up.** The inspector's tabs are as tall as the
