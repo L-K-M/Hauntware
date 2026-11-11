@@ -51,6 +51,10 @@ final class AlertNotificationsController extends ChangeNotifier {
   /// permission check.
   bool _set = false;
 
+  /// Whether [dispose] ran: a permission answer that arrives later must
+  /// not notify.
+  bool _disposed = false;
+
   /// The raised alerts' notification ids, so a clear withdraws only what
   /// this run posted.
   final Set<int> _posted = {};
@@ -75,7 +79,7 @@ final class AlertNotificationsController extends ChangeNotifier {
     }
     if (enabled != _enabled) {
       _enabled = enabled;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
     await _save?.call(enabled);
     return AlertNotificationsOutcome.enabled;
@@ -101,7 +105,7 @@ final class AlertNotificationsController extends ChangeNotifier {
       );
       return;
     }
-    if (permitted || _set || !_enabled) return;
+    if (permitted || _set || !_enabled || _disposed) return;
     _enabled = false;
     notifyListeners();
   }
@@ -146,6 +150,7 @@ final class AlertNotificationsController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     unawaited(_events.cancel());
     super.dispose();
   }

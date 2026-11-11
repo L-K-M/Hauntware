@@ -136,6 +136,19 @@ void main() {
       expect(fake.shown, isEmpty);
     });
 
+    test('a launch check that answers after dispose changes nothing', () async {
+      fake.permittedNow = false;
+      final notifications = AlertNotificationsController(
+        engine,
+        notifications: fake,
+        textOf: (_) => throw UnimplementedError(),
+        enabled: true,
+      );
+      notifications.dispose();
+      // A notify on a disposed notifier fails its debug assertion here.
+      await pumpEventQueue();
+    });
+
     test('a stored "on" the system still allows stays on', () async {
       final notifications = controller(notifications: fake, enabled: true);
       await pumpEventQueue();
