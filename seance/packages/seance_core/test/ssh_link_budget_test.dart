@@ -33,7 +33,10 @@ void main() {
     await held.close();
     await pumpEventQueue();
     link.peer.onExec = SshChannelPeer.execEchoAndExit;
-    expect((await link.link.run('after timeout')).stdout, 'ran:after timeout\n');
+    expect(
+      (await link.link.run('after timeout')).stdout,
+      'ran:after timeout\n',
+    );
   });
 
   test('the ninth open queues and slots go out in priority order', () async {
@@ -97,10 +100,11 @@ void main() {
         addTearDown(subscription.cancel);
         final held = await _holdBehindLimit(link, refusal);
 
-        await expectLater(
-          link.link.start('follow 2'),
-          throwsA(_refusedAs(ChannelRefusal.sessionLimit)),
-        );
+        // The refused open is not the caller's failure: it waits on the link
+        // under the learned limit.
+        final refused = link.link.start('follow 2');
+        await pumpEventQueue();
+        expect(link.peer.sessionOpensRefused, 1);
         expect(
           link.link.seen,
           const SshLinkSeen(
@@ -114,22 +118,104 @@ void main() {
           SshLinkDegradedReason.sessionLimitLearned,
         );
         expect(link.link.state, degraded);
-        await pumpEventQueue();
         expect(states, [isA<SshLinkReady>(), degraded]);
 
-        // Degraded, not failed: the next open waits on the link under the
-        // learned limit instead of going out to be refused again, and runs
-        // once a slot frees.
+        // Degraded, not failed: the next open waits on the link too instead
+        // of going out to be refused again, and both run, in order, as
+        // slots free.
         link.peer.onExec = SshChannelPeer.execEchoAndExit;
         final queued = link.link.run('uptime');
         await pumpEventQueue();
         expect(link.peer.sessionOpenRequests, 3);
 
         await held.first.close();
+        expect((await (await refused).exit).exitCode, 0);
         expect((await queued).exitCode, 0);
         expect(link.peer.sessionOpensRefused, 1);
+        expect(link.peer.channels.skip(2).map((c) => c.execCommand), [
+          'follow 2',
+          'uptime',
+        ]);
       });
     }
+
+    test('in a burst learns the count the server held, and the refused '
+        'opens queue instead of failing', () async {
+      final link = await openTestLink();
+      addTearDown(link.link.close);
+      link.peer
+        ..sessionChannelLimit = 4
+        ..onExec = SshChannelPeer.execQuietFollower;
+
+      // Eight opens go out at once against MaxSessions 4: the last four are
+      // refused while the first four are still settling on the link.
+      final started = <RemoteProcess>[];
+      final failures = <Object>[];
+      for (var index = 0; index < 8; index++) {
+        link.link
+            .start('follow $index')
+            .then(started.add, onError: failures.add)
+            .ignore();
+      }
+      await pumpEventQueue();
+
+      expect(failures, isEmpty);
+      expect(started, hasLength(4));
+      expect(link.peer.sessionOpensRefused, 4);
+      expect(link.link.seen.learnedSessionLimit, 4);
+
+      // Each refused open waits for a slot and goes out once more.
+      for (final process in started.toList()) {
+        await process.close();
+      }
+      await pumpEventQueue();
+      expect(failures, isEmpty);
+      expect(started, hasLength(8));
+      expect(link.peer.sessionOpensRefused, 4);
+      for (final process in started.skip(4)) {
+        await process.close();
+      }
+    });
+
+    test('whose slot does not free in time reaches the caller as the '
+        'refusal', () async {
+      final link = await openTestLink(
+        timeout: const Duration(milliseconds: 30),
+      );
+      addTearDown(link.link.close);
+      await _holdBehindLimit(link, (
+        reasonCode: peerRefusalConnectFailed,
+        description: 'open failed',
+      ));
+
+      await expectLater(
+        link.link.start('follow 2'),
+        throwsA(_refusedAs(ChannelRefusal.sessionLimit)),
+      );
+      expect(link.peer.sessionOpensRefused, 1);
+    });
+
+    test('with nothing open teaches nothing the first time', () async {
+      final link = await openTestLink();
+      addTearDown(link.link.close);
+      link.peer.sessionChannelLimit = 0;
+
+      await expectLater(
+        link.link.run('uptime'),
+        throwsA(_refusedAs(ChannelRefusal.other)),
+      );
+      expect(link.link.seen.learnedSessionLimit, isNull);
+      expect(link.link.state, isA<SshLinkReady>());
+
+      // A second refusal with nothing open is the server's answer: it
+      // takes no session channels on this link.
+      await expectLater(
+        link.link.run('uptime'),
+        throwsA(_refusedAs(ChannelRefusal.sessionLimit)),
+      );
+      expect(link.link.seen.learnedSessionLimit, 0);
+      expect(link.link.state, isA<SshLinkDegraded>());
+    });
 
     test('that does not read as a limit teaches nothing', () async {
       final link = await openTestLink();

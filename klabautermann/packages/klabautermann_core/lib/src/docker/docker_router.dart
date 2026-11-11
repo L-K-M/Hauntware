@@ -1164,14 +1164,12 @@ final class DockerRouter {
   /// quota is free, and frees it after (M9).
   ///
   /// An action whose session channel sshd refuses at its `MaxSessions`
-  /// runs again while each refusal tightens the limit the link learned:
-  /// at that limit the link queues an open instead of sending it (03
-  /// §5.2), so the command that taught it would otherwise fail where the
-  /// next one waits. The link counts the opens in flight when it learns,
-  /// so two refused at once can teach it one too many first. Without
-  /// this, the stack check that found the limit read "check failed",
-  /// and its verdict stood, where the next check would have queued and
-  /// run (M3 D22).
+  /// runs again while each refusal tightens the limit the link learned.
+  /// The link itself queues a refused open once under the limit it
+  /// learned (03 §5.2); this covers that open being refused again at a
+  /// tighter limit. Without it, the stack check that found the limit
+  /// could read "check failed", and its verdict stood, where the next
+  /// check would have queued and run (M3 D22).
   static Future<RemoteCommandResult> _shortAction(
     _Session session,
     SshLink link,

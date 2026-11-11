@@ -17,8 +17,6 @@ void main() {
     ]) {
       ChannelRefusal classify(int? code) => classifyChannelRefusal(
         kind,
-        observedOpens: 0,
-        effectiveLimit: 8,
         reasonCode: code,
         description: 'open failed',
       );
@@ -50,21 +48,11 @@ void main() {
   });
 
   group('a session refusal', () {
-    ChannelRefusal classify(int? code, {int observedOpens = 2}) =>
-        classifyChannelRefusal(
-          .session,
-          observedOpens: observedOpens,
-          effectiveLimit: 8,
-          reasonCode: code,
-          description: '',
-        );
+    ChannelRefusal classify(int? code) =>
+        classifyChannelRefusal(.session, reasonCode: code, description: '');
 
-    test('connect failed below the ceiling is the session limit', () {
+    test('connect failed is the session limit', () {
       expect(classify(_connectFailed), ChannelRefusal.sessionLimit);
-    });
-
-    test('at the ceiling it teaches nothing', () {
-      expect(classify(_connectFailed, observedOpens: 8), ChannelRefusal.other);
     });
 
     test('administratively prohibited without "open failed" is other', () {

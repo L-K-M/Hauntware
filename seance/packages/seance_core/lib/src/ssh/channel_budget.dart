@@ -31,7 +31,8 @@ enum ChannelWaitPriority {
 enum ChannelRefusal {
   /// The peer refuses more concurrent session channels. The budget lowers its
   /// effective ceiling to the count that was already open, and future opens
-  /// queue rather than erroring.
+  /// queue rather than erroring; the refused open itself queues and goes out
+  /// once more, and this reaches a caller only if that refused too.
   sessionLimit,
 
   /// The peer refused a `direct-tcpip` or `direct-streamlocal` open because
@@ -47,8 +48,8 @@ enum ChannelRefusal {
   /// does not prove that forwarding works.
   connectFailed,
 
-  /// A refusal that teaches the link nothing (already at the learned ceiling,
-  /// or a reason the classifier cannot attribute).
+  /// A refusal that teaches the link nothing (a reason the classifier cannot
+  /// attribute, or a first session refusal with nothing open).
   other,
 }
 
@@ -115,16 +116,19 @@ final class SshLinkSeen {
 /// Grants are idempotent: every cleanup path may call [release] and only the
 /// first one frees the slot.
 final class ChannelGrant {
-  ChannelGrant._(this._budget);
+  ChannelGrant._(this._budget, this._serial);
 
   final ChannelBudget _budget;
+
+  /// Order of issue: grants are taken in the order their opens go out.
+  final int _serial;
   var _released = false;
 
   /// Frees the slot and wakes the next waiter that fits.
   void release() {
     if (_released) return;
     _released = true;
-    _budget._releaseOne();
+    _budget._releaseOne(this);
   }
 }
 
@@ -143,12 +147,23 @@ final class ChannelBudget {
   /// The configured ceiling on open session channels.
   final int capacity;
 
-  var _inUse = 0;
+  /// Grants not yet released, in order of issue.
+  final _held = <ChannelGrant>{};
+  var _nextSerial = 0;
   int? _learnedLimit;
   final _waiters = <_ChannelWaiter>[];
 
   /// Slots currently held.
-  int get inUse => _inUse;
+  int get inUse => _held.length;
+
+  /// Slots still held that were granted before [grant].
+  ///
+  /// When the server refuses [grant]'s open, this is the count it had
+  /// open: every earlier open was answered before the refusal, and the
+  /// opens granted after [grant] reached the server after it. [inUse]
+  /// counts those later opens too, and overstates the limit.
+  int heldBefore(ChannelGrant grant) =>
+      _held.where((held) => held._serial < grant._serial).length;
 
   /// The ceiling in force: the configured capacity, tightened by the lowest
   /// count the server has demonstrated it will tolerate.
@@ -180,9 +195,8 @@ final class ChannelBudget {
         ),
       );
     }
-    if (_inUse < effectiveLimit && _waiters.isEmpty) {
-      _inUse++;
-      return Future.value(ChannelGrant._(this));
+    if (inUse < effectiveLimit && _waiters.isEmpty) {
+      return Future.value(_grant());
     }
     final waiter = _ChannelWaiter(priority, reason);
     // Higher priority first; FIFO inside one priority band.
@@ -210,11 +224,16 @@ final class ChannelBudget {
     _waiters.clear();
   }
 
-  void _releaseOne() {
-    _inUse--;
-    while (_inUse < effectiveLimit && _waiters.isNotEmpty) {
-      _inUse++;
-      _waiters.removeAt(0).grant.complete(ChannelGrant._(this));
+  ChannelGrant _grant() {
+    final grant = ChannelGrant._(this, _nextSerial++);
+    _held.add(grant);
+    return grant;
+  }
+
+  void _releaseOne(ChannelGrant grant) {
+    _held.remove(grant);
+    while (inUse < effectiveLimit && _waiters.isNotEmpty) {
+      _waiters.removeAt(0).grant.complete(_grant());
     }
   }
 }
@@ -250,17 +269,15 @@ const sshOpenUnknownChannelType = 3;
 
 /// Maps a wire refusal to a [ChannelRefusal].
 ///
-/// A connect-failed session refusal while the observed open count is below
-/// the ceiling in force is the server's `MaxSessions` speaking: the count
-/// that was open is the real limit, so the link learns it and the link
-/// degrades rather than failing. A forwarding open refused by policy or as
+/// A connect-failed session refusal is the server's `MaxSessions` speaking:
+/// the link learns the count that was open as the real limit and degrades
+/// rather than failing (a refusal of an open granted before the link
+/// learned the limit teaches it again and lowers nothing). A forwarding open refused by policy or as
 /// an unknown type means this transport cannot carry that forwarding kind;
 /// one refused as connect failed means the target did not answer. Anything
 /// else is an opaque refusal.
 ChannelRefusal classifyChannelRefusal(
   ChannelOpenKind kind, {
-  required int observedOpens,
-  required int effectiveLimit,
   int? reasonCode,
   String description = '',
 }) {
@@ -271,9 +288,6 @@ ChannelRefusal classifyChannelRefusal(
       sshOpenConnectFailed => ChannelRefusal.connectFailed,
       _ => ChannelRefusal.other,
     };
-  }
-  if (observedOpens >= effectiveLimit) {
-    return ChannelRefusal.other;
   }
   final isConnectFailure =
       reasonCode == sshOpenConnectFailed ||

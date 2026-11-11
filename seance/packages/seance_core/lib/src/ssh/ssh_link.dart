@@ -294,6 +294,9 @@ final class _SshLink implements SshLink {
   int? _learnedSessionLimit;
   var _forwardingRefused = false;
 
+  /// Set by the first session refusal that arrived with no session open.
+  var _refusedWithNoneOpen = false;
+
   Timer? _pingTimer;
   var _pingOutstanding = false;
   var _dataSinceLastTick = false;
@@ -543,45 +546,61 @@ final class _SshLink implements SshLink {
   /// finds it; [start] hands the grant to the `RemoteProcess`, which owns
   /// both. On open failure the grant is released here. A channel that
   /// arrives after the open timeout is closed on arrival, never leaked.
+  ///
+  /// An open the server refuses at its session limit is not the caller's
+  /// failure: once the link has learned the limit, the open queues on the
+  /// budget like any later one and goes out once more when a slot frees. If
+  /// no slot frees within the open bound, the caller gets that refusal.
   Future<(SSHSession, ChannelGrant)> _openSessionChannel(
     String command, {
     SSHPtyConfig? pty,
     bool trackChannel = true,
   }) async {
-    _throwIfClosingForChannel();
-    final acquire = _budget.acquire(
-      ChannelWaitPriority.userAction,
-      'exec: $command',
-    );
-    final ChannelGrant grant;
-    try {
-      grant = await acquire.timeout(openTimeout);
-    } on TimeoutException {
-      // The waiter stays queued until a slot frees. Its late grant is
-      // released at once, so the command the caller gave up on never runs
-      // and the slot goes to the next waiter.
-      unawaited(acquire.then((late) => late.release(), onError: (_) {}));
-      rethrow;
-    }
-    _pendingOpens++;
-    try {
-      final pending = _client.execute(command, pty: pty);
-      SSHSession channel;
+    ChannelOpenException? refusedAtLimit;
+    while (true) {
+      _throwIfClosingForChannel();
+      final acquire = _budget.acquire(
+        ChannelWaitPriority.userAction,
+        'exec: $command',
+      );
+      final ChannelGrant grant;
       try {
-        channel = await pending.timeout(openTimeout);
-      } catch (_) {
-        // The open was abandoned at its bound; whatever arrives late on it
-        // is owned by nobody — close it on arrival, never leak it.
-        unawaited(pending.then(_discardSession, onError: (_) {}));
+        grant = await acquire.timeout(openTimeout);
+      } on TimeoutException {
+        // The waiter stays queued until a slot frees. Its late grant is
+        // released at once, so the command the caller gave up on never runs
+        // and the slot goes to the next waiter.
+        unawaited(acquire.then((late) => late.release(), onError: (_) {}));
+        if (refusedAtLimit != null) throw refusedAtLimit;
         rethrow;
       }
-      if (trackChannel) _trackChannel(channel, grant);
-      return (channel, grant);
-    } catch (e) {
-      grant.release();
-      throw _classifyOpen(e, ChannelOpenKind.session);
-    } finally {
-      _pendingOpens--;
+      _pendingOpens++;
+      try {
+        final pending = _client.execute(command, pty: pty);
+        SSHSession channel;
+        try {
+          channel = await pending.timeout(openTimeout);
+        } catch (_) {
+          // The open was abandoned at its bound; whatever arrives late on it
+          // is owned by nobody — close it on arrival, never leak it.
+          unawaited(pending.then(_discardSession, onError: (_) {}));
+          rethrow;
+        }
+        if (trackChannel) _trackChannel(channel, grant);
+        return (channel, grant);
+      } catch (e) {
+        final error = _classifyOpen(e, ChannelOpenKind.session, grant: grant);
+        grant.release();
+        if (refusedAtLimit == null &&
+            error is ChannelOpenException &&
+            error.refusal == ChannelRefusal.sessionLimit) {
+          refusedAtLimit = error;
+          continue;
+        }
+        throw error;
+      } finally {
+        _pendingOpens--;
+      }
     }
   }
 
@@ -683,18 +702,31 @@ final class _SshLink implements SshLink {
     }
   }
 
-  Object _classifyOpen(Object e, ChannelOpenKind kind) {
+  /// Turns a refused open into a [ChannelOpenException] and records what it
+  /// teaches. [grant] is the session open's slot, still held: the count the
+  /// server had open is the slots granted before it.
+  Object _classifyOpen(Object e, ChannelOpenKind kind, {ChannelGrant? grant}) {
     if (e is! SSHChannelOpenError) return e;
-    final refusal = classifyChannelRefusal(
+    final observedOpens = grant == null
+        ? _budget.inUse
+        : _budget.heldBefore(grant);
+    var refusal = classifyChannelRefusal(
       kind,
-      observedOpens: _budget.inUse,
-      effectiveLimit: _budget.effectiveLimit,
       reasonCode: e.code,
       description: e.description,
     );
+    // A limit of zero fails every later session open on the link, so one
+    // refusal with nothing open is not enough to learn it: the first is
+    // reported as it came, and only a second one teaches the limit.
+    if (refusal == ChannelRefusal.sessionLimit && observedOpens == 0) {
+      if (!_refusedWithNoneOpen) {
+        _refusedWithNoneOpen = true;
+        refusal = ChannelRefusal.other;
+      }
+    }
     switch (refusal) {
       case ChannelRefusal.sessionLimit:
-        _budget.learnLimit(_budget.inUse);
+        _budget.learnLimit(observedOpens);
         _learnedSessionLimit = _budget.learnedLimit;
         _setState(
           const SshLinkDegraded(SshLinkDegradedReason.sessionLimitLearned),
