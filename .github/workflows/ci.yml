@@ -625,6 +625,7 @@ jobs:
       pull-requests: read
     outputs:
       run: ${{ steps.fixture.outputs.run }}
+      sync: ${{ steps.changes.outputs.sync }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -651,6 +652,16 @@ jobs:
             fixture:
               - 'poltergeist/test/integration/**'
               - '.github/workflows/ci.yml'
+            # sync_integration's server and everything its Dockerfile
+            # copies; a server-only PR runs that job without the SSH
+            # fixture job.
+            sync:
+              - 'seance/pubspec.yaml'
+              - 'seance/pubspec.lock'
+              - 'seance/analysis_options.yaml'
+              - 'seance/scripts/licenses/**'
+              - 'seance/packages/seance_sync_server/**'
+              - 'scripts/resolve-package-root.py'
       - name: Require fixture when its lifecycle changes
         id: fixture
         if: >-
@@ -700,7 +711,9 @@ jobs:
   sync_integration:
     name: Sync-server integration tests
     needs: detect_integration
-    if: needs.detect_integration.outputs.run == 'true'
+    if: >-
+      needs.detect_integration.outputs.run == 'true' ||
+      needs.detect_integration.outputs.sync == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
