@@ -85,6 +85,24 @@ void main() {
     expect(controller.configured, isTrue);
   });
 
+  test('an unlock refresh failure stays inside the controller', () async {
+    controller.refreshAfterUnlock();
+    final request = engine.sent.whereType<RecoveryStatusRequest>().last;
+    engine.emit(
+      VaultRecoveryFailed(
+        requestId: request.requestId,
+        failure: VaultRecoveryFailure.keystoreUnavailable,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final retried = controller.refresh();
+    final retry = engine.sent.whereType<RecoveryStatusRequest>().last;
+    engine.emit(RecoveryStatus(requestId: retry.requestId, configured: true));
+    await retried;
+    expect(controller.configured, isTrue);
+  });
+
   test('a status timeout is not reported as a successful refresh', () async {
     await expectLater(controller.refresh(), throwsA(isA<RecoveryException>()));
   });

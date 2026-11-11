@@ -525,7 +525,7 @@ Future<void> main(List<String> args) async {
   // keystore that was locked at launch.
   final recovery = RecoveryController(engine, PlatformRecoveryFiles());
   appLock.addListener(() {
-    if (!appLock.locked) unawaited(recovery.refresh());
+    if (!appLock.locked) recovery.refreshAfterUnlock();
   });
 
   // SAF-08's notice heads the Docker tab until dismissed on this device,

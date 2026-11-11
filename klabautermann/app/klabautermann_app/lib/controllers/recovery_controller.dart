@@ -100,6 +100,16 @@ final class RecoveryController extends ChangeNotifier
   @override
   Future<void> refresh() => _requestStatus();
 
+  /// Retries status after unlock without surfacing an optional background
+  /// failure to the uncaught-error handler. Explicit [refresh] stays strict.
+  void refreshAfterUnlock() {
+    unawaited(
+      refresh().onError<RecoveryException>((_, _) {
+        // Explicit settings checks report status failures and offer Retry.
+      }),
+    );
+  }
+
   String _id(String prefix) => '$prefix-${_nextRequestId++}';
 
   @override
