@@ -120,7 +120,8 @@ JournalEntry? _decodeLine(String line) {
 /// hostile line would overflow the stack.
 String? _fieldValue(Object? v) {
   if (v is List && v.isNotEmpty && v.every((e) => e is String || e is List)) {
-    return v.map(_singleValue).nonNulls.join('\n');
+    final values = v.map(_singleValue).nonNulls;
+    return values.isEmpty ? null : values.join('\n');
   }
   return _singleValue(v);
 }

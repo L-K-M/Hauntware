@@ -133,6 +133,12 @@ void main() {
       expect(e.fields['X'], ',\uFFFD\x00');
     });
 
+    test('a repeated field with no decodable value reads as null', () {
+      final e = parseJournalLine('{"MESSAGE":[[[1]],[[2]]],"X":[[["a"]]]}')!;
+      expect(e.message, isNull);
+      expect(e.fields['X'], isNull);
+    });
+
     test('an object value reads as null, however deep it nests', () {
       // Stringifying this recurses once per level, past the stack.
       final deep = '${'{"a":' * 20000}1${'}' * 20000}';
