@@ -294,6 +294,11 @@ final class SshChannelPeer {
   /// Never answer global requests: the keepalive dead-peer case.
   var silent = false;
 
+  /// Refuse the `sftp` subsystem request, as an OpenSSH server without a
+  /// `Subsystem sftp` line does: the channel stays open and nothing answers
+  /// the client's SFTP INIT.
+  var refuseSftpSubsystem = false;
+
   /// SFTP REALPATH requests for these paths are answered only after the
   /// given delay: a long-running SFTP call a test can overlap others with.
   final realpathDelays = <String, Duration>{};
@@ -491,8 +496,9 @@ final class SshChannelPeer {
         onExec(channel, request.command ?? '');
       case SSHChannelRequestType.subsystem:
         channel.subsystem = request.subsystemName;
-        reply(request.subsystemName == 'sftp');
-        if (request.subsystemName == 'sftp') channel._sftpMode = true;
+        final sftp = request.subsystemName == 'sftp' && !refuseSftpSubsystem;
+        reply(sftp);
+        if (sftp) channel._sftpMode = true;
       case SSHChannelRequestType.signal:
         channel.signalsSeen.add(request.signalName ?? '');
       case SSHChannelRequestType.env:

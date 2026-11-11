@@ -700,7 +700,7 @@ final class _SshLink implements SshLink {
   // ---- file system --------------------------------------------------------
 
   @override
-  Future<RemoteFileSystem> openFileSystem() {
+  Future<RemoteFileSystem> openFileSystem() async {
     if (_closed || _client.isClosed) {
       throw const RemoteFileException(
         kind: RemoteFileErrorKind.disconnected,
@@ -708,7 +708,7 @@ final class _SshLink implements SshLink {
         message: 'The SSH link is closed.',
       );
     }
-    return Future.value(_fileSystem ??= _LeasedLinkFileSystem(this));
+    return _fileSystem ??= _LeasedLinkFileSystem(this);
   }
 
   // ---- open classification ------------------------------------------------
@@ -965,11 +965,34 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
     _inFlightOps++;
     try {
       final lease = await _leaseFs();
-      return await body(lease.fs);
+      try {
+        return await body(lease.fs);
+      } on RemoteFileException catch (e) {
+        // dartssh2 aborts every call once the SFTP channel has ended, and
+        // offers no other signal that it did. Drop that lease so the next
+        // call opens a fresh channel instead of failing on the dead one.
+        if (e.cause is SftpAbortError) _evict(lease);
+        rethrow;
+      }
     } finally {
       _inFlightOps--;
       _armIdle();
     }
+  }
+
+  /// Forgets [lease] if it is still the current one and frees what it
+  /// holds. Calls still running on it fail on their own.
+  void _evict(_FsLease lease) {
+    if (!identical(_leaseValue, lease)) return;
+    _lease = null;
+    _leaseValue = null;
+    unawaited(
+      runSequentialCleanup(
+        [lease.sftp.close, lease.grant.release],
+        actionTimeout: _link.closeTimeout,
+        failureMode: CleanupFailureMode.ignore,
+      ),
+    );
   }
 
   Future<_FsLease> _leaseFs() {
@@ -982,48 +1005,119 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
     );
   }
 
+  /// Leases one SFTP channel inside the budget. A session-limit refusal of
+  /// the channel queues once under the learned limit, as an exec open does.
   Future<_FsLease> _openFs() async {
-    final grant = await _acquireGrant();
-    _link._pendingOpens++;
-    try {
-      final pending = _link._client.sftp();
-      SftpClient sftp;
+    ChannelOpenException? refusedAtLimit;
+    while (true) {
+      final grant = await _acquireGrant(refusedAtLimit);
+      _link._pendingOpens++;
       try {
-        sftp = await pending.timeout(_link.openTimeout);
-      } catch (_) {
-        // The open was abandoned at its bound; whatever arrives late on it
-        // is owned by nobody — close it on arrival, never leak it.
-        unawaited(pending.then(_discardSftp, onError: (_) {}));
-        rethrow;
-      }
-      try {
-        await sftp.handshake.timeout(_link.openTimeout);
-      } catch (_) {
-        unawaited(_discardSftp(sftp));
-        rethrow;
-      }
-      return _leaseValue = _FsLease(DartSshRemoteFileSystem(sftp), sftp, grant);
-    } catch (e) {
-      grant.release();
-      if (_link._closed || _link._client.isClosed || e is TimeoutException) {
-        throw const RemoteFileException(
-          kind: RemoteFileErrorKind.disconnected,
-          operation: 'open SFTP',
-          message: 'The SSH link is closed.',
+        final sftp = await _openSftp();
+        return _leaseValue = _FsLease(
+          DartSshRemoteFileSystem(sftp),
+          sftp,
+          grant,
         );
+      } catch (e) {
+        final error = _link._classifyOpen(
+          e,
+          ChannelOpenKind.session,
+          grant: grant,
+        );
+        grant.release();
+        if (refusedAtLimit == null &&
+            error is ChannelOpenException &&
+            error.refusal == ChannelRefusal.sessionLimit) {
+          refusedAtLimit = error;
+          continue;
+        }
+        throw _openFailure(error);
+      } finally {
+        _link._pendingOpens--;
       }
-      throw RemoteFileException(
-        kind: RemoteFileErrorKind.unsupported,
-        operation: 'open SFTP',
-        message: 'Could not open SFTP on this server: $e',
-        cause: e,
-      );
-    } finally {
-      _link._pendingOpens--;
     }
   }
 
-  Future<ChannelGrant> _acquireGrant() async {
+  /// Opens the channel, requests the subsystem and waits for the SFTP
+  /// version reply.
+  Future<SftpClient> _openSftp() async {
+    final pending = _link._client.sftp();
+    SftpClient sftp;
+    try {
+      sftp = await pending.timeout(_link.openTimeout);
+    } catch (_) {
+      // The open was abandoned at its bound; whatever arrives late on it
+      // is owned by nobody — close it on arrival, never leak it.
+      unawaited(pending.then(_discardSftp, onError: (_) {}));
+      rethrow;
+    }
+    // dartssh2 drops the server's reply to the subsystem request, so a
+    // server without an SFTP subsystem leaves the handshake unanswered
+    // rather than refusing. A server that has one answers within a round
+    // trip, so a short bound tells the two apart.
+    final handshakeBound = _link.openTimeout < _sftpHandshakeBound
+        ? _link.openTimeout
+        : _sftpHandshakeBound;
+    try {
+      await sftp.handshake.timeout(handshakeBound);
+    } on TimeoutException {
+      unawaited(_discardSftp(sftp));
+      throw const _SftpSubsystemSilent();
+    } catch (_) {
+      unawaited(_discardSftp(sftp));
+      rethrow;
+    }
+    return sftp;
+  }
+
+  /// How long a started SFTP subsystem may take to answer its handshake.
+  static const _sftpHandshakeBound = Duration(seconds: 5);
+
+  RemoteFileException _openFailure(Object error) {
+    if (_link._closed || _link._client.isClosed) {
+      return const RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'open SFTP',
+        message: 'The SSH link is closed.',
+      );
+    }
+    return switch (error) {
+      _SftpSubsystemSilent() => RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'open SFTP',
+        message: 'The server did not start its SFTP subsystem.',
+        cause: error,
+      ),
+      TimeoutException() => RemoteFileException(
+        kind: RemoteFileErrorKind.other,
+        operation: 'open SFTP',
+        message: 'The server did not answer the SFTP channel open in time.',
+        cause: error,
+      ),
+      ChannelOpenException(refusal: ChannelRefusal.sessionLimit) =>
+        RemoteFileException(
+          kind: RemoteFileErrorKind.other,
+          operation: 'open SFTP',
+          message:
+              'The server refused another session channel for SFTP: '
+              '$error',
+          cause: error,
+        ),
+      _ => RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'open SFTP',
+        message: 'Could not open SFTP on this server: $error',
+        cause: error,
+      ),
+    };
+  }
+
+  /// [refusedAtLimit] is the refusal a retried open answers with when no
+  /// slot frees in time.
+  Future<ChannelGrant> _acquireGrant([
+    ChannelOpenException? refusedAtLimit,
+  ]) async {
     final acquire = _link._budget.acquire(ChannelWaitPriority.sftp, 'SFTP');
     try {
       return await boundedOpen(
@@ -1042,6 +1136,7 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
     } on RemoteFileException {
       rethrow;
     } catch (e) {
+      if (refusedAtLimit != null) throw _openFailure(refusedAtLimit);
       throw RemoteFileException(
         kind: RemoteFileErrorKind.other,
         operation: 'open SFTP',
@@ -1098,6 +1193,14 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
       // A lease that never opened holds nothing to release.
     }
   }
+}
+
+/// The SFTP subsystem did not answer its handshake within the short bound.
+final class _SftpSubsystemSilent implements Exception {
+  const _SftpSubsystemSilent();
+
+  @override
+  String toString() => 'The SFTP subsystem did not answer its handshake.';
 }
 
 final class _FsLease {
