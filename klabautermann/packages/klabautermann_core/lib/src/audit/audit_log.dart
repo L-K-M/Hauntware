@@ -125,12 +125,14 @@ final class AuditLog {
     }
     final all = [...stored, ...?_memory[serverId]];
     // Appends are not in end order (see AuditCursor), so the log is
-    // sorted; the append index orders records that ended together.
+    // sorted; records that ended together keep their append order, so a
+    // record appended between two pages joins the end of its tie group,
+    // past the ones a cursor already counted.
     final ordered =
         [for (var i = 0; i < all.length; i++) (index: i, record: all[i])]
           ..sort((a, b) {
             final byEnd = b.record.endedAt.compareTo(a.record.endedAt);
-            return byEnd != 0 ? byEnd : b.index.compareTo(a.index);
+            return byEnd != 0 ? byEnd : a.index.compareTo(b.index);
           });
     bool endsAt(int i, DateTime at) =>
         ordered[i].record.endedAt.isAtSameMomentAs(at);

@@ -1378,9 +1378,12 @@ final class AuditQuery extends EngineRequest {
 /// Where the next page of an audit log starts (SAF-11): past the records
 /// that ended after [endedAt], and past the first [seen] of those that
 /// ended at it. The log is in end order, newest first, and records that
-/// ended together newest append first. Records are not appended in end
+/// ended together in append order, so one appended between two pages
+/// lands after those [seen] counted. Records are not appended in end
 /// order, since a detached operation's is appended when its result is
-/// acknowledged, so a page boundary is not a time alone.
+/// acknowledged, so a page boundary is not a time alone. A prune between
+/// two pages can shorten a tie group; the next page then starts at its
+/// remaining records, which may repeat ones already shown.
 @immutable
 final class AuditCursor {
   const AuditCursor(this.endedAt, {required this.seen})

@@ -30,17 +30,20 @@ void main() {
     now: () => now,
   );
 
-  AuditRecord record(DateTime endedAt, {String serverId = _server}) =>
-      AuditRecord(
-        serverId: serverId,
-        action: 'UnitAction',
-        targetName: 'nginx.service',
-        steps: const ['systemctl restart nginx.service'],
-        tier: ConfirmationTier.acknowledge,
-        outcome: ActionOutcome.succeeded,
-        startedAt: endedAt.subtract(const Duration(seconds: 2)),
-        endedAt: endedAt,
-      );
+  AuditRecord record(
+    DateTime endedAt, {
+    String serverId = _server,
+    String targetName = 'nginx.service',
+  }) => AuditRecord(
+    serverId: serverId,
+    action: 'UnitAction',
+    targetName: targetName,
+    steps: const ['systemctl restart nginx.service'],
+    tier: ConfirmationTier.acknowledge,
+    outcome: ActionOutcome.succeeded,
+    startedAt: endedAt.subtract(const Duration(seconds: 2)),
+    endedAt: endedAt,
+  );
 
   File fileOf(String serverId) => File(
     '${root.path}/$auditDirectoryName/${serverFileStem(serverId)}.jsonl',
@@ -95,6 +98,26 @@ void main() {
     }
 
     expect(seen, [at(40), at(30), at(20), at(20), at(20), at(10), at(5)]);
+  });
+
+  test('a record that ends with a paged tie group is shown once, after '
+      'the ones already paged (SAF-11)', () async {
+    final audit = log();
+    final at = now.add(const Duration(minutes: 20));
+    for (final name in ['a', 'b', 'c']) {
+      await audit.append(record(at, targetName: name));
+    }
+
+    final first = await audit.query(_server, limit: 2);
+    // Ended at the same moment as the records the cursor already counted.
+    await audit.append(record(at, targetName: 'd'));
+    final second = await audit.query(_server, after: first.next, limit: 2);
+
+    final shown = [
+      for (final r in [...first.records, ...second.records]) r.targetName,
+    ];
+    expect(shown.toSet(), {'a', 'b', 'c', 'd'});
+    expect(shown, hasLength(4));
   });
 
   test('records a run with its steps redacted and its typed result', () async {
@@ -167,7 +190,8 @@ void main() {
     ));
     await audit.append(record(now));
 
-    final [plain, skipped] = (await audit.query(_server)).records;
+    // Records that ended together read in append order.
+    final [skipped, plain] = (await audit.query(_server)).records;
     expect(skipped.steps, hasLength(2));
     expect(skipped.skippedSteps, [1]);
     expect(skipped.toJson()['skippedSteps'], [1]);
