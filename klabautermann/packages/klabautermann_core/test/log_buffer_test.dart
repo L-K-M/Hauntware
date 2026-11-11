@@ -269,6 +269,29 @@ void main() {
         expect(line(buffer, 1).text, '');
         expect(bare.messageNotSent, isFalse, reason: 'no MESSAGE at all');
         expect([bare.source, bare.priority, bare.pid], [null, null, null]);
+        expect(bare.at, isNull, reason: 'no __REALTIME_TIMESTAMP');
+      });
+
+      test('keeps the realtime timestamp as a UTC instant for the time '
+          'column', () {
+        final buffer = LogBuffer()
+          ..addJournal([
+            entry({'__REALTIME_TIMESTAMP': '1760519107123456', 'MESSAGE': 'a'}),
+            entry({'__REALTIME_TIMESTAMP': 'soon', 'MESSAGE': 'b'}),
+            entry({'__REALTIME_TIMESTAMP': '9' * 19, 'MESSAGE': 'c'}),
+          ]);
+
+        expect(
+          line(buffer, 0).journal!.at,
+          DateTime.utc(2025, 10, 15, 9, 5, 7, 123, 456),
+        );
+        expect(line(buffer, 0).journal!.at!.isUtc, isTrue);
+        expect(line(buffer, 1).journal!.at, isNull, reason: 'not a number');
+        expect(
+          line(buffer, 2).journal!.at,
+          isNull,
+          reason: 'past what a DateTime holds',
+        );
       });
 
       test('counts the text, the source and the encoded fields', () {
