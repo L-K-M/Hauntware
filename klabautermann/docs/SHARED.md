@@ -55,14 +55,16 @@ This is the suite's fourth copy of the controller, after Séance's,
 Poltergeist's and Planchette's, so D32 requires a review for a shared
 plugin first. Reviewed at the copy commit above:
 
-- **The copies.** Klabautermann's controller is Séance's after the
-  rename. Planchette's is Séance's plus multi-view semantics routing
-  (`updateSemantics:`), which forwards only updates that name another
-  view and so never acts in a single-view app. Poltergeist's carries a
-  variant of that routing without Planchette's view-identifier check:
-  the copies have already drifted (04 R18). The lifecycle test is the
-  same in Séance, Planchette and Klabautermann after the rename. The
-  keyboard checks already live once, in
+- **The copies.** The four controllers are two exact variants; after
+  the product rename their code is identical within each pair and only
+  comments differ. Séance's and Klabautermann's are the plain controller
+  with both fixes. Planchette's and Poltergeist's add the multi-view
+  semantics routing (`updateSemantics:`), which forwards only updates that
+  name another view and so never acts in a single-view app; Poltergeist's
+  carries the same view-identifier check as Planchette's, so the earlier
+  drift between them is gone (04 R18). The lifecycle test
+  (`RunnerTests/AccessibilityLifecycleTest.mm`) is the same in all four
+  after the rename. The keyboard checks already live once, in
   `scripts/macos-keyboard-fixture.mm`.
 - **What a plugin takes.** The suite has no macOS plugin package yet;
   `ghost_desktop` is pure Dart. A new one would ship Planchette's
