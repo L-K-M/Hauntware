@@ -4889,6 +4889,12 @@ abstract class AppLocalizations {
   /// **'Not a valid regular expression'**
   String get logsPanelSearchInvalid;
 
+  /// Error under the log search field in regular expression mode when the text does not compile locally but the journal's own PCRE2 search may still accept it, so Search on server stays available.
+  ///
+  /// In en, this message translates to:
+  /// **'Not shown here: this engine cannot read the pattern, but the server may'**
+  String get logsPanelSearchInvalidLocal;
+
   /// Tooltip of the button that reads only the journal entries matching the search, matched by the server, rather than searching the entries already shown.
   ///
   /// In en, this message translates to:
@@ -11661,10 +11667,10 @@ abstract class AppLocalizations {
   /// **'Diagnostic bundle for {server}: {count, plural, =1{1 section} other{{count} sections}}'**
   String diagnosticsTitle(String server, int count);
 
-  /// Diagnostic bundle sheet: what the bundle holds and why to check it before sharing.
+  /// Diagnostic bundle sheet: what the bundle holds (identity, process command lines, crontabs, units, mounts, paths) and why to check it before sharing, since redaction only catches secret-shaped values.
   ///
   /// In en, this message translates to:
-  /// **'The raw output of each collector, for a parser bug report. It names this server\'s processes, units, mounts and paths, so read it before you share it.'**
+  /// **'The raw output of each collector, for a parser bug report. It carries this server\'s host name and machine ID, the command lines of its processes, crontab entries and cron jobs, and its units, mounts and paths. Redaction catches secret-shaped values, not host names or internal addresses, so read it before you share it.'**
   String get diagnosticsHint;
 
   /// Diagnostic bundle sheet: the collectors whose sampler did not answer in time, by their wire names, which are not translated.
