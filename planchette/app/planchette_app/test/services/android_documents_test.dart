@@ -13,9 +13,11 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('planchette/documents');
   const path = '/documents/provider/config.txt';
+  const recoveryPath = '/data/files/recovery/recovery-1-config.txt';
   late AndroidDocuments documents;
   late Uint8List providerBytes;
   late List<MethodCall> writes;
+  late List<String> discarded;
   PlatformException? writeError;
   Uint8List? failedWriteBytes;
 
@@ -28,6 +30,7 @@ void main() {
       ...utf8.encode('a\r\nb\r\n'),
     ]);
     writes = [];
+    discarded = [];
     writeError = null;
     failedWriteBytes = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -35,6 +38,11 @@ void main() {
           switch (call.method) {
             case 'open':
               return [path];
+            case 'recoveries':
+              return [recoveryPath];
+            case 'discardRecovery':
+              discarded.add((call.arguments as Map)['path'] as String);
+              return null;
             case 'create':
               return path;
             case 'read':
@@ -181,5 +189,44 @@ void main() {
     expect(tab.editor.isDirty, isTrue);
     expect(tab.baseline, same(baseline));
     expect(workspace.error, contains('Restart Planchette'));
+  });
+  group('recovery copies', () {
+    late DocumentWorkspace workspace;
+    late FakeDialogs dialogs;
+
+    setUp(() async {
+      dialogs = FakeDialogs()..savePath = path;
+      workspace = DocumentWorkspace(store: documents, dialogs: dialogs);
+      addTearDown(workspace.dispose);
+      await workspace.openAll(await documents.recoveries());
+    });
+
+    test('are discarded once saved elsewhere', () async {
+      final tab = workspace.active!;
+      expect(tab.path, recoveryPath);
+
+      expect(await workspace.save(tab, saveAs: true), isTrue);
+      expect(tab.path, path);
+      expect(discarded, [recoveryPath]);
+    });
+
+    test('are kept when saving elsewhere fails', () async {
+      writeError = PlatformException(
+        code: 'document_error',
+        message: 'Provider disconnected',
+      );
+
+      expect(await workspace.save(workspace.active!, saveAs: true), isFalse);
+      expect(discarded, isEmpty);
+    });
+
+    test('are not touched by saves of provider documents', () async {
+      await workspace.openAll([path]);
+      final tab = workspace.active!;
+      tab.editor.text.text = 'changed';
+
+      expect(await workspace.save(tab), isTrue);
+      expect(discarded, isEmpty);
+    });
   });
 }
