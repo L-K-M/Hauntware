@@ -17,8 +17,9 @@ name: Release
 # Recovery from a failed run: delete the release, never the tag.
 #
 # Signing/secrets inventory (explicit): the only repo secrets are
-# GITHUB_TOKEN and ZAI_API_KEY (review workflow). No signing secrets
-# exist — desktop bundles are unsigned (macOS: ad-hoc — right-click ▸
+# GITHUB_TOKEN and the review workflow's ZAI_API_KEY, MIMO_API_KEY and
+# STEPFUN_API_KEY; this workflow reads GITHUB_TOKEN only. No signing
+# secrets exist — desktop bundles are unsigned (macOS: ad-hoc — right-click ▸
 # Open; Windows: SmartScreen ▸ Run anyway), the Android APKs sign with
 # the committed debug-grade keystores, and the iOS IPAs must be
 # re-signed to sideload. Do not add signing inputs without a decision.
