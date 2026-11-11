@@ -367,7 +367,13 @@ class _ImagesPanelState extends State<ImagesPanel> {
             : switch (_filter) {
                 ImageFilter.unused => l10n.dockerImagesNoneUnused,
                 ImageFilter.dangling => l10n.dockerImagesNoneDangling,
-                ImageFilter.updates => l10n.dockerImagesNoneUpdates,
+                // None has an update only once a check said so.
+                ImageFilter.updates =>
+                  _updatesFailed != null
+                      ? l10n.dockerImagesUpdatesUnknown
+                      : _updates == null
+                      ? l10n.dockerImagesUpdatesChecking
+                      : l10n.dockerImagesNoneUpdates,
                 // Every image passes; the engine listed none.
                 ImageFilter.all => l10n.dockerImagesEmpty,
               },
