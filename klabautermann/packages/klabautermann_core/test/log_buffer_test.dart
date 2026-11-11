@@ -278,7 +278,11 @@ void main() {
           ..addJournal([
             entry({'__REALTIME_TIMESTAMP': '1760519107123456', 'MESSAGE': 'a'}),
             entry({'__REALTIME_TIMESTAMP': 'soon', 'MESSAGE': 'b'}),
-            entry({'__REALTIME_TIMESTAMP': '9' * 19, 'MESSAGE': 'c'}),
+            // Parses as an int, but lies past year 275760.
+            entry({
+              '__REALTIME_TIMESTAMP': '9223372036854775807',
+              'MESSAGE': 'c',
+            }),
           ]);
 
         expect(
