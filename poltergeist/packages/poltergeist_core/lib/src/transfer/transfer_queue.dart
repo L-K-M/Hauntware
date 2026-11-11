@@ -2669,6 +2669,11 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           task.state == TransferTaskState.scanning) {
         _setTaskState(runtime, TransferTaskState.running);
       }
+      // Every trash name an attempt tried, and whether an attempt was lost
+      // with the link: the server may have run it and dropped only the
+      // reply, so a retry must look before it acts again.
+      final trashTargets = <String>[];
+      var retried = false;
       while (true) {
         final leases = await _leaseServerIds(
           _serverIds({task.source}),
@@ -2676,14 +2681,28 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         );
         try {
           final fs = _fsFor(task.source, leases);
+          Future<({String resolvedPath, ItemDisposition disposition})?>
+          execute() async {
+            if (retried) {
+              final settled = await _settleRetriedDelete(
+                runtime,
+                fs,
+                work,
+                trashTargets,
+              );
+              if (settled != null) return settled;
+            }
+            return _executeDelete(runtime, fs, work, trashTargets);
+          }
+
           final outcome = work.entry.isDirectory
               ? await _withFileSystemNameProbeIsolation(task.source, () async {
                   _throwIfTaskCancelled(task);
                   await _waitForNameProbeArtifacts(task, fs, work.entry.path);
                   _throwIfTaskCancelled(task);
-                  return _executeDelete(runtime, fs, work);
+                  return execute();
                 }, cancellation: task.cancellation)
-              : await _executeDelete(runtime, fs, work);
+              : await execute();
           // A completed op proves connectivity — the retry budget
           // bounds consecutive losses, not lifetime ones (03 §3.3).
           task.retryCount = 0;
@@ -2695,6 +2714,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           if (error.kind != RemoteFileErrorKind.disconnected) rethrow;
           task.retryCount++;
           if (task.retryCount > poolPolicy.taskRetryLimit) rethrow;
+          retried = true;
           // Retry in place — re-chaining at the tail would let the
           // item's parent run first and break the post-order the
           // permanent path relies on.
@@ -2750,6 +2770,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     _TaskRuntime runtime,
     RemoteFileSystem fs,
     _DeleteWork work,
+    List<String> trashTargets,
   ) async {
     final task = runtime.task;
     final entry = work.entry;
@@ -2799,9 +2820,57 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           entry,
           task.destinationDir,
           () => runtime.nextTrashSequence++,
+          onAttempt: trashTargets.add,
         );
         return (resolvedPath: target, disposition: ItemDisposition.remoteTrash);
     }
+  }
+
+  /// The outcome of a delete whose earlier attempt was lost with the link,
+  /// when that attempt already ran: a permanent delete whose entry is gone,
+  /// or a trash move found under one of the names it tried. Returns null
+  /// while the entry is still in place, so the delete runs again. An entry
+  /// that is gone and not in the trash fails with where to look.
+  Future<({String resolvedPath, ItemDisposition disposition})?>
+  _settleRetriedDelete(
+    _TaskRuntime runtime,
+    RemoteFileSystem fs,
+    _DeleteWork work,
+    List<String> trashTargets,
+  ) async {
+    final task = runtime.task;
+    final entry = work.entry;
+    if (task.source is LocalFsLocation) return null;
+    if (await _statOrNull(fs, entry.path) != null) return null;
+    if (task.spec.disposition == DeleteDisposition.permanent) {
+      return (resolvedPath: entry.path, disposition: ItemDisposition.permanent);
+    }
+
+    // Newest first: the last name tried is the one whose reply was lost.
+    for (final target in trashTargets.reversed) {
+      final trashed = await _statOrNull(fs, target);
+      if (_isTrashedEntry(entry, trashed)) {
+        return (resolvedPath: target, disposition: ItemDisposition.remoteTrash);
+      }
+    }
+    throw RemoteFileException(
+      kind: RemoteFileErrorKind.notFound,
+      operation: 'trash',
+      path: entry.path,
+      message:
+          '"${entry.path}" is gone after the connection dropped, and it '
+          'is not under the names tried in ${task.destinationDir}; it may '
+          'have moved to the trash there',
+    );
+  }
+
+  /// Whether [trashed] is [entry] after a rename. A directory's times can
+  /// change when it moves to a new parent, so only its type is compared;
+  /// the run directory and the sequence-prefixed name are this task's own.
+  static bool _isTrashedEntry(RemoteFileEntry entry, RemoteFileEntry? trashed) {
+    if (trashed == null || trashed.type != entry.type) return false;
+    if (entry.isDirectory) return true;
+    return _sameDeleteIdentity(entry, trashed);
   }
 
   static bool _sameDeleteIdentity(
