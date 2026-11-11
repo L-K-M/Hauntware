@@ -7,6 +7,8 @@
 /// seam.
 library;
 
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -36,15 +38,61 @@ enum AtomicFilePrivacy {
 final class AtomicFileWriter {
   const AtomicFileWriter();
 
+  static final Map<String, Future<void>> _pendingWrites = {};
+  static Future<void> _resolutionTail = Future<void>.value();
+
   /// Replaces [file] with [contents], creating missing parent directories.
   Future<void> write(
     File file,
     String contents, {
     AtomicFilePrivacy privacy = AtomicFilePrivacy.processDefault,
-  }) async {
+  }) {
+    return writeBytes(file, utf8.encode(contents), privacy: privacy);
+  }
+
+  /// Replaces [file] with [bytes], creating missing parent directories.
+  Future<void> writeBytes(
+    File file,
+    List<int> bytes, {
+    AtomicFilePrivacy privacy = AtomicFilePrivacy.processDefault,
+  }) {
+    final result = Completer<void>();
+    // Resolve aliases in request order, not in filesystem-completion order.
+    // Only resolution is global; writes to different targets still overlap.
+    final enqueue = _resolutionTail.then((_) async {
+      final target = await _resolveTarget(file);
+      final key = _queueKey(target.path);
+      final previous = _pendingWrites[key] ?? Future<void>.value();
+      final write = previous.then(
+        (_) => _writeResolved(target, bytes, privacy),
+      );
+      late final Future<void> tail;
+      tail = write
+          .then<void>((_) {}, onError: (Object _, StackTrace __) {})
+          .whenComplete(() {
+            if (identical(_pendingWrites[key], tail))
+              _pendingWrites.remove(key);
+          });
+      _pendingWrites[key] = tail;
+      result.complete(write);
+    });
+    _resolutionTail = enqueue.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stack) {
+        result.completeError(error, stack);
+      },
+    );
+    return result.future;
+  }
+
+  Future<void> _writeResolved(
+    File target,
+    List<int> bytes,
+    AtomicFilePrivacy privacy,
+  ) async {
     final ownerOnly = privacy == AtomicFilePrivacy.ownerOnly;
-    await file.parent.create(recursive: true);
-    final temporary = File('${file.path}.tmp-${_randomHexSuffix()}');
+    await target.parent.create(recursive: true);
+    final temporary = File('${target.path}.tmp-${_randomHexSuffix()}');
     try {
       if (ownerOnly) {
         // Restrict before any content lands: the empty temp briefly exists
@@ -54,18 +102,20 @@ final class AtomicFileWriter {
       }
       final raf = await temporary.open(mode: FileMode.writeOnly);
       try {
-        await raf.writeString(contents);
+        await raf.writeFrom(bytes);
         await raf.flush();
       } finally {
         await raf.close();
       }
-      await temporary.rename(file.path);
+      // Never delete a committed file to retry a failed rename. A refused
+      // replacement must leave the old snapshot available for recovery.
+      await temporary.rename(target.path);
       if (ownerOnly) {
         // Rename carries the temp's mode; the explicit chmod also tightens
         // a destination that outlived an odd rename path.
-        await restrictLocalPathPermissions(file.path, '600');
+        await restrictLocalPathPermissions(target.path, '600');
       }
-      await syncLocalDirectory(file.parent);
+      await syncLocalDirectory(target.parent);
     } on Object {
       try {
         if (await temporary.exists()) await temporary.delete();
@@ -74,6 +124,70 @@ final class AtomicFileWriter {
       }
       rethrow;
     }
+  }
+
+  Future<File> _resolveTarget(File file, [Set<String>? links]) async {
+    var current = file.absolute;
+    final visited = links ?? <String>{};
+    const maxLinkDepth = 40;
+    for (var depth = 0; depth <= maxLinkDepth; depth++) {
+      final type = await FileSystemEntity.type(
+        current.path,
+        followLinks: false,
+      );
+      if (type == FileSystemEntityType.link) {
+        final parent = await current.parent.resolveSymbolicLinks();
+        final linkPath = _joinPath(parent, _fileName(current));
+        if (!visited.add(linkPath)) {
+          throw FileSystemException('Cyclic symbolic link', file.path);
+        }
+        if (visited.length > maxLinkDepth) {
+          throw FileSystemException('Too many symbolic links', file.path);
+        }
+        final linkTarget = await Link(current.path).target();
+        current = File(linkTarget).isAbsolute
+            ? File(linkTarget)
+            : File(_joinPath(current.parent.path, linkTarget));
+        continue;
+      }
+      if (type != FileSystemEntityType.notFound) {
+        return File(await current.resolveSymbolicLinks());
+      }
+      // A dangling target may have missing ancestors or a symlinked parent.
+      // Resolve the nearest existing parent without treating filename bytes
+      // such as '%' or '?' as URI syntax.
+      if (current.parent.path == current.path) {
+        throw FileSystemException('Cannot resolve filesystem root', file.path);
+      }
+      final parent = await _resolveTarget(File(current.parent.path), visited);
+      return File(_joinPath(parent.path, _fileName(current)));
+    }
+    throw FileSystemException('Too many symbolic links', file.path);
+  }
+
+  // URI resolution would collapse '..' before the filesystem can follow
+  // a preceding directory symlink, potentially selecting a different file.
+  String _joinPath(String parent, String child) {
+    final trailingSeparator =
+        parent.endsWith(Platform.pathSeparator) ||
+        (Platform.isWindows && parent.endsWith('/'));
+    return trailingSeparator
+        ? '$parent$child'
+        : '$parent${Platform.pathSeparator}$child';
+  }
+
+  String _fileName(File file) {
+    final path = file.path;
+    final separator = Platform.isWindows
+        ? max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+        : path.lastIndexOf('/');
+    return path.substring(separator + 1);
+  }
+
+  String _queueKey(String path) {
+    // Folding case only adds serialization on case-sensitive volumes; the
+    // actual target spelling is unchanged.
+    return File(path).absolute.uri.normalizePath().toFilePath().toLowerCase();
   }
 }
 

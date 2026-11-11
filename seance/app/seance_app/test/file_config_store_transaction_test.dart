@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/services/file_stores.dart';
 import 'package:seance_core/seance_core.dart';
 
+import 'support/atomic_write_blocker.dart';
+
 void main() {
   late Directory directory;
   late File file;
@@ -42,7 +44,7 @@ void main() {
   test(
     'a failed credential config save keeps the old reference in memory and on disk',
     () async {
-      final blocker = await Directory('${file.path}.tmp').create();
+      final blocker = await AtomicWriteBlocker(file).create();
       final replacement = original.copyWith(
         secretRef: 'new-credential',
         updatedAt: 2,
@@ -54,11 +56,11 @@ void main() {
       );
 
       expect((await store.getServer(original.id))!.secretRef, 'old-credential');
+      await blocker.delete();
       expect(
         (await FileConfigStore(file).getServer(original.id))!.secretRef,
         'old-credential',
       );
-      await blocker.delete();
 
       await store.putServer(unrelated);
       expect(
@@ -76,7 +78,7 @@ void main() {
   test(
     'a read queued behind a failed save sees only committed credentials',
     () async {
-      final blocker = await Directory('${file.path}.tmp').create();
+      final blocker = await AtomicWriteBlocker(file).create();
       final failedSave = store.putServer(
         original.copyWith(secretRef: 'new-credential'),
       );
@@ -113,7 +115,7 @@ void main() {
   test(
     'a failed deletion cannot ride a later successful config save',
     () async {
-      final blocker = await Directory('${file.path}.tmp').create();
+      final blocker = await AtomicWriteBlocker(file).create();
 
       await expectLater(
         store.deleteServer(original.id),

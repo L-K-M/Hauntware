@@ -6,6 +6,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Settings and window state files use the shared atomic writer and
+  write through symbolic links.
+
 ### Added
 - The workspace server list offers Keep this device's key and Trust the new
   key when another device synced a different host key, so the conflict can be
