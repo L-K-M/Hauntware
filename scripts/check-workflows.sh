@@ -30,7 +30,8 @@
 #  11. all Android client legs verify the built APK's version code,
 #  12. PR product-job selection follows every cross-product read,
 #  14. every Planchette Flutter package is analyzed and tested by CI,
-#      the release gate and scripts/test.sh.
+#      the release gate and scripts/test.sh,
+#  15. no checkout leaves the job token in .git/config.
 
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -299,6 +300,30 @@ for pubspec in planchette/packages/*/pubspec.yaml; do
     END { exit !found }
   ' scripts/test.sh ||
     err "scripts/test.sh must analyze and test planchette/$package"
+done
+
+# --- 15. Checkouts drop the job token ---------------------------------------
+# actions/checkout otherwise writes the job token into .git/config, where
+# every later step (pub build hooks, Gradle, CocoaPods) can read it; in
+# release.yml that token can write releases. No workflow pushes with git,
+# and the repo is public, so origin fetches still work without it. The
+# option must be the first `with:` key right after the uses line.
+for wf in .github/workflows/*.yml; do
+  awk -v file="$wf" '
+    checkout == 1 { checkout = ($0 ~ /^ +with:$/) ? 2 : 3 }
+    checkout == 2 && /^ +with:$/ { next }
+    checkout == 2 {
+      if ($0 !~ /^ +persist-credentials: false$/) checkout = 3
+      else checkout = 0
+    }
+    checkout == 3 {
+      printf "!! %s:%d: actions/checkout must set persist-credentials: false\n", file, line > "/dev/stderr"
+      bad = 1
+      checkout = 0
+    }
+    /- uses: actions\/checkout@/ { checkout = 1; line = NR }
+    END { exit bad }
+  ' "$wf" || fail=1
 done
 
 # --- 12. PR product-job selection -------------------------------------------
