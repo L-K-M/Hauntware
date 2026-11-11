@@ -131,8 +131,10 @@ final class SecureSyncCredentialStore implements SyncCredentialStore {
       // The keystore threw — but it may still have kept the new key
       // (a keyring can store and then fail its own verdict). Read back
       // what it actually holds and settle against that; a keyring that
-      // cannot testify leaves the journal staged rather than guess.
-      final installed = await _keys.probeKeystore();
+      // cannot testify leaves the journal staged rather than guess. The
+      // read never mints: a key neither generation matches would settle
+      // by discarding the journal and strand the vault.
+      final installed = await _keys.readKeystoreKey();
       if (installed != null) await journal.settleRekey(installed);
       rethrow;
     }
