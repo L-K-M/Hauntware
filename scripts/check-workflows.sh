@@ -23,7 +23,8 @@
 #   8. multi-line run scripts in jobs that can run on Windows name
 #      their shell (Windows otherwise runs them under PowerShell),
 #   9. release.yml grants packages: write to the docker job only
-#      (least-privilege tokens: only that job pushes to GHCR),
+#      (least-privilege tokens: only that job pushes to GHCR), and that
+#      job pushes after the release gates and before the publish,
 #  10. the checksum job drops a stale SHA256SUMS before recomputing,
 #      so re-running it stays idempotent,
 #  11. all Android client legs verify the built APK's version code,
@@ -229,6 +230,23 @@ docker_package_writes="$(
 )"
 [[ "$package_writes" -eq 1 && "$docker_package_writes" -eq 1 ]] ||
   err "release.yml must grant packages: write to the docker job only (found $package_writes, $docker_package_writes in docker)"
+# A pushed image is public at once, so the push waits for the sums
+# job's floor and checksum gates, and the release goes public only
+# after the push.
+job_needs() {
+  awk -v job="$1" -v dep="$2" '
+    $0 == "  " job ":" { inside = 1; next }
+    inside && /^  [A-Za-z0-9_-]+:/ { inside = 0 }
+    inside && /^    needs:/ { needs = 1; next }
+    inside && needs && /^    [A-Za-z]/ { needs = 0 }
+    inside && needs && $0 ~ "^      - " dep "$" { found = 1 }
+    END { exit !found }
+  ' .github/workflows/release.yml
+}
+job_needs docker sums ||
+  err "release.yml docker job must need sums (no image before the release gates)"
+job_needs publish docker ||
+  err "release.yml publish job must need docker"
 
 # --- 10. Re-runnable checksum job ------------------------------------------
 # The sums job downloads the draft's assets before recomputing

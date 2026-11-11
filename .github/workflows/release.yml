@@ -11,9 +11,9 @@ name: Release
 #
 # Atomic publication: the release is created hidden while the build
 # legs attach their assets, the GHCR image is pushed only after every
-# build leg succeeds, and the single publish job flips the draft to
-# public only once the manifest floor, SHA256SUMS and the notes are
-# verified — a public release is never partial, per-app, or sum-less.
+# build leg succeeds and the manifest floor, SHA256SUMS and the notes
+# are verified, and the single publish job then flips the draft to
+# public — a public release is never partial, per-app, or sum-less.
 # Recovery from a failed run: delete the release, never the tag.
 #
 # Signing/secrets inventory (explicit): the only repo secrets are
@@ -54,9 +54,9 @@ concurrency:
 permissions:
   # Read-only baseline for any job without its own block; every job
   # below declares what it actually needs. Only the docker job pushes
-  # to GHCR (packages: write); the asset legs, the sums job and the
-  # test gate need contents: write (asset uploads; the gate lists
-  # draft releases, which read-scoped tokens cannot see).
+  # to GHCR (packages: write); the asset legs, the sums and publish
+  # jobs and the test gate need contents: write (asset uploads; the
+  # gate lists draft releases, which read-scoped tokens cannot see).
   contents: read
 
 env:
@@ -506,7 +506,7 @@ jobs:
           # job to get here create the tag at the dispatched commit.
           tag_name: ${{ inputs.tag || github.ref_name }}
           target_commitish: ${{ github.sha }}
-          # Hidden while the matrix legs attach; the sums job publishes
+          # Hidden while the matrix legs attach; the publish job publishes
           # after the floor check, so a public release is never partial.
           draft: true
           prerelease: >-
@@ -1723,13 +1723,17 @@ jobs:
           fail_on_unmatched_files: true
 
   # Container image to GitHub Container Registry. It pushes only after
-  # EVERY build leg succeeded — an image must never publish for a
-  # release whose client floor failed. Deployments build from source;
-  # this image is the release artifact for everyone else.
+  # EVERY build leg succeeded and the sums job verified the draft's
+  # manifest floor and checksums — the image is public the moment it is
+  # pushed, so it must never publish for a release that cannot. The
+  # publish job waits for it, so the release never announces a missing
+  # image. Deployments build from source; this image is the release
+  # artifact for everyone else.
   docker:
     name: Docker image
     needs:
       - test
+      - sums
       - server
       - client_planchette
       - client_seance
@@ -1836,12 +1840,13 @@ jobs:
 
   # Every release carries SHA-256 checksums for all assets — SHA256SUMS
   # beside the assets, the same sums in the notes — computed by CI after
-  # all assets attach and the GHCR image is published (an integrity
-  # channel, not an origin one). Runs only when every leg succeeded:
-  # sums over a partial asset set would certify a broken release, and
-  # the manifest floor check makes even a silent upload miss loud.
+  # all assets attach (an integrity channel, not an origin one). Runs
+  # only when every leg succeeded: sums over a partial asset set would
+  # certify a broken release, and the manifest floor check makes even a
+  # silent upload miss loud. Everything here edits the hidden draft; the
+  # docker and publish jobs follow it.
   sums:
-    name: Checksums and publish
+    name: Checksums
     needs:
       - server
       - client_planchette
@@ -1851,7 +1856,6 @@ jobs:
       - flatpak_planchette
       - flatpak_seance
       - flatpak_poltergeist
-      - docker
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -1990,14 +1994,24 @@ jobs:
             exit 1
           fi
           sha256sum -c --strict SHA256SUMS
-      # The publish itself: no human step, but only now that the floor
-      # check passed, the image is pushed, and the sums are attached and
-      # verified. Idempotent for re-runs: if a prior attempt already
-      # flipped the release public (e.g. a timeout after a successful
-      # call), there is nothing to do -- created-once is the guard job's
-      # invariant, not this step's failure mode, and a spurious red here
-      # would push a healthy published release down the delete-and-retag
-      # path.
+
+  # The publish itself: no human step, but only now that the floor
+  # check passed, the sums are attached and verified, and the image is
+  # pushed. Idempotent for re-runs: if a prior attempt already flipped
+  # the release public (e.g. a timeout after a successful call), there
+  # is nothing to do -- created-once is the guard job's invariant, not
+  # this step's failure mode, and a spurious red here would push a
+  # healthy published release down the delete-and-retag path.
+  publish:
+    name: Publish
+    needs:
+      - sums
+      - docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
