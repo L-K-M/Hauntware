@@ -141,7 +141,12 @@ class DriveHealthSection extends StatefulWidget {
 
 class _DriveHealthSectionState extends State<DriveHealthSection> {
   SmartReport? _report;
-  bool _reading = false;
+
+  /// The servers with a read out. A read outlives a switch away from its
+  /// server, so a switch back must still see it and offer no second one.
+  final _readingServers = <String>{};
+
+  bool get _reading => _readingServers.contains(widget.serverId);
   TableSort? _sort;
 
   @override
@@ -149,19 +154,18 @@ class _DriveHealthSectionState extends State<DriveHealthSection> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.serverId == widget.serverId) return;
     _report = null;
-    _reading = false;
   }
 
   Future<void> _read(AdminController admin) async {
     // A second tap before the button gives way would run smartctl twice.
     if (_reading) return;
     final serverId = widget.serverId;
-    setState(() => _reading = true);
+    setState(() => _readingServers.add(serverId));
     final report = await admin.readSmart(serverId);
-    if (!mounted || serverId != widget.serverId) return;
+    if (!mounted) return;
     setState(() {
-      _report = report;
-      _reading = false;
+      _readingServers.remove(serverId);
+      if (serverId == widget.serverId) _report = report;
     });
   }
 

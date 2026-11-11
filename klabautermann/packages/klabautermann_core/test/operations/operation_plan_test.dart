@@ -6,10 +6,15 @@ import 'dart:math';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
+import 'package:klabautermann_core/src/admin/admin_mode.dart';
 import 'package:klabautermann_core/src/operations/confirmation.dart';
 import 'package:klabautermann_core/src/operations/operation_plan.dart';
 import 'package:klabautermann_core/src/operations/plan_registry.dart';
+import 'package:seance_core/seance_core.dart'
+    show ElevatedExecutor, ElevationProbe;
 import 'package:test/test.dart';
+
+import '../support/scripted_link.dart';
 
 const _intent = UnitAction(
   'srv-1',
@@ -303,6 +308,47 @@ void main() {
       registry.forget({'srv-1'});
       expect(registry.length, 1);
       expect(registry.take(kept, linkGeneration: (_) => 1).plan, isNotNull);
+    });
+  });
+
+  group('admin credentials (03 §8.3)', () {
+    AdminSession session(String? password) => AdminSession.test(
+      ElevatedExecutor(ScriptedLink(), const ElevationProbe(isRoot: true)),
+      password,
+    );
+
+    test('a root login or a NOPASSWD rule needs no password', () {
+      final plan = _plan();
+      final held = withAdminCredentials(plan, session(null));
+
+      expect(held.runner.credentials, RunnerCredentials.passwordless);
+      expect(held.preview.runner.credentials, RunnerCredentials.passwordless);
+      expect(held.runner.identity, 'root');
+      expect(
+        held.steps.map((s) => s.display),
+        plan.steps.map((s) => s.display),
+      );
+      expect(held.hostWrites, plan.hostWrites);
+      expect(held.revalidate, plan.revalidate);
+      expect(held.requiredLevel, plan.requiredLevel);
+    });
+
+    test('a password, no admin mode or a session run keeps its words', () {
+      final plan = _plan();
+      expect(withAdminCredentials(plan, session('pw')), same(plan));
+      expect(withAdminCredentials(plan, null), same(plan));
+
+      final asLogin = OperationPlan(
+        intent: _intent,
+        kind: OperationKind.restart,
+        targetName: 'nginx.service',
+        steps: [
+          ShellStep(['systemctl', '--user', 'restart', 'nginx.service']),
+        ],
+        requiredLevel: RequiredLevel.login,
+        runner: const RunnerFacts(identity: 'deploy'),
+      );
+      expect(withAdminCredentials(asLogin, session(null)), same(asLogin));
     });
   });
 }

@@ -128,7 +128,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'0.0.0.0'",
     "'::'",
     "'http'",
-    r"'${port.hostIp ?? '*'}:$public'",
+    r"'${_hostText(port.hostIp)}:$public'",
+    r"'[$ip]'",
     "'*'",
     "':'",
     r"'[${forward.host}]:${forward.port}'",
@@ -543,6 +544,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // debugPrint of a dismissal that was not saved; the toast is ARB text.
   'lib/ui/coverage.dart': {r"'$error'"},
+  'lib/ui/attention.dart': {r"'$error'"},
   'lib/ui/docker/container_details.dart': {
     // A mount's type as the Engine API names it, matched, never shown;
     // the empty type a mount without one reads as; the separator between

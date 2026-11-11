@@ -1,12 +1,16 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show SemanticsProperties;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 
+import 'chart_marks.dart';
 import 'chart_style.dart';
 import 'chart_values.dart';
 import 'time_series.dart';
+import 'time_series_crosshair.dart';
 
 /// A time-series chart (03 §10.7, OV-03): the one to four lanes of a
 /// [TimeSeriesRing] on a shared time axis that spans [span] and ends at
@@ -15,18 +19,33 @@ import 'time_series.dart';
 /// No line crosses an unknown sample or a gap, and every gap is a hatched
 /// band labelled with its reason where the label fits. The legend names
 /// each series, each gap reason in view and the data's [source] (03 §9.5
-/// item 5), so a band too narrow for its label is still named. Screen
-/// readers get each series' summary over the window (A11Y-02) and each
-/// gap's span, none of them a live region (A11Y-15).
+/// item 5), so a band too narrow for its label is still named. Each series
+/// also has a shape (03 §10.10: never colour alone), drawn beside its name
+/// in the legend and at its latest point in view, so a legend entry
+/// matches its line without colour; a dash pattern would read as missed
+/// samples, so the lines stay solid. [thresholds] draw warning and
+/// critical bands with a rule at each level, as the sparkline does, and
+/// the legend names each level.
+///
+/// A crosshair (03 §10.7) follows a hovering mouse or a dragging finger,
+/// and the left and right arrow keys (Home and End for the ends) while
+/// the chart has focus: a rule at the nearest sample time, each series'
+/// shape on it, and beside it a readout of the time in the ticks' zone and
+/// each series' value there, or inside a gap that there is no reading and
+/// why. Screen readers get each series' summary over the window (A11Y-02)
+/// and each gap's span, none of them a live region (A11Y-15), and the
+/// readout as an adjustable value that swiping up or down moves.
 ///
 /// The chart rebuilds on each change to [data]; its painter repaints on
-/// the ring's version counter inside its own [RepaintBoundary]. It moves
-/// only when a sample arrives or a rebuild hands it a later [end], and it
-/// never animates, so reduced motion (A11Y-11) leaves it unchanged.
+/// the ring's version counter inside its own [RepaintBoundary]. The
+/// crosshair paints in a layer of its own, so moving it neither rebuilds
+/// the chart nor repaints its lines. It moves only when a sample arrives
+/// or a rebuild hands it a later [end], and it never animates, so reduced
+/// motion (A11Y-11) leaves it unchanged.
 ///
 /// On an axis its parent leaves unbounded, and when measured intrinsically,
 /// the chart takes 320 x 200.
-class TimeSeriesChart extends StatelessWidget {
+class TimeSeriesChart extends StatefulWidget {
   const TimeSeriesChart({
     super.key,
     required this.data,
@@ -38,6 +57,7 @@ class TimeSeriesChart extends StatelessWidget {
     this.span = const Duration(minutes: 10),
     this.max,
     this.zoneOffset,
+    this.thresholds,
   });
 
   final TimeSeriesRing data;
@@ -67,17 +87,147 @@ class TimeSeriesChart extends StatelessWidget {
   /// device's zone.
   final Duration? zoneOffset;
 
+  /// Draws warning and critical bands behind the lines, in [unit]. A level
+  /// above the scale draws nothing and the legend leaves it out.
+  final ChartThresholds? thresholds;
+
+  @override
+  State<TimeSeriesChart> createState() => _TimeSeriesChartState();
+}
+
+/// Where the crosshair is: under a pointer, kept as its place on the plot
+/// so a moving window slides the data under a still mouse, or at a time a
+/// key or a screen reader moved it to.
+sealed class _Cursor {
+  const _Cursor();
+}
+
+final class _PointerCursor extends _Cursor {
+  const _PointerCursor(this.x, this.plotSize);
+
+  final double x;
+  final Size plotSize;
+}
+
+final class _TimeCursor extends _Cursor {
+  const _TimeCursor(this.at);
+
+  final int at;
+}
+
+final class _StepIntent extends Intent {
+  const _StepIntent(this.step);
+
+  final TimeSeriesStep step;
+}
+
+/// What the last build drew, which input between builds resolves against.
+typedef _Frame = ({
+  TimeSeriesPainter chart,
+  List<ChartGap> gaps,
+  TimeSeriesHit? Function(_Cursor? cursor) hitOf,
+});
+
+class _TimeSeriesChartState extends State<TimeSeriesChart> {
+  static const _shortcuts = {
+    SingleActivator(LogicalKeyboardKey.arrowLeft): _StepIntent(
+      TimeSeriesStep.earlier,
+    ),
+    SingleActivator(LogicalKeyboardKey.arrowRight): _StepIntent(
+      TimeSeriesStep.later,
+    ),
+    SingleActivator(LogicalKeyboardKey.home): _StepIntent(
+      TimeSeriesStep.oldest,
+    ),
+    SingleActivator(LogicalKeyboardKey.end): _StepIntent(TimeSeriesStep.newest),
+  };
+
+  /// The crosshair, which only its layer and the readout's semantics
+  /// listen to.
+  final _cursor = ValueNotifier<_Cursor?>(null);
+  final _focus = FocusNode();
+  late final _actions = <Type, Action<Intent>>{
+    _StepIntent: CallbackAction<_StepIntent>(
+      onInvoke: (intent) => _step(intent.step),
+    ),
+  };
+
+  /// Whether focus came by keyboard, which draws the focus ring.
+  bool _focusRing = false;
+
+  /// Set by each build and each plot layout, for the key and gesture
+  /// handlers that run between them.
+  _Frame? _frame;
+  Size _plotSize = Size.zero;
+
+  /// What started a drag: a mouse that lets go still hovers, so only a
+  /// touch or a pen clears the crosshair.
+  PointerDeviceKind? _dragKind;
+
+  @override
+  void didUpdateWidget(TimeSeriesChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data != widget.data) _cursor.value = null;
+  }
+
+  @override
+  void dispose() {
+    _cursor.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _point(Offset position) =>
+      _cursor.value = _PointerCursor(position.dx, _plotSize);
+
+  void _leave() {
+    if (_cursor.value is _PointerCursor) _cursor.value = null;
+  }
+
+  void _endDrag() {
+    if (_dragKind != PointerDeviceKind.mouse) _leave();
+    _dragKind = null;
+  }
+
+  /// Where [step] takes the crosshair from [cursor], or null with nothing
+  /// in view.
+  int? _stepFrom(_Cursor? cursor, TimeSeriesStep step) {
+    final frame = _frame;
+    if (frame == null) return null;
+    final chart = frame.chart;
+    final plot = chart.plotRectFor(_plotSize);
+    // One pixel column's time, so each key moves the rule on screen.
+    final stride = plot.width > 0
+        ? ((chart.to - chart.from) / plot.width).ceil()
+        : 1;
+    return timeSeriesStepFrom(
+      chart.data,
+      frame.gaps,
+      at: frame.hitOf(cursor)?.at,
+      step: step,
+      from: chart.from,
+      to: chart.to,
+      stride: stride,
+    );
+  }
+
+  void _step(TimeSeriesStep step) {
+    final at = _stepFrom(_cursor.value, step);
+    if (at != null) _cursor.value = _TimeCursor(at);
+  }
+
   @override
   Widget build(BuildContext context) {
-    assert(labels.length == data.lanes, 'one label per lane');
-    return ListenableBuilder(listenable: data, builder: _build);
+    assert(widget.labels.length == widget.data.lanes, 'one label per lane');
+    return ListenableBuilder(listenable: widget.data, builder: _build);
   }
 
   Widget _build(BuildContext context, Widget? _) {
+    final TimeSeriesChart(:data, :labels, :unit, :strings) = widget;
     final theme = Theme.of(context);
     final palette = ChartPalette.of(context);
-    final to = end.microsecondsSinceEpoch;
-    final from = to - span.inMicroseconds;
+    final to = widget.end.microsecondsSinceEpoch;
+    final from = to - widget.span.inMicroseconds;
 
     final first = data.indexAtOrAfter(from);
     final stop = data.indexAtOrAfter(to + 1);
@@ -95,7 +245,7 @@ class TimeSeriesChart extends StatelessWidget {
           (high, value) =>
               value != null && (high == null || value > high) ? value : high,
         );
-    final scaleMax = max ?? chartScaleMax(highest, unit);
+    final scaleMax = widget.max ?? chartScaleMax(highest, unit);
 
     final gaps = [
       for (final gap in data.gaps)
@@ -112,41 +262,222 @@ class TimeSeriesChart extends StatelessWidget {
     final style = theme.textTheme.labelSmall!.copyWith(
       color: palette.scaleText,
     );
+    String format(double value) => formatChartValue(value, unit, strings);
 
-    final plot = RepaintBoundary(
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: TimeSeriesPainter(
-          data: data,
-          version: data.version,
-          from: from,
-          to: to,
-          scaleMax: scaleMax,
-          unit: unit,
-          strings: strings,
-          colors: palette.series,
-          gaps: gaps,
-          summaries: [
-            for (final (lane, samples) in inView.indexed)
-              chartSeriesSummary(
-                label: labels[lane],
-                samples: edgeInGap ? [...samples, null] : samples,
-                unit: unit,
-                span: scaleMax,
-                strings: strings,
+    // The levels the plot draws, as the legend and screen readers name them.
+    final thresholds = widget.thresholds;
+    final levels = [
+      if (thresholds != null)
+        for (final (level, severity, color) in [
+          (thresholds.warning, strings.severityWarning, palette.warning),
+          (thresholds.critical, strings.severityCritical, palette.critical),
+        ])
+          if (level.isFinite && level < scaleMax)
+            (strings.barPart(severity, format(math.max(0, level))), color),
+    ];
+    ThresholdBand? band(double? level, Color color) =>
+        level == null ? null : (from: level, color: color);
+
+    final zoneOffsetOf = switch (widget.zoneOffset) {
+      final offset? => (DateTime _) => offset,
+      null => _deviceZoneOffset,
+    };
+    final chart = TimeSeriesPainter(
+      data: data,
+      version: data.version,
+      from: from,
+      to: to,
+      scaleMax: scaleMax,
+      unit: unit,
+      strings: strings,
+      colors: palette.series,
+      gaps: gaps,
+      summaries: [
+        for (final (lane, samples) in inView.indexed)
+          chartSeriesSummary(
+            label: labels[lane],
+            samples: edgeInGap ? [...samples, null] : samples,
+            unit: unit,
+            span: scaleMax,
+            strings: strings,
+          ),
+      ],
+      textStyle: style,
+      textScaler: MediaQuery.textScalerOf(context),
+      textDirection: Directionality.of(context),
+      background: theme.colorScheme.surface,
+      zoneOffsetOf: zoneOffsetOf,
+      warningBand: band(thresholds?.warning, palette.warning),
+      criticalBand: band(thresholds?.critical, palette.critical),
+      thresholdSummary: levels.isEmpty
+          ? null
+          : [
+              for (final (words, _) in levels) words,
+            ].join(strings.listSeparator),
+    );
+
+    TimeSeriesHit? hitOf(_Cursor? cursor) {
+      switch (cursor) {
+        case null:
+          return null;
+        case _TimeCursor(:final at):
+          return timeSeriesHitAt(data, gaps, at: at, from: from, to: to);
+        case _PointerCursor(:final x, :final plotSize):
+          final plot = chart.plotRectFor(plotSize);
+          if (plot.width <= 0 || plot.height <= 0) return null;
+          final window = to - from;
+          return timeSeriesHitAt(
+            data,
+            gaps,
+            at: from + ((x - plot.left) / plot.width * window).round(),
+            from: from,
+            to: to,
+            // A narrow band is drawn wider than its span, and a pointer
+            // over any of it finds the gap.
+            gapReach: (TimeSeriesPainter.minGapWidth / 2 / plot.width * window)
+                .ceil(),
+          );
+      }
+    }
+
+    _frame = (chart: chart, gaps: gaps, hitOf: hitOf);
+    TimeSeriesReadout readoutOf(TimeSeriesHit hit) => timeSeriesReadout(
+      hit,
+      data,
+      labels: labels,
+      unit: unit,
+      strings: strings,
+      span: widget.span,
+      zoneOffsetOf: zoneOffsetOf,
+    );
+
+    final layer = ValueListenableBuilder(
+      valueListenable: _cursor,
+      builder: (context, cursor, _) {
+        final hit = hitOf(cursor);
+        if (hit == null) return const SizedBox.shrink();
+        final plot = chart.plotRectFor(_plotSize);
+        return ExcludeSemantics(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CustomPaint(
+                painter: TimeSeriesCrosshairPainter(
+                  chart: chart,
+                  hit: hit,
+                  ink: palette.scaleText,
+                ),
               ),
-          ],
-          textStyle: style,
-          textScaler: MediaQuery.textScalerOf(context),
-          textDirection: Directionality.of(context),
-          background: theme.colorScheme.surface,
-          zoneOffsetOf: switch (zoneOffset) {
-            final offset? => (_) => offset,
-            null => _deviceZoneOffset,
+              CustomSingleChildLayout(
+                delegate: _ReadoutLayout(
+                  x: chart.xOf(plot, hit.at),
+                  top: plot.top,
+                  minSide: MediaQuery.textScalerOf(context).scale(96),
+                ),
+                child: _Readout(
+                  readout: readoutOf(hit),
+                  colors: palette.series,
+                  ink: palette.scaleText,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    Widget plot = MouseRegion(
+      onHover: (event) => _point(event.localPosition),
+      onExit: (_) => _leave(),
+      child: GestureDetector(
+        // Screen readers move the crosshair through the readout's
+        // adjustable node; a long press or a scroll would do nothing more.
+        excludeFromSemantics: true,
+        onHorizontalDragStart: (details) {
+          _dragKind = details.kind;
+          _point(details.localPosition);
+        },
+        onHorizontalDragUpdate: (details) => _point(details.localPosition),
+        onHorizontalDragEnd: (_) => _endDrag(),
+        onHorizontalDragCancel: _endDrag,
+        onLongPressStart: (details) => _point(details.localPosition),
+        onLongPressMoveUpdate: (details) => _point(details.localPosition),
+        onLongPressEnd: (_) => _endDrag(),
+        onLongPressCancel: _endDrag,
+        // The plot's own size, which a pointer's place is relative to; the
+        // chart's layout answers intrinsic measurements without it.
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            _plotSize = constraints.biggest;
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                RepaintBoundary(
+                  child: CustomPaint(size: Size.infinite, painter: chart),
+                ),
+                layer,
+              ],
+            );
           },
         ),
       ),
     );
+    if (_focusRing) {
+      plot = DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.colorScheme.primary, width: 2),
+          borderRadius: BorderRadius.circular(2),
+        ),
+        child: plot,
+      );
+    }
+    plot = FocusableActionDetector(
+      focusNode: _focus,
+      shortcuts: _shortcuts,
+      actions: _actions,
+      onFocusChange: (focused) {
+        if (!focused && _cursor.value is _TimeCursor) _cursor.value = null;
+      },
+      onShowFocusHighlight: (show) => setState(() => _focusRing = show),
+      child: plot,
+    );
+    // The readout as a screen reader meets it: an adjustable value, as a
+    // slider is, that moves the crosshair. Its value changes only when the
+    // user moves it, so it is no live region (A11Y-15).
+    plot = ValueListenableBuilder(
+      valueListenable: _cursor,
+      child: plot,
+      builder: (context, cursor, child) {
+        String? words(_Cursor? cursor) => switch (hitOf(cursor)) {
+          final hit? => timeSeriesReadoutText(readoutOf(hit), strings),
+          null => null,
+        };
+        String? wordsAfter(TimeSeriesStep step) =>
+            switch (_stepFrom(cursor, step)) {
+              final at? => words(_TimeCursor(at)),
+              null => null,
+            };
+        // Until the crosshair shows, the readout has no value, and so no
+        // value either side of it.
+        final value = words(cursor);
+        return Semantics(
+          container: true,
+          label: strings.readout,
+          value: value,
+          increasedValue: value == null
+              ? null
+              : wordsAfter(TimeSeriesStep.later),
+          decreasedValue: value == null
+              ? null
+              : wordsAfter(TimeSeriesStep.earlier),
+          onIncrease: () => _step(TimeSeriesStep.later),
+          onDecrease: () => _step(TimeSeriesStep.earlier),
+          child: child,
+        );
+      },
+    );
+
     final legend = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -157,15 +488,30 @@ class TimeSeriesChart extends StatelessWidget {
             children: [
               for (final (lane, label) in labels.indexed)
                 _legendEntry(
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: palette.series[lane],
-                      borderRadius: BorderRadius.circular(1.5),
+                  CustomPaint(
+                    size: _LaneSwatch.size,
+                    painter: _LaneSwatch(
+                      palette.series[lane],
+                      ChartMarker.forLane(lane),
                     ),
-                    child: const SizedBox(width: 12, height: 3),
                   ),
                   label,
                   theme.textTheme.labelSmall!,
+                ),
+              for (final (words, color) in levels)
+                _legendEntry(
+                  SizedBox.fromSize(
+                    size: _LaneSwatch.size,
+                    child: Center(
+                      child: SizedBox(
+                        width: _LaneSwatch.size.width,
+                        height: 2,
+                        child: ColoredBox(color: color),
+                      ),
+                    ),
+                  ),
+                  words,
+                  style,
                 ),
               for (final reason in {for (final gap in gaps) gap.reason})
                 _legendEntry(
@@ -173,13 +519,13 @@ class TimeSeriesChart extends StatelessWidget {
                     size: const Size(12, 10),
                     painter: _HatchSwatch(palette.scaleText),
                   ),
-                  _gapLabel(reason, strings),
+                  chartGapLabel(reason, strings),
                   style,
                 ),
             ],
           ),
         ),
-        Text(source, style: style),
+        Text(widget.source, style: style),
       ],
     );
 
@@ -212,6 +558,180 @@ class TimeSeriesChart extends StatelessWidget {
           Flexible(child: Text(label, style: style)),
         ],
       );
+}
+
+/// A series' legend swatch: a stroke of its line with its marker on it.
+final class _LaneSwatch extends CustomPainter {
+  _LaneSwatch(this.color, this.marker, {this.line = true});
+
+  static const size = Size(16, 10);
+
+  final Color color;
+  final ChartMarker marker;
+
+  /// Whether the stroke shows; the readout shows the marker alone.
+  final bool line;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    if (line) {
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: center,
+          width: size.width,
+          height: TimeSeriesPainter.strokeWidth,
+        ),
+        Paint()..color = color,
+      );
+    }
+    paintChartMarker(canvas, marker, center, color);
+  }
+
+  @override
+  bool shouldRepaint(_LaneSwatch oldDelegate) =>
+      oldDelegate.color != color ||
+      oldDelegate.marker != marker ||
+      oldDelegate.line != line;
+}
+
+/// The crosshair's readout: the time, then each series' shape with its
+/// label and value, or inside a gap that there is no reading and why. It
+/// wraps at the width it is given and scales down rather than overflow a
+/// short plot under large text. Screen readers hear it through the
+/// chart's adjustable readout node instead.
+class _Readout extends StatelessWidget {
+  const _Readout({
+    required this.readout,
+    required this.colors,
+    required this.ink,
+  });
+
+  final TimeSeriesReadout readout;
+  final List<Color> colors;
+  final Color ink;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = theme.textTheme.labelSmall!;
+    final gap = readout.gap;
+    final body = DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHigh,
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: 2,
+          children: [
+            Text(
+              readout.time,
+              style: style.copyWith(fontWeight: FontWeight.w600),
+            ),
+            for (final (lane, value) in readout.values.indexed)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 4,
+                children: [
+                  CustomPaint(
+                    size: const Size.square(chartMarkerSize + 2),
+                    painter: _LaneSwatch(
+                      colors[lane],
+                      ChartMarker.forLane(lane),
+                      line: false,
+                    ),
+                  ),
+                  Flexible(
+                    child: Text(
+                      value,
+                      style: style.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            if (gap != null)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 4,
+                children: [
+                  CustomPaint(
+                    size: const Size(12, 10),
+                    painter: _HatchSwatch(ink),
+                  ),
+                  Flexible(child: Text(gap, style: style)),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) => FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: AlignmentDirectional.topStart,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+          child: body,
+        ),
+      ),
+    );
+  }
+}
+
+/// Places the readout beside the crosshair's rule at [x], after it where
+/// it fits and otherwise before it, so it does not cover the points it
+/// describes. It wraps to the wider side, unless that side is narrower
+/// than [minSide]; only then does it take the plot's width and may cover
+/// the rule.
+final class _ReadoutLayout extends SingleChildLayoutDelegate {
+  _ReadoutLayout({required this.x, required this.top, required this.minSide});
+
+  final double x;
+  final double top;
+  final double minSide;
+
+  static const _gap = chartMarkerSize;
+
+  double _after(Size size) => size.width - x - _gap;
+  double _before() => x - _gap;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    final size = constraints.biggest;
+    final side = math.max(_after(size), _before());
+    return BoxConstraints.loose(
+      Size(side >= minSide ? side : size.width, size.height),
+    );
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final y = math.max(0.0, math.min(top, size.height - childSize.height));
+    if (childSize.width <= _after(size)) return Offset(x + _gap, y);
+    if (childSize.width <= _before()) {
+      return Offset(x - _gap - childSize.width, y);
+    }
+    final left = _after(size) >= _before()
+        ? x + _gap
+        : x - _gap - childSize.width;
+    return Offset(
+      left.clamp(0.0, math.max(0.0, size.width - childSize.width)),
+      y,
+    );
+  }
+
+  @override
+  bool shouldRelayout(_ReadoutLayout oldDelegate) =>
+      oldDelegate.x != x ||
+      oldDelegate.top != top ||
+      oldDelegate.minSide != minSide;
 }
 
 enum _ChartPart { plot, legend }
@@ -257,23 +777,15 @@ final class _ChartLayout extends MultiChildLayoutDelegate {
   bool shouldRelayout(_ChartLayout oldDelegate) => false;
 }
 
-String _gapLabel(ChartGapReason reason, ChartStrings strings) =>
-    switch (reason) {
-      ChartGapReason.appClosed => strings.gapAppClosed,
-      ChartGapReason.background => strings.gapBackground,
-      ChartGapReason.disconnected => strings.gapDisconnected,
-      ChartGapReason.readingFailed => strings.gapReadingFailed,
-    };
-
 /// A band without data in words, as a screen reader hears it and the
 /// coverage inspector lists it: when it began and ended, and why.
 String chartGapText(ChartGap gap, ChartStrings strings) => switch (gap.end) {
   final end? => strings.gapSummary(
     gap.start,
     end,
-    _gapLabel(gap.reason, strings),
+    chartGapLabel(gap.reason, strings),
   ),
-  null => strings.gapOngoing(gap.start, _gapLabel(gap.reason, strings)),
+  null => strings.gapOngoing(gap.start, chartGapLabel(gap.reason, strings)),
 };
 
 /// The first time axis tick at or after [from] on a grid of [step]
@@ -353,6 +865,9 @@ final class TimeSeriesPainter extends CustomPainter {
     required this.textDirection,
     required this.background,
     this.zoneOffsetOf = _deviceZoneOffset,
+    this.warningBand,
+    this.criticalBand,
+    this.thresholdSummary,
   }) : assert(to > from, 'the window spans time'),
        assert(scaleMax > 0, 'the scale needs a positive top');
 
@@ -393,7 +908,20 @@ final class TimeSeriesPainter extends CustomPainter {
   /// change.
   final Duration Function(DateTime time) zoneOffsetOf;
 
+  /// The threshold bands behind the lines ([paintThresholdBands]).
+  final ThresholdBand? warningBand;
+  final ThresholdBand? criticalBand;
+
+  /// The levels [warningBand] and [criticalBand] start at, in words, as a
+  /// screen reader hears them; null without them.
+  final String? thresholdSummary;
+
   static const strokeWidth = 1.5;
+
+  /// How far a series' marker reaches right of its centre, with its halo:
+  /// the plot stops this far short of the right edge, so the marker on a
+  /// sample at the edge shows whole.
+  static const markerReach = chartMarkerSize * 0.6 + chartMarkerHalo;
 
   /// The value grid is decoration: the labels beside it carry the values.
   static const _gridAlpha = 0.24;
@@ -450,7 +978,9 @@ final class TimeSeriesPainter extends CustomPainter {
       _text(formatChartValue(scaleMax * share, unit, strings)),
   ];
 
-  Rect _plotFor(Size size) {
+  /// The plot within [size], inside the axis labels: lines, bands and the
+  /// crosshair's rule stay within it.
+  Rect plotRectFor(Size size) {
     if (_plotSize == size) return _plot!;
     final labels = _valueLabels();
     final gutter = labels.map((label) => label.width).reduce(math.max);
@@ -462,21 +992,26 @@ final class TimeSeriesPainter extends CustomPainter {
     return _plot = Rect.fromLTRB(
       gutter + _labelGap,
       lineHeight / 2,
-      size.width - strokeWidth / 2,
+      size.width - markerReach,
       size.height - lineHeight - _tickLength - 2,
     );
   }
 
-  double _xOf(Rect plot, int micros) =>
+  /// Where the time [micros] falls across [plot].
+  double xOf(Rect plot, int micros) =>
       plot.left + (micros - from) / (to - from) * plot.width;
+
+  /// Where [value] falls up [plot], clamped to the scale.
+  double yOf(Rect plot, double value) =>
+      plot.bottom - value.clamp(0, scaleMax) / scaleMax * plot.height;
 
   Rect _bandOf(Rect plot, ChartGap gap) {
     final start = math.max(gap.start.microsecondsSinceEpoch, from);
     final end = math.min(gap.end?.microsecondsSinceEpoch ?? to, to);
     final band = Rect.fromLTRB(
-      _xOf(plot, start),
+      xOf(plot, start),
       plot.top,
-      _xOf(plot, end),
+      xOf(plot, end),
       plot.bottom,
     );
     if (band.width >= minGapWidth) return band;
@@ -489,10 +1024,18 @@ final class TimeSeriesPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final plot = _plotFor(size);
+    final plot = plotRectFor(size);
     if (plot.width <= 0 || plot.height <= 0) return;
-    double yOf(double value) =>
-        plot.bottom - value.clamp(0, scaleMax) / scaleMax * plot.height;
+    double yOf(double value) => this.yOf(plot, value);
+
+    paintThresholdBands(
+      canvas,
+      plot,
+      yOf: yOf,
+      scaleMax: scaleMax,
+      warning: warningBand,
+      critical: criticalBand,
+    );
 
     final grid = Paint()..color = _ink.withValues(alpha: _gridAlpha);
     final valueLabels = _valueLabels();
@@ -512,7 +1055,7 @@ final class TimeSeriesPainter extends CustomPainter {
     for (final gap in gaps) {
       final band = _bandOf(plot, gap).intersect(plot);
       _paintHatch(canvas, band, _ink);
-      final label = _text(_gapLabel(gap.reason, strings));
+      final label = _text(chartGapLabel(gap.reason, strings));
       // The label sits on a backing that leaves the band's edges showing.
       final box = Rect.fromCenter(
         center: Offset(band.center.dx, band.top + 2 + label.height / 2),
@@ -546,6 +1089,7 @@ final class TimeSeriesPainter extends CustomPainter {
         plot.bottom + strokeWidth,
       ),
     );
+    final markers = <(ChartMarker, Offset, Color)>[];
     for (var lane = 0; lane < data.lanes; lane++) {
       final line = Path();
       final dots = <Offset>[];
@@ -560,7 +1104,7 @@ final class TimeSeriesPainter extends CustomPainter {
         final points = [
           for (final index in run)
             Offset(
-              _xOf(plot, data.microsAt(index)),
+              xOf(plot, data.microsAt(index)),
               yOf(data.valueAt(lane, index)!),
             ),
         ];
@@ -584,8 +1128,36 @@ final class TimeSeriesPainter extends CustomPainter {
       for (final dot in dots) {
         canvas.drawCircle(dot, strokeWidth, dotPaint);
       }
+      if (_latestInView(runs) case final index?) {
+        markers.add((
+          ChartMarker.forLane(lane),
+          Offset(
+            xOf(plot, data.microsAt(index)),
+            yOf(data.valueAt(lane, index)!),
+          ),
+          color,
+        ));
+      }
     }
     canvas.restore();
+    // Outside the clip, so a marker at zero or the top shows whole.
+    for (final (marker, center, color) in markers) {
+      paintChartMarker(canvas, marker, center, color, halo: background);
+    }
+  }
+
+  /// The newest sample of [runs] inside the window, where the lane's marker
+  /// goes: the runs reach one sample past either edge, so only the last
+  /// run's last few entries are looked at.
+  int? _latestInView(List<List<int>> runs) {
+    for (final run in runs.reversed) {
+      for (final index in run.reversed) {
+        final micros = data.microsAt(index);
+        if (micros > to) continue;
+        return micros >= from ? index : null;
+      }
+    }
+    return null;
   }
 
   void _paintTimeAxis(Canvas canvas, Size size, Rect plot) {
@@ -610,7 +1182,7 @@ final class TimeSeriesPainter extends CustomPainter {
 
     final tickPaint = Paint()..color = _ink;
     for (; tick <= to; tick += stepMicros) {
-      final x = _xOf(plot, tick);
+      final x = xOf(plot, tick);
       canvas.drawRect(
         Rect.fromLTWH(x - 0.5, plot.bottom, 1, _tickLength),
         tickPaint,
@@ -631,7 +1203,7 @@ final class TimeSeriesPainter extends CustomPainter {
 
   @override
   SemanticsBuilderCallback get semanticsBuilder => (size) {
-    final plot = _plotFor(size);
+    final plot = plotRectFor(size);
     CustomPainterSemantics node(Rect rect, String label) =>
         CustomPainterSemantics(
           rect: rect,
@@ -651,6 +1223,7 @@ final class TimeSeriesPainter extends CustomPainter {
       for (final summary in summaries) node(plot, summary),
       for (final gap in gaps)
         node(_bandOf(plot, gap).intersect(plot), chartGapText(gap, strings)),
+      if (thresholdSummary case final levels?) node(plot, levels),
     ];
   };
 
@@ -668,10 +1241,71 @@ final class TimeSeriesPainter extends CustomPainter {
       oldDelegate.textScaler != textScaler ||
       oldDelegate.textDirection != textDirection ||
       oldDelegate.background != background ||
-      oldDelegate.zoneOffsetOf != zoneOffsetOf;
+      oldDelegate.zoneOffsetOf != zoneOffsetOf ||
+      oldDelegate.warningBand != warningBand ||
+      oldDelegate.criticalBand != criticalBand;
 
   @override
   bool shouldRebuildSemantics(TimeSeriesPainter oldDelegate) =>
       shouldRepaint(oldDelegate) ||
-      !listEquals(oldDelegate.summaries, summaries);
+      !listEquals(oldDelegate.summaries, summaries) ||
+      oldDelegate.thresholdSummary != thresholdSummary;
+}
+
+/// Paints a [TimeSeriesChart]'s crosshair over its plot: a rule at [hit]
+/// and, on a sample, each known value's marker on it. It reads [chart]'s
+/// plot and scale, so a new chart painter repaints it too. Visible so
+/// painter tests can check what it draws, and kept out of the charts'
+/// barrel.
+@visibleForTesting
+final class TimeSeriesCrosshairPainter extends CustomPainter {
+  TimeSeriesCrosshairPainter({
+    required this.chart,
+    required this.hit,
+    required this.ink,
+  });
+
+  final TimeSeriesPainter chart;
+  final TimeSeriesHit hit;
+
+  /// The rule's colour: the axis text's, at full strength.
+  final Color ink;
+
+  static const ruleWidth = 1.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final plot = chart.plotRectFor(size);
+    if (plot.width <= 0 || plot.height <= 0) return;
+    final hit = this.hit;
+    final x = chart.xOf(plot, hit.at);
+    canvas.drawRect(
+      Rect.fromLTRB(
+        x - ruleWidth / 2,
+        plot.top,
+        x + ruleWidth / 2,
+        plot.bottom,
+      ),
+      Paint()..color = ink,
+    );
+    if (hit is! TimeSeriesSampleHit) return;
+    final data = chart.data;
+    for (var lane = 0; lane < data.lanes; lane++) {
+      final value = data.valueAt(lane, hit.index);
+      if (value == null) continue;
+      paintChartMarker(
+        canvas,
+        ChartMarker.forLane(lane),
+        Offset(x, chart.yOf(plot, value)),
+        chart.colors[lane],
+        halo: chart.background,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(TimeSeriesCrosshairPainter oldDelegate) =>
+      oldDelegate.chart != chart ||
+      oldDelegate.hit != hit ||
+      oldDelegate.ink != ink;
 }

@@ -2892,6 +2892,27 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String chartDateTime(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.MMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString';
+  }
+
+  @override
+  String get chartNoReading => 'no reading';
+
+  @override
+  String chartNoReadingBecause(String reason) {
+    return 'No reading: $reason';
+  }
+
+  @override
+  String get chartReadout => 'Values at a time';
+
+  @override
   String get accessNeverRuns =>
       'Klabautermann never runs these fix commands. Copy one and run it yourself on the server.';
 
@@ -3739,6 +3760,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logsPanelSearchInvalid => 'Not a valid regular expression';
+
+  @override
+  String get logsPanelSearchInvalidLocal =>
+      'Not shown here: this engine cannot read the pattern, but the server may';
 
   @override
   String get logsPanelSearchServer => 'Search the whole journal on the server';
@@ -7626,6 +7651,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerImagesNoneUpdates => 'No image has an update.';
 
   @override
+  String get dockerImagesUpdatesUnknown =>
+      'Which images have an update is not known yet.';
+
+  @override
   String get dockerImagesUpdatesCheck => 'Check for updates';
 
   @override
@@ -9267,7 +9296,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diagnosticsHint =>
-      'The raw output of each collector, for a parser bug report. It names this server\'s processes, units, mounts and paths, so read it before you share it.';
+      'The raw output of each collector, for a parser bug report. It carries this server\'s host name and machine ID, the command lines of its processes, crontab entries and cron jobs, and its units, mounts and paths. Redaction catches secret-shaped values, not host names or internal addresses, so read it before you share it.';
 
   @override
   String diagnosticsMissing(String collectors) {
@@ -10817,6 +10846,10 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get attentionNotSaved =>
+      'Klabautermann could not save this acknowledgement, so it lasts only until it quits.';
 
   @override
   String get attentionClose => 'Close';
