@@ -723,6 +723,7 @@ void main() {
       // starts.
       for (final (script, then) in [
         (const <int>[], _Then.hangUp),
+        (const <int>[], _Then.reset),
         (latin1.encode(_identification), _Then.hangUp),
         (latin1.encode(_identification), _Then.reset),
       ]) {
@@ -736,6 +737,22 @@ void main() {
         );
       }
     });
+
+    test(
+      'a server that hangs up once a packet has started stays other',
+      () async {
+        // One byte past the identification line is the start of the server's
+        // first packet: the key exchange had begun, so the close is not the
+        // service refusing connections.
+        final failure = await _connectFailure(
+          _ScriptedServer([
+            ...latin1.encode(_identification),
+            0,
+          ], then: _Then.hangUp),
+        );
+        expect(failure, _ofKind(SshConnectFailureKind.other));
+      },
+    );
 
     test('a server that disconnects before its KEXINIT stays other', () async {
       // A DISCONNECT carries the server's own reason.
