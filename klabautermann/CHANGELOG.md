@@ -21,6 +21,10 @@
   asks first and names the container, as closing a Séance tab does.
 - Quitting while a container shell is open asks first and names the
   container, as quitting with unsaved edits or running operations does.
+- Settings > Sync shows a synced host key that conflicts with the one
+  this device trusts, with both fingerprints, and resolves it by keeping
+  this device's key or trusting the new one, in the settings route and
+  the desktop settings window.
 - Activity shows the commands an action ran in the code font, as the
   preview before it runs does.
 - Saved log and diagnostic exports, and the staged copy a share hands on,

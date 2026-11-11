@@ -1268,8 +1268,11 @@ is on main:
   started by the user, none runs at startup or on a timer. Synced
   servers have no connect config, so a `Connect` to one is rejected
   until endpoint confirmation (K41) exists. Sign-out, switching
-  accounts, secrets, quarantine and pin-conflict surfaces are not
-  built. Tested against an in-memory sync server that refuses any push
+  accounts, secrets and quarantine surfaces are not built. The
+  pin-conflict surface is: Settings > Sync shows each quarantined host
+  key with both fingerprints and resolves it by keeping this device's
+  key or trusting the new one, in the route and the desktop settings
+  window. Tested against an in-memory sync server that refuses any push
   and a fake OS keystore; no real Séance server or OS keystore has been
   exercised, and the keychain sign-off stays a manual gate (06).
 - Local-only import (FL-02): desktops offer "Import from

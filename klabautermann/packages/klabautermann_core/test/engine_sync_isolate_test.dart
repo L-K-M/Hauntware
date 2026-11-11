@@ -1,11 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/catalog/klabautermann_records.dart';
 import 'package:klabautermann_core/src/engine/engine_isolate.dart';
-import 'package:seance_core/seance_core.dart' show AuthKind, AuthMethod;
+import 'package:seance_core/seance_core.dart'
+    show AuthKind, AuthMethod, HostKey;
 import 'package:test/test.dart';
 
 import 'support/fake_sync_server.dart';
@@ -80,6 +82,32 @@ void main() {
       if (event is SyncStatus && event.phase != SyncPhase.running) break;
     }
     return seen;
+  }
+
+  /// The next [PinConflictsChanged], answering each keystore request from
+  /// [keystore] as the app's binding would.
+  Future<PinConflictsChanged> untilPinConflictsChanged(
+    IsolateEngineClient client,
+    StreamIterator<EngineEvent> events,
+    MemoryKeystore keystore,
+  ) async {
+    while (await events.moveNext()) {
+      final event = events.current;
+      if (event case KeystoreRequest(:final requestId, :final operation)) {
+        final KeystoreResult result = switch (operation) {
+          KeystoreReadMasterKey() => KeystoreMasterKey(
+            switch (keystore.masterKey) {
+              final key? => Uint8List.fromList(key),
+              null => null,
+            },
+          ),
+          final other => throw StateError('unexpected keystore call $other'),
+        };
+        client.send(AnswerKeystore(requestId, result));
+      }
+      if (event is PinConflictsChanged) return event;
+    }
+    throw StateError('the engine stopped before answering');
   }
 
   test('sync is refused while another instance may use the files', () async {
@@ -579,6 +607,69 @@ void main() {
         File('${support.path}/sync_enrollment.json').readAsStringSync(),
         isNot(contains('seance56Asserted')),
       );
+    });
+  });
+
+  group('pin conflicts (k4)', () {
+    const locator = 'alpha.example.com:22';
+
+    test('a round reports the conflict, and reads and resolutions answer '
+        'PinConflictsChanged', () async {
+      final server = await FakeSyncServer.create();
+      await server.seedServer(fakeServer('srv-a', 'alpha'));
+      await server.seedHostKey(
+        HostKey(
+          host: 'alpha.example.com',
+          port: 22,
+          type: 'ssh-ed25519',
+          fingerprintSha256: 'SHA256:pulled',
+          pinnedAt: 1000,
+        ),
+      );
+      File('${support.path}/host_keys.json').writeAsStringSync(
+        jsonEncode([
+          {
+            'host': 'alpha.example.com',
+            'port': 22,
+            'type': 'ssh-ed25519',
+            'fingerprintSha256': 'SHA256:local',
+            'pinnedAt': 1000,
+          },
+        ]),
+      );
+      final (client, events) = await spawn(
+        entryPoint: (start) =>
+            engineMain(start, syncTransport: server.transport),
+      );
+      final keystore = MemoryKeystore();
+      client.send(
+        const EnrollSync(
+          baseUrl: 'https://sync.example.com',
+          username: fakeSyncUser,
+          password: fakeSyncPassword,
+          encryptionPassphrase: fakeSyncPassword,
+        ),
+      );
+
+      final enrolled = await untilSyncEnds(client, events, keystore);
+      final status = enrolled.last as SyncStatus;
+      expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+      expect(status.pinConflicts?.single.locator, locator);
+
+      client.send(const ReadPinConflicts());
+      final read = await untilPinConflictsChanged(client, events, keystore);
+      expect(read.conflicts.single.pulledFingerprintSha256, 'SHA256:pulled');
+
+      client.send(
+        const ResolvePinConflict(
+          locator,
+          keepLocal: false,
+          localFingerprintSha256: 'SHA256:local',
+          pulledFingerprintSha256: 'SHA256:pulled',
+        ),
+      );
+      final resolved = await untilPinConflictsChanged(client, events, keystore);
+      expect(resolved.conflicts, isEmpty);
     });
   });
 }

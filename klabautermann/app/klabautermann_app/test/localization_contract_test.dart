@@ -489,7 +489,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'/'",
     "'..'",
   },
-  'lib/controllers/sync_controller.dart': {"'the engine stopped'"},
+  'lib/controllers/sync_controller.dart': {
+    "'the engine stopped'",
+    // Pin conflict refusals: diagnostics, and the request names the
+    // engine's refusals answer by.
+    "'The engine stopped'",
+    "'That conflict is already being resolved'",
+    "'ResolvePinConflict'",
+    "'ReadPinConflicts'",
+  },
   // TRI-03's acknowledgement keys (kind and subject) and the fields they
   // are stored under in settings.json.
   'lib/controllers/attention.dart': {
@@ -593,6 +601,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/services/settings_window/settings_window_host.dart': {
     r"'No settings window method $name'",
     "'No pin publication settings'",
+    "'No pin conflict settings'",
     "'No app lock settings'",
     "'No admin memory settings'",
     "'levels'",
@@ -1161,6 +1170,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/quick_actions.dart': {"'/'", r"'$error'"},
   'lib/ui/fleet_board.dart': {r"'$error'"},
   'lib/ui/settings_page.dart': {r"'$error'"},
+  // The keys tests find a pin conflict card's two resolutions by, and a
+  // resolution failure's diagnostic.
+  'lib/ui/pin_conflict_card.dart': {
+    r"'settings.pin.keep.${conflict.locator}'",
+    r"'settings.pin.accept.${conflict.locator}'",
+    r"'$error'",
+  },
   'lib/ui/thresholds_tab.dart': {r"'$error'"},
   'lib/ui/sortable_table.dart': {
     // FocusNode debug labels.

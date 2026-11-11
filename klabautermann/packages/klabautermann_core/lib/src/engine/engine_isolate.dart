@@ -1407,6 +1407,31 @@ void engineMain(
         runSync(SyncOperation.enroll, () => sync.enroll(message));
       case RunSyncRound():
         runSync(SyncOperation.round, sync.runRound);
+      case ReadPinConflicts():
+        // Behind any round already queued, so a read never races the diff
+        // that round is about to change.
+        syncTail = syncTail.then((_) async {
+          uiPort.send(PinConflictsChanged(await sync.pinConflicts()));
+        });
+      case ResolvePinConflict(
+        :final locator,
+        :final keepLocal,
+        :final localFingerprintSha256,
+        :final pulledFingerprintSha256,
+      ):
+        syncTail = syncTail.then((_) async {
+          try {
+            final conflicts = await sync.resolvePinConflict(
+              locator,
+              keepLocal: keepLocal,
+              localFingerprintSha256: localFingerprintSha256,
+              pulledFingerprintSha256: pulledFingerprintSha256,
+            );
+            uiPort.send(PinConflictsChanged(conflicts));
+          } on Object catch (error) {
+            uiPort.send(RequestRejected('ResolvePinConflict', '$error'));
+          }
+        });
       case ReadServerDraft(:final requestId, :final serverId):
         uiPort.send(
           ServerDraftRead(

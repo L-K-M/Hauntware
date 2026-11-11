@@ -6147,6 +6147,31 @@
   "@settingsPinPublicationNotChanged": {
     "description": "Toast when the engine did not take or keep a change of the host key sharing switch."
   },
+  "settingsPinConflictWarning": "A synced host key for {locator} conflicts with the key this device trusts. This can mean a man-in-the-middle attack.",
+  "@settingsPinConflictWarning": {
+    "description": "Settings, Sync: warning over one quarantined host key, naming the host:port whose synced key differs from the trusted pin (03 §4.9).",
+    "placeholders": {
+      "locator": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsPinLocalKey": "This device trusts",
+  "@settingsPinLocalKey": {
+    "description": "Label over the fingerprint of the host key this device trusts, in a pin conflict."
+  },
+  "settingsPinPulledKey": "The other device synced",
+  "@settingsPinPulledKey": {
+    "description": "Label over the fingerprint of the host key another device synced, in a pin conflict on this account."
+  },
+  "settingsPinKeepLocal": "Keep this device's key",
+  "@settingsPinKeepLocal": {
+    "description": "Resolves a pin conflict by re-pushing the trusted key (03 §4.9)."
+  },
+  "settingsPinConflictNotResolved": "The host key conflict could not be resolved.",
+  "@settingsPinConflictNotResolved": {
+    "description": "Toast when the engine did not take a host key conflict resolution."
+  },
   "settingsAboutTitle": "About",
   "@settingsAboutTitle": {
     "description": "Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog."

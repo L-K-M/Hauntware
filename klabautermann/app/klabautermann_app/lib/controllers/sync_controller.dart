@@ -6,11 +6,43 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'account_size.dart';
 import 'pin_publication_controller.dart' show PinPublicationSettings;
 
+/// What Settings reads and resolves of the host-key quarantine diff, apart
+/// from where it runs: [SyncController] in the app, and a copy kept over the
+/// settings link in the desktop settings window.
+abstract interface class PinConflictsSettings implements Listenable {
+  /// The conflicts the engine reports, in its order.
+  List<SyncPinConflict> get conflicts;
+
+  /// Whether a resolution is in flight; the cards disable their buttons
+  /// while it is, so a double tap cannot send two.
+  bool get resolving;
+
+  /// Resolves the conflict at [locator]: [keepLocal] keeps this device's pin
+  /// and re-pushes it, false trusts the pulled key. Throws
+  /// [PinConflictNotResolvedException] when the engine refuses or the
+  /// conflict no longer stands.
+  Future<void> resolvePinConflict(
+    SyncPinConflict conflict, {
+    required bool keepLocal,
+  });
+}
+
+/// A resolution the engine refused or did not apply.
+final class PinConflictNotResolvedException implements Exception {
+  const PinConflictNotResolvedException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// The sync account concern (03 §4.3, §10.1): the account this device is
 /// enrolled in, the sign-in, and the rounds the user asks for. A round
 /// pushes what the engine sealed since (03 §4.4, [engineSyncPushPolicy]);
 /// a sign-in pushes nothing.
-final class SyncController extends ChangeNotifier {
+final class SyncController extends ChangeNotifier
+    implements PinConflictsSettings {
   /// [account] is the one the engine started with
   /// ([EngineReady.syncAccount]). [pinPublication] is what the sign-in
   /// offers to assert, when a release is named (M5 plan M07).
@@ -33,8 +65,25 @@ final class SyncController extends ChangeNotifier {
   /// final [SyncStatus], so the next one always answers the oldest.
   final List<(SyncOperation, Completer<SyncStatus>)> _waiting = [];
 
+  /// The pin-conflict reads and resolutions still to come, oldest first.
+  /// A null locator is a read, and every one is answered by the engine's
+  /// next [PinConflictsChanged] or a refusal, in request order.
+  final List<(String?, Completer<void>)> _pinRequests = [];
+
+  /// The locators whose resolution is in flight, so a second tap on the
+  /// same card is refused rather than queued.
+  final Set<String> _resolving = {};
+
+  List<SyncPinConflict> _conflicts = const [];
+
   /// The enrolled account, or null.
   SyncAccountInfo? get account => _account;
+
+  @override
+  List<SyncPinConflict> get conflicts => List.unmodifiable(_conflicts);
+
+  @override
+  bool get resolving => _resolving.isNotEmpty;
 
   /// The account's size after the latest operation that succeeded in this
   /// engine run (SYN-09); null before one, and while no account is
@@ -74,6 +123,66 @@ final class SyncController extends ChangeNotifier {
   Future<SyncStatus> syncNow() =>
       _send(SyncOperation.round, const RunSyncRound());
 
+  /// Asks the engine for the quarantine diff as it stands and updates
+  /// [conflicts] with its answer. A read the engine refuses leaves the
+  /// list as it is, since a startup read must not stop the app.
+  Future<void> readPinConflicts() {
+    if (_engineStopped) return Future.value();
+    final answered = Completer<void>();
+    _pinRequests.add((null, answered));
+    try {
+      _engine.send(const ReadPinConflicts());
+    } on StateError {
+      _pinRequests.removeWhere(
+        (pending) => identical(pending.$2, answered),
+      );
+      return Future.value();
+    }
+    return answered.future.catchError((Object _) {});
+  }
+
+  @override
+  Future<void> resolvePinConflict(
+    SyncPinConflict conflict, {
+    required bool keepLocal,
+  }) async {
+    if (_engineStopped) {
+      throw const PinConflictNotResolvedException('The engine stopped');
+    }
+    if (_resolving.contains(conflict.locator)) {
+      throw const PinConflictNotResolvedException(
+        'That conflict is already being resolved',
+      );
+    }
+    final answered = Completer<void>();
+    _resolving.add(conflict.locator);
+    _pinRequests.add((conflict.locator, answered));
+    notifyListeners();
+    try {
+      _engine.send(
+        ResolvePinConflict(
+          conflict.locator,
+          keepLocal: keepLocal,
+          localFingerprintSha256: conflict.localFingerprintSha256,
+          pulledFingerprintSha256: conflict.pulledFingerprintSha256,
+        ),
+      );
+    } on StateError {
+      _pinRequests.removeWhere(
+        (pending) => identical(pending.$2, answered),
+      );
+      _resolving.remove(conflict.locator);
+      notifyListeners();
+      throw const PinConflictNotResolvedException('The engine stopped');
+    }
+    try {
+      await answered.future;
+    } finally {
+      _resolving.remove(conflict.locator);
+      notifyListeners();
+    }
+  }
+
   Future<SyncStatus> _send(SyncOperation operation, EngineRequest request) {
     if (_engineStopped) {
       return Future.value(_stopped(operation));
@@ -90,13 +199,35 @@ final class SyncController extends ChangeNotifier {
   }
 
   void _onEngineEvent(EngineEvent event) {
-    if (event is! SyncStatus) return;
+    switch (event) {
+      case SyncStatus():
+        _onSyncStatus(event);
+      case PinConflictsChanged(:final conflicts):
+        _setConflicts(conflicts);
+        if (_pinRequests.isNotEmpty) {
+          _pinRequests.removeAt(0).$2.complete();
+        }
+      case RequestRejected(:final requestName, :final reason)
+          when requestName == 'ResolvePinConflict' ||
+              requestName == 'ReadPinConflicts':
+        if (_pinRequests.isNotEmpty) {
+          _pinRequests.removeAt(0).$2.completeError(
+            PinConflictNotResolvedException(reason),
+          );
+        }
+      case _:
+    }
+  }
 
+  void _onSyncStatus(SyncStatus event) {
     _account = event.account;
     if (_account == null) {
       _accountSize.value = null;
     } else if (event.prefixBudget case final budget?) {
       _accountSize.value = accountSizeOf(budget);
+    }
+    if (event.pinConflicts case final conflicts?) {
+      _setConflicts(conflicts);
     }
     if (event.phase == SyncPhase.running) {
       notifyListeners();
@@ -110,12 +241,24 @@ final class SyncController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _setConflicts(List<SyncPinConflict> conflicts) {
+    if (listEquals(_conflicts, conflicts)) return;
+    _conflicts = List.unmodifiable(conflicts);
+    notifyListeners();
+  }
+
   void _onEngineDone() {
     _engineStopped = true;
     for (final (operation, answer) in _waiting) {
       answer.complete(_stopped(operation));
     }
     _waiting.clear();
+    for (final (_, answer) in _pinRequests) {
+      answer.completeError(
+        const PinConflictNotResolvedException('The engine stopped'),
+      );
+    }
+    _pinRequests.clear();
     notifyListeners();
   }
 
@@ -136,6 +279,12 @@ final class SyncController extends ChangeNotifier {
       answer.complete(_stopped(operation));
     }
     _waiting.clear();
+    for (final (_, answer) in _pinRequests) {
+      answer.completeError(
+        const PinConflictNotResolvedException('The engine stopped'),
+      );
+    }
+    _pinRequests.clear();
     unawaited(_events.cancel());
     _accountSize.dispose();
     super.dispose();
