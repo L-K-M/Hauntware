@@ -2,7 +2,8 @@
 
 A tiny, self-hostable sync server for Séance. It stores **end-to-end encrypted**
 record blobs and resolves conflicts by last-write-wins. It can decrypt nothing:
-a full database compromise leaks only opaque ciphertext.
+a full database compromise exposes ciphertext and account metadata, and lets an
+attacker guess weak passwords offline (see [Security model](#security-model)).
 
 ## Run with Docker
 
@@ -346,17 +347,25 @@ DTOs and the database schema are unchanged; this is not an account migration.
 
 ## Security model
 
-- The client derives a vault key and an **independent** auth verifier from the
-  passphrase (Argon2id + HKDF domain separation). Only the verifier reaches the
-  server, and it is stored as a salted SHA-256 hash — a DB leak does not allow
-  login (the raw verifier is needed and cannot be recovered from the hash).
+- The client derives an auth verifier from the account password and a vault
+  key from the encryption passphrase (Argon2id, then HKDF with separate
+  labels). Only the verifier reaches the server, which stores a salted SHA-256
+  hash of it, so a copy of the database cannot be replayed to sign in. It does
+  let an attacker guess the password offline: each guess costs one Argon2id
+  run with the account's parameters, which slows guessing but does not stop it
+  for a weak or common password. A compromised server sees the raw verifier at
+  every sign-in and can guess the same way.
+- When the account password and the encryption passphrase are the same
+  string, both keys come from the same Argon2id result, so a guessed password
+  also opens every record. A separate, strong encryption passphrase keeps the
+  records sealed even if the password is guessed.
 - Record payloads are sealed client-side with XChaCha20-Poly1305. The server
   stores `nonce ‖ ciphertext ‖ mac` and never holds a key.
 - Registration, prelogin and login have global and network-source limits.
   Failed logins also have an account limit; a correct verifier remains usable.
-  Forwarded addresses are accepted only from configured exact-IP proxies,
-  including equivalent IPv4-mapped IPv6 addresses. Malformed or oversized
-  forwarding chains fall back to the immediate peer.
+  Forwarded addresses are accepted only from configured proxy addresses or
+  CIDR networks, including equivalent IPv4-mapped IPv6 addresses. Malformed or
+  oversized forwarding chains fall back to the immediate peer.
 - Active limiter buckets are never evicted. When all keyed buckets are active,
   unseen keys share a bounded overflow bucket, so saturation can temporarily
   throttle new clients. Set the global/source budgets and bucket capacity for
