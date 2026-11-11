@@ -127,8 +127,8 @@ final class ChartStrings {
   final String Function(double value) decimal;
 
   /// A core heatmap's summary: its label, how many cores it shows, their
-  /// formatted average and the busiest core as a [barPart], which may
-  /// carry its severity ([withSeverity]).
+  /// formatted average and the busiest core as a [barPart] with its name
+  /// and share, without a severity.
   final String Function(String label, int count, String average, String busiest)
   heatmapSummary;
 }

@@ -3774,7 +3774,7 @@ abstract class AppLocalizations {
   /// **'{value}'**
   String chartDecimal(double value);
 
-  /// A core heatmap's screen-reader summary: what it measures, how many cores it shows, their average busy share (already formatted) and the busiest core as a chartBarPart, which may carry a chartWithSeverity.
+  /// A core heatmap's screen-reader summary: what it measures, how many cores it shows, their average busy share (already formatted) and the busiest core as a chartBarPart with its name and busy share; it carries no severity.
   ///
   /// In en, this message translates to:
   /// **'{label}: {count, plural, =1{1 core} other{{count} cores}}, average {average}, busiest {busiest}'**

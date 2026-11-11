@@ -3450,7 +3450,7 @@
   },
   "chartHeatmapSummary": "{label}: {count, plural, =1{1 core} other{{count} cores}}, average {average}, busiest {busiest}",
   "@chartHeatmapSummary": {
-    "description": "A core heatmap's screen-reader summary: what it measures, how many cores it shows, their average busy share (already formatted) and the busiest core as a chartBarPart, which may carry a chartWithSeverity.",
+    "description": "A core heatmap's screen-reader summary: what it measures, how many cores it shows, their average busy share (already formatted) and the busiest core as a chartBarPart with its name and busy share; it carries no severity.",
     "placeholders": {
       "label": {
         "type": "String",
