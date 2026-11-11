@@ -31,14 +31,22 @@ void main() {
   });
   tearDown(() => workspace.dispose());
 
-  Future<void> mount(WidgetTester tester, {ThemeMode? mode}) async {
+  Future<void> mount(
+    WidgetTester tester, {
+    ThemeMode? mode,
+    String? appVersion,
+  }) async {
     if (mode != null) {
       await settings.update(settings.value.copyWith(themeMode: mode));
     }
     await tester.binding.setSurfaceSize(const Size(1000, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
-      PlanchetteApp(workspace: workspace, settings: settings),
+      PlanchetteApp(
+        workspace: workspace,
+        settings: settings,
+        appVersion: appVersion,
+      ),
     );
     // The shell listens to the global FocusManager, so the tree has to be torn
     // down before the next test rather than left for the binding to discard.
@@ -328,6 +336,22 @@ void main() {
     await mount(tester);
     await openSettings(tester);
   }, variant: const TargetPlatformVariant({TargetPlatform.windows}));
+
+  testWidgets('Settings › About shows the running build version', (
+    tester,
+  ) async {
+    workspace.newDocument();
+    await mount(tester, appVersion: '1.9.4');
+    await openSettings(tester);
+    expect(find.text('Version 1.9.4'), findsOneWidget);
+
+    final licenses = find.byKey(const ValueKey('settings.licenses'));
+    await tester.ensureVisible(licenses);
+    await tester.pumpAndSettle();
+    await tester.tap(licenses);
+    await tester.pumpAndSettle();
+    expect(find.text('1.9.4'), findsWidgets);
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 
   testWidgets('Settings opens the open-source licenses', (tester) async {
     // A known entry instead of the bundle's NOTICES, which tests lack.
