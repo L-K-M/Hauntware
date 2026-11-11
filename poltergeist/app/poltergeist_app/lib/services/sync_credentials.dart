@@ -113,8 +113,12 @@ final class SecureSyncCredentialStore implements SyncCredentialStore {
     }
     // Settle any journal an interrupted earlier attempt left staged —
     // staging a second one over it is refused — then read the key the
-    // keystore actually holds. A locked keystore reads as no key.
-    final current = await _keys.probeKeystore();
+    // keystore actually holds. A locked keystore reads as no key, and a
+    // keystore that lost the key of a vault holding secrets throws
+    // MasterKeyUnavailableException rather than mint a replacement.
+    final current = journal is FileVaultStore
+        ? await probeVaultKey(_keys, journal.file)
+        : await _keys.probeKeystore();
     if (current != null) await journal.settleRekey(current);
     // Staging re-seals every stored entry, which a keyless vault cannot
     // produce: fail like the locked vault rather than stage a generation

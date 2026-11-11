@@ -36,17 +36,23 @@ class CredentialDialogResult {
 /// a key-file path plus passphrase; [readKeyFile] (the coordinator's
 /// audited identity-file reader, D18) is injected so the dialog never
 /// touches the filesystem itself and tests need no files.
+/// [vaultKeyMissing] words the [vaultUnavailable] banner for a keystore
+/// that no longer holds the key of a vault with saved secrets.
 Future<CredentialDialogResult?> showCredentialDialog(
   BuildContext context,
   CredentialPromptData data, {
   required Future<String> Function(String path) readKeyFile,
   bool vaultUnavailable = false,
+  bool vaultKeyMissing = false,
   GlobalKey? dialogKey,
 }) async {
   final reply = await showGhostCredentialDialog(
     context,
     ghostCredentialRequestOf(data, vaultUnavailable: vaultUnavailable),
-    strings: poltergeistCredentialStrings(AppLocalizations.of(context)),
+    strings: poltergeistCredentialStrings(
+      AppLocalizations.of(context),
+      vaultKeyMissing: vaultKeyMissing,
+    ),
     readKeyFile: readKeyFile,
     monoStyle: poltergeistMonoTextStyle,
     dialogKey: dialogKey,

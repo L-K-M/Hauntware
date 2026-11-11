@@ -244,6 +244,23 @@ void main() {
       expect(await journalFile.exists(), isFalse);
     });
 
+    test('a keystore that lost its entry refuses the re-key and mints '
+        'nothing', () async {
+      await enrolled();
+      // The keystore forgot the vault key while vault.json still holds a
+      // secret sealed under it.
+      keystore._map.clear();
+
+      await expectLater(() => credentials.writeVaultKey(newKey),
+          throwsA(isA<MasterKeyUnavailableException>()));
+
+      expect(keystore._map, isEmpty, reason: 'no key may be minted');
+      expect(await journalFile.exists(), isFalse);
+      expect(
+          (await SecretVault(vaultStore, oldKey).getSecret('a'))!.value,
+          'value-a');
+    });
+
     test('a locked keystore cannot even begin the re-key', () async {
       await enrolled();
       keystore.locked = true;
