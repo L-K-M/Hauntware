@@ -5445,6 +5445,12 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   /// scoped to the directories the journal names — never a general
   /// sweep (03 §4.6). Entries modified at/after [adoptedAt] are left
   /// alone: a user resuming mid-sweep may have just minted them.
+  ///
+  /// A server's times are compared with [adoptedAt] on the server's own
+  /// clock, read in each directory that holds a temp (see
+  /// [_serverCutoff]); a server clock that lags would otherwise make
+  /// another client's live temp look old. A directory whose clock cannot
+  /// be read, and a temp without a modification time, are left alone.
   Future<void> _sweepRestoredTemps(
     RestoredTransferTask restored,
     TransferTask task,
@@ -5472,10 +5478,17 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         } on Object {
           continue;
         }
-        for (final entry in entries) {
-          if (!_isTransferTemp(entry.name)) continue;
-          final modified = entry.modifiedAt;
-          if (modified != null && !modified.isBefore(adoptedAt)) continue;
+        final temps = [
+          for (final entry in entries)
+            if (_isTransferTemp(entry.name) && entry.modifiedAt != null) entry,
+        ];
+        if (temps.isEmpty) continue;
+        final cutoff = task.destination is LocalFsLocation
+            ? adoptedAt
+            : await _serverCutoff(fs, directory, adoptedAt);
+        if (cutoff == null) continue;
+        for (final entry in temps) {
+          if (!entry.modifiedAt!.isBefore(cutoff)) continue;
           try {
             await fs.delete(entry);
           } on Object {
@@ -5488,6 +5501,38 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     } finally {
       await _releaseLeases(leases);
     }
+  }
+
+  /// [adoptedAt] on the clock of the server holding [directory], or null
+  /// when that clock cannot be read. An empty probe file written there
+  /// carries the server's time; the local time is taken after its upload
+  /// returns, and SFTP truncates to whole seconds, so both errors move the
+  /// cutoff earlier and only ever spare a temp. The probe is named like a
+  /// transfer temp, so one a crash strands is swept on a later launch.
+  Future<DateTime?> _serverCutoff(
+    RemoteFileSystem fs,
+    String directory,
+    DateTime adoptedAt,
+  ) async {
+    final RemoteFileEntry probe;
+    try {
+      probe = await fs.upload(
+        remoteJoin(directory, '.poltergeist-clock-${uuidV4()}.tmp'),
+        const Stream<List<int>>.empty(),
+        length: 0,
+      );
+    } on Object {
+      return null;
+    }
+    final localNow = DateTime.now();
+    try {
+      await fs.delete(probe);
+    } on Object {
+      // Left for a later sweep: it is named like a transfer temp.
+    }
+    final serverNow = probe.modifiedAt;
+    if (serverNow == null) return null;
+    return adoptedAt.add(serverNow.difference(localNow));
   }
 
   static bool _isTransferTemp(String name) =>
