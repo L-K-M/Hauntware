@@ -142,7 +142,7 @@ class FakeTreeFileSystem implements RemoteFileSystem {
   /// landed upload without a modification time.
   DateTime Function()? clock;
 
-  /// `setTimes` refusals — a server that allows writes but denies SETSTAT.
+  /// `setTimes` refusals: a server that allows writes but denies SETSTAT.
   Object? Function(String path)? setTimesFailure;
 
   /// Gates — return a completer to stall the operation until it completes.

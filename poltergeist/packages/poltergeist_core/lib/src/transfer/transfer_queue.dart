@@ -3395,7 +3395,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   /// kept; a move then re-checks the copy before it deletes the source,
   /// because `unsupported` also covers a path that is no longer a plain
   /// file. A lost link, a cancel, or a copy that is gone still throws. The
-  /// move verb then deletes the source file — a delete failure fails the
+  /// move verb then deletes the source file, and a delete failure fails the
   /// item because a move that leaves its source is not complete (02 §5.2).
   /// A [resumed] delete that finds the source gone completes: the earlier
   /// attempt's delete ran and only its reply was lost.
