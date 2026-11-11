@@ -27,7 +27,9 @@
 #  10. the checksum job drops a stale SHA256SUMS before recomputing,
 #      so re-running it stays idempotent,
 #  11. all Android client legs verify the built APK's version code,
-#  12. PR product-job selection follows every cross-product read.
+#  12. PR product-job selection follows every cross-product read,
+#  14. every Planchette Flutter package is analyzed and tested by CI,
+#      the release gate and scripts/test.sh.
 
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -250,6 +252,35 @@ for leg in client_planchette client_seance client_poltergeist client_klabauterma
     END { exit !found }
   ' .github/workflows/release.yml ||
     err "release.yml $leg must verify the APK version code (verify-android-version.sh)"
+done
+
+# --- 14. Planchette Flutter package lists ------------------------------------
+# ci.yml, release.yml's gate and scripts/test.sh each list the shared
+# Flutter packages by hand; a package missing from one list ships
+# untested from that path. Every package that depends on the Flutter SDK
+# must appear in all three.
+for pubspec in planchette/packages/*/pubspec.yaml; do
+  grep -qE '^[[:space:]]+sdk:[[:space:]]+flutter' "$pubspec" || continue
+  package="$(basename "$(dirname "$pubspec")")"
+  grep -qxF "        working-directory: planchette/packages/$package" \
+    .github/workflows/ci.yml ||
+    err "ci.yml planchette_flutter must analyze and test $package"
+  grep -qF "(cd planchette/packages/$package && flutter analyze --no-pub && flutter test --no-pub)" \
+    .github/workflows/release.yml ||
+    err "release.yml test gate must analyze and test $package"
+  # The analyze loop is the `for dir in ...; do` list whose body runs
+  # flutter analyze.
+  awk -v want="packages/$package" '
+    /for dir in / { list = ""; collecting = 1 }
+    collecting { list = list " " $0 }
+    collecting && /; do$/ { collecting = 0; next }
+    /run flutter analyze/ && list != "" {
+      n = split(list, words, /[[:space:]\\]+/)
+      for (i = 1; i <= n; i++) if (words[i] == want) found = 1
+    }
+    END { exit !found }
+  ' scripts/test.sh ||
+    err "scripts/test.sh must analyze and test planchette/$package"
 done
 
 # --- 12. PR product-job selection -------------------------------------------
