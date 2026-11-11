@@ -714,6 +714,13 @@ final class _SshLink implements SshLink {
           'The server refused forwarding: ${e.description}',
           cause: e,
         );
+      case ChannelRefusal.connectFailed:
+        return ChannelOpenException(
+          refusal,
+          'The server could not reach the forwarding target: '
+          '${e.description}',
+          cause: e,
+        );
       case ChannelRefusal.other:
         return ChannelOpenException(
           refusal,

@@ -34,9 +34,18 @@ enum ChannelRefusal {
   /// queue rather than erroring.
   sessionLimit,
 
-  /// The peer refused a `direct-tcpip` or `direct-streamlocal` open. The link
-  /// marks forwarding unavailable for the endpoint-discovery ladder.
+  /// The peer refused a `direct-tcpip` or `direct-streamlocal` open because
+  /// it does not forward that kind (RFC 4254 reason administratively
+  /// prohibited, or an unknown channel type). The link marks forwarding
+  /// refused in [SshLinkSeen].
   forwardDisabled,
+
+  /// The peer tried to reach the forwarding target and could not (RFC 4254
+  /// reason connect failed): a closed port, a missing Unix socket. Says
+  /// nothing about the link. OpenSSH also answers a `direct-streamlocal`
+  /// open this way when its own settings refuse it, so for a socket this
+  /// does not prove that forwarding works.
+  connectFailed,
 
   /// A refusal that teaches the link nothing (already at the learned ceiling,
   /// or a reason the classifier cannot attribute).
@@ -222,20 +231,32 @@ final class _ChannelWaiter {
 /// it to [classifyChannelRefusal].
 enum ChannelOpenKind { session, directTcpip, directStreamLocal }
 
-/// RFC 4254 §6.1 `SSH_OPEN_CONNECT_FAILED`: the reason code a session-limit
+/// RFC 4254 §5.1 `SSH_OPEN_ADMINISTRATIVELY_PROHIBITED`: the server's own
+/// policy refused the open, as OpenSSH and Dropbear answer a `direct-tcpip`
+/// open their forwarding settings refuse.
+const sshOpenAdministrativelyProhibited = 1;
+
+/// RFC 4254 §5.1 `SSH_OPEN_CONNECT_FAILED`: the reason code a session-limit
 /// refusal carries. OpenSSH historically reports `MaxSessions` refusals as
 /// administratively-prohibited with an "open failed" description instead, so
-/// the classifier accepts either signal.
+/// the classifier accepts either signal. On a forwarding open it means the
+/// server could not reach the target.
 const sshOpenConnectFailed = 2;
+
+/// RFC 4254 §5.1 `SSH_OPEN_UNKNOWN_CHANNEL_TYPE`: the server does not know
+/// the forwarding kind at all, as Dropbear before 2024.84 answers
+/// `direct-streamlocal`.
+const sshOpenUnknownChannelType = 3;
 
 /// Maps a wire refusal to a [ChannelRefusal].
 ///
 /// A connect-failed session refusal while the observed open count is below
 /// the ceiling in force is the server's `MaxSessions` speaking: the count
 /// that was open is the real limit, so the link learns it and the link
-/// degrades rather than failing. A refusal on a forwarding open means this
-/// transport cannot carry that forwarding kind. Anything else is an opaque
-/// refusal.
+/// degrades rather than failing. A forwarding open refused by policy or as
+/// an unknown type means this transport cannot carry that forwarding kind;
+/// one refused as connect failed means the target did not answer. Anything
+/// else is an opaque refusal.
 ChannelRefusal classifyChannelRefusal(
   ChannelOpenKind kind, {
   required int observedOpens,
@@ -244,7 +265,12 @@ ChannelRefusal classifyChannelRefusal(
   String description = '',
 }) {
   if (kind != ChannelOpenKind.session) {
-    return ChannelRefusal.forwardDisabled;
+    return switch (reasonCode) {
+      sshOpenAdministrativelyProhibited ||
+      sshOpenUnknownChannelType => ChannelRefusal.forwardDisabled,
+      sshOpenConnectFailed => ChannelRefusal.connectFailed,
+      _ => ChannelRefusal.other,
+    };
   }
   if (observedOpens >= effectiveLimit) {
     return ChannelRefusal.other;
