@@ -3450,7 +3450,7 @@
   },
   "chartHeatmapSummary": "{label}: {count, plural, =1{1 core} other{{count} cores}}, average {average}, busiest {busiest}",
   "@chartHeatmapSummary": {
-    "description": "A core heatmap's screen-reader summary: what it measures, how many cores it shows, their average busy share (already formatted) and the busiest core as a chartBarPart, which may carry a chartWithSeverity.",
+    "description": "A core heatmap's screen-reader summary: what it measures, how many cores it shows, their average busy share (already formatted) and the busiest core as a chartBarPart with its name and busy share; it carries no severity.",
     "placeholders": {
       "label": {
         "type": "String",
@@ -3468,6 +3468,34 @@
         "example": "cpu12 98%"
       }
     }
+  },
+  "chartDateTime": "{time}",
+  "@chartDateTime": {
+    "description": "The time a chart's crosshair readout names on a chart that spans more than a day, with the date, in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "MMMd+jm"
+      }
+    }
+  },
+  "chartNoReading": "no reading",
+  "@chartNoReading": {
+    "description": "A series' value in a chart's crosshair readout when the sample under the crosshair has no known value for it."
+  },
+  "chartNoReadingBecause": "No reading: {reason}",
+  "@chartNoReadingBecause": {
+    "description": "A chart's crosshair readout inside a band without data: no series has a value there, and why, one of chartGapAppClosed, chartGapBackground, chartGapDisconnected or chartGapReadingFailed.",
+    "placeholders": {
+      "reason": {
+        "type": "String",
+        "example": "disconnected"
+      }
+    }
+  },
+  "chartReadout": "Values at a time",
+  "@chartReadout": {
+    "description": "Screen-reader name of a time-series chart's crosshair readout: swiping up or down, or the arrow keys, moves it to a later or earlier time, and its value reads the time and each series' value there."
   },
   "accessNeverRuns": "Klabautermann never runs these fix commands. Copy one and run it yourself on the server.",
   "@accessNeverRuns": {
@@ -4438,6 +4466,10 @@
   "logsPanelSearchInvalid": "Not a valid regular expression",
   "@logsPanelSearchInvalid": {
     "description": "Error under the log search field when its text, read as a regular expression, does not compile."
+  },
+  "logsPanelSearchInvalidLocal": "Not shown here: this engine cannot read the pattern, but the server may",
+  "@logsPanelSearchInvalidLocal": {
+    "description": "Error under the log search field in regular expression mode when the text does not compile locally but the journal's own PCRE2 search may still accept it, so Search on server stays available."
   },
   "logsPanelSearchServer": "Search the whole journal on the server",
   "@logsPanelSearchServer": {
@@ -9203,6 +9235,10 @@
   "@dockerImagesNoneUpdates": {
     "description": "Images list: the Updates filter hides every image."
   },
+  "dockerImagesUpdatesUnknown": "Which images have an update is not known yet.",
+  "@dockerImagesUpdatesUnknown": {
+    "description": "Images list: the Updates filter shows nothing because the update check failed, so no image's update is known."
+  },
   "dockerImagesUpdatesCheck": "Check for updates",
   "@dockerImagesUpdatesCheck": {
     "description": "Images list: the button that asks every tag's registry again, even within the six hours a check is kept."
@@ -11136,9 +11172,9 @@
       "count": {"type": "int", "example": "14"}
     }
   },
-  "diagnosticsHint": "The raw output of each collector, for a parser bug report. It names this server's processes, units, mounts and paths, so read it before you share it.",
+  "diagnosticsHint": "The raw output of each collector, for a parser bug report. It carries this server's host name and machine ID, the command lines of its processes, crontab entries and cron jobs, and its units, mounts and paths. Redaction catches secret-shaped values, not host names or internal addresses, so read it before you share it.",
   "@diagnosticsHint": {
-    "description": "Diagnostic bundle sheet: what the bundle holds and why to check it before sharing."
+    "description": "Diagnostic bundle sheet: what the bundle holds (identity, process command lines, crontabs, units, mounts, paths) and why to check it before sharing, since redaction only catches secret-shaped values."
   },
   "diagnosticsMissing": "No answer from: {collectors}",
   "@diagnosticsMissing": {
@@ -12946,6 +12982,10 @@
         "type": "int"
       }
     }
+  },
+  "attentionNotSaved": "Klabautermann could not save this acknowledgement, so it lasts only until it quits.",
+  "@attentionNotSaved": {
+    "description": "Toast: acknowledging a problem in the attention queue, or taking an acknowledgement back, could not be saved on this device. It still applies until the app quits."
   },
   "attentionClose": "Close",
   "@attentionClose": {

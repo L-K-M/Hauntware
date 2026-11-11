@@ -635,6 +635,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final (platform, floor) in [
+    (TargetPlatform.android, kMinInteractiveDimension),
+    (TargetPlatform.linux, 0.0),
+  ]) {
+    testWidgets(
+      'a stack\'s container row is ${floor > 0 ? 'a 48 dp touch '
+                'target' : 'the compact line'} on ${platform.name} (A11Y-01)',
+      (tester) async {
+        final panel = await _pump(tester, size: _phone, platform: platform);
+        await panel.list(tester);
+        await tester.scrollUntilVisible(
+          _row('web'),
+          100,
+          scrollable: _listScrollable(),
+        );
+        await tester.tap(_row('web'));
+        await tester.pumpAndSettle();
+
+        final line = find
+            .ancestor(
+              of: _inOverview(find.text('web-db-1')),
+              matching: find.byType(InkWell),
+            )
+            .first;
+        final height = tester.getSize(line).height;
+        expect(height, greaterThanOrEqualTo(floor));
+        if (floor == 0) expect(height, lessThan(kMinInteractiveDimension));
+      },
+    );
+  }
+
   testWidgets('a palette request selects its stack, again after another '
       'was chosen (PLT-07)', (tester) async {
     final panel = await _pump(tester);

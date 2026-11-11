@@ -8,6 +8,7 @@ import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/docker/events_panel.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'support/docker.dart' show dockerListFailed;
 import 'support/fake_engine.dart';
 
 const _serverId = 'srv-1';
@@ -69,12 +70,22 @@ void main() {
     await engine.close();
   });
 
-  Future<void> pump(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(900, 900);
+  Future<void> pump(
+    WidgetTester tester, {
+    Size size = const Size(900, 900),
+    double textScale = 1,
+  }) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
@@ -95,6 +106,27 @@ void main() {
 
   List<DockerWatch> watches() =>
       engine.sentOfType<DockerWatch>().cast<DockerWatch>().toList();
+
+  testWidgets('at three times the text size on a phone the header scrolls '
+      'and the list keeps its room', (tester) async {
+    await pump(tester, size: const Size(360, 640), textScale: 3);
+    engine.emit(
+      dockerListFailed(
+        _serverId,
+        DockerWatchList.events,
+        DockerQueryFailure.connectionFailed,
+        at: DateTime.utc(2026, 10, 26, 12, 7),
+        detail: 'read: connection reset by peer',
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    engine.emit(_timeline([_die, _gap, _pull]));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('redis:7: pull'), findsOneWidget);
+  });
 
   testWidgets('watches the events while it shows and lists them', (
     tester,
