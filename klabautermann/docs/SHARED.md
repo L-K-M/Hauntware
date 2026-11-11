@@ -28,9 +28,15 @@ Flutter upgrade; both fixes depend on private engine selectors.
 | `SWIFT_OBJC_BRIDGING_HEADER` in `klabautermann/app/klabautermann_app/macos/Runner/Configs/AppInfo.xcconfig` | The same setting in `seance/app/seance_app/macos/Runner/Configs/AppInfo.xcconfig` (`f9bd1e1`) | None. |
 | `klabautermann/app/klabautermann_app/macos/Runner.xcodeproj/project.pbxproj` (three file references, the Runner group entries, one Sources build file) | Séance's wiring of the same three files in `seance/app/seance_app/macos/Runner.xcodeproj/project.pbxproj` (`f9bd1e1`) | Own object ids `D7A6C0DE2F8E4A1B00000001` to `D7A6C0DE2F8E4A1B00000004`. |
 | `klabautermann/app/klabautermann_app/macos/RunnerTests/AccessibilityLifecycleTest.mm` | `seance/app/seance_app/macos/RunnerTests/AccessibilityLifecycleTest.mm` (`f9bd1e1`) | `KLABAUTERMANN_USE_GUARD` and the renamed controller. Like Séance's, compiled only by the fixture script, not by the Xcode project. |
-| `klabautermann/scripts/test-macos-keyboard.sh` | `seance/scripts/test-macos-keyboard.sh` (`f9bd1e1`) | App path, `KLABAUTERMANN_USE_CONTROLLER`, temporary directory name and controller file. Same shape as Poltergeist's adaptation. |
-| `klabautermann/scripts/test-macos-keyboard.mm` | `seance/scripts/test-macos-keyboard.mm` (`79a5679`) | Selects the renamed controller. The checks are not copied: it includes the suite's `scripts/macos-keyboard-fixture.mm`. |
-| `klabautermann/scripts/test-macos-accessibility.sh` | `seance/scripts/test-macos-accessibility.sh` (`f9bd1e1`) | App path, `KLABAUTERMANN_USE_GUARD`, temporary directory name and controller file. |
+
+The fixture scripts are no longer copies:
+`klabautermann/scripts/test-macos-keyboard.sh` and
+`klabautermann/scripts/test-macos-accessibility.sh` set the app path, the
+controller and the `KLABAUTERMANN` macro prefix, and source the suite's
+`scripts/macos-native-fixtures.sh`, which all four products share. The
+keyboard checks and the controller import are compiled from
+`scripts/macos-keyboard-fixture.mm`, so there is no per-product `.mm`.
+The lifecycle test above is still Klabautermann's own copy.
 
 `MainFlutterWindow.swift` creates the controller and, since the desktop
 chrome landed, hosts it inside macos_window_utils'
