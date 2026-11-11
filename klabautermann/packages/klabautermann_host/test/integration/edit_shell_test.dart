@@ -431,7 +431,7 @@ void main() {
         final label = await run(EditCommands.copyAttributes(target, temp));
         expect(label.exitCode, 0, reason: '${label.stderr}');
         expect(_mode(temp), '640');
-      });
+      }, skip: ownTools(['getfacl', 'getfattr']));
 
       test('a backup copies the target and appends to the index', () async {
         final backups = '${dir.path}/state$kBackupsDirSuffix';
