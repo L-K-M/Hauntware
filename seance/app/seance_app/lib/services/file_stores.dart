@@ -700,7 +700,7 @@ class FileHostKeyStore
 
   @override
   Future<HostKey?> get(String host, int port) =>
-      _serialize(() async => _keys['$host:$port']);
+      _serialize(() async => _keys[hostKeyLocator(host, port)]);
 
   @override
   Future<void> put(HostKey key) => _serialize(() => _write(key));
