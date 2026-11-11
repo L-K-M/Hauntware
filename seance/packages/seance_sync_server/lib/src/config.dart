@@ -46,14 +46,16 @@ class ServerSettings {
   final int maxBlobBytes;
 
   /// Bounds one explicitly paged record or inbox response. Legacy record
-  /// pulls remain whole-account for older clients, but the account quotas
-  /// below put a hard ceiling on those responses too.
+  /// pulls remain whole-account for older clients, but the account byte
+  /// quota below puts a hard ceiling on those responses too.
   final int maxRecordsPerPull;
   final int maxPullBodyBytes;
 
   /// Durable storage ceilings per account. The byte ceiling is enforced
   /// independently for sync records and pending inbox items, so a producer
   /// token cannot consume the space needed for the user's record catalog.
+  /// The record-count ceiling counts live records only; deletions are kept
+  /// as tombstones and count toward the byte ceiling alone.
   final int maxRecordsPerAccount;
   final int maxAccountBytes;
 

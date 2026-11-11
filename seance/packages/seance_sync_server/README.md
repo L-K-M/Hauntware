@@ -163,8 +163,8 @@ Omit `--db` for an ephemeral in-memory store.
 | `SEANCE_MAX_SESSIONS_PER_ACCOUNT` | — | `20` | Active sessions retained per account, evicting least recently used |
 | `SEANCE_MAX_RECORDS_PER_PULL` | — | `1000` | Records or inbox items returned per page |
 | `SEANCE_MAX_PULL_BODY_BYTES` | — | `8388608` | Maximum encoded JSON bytes per record or inbox page |
-| `SEANCE_MAX_RECORDS_PER_ACCOUNT` | — | `5000` | Current records and, separately, pending inbox items per account |
-| `SEANCE_MAX_ACCOUNT_BYTES` | — | `41943040` | Encoded record and, separately, inbox-item bytes per account |
+| `SEANCE_MAX_RECORDS_PER_ACCOUNT` | — | `5000` | Live records (deletions do not count) and, separately, pending inbox items per account |
+| `SEANCE_MAX_ACCOUNT_BYTES` | — | `41943040` | Encoded record bytes, deletions included, and, separately, inbox-item bytes per account |
 
 ## API (protocol v4)
 
