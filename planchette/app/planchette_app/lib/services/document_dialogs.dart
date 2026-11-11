@@ -111,7 +111,8 @@ final class AppDocumentDialogs implements DocumentDialogs {
     final choice = await showGhostCloseDialog(
       context,
       title: 'Save changes to ${names.length} documents?',
-      body: '${_listed(names)}\n\n'
+      body:
+          '${_listed(names)}\n\n'
           'Your changes will be lost if you close without saving them.',
       saveLabel: 'Save All',
     );
