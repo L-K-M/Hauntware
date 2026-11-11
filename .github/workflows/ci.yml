@@ -1385,6 +1385,7 @@ jobs:
           (cd planchette/packages/ghost_servers && flutter pub get)
           (cd planchette/packages/ghost_keystore && flutter pub get)
           (cd planchette/packages/ghost_apk_update && flutter pub get)
+          (cd planchette/packages/ghost_keepalive && flutter pub get)
           (cd planchette/packages/ghost_licenses && flutter pub get)
           (cd planchette/packages/ghost_update && flutter pub get)
           (cd planchette/app/planchette_app && flutter pub get)
@@ -1438,6 +1439,11 @@ jobs:
         run: |
           flutter analyze --no-pub
           flutter test --no-pub
+      - name: Shared background keep-alive
+        working-directory: planchette/packages/ghost_keepalive
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
       - name: Shared platform license notices
         working-directory: planchette/packages/ghost_licenses
         run: |
@@ -1463,7 +1469,8 @@ jobs:
           planchette/packages/ghost_marks planchette/packages/ghost_marks_picker
           planchette/packages/ghost_theme
           planchette/packages/ghost_servers planchette/packages/ghost_keystore
-          planchette/packages/ghost_apk_update planchette/packages/ghost_licenses
+          planchette/packages/ghost_apk_update
+          planchette/packages/ghost_keepalive planchette/packages/ghost_licenses
           planchette/packages/ghost_update
           planchette/app/planchette_app
 

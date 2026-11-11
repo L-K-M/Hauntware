@@ -10895,5 +10895,22 @@
         "type": "String"
       }
     }
+  },
+  "keepAliveChannelName": "Transfer keep-alive",
+  "@keepAliveChannelName": {
+    "description": "Notification channel name for the Android transfer keep-alive service."
+  },
+  "keepAliveChannelDescription": "Shown while transfers are kept alive in the background.",
+  "@keepAliveChannelDescription": {
+    "description": "Notification channel description for the Android transfer keep-alive service."
+  },
+  "keepAliveNotificationText": "{count, plural, =1{Keeping 1 transfer alive in the background.} other{Keeping {count} transfers alive in the background.}}",
+  "@keepAliveNotificationText": {
+    "description": "Notification text of the Android transfer keep-alive while count transfers are live.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

@@ -29,6 +29,10 @@
   one you pick.
 - About Séance is in Help on Linux, Windows and phones, with the version
   and licenses; macOS keeps its application menu's About.
+- The background keep-alive (the "Session keep-alive" notification that
+  keeps SSH sessions alive while Séance is in the background) now comes
+  from the shared ghost_keepalive plugin it shares with Poltergeist.
+  Its notification, channel and behavior are unchanged.
 - Deleting a saved server retracts its credential from your sync account
   as well as from this device, unless another server still uses it, so a
   new device no longer picks up the password or key of a server that is

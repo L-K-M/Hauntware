@@ -79,6 +79,7 @@ products:
       ghost_apk_update: [seance_core]
       ghost_desktop: [seance_core]
       ghost_fonts: [seance_core]
+      ghost_keepalive: [seance_core]
       ghost_keystore: [seance_core]
       ghost_licenses: [seance_core]
       ghost_marks: [seance_core]

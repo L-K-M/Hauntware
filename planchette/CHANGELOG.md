@@ -15,6 +15,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   resolved instead of only warned about.
 - Settings › About shows the running build's version, and the open-source
   licenses page repeats it under the app name.
+- `ghost_keepalive` package: the Android background keep-alive (a
+  dataSync foreground service and its `ghost_keepalive` channel) shared
+  by Séance and Poltergeist, moved out of Séance's app-private
+  implementation. The apps pass the notification channel id and every
+  user-facing string.
 - Hide or show the folder sidebar from View, its toolbar buttons or
   `Ctrl+Alt+S` (`Control+Command+S` on macOS). Hiding keeps the workspace
   connected. Its visibility and width survive a restart, and the divider
