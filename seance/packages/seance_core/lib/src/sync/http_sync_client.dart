@@ -179,16 +179,13 @@ class HttpSyncClient
   /// Fetch the KDF salt/params for a username so a new device can derive keys.
   Future<PreloginResponse> prelogin(String username) async {
     final res = await _client
-        .post(
-          _uri('/v1/prelogin'),
-          headers: {'content-type': 'application/json'},
-          body: jsonEncode({'username': username}),
-        )
+        .post(_uri('/v1/prelogin'),
+            headers: {'content-type': 'application/json'},
+            body: jsonEncode({'username': username}))
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
     return PreloginResponse.fromJson(
-      jsonDecode(res.body) as Map<String, dynamic>,
-    );
+        jsonDecode(res.body) as Map<String, dynamic>);
   }
 
   /// Exchange the auth verifier for a session token.
@@ -305,8 +302,7 @@ class HttpSyncClient
             pageThrough < since ||
             page.latestSeq != pageThrough) {
           throw const FormatException(
-            'Sync page changed its snapshot watermark',
-          );
+              'Sync page changed its snapshot watermark');
         }
       }
 
@@ -387,7 +383,9 @@ class HttpSyncClient
   Future<LegacyRecordPage> pullLegacyPage({String? afterId}) async {
     final res = await _transfer(
       'GET',
-      _uri('/v1/records/legacy', {if (afterId != null) 'after': afterId}),
+      _uri('/v1/records/legacy', {
+        if (afterId != null) 'after': afterId,
+      }),
     );
     if (res.statusCode >= 400) _fail(res);
     return LegacyRecordPage.fromJson(
@@ -419,20 +417,18 @@ class HttpSyncClient
   @override
   Future<void> createApp(CreateInboxAppRequest request) async {
     final res = await _client
-        .post(
-          _uri('/v1/apps'),
-          headers: _authHeaders,
-          body: jsonEncode(request.toJson()),
-        )
+        .post(_uri('/v1/apps'),
+            headers: _authHeaders, body: jsonEncode(request.toJson()))
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
   }
 
   @override
   Future<List<InboxAppInfo>> listApps() async {
-    final res = await _client
-        .get(_uri('/v1/apps'), headers: _authHeaders)
-        .timeout(timeout);
+    final res =
+        await _client.get(_uri('/v1/apps'), headers: _authHeaders).timeout(
+              timeout,
+            );
     if (res.statusCode >= 400) _fail(res);
     final json = jsonDecode(res.body) as Map<String, dynamic>;
     return [
@@ -464,14 +460,14 @@ class HttpSyncClient
       final next = page.nextReceived;
       if (pageThrough == null) {
         if (through != null || page.hasMore) {
-          throw const FormatException('Inbox page lost its snapshot watermark');
+          throw const FormatException(
+              'Inbox page lost its snapshot watermark');
         }
       } else {
         through ??= pageThrough;
         if (pageThrough != through || pageThrough < since || next == null) {
           throw const FormatException(
-            'Inbox page changed its snapshot watermark',
-          );
+              'Inbox page changed its snapshot watermark');
         }
       }
 
@@ -503,7 +499,10 @@ class HttpSyncClient
     }
   }
 
-  Future<InboxPage> _listItemPage({required int since, int? through}) async {
+  Future<InboxPage> _listItemPage({
+    required int since,
+    int? through,
+  }) async {
     final res = await _transfer(
       'GET',
       _uri('/v1/inbox', {
@@ -537,7 +536,9 @@ class HttpSyncClient
     }
     final nextValue = json['nextReceived'];
     final hasMoreValue = json['hasMore'];
-    if (throughValue is! num || nextValue is! num || hasMoreValue is! bool) {
+    if (throughValue is! num ||
+        nextValue is! num ||
+        hasMoreValue is! bool) {
       throw const FormatException('Inbox page metadata is malformed');
     }
     return InboxPage(
@@ -550,21 +551,18 @@ class HttpSyncClient
 
   @override
   Future<bool> deleteItem(String appId, String itemId) =>
-      _deleteReportingAbsence(
-        _uri(
-          '/v1/inbox/${Uri.encodeComponent(appId)}/'
-          '${Uri.encodeComponent(itemId)}',
-        ),
-      );
+      _deleteReportingAbsence(_uri(
+        '/v1/inbox/${Uri.encodeComponent(appId)}/'
+        '${Uri.encodeComponent(itemId)}',
+      ));
 
   /// A 404 counts as "already gone" only when the server itself says so
   /// (`not_found`). A plain 404 is a server too old to have the route, or a
   /// proxy in the way, and reading that as "another device claimed it" would
   /// quietly drop the user's proposal.
   Future<bool> _deleteReportingAbsence(Uri uri) async {
-    final res = await _client
-        .delete(uri, headers: _authHeaders)
-        .timeout(timeout);
+    final res =
+        await _client.delete(uri, headers: _authHeaders).timeout(timeout);
     if (res.statusCode < 400) return true;
     if (res.statusCode == 404) {
       try {
