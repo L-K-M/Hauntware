@@ -179,7 +179,7 @@ void main() {
         isA<BuiltInEditorException>().having(
           (error) => error.message,
           'message',
-          'The local copy changed in another editor. Reopen it before '
+          'The file changed in another editor. Reopen it before '
               'saving to avoid losing those changes.',
         ),
       ),
@@ -244,7 +244,7 @@ void main() {
         isA<BuiltInEditorException>().having(
           (error) => error.message,
           'message',
-          'The local copy changed while it was being opened.',
+          'The file changed while it was being opened.',
         ),
       ),
     );
@@ -279,7 +279,7 @@ void main() {
     expect(
       classifyBuiltInTextDocumentFailure(
         const BuiltInEditorException(
-          'The local copy changed while it was being opened.',
+          'The file changed while it was being opened.',
         ),
       ),
       BuiltInTextDocumentFailure.changed,
@@ -287,7 +287,7 @@ void main() {
     expect(
       classifyBuiltInTextDocumentFailure(
         const BuiltInEditorException(
-          'The local copy is missing or no longer a regular file.',
+          'The file is missing or no longer a regular file.',
         ),
       ),
       BuiltInTextDocumentFailure.missing,
@@ -315,7 +315,7 @@ void main() {
         isA<BuiltInEditorException>().having(
           (error) => error.message,
           'message',
-          'The local copy is missing or no longer a regular file.',
+          'The file is missing or no longer a regular file.',
         ),
       ),
     );
@@ -364,7 +364,7 @@ void main() {
         isA<BuiltInEditorException>().having(
           (error) => error.message,
           'message',
-          'The local copy is a symbolic link, not a regular file.',
+          'The file is a symbolic link, not a regular file.',
         ),
       ),
     );
