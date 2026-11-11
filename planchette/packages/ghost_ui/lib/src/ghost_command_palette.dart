@@ -70,7 +70,7 @@ final class CommandPaletteStrings {
 String _keywordMatch(String keyword) => 'matches "$keyword"';
 
 String _keywordMatchWithDescription(String keyword, String description) =>
-    'matches "$keyword" — $description';
+    'matches "$keyword": $description';
 
 String _unavailable(String label) => '$label, unavailable';
 

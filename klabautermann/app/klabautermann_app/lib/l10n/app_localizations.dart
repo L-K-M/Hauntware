@@ -14238,7 +14238,7 @@ abstract class AppLocalizations {
   /// Command palette: the same line for a row that also describes what it does.
   ///
   /// In en, this message translates to:
-  /// **'matches \"{keyword}\" — {description}'**
+  /// **'matches \"{keyword}\": {description}'**
   String paletteKeywordMatchWithDescription(String keyword, String description);
 
   /// Command palette: what a screen reader hears when the highlight reaches a row that cannot run right now.

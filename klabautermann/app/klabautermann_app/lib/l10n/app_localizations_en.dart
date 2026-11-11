@@ -11143,7 +11143,7 @@ class AppLocalizationsEn extends AppLocalizations {
     String keyword,
     String description,
   ) {
-    return 'matches \"$keyword\" — $description';
+    return 'matches \"$keyword\": $description';
   }
 
   @override

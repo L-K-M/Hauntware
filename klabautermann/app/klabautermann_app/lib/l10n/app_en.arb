@@ -13447,7 +13447,7 @@
       }
     }
   },
-  "paletteKeywordMatchWithDescription": "matches \"{keyword}\" — {description}",
+  "paletteKeywordMatchWithDescription": "matches \"{keyword}\": {description}",
   "@paletteKeywordMatchWithDescription": {
     "description": "Command palette: the same line for a row that also describes what it does.",
     "placeholders": {
