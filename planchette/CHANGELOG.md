@@ -37,6 +37,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The Linux package build uses the suite's shared packager and fails early
   with a clear message when `objdump` is missing, instead of partway through.
   The built `.deb` and AppImage are unchanged.
+- Closing an unsaved document, and the quit question that covers several,
+  use the shared Ghost close dialog: Save, Don't save or Cancel, with Save
+  as the default. The discard button reads "Don't save", as in Séance and
+  Poltergeist.
 
 ### Fixed
 - A stored key passphrase that does not open the key is asked for again,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/services/app_quit_guard.dart';
 import 'package:seance_app/services/xterm_engine.dart';
+import 'package:seance_app/ui/built_in_text_editor.dart';
 import 'package:seance_core/seance_core.dart';
 
 void main() {
@@ -91,7 +93,7 @@ void main() {
       snapshotOverride: () => QuitRiskSnapshot(),
       presentDialog: (_, _) async {
         dialogs++;
-        return false;
+        return QuitChoice.cancel;
       },
     );
 
@@ -106,7 +108,7 @@ void main() {
       snapshotOverride: _hazards,
       presentDialog: (_, _) async {
         dialogs++;
-        return true;
+        return QuitChoice.quit;
       },
     );
 
@@ -117,7 +119,7 @@ void main() {
   testWidgets('concurrent close routes share one decision', (tester) async {
     final navigator = GlobalKey<NavigatorState>();
     await _pumpNavigator(tester, navigator);
-    final answer = Completer<bool?>();
+    final answer = Completer<QuitChoice?>();
     var dialogs = 0;
     final guard = AppQuitGuard(
       navigatorKey: navigator,
@@ -133,7 +135,7 @@ void main() {
     expect(identical(first, second), isTrue);
     expect(dialogs, 1);
 
-    answer.complete(false);
+    answer.complete(QuitChoice.cancel);
     expect(await first, isFalse);
     expect(await second, isFalse);
   });
@@ -153,7 +155,7 @@ void main() {
       presentDialog: (_, _) async {
         settings.events.add('dialog');
         dialogs++;
-        return false;
+        return QuitChoice.cancel;
       },
     );
 
@@ -180,7 +182,7 @@ void main() {
       snapshotOverride: _hazards,
       presentDialog: (_, _) async {
         dialogs++;
-        return true;
+        return QuitChoice.quit;
       },
     );
 
@@ -287,6 +289,207 @@ void main() {
     await tester.tapAt(const Offset(4, 4));
     await tester.pumpAndSettle();
     expect(await decision, isFalse);
+  });
+
+  testWidgets('Save All saves every dirty editor and quits', (tester) async {
+    final navigator = GlobalKey<NavigatorState>();
+    final editorKey = GlobalKey<BuiltInTextEditorScreenState>();
+    final saved = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigator,
+        home: BuiltInTextEditorScreen(
+          key: editorKey,
+          file: File('/tmp/seance-quit-save.txt'),
+          remotePath: '/etc/config.txt',
+          initialText: 'one\n',
+          saveDocument: (_, text) async {
+            saved.add(text);
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'unsaved\n');
+    await tester.pump();
+    expect(editorKey.currentState!.isDirty, isTrue);
+
+    final guard = AppQuitGuard(
+      navigatorKey: navigator,
+      snapshotOverride: () => QuitRiskSnapshot(
+        dirtyEditors: [
+          QuitDirtyEditor(
+            server: 'server',
+            path: '/etc/config.txt',
+            editorKey: editorKey,
+          ),
+        ],
+      ),
+    );
+
+    final decision = guard.confirmClose();
+    await tester.pumpAndSettle();
+    expect(find.text('Save All'), findsOneWidget);
+    await tester.tap(find.text('Save All'));
+    await tester.pumpAndSettle();
+
+    expect(saved, ['unsaved\n']);
+    expect(await decision, isTrue);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('Save All rechecks editors saved earlier in the batch', (tester) async {
+    final navigator = GlobalKey<NavigatorState>();
+    final firstKey = GlobalKey<BuiltInTextEditorScreenState>();
+    final secondKey = GlobalKey<BuiltInTextEditorScreenState>();
+    TextEditingController? firstBuffer;
+    await tester.pumpWidget(MaterialApp(
+      navigatorKey: navigator,
+      home: Column(children: [
+        Expanded(child: BuiltInTextEditorScreen(
+          key: firstKey,
+          file: File('/tmp/seance-quit-first.txt'),
+          remotePath: '/first.txt',
+          initialText: 'first',
+          saveDocument: (_, _) async {},
+        )),
+        Expanded(child: BuiltInTextEditorScreen(
+          key: secondKey,
+          file: File('/tmp/seance-quit-second.txt'),
+          remotePath: '/second.txt',
+          initialText: 'second',
+          saveDocument: (_, _) async {
+            firstBuffer!.text = 'new edits while the second save waits';
+          },
+        )),
+      ]),
+    ));
+    await tester.pump();
+    final firstField = find.descendant(
+      of: find.byKey(firstKey), matching: find.byType(TextField),
+    ).first;
+    final secondField = find.descendant(
+      of: find.byKey(secondKey), matching: find.byType(TextField),
+    ).first;
+    firstBuffer = tester.widget<TextField>(firstField).controller;
+    await tester.enterText(firstField, 'first changed');
+    await tester.enterText(secondField, 'second changed');
+    await tester.pump();
+    final guard = AppQuitGuard(
+      navigatorKey: navigator,
+      snapshotOverride: () => QuitRiskSnapshot(dirtyEditors: [
+        QuitDirtyEditor(server: 'server', path: '/first.txt', editorKey: firstKey),
+        QuitDirtyEditor(server: 'server', path: '/second.txt', editorKey: secondKey),
+      ]),
+    );
+
+    final decision = guard.confirmClose();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save All'));
+    await tester.pumpAndSettle();
+
+    expect(firstKey.currentState!.isDirty, isTrue);
+    expect(await decision, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('a failed Save All vetoes the quit and restores Settings', (
+    tester,
+  ) async {
+    final navigator = GlobalKey<NavigatorState>();
+    final editorKey = GlobalKey<BuiltInTextEditorScreenState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigator,
+        home: BuiltInTextEditorScreen(
+          key: editorKey,
+          file: File('/tmp/seance-quit-fail.txt'),
+          remotePath: '/etc/config.txt',
+          initialText: 'one\n',
+          saveDocument: (_, _) async => throw const FileSystemException('full'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'unsaved\n');
+    await tester.pump();
+
+    final settings = _FakeSettingsWindow();
+    final guard = AppQuitGuard(
+      navigatorKey: navigator,
+      settingsWindow: () => settings,
+      snapshotOverride: () => QuitRiskSnapshot(
+        dirtyEditors: [
+          QuitDirtyEditor(
+            server: 'server',
+            path: '/etc/config.txt',
+            editorKey: editorKey,
+          ),
+        ],
+      ),
+    );
+
+    final decision = guard.confirmClose();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save All'));
+    await tester.pumpAndSettle();
+
+    expect(await decision, isFalse);
+    expect(settings.events, ['yield', 'restore']);
+    expect(find.textContaining('full'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('a dirty editor with no mounted state vetoes Save All', (
+    tester,
+  ) async {
+    final navigator = GlobalKey<NavigatorState>();
+    await _pumpNavigator(tester, navigator);
+    final editorKey = GlobalKey<BuiltInTextEditorScreenState>();
+    final guard = AppQuitGuard(
+      navigatorKey: navigator,
+      snapshotOverride: () => QuitRiskSnapshot(
+        dirtyEditors: [
+          QuitDirtyEditor(
+            server: 'server',
+            path: '/etc/config.txt',
+            editorKey: editorKey,
+          ),
+        ],
+      ),
+    );
+
+    final decision = guard.confirmClose();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save All'));
+    await tester.pumpAndSettle();
+
+    expect(await decision, isFalse);
+  });
+
+  testWidgets('no dirty editors hides Save All', (tester) async {
+    final navigator = GlobalKey<NavigatorState>();
+    await _pumpNavigator(tester, navigator);
+    final guard = AppQuitGuard(
+      navigatorKey: navigator,
+      snapshotOverride: () => QuitRiskSnapshot(
+        activeSessions: const [
+          QuitActiveSession(
+            label: 'Build',
+            target: 'dev@build:22',
+            status: QuitSessionStatus.connected,
+          ),
+        ],
+      ),
+    );
+
+    final decision = guard.confirmClose();
+    await tester.pumpAndSettle();
+    expect(find.text('Quit Séance?'), findsOneWidget);
+    expect(find.text('Save All'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('quit-confirm')));
+    await tester.pumpAndSettle();
+    expect(await decision, isTrue);
   });
 }
 
