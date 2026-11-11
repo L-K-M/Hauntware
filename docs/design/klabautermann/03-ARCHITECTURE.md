@@ -6610,9 +6610,22 @@ shows there.
 | `SetSafetyPolicy(policy)`, `SetAdminMode(serverId, enabled)` (8.2, M4) | `AdminModeState(serverId, phase, expiresAt, retry, failure, ended)`; a refused plan's `ActionRefused` names `observeOnly` or `readOnly` |
 | `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, key passphrase, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
+| `NewRecoveryCode`, `SetRecoveryCode`, `RecoveryStatusRequest`, `ExportVault`, `RestoreVault` (CRED-05): the standing recovery code, its status, and the encrypted export and merge; every request runs inside the vault's exclusive queue, with the master key read through the keystore responder and no key minted | `RecoveryCodeGenerated`, `RecoveryStatus`, `VaultExported`, `VaultRestored`, `VaultRecoveryFailed` (fixed kinds only) |
 | none: the engine's probe sweeps (5.12) | `Reachability(serverId, status)` (FL-04) |
 | `HandleAlert(alertRef, acknowledge or dismiss)` (v1.x; inbox fetch runs inside `RunSyncRound`) | `AlertsArrived(serverId, alerts)`, `AlertStatusChanged` (D42) |
 | `OpenTerminal(serverId, containerId, shell)` (v1) | `TerminalBytes`, `TerminalClosed` |
+
+The CRED-05 recovery requests run inside `EngineVault.exclusive` over
+the engine's one vault, with the master key read through the keystore
+responder; a locked or unavailable keystore refuses without minting a
+key. The app's `RecoveryController` correlates every request by
+`requestId`, bounds each wait, and reports the fixed
+`VaultRecoveryFailure` kinds; the settings window carries only the
+configured flag in its snapshot, and the export keeps the
+`seance-secrets` wire format. Explicit status refreshes surface a fixed
+failure and retry path rather than treating an unsuccessful read as no
+code. Desktop export uses a path-only save panel and one shared atomic
+owner-only write; the mobile document provider owns its save.
 
 The `LinkState`, `Subscribe` and `Sample` rows carry what D43 to D46
 decide, in their version 3 shapes (below).

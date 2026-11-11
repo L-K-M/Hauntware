@@ -25,6 +25,18 @@
 - **Return submits the remaining dialogs.** The typed-name backup account
   deletions, external-editor settings, sync rule-set name and final
   sync-pair field use the primary button's validation and busy gates.
+- **Optional device-authentication lock.** Settings → General can require
+  your device's unlock before future saved-credential reads. It is off
+  by default, locks again after five minutes away, and leaves existing
+  connections running. Authentication refusal stays distinct from an
+  unavailable credential store.
+- **Recovery codes for saved passwords and keys.** Settings → Backup →
+  Recovery shows a code once and keeps the setup in the device's vault.
+  Export your credentials, encrypted, to restore here or on another
+  device, keeping existing entries unless you choose to replace them.
+  Saving a first
+  credential offers the code once; "Not now" is remembered. The export
+  uses Séance's `seance-secrets` format, so it opens in either app.
 - **Host-key conflicts show both keys.** When a synced host key differs
   from the one this device trusts, Settings and the account switch now
   show both fingerprints, so you can check them against the server's own

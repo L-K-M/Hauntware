@@ -83,6 +83,11 @@ final class EngineVault {
   /// The vault file's store, for sync's re-key journal and coordinator.
   final FileVaultStore store;
 
+  /// Whether this process alone uses the support directory, so a vault
+  /// write may go through (D63). Recovery refuses to write otherwise, as
+  /// [save] does.
+  bool get exclusiveAccess => _access == SupportDirectoryAccess.exclusive;
+
   // The tail of [exclusive]'s queue.
   Future<void> _tail = Future.value();
 

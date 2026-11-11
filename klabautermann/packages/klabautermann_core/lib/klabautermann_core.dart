@@ -314,8 +314,14 @@ export 'src/operations/command_words.dart' show splitCommandWords;
 
 // The sync sign-in form (03 §4.3 step 1) checks its fields with the
 // suite's enrollment rule before the engine is asked, and the pull-only
-// test names the push policy.
-export 'package:seance_core/catalog.dart' show PushPolicy;
+// test names the push policy. CRED-05's recovery service reads the
+// shared export's size bound and reports its restore summary, and the
+// desktop export file writer applies owner-only privacy.
+export 'package:seance_core/catalog.dart'
+    show AtomicFilePrivacy, AtomicFileWriter, PushPolicy, SecretsRestoreSummary;
+// The secrets export's size bound, checked before a picked file is
+// loaded (CRED-05).
+export 'package:seance_core/seance_core.dart' show SecretsExport;
 export 'package:seance_core/seance_core.dart'
     show SyncEnrollmentIssue, SyncEnrollmentMode, validateSyncEnrollment;
 // The login password prompt (03 §4.5) hands ghost_servers' credential

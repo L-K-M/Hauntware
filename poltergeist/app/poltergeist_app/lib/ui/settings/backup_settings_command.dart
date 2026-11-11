@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/bookmark_backup_service.dart';
 import '../../services/registered_command.dart';
+import '../../services/settings_models.dart';
 import '../../services/settings_window/settings_window_link.dart';
 import '../../services/sync_account_gate.dart';
 import 'backup_settings.dart';
@@ -18,6 +19,7 @@ const kOpenSettingsBackupCommandId = 'open-settings-backup';
 /// Backup dialog remains for a runner without one.
 RegisteredCommand buildOpenSettingsBackupCommand({
   required BookmarkBackupService service,
+  RecoverySettingsModel? recovery,
   SyncAccountGate gate = const SyncAccountGate.production(),
   required bool Function() enabled,
   OpenSettingsWindow? openWindow,
@@ -32,7 +34,12 @@ RegisteredCommand buildOpenSettingsBackupCommand({
     run: (context) async {
       if (await openWindow?.call(SettingsWindowTab.sync) ?? false) return;
       if (!context.mounted) return;
-      await showBackupSettingsDialog(context, service: service, gate: gate);
+      await showBackupSettingsDialog(
+        context,
+        service: service,
+        recovery: recovery,
+        gate: gate,
+      );
     },
     menuPlacement: const CommandMenuPlacement(
       menu: AppMenuId.server,

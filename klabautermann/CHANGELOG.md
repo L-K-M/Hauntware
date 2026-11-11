@@ -27,6 +27,9 @@
   the desktop settings window.
 - Settings files use the shared atomic writer and write through
   symbolic links.
+- Android's device-authentication host uses AppCompat launch and normal
+  themes in light and dark modes, matching Séance's required setup for
+  the biometric fallback on supported older Android versions.
 - Activity shows the commands an action ran in the code font, as the
   preview before it runs does.
 - Saved log and diagnostic exports, and the staged copy a share hands on,
@@ -365,3 +368,8 @@
 - A file editor no longer claims unsaved changes after a save whose
   follow-up read fails. The written text is kept as the base, so the
   editor, the close prompt and quitting agree that nothing is unsaved.
+- Settings → Sync → Recovery: a recovery code for this device's saved
+  passwords and keys, shown once with its setup kept in the vault; an
+  encrypted export you can restore on this or another device, with a keep-or-replace
+  choice for credentials already here. The export keeps Séance's
+  `seance-secrets` wire format, so exports restore across the apps.

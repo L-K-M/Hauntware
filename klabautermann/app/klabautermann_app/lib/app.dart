@@ -3,8 +3,13 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show withMacosToolbarBand;
+import 'package:ghost_keystore/app_lock.dart' show AppLockController;
 import 'package:ghost_ui/ghost_ui.dart'
-    show GhostUndoHistory, showCommandPalette;
+    show
+        GhostAppLockGate,
+        GhostAppLockStrings,
+        GhostUndoHistory,
+        showCommandPalette;
 import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
 import 'package:ghost_update/ghost_update.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
@@ -26,8 +31,8 @@ import 'controllers/announcement_controller.dart';
 import 'controllers/cadence_controller.dart';
 import 'controllers/pinned_services.dart';
 import 'controllers/fleet_density.dart';
-import 'controllers/app_lock_controller.dart';
 import 'controllers/pin_publication_controller.dart';
+import 'controllers/recovery_controller.dart' show RecoverySettings;
 import 'controllers/safety_controller.dart';
 import 'controllers/appearance_controller.dart';
 import 'controllers/coverage_controller.dart';
@@ -117,6 +122,7 @@ class KlabautermannApp extends StatelessWidget {
     this.appLock,
     this.syncSecrets,
     this.pinPublication,
+    this.recovery,
     this.admin,
     this.alerts,
     this.alertRules,
@@ -211,6 +217,11 @@ class KlabautermannApp extends StatelessWidget {
   /// The host key sharing assertion (M5 plan M07), one engine run's like
   /// [sync]; null in tests that leave it out.
   final PinPublicationController? pinPublication;
+
+  /// CRED-05's recovery code section in Settings > Sync, one engine run's
+  /// like [fleet]; null in tests that leave it out, where the section is
+  /// absent.
+  final RecoverySettings? recovery;
 
   /// Admin mode per server (03 §8.2), one engine run's like [fleet]. Null
   /// in tests that leave it out, where the header shows no admin chip.
@@ -539,8 +550,17 @@ class KlabautermannApp extends StatelessWidget {
             return UndoHistoryScope(
               history: undoHistory,
               child: switch (appLock) {
-                final appLock? => AppLockGate(
-                  lock: appLock,
+                final appLock? => GhostAppLockGate(
+                  model: AppLockGateModel(appLock),
+                  strings: GhostAppLockStrings(
+                    title: AppLocalizations.of(context).appLockTitle,
+                    detail: AppLocalizations.of(context).appLockDetail,
+                    unlock: AppLocalizations.of(context).appLockUnlock,
+                    failed: AppLocalizations.of(context).appLockFailed,
+                    unavailable: AppLocalizations.of(
+                      context,
+                    ).appLockUnavailable,
+                  ),
                   child: withHandOff,
                 ),
                 null => withHandOff,
@@ -693,6 +713,7 @@ class KlabautermannApp extends StatelessWidget {
               pinPublication: pinPublication,
               pinConflicts: sync,
               accountSize: sync?.accountSize,
+              recovery: recovery,
             ),
           },
         );

@@ -35,6 +35,7 @@ import '../alerts/alert_evaluator.dart';
 import '../forwards/port_forwards.dart';
 import '../history/history_store.dart';
 import '../capabilities/capability_cache.dart';
+import '../catalog/engine_recovery.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/engine_vault.dart';
 import '../catalog/klabautermann_records.dart'
@@ -361,6 +362,11 @@ void engineMain(
     keystore: keystore,
     enrolled: () => !syncOpened || sync.account != null,
   );
+
+  // CRED-05's recovery operations over the same vault, with the master
+  // key resolved through the same keystore responder and the vault's
+  // exclusive queue (03 §4.5).
+  final recovery = EngineRecovery(vault, keystore);
 
   // What the engine asks the user while it connects, keyed by prompt id
   // (03 §10.1).
@@ -1101,6 +1107,28 @@ void engineMain(
       uiPort.send(answer);
       if (answer is CatalogWritten) runSync(SyncOperation.round, sync.runRound);
     });
+  }
+
+  Future<void> replyToRecovery(
+    String requestId,
+    FutureOr<EngineEvent> Function() action,
+  ) async {
+    try {
+      uiPort.send(await action());
+    } on VaultRecoveryException catch (error) {
+      uiPort.send(
+        VaultRecoveryFailed(requestId: requestId, failure: error.failure),
+      );
+    } on Object {
+      // A malformed stored blob or failed read must neither expose its
+      // exception text nor stop the engine's command queue.
+      uiPort.send(
+        VaultRecoveryFailed(
+          requestId: requestId,
+          failure: VaultRecoveryFailure.failed,
+        ),
+      );
+    }
   }
 
   Future<void> handle(Object? message) async {
@@ -2210,6 +2238,55 @@ void engineMain(
         // Behind any sync operation already queued, which runs under the
         // switch as it was when it was asked for.
         syncTail = syncTail.then((_) => sync.setSyncSecrets(enabled: enabled));
+      case NewRecoveryCode(:final requestId):
+        await replyToRecovery(
+          requestId,
+          () => RecoveryCodeGenerated(
+            requestId: requestId,
+            code: recovery.newCode(),
+          ),
+        );
+      case SetRecoveryCode(:final requestId, :final code):
+        await replyToRecovery(requestId, () async {
+          await recovery.saveCode(code);
+          return RecoveryStatus(requestId: requestId, configured: true);
+        });
+      case RecoveryStatusRequest(:final requestId):
+        await replyToRecovery(
+          requestId,
+          () async => RecoveryStatus(
+            requestId: requestId,
+            configured: await recovery.configured(),
+          ),
+        );
+      case ExportVault(:final requestId):
+        await replyToRecovery(
+          requestId,
+          () async => VaultExported(
+            requestId: requestId,
+            bytes: await recovery.exportSecrets(),
+          ),
+        );
+      case RestoreVault(
+        :final requestId,
+        :final export,
+        :final code,
+        :final policy,
+      ):
+        await replyToRecovery(requestId, () async {
+          final summary = await recovery.restoreSecrets(
+            export,
+            code,
+            policy: policy,
+          );
+          return VaultRestored(
+            requestId: requestId,
+            added: summary.added,
+            replaced: summary.replaced,
+            kept: summary.kept,
+            unreadable: summary.unreadable,
+          );
+        });
       case SetAdminMode(:final serverId, :final enabled):
         if (!fleetIds.contains(serverId)) {
           reject(message, 'no fleet server $serverId');

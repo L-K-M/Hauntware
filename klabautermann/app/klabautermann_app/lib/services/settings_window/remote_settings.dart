@@ -7,7 +7,7 @@ import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:ghost_update/ghost_update.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show SyncPinConflict;
+    show SecretsRestoreSummary, SyncPinConflict, VaultRestorePolicy;
 
 import '../../controllers/account_size.dart';
 import '../../controllers/admin_memory.dart';
@@ -15,12 +15,14 @@ import '../../controllers/announcement_controller.dart';
 import '../../controllers/cadence_controller.dart';
 import '../../controllers/log_display.dart';
 import '../../controllers/time_display.dart';
-import '../../controllers/app_lock_controller.dart';
+import 'package:ghost_keystore/app_lock.dart';
+
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/device_name.dart';
 import '../../controllers/editor_display.dart';
 import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart';
+import '../../controllers/recovery_controller.dart';
 import '../../controllers/safety_controller.dart';
 import '../../controllers/sync_secrets_controller.dart';
 import '../../controllers/sync_controller.dart' show PinConflictsSettings;
@@ -178,6 +180,19 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
         }),
   );
 
+  /// CRED-05's Recovery section, from the latest snapshot; null when the
+  /// app has no recovery service.
+  RemoteRecovery? get recovery => _hasRecovery ? _recovery : null;
+  bool _hasRecovery = false;
+
+  /// The last snapshot the app sent, for tests that check what crosses.
+  @visibleForTesting
+  Map<String, Object?> get lastSnapshot => Map.of(_lastSnapshot);
+  Map<String, Object?> _lastSnapshot = {};
+  late final RemoteRecovery _recovery = RemoteRecovery._(
+    (method, argument) => invoke(method.name, argument),
+  );
+
   /// The Sync tab's account size (SYN-09), from the latest snapshot.
   final ValueNotifier<AccountSize?> accountSize = ValueNotifier(null);
 
@@ -206,6 +221,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
 
   @override
   void applySnapshot(Map<String, Object?> snapshot) {
+    _lastSnapshot = Map.of(snapshot);
     _appVersion = snapshot[SettingsLinkKey.appVersion.name] as String?;
     appearance._apply(
       decodeAppearance(
@@ -239,6 +255,9 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     accountSize.value = decodeAccountSize(
       snapshot[SettingsLinkKey.accountSize.name],
     );
+    final recovery = snapshot[SettingsLinkKey.recovery.name] as Map?;
+    _hasRecovery = recovery != null;
+    _recovery._apply(recovery?.cast<String, Object?>());
     monitorSet._apply(
       decodeMonitorCandidates(
         snapshot[SettingsLinkKey.monitorSet.name]! as List<Object?>,
@@ -267,6 +286,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     pinPublication.dispose();
     pinConflicts.dispose();
     accountSize.dispose();
+    _recovery.dispose();
     monitorSet.dispose();
     safety.dispose();
     appLock.dispose();
@@ -857,5 +877,57 @@ final class RemoteSafety extends ChangeNotifier implements SafetySettings {
       SettingsLinkKey.serverId.name: serverId,
       SettingsLinkKey.safety.name: encodeServerSafety(safety),
     });
+  }
+}
+
+/// [RecoverySettings] over the link: the app's configured flag as the
+/// latest snapshot carries it, and the explicit actions run in the app's
+/// isolate, where the file panels and the vault key live. The code and
+/// an export's bytes cross in memory only, never in a snapshot.
+final class RemoteRecovery extends ChangeNotifier implements RecoverySettings {
+  RemoteRecovery._(this._call);
+
+  final Future<Object?> Function(SettingsLinkMethod method, Object? argument)
+  _call;
+
+  bool? _configured;
+
+  void _apply(Map<Object?, Object?>? json) {
+    final configured = json?[SettingsLinkKey.configured.name] as bool?;
+    if (configured == _configured) return;
+    _configured = configured;
+    notifyListeners();
+  }
+
+  @override
+  bool? get configured => _configured;
+
+  @override
+  Future<void> refresh() => _call(SettingsLinkMethod.refreshRecoveryStatus, null);
+
+  @override
+  Future<String> newCode() async =>
+      (await _call(SettingsLinkMethod.newRecoveryCode, null))! as String;
+
+  @override
+  Future<void> saveCode(String code) =>
+      _call(SettingsLinkMethod.saveRecoveryCode, code);
+
+  @override
+  Future<String?> exportSecrets() async =>
+      await _call(SettingsLinkMethod.exportSecrets, null) as String?;
+
+  @override
+  Future<SecretsRestoreSummary?> restoreSecrets({
+    required String code,
+    required VaultRestorePolicy policy,
+  }) async {
+    final json = await _call(SettingsLinkMethod.restoreSecrets, {
+      SettingsLinkKey.code.name: code,
+      SettingsLinkKey.policy.name: policy.name,
+    });
+    return json == null
+        ? null
+        : SecretsRestoreSummary.fromJson((json as Map).cast<String, dynamic>());
   }
 }

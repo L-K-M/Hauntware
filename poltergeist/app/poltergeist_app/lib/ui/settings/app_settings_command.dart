@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:ghost_keystore/ghost_keystore.dart' show AppLockSettings;
 
 import '../../services/registered_command.dart';
 import '../../services/settings_models.dart'
@@ -29,6 +30,7 @@ const kAppSettingsCommandId = 'app.settings';
 /// [editorFont]), whichever the app has.
 RegisteredCommand buildAppSettingsCommand({
   GeneralSettings Function()? settings,
+  AppLockSettings? appLock,
   DirectoryGroupingModel? directoryGrouping,
   AppearanceSettingsModel? appearance,
   EditorTextSizeModel? editorTextSize,
@@ -38,6 +40,7 @@ RegisteredCommand buildAppSettingsCommand({
 }) {
   assert(
     settings != null ||
+        appLock != null ||
         directoryGrouping != null ||
         appearance != null ||
         editorTextSize != null ||
@@ -63,6 +66,7 @@ RegisteredCommand buildAppSettingsCommand({
       await showGeneralSettingsDialog(
         context,
         settings: settings?.call(),
+        appLock: appLock,
         directoryGrouping: directoryGrouping,
         appearance: appearance,
         editorTextSize: editorTextSize,

@@ -83,6 +83,15 @@ export 'src/sync/sync_engine.dart' show SyncCursorRejectedException;
 export 'src/store/file_host_key_store.dart' show FileHostKeyStore;
 export 'src/store/file_vault_store.dart'
     show FileVaultStore, VaultRekeyJournal, VaultRekeyOutcome;
+// CRED-05's recovery-code operations over a vault store, shared by every
+// app's credential vault.
+export 'src/vault/vault_recovery.dart'
+    show
+        RecoveryDamagedException,
+        RecoveryNotSetUpException,
+        RestoreConflictPolicy,
+        SecretsRestoreSummary,
+        VaultRecovery;
 // The endpoint pins' file store (D16, 03-ARCHITECTURE.md 4.7), beside
 // the host-key store whose conventions it shares.
 export 'src/store/file_endpoint_pin_store.dart'
@@ -91,7 +100,12 @@ export 'src/store/file_endpoint_pin_store.dart'
         FileEndpointPinStore,
         endpointPinsFileName;
 // The file primitives behind the stores' default writer, which
-// Poltergeist's local-file safety and transfer journal share.
+// Poltergeist's local-file safety and transfer journal share. The
+// writer itself is exported too, so a host that writes a secret file
+// (CRED-05's desktop export) applies the same owner-only privacy
+// instead of inventing its own writer.
+export 'src/catalog/atomic_file_writer.dart'
+    show AtomicFilePrivacy, AtomicFileWriter;
 export 'src/store/file_permissions.dart' show restrictLocalPathPermissions;
 export 'src/store/local_directory_sync.dart' show syncLocalDirectory;
 export 'src/catalog/atomic_file_writer.dart'

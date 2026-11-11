@@ -41,6 +41,8 @@ const _sidebarPinnedServersKey = 'sidebar.pinnedServers';
 const _previewCacheCapacityKey = 'preview.cacheCapacityBytes';
 const _previewThresholdKey = 'preview.largeDownloadThresholdBytes';
 const _updateChecksEnabledKey = 'updates.checkEnabled';
+const _appLockKey = 'poltergeist.appLock';
+const _recoveryPromptDeclinedKey = 'poltergeist.recoveryPromptDeclined';
 const _themePaletteKey = 'theme.palette';
 const _themeModeKey = 'theme.mode';
 const _editorTextSizeKey = 'editor.textSize';
@@ -444,6 +446,34 @@ class AppPreferences {
 
   Future<void> saveUpdateChecksEnabled(bool enabled) =>
       _store.set(_updateChecksEnabledKey, enabled);
+
+  /// The app lock (cred-05), `poltergeist.appLock`: off until the user
+  /// turns it on, and an unreadable store reads as off rather than
+  /// locking the app by accident.
+  Future<bool> loadAppLock() async {
+    try {
+      return await _store.get<bool>(_appLockKey) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> saveAppLock(bool enabled) =>
+      _store.set(_appLockKey, enabled);
+
+  /// CRED-05's enrolment prompt answer, `poltergeist.recoveryPromptDeclined`:
+  /// "Not now" is remembered so the offer is not made again; Settings
+  /// still offers the code. An unreadable store reads as not declined.
+  Future<bool> loadRecoveryPromptDeclined() async {
+    try {
+      return await _store.get<bool>(_recoveryPromptDeclinedKey) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> saveRecoveryPromptDeclined(bool declined) =>
+      _store.set(_recoveryPromptDeclinedKey, declined);
 
   /// This device's theme (00-OVERVIEW's "Device themes"): the palette as
   /// one JSON object in Séance's format, and the mode its Automatic colours

@@ -10,71 +10,14 @@ import 'atomic_file.dart';
 import 'file_export_service.dart';
 import 'picked_file_bytes.dart';
 
-/// What a restore does with a credential this device already holds.
-enum RestoreConflictPolicy {
-  /// Keep this device's copy (the default).
-  keepExisting,
-
-  /// Take the export's copy.
-  replaceExisting,
-}
-
-/// What a restore did, for the screen to report.
-@immutable
-class SecretsRestoreSummary {
-  const SecretsRestoreSummary({
-    required this.added,
-    required this.replaced,
-    required this.kept,
-    required this.unreadable,
-  });
-
-  /// Credentials this device did not have, or held but could not read.
-  final int added;
-
-  /// Credentials this device had, replaced by the export's copy.
-  final int replaced;
-
-  /// Credentials this device had and kept.
-  final int kept;
-
-  /// Entries the export carries that did not open as credentials.
-  final int unreadable;
-
-  factory SecretsRestoreSummary.fromJson(Map<String, dynamic> json) =>
-      SecretsRestoreSummary(
-        added: json['added'] as int,
-        replaced: json['replaced'] as int,
-        kept: json['kept'] as int,
-        unreadable: json['unreadable'] as int,
-      );
-
-  Map<String, dynamic> toJson() => {
-    'added': added,
-    'replaced': replaced,
-    'kept': kept,
-    'unreadable': unreadable,
-  };
-}
-
-/// Export was asked for on a device with no recovery code.
-class RecoveryNotSetUpException implements Exception {
-  const RecoveryNotSetUpException();
-
-  @override
-  String toString() =>
-      'Set up a recovery code first: an export opens only with it.';
-}
-
-/// The recovery entry exists but this vault's key does not open it.
-class RecoveryDamagedException implements Exception {
-  const RecoveryDamagedException();
-
-  @override
-  String toString() =>
-      'This device\'s recovery code can no longer be used. Replace it to '
-      'export again.';
-}
+// The recovery policy, summary and failure types moved to seance_core with
+// VaultRecovery; the export keeps every importer of this library compiling.
+export 'package:seance_core/catalog.dart'
+    show
+        RecoveryDamagedException,
+        RecoveryNotSetUpException,
+        RestoreConflictPolicy,
+        SecretsRestoreSummary;
 
 /// What the Settings screen says when this vault is too large to export.
 const secretsExportTooLargeMessage =

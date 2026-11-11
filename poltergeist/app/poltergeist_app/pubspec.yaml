@@ -34,6 +34,9 @@ dependencies:
   # here so the plugin's native code and default options stay what this
   # app shipped with.
   flutter_secure_storage: 10.3.1
+  # The app lock's device authentication prompt (cred-05); the same pin
+  # Klabautermann and Séance use.
+  local_auth: 3.0.2
   intl: 0.20.3
   macos_window_utils: 1.9.1
   # The running build's version for the D19 update check (07 §3.10) —

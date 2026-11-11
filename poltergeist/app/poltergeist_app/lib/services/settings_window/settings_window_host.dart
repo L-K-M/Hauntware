@@ -6,12 +6,14 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
+import 'package:ghost_keystore/app_lock.dart' show AppLockSettings;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../ui/settings/general_settings.dart';
 import '../../ui/settings/preview_settings.dart';
 import '../double_click_action.dart';
 import '../external_file_opener.dart';
+import '../secrets_recovery.dart' show RecoveryStatusException;
 import '../settings_models.dart';
 import '../sync_account_gate.dart';
 import 'settings_window_link.dart';
@@ -26,12 +28,14 @@ final class SettingsWindowSources {
     this.opener = const ExternalFileOpener(),
     this.previewDownloads,
     this.backup,
+    this.recovery,
     this.gate = const SyncAccountGate.production(),
     this.appearance,
     this.editorTextSize,
     this.editorFont,
     this.directoryGrouping,
     this.doubleClickAction,
+    this.appLock,
     this.changes = const [],
   });
 
@@ -48,6 +52,10 @@ final class SettingsWindowSources {
   final PreviewDownloadsSettings? Function()? previewDownloads;
 
   final BackupSettingsModel? backup;
+
+  /// CRED-05's Recovery section, read afresh at each use. Null leaves the
+  /// section out.
+  final RecoverySettingsModel? recovery;
 
   final SyncAccountGate gate;
 
@@ -66,6 +74,10 @@ final class SettingsWindowSources {
 
   /// What opening a file does: the Editing tab's first row.
   final DoubleClickActionModel? doubleClickAction;
+
+  /// The app lock behind Settings → General, read afresh at each use.
+  /// Null leaves the section out.
+  final AppLockSettings? appLock;
 
   /// What else moves a value the window shows (the update-check
   /// controller behind [general]); [editors], [backup], [appearance],
@@ -122,11 +134,13 @@ class SettingsWindowHost {
         changes: [
           ?sources.editors,
           ?sources.backup,
+          ?sources.recovery,
           ?sources.appearance,
           ?sources.editorTextSize,
           ?sources.editorFont,
           ?sources.directoryGrouping,
           ?sources.doubleClickAction,
+          ?sources.appLock,
           ...sources.changes,
         ],
       );
@@ -151,6 +165,10 @@ class SettingsWindowHost {
           _sources.directoryGrouping?.value.name,
       SettingsLinkKey.doubleClickAction.name:
           _sources.doubleClickAction?.value.name,
+      SettingsLinkKey.appLock.name: switch (_sources.appLock) {
+        final lock? => encodeAppLock(lock),
+        null => null,
+      },
       SettingsLinkKey.general.name: general == null
           ? null
           : {
@@ -168,6 +186,12 @@ class SettingsWindowHost {
       SettingsLinkKey.backup.name: backup == null
           ? null
           : _backupSnapshot(backup),
+      SettingsLinkKey.recovery.name: switch (_sources.recovery) {
+        final recovery? => {
+          SettingsLinkKey.configured.name: recovery.configured,
+        },
+        null => null,
+      },
       SettingsLinkKey.gate.name: {
         SettingsLinkKey.minimumSharedVersion.name: gate.minimumSharedVersion,
         SettingsLinkKey.sharedIncludesSeance56Fix.name:
@@ -207,6 +231,10 @@ class SettingsWindowHost {
   }
 
   Future<Object?> _handleCall(String name, Object? argument) async {
+    // A locked app changes nothing from the settings window, which covers
+    // itself then; a call already on its way when the lock engaged is
+    // refused here.
+    if (_sources.appLock?.locked ?? false) throw const AppLockedException();
     final method = SettingsLinkMethod.values.asNameMap()[name];
     if (method == null) {
       throw MissingPluginException('No Settings window method $name');
@@ -218,6 +246,7 @@ class SettingsWindowHost {
     Map<String, Object?> map() => (argument! as Map).cast<String, Object?>();
     String text(String key) => map()[key]! as String;
     final backup = _sources.backup;
+    final recovery = _sources.recovery;
     final editors = _sources.editors;
     switch (method) {
       case SettingsLinkMethod.setCheckForUpdates:
@@ -318,6 +347,32 @@ class SettingsWindowHost {
         ).deleteRetainedSeparateAccount(confirmedName: argument! as String);
       case SettingsLinkMethod.declineRetainedDelete:
         await _require(backup).declineRetainedDelete();
+      case SettingsLinkMethod.setAppLock:
+        final appLock = _sources.appLock;
+        if (appLock == null) throw StateError('No app lock settings');
+        // The device authentication runs here, in the app's window.
+        return (await appLock.setEnabled(argument! as bool)).name;
+      case SettingsLinkMethod.refreshRecoveryStatus:
+        try {
+          await _require(recovery).refresh();
+        } on Object {
+          throw const RecoveryStatusException();
+        }
+      case SettingsLinkMethod.newRecoveryCode:
+        return _require(recovery).newCode();
+      case SettingsLinkMethod.saveRecoveryCode:
+        await _require(recovery).saveCode(argument! as String);
+      case SettingsLinkMethod.exportSecrets:
+        return _require(recovery).exportSecrets();
+      case SettingsLinkMethod.restoreSecrets:
+        final json = map();
+        final summary = await _require(recovery).restoreSecrets(
+          code: json[SettingsLinkKey.code.name]! as String,
+          policy: RestoreConflictPolicy.values.byName(
+            json[SettingsLinkKey.policy.name]! as String,
+          ),
+        );
+        return summary?.toJson();
     }
     return null;
   }

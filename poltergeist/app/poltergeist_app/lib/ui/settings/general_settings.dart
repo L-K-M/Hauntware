@@ -6,6 +6,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ghost_keystore/ghost_keystore.dart' show AppLockSettings;
 
 import '../../l10n/app_localizations.dart';
 import '../../services/application_error_reporter.dart';
@@ -17,6 +18,7 @@ import '../../services/settings_models.dart'
         EditorTextSizeModel;
 import '../top_toast.dart';
 import 'appearance_settings.dart';
+import 'app_lock_settings.dart';
 import 'directory_grouping_settings.dart';
 import 'editor_font_settings.dart';
 import 'editor_text_size_settings.dart';
@@ -56,6 +58,7 @@ final class GeneralSettings {
 Future<void> showGeneralSettingsDialog(
   BuildContext context, {
   GeneralSettings? settings,
+  AppLockSettings? appLock,
   DirectoryGroupingModel? directoryGrouping,
   AppearanceSettingsModel? appearance,
   EditorTextSizeModel? editorTextSize,
@@ -75,15 +78,22 @@ Future<void> showGeneralSettingsDialog(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (settings != null) GeneralSection(settings: settings),
-              if (settings != null && directoryGrouping != null)
+              if (settings != null && appLock != null)
+                const SizedBox(height: 16),
+              if (appLock != null) AppLockSection(lock: appLock),
+              if ((settings != null || appLock != null) &&
+                  directoryGrouping != null)
                 const SizedBox(height: 16),
               if (directoryGrouping != null)
                 DirectoryGroupingSection(model: directoryGrouping),
-              if ((settings != null || directoryGrouping != null) &&
+              if ((settings != null ||
+                      appLock != null ||
+                      directoryGrouping != null) &&
                   appearance != null)
                 const Divider(height: 32),
               if (appearance != null) AppearanceSection(model: appearance),
               if ((settings != null ||
+                      appLock != null ||
                       directoryGrouping != null ||
                       appearance != null) &&
                   editorTextSize != null)

@@ -10,7 +10,8 @@ import 'package:seance_core/catalog.dart'
         ConflictAwareHostKeyStore,
         HostKeyConflict,
         PersistentLocalRecordStore,
-        SyncAccountScope;
+        SyncAccountScope,
+        VaultRecovery;
 import 'package:seance_core/seance_core.dart';
 
 import 'atomic_file.dart';
@@ -660,6 +661,12 @@ class AppServices {
   @visibleForTesting
   Future<void> rekeyVaultForTesting(List<int> newKey) => _rekeyVault(newKey);
 
+  /// The CRED-05 operations over the credential vault's blob store. This
+  /// class keeps the app-lock gate, the locked-vault checks and the sync
+  /// serialization; the store-level work is seance_core's [VaultRecovery],
+  /// shared with the sibling apps.
+  VaultRecovery get _recovery => VaultRecovery(vault.store);
+
   /// Whether this device has a recovery code an export can use (CRED-05).
   ///
   /// With the vault locked, whether the entry exists, which is all anyone
@@ -669,22 +676,13 @@ class AppServices {
   Future<bool> recoveryConfigured() async {
     await appLock.requireUnlocked();
     if (vaultKey == null) await unlockVaultFromKeystore();
-    final sealed = await vault.store.getSecretBlob(recoveryWrapKeyId);
-    if (sealed == null) return false;
-    final key = vaultKey;
-    if (key == null) return true;
-    try {
-      RecoveryWrapKey.fromJson(await VaultCrypto.openJson(key, sealed));
-      return true;
-    } catch (_) {
-      return false;
-    }
+    return _recovery.configured(vaultKey);
   }
 
   /// A new recovery code, formatted, to be shown once. Nothing is stored
   /// until [saveRecoveryCode]: a code the user never confirmed writing down
   /// must not replace one they did.
-  String newRecoveryCode() => RecoveryKey.encode(secureRandomBytes(32));
+  String newRecoveryCode() => _recovery.newCode();
 
   /// Keeps what an export needs of [code] (never the code itself), replacing
   /// an earlier one; exports made with that one still open with it.
@@ -695,11 +693,7 @@ class AppServices {
           await _resolveCredentialVault();
           final key = vaultKey;
           if (key == null) throw const VaultLockedException();
-          final wrap = await RecoveryWrapKey.derive(RecoveryKey.decode(code));
-          await vault.store.putSecretBlob(
-            recoveryWrapKeyId,
-            await VaultCrypto.sealJson(key, wrap.toJson()),
-          );
+          await _recovery.saveCode(code, vaultKey: key);
         }),
       );
 
@@ -713,23 +707,7 @@ class AppServices {
     await _resolveCredentialVault();
     final key = vaultKey;
     if (key == null) throw const VaultLockedException();
-    final blobs = await vault.store.allSecretBlobs();
-    final sealedWrap = blobs[recoveryWrapKeyId];
-    if (sealedWrap == null) throw const RecoveryNotSetUpException();
-    final RecoveryWrapKey wrap;
-    try {
-      wrap = RecoveryWrapKey.fromJson(
-        await VaultCrypto.openJson(key, sealedWrap),
-      );
-    } catch (_) {
-      throw const RecoveryDamagedException();
-    }
-    return SecretsExport.build(
-      recovery: wrap,
-      vaultKey: key,
-      sealedEntries: blobs,
-      createdAt: DateTime.now(),
-    );
+    return _recovery.exportSecrets(vaultKey: key);
   }
 
   /// Opens [export] with [code] and merges its credentials into this
@@ -748,29 +726,7 @@ class AppServices {
     () => _runSyncLocal(runLocal, () async {
       await _resolveCredentialVault();
       if (vaultKey == null) throw const VaultLockedException();
-      final opened = await SecretsExport.open(export, code);
-      final toWrite = <Secret>[];
-      var added = 0;
-      var replaced = 0;
-      var kept = 0;
-      for (final secret in opened.secrets.values) {
-        if (await vault.readableSecret(secret.id) == null) {
-          added++;
-        } else if (policy == RestoreConflictPolicy.keepExisting) {
-          kept++;
-          continue;
-        } else {
-          replaced++;
-        }
-        toWrite.add(secret);
-      }
-      await vault.putSecrets(toWrite);
-      return SecretsRestoreSummary(
-        added: added,
-        replaced: replaced,
-        kept: kept,
-        unreadable: opened.unreadable.length,
-      );
+      return _recovery.restoreSecrets(vault, export, code, policy: policy);
     }),
   );
 
