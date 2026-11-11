@@ -129,12 +129,13 @@ class ServerSettings {
       final result = <String>{};
       for (final entry in raw.split(',')) {
         final value = entry.trim();
-        final address = canonicalIpAddress(value);
+        final address = canonicalTrustedProxy(value);
         if (address == null) {
           throw ArgumentError.value(
             value,
             'SEANCE_TRUSTED_PROXIES',
-            'must contain comma-separated IP addresses',
+            'must contain comma-separated IP addresses or CIDR networks '
+                '(such as 172.16.0.0/12; a /0 network is refused)',
           );
         }
         result.add(address);

@@ -120,10 +120,22 @@ void main() {
       expect(settings.trustedProxies, {'192.0.2.1'});
     });
 
-    test('rejects hostnames, CIDR ranges, and empty CSV entries', () {
+    test('accepts CIDR ranges in canonical form', () {
+      final settings = ServerSettings.fromEnvironment(const {
+        'SEANCE_TRUSTED_PROXIES': '172.17.0.1/16, 192.0.2.1, 2001:db8::/32',
+      });
+      expect(settings.trustedProxies, {
+        '172.17.0.0/16',
+        '192.0.2.1',
+        '2001:db8::/32',
+      });
+    });
+
+    test('rejects hostnames, bad ranges, and empty CSV entries', () {
       for (final value in const [
         'proxy.example.com',
-        '192.0.2.0/24',
+        '192.0.2.0/33',
+        '0.0.0.0/0',
         '192.0.2.1,,203.0.113.4',
         '192.0.2.1, ',
       ]) {

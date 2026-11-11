@@ -114,6 +114,39 @@ The `.env` file is gitignored, so updates keep the setting. Use
 `SEANCE_PUBLISH_ADDR=0.0.0.0` for every interface (firewall it), or attach the
 proxy and this service to a shared Docker network and skip publishing entirely.
 
+### Client addresses behind a reverse proxy
+
+Login, prelogin and registration are rate-limited per source address. Behind a
+proxy the server sees the proxy (or Docker's gateway) as the source of every
+request, so all your devices share one allowance, and anyone who sends 60
+prelogin requests a minute locks every device out of signing in until they
+stop. Tell the server which peers may report the real client address:
+
+1. Make the proxy send `X-Forwarded-For`. Caddy, Traefik and Nginx Proxy
+   Manager do so by default; plain nginx needs
+   `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`.
+2. Set `SEANCE_TRUSTED_PROXIES` in `packages/seance_sync_server/.env` to the
+   address the server sees the proxy connect from. It takes comma-separated
+   IP addresses and CIDR networks, so an address Docker may change when the
+   stack is recreated can be covered by its network:
+
+   ```bash
+   # Proxy on the host or in another container, reaching the published port:
+   # connections arrive from the gateway of this stack's Docker network.
+   SEANCE_TRUSTED_PROXIES=172.16.0.0/12,192.168.0.0/16
+   ```
+
+   `docker network inspect` shows the subnet Compose chose. An address or
+   network that is not a valid IP or CIDR stops the server at startup with a
+   message naming the setting, and `/0` is refused.
+
+Trust only peers that cannot be reached by anyone else. Docker's port
+publishing relays every connection through the gateway, so trusting it is safe
+only while the port is published on `127.0.0.1` or on the bridge gateway (the
+setups above), never on `0.0.0.0` without a firewall, where every internet
+client would arrive through the gateway and could choose its own rate-limit
+key with the header. A header from a peer that is not trusted is ignored.
+
 ### Troubleshooting: the app reports a 502
 
 A 502 is never produced by this server — it comes from whatever sits in front
@@ -158,7 +191,7 @@ Omit `--db` for an ephemeral in-memory store.
 | `SEANCE_AUTH_SOURCE_MAX_ATTEMPTS` | — | `60` | Auth requests per network source per source window |
 | `SEANCE_AUTH_SOURCE_WINDOW_SECONDS` | — | `60` | Source auth window |
 | `SEANCE_RATE_LIMIT_MAX_BUCKETS` | — | `4096` | Maximum keyed buckets per limiter before overflow sharing |
-| `SEANCE_TRUSTED_PROXIES` | — | *(empty)* | Exact comma-separated proxy IPs allowed to supply `X-Forwarded-For` |
+| `SEANCE_TRUSTED_PROXIES` | — | *(empty)* | Comma-separated proxy IPs or CIDR networks allowed to supply `X-Forwarded-For` (see [Client addresses behind a reverse proxy](#client-addresses-behind-a-reverse-proxy)) |
 | `SEANCE_SESSION_TTL_SECONDS` | — | `2592000` | Bearer-session lifetime (30 days) |
 | `SEANCE_MAX_SESSIONS_PER_ACCOUNT` | — | `20` | Active sessions retained per account, evicting least recently used |
 | `SEANCE_MAX_RECORDS_PER_PULL` | — | `1000` | Records or inbox items returned per page |
