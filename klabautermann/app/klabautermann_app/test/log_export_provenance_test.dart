@@ -54,6 +54,24 @@ void main() {
     }
   });
 
+  test('a failed staging write deletes its temporary directory', () async {
+    final provenance = DownloadProvenance.forHost(
+      ProvenancePlatform.linux,
+      agent: 'Klabautermann',
+    );
+
+    await expectLater(
+      stageMarkedExport(
+        'missing/logs.txt',
+        Uint8List.fromList([1, 0, 1]),
+        provenance,
+      ),
+      throwsA(isA<FileSystemException>()),
+    );
+
+    expect(stagedExports(root), isEmpty);
+  });
+
   test('markSavedExport swallows a failed mark', () async {
     final file = File('${root.path}/saved.log')..writeAsBytesSync([1]);
 
