@@ -3,11 +3,9 @@ import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:klabautermann_app/controllers/app_lock_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/overview_layout.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
-import 'package:klabautermann_app/ui/app_lock_gate.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart'
     show ChartSeverity, ChartThresholds, CoreHeatmap, Gauge, StackedBar;
 import 'package:klabautermann_app/ui/cpu_hints.dart';
@@ -19,7 +17,6 @@ import 'package:klabautermann_app/ui/system_panel.dart' show PanelSection;
 import 'package:klabautermann_app/ui/threshold_announcer.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
-import 'support/device_authenticator.dart';
 import 'support/charts.dart'
     show chartTheme, goldenFontFamily, goldensCompareHere, loadGoldenFonts;
 import 'support/docker.dart';
@@ -230,7 +227,7 @@ Future<_Panel> _pump(
   bool visible = true,
   ValueNotifier<bool>? announce,
   OverviewLayoutController? layout,
-  AppLockController? lock,
+  ValueNotifier<bool>? locked,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -253,11 +250,13 @@ Future<_Panel> _pump(
       theme: theme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      // As KlabautermannApp mounts the lock screen, over the Navigator.
-      builder: switch (lock) {
-        final lock? => (context, child) => AppLockGate(
-          lock: lock,
-          child: child!,
+      // The app lock's gate stops tickers beneath it while locked, over
+      // the Navigator; this stands in for it.
+      builder: switch (locked) {
+        final locked? => (context, child) => ValueListenableBuilder(
+          valueListenable: locked,
+          builder: (context, locked, _) =>
+              TickerMode(enabled: !locked, child: child!),
         ),
         null => null,
       },
@@ -1709,15 +1708,9 @@ void main() {
     ) async {
       final announce = ValueNotifier(true);
       addTearDown(announce.dispose);
-      final device = FakeDeviceAuthenticator()..accept = false;
-      final lock = AppLockController(
-        authenticator: device,
-        supported: true,
-        enabled: true,
-      );
-      addTearDown(lock.dispose);
-      final panel = await _pump(tester, announce: announce, lock: lock);
-      expect(lock.locked, isTrue);
+      final locked = ValueNotifier(true);
+      addTearDown(locked.dispose);
+      final panel = await _pump(tester, announce: announce, locked: locked);
       Future<void> cpu(int seconds, double percent) => panel.sample(
         tester,
         busy(percent),
@@ -1731,8 +1724,7 @@ void main() {
       expect(heard(tester), isEmpty);
 
       // Unlocked: where the value stands now is the start.
-      device.accept = true;
-      await lock.unlock();
+      locked.value = false;
       await tester.pumpAndSettle();
       await cpu(16, 95);
       await cpu(28, 95);
