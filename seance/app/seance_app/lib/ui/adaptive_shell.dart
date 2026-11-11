@@ -67,6 +67,10 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
               utilityWidth: utilityWidth,
             ),
           ),
+          // The palette's root-chord and native-menu callers sit above this
+          // layout, so they cannot look the posture up; the shell publishes
+          // it on their behalf.
+          onNarrowChanged: (narrow) => state.shellNarrow.value = narrow,
           listPane: ServerListPane(
             posture: ServerListPosture.rail,
             onOpen: (s) => _open(state, s),
@@ -301,6 +305,7 @@ class AdaptivePaneLayout extends StatefulWidget {
     this.initialListWidth = AdaptiveShell.defaultListWidth,
     this.initialUtilityWidth = AdaptiveShell.defaultUtilityWidth,
     this.onPaneWidthsChanged,
+    this.onNarrowChanged,
   });
 
   final Widget listPane;
@@ -338,6 +343,13 @@ class AdaptivePaneLayout extends StatefulWidget {
   final void Function(double listWidth, double utilityWidth)?
   onPaneWidthsChanged;
 
+  /// Fired when the layout's posture changes (wide to narrow or back), with
+  /// the new [AdaptiveShell] posture. The shell publishes this to surfaces
+  /// whose context sits above the layout, such as the root chord and native
+  /// menu handler, so they read the shell's real posture rather than an
+  /// inherited lookup that answers wide from above the provider.
+  final ValueChanged<bool>? onNarrowChanged;
+
   static const listPaneKey = ValueKey('adaptive-list-pane');
   static const terminalPaneKey = ValueKey('adaptive-terminal-pane');
   static const utilityPaneKey = ValueKey('adaptive-utility-pane');
@@ -347,8 +359,30 @@ class AdaptivePaneLayout extends StatefulWidget {
     'adaptive-utility-resize-handle',
   );
 
+  /// Whether the layout currently shows its [narrowPane]: the phone-like
+  /// arrangement with screens instead of side panes. Surfaces that read
+  /// posture without a layout of their own (the palette's command list)
+  /// take it from here; below the first [AdaptivePaneLayout] it is exact,
+  /// above it the default answers wide.
+  static bool isNarrow(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<_AdaptiveNarrow>()
+          ?.narrow ??
+      false;
+
   @override
   State<AdaptivePaneLayout> createState() => _AdaptivePaneLayoutState();
+}
+
+/// Marks which arrangement the layout built this frame.
+class _AdaptiveNarrow extends InheritedWidget {
+  const _AdaptiveNarrow({required this.narrow, required super.child});
+
+  final bool narrow;
+
+  @override
+  bool updateShouldNotify(_AdaptiveNarrow oldWidget) =>
+      narrow != oldWidget.narrow;
 }
 
 class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
@@ -356,6 +390,7 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
   late double _requestedUtilityWidth = widget.initialUtilityWidth;
   double? _temporaryListWidth;
   double? _temporaryUtilityWidth;
+  bool? _lastNarrow;
 
   AdaptivePaneWidths? _allocate(double availableWidth) =>
       allocateAdaptivePaneWidths(
@@ -371,10 +406,18 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final widths = _allocate(constraints.maxWidth);
+        final narrow = widths == null;
+        if (_lastNarrow != narrow) {
+          _lastNarrow = narrow;
+          widget.onNarrowChanged?.call(narrow);
+        }
         if (widths == null) {
-          return KeyedSubtree(
-            key: AdaptivePaneLayout.narrowPaneKey,
-            child: widget.narrowPane,
+          return _AdaptiveNarrow(
+            narrow: true,
+            child: KeyedSubtree(
+              key: AdaptivePaneLayout.narrowPaneKey,
+              child: widget.narrowPane,
+            ),
           );
         }
         AdaptivePaneWidths currentWidths() =>
@@ -534,9 +577,10 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
           handle: listHandle,
           start: widths.list,
         );
-        return header == null
+        final shell = header == null
             ? Scaffold(body: body)
             : ClaimMacosToolbarBand(child: Scaffold(body: body));
+        return _AdaptiveNarrow(narrow: false, child: shell);
       },
     );
   }

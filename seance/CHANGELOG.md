@@ -8,6 +8,27 @@
 - Settings and sync data files use the shared atomic writer and write
   through symbolic links, and local store operations share one queue so
   a failed save does not poison the next one.
+- Linux, Windows and phones get a ☰ menu in the header and the phone
+  home's app bar, with the app's commands as File, Edit, View, Terminal
+  and Help submenus, each row showing its chord. macOS keeps its native
+  menu and hides the ☰.
+- Check for Updates… is in the application menu on macOS and in Help
+  everywhere else, and in the command palette. It runs even when the
+  launch check is off; when no newer version is found it says so without
+  claiming you are up to date.
+- On macOS, the Edit menu works while a built-in editor tab is focused:
+  File ▸ Save (⌘S) saves the file, as Ctrl+S does, and Edit ▸ Find… (⌘F)
+  opens the editor's find bar.
+- Undo and Redo name the change they would take ("Undo Pin to top") and
+  are dimmed when there is nothing to take back, in the ☰ Edit menu and,
+  on macOS, in Edit.
+- Help ▸ Keyboard Shortcuts (⌘/ or Ctrl+/) opens the shortcut list, which
+  names the new chords.
+- The command palette (⇧⌘P or Ctrl+Shift+P, View ▸ Command Palette…)
+  lists the app's commands with their menu paths and chords, and runs the
+  one you pick.
+- About Séance is in Help on Linux, Windows and phones, with the version
+  and licenses; macOS keeps its application menu's About.
 - Deleting a saved server retracts its credential from your sync account
   as well as from this device, unless another server still uses it, so a
   new device no longer picks up the password or key of a server that is

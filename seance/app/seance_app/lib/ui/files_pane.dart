@@ -2710,6 +2710,9 @@ class EditorTabView extends StatelessWidget {
       isActive: isActive,
       remoteFiles: files,
       dirtyNotifier: tab.dirty,
+      // The ☰ menu and the native macOS menu gate Find/Save on this editor
+      // being mounted, so they must hear about its mount and unmount.
+      mountRevision: state.editorMountRevision,
       fontSize: state.services.settings.editorFontSize,
       fontFamily: state.services.settings.editorFontFamily,
       ligatures: state.services.settings.editorLigatures,
