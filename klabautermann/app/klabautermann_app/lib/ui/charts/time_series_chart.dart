@@ -145,7 +145,7 @@ class _TimeSeriesChartState extends State<TimeSeriesChart> {
   /// The crosshair, which only its layer and the readout's semantics
   /// listen to.
   final _cursor = ValueNotifier<_Cursor?>(null);
-  final _focus = FocusNode(debugLabel: 'TimeSeriesChart');
+  final _focus = FocusNode();
   late final _actions = <Type, Action<Intent>>{
     _StepIntent: CallbackAction<_StepIntent>(
       onInvoke: (intent) => _step(intent.step),

@@ -31,9 +31,6 @@ final class TimeSeriesSampleHit extends TimeSeriesHit {
 
   @override
   int get hashCode => Object.hash(index, at);
-
-  @override
-  String toString() => 'TimeSeriesSampleHit($index, $at)';
 }
 
 /// A time [at] inside [gap], where no series has a reading.
@@ -48,9 +45,6 @@ final class TimeSeriesGapHit extends TimeSeriesHit {
 
   @override
   int get hashCode => Object.hash(gap, at);
-
-  @override
-  String toString() => 'TimeSeriesGapHit(${gap.reason.name}, $at)';
 }
 
 /// Where a key moves the crosshair.
