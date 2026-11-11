@@ -290,6 +290,14 @@ void main() {
         expect(keys.lastKeystoreError, 'KeyringLocked');
       });
     }
+
+    test('an empty entry reads as no key, not a zero-length one', () async {
+      // base64 decodes '' to no bytes; handed to a settle as the installed
+      // key, that would match no sealed generation and discard the journal.
+      final keystore = _FakeKeystore(data: {_masterKeyEntry: ''});
+
+      expect(await _manager(keystore).readKeystoreKey(), isNull);
+    });
   });
 
   group('entry names', () {

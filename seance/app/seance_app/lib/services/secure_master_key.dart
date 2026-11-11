@@ -181,7 +181,9 @@ class MasterKeyManager {
   Future<List<int>?> readKeystoreKey() async {
     try {
       final existing = await _storage.read(key: _keyName);
-      return existing == null ? null : base64.decode(existing);
+      // An empty entry decodes to no bytes, which is no key either.
+      if (existing == null || existing.isEmpty) return null;
+      return base64.decode(existing);
     } catch (_) {
       return null;
     }
