@@ -2892,6 +2892,27 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String chartDateTime(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.MMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString';
+  }
+
+  @override
+  String get chartNoReading => 'no reading';
+
+  @override
+  String chartNoReadingBecause(String reason) {
+    return 'No reading: $reason';
+  }
+
+  @override
+  String get chartReadout => 'Values at a time';
+
+  @override
   String get accessNeverRuns =>
       'Klabautermann never runs these fix commands. Copy one and run it yourself on the server.';
 

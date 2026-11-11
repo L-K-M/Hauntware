@@ -3450,7 +3450,7 @@
   },
   "chartHeatmapSummary": "{label}: {count, plural, =1{1 core} other{{count} cores}}, average {average}, busiest {busiest}",
   "@chartHeatmapSummary": {
-    "description": "A core heatmap's screen-reader summary: what it measures, how many cores it shows, their average busy share (already formatted) and the busiest core as a chartBarPart, which may carry a chartWithSeverity.",
+    "description": "A core heatmap's screen-reader summary: what it measures, how many cores it shows, their average busy share (already formatted) and the busiest core as a chartBarPart with its name and busy share; it carries no severity.",
     "placeholders": {
       "label": {
         "type": "String",
@@ -3468,6 +3468,34 @@
         "example": "cpu12 98%"
       }
     }
+  },
+  "chartDateTime": "{time}",
+  "@chartDateTime": {
+    "description": "The time a chart's crosshair readout names on a chart that spans more than a day, with the date, in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "MMMd+jm"
+      }
+    }
+  },
+  "chartNoReading": "no reading",
+  "@chartNoReading": {
+    "description": "A series' value in a chart's crosshair readout when the sample under the crosshair has no known value for it."
+  },
+  "chartNoReadingBecause": "No reading: {reason}",
+  "@chartNoReadingBecause": {
+    "description": "A chart's crosshair readout inside a band without data: no series has a value there, and why, one of chartGapAppClosed, chartGapBackground, chartGapDisconnected or chartGapReadingFailed.",
+    "placeholders": {
+      "reason": {
+        "type": "String",
+        "example": "disconnected"
+      }
+    }
+  },
+  "chartReadout": "Values at a time",
+  "@chartReadout": {
+    "description": "Screen-reader name of a time-series chart's crosshair readout: swiping up or down, or the arrow keys, moves it to a later or earlier time, and its value reads the time and each series' value there."
   },
   "accessNeverRuns": "Klabautermann never runs these fix commands. Copy one and run it yourself on the server.",
   "@accessNeverRuns": {
