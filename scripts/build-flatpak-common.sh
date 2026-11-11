@@ -42,7 +42,7 @@ build_flatpak_main() {
   if [[ -z "$DEB" ]]; then
     (cd "$APP_DIR" && flutter build linux --release)
     scripts/package-linux.sh --skip-appimage
-    DEB="$(find dist -maxdepth 1 -name "${PACKAGE_NAME}_*.deb" -printf '%T@\t%p\n' 2>/dev/null | sort -rn | head -n1 | cut -f2- || true)"
+    DEB="$(find dist -maxdepth 1 -name "${PACKAGE_NAME}_*.deb" -printf '%T@\t%p\n' 2>/dev/null | LC_ALL=C sort -rn | head -n1 | cut -f2- || true)"
   fi
   [ -f "$DEB" ] || die ".deb not found: $DEB"
 

@@ -196,7 +196,7 @@ finish_app() {
     case "$HOST" in
       macos)
         echo "-- installing /Applications/$MACOS_APP_NAME"
-        rm -rf "/Applications/$MACOS_APP_NAME"
+        rm -rf "/Applications/${MACOS_APP_NAME:?}"
         # ditto preserves the signature, resource forks, and permissions.
         if ditto "$out" "/Applications/$MACOS_APP_NAME"; then
           INSTALLED="/Applications/$MACOS_APP_NAME"
@@ -300,13 +300,17 @@ flutter_build_apk() {
   [[ "$PROFILE" == "debug" ]] && mode_flag="--debug"
   echo "-- flutter build apk ${mode_flag}"
   if ( cd "$APP_DIR" && flutter pub get && flutter build apk $mode_flag ); then
-    local apk
-    apk="$(ls "$APP_DIR"/build/app/outputs/flutter-apk/*.apk 2>/dev/null | head -1)"
-    if [[ -n "$apk" ]] && ! stage "$apk" "$ASSET_STEM.apk"; then
+    # Named by profile: Flutter leaves the other profile's APK beside it.
+    local apk="$APP_DIR/build/app/outputs/flutter-apk/app-$PROFILE.apk"
+    if [[ ! -f "$apk" ]]; then
+      echo "!! apk: flutter build apk produced no app-$PROFILE.apk" >&2
+      record "apk: FAILED (no app-$PROFILE.apk)"; return 1
+    fi
+    if ! stage "$apk" "$ASSET_STEM.apk"; then
       echo "!! apk: copying the APK into dist/ failed" >&2
       record "apk: FAILED (copy to dist/)"; return 1
     fi
-    record "apk: built ($PROFILE)${apk:+ -> dist/$ASSET_STEM.apk}"
+    record "apk: built ($PROFILE) -> dist/$ASSET_STEM.apk"
   else
     echo "!! apk: flutter build apk failed" >&2
     record "apk: FAILED (flutter build apk)"; return 1

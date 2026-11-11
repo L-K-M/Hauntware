@@ -320,6 +320,38 @@ fi
         expect(result.stdout, contains('apk: FAILED (copy to dist/)'));
       });
 
+      test(
+        '$product: a stale debug APK is not staged as the release',
+        () async {
+          final build = _realProductBuild(sandbox, product, appDir, 'Linux');
+          final outputs = Directory(
+            p.join(
+              build.root,
+              'app',
+              appDir,
+              'build',
+              'app',
+              'outputs',
+              'flutter-apk',
+            ),
+          )..createSync(recursive: true);
+          // A debug build's leftover, which sorts before app-release.apk.
+          File(
+            p.join(outputs.path, 'app-debug.apk'),
+          ).writeAsStringSync('debug');
+
+          final result = await build.run(['apk']);
+
+          expect(result.exitCode, 0, reason: '${result.stdout}');
+          final staged = Directory(p.join(build.root, 'dist'))
+              .listSync()
+              .whereType<File>()
+              .where((f) => f.path.endsWith('.apk'))
+              .single;
+          expect(staged.readAsStringSync(), isEmpty);
+        },
+      );
+
       test('$product: Linux packaging fails', () async {
         final build = _realProductBuild(sandbox, product, appDir, 'Linux');
         final packager = File(p.join(build.root, 'scripts', 'package-linux.sh'))
