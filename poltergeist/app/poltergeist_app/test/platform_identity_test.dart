@@ -310,11 +310,22 @@ void main() {
   });
 
   test('fails closed when a committed platform scaffold is missing', () {
+    // build.sh sources the suite's shared body, which holds the check.
+    final build = _read('../../scripts/build.sh');
+    final shared = _read('../../../scripts/product-build-common.sh');
     expect(
-      _read('../../scripts/build.sh'),
+      build,
+      allOf(
+        contains(r'source "$ROOT/../scripts/product-build-common.sh"'),
+        isNot(contains('ensure_platform()')),
+        isNot(contains('flutter create')),
+      ),
+    );
+    expect(
+      shared,
       allOf(
         contains('platform scaffold is missing'),
-        isNot(contains('flutter create --org')),
+        isNot(contains('flutter create')),
       ),
     );
   });

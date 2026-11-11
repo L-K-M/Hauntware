@@ -9,8 +9,10 @@ import 'package:klabautermann_app/l10n/app_localizations_en.dart';
 const _packager = '../../scripts/package-linux.sh';
 const _sharedPackager = '../../../scripts/package-linux-common.sh';
 const _flatpakBuilder = '../../scripts/build-flatpak.sh';
+const _sharedFlatpakBuilder = '../../../scripts/build-flatpak-common.sh';
 const _flatpakManifest = '../../flatpak/ch.lkmc.klabautermann.yml';
 const _buildScript = '../../scripts/build.sh';
+const _sharedBuildScript = '../../../scripts/product-build-common.sh';
 const _releaseScript = '../../scripts/release.sh';
 const _masterIcon = '../../media-sources/klabautermann-icon.png';
 
@@ -89,12 +91,22 @@ void main() {
       );
       expect(
         _read(_flatpakBuilder),
-        allOf(
-          contains('readonly ASSET_STEM=$_assetStem'),
-          contains(r'BUNDLE="$ROOT/dist/$ASSET_STEM-linux-x64.flatpak"'),
-        ),
+        contains('readonly ASSET_STEM=$_assetStem'),
+      );
+      expect(
+        _read(_sharedFlatpakBuilder),
+        contains(r'BUNDLE="$ROOT/dist/$ASSET_STEM-linux-x64.flatpak"'),
       );
       expect(_read(_buildScript), contains('ASSET_STEM="$_assetStem"'));
+      // The staged names come from ASSET_STEM in the shared build body.
+      expect(
+        _read(_sharedBuildScript),
+        allOf([
+          contains(r'name="$ASSET_STEM-linux"'),
+          contains(r'stage "$apk" "$ASSET_STEM.apk"'),
+          contains(r'dist/"$ASSET_STEM"-linux-*.AppImage'),
+        ]),
+      );
       // The package name stays klabautermann; its description says
       // preview with the app's own label, as the app title does (M16), so
       // M7 drops both together.
@@ -247,9 +259,19 @@ void main() {
         _read(_flatpakBuilder),
         allOf([
           contains('readonly APP_ID=$_linuxApplicationId'),
+          contains('readonly APP_DIR=app/klabautermann_app'),
+          contains('readonly PACKAGE_NAME=$_packageName'),
+          contains(r'source "$ROOT/../scripts/build-flatpak-common.sh"'),
+          contains(r'build_flatpak_main "$@"'),
+        ]),
+      );
+      expect(
+        _read(_sharedFlatpakBuilder),
+        allOf([
+          contains(r'readonly MANIFEST="$ROOT/flatpak/$APP_ID.yml"'),
           contains(r'source "$ROOT/../scripts/flatpak-repack.sh"'),
-          contains("-name '${_packageName}_*.deb'"),
-          contains('(cd app/klabautermann_app && flutter build linux'),
+          contains(r'-name "${PACKAGE_NAME}_*.deb"'),
+          contains(r'(cd "$APP_DIR" && flutter build linux'),
         ]),
       );
     });
@@ -257,12 +279,22 @@ void main() {
 
   group('build and release scripts', () {
     test('build.sh fails closed and defers to the suite orchestrator', () {
+      // The wrapper sets Klabautermann's values; the body it sources is
+      // shared with Séance and Poltergeist and holds the checks below.
       expect(
         _read(_buildScript),
         allOf([
           contains('APP_DIR="app/klabautermann_app"'),
+          contains(r'source "$ROOT/../scripts/product-build-common.sh"'),
+          contains(r'product_build_main "$@"'),
+          isNot(contains('flutter create')),
+        ]),
+      );
+      expect(
+        _read(_sharedBuildScript),
+        allOf([
           contains('platform scaffold is missing'),
-          isNot(contains('flutter create --org')),
+          isNot(contains('flutter create')),
           contains('HAUNTWARE_BUILD_ORCHESTRATED'),
           contains('scripts/package-linux.sh --appimage=best-effort'),
           contains('scripts/build-flatpak.sh "\$deb"'),
