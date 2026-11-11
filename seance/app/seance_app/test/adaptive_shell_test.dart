@@ -281,6 +281,17 @@ void main() {
     }
   });
 
+  testWidgets('a focused divider keeps the full pointer drag', (tester) async {
+    await pumpResizable(tester);
+    final handle = find.byKey(AdaptivePaneLayout.listResizeHandleKey);
+    final before = paneWidth(tester, AdaptivePaneLayout.listPaneKey);
+    await tester.tap(handle);
+    await tester.pump();
+    await tester.drag(handle, const Offset(60, 0));
+    await tester.pump();
+    expect(paneWidth(tester, AdaptivePaneLayout.listPaneKey), before + 60);
+  });
+
   testWidgets('RTL pointer drag follows the visible divider', (tester) async {
     await pumpResizable(tester, direction: TextDirection.rtl);
     await tester.drag(
