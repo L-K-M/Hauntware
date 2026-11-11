@@ -10,10 +10,12 @@ final RegExp secretKeyPattern = RegExp(
 
 /// 03 §8.9: the `user:pass@` of `scheme://user:pass@` credentials, read
 /// after the `://`. The user may be empty (`redis://:pass@host`). The
-/// password runs to the last `@` before the authority ends at `/`, `?`,
-/// `#` or whitespace, so an unescaped `@` in it stays hidden; a URL
-/// without an `@` in its authority matches nothing.
-final RegExp _urlCredentialPattern = RegExp(r'([^/@\s:]*):[^/?#\s]+@');
+/// password runs to the last `@` before a `/` or whitespace, so an
+/// unescaped `@`, `?` or `#` in it stays hidden. The price is that an
+/// `@` in a query or fragment of a URL without a path
+/// (`http://host:80?to=a@b`) masks from the port on; over-masking is the
+/// safe direction.
+final RegExp _urlCredentialPattern = RegExp(r'([^/@\s:]*):[^/\s]+@');
 
 /// Whether the code unit [unit] is an ASCII letter, which a URL scheme
 /// starts with. Code units, not a regular expression per character,
