@@ -16,6 +16,7 @@ constexpr DWORD kInitialPathCapacity = MAX_PATH;
 constexpr DWORD kMaximumPathCapacity = 32768;
 constexpr DWORD kPrimaryWindowPollIntervalMs = 25;
 constexpr ULONGLONG kPrimaryWindowStartupTimeoutMs = 30000;
+constexpr UINT kDocumentDeliveryTimeoutMs = 5000;
 
 // The creating UI thread owns this mutex for the process lifetime. Windows
 // releases it if startup crashes, so one waiting activation can take over.
@@ -215,9 +216,9 @@ std::vector<std::wstring> ForwardedArguments() {
   return forwarded;
 }
 
-// The NUL-separated UTF-16 payload a second launch sends; SendMessage is
-// synchronous, so the stack buffer outlives the delivery.
-void SendForwardedArguments(HWND primary_window,
+// Windows marshals this NUL-separated UTF-16 WM_COPYDATA payload. Require
+// the receiver's acknowledgement, and bound the wait if its UI is hung.
+bool SendForwardedArguments(HWND primary_window,
                             const std::vector<std::wstring>& arguments) {
   std::wstring payload;
   for (const std::wstring& argument : arguments) {
@@ -237,8 +238,12 @@ void SendForwardedArguments(HWND primary_window,
   data.dwData = kOpenDocumentsCopyDataId;
   data.cbData = static_cast<DWORD>(payload.size() * sizeof(wchar_t));
   data.lpData = payload.data();
-  SendMessageW(primary_window, WM_COPYDATA, reinterpret_cast<WPARAM>(nullptr),
-               reinterpret_cast<LPARAM>(&data));
+  DWORD_PTR accepted = FALSE;
+  const LRESULT delivered = SendMessageTimeoutW(
+      primary_window, WM_COPYDATA, reinterpret_cast<WPARAM>(nullptr),
+      reinterpret_cast<LPARAM>(&data), SMTO_ABORTIFHUNG | SMTO_BLOCK,
+      kDocumentDeliveryTimeoutMs, &accepted);
+  return delivered != 0 && accepted == TRUE;
 }
 
 }  // namespace
@@ -260,14 +265,16 @@ InstanceDisposition ClaimOrForwardInstance() {
   while (GetTickCount64() < deadline) {
     const HWND primary_window = FindPrimaryInstanceWindow();
     if (primary_window != nullptr) {
+      bool forwarded = true;
       if (arguments.empty()) {
         PresentVisibleApplicationWindow();
       } else {
-        SendForwardedArguments(primary_window, arguments);
+        forwarded = SendForwardedArguments(primary_window, arguments);
       }
       if (IsWindow(primary_window) != FALSE) {
         CloseHandle(instance_mutex);
-        return InstanceDisposition::kForwarded;
+        return forwarded ? InstanceDisposition::kForwarded
+                         : InstanceDisposition::kFailed;
       }
     }
 

@@ -15,6 +15,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     case InstanceDisposition::kForwarded:
       return EXIT_SUCCESS;
     case InstanceDisposition::kFailed:
+      MessageBoxW(
+          nullptr,
+          L"Could not start Planchette or contact its running app. "
+          L"Check that the running app is responding and uses the same "
+          L"permissions, then try again.",
+          L"Planchette", MB_OK | MB_ICONERROR);
       return EXIT_FAILURE;
     case InstanceDisposition::kRunPrimary:
       break;

@@ -26,6 +26,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   them.
 
 ### Fixed
+- Windows bounds the wait when handing a file to the running app and
+  requires its acknowledgement. Failed or blocked delivery shows a retryable
+  error instead of claiming the request succeeded.
 - Host-key fingerprints and key paths in the server prompts draw in the
   bundled code font on macOS and Windows, as in Séance and Poltergeist.
   They were in the proportional system font there.
