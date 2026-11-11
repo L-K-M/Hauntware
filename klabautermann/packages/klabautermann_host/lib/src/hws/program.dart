@@ -900,7 +900,8 @@ psec() {
 /// ([kProcsCmdlineByteCap]) piped into `tr '\000' '\037'` (shell
 /// variables cannot hold NULs; 04 App. A, E11), in the byte order of the
 /// pids, which is the glob's (03 §7.2). The `meta` block's
-/// `cmdline_cap=` says the cap applied; a `head` without `-c`, which
+/// `cmdline_cap=` says the cap applied, so it is set only when head and
+/// tr both exist and read the command lines; a `head` without `-c`, which
 /// `HW_HC` caches for the sampler's life, falls back to the uncapped
 /// `head -n 1000` and leaves it out. Without head or tr the fallbacks are
 /// `ps -eo pid,ppid,user,stat,rss,args` then BusyBox `ps w`. The `==> `
@@ -957,7 +958,7 @@ c_procs() {
     fi
   fi
   _ho='-n 1000'; _cap=
-  if command -v head >/dev/null 2>&1; then
+  if command -v head >/dev/null 2>&1 && command -v tr >/dev/null 2>&1; then
     if [ -z "$HW_HC" ]; then
       HW_HC=n; head -c 1 </dev/null >/dev/null 2>&1 && HW_HC=y
     fi
