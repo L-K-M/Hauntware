@@ -1,6 +1,8 @@
 // The edit pipeline's scripts through real shells (03 §8.5, D67): each
-// installed shell (dash, bash) runs the builders' argv over a scratch
-// directory, as the login user, with GNU coreutils. Stand-ins first on
+// installed shell (dash, bash, mksh, BusyBox ash) runs the builders' argv
+// over a scratch directory, as the login user, with GNU coreutils; the
+// symlink reads run with BusyBox's applets too where BusyBox is
+// installed. Stand-ins first on
 // PATH play BusyBox's `cp`, which refuses `--attributes-only`, and the
 // `getfacl` and `getfattr` of a target that carries an ACL entry or an
 // xattr. Tagged `shell`; a shell that is not installed gets no tests.
@@ -14,17 +16,26 @@ import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
 
 String? _which(String name) {
-  for (final dir in ['/bin', '/usr/bin']) {
+  final path = Platform.environment['PATH'] ?? '';
+  for (final dir in ['/bin', '/usr/bin', ...path.split(':')]) {
+    if (dir.isEmpty) continue;
     final f = File('$dir/$name');
     if (f.existsSync()) return f.path;
   }
   return null;
 }
 
-final _shells = <String, String>{
-  for (final name in ['dash', 'bash'])
-    if (_which(name) case final p?) name: p,
+final _busybox = _which('busybox');
+
+/// Each installed shell, as the words that start it.
+final _shells = <String, List<String>>{
+  for (final name in ['dash', 'bash', 'mksh'])
+    if (_which(name) case final p?) name: [p],
+  if (_busybox case final p?) 'busybox ash': [p, 'sh'],
 };
+
+/// The tools a symlink read runs with: GNU's, and BusyBox's applets.
+const _tools = ['gnu', 'busybox'];
 
 // Low entropy, so the secret scan does not read it as a key.
 const _tempId = 'feedfacefeedface';
@@ -61,10 +72,9 @@ void main() {
       /// Runs [argv] with [shell] as its `sh` and [stdin], with the shims
       /// first on PATH.
       Future<ProcessResult> run(List<String> argv, {String? stdin}) async {
-        final executable = argv.first == 'sh' ? shell : argv.first;
         final process = await Process.start(
-          executable,
-          argv.sublist(1),
+          argv.first == 'sh' ? shell.first : argv.first,
+          [if (argv.first == 'sh') ...shell.skip(1), ...argv.sublist(1)],
           environment: {
             'PATH': '${shims.path}:${Platform.environment['PATH'] ?? ''}',
             'LC_ALL': 'C',
@@ -87,6 +97,25 @@ void main() {
           await out,
           await err,
         );
+      }
+
+      /// Why a test that stands in for [tools] on PATH cannot run here: the
+      /// shell runs its own (mksh's `realpath`, or a BusyBox built to run
+      /// its applets before PATH), or null.
+      String? ownTools(List<String> tools) {
+        for (final tool in tools) {
+          final found =
+              Process.runSync(shell.first, [
+                    ...shell.skip(1),
+                    '-c',
+                    'command -v $tool',
+                  ]).stdout
+                  as String;
+          if (found.trim().isNotEmpty && !found.startsWith('/')) {
+            return '$name runs its own $tool';
+          }
+        }
+        return null;
       }
 
       /// A stand-in for [tool] that runs [body] as its script.
@@ -120,6 +149,7 @@ void main() {
             gid: int.parse(ids[1]),
             mode: 416,
             sha256: _sha256Of(target),
+            path: File(target).resolveSymbolicLinksSync(),
           ));
           expect(lines.skip(1).join('\n'), 'original\n');
 
@@ -161,30 +191,136 @@ void main() {
         expect(File(temp).existsSync(), isFalse);
       });
 
-      test('a symlinked target is refused by the read and never replaced '
-          'by the swap', () async {
-        // The link names a file elsewhere: a read would describe the link
-        // and print the file, and the rename would replace the link with
-        // a detached copy while the file stays as it was.
+      /// Puts BusyBox's applets for what the read runs first on PATH.
+      void busyboxTools() {
+        for (final tool in ['readlink', 'realpath', 'stat', 'sha256sum']) {
+          Link('${shims.path}/$tool').createSync(_busybox!);
+        }
+      }
+
+      for (final tools in _tools) {
+        final skip = tools == 'busybox' && _busybox == null
+            ? 'BusyBox is not installed'
+            : null;
+
+        test('$tools: a read through a link names the real file, and the '
+            'write through that name leaves the link a link', () async {
+          if (tools == 'busybox') busyboxTools();
+          final real = '${dir.path}/real.conf';
+          File(real).writeAsStringSync('real\n');
+          Process.runSync('chmod', ['0604', real]);
+          final link = '${dir.path}/link.conf';
+          Link(link).createSync('real.conf');
+          final resolved = File(real).resolveSymbolicLinksSync();
+
+          final read = await run(EditCommands.readFile(link));
+          expect(read.exitCode, 0, reason: '${read.stderr}');
+          final out = read.stdout as String;
+          final header = parseReadHeader(out.substring(0, out.indexOf('\n')));
+          expect(header?.path, resolved);
+          expect(header?.mode, 0x184);
+          expect(out.substring(out.indexOf('\n') + 1), 'real\n');
+
+          final realTemp = EditCommands.tempPathFor(resolved, _tempId);
+          await run(EditCommands.writeTemp(realTemp), stdin: 'edited\n');
+          await run(EditCommands.copyAttributes(resolved, realTemp));
+          final swap = await run(
+            EditCommands.replaceIfHash(resolved, realTemp, header!.sha256),
+          );
+          expect(swap.exitCode, 0, reason: '${swap.stderr}');
+          expect(FileSystemEntity.isLinkSync(link), isTrue);
+          expect(File(link).readAsStringSync(), 'edited\n');
+          expect(_mode(real), '604');
+        }, skip: skip);
+
+        test('$tools: a linked directory, a relative link up a level and a '
+            'chain of links each resolve to the real file', () async {
+          if (tools == 'busybox') busyboxTools();
+          Directory('${dir.path}/real/sub').createSync(recursive: true);
+          final real = '${dir.path}/real/sub/app.conf';
+          File(real).writeAsStringSync('x\n');
+          final resolved = File(real).resolveSymbolicLinksSync();
+          Link('${dir.path}/linked').createSync('real/sub');
+          Link('${dir.path}/real/up.conf').createSync('sub/app.conf');
+          Link('${dir.path}/real/sub/down').createSync('..');
+          Link('${dir.path}/a.conf').createSync('b.conf');
+          Link('${dir.path}/b.conf').createSync('${dir.path}/real/up.conf');
+
+          for (final path in [
+            '${dir.path}/linked/app.conf',
+            '${dir.path}/real/sub/down/sub/app.conf',
+            '${dir.path}/a.conf',
+          ]) {
+            final read = await run(EditCommands.readFile(path));
+            expect(read.exitCode, 0, reason: '$path: ${read.stderr}');
+            final out = read.stdout as String;
+            expect(
+              parseReadHeader(out.substring(0, out.indexOf('\n')))?.path,
+              resolved,
+              reason: path,
+            );
+          }
+        }, skip: skip);
+
+        test('$tools: a dangling link reads as missing, and a retargeted '
+            'link reads as its new file', () async {
+          if (tools == 'busybox') busyboxTools();
+          final link = '${dir.path}/link.conf';
+          Link(link).createSync('gone.conf');
+          final dangling = await run(EditCommands.readFile(link));
+          expect(dangling.exitCode, isNot(0));
+          expect(dangling.stderr, contains('No such file'));
+
+          File('${dir.path}/one.conf').writeAsStringSync('1\n');
+          File('${dir.path}/two.conf').writeAsStringSync('2\n');
+          Link(link).updateSync('one.conf');
+          String? pathOf(ProcessResult read) =>
+              parseReadHeader((read.stdout as String).split('\n').first)?.path;
+          final first = pathOf(await run(EditCommands.readFile(link)));
+          Link(link).updateSync('two.conf');
+          final second = pathOf(await run(EditCommands.readFile(link)));
+          expect(first, endsWith('/one.conf'));
+          expect(second, endsWith('/two.conf'));
+        }, skip: skip);
+      }
+
+      test('without readlink -f or realpath a link is refused, and a file '
+          'reads as it is', () async {
+        shim('readlink', 'exit 1');
+        shim('realpath', 'exit 1');
         final real = '${dir.path}/real.conf';
         File(real).writeAsStringSync('real\n');
         final link = '${dir.path}/link.conf';
         Link(link).createSync('real.conf');
-        final linkTemp = EditCommands.tempPathFor(link, _tempId);
 
-        final read = await run(EditCommands.readFile(link));
-        expect(read.exitCode, EditExit.symlink, reason: '${read.stderr}');
-        expect(read.stdout, '');
+        final refused = await run(EditCommands.readFile(link));
+        expect(refused.exitCode, EditExit.symlink, reason: '${refused.stderr}');
+        expect(refused.stdout, '');
 
+        final plain = await run(EditCommands.readFile(real));
+        expect(plain.exitCode, 0, reason: '${plain.stderr}');
+        expect(
+          parseReadHeader((plain.stdout as String).split('\n').first)?.path,
+          real,
+        );
+      }, skip: ownTools(['readlink', 'realpath']));
+
+      test('the swap refuses a real file that has become a link', () async {
+        final real = '${dir.path}/real.conf';
+        File(real).writeAsStringSync('real\n');
         final hash = _sha256Of(real);
-        await run(EditCommands.writeTemp(linkTemp), stdin: 'edited\n');
+        final realTemp = EditCommands.tempPathFor(real, _tempId);
+        await run(EditCommands.writeTemp(realTemp), stdin: 'edited\n');
+        File(real).renameSync('${dir.path}/moved.conf');
+        Link(real).createSync('moved.conf');
+
         final swap = await run(
-          EditCommands.replaceIfHash(link, linkTemp, hash),
+          EditCommands.replaceIfHash(real, realTemp, hash),
         );
         expect(swap.exitCode, EditExit.symlink);
-        expect(FileSystemEntity.isLinkSync(link), isTrue);
-        expect(File(real).readAsStringSync(), 'real\n');
-        expect(File(linkTemp).existsSync(), isFalse);
+        expect(FileSystemEntity.isLinkSync(real), isTrue);
+        expect(File('${dir.path}/moved.conf').readAsStringSync(), 'real\n');
+        expect(File(realTemp).existsSync(), isFalse);
       });
 
       test('the root-only check resolves the directory and refuses one '
@@ -228,7 +364,7 @@ void main() {
           );
           expect(checked.exitCode, verdict, reason: owner);
         }
-      });
+      }, skip: ownTools(['stat']));
 
       test('a changed target is never replaced, and the temp goes', () async {
         final hash = _sha256Of(target);
@@ -250,7 +386,7 @@ void main() {
         expect(swap.exitCode, 1);
         expect(File(target).readAsStringSync(), 'original\n');
         expect(File(temp).existsSync(), isFalse);
-      });
+      }, skip: ownTools(['mv']));
 
       test(
         'without cp --attributes-only, stat carries owner and mode',
@@ -381,6 +517,7 @@ void main() {
           expect(next.exitCode, 0, reason: '${next.stderr}');
           expect(File(table).readAsStringSync(), '0 4 * * * a\n');
         },
+        skip: ownTools(['crontab']),
       );
 
       test('a crontab backup leaves another run\'s temps alone', () async {
@@ -409,7 +546,7 @@ void main() {
           Directory(backups).listSync().map((e) => e.path.split('/').last),
           isNot(contains(matches(r'^\.(crontab|index)\.tmp\..'))),
         );
-      });
+      }, skip: ownTools(['crontab']));
 
       test('the user backup directory resolves under XDG_STATE_HOME', () async {
         final resolved = await run(EditCommands.userBackupsDir());

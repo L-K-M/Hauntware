@@ -146,18 +146,24 @@ Future<PlanAttempt> _planFile(
   if (current is! EditContent || current.sha256 != intent.baseSha256) {
     return _readRefusal(current);
   }
+  // A link the read resolved to another file, or one that became or
+  // stopped being a link, would write a file the editor did not show.
+  if (current.resolvedPath != intent.resolvedPath) {
+    return _refused(ActionRefusalReason.targetChanged);
+  }
   final privileged = current.privileged;
   // Root's backups and manifest are root's alone, so even planning needs
   // admin mode.
   if (privileged && c.admin == null) {
     return _refused(ActionRefusalReason.adminRequired);
   }
-  // Root writes only where root alone can change the directory's entries
-  // (03 §7.17), and names the file there, so no step passes through a
-  // symlink that could be swapped between steps.
-  var target = path;
+  // Every step names the real file, so a link stays a link. Root writes
+  // only where root alone can change the directory's entries (03 §7.17),
+  // and names the file under that directory resolved, so no step passes
+  // through a symlink that could be swapped between steps.
+  var target = current.resolvedPath ?? path;
   if (privileged) {
-    final (:resolved, :refusal) = await _rootOnlyPath(path, c);
+    final (:resolved, :refusal) = await _rootOnlyPath(target, c);
     if (resolved == null) return _refused(refusal);
     target = resolved;
   }
@@ -172,7 +178,8 @@ Future<PlanAttempt> _planFile(
   // A unit file is checked as its unit before the rename where the
   // host's systemd can load the temp under the unit's name; elsewhere the
   // preview says it is not.
-  final unit = unitFileName(target);
+  // systemd and sudo read a linked file under the name it was opened by.
+  final unit = unitFileName(path) ?? unitFileName(target);
   final verifyUnit =
       unit != null &&
       !temp.contains(':') &&
@@ -195,7 +202,8 @@ Future<PlanAttempt> _planFile(
         step(EditCommands.backupFile(target, backups)),
         if (manifest case _ManifestWrite(:final step)) step,
         step(EditCommands.writeTemp(temp), input: utf8.encode(intent.text)),
-        if (_isSudoers(target)) step(['visudo', '-c', '-f', temp]),
+        if (_isSudoers(path) || _isSudoers(target))
+          step(['visudo', '-c', '-f', temp]),
         if (verifyUnit) step(EditCommands.verifyUnit(temp, unit)),
         step(EditCommands.copyAttributes(target, temp)),
         // Status only: compose's errors can quote interpolated values.

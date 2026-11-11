@@ -11328,8 +11328,14 @@ abstract class AppLocalizations {
   /// Remote editor: why the engine read nothing. reason is the engine's EditReadFailure name.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, noLink{There is no connection to this server.} invalidTarget{Klabautermann does not edit this path.} notFound{There is no file at this path on the host.} adminRequired{Only root can read this file. Turn on admin mode to edit it.} tooLarge{This file is too large for the editor.} notText{This file is not text.} stackUnverified{This stack\'s files are not its verified source, so Klabautermann does not edit them.} symlink{This path is a symbolic link. Open the file it points to instead.} failed{The file could not be read.} other{The file could not be read.}}'**
+  /// **'{reason, select, noLink{There is no connection to this server.} invalidTarget{Klabautermann does not edit this path.} notFound{There is no file at this path on the host.} adminRequired{Only root can read this file. Turn on admin mode to edit it.} tooLarge{This file is too large for the editor.} notText{This file is not text.} stackUnverified{This stack\'s files are not its verified source, so Klabautermann does not edit them.} symlink{This path is a symbolic link that cannot be resolved on this host.} failed{The file could not be read.} other{The file could not be read.}}'**
   String editReadFailed(String reason);
+
+  /// Remote editor: under the path the editor opened, when it is a symbolic link; path is the real file that is read and saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Link to {path}'**
+  String editLinkTo(String path);
 
   /// Remote editor: chip on a file only root may write; saving it runs through admin mode.
   ///

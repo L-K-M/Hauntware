@@ -255,6 +255,35 @@ void main() {
     expect(plan.baseSha256, 'abc123');
   });
 
+  testWidgets('a link names the real file it reads, and the save carries '
+      'it so a retargeted link is refused', (tester) async {
+    const real = '/srv/releases/7/compose.yaml';
+    final editor = await _pump(tester);
+    await editor.answer(
+      tester,
+      const EditContent(
+        text: _original,
+        sha256: 'abc123',
+        privileged: false,
+        resolvedPath: real,
+      ),
+    );
+    expect(find.text('Link to $real'), findsOneWidget);
+
+    await editor.type(tester, '$_original# edited\n');
+    await editor.review(tester);
+    await tester.tap(find.text('Save to server'));
+    await tester.pumpAndSettle();
+    expect(editor.plans.single.resolvedPath, real);
+    expect(editor.plans.single.target, _target);
+  });
+
+  testWidgets('a file that is no link shows no link line', (tester) async {
+    final editor = await _pump(tester);
+    await editor.answer(tester, _content(_original));
+    expect(find.textContaining('Link to '), findsNothing);
+  });
+
   testWidgets('a target changed before planning opens the conflict sheet; '
       '"Discard mine" takes the server\'s text', (tester) async {
     final editor = await _pump(tester);

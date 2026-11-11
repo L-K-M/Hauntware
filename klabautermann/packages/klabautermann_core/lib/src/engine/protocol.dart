@@ -2736,12 +2736,18 @@ final class EditContent extends EditReadResult {
     this.uid,
     this.gid,
     this.mode,
+    this.resolvedPath,
   });
 
   final String text;
   final String sha256;
   final bool privileged;
   final int? uid, gid, mode;
+
+  /// The real file a symlinked path names, which was read and which the
+  /// edit writes, leaving the link a link; null when the path opened is
+  /// the real file.
+  final String? resolvedPath;
 }
 
 /// A [ReadEditable] that read nothing; [detail] is the end of stderr.
@@ -2775,9 +2781,9 @@ enum EditReadFailure {
   /// A [StackFileTarget]'s project is not a verified source (STK-07).
   stackUnverified,
 
-  /// The path is a symbolic link. A write through it would replace the
-  /// link with a copy and leave the file it names unchanged, so the user
-  /// opens that file instead.
+  /// The path is a symbolic link the host has no `readlink -f` or
+  /// `realpath` to resolve, so the engine cannot tell which file a write
+  /// through it would change.
   symlink,
 
   /// The read failed otherwise.
@@ -6133,18 +6139,22 @@ final class StackFileTarget extends EditTarget {
 /// target still has [baseSha256], the hash its [ReadEditable] read. The
 /// plan backs the target up first, writes a temp file beside it, carries
 /// its owner, mode, ACL and xattrs over (D67) and renames it over the
-/// target; a crontab goes through `crontab -`.
+/// target; a crontab goes through `crontab -`. [resolvedPath] is the
+/// [EditContent.resolvedPath] the read reported: a link retargeted since
+/// is refused as a changed target.
 final class EditFile extends ActionIntent {
   const EditFile(
     super.serverId, {
     required this.target,
     required this.text,
     required this.baseSha256,
+    this.resolvedPath,
   });
 
   final EditTarget target;
   final String text;
   final String baseSha256;
+  final String? resolvedPath;
 }
 
 /// Whose backups a footprint action or row is (03 §8.11): the login

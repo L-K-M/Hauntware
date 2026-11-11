@@ -9013,11 +9013,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'stackUnverified':
           'This stack\'s files are not its verified source, so Klabautermann does not edit them.',
       'symlink':
-          'This path is a symbolic link. Open the file it points to instead.',
+          'This path is a symbolic link that cannot be resolved on this host.',
       'failed': 'The file could not be read.',
       'other': 'The file could not be read.',
     });
     return '$_temp0';
+  }
+
+  @override
+  String editLinkTo(String path) {
+    return 'Link to $path';
   }
 
   @override

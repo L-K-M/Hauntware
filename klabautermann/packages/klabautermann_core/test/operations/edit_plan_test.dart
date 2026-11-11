@@ -148,24 +148,66 @@ void main() {
       expect(await failure('var/relative'), EditReadFailure.invalidTarget);
     });
 
-    test(
-      'a symlink is refused rather than read as the file it names',
-      () async {
-        host.files['/etc/resolv.conf'] = (
-          uid: 0,
-          mode: '644',
-          text: 'nameserver 127.0.0.53\n',
-          rootOnly: false,
-        );
-        host.symlinks.add('/etc/resolv.conf');
+    test('a symlink the host cannot resolve is refused', () async {
+      host.files['/etc/resolv.conf'] = (
+        uid: 0,
+        mode: '644',
+        text: 'nameserver 127.0.0.53\n',
+        rootOnly: false,
+      );
+      host.symlinks.add('/etc/resolv.conf');
 
-        final read = await readEditable(
-          const FileTarget('/etc/resolv.conf'),
-          context(),
-        );
-        expect((read as EditReadFailed).failure, EditReadFailure.symlink);
-      },
-    );
+      final read = await readEditable(
+        const FileTarget('/etc/resolv.conf'),
+        context(),
+      );
+      expect((read as EditReadFailed).failure, EditReadFailure.symlink);
+    });
+
+    test('a link reads as the real file it names, whose owner decides; a '
+        'real path the edit rules refuse is an invalid target', () async {
+      host.files['/run/systemd/resolve/stub-resolv.conf'] = (
+        uid: 0,
+        mode: '644',
+        text: 'nameserver 127.0.0.53\n',
+        rootOnly: false,
+      );
+      host.links['/etc/resolv.conf'] = '/run/systemd/resolve/stub-resolv.conf';
+      host.files['/home/deploy/app/.env'] = (
+        uid: 1000,
+        mode: '600',
+        text: 'A=1\n',
+        rootOnly: false,
+      );
+
+      final read = await readEditable(
+        const FileTarget('/etc/resolv.conf'),
+        context(),
+      );
+      final content = read as EditContent;
+      expect(content.resolvedPath, '/run/systemd/resolve/stub-resolv.conf');
+      expect(content.text, 'nameserver 127.0.0.53\n');
+      expect(content.privileged, isTrue);
+
+      final plain = await readEditable(
+        const FileTarget('/home/deploy/app/.env'),
+        context(),
+      );
+      expect((plain as EditContent).resolvedPath, isNull);
+
+      host.files['/srv/a\u0007b'] = (
+        uid: 1000,
+        mode: '644',
+        text: 'x\n',
+        rootOnly: false,
+      );
+      host.links['/home/deploy/odd'] = '/srv/a\u0007b';
+      final odd = await readEditable(
+        const FileTarget('/home/deploy/odd'),
+        context(),
+      );
+      expect((odd as EditReadFailed).failure, EditReadFailure.invalidTarget);
+    });
 
     test('an absent crontab reads as empty; another account\'s needs admin '
         'mode', () async {
@@ -547,6 +589,109 @@ void main() {
         _sha('a\n'),
       )).plan!;
       expect(own.targetName, '/home/deploy/a');
+    });
+
+    test('an edit through a link names the real file in every step, and '
+        'a link retargeted since the read is refused', () async {
+      adminOn();
+      const link = '/etc/nginx/sites-enabled/default';
+      const real = '/etc/nginx/sites-available/default';
+      host.files[real] = (uid: 0, mode: '644', text: 'a\n', rootOnly: false);
+      host.links[link] = real;
+      Future<PlanAttempt> through({String? resolved = real}) => planEdit(
+        EditFile(
+          _server,
+          target: const FileTarget(link),
+          text: 'b\n',
+          baseSha256: _sha('a\n'),
+          resolvedPath: resolved,
+        ),
+        context(),
+        random: Random(1),
+      );
+
+      final p = (await through()).plan!;
+      final temp = tempOf(p);
+      expect(temp, startsWith('/etc/nginx/sites-available/.default'));
+      expect(p.targetName, real);
+      expect(argvs(p), [
+        EditCommands.backupFile(real, kRootBackupsDir),
+        EditCommands.manifestWrite(kRootManifestPath, _sha('')),
+        EditCommands.writeTemp(temp),
+        EditCommands.copyAttributes(real, temp),
+        EditCommands.replaceIfHash(real, temp, _sha('a\n')),
+      ]);
+      expect(p.cleanup.single.argv, EditCommands.removeTemp(temp));
+      expect(
+        host.commands.where((c) => c.contains('klabautermann-directory')),
+        everyElement(contains("'$real'")),
+      );
+
+      host.enforcing = true;
+      expect(
+        argvs((await through()).plan!).last,
+        EditCommands.restorecon(real),
+      );
+      host.enforcing = false;
+
+      // The read showed another file, or the path was no link then.
+      expect(
+        (await through(resolved: '/etc/nginx/sites-available/other')).refusal,
+        ActionRefusalReason.targetChanged,
+      );
+      expect(
+        (await through(resolved: null)).refusal,
+        ActionRefusalReason.targetChanged,
+      );
+    });
+
+    test('a link opened as sudo rules or a unit file keeps their checks '
+        'and protection, whatever it names', () async {
+      adminOn();
+      profile = HostProfile(uid: 1000, user: 'deploy', systemdVersion: 255);
+      host.files['/opt/rules/deploy'] = (
+        uid: 0,
+        mode: '440',
+        text: 'a\n',
+        rootOnly: false,
+      );
+      host.links['/etc/sudoers.d/deploy'] = '/opt/rules/deploy';
+      host.files['/opt/units/app.service'] = (
+        uid: 0,
+        mode: '644',
+        text: 'a\n',
+        rootOnly: false,
+      );
+      host.links['/etc/systemd/system/app.service'] = '/opt/units/app.service';
+      Future<OperationPlan> planned(String link, String real) async =>
+          (await planEdit(
+            EditFile(
+              _server,
+              target: FileTarget(link),
+              text: 'b\n',
+              baseSha256: _sha('a\n'),
+              resolvedPath: real,
+            ),
+            context(),
+            random: Random(1),
+          )).plan!;
+
+      final sudo = await planned('/etc/sudoers.d/deploy', '/opt/rules/deploy');
+      expect(
+        argvs(sudo),
+        contains(equals(['visudo', '-c', '-f', tempOf(sudo)])),
+      );
+      expect(sudo.protected, ProtectedReason.builtIn);
+      expect(sudo.targetName, '/opt/rules/deploy');
+
+      final unit = await planned(
+        '/etc/systemd/system/app.service',
+        '/opt/units/app.service',
+      );
+      expect(
+        argvs(unit),
+        contains(equals(EditCommands.verifyUnit(tempOf(unit), 'app.service'))),
+      );
     });
 
     test('a target that changed since the read, a bad path and a file only '
