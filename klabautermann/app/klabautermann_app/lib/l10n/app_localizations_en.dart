@@ -7612,6 +7612,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerImagesNoneUpdates => 'No image has an update.';
 
   @override
+  String get dockerImagesUpdatesUnknown =>
+      'Which images have an update is not known yet.';
+
+  @override
   String get dockerImagesUpdatesCheck => 'Check for updates';
 
   @override
@@ -10803,6 +10807,10 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get attentionNotSaved =>
+      'Klabautermann could not save this acknowledgement, so it lasts only until it quits.';
 
   @override
   String get attentionClose => 'Close';

@@ -143,6 +143,19 @@ String formatChartValue(double value, ChartUnit unit, ChartStrings strings) =>
       ChartUnit.decimal => strings.decimal(value),
     };
 
+/// A full percentage scale: what a share of one whole tops out at.
+const _percentFull = 100.0;
+
+/// The top of a percentage scale: [_percentFull], or the next multiple of
+/// it once [dataMax] passes it, so a value above 100 % is drawn at its
+/// height rather than flattened against the top.
+double _percentScaleMax(double? dataMax) {
+  if (dataMax == null || !dataMax.isFinite || dataMax <= _percentFull) {
+    return _percentFull;
+  }
+  return (dataMax / _percentFull).ceilToDouble() * _percentFull;
+}
+
 /// The steps of an automatic scale within one IEC unit: 1, 2 and 5 times a
 /// power of ten, stopping below 1024 so a label never reads "1000 KiB".
 const _scaleSteps = [1, 2, 5, 10, 20, 50, 100, 200, 500];
@@ -151,9 +164,11 @@ const _scaleSteps = [1, 2, 5, 10, 20, 50, 100, 200, 500];
 const _tebibyte = 1024.0 * 1024 * 1024 * 1024;
 
 /// The top of an automatic scale for a series whose highest known value is
-/// [dataMax]: 100 for a percentage, so hosts compare by eye, and otherwise
-/// the next round IEC figure (500 KiB, 1 MiB, 2 MiB), so the scale label
-/// reads as a round number. An empty or all-zero series gets 1 KiB. Debug
+/// [dataMax]: 100 for a percentage, so hosts compare by eye, or the next
+/// whole hundred for one that passes 100 (a container's CPU counts each
+/// core as 100 %), and otherwise the next round IEC figure (500 KiB, 1 MiB,
+/// 2 MiB), so the scale label reads as a round number. An empty or
+/// all-zero series gets 1 KiB. Debug
 /// builds assert that [dataMax] is finite; release builds give a
 /// non-finite one 1 KiB too.
 double chartScaleMax(double? dataMax, ChartUnit unit) {
@@ -166,7 +181,7 @@ double chartScaleMax(double? dataMax, ChartUnit unit) {
 /// than an endless search.
 @visibleForTesting
 double uncheckedChartScaleMax(double? dataMax, ChartUnit unit) {
-  if (unit == ChartUnit.percent) return 100;
+  if (unit == ChartUnit.percent) return _percentScaleMax(dataMax);
   if (unit == ChartUnit.count) return _countScaleMax(dataMax);
   if (unit == ChartUnit.decimal) return _decimalScaleMax(dataMax);
   // NaN would never meet a step and +Infinity would reach an infinite

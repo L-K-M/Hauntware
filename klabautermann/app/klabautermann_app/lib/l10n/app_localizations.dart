@@ -9687,6 +9687,12 @@ abstract class AppLocalizations {
   /// **'No image has an update.'**
   String get dockerImagesNoneUpdates;
 
+  /// Images list: the Updates filter shows nothing because the update check failed, so no image's update is known.
+  ///
+  /// In en, this message translates to:
+  /// **'Which images have an update is not known yet.'**
+  String get dockerImagesUpdatesUnknown;
+
   /// Images list: the button that asks every tag's registry again, even within the six hours a check is kept.
   ///
   /// In en, this message translates to:
@@ -13718,6 +13724,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{Acknowledged (1)} other{Acknowledged ({count})}}'**
   String attentionAcknowledgedHeading(int count);
+
+  /// Toast: acknowledging a problem in the attention queue, or taking an acknowledgement back, could not be saved on this device. It still applies until the app quits.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save this acknowledgement, so it lasts only until it quits.'**
+  String get attentionNotSaved;
 
   /// Attention queue: closes it.
   ///

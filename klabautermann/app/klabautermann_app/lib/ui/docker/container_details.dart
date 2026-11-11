@@ -152,13 +152,34 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
     final container = widget.inspected.container;
     final serverId = widget.inspected.serverId;
     final shell =
         _shell &&
         actionsAllowedAt(context, serverId, ActionEntryPoint.containerShell);
+    return _RemovedBuilder(
+      monitoring: widget.monitoring,
+      serverId: serverId,
+      containerId: container.id,
+      builder: (context, removed) => _inspector(
+        context,
+        container: container,
+        serverId: serverId,
+        shell: shell && !removed,
+        removed: removed,
+      ),
+    );
+  }
+
+  Widget _inspector(
+    BuildContext context, {
+    required ContainerSummary container,
+    required String serverId,
+    required bool shell,
+    required bool removed,
+  }) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): widget.onClose,
@@ -190,32 +211,34 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
                     container: container,
                   ),
                 ),
-                ContainerCommandButton(
-                  serverId: serverId,
-                  container: container,
-                ),
-                ActionEntry(
-                  serverId: serverId,
-                  point: ActionEntryPoint.containerShell,
-                  child: IconButton(
-                    tooltip: shell
-                        ? l10n.dockerShellHide
-                        : l10n.dockerShellOpen,
-                    icon: Icon(shell ? Icons.info_outline : Icons.terminal),
-                    onPressed: () {
-                      // The desktop dock (OV-10) gives a shell the room
-                      // the inspector's column lacks.
-                      if (!shell) {
-                        if (WorkspaceDockScope.maybeOf(context)
-                            case final dock?) {
-                          dock.show(DockedShell(serverId, container));
-                          return;
-                        }
-                      }
-                      setState(() => _shell = !shell);
-                    },
+                if (!removed) ...[
+                  ContainerCommandButton(
+                    serverId: serverId,
+                    container: container,
                   ),
-                ),
+                  ActionEntry(
+                    serverId: serverId,
+                    point: ActionEntryPoint.containerShell,
+                    child: IconButton(
+                      tooltip: shell
+                          ? l10n.dockerShellHide
+                          : l10n.dockerShellOpen,
+                      icon: Icon(shell ? Icons.info_outline : Icons.terminal),
+                      onPressed: () {
+                        // The desktop dock (OV-10) gives a shell the room
+                        // the inspector's column lacks.
+                        if (!shell) {
+                          if (WorkspaceDockScope.maybeOf(context)
+                              case final dock?) {
+                            dock.show(DockedShell(serverId, container));
+                            return;
+                          }
+                        }
+                        setState(() => _shell = !shell);
+                      },
+                    ),
+                  ),
+                ],
                 IconButton(
                   focusNode: _close,
                   tooltip: l10n.dockerDetailsClose,
@@ -264,7 +287,14 @@ class ContainerDetailsPage extends StatelessWidget {
   final ContainerSummary container;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => _RemovedBuilder(
+    monitoring: monitoring,
+    serverId: serverId,
+    containerId: container.id,
+    builder: _scaffold,
+  );
+
+  Widget _scaffold(BuildContext context, bool removed) => Scaffold(
     appBar: AppBar(
       title: Text(containerNameOf(container)),
       actions: [
@@ -280,26 +310,30 @@ class ContainerDetailsPage extends StatelessWidget {
             ),
           ),
         ),
-        Builder(
-          builder: (context) =>
-              ContainerCommandButton(serverId: serverId, container: container),
-        ),
-        ActionEntry(
-          serverId: serverId,
-          point: ActionEntryPoint.containerShell,
-          child: Builder(
-            builder: (context) => IconButton(
-              tooltip: AppLocalizations.of(context).dockerShellOpen,
-              icon: const Icon(Icons.terminal),
-              onPressed: () => openContainerShellPage(
-                context,
-                monitoring: monitoring,
-                serverId: serverId,
-                container: container,
+        if (!removed) ...[
+          Builder(
+            builder: (context) => ContainerCommandButton(
+              serverId: serverId,
+              container: container,
+            ),
+          ),
+          ActionEntry(
+            serverId: serverId,
+            point: ActionEntryPoint.containerShell,
+            child: Builder(
+              builder: (context) => IconButton(
+                tooltip: AppLocalizations.of(context).dockerShellOpen,
+                icon: const Icon(Icons.terminal),
+                onPressed: () => openContainerShellPage(
+                  context,
+                  monitoring: monitoring,
+                  serverId: serverId,
+                  container: container,
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ],
     ),
     body: SafeArea(
@@ -310,6 +344,63 @@ class ContainerDetailsPage extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       ),
     ),
+  );
+}
+
+/// Builds a container's header while telling it whether the container is
+/// gone, so a header does not offer a command or shell that would end in
+/// a refusal. It counts as a view of the container, as
+/// [ContainerDetailsView] does, and shares what that one reads.
+class _RemovedBuilder extends StatefulWidget {
+  const _RemovedBuilder({
+    required this.monitoring,
+    required this.serverId,
+    required this.containerId,
+    required this.builder,
+  });
+
+  final MonitoringController monitoring;
+  final String serverId;
+  final String containerId;
+  final Widget Function(BuildContext context, bool removed) builder;
+
+  @override
+  State<_RemovedBuilder> createState() => _RemovedBuilderState();
+}
+
+class _RemovedBuilderState extends State<_RemovedBuilder> {
+  late ValueListenable<DockerContainerDetails> _details;
+
+  DockerController get _docker => widget.monitoring.docker;
+
+  @override
+  void initState() {
+    super.initState();
+    _details = _docker.openContainer(widget.serverId, widget.containerId);
+  }
+
+  @override
+  void didUpdateWidget(_RemovedBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.serverId == oldWidget.serverId &&
+        widget.containerId == oldWidget.containerId) {
+      return;
+    }
+
+    _docker.closeContainer(oldWidget.serverId, oldWidget.containerId);
+    _details = _docker.openContainer(widget.serverId, widget.containerId);
+  }
+
+  @override
+  void dispose() {
+    _docker.closeContainer(widget.serverId, widget.containerId);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: _details,
+    builder: (context, details, _) => widget.builder(context, details.removed),
   );
 }
 
@@ -440,8 +531,12 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
 
   /// [sections] with the usage charts (CST-03) after them while the
   /// container is up: the facts come first, the charts' history below.
-  List<Widget> _withUsage(List<Widget> sections, ContainerSummary row) {
-    if (!containerIsUp(row)) return sections;
+  List<Widget> _withUsage(
+    List<Widget> sections,
+    ContainerSummary row, {
+    required bool removed,
+  }) {
+    if (removed || !containerIsUp(row)) return sections;
     return [
       ...sections,
       ContainerUsageCharts(
@@ -485,8 +580,10 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
             container,
             row,
             live: !read.removed && failure == null,
+            removed: read.removed,
           ),
           row,
+          removed: read.removed,
         ),
     ];
     return ListView(
@@ -503,6 +600,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
     ContainerDetails container,
     ContainerSummary row, {
     required bool live,
+    required bool removed,
   }) {
     final l10n = AppLocalizations.of(context);
     final config = container.config;
@@ -522,7 +620,8 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
     return [
       if (detectOwnership(labels).primary case final marker?)
         _ManagedByBadge(marker: marker),
-      if (containerActionsShown(context, widget.serverId, row))
+      // The row is the stale one from before the container went.
+      if (!removed && containerActionsShown(context, widget.serverId, row))
         ContainerActionButtons(serverId: widget.serverId, container: row),
       if (masked)
         Text(
