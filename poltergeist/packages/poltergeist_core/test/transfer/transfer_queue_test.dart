@@ -2591,6 +2591,35 @@ void main() {
       expect(s2.fileBytes['/dst/f.bin'], List.filled(8, 9));
     });
 
+    test('a retry re-reads a source that changed size after the scan',
+        () async {
+      s1.addFile('/src/log.txt', List.filled(8, 1));
+      // The file grows between the scan and its transfer.
+      s1.downloadFailure = (path) {
+        s1.downloadFailure = null;
+        s1.addFile(path, List.filled(12, 2));
+        return null;
+      };
+      final task = enqueue(
+        copySpec(
+          source: const ServerFsLocation('s1'),
+          destination: const ServerFsLocation('s2'),
+          rootPaths: ['/src/log.txt'],
+          destinationDir: '/dst',
+        ),
+      );
+      await awaitTaskDone(task);
+      final item = task.items.single;
+      expect(item.state, TransferItemState.failed);
+      expect(s2.entryAt('/dst/log.txt'), isNull);
+
+      expect(queue.retryItem(task.id, item.id), isTrue);
+      await awaitTaskDone(task);
+
+      expect(task.state, TransferTaskState.completed, reason: item.error);
+      expect(s2.fileBytes['/dst/log.txt'], List.filled(12, 2));
+    });
+
     test('persistent disconnect beyond the retry budget fails the task',
         () async {
       queue = newQueue(taskRetryLimit: 1);

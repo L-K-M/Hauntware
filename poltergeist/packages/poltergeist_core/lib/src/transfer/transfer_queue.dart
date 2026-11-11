@@ -3025,7 +3025,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   Future<void> _runFile(_TaskRuntime runtime, _FileWork work) async {
     final task = runtime.task;
     final item = work.item;
-    final file = work.file;
+    var file = work.file;
 
     // A cancel/skip/requeue that settled the item while it sat in
     // `eligible` owns the row — dispatch must not resurrect it.
@@ -3102,6 +3102,13 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         if (landed != null &&
             await _resumeLandedFile(runtime, srcFs, dstFs, work, landed)) {
           return;
+        }
+        if (landed == null && runtime.staleSourceItems.contains(item.id)) {
+          final refreshed = await _refreshPlannedSource(runtime, srcFs, work);
+          if (refreshed == null) return;
+          runtime.staleSourceItems.remove(item.id);
+          file = refreshed;
+          work = _FileWork(item: item, file: refreshed);
         }
         for (var commitTry = 0; ; commitTry++) {
           // The token is one-shot: a dead upload or a pause in the gap
@@ -3435,6 +3442,48 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       }
     }
     return note;
+  }
+
+  /// [work]'s planned file with its source read again, for a retry: a
+  /// source that grew or shrank since the scan would otherwise fail every
+  /// retry on the planned length. Returns null after failing the item when
+  /// the source is gone or is no longer the same kind of entry.
+  Future<PlannedFile?> _refreshPlannedSource(
+    _TaskRuntime runtime,
+    RemoteFileSystem srcFs,
+    _FileWork work,
+  ) async {
+    final file = work.file;
+    final path = file.source.path;
+    final current = await _statOrNull(srcFs, path);
+    if (current == null || current.type != file.source.type) {
+      _finishItem(
+        runtime,
+        work.item,
+        TransferItemState.failed,
+        error: current == null
+            ? 'the source "$path" is gone'
+            : 'the source "$path" is no longer the same kind of entry',
+        failureKind: current == null
+            ? RemoteFileErrorKind.notFound
+            : RemoteFileErrorKind.conflict,
+      );
+      return null;
+    }
+
+    final refreshed = PlannedFile(
+      source: current,
+      name: file.name,
+      containerKey: file.containerKey,
+      destinationPath: file.destinationPath,
+      existing: file.existing,
+      itemId: file.itemId,
+    );
+    // Later retries and the move's source delete read the plan's entry.
+    final files = runtime.task.plan?.files;
+    final index = files?.indexOf(file) ?? -1;
+    if (index >= 0) files![index] = refreshed;
+    return refreshed;
   }
 
   /// Whether a failed timestamp update is the server declining it, after
@@ -4888,6 +4937,9 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     item.error = null;
     item.failureKind = null;
     item.failureRetryPolicy = TransferFailureRetryPolicy.retryable;
+    if (!item.isDirectory && task.operation != TransferOperation.delete) {
+      runtime.staleSourceItems.add(item.id);
+    }
     final directory = runtime.directories[item.id];
     if (directory != null) {
       directory.outcome = _DirOutcome.pending;
@@ -6787,6 +6839,10 @@ class _TaskRuntime {
   /// meeting its own output as an occupant. Live state only: after a
   /// crash the occupied durable claim still fails safe.
   final Map<String, _LandedFile> landedFiles = {};
+
+  /// File items re-armed by a retry, whose scan-time source entry (size,
+  /// time, mode) is re-read before their next attempt.
+  final Set<String> staleSourceItems = {};
 
   /// Visible probe rows do not block a Move after the probe cleans up.
   final Set<String> nameProbeArtifactItems = {};
