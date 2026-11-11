@@ -369,6 +369,9 @@ void main() {
         engine,
         TerminalBytes(open.terminalId, _bytes('\x1b[?2004h')),
       );
+      // setUp made the fake engine outside the test's fake-async zone, so
+      // its events reach the terminal only once real async work runs.
+      await tester.runAsync(pumpEventQueue);
 
       clipboard = 'cd /tmp\nls';
       await tester.tap(find.byTooltip('Paste'));
