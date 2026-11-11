@@ -108,5 +108,3 @@ export 'src/catalog/atomic_file_writer.dart'
     show AtomicFilePrivacy, AtomicFileWriter;
 export 'src/store/file_permissions.dart' show restrictLocalPathPermissions;
 export 'src/store/local_directory_sync.dart' show syncLocalDirectory;
-export 'src/catalog/atomic_file_writer.dart'
-    show AtomicFilePrivacy, AtomicFileWriter;
