@@ -1,7 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:ghost_desktop/ghost_desktop.dart' show macosTrafficLightsInset;
+import 'package:ghost_desktop/ghost_desktop.dart'
+    show
+        ClaimMacosToolbarBand,
+        MacosToolbarBandScope,
+        macosToolbarBandHeight,
+        macosTrafficLightsInset;
 import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostPaneEdge, GhostResizeHandle, formatShortcutActivator;
@@ -20,7 +25,6 @@ import 'docker/container_details.dart';
 import 'docker/container_logs.dart';
 import 'fleet_rail.dart';
 import 'inspector_pane.dart';
-import 'macos_toolbar_band.dart';
 import 'server_workspace.dart';
 import 'sidebar_kit.dart' show SidebarThemeTokens;
 import 'window_pane_actions.dart';

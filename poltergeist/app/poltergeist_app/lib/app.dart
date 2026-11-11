@@ -3,6 +3,8 @@ import 'dart:async' show FutureOr;
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:ghost_desktop/ghost_desktop.dart'
+    show ClaimMacosToolbarBand, withMacosToolbarBand;
 import 'package:ghost_update/ghost_update.dart';
 import 'package:poltergeist_core/poltergeist_core.dart'
     show
@@ -58,7 +60,6 @@ import 'theme/app_theme.dart';
 import 'ui/adaptive_shell.dart';
 import 'ui/inspector/inspector_view.dart' show inspectorDefaultWidth;
 import 'ui/server_editor.dart' show ServerEditorDelegate;
-import 'ui/shell/macos_toolbar_band.dart';
 import 'ui/workspace_shell.dart';
 
 class PoltergeistApp extends StatefulWidget {
@@ -469,8 +470,13 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
   Widget build(BuildContext context) {
     // Built once here, outside the theme's builder, which then only swaps
     // the MaterialApp's themes: the workspace keeps its state through a
-    // re-theme, and is not rebuilt for one.
-    final home = ClaimMacosToolbarBand(child: _buildWorkspace());
+    // re-theme, and is not rebuilt for one. Poltergeist's no-scope
+    // default is the windowed layout, so the shell claims the band back
+    // with or without a runner report.
+    final home = ClaimMacosToolbarBand(
+      windowedWithoutScope: true,
+      child: _buildWorkspace(),
+    );
     final appearance = widget.appearance;
     if (appearance == null) return _app(AppAppearance.initial, home);
     // Rebuilt for a theme change and nothing else: the appearance moves
@@ -502,12 +508,11 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       // macOS: every route, dialog, and root-overlay toast keeps its
       // controls below the unified toolbar band, which claims clicks
       // for window drag...
-      builder: (context, child) {
-        final reserved = ReserveMacosToolbarBand(child: child!);
-        final band = widget.toolbarBand;
-        if (band == null) return reserved;
-        return MacosToolbarBandScope(band: band, child: reserved);
-      },
+      builder: (context, child) => withMacosToolbarBand(
+        widget.toolbarBand,
+        windowedWithoutScope: true,
+        child: child!,
+      ),
       // ...except the shell, which draws under the transparent titlebar
       // (the full-size content view), passes its header controls
       // through, and insets itself for the traffic lights, leaving no

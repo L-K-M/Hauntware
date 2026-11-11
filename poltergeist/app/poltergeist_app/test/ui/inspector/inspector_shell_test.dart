@@ -6,7 +6,6 @@ import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/session_state.dart';
 import 'package:poltergeist_app/ui/inspector/inspector_view.dart';
 import 'package:poltergeist_app/ui/shell/shell_commands.dart';
-import 'package:poltergeist_app/ui/shell/shell_splitter.dart';
 import 'package:poltergeist_app/ui/workspace_shell.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -274,10 +273,14 @@ void main() {
       tester,
       onInspectorWidthChanged: (width) async => saved.add(width),
     );
-    tester
-        .widget<ShellSplitter>(splitter)
-        .focusNode!
-        .requestFocus();
+    Focus.of(
+      tester.element(
+        find.descendant(
+          of: splitter,
+          matching: find.byType(MouseRegion),
+        ),
+      ),
+    ).requestFocus();
     await tester.pump();
 
     // The inspector sits right of its splitter: ← grows it.
@@ -285,19 +288,19 @@ void main() {
     await tester.pump();
     expect(
       tester.getSize(region).width,
-      inspectorDefaultWidth + shellSplitterKeyStep,
+      inspectorDefaultWidth + 16.0,
     );
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
     expect(
       tester.getSize(region).width,
-      inspectorDefaultWidth - shellSplitterKeyStep,
+      inspectorDefaultWidth - 16.0,
     );
     expect(saved, [
-      inspectorDefaultWidth + shellSplitterKeyStep,
+      inspectorDefaultWidth + 16.0,
       inspectorDefaultWidth,
-      inspectorDefaultWidth - shellSplitterKeyStep,
+      inspectorDefaultWidth - 16.0,
     ]);
   });
 

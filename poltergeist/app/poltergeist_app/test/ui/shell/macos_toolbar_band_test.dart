@@ -4,14 +4,14 @@ import 'package:flutter/foundation.dart'
     show ValueListenable, debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ghost_desktop/ghost_desktop.dart' show macosTrafficLightsInset;
+import 'package:ghost_desktop/ghost_desktop.dart'
+    show macosToolbarBandHeight, macosTrafficLightsInset;
 import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/services/engine_session.dart';
 import 'package:poltergeist_app/ui/panes/pane_commands.dart';
 import 'package:poltergeist_app/ui/panes/pane_tabs_view.dart';
 import 'package:poltergeist_app/ui/shell/header_toolbar.dart';
-import 'package:poltergeist_app/ui/shell/macos_toolbar_band.dart';
 import 'package:poltergeist_app/ui/sidebar/sidebar_view.dart';
 import 'package:poltergeist_app/ui/top_toast.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -259,7 +259,7 @@ void main() {
       // passthrough view a drag there moves the window instead.
       expect(tester.getRect(splitter).top, 0);
       expect(
-        find.descendant(
+        find.ancestor(
           of: splitter,
           matching: find.byType(MacosToolbarPassthrough),
         ),

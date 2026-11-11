@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
+import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_ui/ghost_ui.dart' show GhostPaneEdge, GhostResizeHandle;
 import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 import 'package:seance_core/seance_core.dart';
@@ -9,7 +10,6 @@ import '../app_state.dart';
 import '../main.dart';
 import '../theme.dart';
 import 'header_toolbar.dart';
-import 'macos_toolbar_band.dart';
 import 'server_list_pane.dart';
 import 'sidebar_panel.dart';
 import 'terminal_pane.dart';

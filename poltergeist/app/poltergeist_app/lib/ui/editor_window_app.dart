@@ -1,12 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show withMacosToolbarBand;
 
 import '../l10n/app_localizations.dart';
 import '../services/workspace_windows/window_titlebar.dart';
 import '../services/workspace_windows/workspace_windows.dart';
 import '../theme/app_appearance.dart';
 import '../theme/app_theme.dart';
-import 'shell/macos_toolbar_band.dart';
 
 /// A document's navigator and theme live independently of the workspace
 /// that opened it. Closing that workspace must not destroy its editor.
@@ -37,14 +37,14 @@ class EditorWindowApp extends StatelessWidget {
       themeMode: themes.themeMode,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      builder: (context, child) {
-        final reserved = ReserveMacosToolbarBand(child: child!);
-        if (defaultTargetPlatform != TargetPlatform.macOS) return reserved;
-        return MacosToolbarBandScope(
-          band: WindowTitlebars.instance.bandFor(window.viewId),
-          child: reserved,
-        );
-      },
+      // Poltergeist's no-scope default is the windowed layout.
+      builder: (context, child) => withMacosToolbarBand(
+        defaultTargetPlatform == TargetPlatform.macOS
+            ? WindowTitlebars.instance.bandFor(window.viewId)
+            : null,
+        windowedWithoutScope: true,
+        child: child!,
+      ),
       home: window.editorBuilder!(window),
     );
   }
