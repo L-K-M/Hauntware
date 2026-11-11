@@ -54,11 +54,14 @@ enum SshLinkDegradedReason {
 
 /// Working, but the peer demonstrated a limit below the configured one (for
 /// example a tighter `MaxSessions`). [reason] is typed, not text: each app
-/// renders its own copy.
+/// renders its own copy. [seen] is what refused opens have taught the link
+/// so far, as on [SshLinkReady].
 final class SshLinkDegraded extends SshLinkState {
-  const SshLinkDegraded(this.reason) : super._();
+  const SshLinkDegraded(this.reason, {this.seen = const SshLinkSeen()})
+    : super._();
 
   final SshLinkDegradedReason reason;
+  final SshLinkSeen seen;
 }
 
 /// Waiting out a reconnect delay owned by the supervisor above the link.
@@ -440,9 +443,26 @@ final class _SshLink implements SshLink {
     serverIdentification: _clientOrNull?.remoteVersion,
   );
 
+  /// Closed is terminal: a refusal or prompt that lands while the close
+  /// path tears down must not report a live state for a dead link.
   void _setState(SshLinkState next) {
+    if (_state is SshLinkClosed) return;
     _state = next;
     if (!_stateController.isClosed) _stateController.add(next);
+  }
+
+  /// Re-emits the working state with the current [seen], so listeners see
+  /// a learned fact without polling; a link that is not working (still
+  /// connecting, or closed) keeps its state.
+  void _publishSeen() {
+    switch (_state) {
+      case SshLinkReady():
+        _setState(SshLinkReady(seen));
+      case SshLinkDegraded(:final reason):
+        _setState(SshLinkDegraded(reason, seen: seen));
+      default:
+        break;
+    }
   }
 
   void _noteInbound() => _dataSinceLastTick = true;
@@ -729,7 +749,10 @@ final class _SshLink implements SshLink {
         _budget.learnLimit(observedOpens);
         _learnedSessionLimit = _budget.learnedLimit;
         _setState(
-          const SshLinkDegraded(SshLinkDegradedReason.sessionLimitLearned),
+          SshLinkDegraded(
+            SshLinkDegradedReason.sessionLimitLearned,
+            seen: seen,
+          ),
         );
         return ChannelOpenException(
           refusal,
@@ -738,9 +761,7 @@ final class _SshLink implements SshLink {
         );
       case ChannelRefusal.forwardDisabled:
         _forwardingRefused = true;
-        // A learned fact re-emits Ready with the updated seen, so listeners
-        // see the change without polling; a terminal state stays terminal.
-        if (_state is! SshLinkClosed) _setState(SshLinkReady(seen));
+        _publishSeen();
         return ChannelOpenException(
           refusal,
           'The server refused forwarding: ${e.description}',
