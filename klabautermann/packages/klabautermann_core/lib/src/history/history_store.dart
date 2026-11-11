@@ -520,8 +520,26 @@ final class HistoryStore {
     return next;
   }
 
-  Future<_ServerRings?> _ringsOf(String serverId) =>
-      _rings.putIfAbsent(serverId, () => _openRings(serverId));
+  /// [serverId]'s open rings, opening them on first use. An open the disk
+  /// refused is not kept, so the next write tries again instead of the
+  /// server recording nothing until a restart.
+  Future<_ServerRings?> _ringsOf(String serverId) {
+    if (_rings[serverId] case final open?) return open;
+    final opening = _openRings(serverId);
+    _rings[serverId] = opening;
+    return opening.then(
+      (rings) {
+        if (rings == null && identical(_rings[serverId], opening)) {
+          _rings.remove(serverId);
+        }
+        return rings;
+      },
+      onError: (Object error, StackTrace stack) {
+        if (identical(_rings[serverId], opening)) _rings.remove(serverId);
+        Error.throwWithStackTrace(error, stack);
+      },
+    );
+  }
 
   /// [serverId]'s rings when it has any: open, or as files from an earlier
   /// run. A read alone never creates them.

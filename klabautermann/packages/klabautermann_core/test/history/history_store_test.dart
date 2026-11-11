@@ -281,6 +281,34 @@ void main() {
       );
     });
 
+    test('rings the disk refused to open are opened again by the next '
+        'write', () async {
+      final store = await open({_web});
+      // A file where the server's ring directory belongs fails the open.
+      final blocker = File('${support.path}/history/$_web')
+        ..createSync(recursive: true);
+      store
+        ..observe(_web, _cpu(10), _at(0))
+        ..observe(_web, _cpu(20), _at(60));
+      await store.flush();
+
+      blocker.deleteSync();
+      store
+        ..observe(_web, _cpu(30), _at(120))
+        ..observe(_web, _cpu(40), _at(180));
+      await store.flush();
+
+      final reopened = await open({_web});
+      final minute = await reopened.read(
+        _web,
+        HistoryTier.minute,
+        now: _at(200),
+      );
+      expect([
+        for (final b in minute.buckets) b.start,
+      ], containsAll([_at(120), _at(180)]));
+    });
+
     test('a read of a server with no rings creates none', () async {
       final store = await open({_web});
 
