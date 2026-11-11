@@ -51,6 +51,10 @@ final class ChartStrings {
     required this.stale,
     required this.decimal,
     required this.heatmapSummary,
+    required this.dateTime,
+    required this.noReading,
+    required this.noReadingBecause,
+    required this.readout,
   });
 
   /// A series' screen-reader summary (A11Y-02): its label, the formatted
@@ -131,6 +135,20 @@ final class ChartStrings {
   /// and share, without a severity.
   final String Function(String label, int count, String average, String busiest)
   heatmapSummary;
+
+  /// A crosshair readout's time on a chart that spans more than a day:
+  /// the date and the time to the minute.
+  final String Function(DateTime time) dateTime;
+
+  /// A series' value in a crosshair readout where its sample is unknown.
+  final String noReading;
+
+  /// A crosshair readout inside a band without data, with the band's
+  /// label.
+  final String Function(String reason) noReadingBecause;
+
+  /// What screen readers call a time-series chart's crosshair readout.
+  final String readout;
 }
 
 /// [value] as axis or value text in [unit].

@@ -3785,6 +3785,30 @@ abstract class AppLocalizations {
     String busiest,
   );
 
+  /// The time a chart's crosshair readout names on a chart that spans more than a day, with the date, in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String chartDateTime(DateTime time);
+
+  /// A series' value in a chart's crosshair readout when the sample under the crosshair has no known value for it.
+  ///
+  /// In en, this message translates to:
+  /// **'no reading'**
+  String get chartNoReading;
+
+  /// A chart's crosshair readout inside a band without data: no series has a value there, and why, one of chartGapAppClosed, chartGapBackground, chartGapDisconnected or chartGapReadingFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'No reading: {reason}'**
+  String chartNoReadingBecause(String reason);
+
+  /// Screen-reader name of a time-series chart's crosshair readout: swiping up or down, or the arrow keys, moves it to a later or earlier time, and its value reads the time and each series' value there.
+  ///
+  /// In en, this message translates to:
+  /// **'Values at a time'**
+  String get chartReadout;
+
   /// Access tab: the note above the access rows saying the app only shows and copies fix commands and never runs them (CN-24).
   ///
   /// In en, this message translates to:
