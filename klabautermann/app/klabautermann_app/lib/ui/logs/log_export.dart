@@ -55,7 +55,8 @@ String? savedExportPath(Uri saved) =>
 
 /// Writes [bytes] as [fileName] under a fresh temporary directory, marked
 /// and owner-only like a saved export, so the share sheet hands on a file
-/// the OS treats as untrusted (P1-03a).
+/// the OS treats as untrusted (P1-03a). The caller owns the directory only
+/// after staging succeeds; failed staging cleans it up.
 Future<File> stageMarkedExport(
   String fileName,
   Uint8List bytes,
@@ -63,10 +64,23 @@ Future<File> stageMarkedExport(
 ) async {
   final root = await getTemporaryDirectory();
   final directory = await root.createTemp('klabautermann-export-');
-  final file = File('${directory.path}${Platform.pathSeparator}$fileName');
-  await file.writeAsBytes(bytes, flush: true);
-  await markSavedExport(file.path, provenance);
-  return file;
+  try {
+    final file = File('${directory.path}${Platform.pathSeparator}$fileName');
+    await file.writeAsBytes(bytes, flush: true);
+    await markSavedExport(file.path, provenance);
+    return file;
+  } catch (_) {
+    await _deleteStagedExport(directory);
+    rethrow;
+  }
+}
+
+Future<void> _deleteStagedExport(Directory directory) async {
+  try {
+    if (await directory.exists()) await directory.delete(recursive: true);
+  } catch (_) {
+    // Temporary exports are also subject to normal OS cache eviction.
+  }
 }
 
 /// [LogExportHost] over `file_picker`'s save dialog and `share_plus`.
@@ -119,14 +133,6 @@ final class PluginLogExportHost implements LogExportHost {
     } catch (_) {
       await _deleteStagedExport(file.parent);
       rethrow;
-    }
-  }
-
-  static Future<void> _deleteStagedExport(Directory directory) async {
-    try {
-      if (await directory.exists()) await directory.delete(recursive: true);
-    } catch (_) {
-      // Temporary exports are also subject to normal OS cache eviction.
     }
   }
 }
