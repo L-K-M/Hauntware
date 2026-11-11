@@ -3,8 +3,13 @@
 # Build context is the REPOSITORY ROOT (so the pub workspace resolves):
 #   docker build -f packages/seance_sync_server/Dockerfile -t seance-sync .
 
+# Both base images are pinned by digest (the multi-arch index), so a
+# rebuild of the same commit uses the same toolchain and runtime;
+# Dependabot's docker entry proposes digest updates. The tags say which
+# line each digest came from.
+
 # ---- build stage ----
-FROM dart:stable AS build
+FROM dart:stable@sha256:754aaf779c07a44017823fcb0e972f92d8053a9631531cc4e425053036efcb85 AS build
 # python3 runs the notice generators below; it stays in this stage.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 \
@@ -27,8 +32,8 @@ RUN dart compile exe packages/seance_sync_server/bin/seance_sync_server.dart \
       -o /app/seance-sync
 
 # Third-party notices for the binary: the pub packages it compiles in, the
-# Dart SDK and the third-party code its AOT runtime embeds. dart:stable
-# floats, so the runtime texts are fetched at this SDK's exact revision.
+# Dart SDK and the third-party code its AOT runtime embeds. The runtime
+# texts are fetched at this SDK's exact revision, whichever the pin holds.
 COPY scripts/licenses scripts/licenses
 RUN python3 scripts/licenses/dart-runtime-licenses.py --out /tmp/dart-runtime \
     && python3 scripts/licenses/go-dart-notices.py dart --workspace . \
@@ -36,7 +41,7 @@ RUN python3 scripts/licenses/dart-runtime-licenses.py --out /tmp/dart-runtime \
          --title seance-sync -o /out/notices/Third-Party-Notices.txt
 
 # ---- runtime stage ----
-FROM debian:stable-slim AS base
+FROM debian:stable-slim@sha256:fbfb4059d2127120aa05b6e6064523d2102552f0cf0026ddf0701c12f1f8f3e0 AS base
 
 FROM base
 RUN apt-get update \
