@@ -2835,6 +2835,11 @@ final class SyncPlanController extends ChangeNotifier {
 
   /// Executor events → item rows + notify. The item objects are the
   /// plan's — status reads re-render through the same list.
+  ///
+  /// Byte progress goes to the activity panel's task only: nothing this
+  /// controller exposes changes with it, and the executor reports it per
+  /// chunk, so a notify would rebuild the whole plan view (filter,
+  /// sections, rows) for every chunk of a run.
   void _onRunEvent(SyncRunEvent event) {
     final binding = _binding;
     switch (event.kind) {
@@ -2850,6 +2855,7 @@ final class SyncPlanController extends ChangeNotifier {
             event.total,
           );
         }
+        return;
       case SyncRunEvent.itemFinished:
         final item = event.item;
         if (item != null) binding?.emitItemFinished(item);
