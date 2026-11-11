@@ -1066,6 +1066,8 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('Used for this connection only'), findsNothing);
+    expect(find.textContaining('unless you choose to save'), findsOneWidget);
+    expect(find.textContaining('never saved'), findsNothing);
     expect(
       tester
           .widget<TextField>(find.widgetWithText(TextField, 'Passphrase'))

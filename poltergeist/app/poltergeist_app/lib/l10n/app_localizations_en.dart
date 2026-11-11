@@ -145,7 +145,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get credentialPassphraseRetryExplanation =>
-      'That passphrase did not open the key. Try again. It is used for this connection only and never saved.';
+      'That passphrase did not open the key. Try again. It is used for this connection only unless you choose to save it.';
 
   @override
   String get credentialSaveInVault => 'Save in vault';

@@ -343,7 +343,7 @@ abstract class AppLocalizations {
   /// Line under the key passphrase dialog's title when the previous passphrase did not open the key.
   ///
   /// In en, this message translates to:
-  /// **'That passphrase did not open the key. Try again. It is used for this connection only and never saved.'**
+  /// **'That passphrase did not open the key. Try again. It is used for this connection only unless you choose to save it.'**
   String get credentialPassphraseRetryExplanation;
 
   /// Checkbox storing the entered secret in the local vault.
