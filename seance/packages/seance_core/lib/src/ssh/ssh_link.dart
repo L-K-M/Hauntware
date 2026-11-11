@@ -1055,7 +1055,9 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
     // dartssh2 drops the server's reply to the subsystem request, so a
     // server without an SFTP subsystem leaves the handshake unanswered
     // rather than refusing. A server that has one answers within a round
-    // trip, so a short bound tells the two apart.
+    // trip once its sftp-server has started, so a bound shorter than the
+    // open bound tells the two apart; it stays long enough for a loaded
+    // host or a slow link, which would otherwise read as having no SFTP.
     final handshakeBound = _link.openTimeout < _sftpHandshakeBound
         ? _link.openTimeout
         : _sftpHandshakeBound;
@@ -1072,7 +1074,7 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
   }
 
   /// How long a started SFTP subsystem may take to answer its handshake.
-  static const _sftpHandshakeBound = Duration(seconds: 5);
+  static const _sftpHandshakeBound = Duration(seconds: 10);
 
   RemoteFileException _openFailure(Object error) {
     if (_link._closed || _link._client.isClosed) {

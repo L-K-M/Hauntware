@@ -38,7 +38,9 @@ void main() {
       // The refusal never reaches the link (dartssh2 drops the subsystem
       // reply), so a short handshake bound stands in for it, well inside
       // the open bound, and the link itself is fine.
-      async.elapse(const Duration(seconds: 5));
+      async.elapse(const Duration(seconds: 9));
+      expect(error, isNull, reason: 'a slow server still has time to answer');
+      async.elapse(const Duration(seconds: 1));
       expect(
         error,
         isA<RemoteFileException>().having(
