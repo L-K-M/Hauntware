@@ -57,12 +57,23 @@ void main() {
       ];
     });
 
-    Future<void> open(WidgetTester tester) async {
+    Future<void> open(
+      WidgetTester tester, {
+      CommandPaletteStrings strings = const CommandPaletteStrings(),
+      double textScale = 1,
+    }) async {
       await tester.pumpWidget(
         MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(textScale)),
+            child: child!,
+          ),
           home: Builder(
             builder: (context) => TextButton(
-              onPressed: () => showCommandPalette(context, commands),
+              onPressed: () =>
+                  showCommandPalette(context, commands, strings: strings),
               child: const Text('open'),
             ),
           ),
@@ -73,10 +84,7 @@ void main() {
     }
 
     Future<void> type(WidgetTester tester, String text) async {
-      await tester.enterText(
-        find.byKey(const ValueKey('planchette.palette.query')),
-        text,
-      );
+      await tester.enterText(find.byKey(commandPaletteQueryKey), text);
       await tester.pump();
     }
 
@@ -278,6 +286,133 @@ void main() {
 
       expect(find.text('Detab'), findsOneWidget);
       expect(find.textContaining('matches "trailing spaces"'), findsOneWidget);
+    });
+
+    testWidgets('the highlighted row is selected and announced', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      commands = [
+        ...commands,
+        PaletteCommand(
+          path: 'Text',
+          label: 'Sort Lines…',
+          run: () {},
+          enabled: false,
+        ),
+      ];
+      await open(tester);
+      tester.takeAnnouncements();
+
+      bool selected(String label) => tester
+          .getSemantics(find.text(label))
+          .flagsCollection
+          .isSelected
+          .toBoolOrNull()!;
+      expect(selected('New'), isTrue);
+      expect(selected('Save'), isFalse);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(selected('New'), isFalse);
+      expect(selected('Save'), isTrue);
+      expect(tester.takeAnnouncements().map((a) => a.message), ['Save']);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      expect(tester.takeAnnouncements().map((a) => a.message), [
+        'New',
+        'Sort Lines…, unavailable',
+      ]);
+      semantics.dispose();
+    });
+
+    testWidgets('rows grow with large text and keep the highlight in view', (
+      tester,
+    ) async {
+      commands = [
+        for (var i = 0; i < 30; i++)
+          PaletteCommand(
+            path: 'Menu',
+            label: 'Command $i',
+            description: 'What command $i does.',
+            run: () => ran.add('Command $i'),
+          ),
+      ];
+      await open(tester, textScale: 2);
+      expect(tester.takeException(), isNull);
+      final row = tester.getRect(
+        find.ancestor(
+          of: find.text('Command 0'),
+          matching: find.byType(InkWell),
+        ),
+      );
+      final detail = tester.getRect(find.text('What command 0 does.'));
+      expect(row.height, greaterThan(48));
+      expect(detail.bottom, lessThanOrEqualTo(row.bottom));
+
+      for (var i = 0; i < 20; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pump();
+      }
+      // The highlighted row is measured after its frame, then revealed.
+      await tester.pump();
+      final list = tester.getRect(find.byType(ListView));
+      final highlighted = tester.getRect(find.text('Command 20'));
+      expect(highlighted.top, greaterThanOrEqualTo(list.top));
+      expect(highlighted.bottom, lessThanOrEqualTo(list.bottom));
+
+      // Wrapping past the top reaches the last row, which was never built.
+      for (var i = 0; i < 21; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.pump();
+      }
+      await tester.pump();
+      final last = tester.getRect(find.text('Command 29'));
+      expect(last.bottom, lessThanOrEqualTo(list.bottom));
+      expect(last.top, greaterThanOrEqualTo(list.top));
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(ran, ['Command 29']);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets("the host's words reach the palette", (tester) async {
+      commands = [
+        PaletteCommand(
+          path: 'Text > Lines',
+          label: 'Remove Duplicate Lines…',
+          description: 'Deletes repeated lines.',
+          keywords: const ['dedupe'],
+          run: () {},
+        ),
+        PaletteCommand(
+          path: 'Text > Lines',
+          label: 'Trim',
+          keywords: const ['dedent'],
+          run: () {},
+        ),
+      ];
+      await open(
+        tester,
+        strings: CommandPaletteStrings(
+          queryHint: 'hint',
+          noMatches: 'nothing',
+          keywordMatch: (keyword) => 'by $keyword',
+          keywordMatchWithDescription: (keyword, description) =>
+              'by $keyword: $description',
+          unavailable: (label) => '$label off',
+        ),
+      );
+      expect(find.text('hint'), findsOneWidget);
+
+      await type(tester, 'ded');
+      expect(find.text('by dedupe: Deletes repeated lines.'), findsOneWidget);
+      expect(find.text('by dedent'), findsOneWidget);
+
+      await type(tester, 'qqq');
+      expect(find.text('nothing'), findsOneWidget);
     });
   });
 }

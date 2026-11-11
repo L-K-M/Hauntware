@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show commandPaletteQueryKey;
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/ui/docker/stacks_panel.dart'
     show StackOverview;
@@ -17,7 +18,7 @@ import 'support/docker.dart';
 import 'support/fake_engine.dart';
 import 'support/harness.dart';
 
-const _query = ValueKey('planchette.palette.query');
+const _query = commandPaletteQueryKey;
 
 Future<void> _openPalette(WidgetTester tester) async {
   await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);

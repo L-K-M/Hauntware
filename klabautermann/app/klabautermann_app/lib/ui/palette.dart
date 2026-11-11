@@ -2,7 +2,8 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/widgets.dart'
     show BuildContext, SingleActivator, TargetPlatform;
-import 'package:ghost_ui/ghost_ui.dart' show PaletteCommand;
+import 'package:ghost_ui/ghost_ui.dart'
+    show CommandPaletteStrings, PaletteCommand;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show SampleStream, UnitsResult;
 
@@ -16,6 +17,16 @@ import 'menus/app_commands.dart';
 import 'server_surfaces.dart' show ServerPanel;
 import 'services_view.dart' show unitDescriptionOf, unitStatesOf;
 import 'workspace_navigation.dart';
+
+/// The command palette's own words in ARB.
+CommandPaletteStrings paletteStrings(AppLocalizations l10n) =>
+    CommandPaletteStrings(
+      queryHint: l10n.paletteQueryHint,
+      noMatches: l10n.paletteNoMatches,
+      keywordMatch: l10n.paletteKeywordMatch,
+      keywordMatchWithDescription: l10n.paletteKeywordMatchWithDescription,
+      unavailable: l10n.paletteUnavailable,
+    );
 
 /// The command palette's rows (PLT-07, 03 §10.6), each provider's under a
 /// path of its own, so `:servers` or `:containers` narrows to one: the
