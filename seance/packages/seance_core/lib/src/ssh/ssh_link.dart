@@ -782,8 +782,9 @@ final class _SshLink implements SshLink {
 /// The link's lazily leased SFTP channel behind a [RemoteFileSystem] facade.
 ///
 /// The lease is shared: every call joins the same in-flight open, so
-/// concurrent users never stack channels. Each operation re-arms an idle
-/// timer; when it fires the SFTP channel closes and the budget slot frees.
+/// concurrent users never stack channels. The idle timer runs only while no
+/// call is in flight; when it fires the SFTP channel closes and the budget
+/// slot frees.
 final class _LeasedLinkFileSystem implements RemoteFileSystem {
   _LeasedLinkFileSystem(this._link);
 
@@ -996,9 +997,25 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
     failureMode: CleanupFailureMode.ignore,
   );
 
+  /// Starts the idle period once the last call on the lease has ended.
+  ///
+  /// Calls overlap: a short `stat` can end while a long transfer still runs
+  /// on the same channel, and releasing the lease then would close the
+  /// channel under the transfer. So the timer only runs while nothing is in
+  /// flight, and when it fires it checks again (the adapter's own count
+  /// covers work the facade no longer awaits) before releasing.
   void _armIdle() {
     _idleTimer?.cancel();
-    _idleTimer = Timer(_link.sftpIdleRelease, releaseNow);
+    _idleTimer = null;
+    if (_inFlightOps > 0) return;
+    _idleTimer = Timer(_link.sftpIdleRelease, () {
+      _idleTimer = null;
+      if (hasActiveOperations) {
+        _armIdle();
+        return;
+      }
+      unawaited(releaseNow());
+    });
   }
 
   /// Closes the SFTP channel and frees the budget slot immediately. Called

@@ -294,6 +294,10 @@ final class SshChannelPeer {
   /// Never answer global requests: the keepalive dead-peer case.
   var silent = false;
 
+  /// SFTP REALPATH requests for these paths are answered only after the
+  /// given delay: a long-running SFTP call a test can overlap others with.
+  final realpathDelays = <String, Duration>{};
+
   /// Runs after an `exec` request is accepted.
   void Function(SshPeerChannel channel, String command) onExec =
       execEchoAndExit;
@@ -557,7 +561,7 @@ final class SshChannelPeer {
         _sendSftp(channel, SftpVersionPacket(3).encode());
       case SftpRealpathPacket.packetType:
         final request = SftpRealpathPacket.decode(packet);
-        _sendSftp(
+        void answer() => _sendSftp(
           channel,
           SftpNamePacket(request.requestId, [
             SftpName(
@@ -567,6 +571,12 @@ final class SshChannelPeer {
             ),
           ]).encode(),
         );
+        final delay = realpathDelays[request.path];
+        if (delay == null) {
+          answer();
+        } else {
+          Timer(delay, answer);
+        }
       default:
         if (packet.length >= 5) {
           final requestId = ByteData.sublistView(packet, 1).getUint32(0);
