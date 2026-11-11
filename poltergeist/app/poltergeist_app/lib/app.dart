@@ -478,7 +478,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       child: _buildWorkspace(),
     );
     final appearance = widget.appearance;
-    if (appearance == null) return _app(AppAppearance.initial, home);
+    if (appearance == null) return _app(poltergeistInitialAppearance, home);
     // Rebuilt for a theme change and nothing else: the appearance moves
     // only when Settings → Appearance writes.
     return ValueListenableBuilder<AppAppearance>(

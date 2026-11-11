@@ -30,7 +30,7 @@ class CompactPaneSwitcher extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final showingLeft = identical(workspace.activePane, workspace.left);
     final shownName = showingLeft ? l10n.paneAName : l10n.paneBName;
     final otherName = showingLeft ? l10n.paneBName : l10n.paneAName;

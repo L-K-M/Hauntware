@@ -1,48 +1,15 @@
-// Ported from Séance app/seance_app/lib/theme/app_appearance.dart @ 8714859; see docs/PORTS.md.
-import 'package:flutter/material.dart';
-import 'package:ghost_ui/ghost_ui.dart'
-    show ThemeModePreference, surfaceBrightness, automaticBrightness;
+// The appearance value moved to `ghost_theme`, shared with the rest of the
+// Ghost app family (design docs/design/ghost-theme.md). Poltergeist keeps
+// its import path so call sites do not move.
+library;
 
-import 'theme_palette.dart';
-import 'theme_presets.dart';
+export 'package:ghost_theme/ghost_theme.dart'
+    show AppAppearance, resolveBrightness, ThemeModePreference, surfaceBrightness, automaticBrightness;
 
-export 'package:ghost_ui/ghost_ui.dart'
-    show ThemeModePreference, surfaceBrightness, automaticBrightness;
+import 'package:ghost_theme/ghost_theme.dart' show AppAppearance;
 
-/// What the app is drawn in: this device's palette and mode, as one value
-/// the app's MaterialApp (and the Settings window's) rebuilds for, and
-/// only for.
-@immutable
-class AppAppearance {
-  const AppAppearance({
-    required this.palette,
-    this.mode = ThemeModePreference.system,
-  });
+import 'theme_presets.dart' show ThemePresets;
 
-  /// A device that has never opened Appearance.
-  static final AppAppearance initial = AppAppearance(
-    palette: ThemePresets.initial,
-  );
-
-  final ThemePalette palette;
-  final ThemeModePreference mode;
-
-  @override
-  bool operator ==(Object other) =>
-      other is AppAppearance && other.palette == palette && other.mode == mode;
-
-  @override
-  int get hashCode => Object.hash(palette, mode);
-}
-
-/// The brightness [palette] is drawn at: its own surface's when it sets
-/// one (a Solarized pane is dark whatever the system says), otherwise what
-/// [mode] asks for, where [ThemeModePreference.system] is [platform].
-Brightness resolveBrightness(
-  ThemePalette palette,
-  Brightness platform,
-  ThemeModePreference mode,
-) {
-  if (palette.surface case final surface?) return surfaceBrightness(surface);
-  return automaticBrightness(platform, mode);
-}
+/// A device that has never opened Appearance.
+AppAppearance get poltergeistInitialAppearance =>
+    AppAppearance(palette: ThemePresets.initial);

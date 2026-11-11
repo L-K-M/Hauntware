@@ -75,7 +75,7 @@ class _SettingsWindowAppState extends State<SettingsWindowApp> {
   Widget build(BuildContext context) {
     final remote = widget.remote;
     if (remote == null) {
-      return _app(AppAppearance.initial, const _Message(unreachable: true));
+      return _app(poltergeistInitialAppearance, const _Message(unreachable: true));
     }
     // Outside the theme's builder, which then only swaps the MaterialApp's
     // themes: the screen showing is the one an edit came from, and it keeps

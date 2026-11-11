@@ -2010,6 +2010,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearanceSlotAccent => 'Accent';
 
   @override
+  String get appearanceAccentAdjusted =>
+      'Low contrast: links and indicators use an adjusted colour.';
+
+  @override
+  String get appearanceChosenAccentPreview => 'Chosen accent';
+
+  @override
+  String get appearanceAdjustedAccentPreview => 'Adjusted interface colour';
+
+  @override
+  String get appearanceUseAdjustedAccent => 'Use adjusted colour';
+
+  @override
   String get appearanceSlotSurface => 'Surface';
 
   @override
