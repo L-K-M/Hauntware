@@ -540,7 +540,7 @@ void main() {
     expect(opened, isEmpty);
   });
 
-  testWidgets('without a review, a hidden OSC 8 target is not a link', (
+  testWidgets('without a review, a hidden OSC 8 target opens as before', (
     tester,
   ) async {
     final terminal = Terminal();
@@ -552,16 +552,20 @@ void main() {
       terminal,
       controller,
       opened,
-      text: '\x1b]8;;https://real.test/\x1b\\Click here\x1b]8;;\x1b\\',
+      // The tapped cell (5, 0) is a letter of the label, not a blank.
+      text: '\x1b]8;;https://real.test/\x1b\\Authenticate\x1b]8;;\x1b\\',
     );
 
+    // A host that has not wired onHiddenLinkTap keeps opening labelled
+    // links on touch and on Ctrl-click.
     await tester.tapAt(point);
     await tester.pump(gestureTimeout);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.tapAt(point, kind: PointerDeviceKind.mouse);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump(gestureTimeout);
-    expect(opened, isEmpty);
+    final target = Uri.parse('https://real.test/');
+    expect(opened, [target, target]);
   });
 
   testWidgets('an OSC 8 link whose text is its target opens on touch', (

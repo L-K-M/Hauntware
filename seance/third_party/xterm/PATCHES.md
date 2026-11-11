@@ -692,8 +692,10 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     across the adjacent rows that carry it, is not its target once
     trimmed; a link spelled out in full, even over the program's own hard
     newlines, and a URL found by the text scan stay with `onLinkTap`. A
-    hidden link takes the same gestures but goes to `onHiddenLinkTap`, and
-    without that callback it is no link at all.
+    hidden link takes the same gestures but goes to `onHiddenLinkTap`.
+    Without that callback it goes to `onLinkTap` as before, so a host
+    keeps opening labelled links until it wires a review that shows the
+    target.
 
 ### App-layer notes (outside this package)
 

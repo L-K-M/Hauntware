@@ -35,7 +35,7 @@ void main() {
       e.sendKey(utf8.encode('$esc[C')); // arrow-right sequence: ignored
       expect(e.pendingInput, 'ls -a');
 
-      e.sendKey(utf8.encode(cr)); // Enter submits — line clears
+      e.sendKey(utf8.encode(cr)); // Enter submits, line clears
       expect(e.pendingInput, '');
 
       e.injectInput('foo');

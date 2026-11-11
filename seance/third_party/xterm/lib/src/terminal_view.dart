@@ -117,7 +117,9 @@ class TerminalView extends StatefulWidget {
   /// [seance fork] Takes the same gestures as [onLinkTap] on an OSC 8
   /// hyperlink whose text does not spell out its target
   /// ([Buffer.isLinkTargetHiddenAt]): the host shows the target and lets the
-  /// user decide before anything opens. When null, such text is no link.
+  /// user decide before anything opens. When null, such a link goes to
+  /// [onLinkTap] as before, so a host that has not wired a review keeps
+  /// opening labelled links.
   final ValueChanged<Uri>? onHiddenLinkTap;
 
   /// [seance fork] Receives text the soft keyboard inserted that is a paste
@@ -508,15 +510,15 @@ class TerminalViewState extends State<TerminalView> {
       widget.onLinkTap != null || widget.onHiddenLinkTap != null;
 
   /// [seance fork] The link at [offset] with the callback that follows it:
-  /// [TerminalView.onHiddenLinkTap] when its text hides its target, else
-  /// [TerminalView.onLinkTap]. Null when there is no link, or no callback
-  /// for its kind.
+  /// [TerminalView.onHiddenLinkTap] when its text hides its target and the
+  /// host gave one, else [TerminalView.onLinkTap]. Null when there is no
+  /// link, or no callback to follow it.
   _FollowableLink? _followableLinkAt(CellOffset offset) {
     final buffer = widget.terminal.buffer;
     final uri = buffer.getLinkAt(offset);
     if (uri == null) return null;
     final follow = buffer.isLinkTargetHiddenAt(offset)
-        ? widget.onHiddenLinkTap
+        ? widget.onHiddenLinkTap ?? widget.onLinkTap
         : widget.onLinkTap;
     return follow == null ? null : _FollowableLink(uri, follow);
   }
