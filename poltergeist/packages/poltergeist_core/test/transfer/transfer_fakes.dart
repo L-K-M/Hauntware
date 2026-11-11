@@ -138,6 +138,9 @@ class FakeTreeFileSystem implements RemoteFileSystem {
   /// remote-trash 0700 rule must refuse rather than absorb.
   Object? Function(String path)? setModeFailure;
 
+  /// `setTimes` refusals — a server that allows writes but denies SETSTAT.
+  Object? Function(String path)? setTimesFailure;
+
   /// Gates — return a completer to stall the operation until it completes.
   Completer<void>? Function(String path)? statGate;
   Completer<void>? Function(String path)? listGate;
@@ -864,6 +867,8 @@ class FakeTreeFileSystem implements RemoteFileSystem {
     DateTime? modifiedAt,
   }) async {
     setTimesCalls++;
+    final failure = setTimesFailure?.call(path);
+    if (failure != null) throw failure;
     final existing = entryAt(path);
     if (existing == null) throw _notFound('setTimes', path);
     if (modifiedAt != null) {

@@ -2370,6 +2370,190 @@ void main() {
       expect(s1.fileBytes['/dst/m.txt'], 'mm'.codeUnits);
       expect(s1.entryAt('/src/m.txt'), isNull);
     });
+
+    group('after the copy landed', () {
+      final sourceTime = DateTime.utc(2024, 3, 4, 5, 6, 7);
+      const dropped = RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'post-commit',
+        message: 'transport dropped',
+      );
+
+      TransferTask enqueueMove() {
+        s1.addFile('/src/m.txt', 'mm'.codeUnits, modifiedAt: sourceTime);
+        return enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src/m.txt'],
+            destinationDir: '/dst',
+            operation: TransferOperation.move,
+          ),
+        );
+      }
+
+      test('a link drop in the timestamp update and the source delete '
+          'resumes the move without copying again', () async {
+        var dropTimes = true;
+        s2.setTimesFailure = (_) {
+          if (!dropTimes) return null;
+          dropTimes = false;
+          return dropped;
+        };
+        var dropDelete = true;
+        s1.deleteFailure = (_) {
+          if (!dropDelete) return null;
+          dropDelete = false;
+          return dropped;
+        };
+        final task = enqueueMove();
+        await awaitTaskDone(task);
+
+        expect(
+          task.state,
+          TransferTaskState.completed,
+          reason: task.items.single.error,
+        );
+        expect(task.items.single.state, TransferItemState.completed);
+        expect(s2.uploadCalls, 1);
+        expect(s2.fileBytes['/dst/m.txt'], 'mm'.codeUnits);
+        expect(s2.mtimes['/dst/m.txt'], sourceTime);
+        expect(s1.deleteCalls, 2);
+        expect(s1.entryAt('/src/m.txt'), isNull);
+      });
+
+      test('a source delete whose reply was lost completes the move', () async {
+        s1.deleteFailure = (entry) {
+          s1.deleteFailure = null;
+          // The server removed the source, then the link dropped before
+          // its reply arrived.
+          unawaited(s1.delete(entry));
+          return dropped;
+        };
+        final task = enqueueMove();
+        await awaitTaskDone(task);
+
+        expect(
+          task.state,
+          TransferTaskState.completed,
+          reason: task.items.single.error,
+        );
+        expect(s2.uploadCalls, 1);
+        expect(s2.fileBytes['/dst/m.txt'], 'mm'.codeUnits);
+        expect(s1.entryAt('/src/m.txt'), isNull);
+      });
+
+      test('a resumed move keeps the source when its landed copy was '
+          'replaced', () async {
+        s2.setTimesFailure = (path) {
+          s2.setTimesFailure = null;
+          s2.addFile(path, 'someone else'.codeUnits);
+          return dropped;
+        };
+        final task = enqueueMove();
+        await awaitTaskDone(task);
+
+        final item = task.items.single;
+        expect(item.state, TransferItemState.failed);
+        expect(item.failureRetryPolicy, TransferFailureRetryPolicy.terminal);
+        expect(s2.fileBytes['/dst/m.txt'], 'someone else'.codeUnits);
+        expect(s1.fileBytes['/src/m.txt'], 'mm'.codeUnits);
+        expect(s1.deleteCalls, 0);
+      });
+
+      test('a resumed move copies again when its landed copy vanished',
+          () async {
+        s2.setTimesFailure = (path) {
+          s2.setTimesFailure = null;
+          unawaited(s2.delete(s2.entryAt(path)!));
+          return dropped;
+        };
+        final task = enqueueMove();
+        await awaitTaskDone(task);
+
+        expect(task.state, TransferTaskState.completed);
+        expect(s2.uploadCalls, 2);
+        expect(s2.fileBytes['/dst/m.txt'], 'mm'.codeUnits);
+        expect(s1.entryAt('/src/m.txt'), isNull);
+      });
+
+      for (final kind in [
+        RemoteFileErrorKind.permissionDenied,
+        RemoteFileErrorKind.unsupported,
+        RemoteFileErrorKind.other,
+      ]) {
+        for (final operation in [
+          TransferOperation.copy,
+          TransferOperation.move,
+        ]) {
+          test('a ${kind.name} timestamp refusal completes a landed '
+              '${operation.name} with a note', () async {
+            s1.addFile('/src/f.txt', 'ff'.codeUnits, modifiedAt: sourceTime);
+            s2.setTimesFailure = (path) => RemoteFileException(
+              kind: kind,
+              operation: 'change timestamps for',
+              path: path,
+              message: 'SETSTAT refused',
+            );
+            final task = enqueue(
+              copySpec(
+                source: const ServerFsLocation('s1'),
+                destination: const ServerFsLocation('s2'),
+                rootPaths: ['/src/f.txt'],
+                destinationDir: '/dst',
+                operation: operation,
+              ),
+            );
+            await awaitTaskDone(task);
+
+            final item = task.items.single;
+            expect(task.state, TransferTaskState.completed);
+            expect(item.state, TransferItemState.completed);
+            expect(item.error, contains('SETSTAT refused'));
+            expect(s2.fileBytes['/dst/f.txt'], 'ff'.codeUnits);
+            expect(
+              s1.entryAt('/src/f.txt'),
+              operation == TransferOperation.move ? isNull : isNotNull,
+            );
+          });
+        }
+      }
+
+      test('a refused timestamp update keeps the source when the landed '
+          'copy is gone', () async {
+        s2.setTimesFailure = (path) {
+          s2.setTimesFailure = null;
+          unawaited(s2.delete(s2.entryAt(path)!));
+          return RemoteFileException(
+            kind: RemoteFileErrorKind.permissionDenied,
+            operation: 'change timestamps for',
+            path: path,
+            message: 'SETSTAT refused',
+          );
+        };
+        final task = enqueueMove();
+        await awaitTaskDone(task);
+
+        expect(task.items.single.state, TransferItemState.failed);
+        expect(s1.fileBytes['/src/m.txt'], 'mm'.codeUnits);
+        expect(s1.deleteCalls, 0);
+      });
+
+      test('a timestamp update that finds no file fails the item', () async {
+        s2.setTimesFailure = (path) => RemoteFileException(
+          kind: RemoteFileErrorKind.notFound,
+          operation: 'change timestamps for',
+          path: path,
+          message: 'no such file',
+        );
+        final task = enqueueMove();
+        await awaitTaskDone(task);
+
+        expect(task.items.single.state, TransferItemState.failed);
+        expect(s1.fileBytes['/src/m.txt'], 'mm'.codeUnits);
+        expect(s1.deleteCalls, 0);
+      });
+    });
   });
 
   group('failures', () {
