@@ -261,6 +261,37 @@ void main() {
     });
   });
 
+  group('readKeystoreKey, the read-only witness', () {
+    // (state, what the read returns)
+    final rows = [
+      (_State.empty, null),
+      (_State.holding, _stored),
+      (_State.locked, null),
+      (_State.corrupt, null),
+      (_State.refusesWrites, null),
+    ];
+
+    for (final (state, expected) in rows) {
+      test('${state.name}: returns ${expected == null ? 'null' : 'the key'} '
+          'and never writes or marks', () async {
+        final keystore = _keystore(state);
+        final before = Map.of(keystore.data);
+        final keys = _manager(keystore)
+          ..keystoreStatus = KeystoreStatus.unavailable
+          ..lastKeystoreError = 'KeyringLocked';
+
+        expect(await keys.readKeystoreKey(), expected);
+
+        expect(keystore.log, ['read $_masterKeyEntry']);
+        expect(keystore.data, before);
+        // A witness called after a failed write must not erase the
+        // diagnosis that write recorded, nor invent one of its own.
+        expect(keys.keystoreStatus, KeystoreStatus.unavailable);
+        expect(keys.lastKeystoreError, 'KeyringLocked');
+      });
+    }
+  });
+
   group('entry names', () {
     // The persisted identities of 04 section 12.3 and CL section 9. Each
     // product's entries must reach the keystore verbatim: a changed name
