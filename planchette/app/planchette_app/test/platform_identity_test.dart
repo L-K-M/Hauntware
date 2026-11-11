@@ -98,6 +98,25 @@ void main() {
     );
   });
 
+  test('Windows forwarding requires a bounded delivery acknowledgement', () {
+    final instance = _read('windows/runner/single_instance.cpp');
+    expect(instance, contains('SendMessageTimeoutW('));
+    expect(instance, isNot(contains('SendMessageW(')));
+    expect(instance, contains('SMTO_ABORTIFHUNG | SMTO_BLOCK'));
+    expect(instance, contains('kDocumentDeliveryTimeoutMs = 5000'));
+    expect(instance, contains('delivered != 0 && accepted == TRUE'));
+    expect(
+      instance,
+      matches(
+        RegExp(
+          r'return forwarded\s*\? InstanceDisposition::kForwarded\s*'
+          r': InstanceDisposition::kFailed;',
+        ),
+      ),
+    );
+    expect(_read('windows/runner/main.cpp'), contains('MessageBoxW('));
+  });
+
   test('the runners speak the channel the Dart intake listens on', () {
     expect(
       _read('lib/services/open_documents.dart'),
