@@ -70,7 +70,7 @@ class StackLogsController extends ChangeNotifier {
   /// [kStackLogsMax].
   final int omitted;
 
-  final LogViewController logs = LogViewController();
+  late final LogViewController logs = LogViewController(serverId: serverId);
   late final LogSearch search = LogSearch(logs);
 
   /// The lines' levels and JSON fields (CTX-05), past each line's name.
