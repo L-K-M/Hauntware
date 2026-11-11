@@ -101,9 +101,25 @@ MissingCredential missingCredentialOf(GhostCredentialReply reply) =>
       GhostPrivateKeyReply(:final privateKeyPem, :final keyPassphrase) =>
         MissingPrivateKey(privateKeyPem, passphrase: keyPassphrase),
       GhostKeyPassphraseReply() => throw StateError(
-        'Séance never raises the passphrase-only credential prompt',
+        'A passphrase alone cannot supply a missing private key',
       ),
     };
+
+/// The passphrase-only form for a key already stored or read from a file.
+GhostCredentialRequest ghostKeyPassphraseRequestOf(ServerConfig server) {
+  final path = server.identityFilePath;
+  final hasFile = path != null && path.isNotEmpty;
+  return GhostCredentialRequest(
+    authMethod: hasFile ? AuthMethod.privateKey : AuthMethod.password,
+    endpointLabel: server.label,
+    keyField: GhostKeyField.passphraseOnly,
+    username: server.username,
+    host: server.host,
+    port: server.port,
+    initialKeyPath: hasFile ? path : null,
+    offerVaultSave: true,
+  );
+}
 
 /// The theme's status colours ([StatusColors]) as the package takes them.
 GhostStatusColors seanceStatusColors(BuildContext context) => GhostStatusColors(

@@ -224,6 +224,9 @@ class TerminalSession extends PaneTab {
   /// jump host on its path. Null for every other failure.
   String? missingCredentialServerId;
 
+  /// The host whose private key needs a passphrase, including a jump host.
+  String? keyPassphraseFailureServerId;
+
   /// Live transcript of the current/last connection attempt, shown in the
   /// "connection log" details when a connection fails. Owned by the session so
   /// its trace lines drive [logNotifier] rather than the whole app.
@@ -664,6 +667,7 @@ class _HostKeyAttempt {
 class AppState extends ChangeNotifier {
   final AppServices services;
   final SshSessionOpener _openSshSession;
+  final bool Function(String, String) _keyPassphraseChecker;
   final InboxProposalClaimer? _claimInboxProposal;
 
   List<ServerConfig> servers = [];
@@ -799,6 +803,7 @@ class AppState extends ChangeNotifier {
     ApkUpdater? apkUpdater,
     BackgroundKeepAlive? keepAlive,
     this._openSshSession = _connectThrough,
+    @visibleForTesting this._keyPassphraseChecker = privateKeyPassphraseOpens,
     this._claimInboxProposal,
   }) : _updateChecker = updateChecker ?? UpdateChecker(),
        apkUpdater = apkUpdater ?? (Platform.isAndroid ? ApkUpdater() : null),
@@ -2009,7 +2014,10 @@ class AppState extends ChangeNotifier {
 
   /// Establish the SSH session for an already-inserted [tab]. Never reached
   /// for a local shell, whose tab carries no server to connect to.
-  Future<void> _connect(TerminalSession tab) async {
+  Future<void> _connect(
+    TerminalSession tab, {
+    ({String serverId, String passphrase})? keyPassphrase,
+  }) async {
     final engine = tab.engine;
     final log = tab.log;
     final config = tab.config;
@@ -2023,14 +2031,23 @@ class AppState extends ChangeNotifier {
     // The attempt's own record of the prompt, so two tabs opening one host
     // at once each keep their own answer.
     final hostKey = _HostKeyAttempt(_promptForHostKey);
+    final passphrases = <String, String>{
+      if (keyPassphrase != null) keyPassphrase.serverId: keyPassphrase.passphrase,
+    };
     try {
-      final credentials = await services.resolveCredentials(config);
+      final credentials = await services.resolveCredentials(
+        config,
+        draftKeyPassphrase: passphrases.remove(config.id),
+      );
       final session = await _openSshSession(
         SshSessionManager(
           tofu: services.tofu,
           onHostKey: hostKey.prompt,
           onKeyboardInteractive: _promptKeyboardInteractive,
-          resolveJumpHost: services.resolveJumpHost,
+          resolveJumpHost: (id) => services.resolveJumpHost(
+            id,
+            draftKeyPassphrase: passphrases.remove(id),
+          ),
         ),
         config: config,
         credentials: credentials,
@@ -2116,6 +2133,13 @@ class AppState extends ChangeNotifier {
       tab.missingCredentialServerId = e is CredentialMissingException
           ? e.serverId
           : null;
+      tab.keyPassphraseFailureServerId = e is SshConnectException &&
+              (e.kind == SshConnectFailureKind.keyPassphraseRequired ||
+                  e.kind == SshConnectFailureKind.keyPassphraseWrong)
+          ? e.serverId ?? config.id
+          : null;
+    } finally {
+      passphrases.clear();
     }
     notifyListeners();
     _refreshKeepAlive();
@@ -2126,7 +2150,10 @@ class AppState extends ChangeNotifier {
   /// old one. A new id means a fresh `_SessionView` mounts cleanly. For a
   /// local shell this is "run another one" — the exited process cannot be
   /// resumed, but the tab and its name survive.
-  Future<void> reconnect(String sessionId) async {
+  Future<void> reconnect(
+    String sessionId, {
+    ({String serverId, String passphrase})? keyPassphrase,
+  }) async {
     final index = tabs.indexWhere((s) => s.id == sessionId);
     if (index < 0) return;
     final old = tabs[index];
@@ -2167,7 +2194,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     await (replacement.isLocal
         ? _startLocalShell(replacement)
-        : _connect(replacement));
+        : _connect(replacement, keyPassphrase: keyPassphrase));
   }
 
   /// The current config for [serverId], preferring the stored list over the
@@ -3678,6 +3705,65 @@ class AppState extends ChangeNotifier {
         );
         return true;
     }
+  });
+
+  /// Validates a passphrase against the current key source. An optional
+  /// save uses the same mutation queue and versioning as the server editor,
+  /// so a sync cannot rotate the key between verification and persistence.
+  Future<bool> provideKeyPassphrase(
+    String serverId,
+    KeyPassphraseAnswer answer,
+  ) => _mutate(() async {
+    if (answer.passphrase.isEmpty) return false;
+    final server = await services.configStore.getServer(serverId);
+    if (server == null) throw StateError('This server was deleted.');
+    if (server.authMethod != AuthMethod.privateKey) {
+      throw StateError('This server no longer uses a private key.');
+    }
+    final credentials = await services.resolveCredentials(
+      server,
+      draftKeyPassphrase: answer.passphrase,
+    );
+    final pem = credentials.privateKeyPem;
+    if (pem == null || !_keyPassphraseChecker(pem, answer.passphrase)) {
+      return false;
+    }
+    if (!answer.saveToVault) return true;
+
+    final oldRef = server.secretRef;
+    final ref = oldRef == null || isReservedVaultId(oldRef) ? uuidV4() : oldRef;
+    final stored = oldRef == ref ? await services.vault.getSecret(ref) : null;
+    final path = server.identityFilePath;
+    final hasFile = path != null && path.isNotEmpty;
+    final base = stored?.kind == SecretKind.privateKey
+        ? stored!
+        : Secret(id: ref, kind: SecretKind.privateKey, value: hasFile ? '' : pem);
+    final secret = hasFile
+        ? base.copyWith(
+            identityFilePath: path,
+            identityFilePassphrase: answer.passphrase,
+          )
+        : base.copyWith(keyPassphrase: answer.passphrase);
+
+    // Saving a passphrase must not revoke the matching security-scoped
+    // file grant. Keep the read path's exact-match rule; an inactive or
+    // stale grant should still be cleared.
+    final savedBookmark = services.settings.identityFileBookmarks[server.id];
+    final identityFileBookmark =
+        hasFile && savedBookmark != null && savedBookmark.path == path
+        ? savedBookmark
+        : null;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _saveServerNow(
+      server.copyWith(
+        secretRef: ref,
+        updatedAt: now > server.updatedAt ? now : server.updatedAt + 1,
+      ),
+      secret: secret,
+      identityFileBookmark: identityFileBookmark,
+    );
+    return true;
   });
 
   /// The vault as an encrypted export the recovery code opens. In the

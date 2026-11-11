@@ -1867,6 +1867,59 @@ class _ConnectionError extends StatelessWidget {
     return state.servers.where((server) => server.id == id).firstOrNull;
   }
 
+  ServerConfig? get _keyPassphraseServer {
+    final id = tab.keyPassphraseFailureServerId;
+    return state.servers.where((server) => server.id == id).firstOrNull;
+  }
+
+  Future<void> _askForKeyPassphrase(
+    BuildContext context,
+    ServerConfig server,
+  ) async {
+    var retry = false;
+    while (identical(state.tabById(tab.id), tab)) {
+      if (!context.mounted) return;
+      final current = state.servers
+          .where((item) => item.id == server.id)
+          .firstOrNull;
+      if (current == null) return;
+      final answer = await showKeyPassphraseDialog(
+        context,
+        server: current,
+        retry: retry,
+      );
+      if (answer == null ||
+          !context.mounted ||
+          !identical(state.tabById(tab.id), tab)) {
+        return;
+      }
+      try {
+        final accepted = await state.provideKeyPassphrase(current.id, answer);
+        if (!accepted) {
+          retry = true;
+          continue;
+        }
+      } catch (_) {
+        if (context.mounted) {
+          showTopToastIn(
+            context,
+            message: 'Could not unlock or save this key. Try again.',
+          );
+        }
+        return;
+      }
+      if (!context.mounted || !identical(state.tabById(tab.id), tab)) return;
+      unawaited(state.reconnect(
+        tab.id,
+        keyPassphrase: (serverId: current.id, passphrase: answer.passphrase),
+      ));
+      if (answer.saveToVault && context.mounted) {
+        await offerRecoveryCode(context, state);
+      }
+      return;
+    }
+  }
+
   Future<void> _askForCredential(
     BuildContext context,
     ServerConfig server,
@@ -1903,6 +1956,7 @@ class _ConnectionError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final missingCredential = _missingCredentialServer;
+    final passphraseServer = _keyPassphraseServer;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560),
@@ -1923,13 +1977,41 @@ class _ConnectionError extends StatelessWidget {
                     // removed meanwhile still failed for this reason.
                     : tab.missingCredentialServerId != null
                     ? 'Credential required on this device'
+                    : tab.keyPassphraseFailureServerId != null
+                    ? 'Key passphrase required'
                     : 'Connection failed',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               Text(tab.error!, textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              if (missingCredential == null)
+              if (passphraseServer != null)
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      key: const ValueKey('connection.provideKeyPassphrase'),
+                      onPressed: () =>
+                          _askForKeyPassphrase(context, passphraseServer),
+                      icon: const Icon(Icons.key_outlined),
+                      label: const Text('Enter passphrase…'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          showServerEditor(context, state, passphraseServer),
+                      icon: const Icon(Icons.edit_outlined),
+                      label: Text('Edit ${passphraseServer.label}'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => state.reconnect(tab.id),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                )
+              else if (missingCredential == null)
                 FilledButton.icon(
                   onPressed: () => state.reconnect(tab.id),
                   icon: const Icon(Icons.refresh),
