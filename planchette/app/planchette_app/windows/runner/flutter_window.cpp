@@ -3,6 +3,7 @@
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "single_instance.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -30,8 +31,15 @@ bool FlutterWindow::OnCreate() {
   // More document windows on this engine (document_windows.h).
   document_windows_ = std::make_unique<DocumentWindowsHost>(
       GetHandle(), flutter_controller_->engine()->messenger());
+  // Forwarded file opens reach Dart through it (open_documents.h).
+  open_documents_ = std::make_unique<OpenDocumentsHost>(
+      flutter_controller_->engine()->messenger());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
+    if (!MarkPrimaryWindow(GetHandle())) {
+      OutputDebugStringW(
+          L"Planchette could not mark its primary window.\n");
+    }
     this->Show();
   });
 
@@ -46,6 +54,7 @@ bool FlutterWindow::OnCreate() {
 void FlutterWindow::OnDestroy() {
   // The extra windows go before the engine: each removes its view from it.
   document_windows_ = nullptr;
+  open_documents_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -57,6 +66,13 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  // A second launch's forwarded argv (single_instance.h) is consumed here.
+  if (open_documents_ &&
+      open_documents_->HandleWindowMessage(message, wparam, lparam)) {
+    // WM_COPYDATA answers TRUE when the receiver processed it.
+    return TRUE;
+  }
+
   // The main window's activation, for the document windows' active one.
   if (document_windows_) {
     document_windows_->HandleMainWindowMessage(message, wparam);

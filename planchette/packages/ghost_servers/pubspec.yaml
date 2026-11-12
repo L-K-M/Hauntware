@@ -1,10 +1,10 @@
 name: ghost_servers
 description: >-
-  Shared server surfaces for Seance, Poltergeist and Klabautermann over
-  seance_protocol and ghost_ui. Today it holds the server list's
-  sectioning rules, the status-dot vocabulary and the host-key,
-  keyboard-interactive and credential prompts; the connection log views
-  follow in a later stage.
+  Shared server surfaces for Seance, Poltergeist, Klabautermann and
+  Planchette over seance_protocol and ghost_ui: the server list's
+  sectioning rules, the status-dot vocabulary, the server editor, the
+  host-key, keyboard-interactive and credential prompts, and the
+  connection log and connection test views.
 version: 1.9.4
 publish_to: none
 
@@ -20,8 +20,7 @@ dependencies:
   ghost_marks:
     path: ../ghost_marks
   # The sidebar dot vocabulary the status dots draw with, and the toast
-  # helper the connection log views will use (a later stage of
-  # docs/design/ghost-servers-part1.md).
+  # helper the connection log views use.
   ghost_ui:
     path: ../ghost_ui
   # The server record types (ServerConfig, normalizeServerGroup,

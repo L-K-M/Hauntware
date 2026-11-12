@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 
@@ -36,17 +38,57 @@ final class PaletteCommand {
   final bool enabled;
 }
 
+/// The palette's words, as one bag. The defaults are English; a host with
+/// localized copy passes its own.
+final class CommandPaletteStrings {
+  const CommandPaletteStrings({
+    this.queryHint = 'Type a command',
+    this.noMatches = 'No matching commands',
+    this.keywordMatch = _keywordMatch,
+    this.keywordMatchWithDescription = _keywordMatchWithDescription,
+    this.unavailable = _unavailable,
+  });
+
+  /// The filter field's hint.
+  final String queryHint;
+
+  /// The line shown when no command matches.
+  final String noMatches;
+
+  /// A row's second line when [keyword], not the label, matched.
+  final String Function(String keyword) keywordMatch;
+
+  /// The same line for a command that also has a description.
+  final String Function(String keyword, String description)
+  keywordMatchWithDescription;
+
+  /// What a screen reader hears when the highlight reaches a command that
+  /// cannot run right now.
+  final String Function(String label) unavailable;
+}
+
+String _keywordMatch(String keyword) => 'matches "$keyword"';
+
+String _keywordMatchWithDescription(String keyword, String description) =>
+    'matches "$keyword": $description';
+
+String _unavailable(String label) => '$label, unavailable';
+
+/// The key of the palette's filter field, for hosts' tests.
+const commandPaletteQueryKey = ValueKey<String>('ghost.palette.query');
+
 /// Shows the palette over [context]'s navigator and runs the command the
 /// user picks once the palette has closed, so a command that moves focus or
 /// opens a dialog of its own is not fighting the palette for either.
 Future<void> showCommandPalette(
   BuildContext context,
-  List<PaletteCommand> commands,
-) async {
+  List<PaletteCommand> commands, {
+  CommandPaletteStrings strings = const CommandPaletteStrings(),
+}) async {
   final chosen = await showDialog<PaletteCommand>(
     context: context,
     barrierColor: Colors.black12,
-    builder: (context) => CommandPalette(commands: commands),
+    builder: (context) => CommandPalette(commands: commands, strings: strings),
   );
   chosen?.run();
 }
@@ -137,9 +179,14 @@ bool _isWordCharacter(int unit) =>
 /// the highlight, Enter or a click runs it, Escape closes. A query that
 /// starts with a colon jumps to a path first ([paletteScope]).
 class CommandPalette extends StatefulWidget {
-  const CommandPalette({super.key, required this.commands});
+  const CommandPalette({
+    super.key,
+    required this.commands,
+    this.strings = const CommandPaletteStrings(),
+  });
 
   final List<PaletteCommand> commands;
+  final CommandPaletteStrings strings;
 
   @override
   State<CommandPalette> createState() => _CommandPaletteState();
@@ -150,11 +197,13 @@ class CommandPalette extends StatefulWidget {
 typedef _Row = ({PaletteCommand command, List<int> positions, String? keyword});
 
 class _CommandPaletteState extends State<CommandPalette> {
-  static const _rowHeight = 48.0;
+  /// A row's height at normal text size; larger text grows the row.
+  static const _minimumRowHeight = 48.0;
   static const _visibleRows = 10;
 
   final _query = TextEditingController();
   final _scroll = ScrollController();
+  final _highlightedRow = GlobalKey();
   List<_Row> _rows = const [];
   String? _filtered;
   int _highlighted = 0;
@@ -246,14 +295,46 @@ class _CommandPaletteState extends State<CommandPalette> {
     setState(() {
       _highlighted = (_highlighted + delta) % _rows.length;
     });
-    final top = _highlighted * _rowHeight;
-    final position = _scroll.position;
-    if (top < position.pixels) {
-      _scroll.jumpTo(top);
-    } else if (top + _rowHeight >
-        position.pixels + position.viewportDimension) {
-      _scroll.jumpTo(top + _rowHeight - position.viewportDimension);
-    }
+    // Focus stays in the field, so a screen reader would not otherwise say
+    // which command Enter now runs.
+    final command = _rows[_highlighted].command;
+    unawaited(
+      SemanticsService.sendAnnouncement(
+        View.of(context),
+        command.enabled
+            ? command.label
+            : widget.strings.unavailable(command.label),
+        Directionality.of(context),
+      ),
+    );
+    _revealHighlighted(
+      delta > 0
+          ? ScrollPositionAlignmentPolicy.keepVisibleAtEnd
+          : ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+      jumpIfUnbuilt: true,
+    );
+  }
+
+  /// Scrolls the highlighted row into view once it is laid out. Rows vary
+  /// in height with the text size, so its offset is measured, not computed.
+  /// Wrapping past either end can land on a row the list has not built;
+  /// the list then jumps to that end first.
+  void _revealHighlighted(
+    ScrollPositionAlignmentPolicy policy, {
+    required bool jumpIfUnbuilt,
+  }) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      final row = _highlightedRow.currentContext;
+      if (row != null) {
+        Scrollable.ensureVisible(row, alignmentPolicy: policy);
+        return;
+      }
+      if (!jumpIfUnbuilt) return;
+      final position = _scroll.position;
+      _scroll.jumpTo(_highlighted == 0 ? 0 : position.maxScrollExtent);
+      _revealHighlighted(policy, jumpIfUnbuilt: false);
+    });
   }
 
   void _run(int index) {
@@ -287,13 +368,13 @@ class _CommandPaletteState extends State<CommandPalette> {
                       _move(-1),
                 },
                 child: TextField(
-                  key: const ValueKey('planchette.palette.query'),
+                  key: commandPaletteQueryKey,
                   controller: _query,
                   autofocus: true,
                   onSubmitted: (_) => _run(_highlighted),
-                  decoration: const InputDecoration(
-                    hintText: 'Type a command',
-                    prefixIcon: Icon(Icons.search, size: 20),
+                  decoration: InputDecoration(
+                    hintText: widget.strings.queryHint,
+                    prefixIcon: const Icon(Icons.search, size: 20),
                     isDense: true,
                     border: OutlineInputBorder(),
                   ),
@@ -305,7 +386,7 @@ class _CommandPaletteState extends State<CommandPalette> {
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(
-                  'No matching commands',
+                  widget.strings.noMatches,
                   style: TextStyle(color: scheme.onSurfaceVariant),
                 ),
               )
@@ -314,13 +395,12 @@ class _CommandPaletteState extends State<CommandPalette> {
               Flexible(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(
-                    maxHeight: _rowHeight * _visibleRows,
+                    maxHeight: _minimumRowHeight * _visibleRows,
                   ),
                   child: ListView.builder(
                     controller: _scroll,
                     shrinkWrap: true,
                     padding: EdgeInsets.zero,
-                    itemExtent: _rowHeight,
                     itemCount: _rows.length,
                     itemBuilder: (context, index) =>
                         _row(context, index, _rows[index]),
@@ -346,26 +426,32 @@ class _CommandPaletteState extends State<CommandPalette> {
     );
     // Line two says what the command does, and when a keyword rather than
     // the label matched, which word found it.
+    final strings = widget.strings;
     final detail = switch ((row.keyword, command.description)) {
-      (final keyword?, '') => 'matches "$keyword"',
+      (final keyword?, '') => strings.keywordMatch(keyword),
       (final keyword?, final description) =>
-        'matches "$keyword" — $description',
+        strings.keywordMatchWithDescription(keyword, description),
       (null, final description) => description,
     };
     final label = command.label;
     final matched = row.positions.toSet();
     return Material(
+      key: highlighted ? _highlightedRow : null,
       color: highlighted ? scheme.secondaryContainer : Colors.transparent,
       child: Semantics(
         // The row stays tappable so a tap cannot fall through to the
         // barrier, but assistive tech still hears it is unavailable.
         enabled: command.enabled,
+        // The command Enter runs.
+        selected: highlighted,
         child: InkWell(
           // Always tappable; _run declines a disabled command.
           onTap: () => _run(index),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: _minimumRowHeight),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

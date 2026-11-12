@@ -6,6 +6,9 @@
   keeps SSH sessions alive while Séance is in the background) now comes
   from the shared ghost_keepalive plugin it shares with Poltergeist.
   Its notification, channel and behavior are unchanged.
+- The Linux package build uses the suite's shared packager and fails early
+  with a clear message when `objdump` is missing, instead of partway through.
+  The built `.deb` and AppImage are unchanged.
 - Deleting a saved server retracts its credential from your sync account
   as well as from this device, unless another server still uses it, so a
   new device no longer picks up the password or key of a server that is

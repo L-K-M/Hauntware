@@ -4,7 +4,8 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 
 /// Serializes native file-open batches, including events sent during startup.
-/// macOS Finder has its own ready handshake; other runners supply argv.
+/// Every desktop runner keeps the macOS ready handshake: a forwarded launch
+/// queues natively until 'ready' answers, then arrives as 'open'.
 final class OpenDocuments {
   OpenDocuments({
     required this.open,
@@ -28,14 +29,29 @@ final class OpenDocuments {
   bool _disposed = false;
 
   Future<void> start(List<String> arguments, {required bool macOS}) async {
-    if (macOS) {
-      channel.setMethodCallHandler((call) async {
-        if (call.method == 'open') await accept(call.arguments);
-      });
-      final pending = await channel.invokeMethod<Object?>('ready');
-      await accept(pending);
+    channel.setMethodCallHandler((call) async {
+      if (call.method == 'open') {
+        await accept(_channelDocuments(call.arguments, macOS: macOS));
+      }
+    });
+    Object? pending;
+    try {
+      pending = await channel.invokeMethod<Object?>('ready');
+    } on MissingPluginException {
+      // A runner without the documents channel answers nothing.
     }
+    await accept(_channelDocuments(pending, macOS: macOS));
     await accept(_documentArguments(arguments, macOS: macOS));
+  }
+
+  /// A channel payload carries the runner's forwarded launch arguments, so
+  /// the same option rules apply as to this process's own argv.
+  List<String> _channelDocuments(Object? payload, {required bool macOS}) {
+    if (payload is! List) return const [];
+    return _documentArguments(
+      payload.whereType<String>().toList(),
+      macOS: macOS,
+    );
   }
 
   /// The launch arguments that name documents.

@@ -164,6 +164,23 @@ void main() {
       expect(route.mode, EngineMode.rootful);
     });
 
+    test('a forwarding-disabled refusal also costs one probe', () async {
+      final link = ForwardingLink()
+        ..openFailures.add(
+          const ChannelOpenException(
+            ChannelRefusal.forwardDisabled,
+            'administratively prohibited',
+          ),
+        )
+        ..probeAnswers[_rootful] = _missing;
+
+      expect(
+        await _none(link, _profile([_rootful])),
+        DockerNoRouteReason.noSocket,
+      );
+      expect(link.commands, [_probeCommand(_rootful)]);
+    });
+
     test('a link failure other than a forwarding refusal propagates', () {
       final link = ForwardingLink()
         ..openFailures.add(

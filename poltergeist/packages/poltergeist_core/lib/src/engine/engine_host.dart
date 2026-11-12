@@ -1324,6 +1324,7 @@ final class _PromptBroker {
         keyType: presented.type,
         fingerprintSha256: presented.fingerprintSha256,
         pinnedFingerprintSha256: decision.pinned?.fingerprintSha256,
+        pinnedKeyType: decision.pinned?.type,
       ),
     );
 

@@ -208,7 +208,9 @@ const _golden = [
       '"keyCipherAlgorithm":'
       '"RSA_ECB_OAEPwithSHA_256andMGF1Padding",'
       '"migrateOnAlgorithmChange":"true","migrateWithBackup":"false",'
-      '"preferencesKeyPrefix":"","resetOnError":"true",'
+      // The one deliberate change since the move: the plugin's default
+      // deleted the entry on any Android read error.
+      '"preferencesKeyPrefix":"","resetOnError":"false",'
       '"sharedPreferencesName":"",'
       '"storageCipherAlgorithm":"AES_GCM_NoPadding","storageNamespace":""}',
   'iOS {"accessibility":"unlocked",'

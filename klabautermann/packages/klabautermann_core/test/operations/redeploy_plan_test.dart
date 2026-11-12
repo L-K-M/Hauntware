@@ -613,6 +613,7 @@ void main() {
         'registry.example.com/app:2',
       ]);
       expect((step.elevated, step.captureOutput), (false, true));
+      expect(step.timeout, StepTimeout.long);
       expect(foreground.runner.identity, 'deploy');
 
       final detached = _planned(await hostPull(PullRoute.hostDetached));
