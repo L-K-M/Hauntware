@@ -25,6 +25,16 @@ final class DocumentRecoveryException implements Exception {
   String toString() => message;
 }
 
+/// Copies of a document's earlier contents that the Android runner keeps
+/// when a provider write fails. Each opens at every launch until it is
+/// saved elsewhere or deleted here. Desktop stores keep none.
+abstract interface class RecoveryCopies {
+  bool isRecoveryCopy(String path);
+
+  /// Deletes the copy at [path]; throws when the runner could not.
+  Future<void> discardRecovery(String path);
+}
+
 /// The shell's filesystem boundary. Tests substitute an in-memory store.
 abstract interface class DocumentStore {
   Future<TextDocument> load(

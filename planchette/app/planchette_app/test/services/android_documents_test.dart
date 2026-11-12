@@ -20,6 +20,7 @@ void main() {
   late List<MethodCall> writes;
   late List<String> discarded;
   PlatformException? writeError;
+  PlatformException? discardError;
   Uint8List? failedWriteBytes;
 
   setUp(() {
@@ -33,6 +34,7 @@ void main() {
     writes = [];
     discarded = [];
     writeError = null;
+    discardError = null;
     failedWriteBytes = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
@@ -42,6 +44,7 @@ void main() {
             case 'recoveries':
               return [recoveryPath];
             case 'discardRecovery':
+              if (discardError != null) throw discardError!;
               discarded.add((call.arguments as Map)['path'] as String);
               return null;
             case 'create':
@@ -203,6 +206,7 @@ void main() {
         store: documents,
         dialogs: dialogs,
         pathContext: paths.posix,
+        recoveries: documents,
       );
       addTearDown(workspace.dispose);
       await workspace.openAll(await documents.recoveries());
@@ -234,6 +238,47 @@ void main() {
 
       expect(await workspace.save(tab), isTrue);
       expect(discarded, isEmpty);
+    });
+
+    test('are deleted when their tab closes with Delete', () async {
+      dialogs.discardRecovery = true;
+
+      expect(await workspace.closeTab(workspace.active!), isTrue);
+      expect(dialogs.recoveryAsked, ['recovery-1-config.txt']);
+      expect(discarded, [recoveryPath]);
+      expect(documents.isRecoveryCopy(recoveryPath), isFalse);
+      // A deleted copy cannot be read again.
+      expect(workspace.canReopenClosed, isFalse);
+    });
+
+    test('are kept when their tab closes with Keep', () async {
+      expect(await workspace.closeTab(workspace.active!), isTrue);
+      expect(dialogs.recoveryAsked, ['recovery-1-config.txt']);
+      expect(discarded, isEmpty);
+      expect(workspace.canReopenClosed, isTrue);
+    });
+
+    test('report a delete that failed', () async {
+      dialogs.discardRecovery = true;
+      discardError = PlatformException(
+        code: 'document_error',
+        message: 'Only recovery copies can be discarded.',
+      );
+
+      expect(await workspace.closeTab(workspace.active!), isTrue);
+      expect(
+        workspace.error,
+        'Could not delete the recovery copy recovery-1-config.txt: '
+        'Only recovery copies can be discarded.',
+      );
+      expect(documents.isRecoveryCopy(recoveryPath), isTrue);
+    });
+
+    test('are not asked about when a provider document closes', () async {
+      await workspace.openAll([path]);
+
+      expect(await workspace.closeTab(workspace.active!), isTrue);
+      expect(dialogs.recoveryAsked, isEmpty);
     });
   });
 }

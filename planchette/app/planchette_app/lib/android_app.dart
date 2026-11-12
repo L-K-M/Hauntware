@@ -24,6 +24,7 @@ Future<void> runAndroidApp({String? appVersion}) async {
     store: documents,
     dialogs: AppDocumentDialogs(navigatorKey, android: documents),
     toolHistory: TextToolHistory.decode(settings.value.recentTextTools),
+    recoveries: documents,
   );
   final recoveryPaths = await documents.recoveries();
   if (recoveryPaths.isEmpty) {

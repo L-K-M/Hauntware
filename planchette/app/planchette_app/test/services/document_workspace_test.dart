@@ -222,6 +222,15 @@ class FakeDialogs implements DocumentDialogs {
     revertAsked = true;
     return revert;
   }
+
+  bool discardRecovery = false;
+  final recoveryAsked = <String>[];
+
+  @override
+  Future<bool> confirmDiscardRecovery(String name) async {
+    recoveryAsked.add(name);
+    return discardRecovery;
+  }
 }
 
 void main() {
