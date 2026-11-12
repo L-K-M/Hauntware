@@ -365,6 +365,7 @@ void main() {
     final twoResult = two.$2.firstWhere((line) => line.startsWith('result:'));
     one.$1.stdin.writeln('go');
     two.$1.stdin.writeln('go');
+    await Future.wait([one.$1.stdin.close(), two.$1.stdin.close()]);
 
     final lines = await Future.wait([oneResult, twoResult]);
     expect(lines.map((line) => line.substring('result:'.length)).toSet(), {
@@ -2560,6 +2561,8 @@ Future<void> _stopHelper(Process process) async {
     await process.stdin.close();
   } on SocketException {
     // The helper already exited.
+  } on StateError {
+    // The one-shot commit test already closed its input pipe.
   }
   try {
     await process.exitCode.timeout(const Duration(seconds: 2));
