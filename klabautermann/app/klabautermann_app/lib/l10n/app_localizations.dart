@@ -1150,6 +1150,30 @@ abstract class AppLocalizations {
   /// **'Quit'**
   String get alreadyRunningQuit;
 
+  /// Heading of the only screen the app shows when its background engine fails to start.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not start'**
+  String get engineFailedTitle;
+
+  /// Body of the screen shown when the app's background engine fails to start: what it means and what to do.
+  ///
+  /// In en, this message translates to:
+  /// **'Its background engine did not start, so no servers can be shown. Quit and open Klabautermann again. If this keeps happening, reinstall it and include the details below in a bug report.'**
+  String get engineFailedBody;
+
+  /// The technical reason the background engine did not start, in English, for a bug report.
+  ///
+  /// In en, this message translates to:
+  /// **'Details: {detail}'**
+  String engineFailedDetail(String detail);
+
+  /// Button on the engine-failed screen that quits the app.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit'**
+  String get engineFailedQuit;
+
   /// Shown in the desktop settings window when the app does not answer it.
   ///
   /// In en, this message translates to:
@@ -5956,6 +5980,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Some servers still need confirming: confirm the jump hosts they go through too.'**
   String get endpointsStillPending;
+
+  /// Under the endpoint confirmation list when a sync changed a server's host, port, user or jump route after the user looked, so that server was not confirmed and its row now shows the new address.
+  ///
+  /// In en, this message translates to:
+  /// **'A server\'s address changed while you confirmed it. Check it again, then confirm.'**
+  String get endpointsChangedMeanwhile;
 
   /// Under the endpoint confirmation list when the engine could not save the confirmation or stopped before answering.
   ///

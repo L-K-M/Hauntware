@@ -25,7 +25,7 @@ abstract interface class EngineClient {
 
   /// Queues [request] for the engine.
   ///
-  /// Throws [StateError] once [shutdown] ran.
+  /// Throws [StateError] once [shutdown] ran or the engine stopped.
   void send(EngineRequest request);
 
   /// Asks the engine to stop and waits for its isolate to exit. Idempotent.
@@ -104,6 +104,9 @@ final class IsolateEngineClient implements EngineClient {
     // A failed handshake leaves [ready] unawaited; mark its error handled.
     ready.future.ignore();
     final exited = Completer<void>();
+    // Set once the handshake succeeds, so an engine that exits by itself
+    // afterwards makes [send] throw rather than drop requests unanswered.
+    IsolateEngineClient? client;
 
     // The engine sends its startup fleet right after EngineReady, before
     // spawn's caller can have listened; a broadcast stream would drop it.
@@ -162,6 +165,7 @@ final class IsolateEngineClient implements EngineClient {
         if (!exited.isCompleted) {
           exited.complete();
         }
+        client?._toEngine = null;
         unawaited(events.close());
       }),
     ];
@@ -170,7 +174,7 @@ final class IsolateEngineClient implements EngineClient {
       final toEngine = await handshake.future;
       toEngine.send(const Hello());
       final answer = await ready.future;
-      return IsolateEngineClient._(
+      final started = client = IsolateEngineClient._(
         answer,
         toEngine,
         isolate,
@@ -179,6 +183,9 @@ final class IsolateEngineClient implements EngineClient {
         exited.future,
         events,
       );
+      // The engine may have exited between its answer and this point.
+      if (exited.isCompleted) started._toEngine = null;
+      return started;
     } catch (_) {
       isolate.kill();
       for (final subscription in subscriptions) {
