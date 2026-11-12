@@ -307,16 +307,18 @@ Map<String, Object?> encodePinConflict(SyncPinConflict conflict) => {
 
 /// The inverse of [encodePinConflict]; a value it did not write reads as
 /// null.
-SyncPinConflict? decodePinConflict(Object? value) => switch (value) {
-  final Map<Object?, Object?> json => SyncPinConflict(
-    locator: json[SettingsLinkKey.locator.name]! as String,
-    localFingerprintSha256:
-        json[SettingsLinkKey.localFingerprintSha256.name]! as String,
-    pulledFingerprintSha256:
-        json[SettingsLinkKey.pulledFingerprintSha256.name]! as String,
-  ),
-  _ => null,
-};
+SyncPinConflict? decodePinConflict(Object? value) {
+  if (value is! Map<Object?, Object?>) return null;
+  final locator = value[SettingsLinkKey.locator.name];
+  final local = value[SettingsLinkKey.localFingerprintSha256.name];
+  final pulled = value[SettingsLinkKey.pulledFingerprintSha256.name];
+  if (locator is! String || local is! String || pulled is! String) return null;
+  return SyncPinConflict(
+    locator: locator,
+    localFingerprintSha256: local,
+    pulledFingerprintSha256: pulled,
+  );
+}
 
 /// The host-key quarantine diff as the snapshot carries it, in the engine's
 /// order.

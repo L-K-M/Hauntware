@@ -59,6 +59,7 @@ final class SyncController extends ChangeNotifier
   bool _passphraseUnverified = false;
   SyncFailure? _lastFailure;
   bool _engineStopped = false;
+  bool _disposed = false;
 
   /// The answers still to come, by request id. The engine ends each
   /// operation with one final [SyncStatus] that echoes its request's id;
@@ -189,7 +190,7 @@ final class SyncController extends ChangeNotifier
       await answered.future;
     } finally {
       _resolving.remove(conflict.locator);
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -290,6 +291,7 @@ final class SyncController extends ChangeNotifier
   /// answer can reach a disposed controller, and refuses later calls.
   @override
   void dispose() {
+    _disposed = true;
     _engineStopped = true;
     _running = false;
     for (final (operation, answer) in _waiting.values) {
