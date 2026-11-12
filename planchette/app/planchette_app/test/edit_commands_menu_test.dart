@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -108,4 +109,28 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets(
+    'Edit Redo shows the platform chord',
+    (tester) async {
+      workspace.newDocument();
+      await mount(tester);
+
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+      final windows = defaultTargetPlatform == TargetPlatform.windows;
+      // Windows programs show Ctrl+Y for Redo; Ctrl+Shift+Z still works.
+      expect(find.text('Ctrl+Y'), windows ? findsOneWidget : findsNothing);
+      expect(
+        find.text('Ctrl+Shift+Z'),
+        windows ? findsNothing : findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
 }

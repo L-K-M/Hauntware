@@ -7,7 +7,7 @@ import 'document_store.dart';
 
 /// Android documents are provider URIs, not filesystem paths. The runner gives
 /// each URI a stable, named identity; only this boundary reads or writes it.
-final class AndroidDocuments implements DocumentStore {
+final class AndroidDocuments implements DocumentStore, RecoveryCopies {
   AndroidDocuments({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel('planchette/documents');
 
@@ -15,7 +15,7 @@ final class AndroidDocuments implements DocumentStore {
 
   /// Identities of the recovery copies the runner listed at launch. Each
   /// holds the only copy of a document's earlier contents until the user
-  /// saves it elsewhere.
+  /// saves it elsewhere or deletes it as its tab closes.
   final _recoveries = <String>{};
 
   Future<T?> _invoke<T>(
@@ -43,6 +43,15 @@ final class AndroidDocuments implements DocumentStore {
     final paths = (await _invoke<List<Object?>>('recoveries'))!.cast<String>();
     _recoveries.addAll(paths);
     return paths;
+  }
+
+  @override
+  bool isRecoveryCopy(String path) => _recoveries.contains(path);
+
+  @override
+  Future<void> discardRecovery(String path) async {
+    await _invoke<void>('discardRecovery', {'path': path});
+    _recoveries.remove(path);
   }
 
   Future<List<String>> pickOpenFiles() async =>

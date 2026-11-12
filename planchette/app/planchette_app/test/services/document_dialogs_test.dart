@@ -101,6 +101,30 @@ void main() {
     });
   }
 
+  for (final (button, delete) in [('Keep', false), ('Delete', true)]) {
+    testWidgets('the recovery copy prompt answers $delete for $button', (
+      tester,
+    ) async {
+      final navigator = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(
+        MaterialApp(navigatorKey: navigator, home: const SizedBox()),
+      );
+
+      final answer = AppDocumentDialogs(
+        navigator,
+      ).confirmDiscardRecovery('recovery-1-notes.txt');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Delete the recovery copy “recovery-1-notes.txt”?'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text(button));
+      await tester.pumpAndSettle();
+
+      expect(await answer, delete);
+    });
+  }
+
   for (final (button, choice) in [
     ('Don’t save', BulkCloseChoice.discardAll),
     ('Cancel', BulkCloseChoice.cancel),
