@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as paths;
 import 'package:planchette_app/services/android_documents.dart';
 import 'package:planchette_app/services/document_store.dart';
 import 'package:planchette_app/services/document_workspace.dart';
@@ -196,7 +197,13 @@ void main() {
 
     setUp(() async {
       dialogs = FakeDialogs()..savePath = path;
-      workspace = DocumentWorkspace(store: documents, dialogs: dialogs);
+      // Android paths are POSIX; the host default would make them
+      // drive-relative on a Windows test runner.
+      workspace = DocumentWorkspace(
+        store: documents,
+        dialogs: dialogs,
+        pathContext: paths.posix,
+      );
       addTearDown(workspace.dispose);
       await workspace.openAll(await documents.recoveries());
     });
