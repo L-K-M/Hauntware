@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:seance_core/catalog.dart' show HostKeyConflict;
 import 'package:seance_core/seance_core.dart';
 
 import '../services/workspace_catalog.dart';
+import '../widgets/mono_text_style.dart';
 
 Future<ServerConfig?> showWorkspaceServersDialog(
   BuildContext context,
@@ -30,6 +32,7 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
   bool _showSignIn = false;
   WorkspaceCredentialSync _credentialSync = WorkspaceCredentialSync.disabled;
   String _query = '';
+  bool _resolvingPin = false;
 
   WorkspaceCatalog get _catalog => widget.catalog;
 
@@ -105,6 +108,25 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
     }
   }
 
+  /// One resolution at a time, so a double tap cannot send two requests. The
+  /// flag flips before the first await, and the buttons follow it.
+  Future<void> _resolvePinConflict(
+    HostKeyConflict conflict, {
+    required bool keepLocal,
+  }) async {
+    if (_resolvingPin) return;
+    _resolvingPin = true;
+    if (mounted) setState(() {});
+    try {
+      await _catalog.resolvePinConflict(conflict, keepLocal: keepLocal);
+    } catch (_) {
+      // The catalog's error is visible above, as for a failed refresh.
+    } finally {
+      _resolvingPin = false;
+      if (mounted) setState(() {});
+    }
+  }
+
   @override
   void dispose() {
     _baseUrl.dispose();
@@ -157,6 +179,12 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Text(notice),
+                ),
+              for (final conflict in _catalog.hostKeyConflicts)
+                _PinConflictCard(
+                  conflict: conflict,
+                  busy: busy || _resolvingPin,
+                  onResolve: _resolvePinConflict,
                 ),
               if (_showSignIn) ...[
                 const Text('Sign in to your existing suite catalog.'),
@@ -284,4 +312,83 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
       );
     },
   );
+}
+
+/// One synced host key that differs from this device's pin, with the two
+/// actions that resolve it. The durable notice above stays until the next
+/// sync; this card is the in-memory conflict itself.
+class _PinConflictCard extends StatelessWidget {
+  const _PinConflictCard({
+    required this.conflict,
+    required this.busy,
+    required this.onResolve,
+  });
+
+  final HostKeyConflict conflict;
+  final bool busy;
+  final Future<void> Function(
+    HostKeyConflict conflict, {
+    required bool keepLocal,
+  })
+  onResolve;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final onContainer = TextStyle(color: scheme.onErrorContainer);
+    final fingerprint = monoTextStyle.copyWith(color: scheme.onErrorContainer);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: scheme.errorContainer,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Another device synced a different host key for '
+              '${conflict.locator}. Planchette kept this device\'s key and is '
+              'not using the other one. If the server\'s key really changed, '
+              'trust the new one; otherwise keep yours.',
+              style: onContainer,
+            ),
+            const SizedBox(height: 8),
+            Text('This device trusts', style: onContainer),
+            SelectableText(
+              conflict.local.fingerprintSha256,
+              style: fingerprint,
+            ),
+            const SizedBox(height: 4),
+            Text('The other device synced', style: onContainer),
+            SelectableText(
+              conflict.pulled.fingerprintSha256,
+              style: fingerprint,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.tonal(
+                  onPressed: busy
+                      ? null
+                      : () => onResolve(conflict, keepLocal: true),
+                  child: const Text("Keep this device's key"),
+                ),
+                TextButton(
+                  onPressed: busy
+                      ? null
+                      : () => onResolve(conflict, keepLocal: false),
+                  child: const Text('Trust the new key'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -682,6 +682,24 @@ void main() {
       expect(find.byType(Checkbox), findsNothing);
     });
 
+    testWidgets('Select all in Top takes only the running containers it '
+        'lists', (tester) async {
+      final panel = await _pump(tester, managed: true);
+      await panel.list(tester);
+      await tester.tap(find.widgetWithText(FilterChip, 'Top'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilterChip, 'Select'));
+      await tester.pumpAndSettle();
+      final listed = _order(tester).length;
+      expect(listed, lessThan(_containers.length));
+
+      await tester.tap(find.text('Select all shown'));
+      await tester.pumpAndSettle();
+      expect(find.text('$listed selected'), findsOneWidget);
+      // No stopped container is listed, so none is there to remove.
+      expect(find.text('Remove (0)'), findsOneWidget);
+    });
+
     testWidgets('a phone row toggles by a tap and says it is checked', (
       tester,
     ) async {

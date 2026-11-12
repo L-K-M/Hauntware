@@ -17,7 +17,7 @@ typedef LogMatch = ({int seq, int index});
 /// ignoring case unless [caseSensitive], with stepping from match to match.
 /// A pattern that does not compile matches nothing and says so through
 /// [invalidPattern]; a match of no characters is skipped. It reads each row's visible text ([logRowText]),
-/// a container row's time and stream mark included (CTX-02), with
+/// a row's time and a container row's stream mark included (CTX-02), with
 /// `planchette_core`'s `findSearchMatches` and keeps up as lines arrive
 /// and leave, holding only a count for each matching line; a view asks
 /// [matchesIn] for the matches of a line it draws.
@@ -36,11 +36,15 @@ typedef LogMatch = ({int seq, int index});
 /// JIT test run, so a search field should debounce its input or search in
 /// slices across frames.
 class LogSearch extends ChangeNotifier {
-  LogSearch(this._logs) {
+  LogSearch(this._logs) : _zoneOffset = _logs.zoneOffset {
     _logs.addListener(_onLines);
   }
 
   final LogViewController _logs;
+
+  /// The zone offset the lines were searched at: a new one changes every
+  /// row's time, so the search starts over as for a new query.
+  Duration? _zoneOffset;
 
   String _query = '';
   bool _caseSensitive = false;
@@ -190,6 +194,12 @@ class LogSearch extends ChangeNotifier {
   }
 
   void _onLines() {
+    if (_logs.zoneOffset != _zoneOffset) {
+      _zoneOffset = _logs.zoneOffset;
+      _searchAll();
+      return;
+    }
+
     final first = _logs.firstSeq;
     var changed = false;
     while (_lines.isNotEmpty && _lines.first.seq < first) {
@@ -225,20 +235,27 @@ class LogSearch extends ChangeNotifier {
     return found;
   }
 
-  /// [line]'s row text, a container line's time and stream included.
-  String _rowText(LogLine line) =>
-      logRowText(line, container: _logs.containerOf(line));
+  /// [line]'s row text, a row's time and a container line's stream
+  /// included.
+  String _rowText(LogLine line) => _logs.rowText(line);
 
   /// Whether a query is set that can match.
   bool get _searching => _query.isNotEmpty && !invalidPattern;
 
+  /// The query as a pattern, or null when it does not compile. Unicode
+  /// mode comes first, so `\p{Lu}` and characters outside the BMP match
+  /// as the journal's PCRE2 matches them. It rejects escapes PCRE2 takes,
+  /// such as `a\-b`, so a pattern it refuses gets the lenient mode.
   RegExp? _compile() {
     if (!_regex || _query.isEmpty) return null;
-    try {
-      return RegExp(_query, caseSensitive: _caseSensitive, unicode: true);
-    } on FormatException {
-      return null;
+    for (final unicode in const [true, false]) {
+      try {
+        return RegExp(_query, caseSensitive: _caseSensitive, unicode: unicode);
+      } on FormatException {
+        continue;
+      }
     }
+    return null;
   }
 
   /// Every match in [text]: the limit is the most a text can hold.

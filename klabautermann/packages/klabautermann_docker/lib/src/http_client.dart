@@ -285,15 +285,21 @@ final class DockerHttpClient {
     // waiter handoffs could overshoot it.
     if (_all.length + _opening < _maxConnections) {
       _opening++;
+      final _Connection c;
       try {
-        final c = await _open(scope);
-        _all.add(c);
-        c.markBusy();
-        scope.bind(c);
-        return c;
-      } finally {
+        c = await _open(scope);
+      } catch (_) {
         _opening--;
+        // The slot this open held is free again; a request queued behind
+        // it would otherwise wait for a release that may never come.
+        _serveWaiters();
+        rethrow;
       }
+      _opening--;
+      _all.add(c);
+      c.markBusy();
+      scope.bind(c);
+      return c;
     }
     final w = _Waiter(scope);
     _waiters.add(w);
@@ -343,6 +349,13 @@ final class DockerHttpClient {
   void _drop(_Connection conn) {
     _all.remove(conn);
     _idle.remove(conn);
+    _serveWaiters();
+  }
+
+  /// Opens a duplex for each queued request that free capacity allows.
+  /// Runs whenever capacity comes back: a dropped connection or a failed
+  /// open.
+  void _serveWaiters() {
     while (_waiters.isNotEmpty &&
         _all.length + _opening < _maxConnections &&
         !_closed) {
@@ -359,6 +372,7 @@ final class DockerHttpClient {
             .onError((Object e, StackTrace st) {
               _opening--;
               w.fail(e);
+              _serveWaiters();
             }),
       );
     }
@@ -575,18 +589,17 @@ final class _Head {
 
 /// One keep-alive HTTP/1.1 connection over a [ByteDuplex]. Reads are
 /// serialized: inbound bytes are buffered and the parser pulls.
+///
+/// Only the end of the duplex's stream is EOF, never [ByteDuplex.done]:
+/// an SSH channel's close or a relay's exit can complete `done` while
+/// bytes still wait behind a paused subscription, and those bytes are
+/// the tail of a body or of a hijacked exec's output.
 final class _Connection {
   _Connection(this._duplex, {required this.onIdle, required this.onDead}) {
     _sub = _duplex.stream.listen(
       _onData,
       onError: _onReadError,
       onDone: _onReadDone,
-    );
-    unawaited(
-      _duplex.done.then(
-        (_) => _remoteClosed(),
-        onError: (_, _) => _remoteClosed(),
-      ),
     );
   }
 
@@ -637,13 +650,6 @@ final class _Connection {
   }
 
   void _onReadDone() {
-    _eof = true;
-    _closeHijackCtl();
-    _wake();
-    if (!_busy) onDead(this);
-  }
-
-  void _remoteClosed() {
     _eof = true;
     _closeHijackCtl();
     _wake();
@@ -982,7 +988,9 @@ final class _Connection {
   /// Releases the connection after a fully consumed body.
   void release({required bool keepAlive}) {
     _busy = false;
+    final ctl = _bodyCtl;
     _bodyCtl = null;
+    ctl?.detach();
     onIdle(this, keepAlive: keepAlive);
   }
 
@@ -1053,19 +1061,23 @@ final class _Connection {
 
 /// The stream a body pump feeds. Pausing it pauses the duplex
 /// subscription (03 §5.5 backpressure); cancelling it aborts the
-/// connection, whose byte position is then unknowable.
+/// connection, whose byte position is then unknowable. Once the body is
+/// fully read the connection serves other requests, so a consumer that
+/// still holds the stream no longer pauses it ([detach]).
 final class _BodyCtl {
   _BodyCtl(this._conn) {
     controller = StreamController<List<int>>(
       onPause: () {
+        if (!_attached) return;
         _paused = true;
         _conn._sub.pause();
       },
       onResume: () {
-        _paused = false;
         final c = _resumed;
         _resumed = null;
         if (c != null && !c.isCompleted) c.complete();
+        if (!_paused) return;
+        _paused = false;
         _conn._sub.resume();
       },
       onCancel: () {
@@ -1082,6 +1094,16 @@ final class _BodyCtl {
   late final StreamController<List<int>> controller;
   bool _paused = false;
   Completer<void>? _resumed;
+
+  bool get _attached => identical(_conn._bodyCtl, this);
+
+  /// The connection was released: give back a pause this consumer holds
+  /// on its subscription.
+  void detach() {
+    if (!_paused) return;
+    _paused = false;
+    _conn._sub.resume();
+  }
 
   /// Wakes an emit stalled on a pause so the connection's death path
   /// can finish (the emit loop then sees `!alive` and throws).

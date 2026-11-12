@@ -991,10 +991,33 @@ class LocalFileSystem implements RemoteFileSystem {
   /// (so stderr stays deterministic English — chmod localizes via
   /// strerror — and `PATH` survives).
   Future<ProcessResult> _runUtility(String name, List<String> arguments) {
-    return Process.run(name, [
+    return Process.run(_resolveUtility(name), [
       '--',
       ...arguments,
     ], environment: {..._environment, 'LC_ALL': 'C'});
+  }
+
+  /// Finds [name] on this file system's own `PATH`. The child's
+  /// environment does not decide the lookup on every platform: on the
+  /// GitHub-hosted macOS runners `Process.run` ran the system utility
+  /// even though the injected `PATH` listed another one first. Empty entries (the current directory) are skipped; with no
+  /// match the bare name falls back to the platform lookup.
+  String _resolveUtility(String name) {
+    final path = _environment['PATH'];
+    if (path == null) return name;
+
+    const anyExecuteBit = 0x49; // 0111
+    for (final directory in path.split(':')) {
+      if (directory.isEmpty) continue;
+
+      final candidate = p.join(directory, name);
+      final stat = FileStat.statSync(candidate);
+      if (stat.type == FileSystemEntityType.file &&
+          stat.mode & anyExecuteBit != 0) {
+        return candidate;
+      }
+    }
+    return name;
   }
 
   /// Maps a non-zero chmod/chown exit to the typed taxonomy from the
