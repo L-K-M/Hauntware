@@ -127,9 +127,10 @@ class _SidebarDropZoneState extends State<_SidebarDropZone> {
 /// containment refusals) through the shell's queue delegate.
 ///
 /// [copyByDefault] is for a device: its row is a volume, usually another
-/// disk than the source, but POSIX paths are one namespace to
-/// [paneDropVerb], which would call a drop from `~/Documents` onto
-/// `/Volumes/STICK` a same-filesystem move and delete the source. So a
+/// disk than the source. [paneDropVerb] tells POSIX volumes apart only by
+/// the OS mount directories (`/Volumes`, `/media`, `/run/media`, `/mnt`),
+/// so a device mounted anywhere else reads as the root volume and a drop
+/// from `~/Documents` would be a move that deletes the source. So a
 /// device drop copies unless the move modifier is held.
 _DropPlan? _transferPlan(
   BuildContext context,
