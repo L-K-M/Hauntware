@@ -13,7 +13,7 @@ import 'services/document_workspace.dart';
 
 /// The phone owns one workspace and uses the system document provider. Desktop
 /// window channels must never run before this app's first frame.
-Future<void> runAndroidApp() async {
+Future<void> runAndroidApp({String? appVersion}) async {
   final documents = AndroidDocuments();
   final settings = SettingsController(
     store: LocalSettingsStore(File(await documents.settingsPath())),
@@ -31,15 +31,21 @@ Future<void> runAndroidApp() async {
   } else {
     await workspace.openAll(recoveryPaths);
   }
-  runApp(_AndroidApp(workspace, settings, navigatorKey));
+  runApp(_AndroidApp(workspace, settings, navigatorKey, appVersion));
 }
 
 class _AndroidApp extends StatefulWidget {
-  const _AndroidApp(this.workspace, this.settings, this.navigatorKey);
+  const _AndroidApp(
+    this.workspace,
+    this.settings,
+    this.navigatorKey,
+    this.appVersion,
+  );
 
   final DocumentWorkspace workspace;
   final SettingsController settings;
   final GlobalKey<NavigatorState> navigatorKey;
+  final String? appVersion;
 
   @override
   State<_AndroidApp> createState() => _AndroidAppState();
@@ -69,6 +75,7 @@ class _AndroidAppState extends State<_AndroidApp> {
     settings: widget.settings,
     navigatorKey: widget.navigatorKey,
     onQuit: _quit,
+    appVersion: widget.appVersion,
   );
 
   @override

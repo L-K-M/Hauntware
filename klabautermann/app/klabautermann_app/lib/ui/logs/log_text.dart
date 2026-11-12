@@ -274,35 +274,55 @@ final class LogPalette {
 /// lines follow.
 const String _messageNewline = '\u23ce\u2028';
 
-/// How many characters a container row's time takes: `2026-10-17
-/// 14:30:05`, in the device's zone.
-const int _containerTimeWidth = 19;
+/// How many characters a row's time takes: `2026-10-17 14:30:05`.
+const int _timeWidth = 19;
 
-/// A container row's time (CTX-01) in the device's zone, to the second,
-/// or as many spaces when the line carried none, so the marks line up.
-String _containerTime(DateTime? at) {
-  if (at == null) return ' ' * _containerTimeWidth;
+/// What starts a row windowed around its current match, in place of the
+/// text before the window.
+const String _windowEllipsis = '\u2026';
 
-  final iso = at.toLocal().toIso8601String();
-  return '${iso.substring(0, 10)} ${iso.substring(11, _containerTimeWidth)}';
+/// Code units the text engine breaks a row at: a windowed row starts on
+/// the line its match is on.
+final _lineBreaks = RegExp('[\n\v\f\r\x85\u2028\u2029]');
+
+/// A row's time (CTX-01, LOG-01) to the second: in this device's zone
+/// when [zoneOffset] is null, else at that offset (the server's zone, as
+/// the time display chooses), or as many spaces when the line carried
+/// none, so the marks line up.
+String _rowTime(DateTime? at, Duration? zoneOffset) {
+  if (at == null) return ' ' * _timeWidth;
+
+  // A UTC date-time whose fields read the server's wall clock, or this
+  // device's local one: either prints its fields in the same layout.
+  final wall = zoneOffset == null ? at.toLocal() : at.toUtc().add(zoneOffset);
+  final iso = wall.toIso8601String();
+  return '${iso.substring(0, 10)} ${iso.substring(11, _timeWidth)}';
 }
 
 /// How many characters a [container] row's time and stream mark take
 /// before its text, the gaps included.
 int logContainerSourceLength(ContainerLine container) =>
-    _containerTimeWidth + container.stream.name.length + 2;
+    _timeWidth + container.stream.name.length + 2;
 
-/// The text of [line]'s row before styling: a journal line's unit and PID
-/// (LOG-01) or a [container] line's time and stream (CTX-01), then what
-/// `parseSgr` leaves of its text, with a MESSAGE's newlines shown instead
-/// of dropped.
+/// How many characters a journal row's time takes before its unit, the
+/// gap included, or 0 for a [line] without one.
+int logJournalTimeLength(LogLine line) =>
+    line.journal?.at == null ? 0 : _timeWidth + 1;
+
+/// The text of [line]'s row before styling: a journal line's time, unit
+/// and PID (LOG-01) or a [container] line's time and stream (CTX-01), then
+/// what `parseSgr` leaves of its text, with a MESSAGE's newlines shown
+/// instead of dropped. Times show at [zoneOffset], in this device's zone
+/// when it is null. A journal entry without a timestamp gets no time
+/// column: `journalctl -o json` always sends one.
 ({String source, SgrText body}) _rowParts(
   LogLine line,
   ContainerLine? container,
+  Duration? zoneOffset,
 ) {
   if (container != null) {
     return (
-      source: '${_containerTime(container.at)} ${container.stream.name} ',
+      source: '${_rowTime(container.at, zoneOffset)} ${container.stream.name} ',
       body: parseSgr(line.text),
     );
   }
@@ -310,28 +330,61 @@ int logContainerSourceLength(ContainerLine container) =>
   final journal = line.journal;
   if (journal == null) return (source: '', body: parseSgr(line.text));
 
+  final at = journal.at;
+  final time = at == null ? '' : '${_rowTime(at, zoneOffset)} ';
   final pid = journal.pid == null ? '' : '[${journal.pid}]';
   final source = '${journal.source ?? ''}$pid';
   return (
-    source: source.isEmpty ? '' : '$source: ',
+    source: time + (source.isEmpty ? '' : '$source: '),
     body: parseSgr(line.text.replaceAll('\n', _messageNewline)),
   );
 }
 
-/// The visible text of [line]'s row without its note: what a search reads
-/// and the width the view measures. A [container] line's row starts with
-/// its time and stream.
-String logRowText(LogLine line, {ContainerLine? container}) {
-  final (:source, :body) = _rowParts(line, container);
+/// The visible text of [line]'s row without its note: what a search reads,
+/// what an export writes and the width the view measures. A journal row
+/// starts with its time, unit and PID, a [container] line's row with its
+/// time and stream; times show at [zoneOffset], or in this device's zone.
+String logRowText(
+  LogLine line, {
+  ContainerLine? container,
+  Duration? zoneOffset,
+}) {
+  final (:source, :body) = _rowParts(line, container, zoneOffset);
   return source + body.text;
 }
+
+/// Where a row without wrap starts when it does not show its current
+/// [match] (LOG-05): past its ellipsis, or on a later line of a journal
+/// MESSAGE. In a row [cells] glyph advances wide, the window keeps a
+/// third of the room the match and the leading ellipsis leave before the
+/// match, so more of what follows it shows, but never starts before the
+/// line the match is on, nor inside a surrogate pair. 0 means the row
+/// shows from its start.
+int logMatchWindowStart(String text, TextMatch match, {required int cells}) {
+  final room = cells - _windowEllipsis.length - (match.end - match.start);
+  final context = math.max(0, room) ~/ 3;
+  var lineStart = 0;
+  for (final lineBreak in _lineBreaks.allMatches(text)) {
+    if (lineBreak.start >= match.start) break;
+    lineStart = lineBreak.end;
+  }
+
+  var start = math.max(lineStart, match.start - context);
+  if (start > lineStart && _isLowSurrogate(text.codeUnitAt(start))) start--;
+  return start;
+}
+
+bool _isLowSurrogate(int unit) => unit >= 0xdc00 && unit <= 0xdfff;
 
 /// [line] as a log view draws it: a journal line's unit and PID, or a
 /// [container] line's time and stream mark, its visible text styled by
 /// [palette], then [note] (a cut line's, or a journal MESSAGE's that was
 /// not sent). A screen reader hears [streamLabel] for the stream mark.
 /// [matches] are search matches in [logRowText], in order; the one at
-/// [currentMatch] is the current one.
+/// [currentMatch] is the current one. Times show at [zoneOffset], or in
+/// this device's zone. A [windowStart] past 0 ([logMatchWindowStart])
+/// draws the row from there after an ellipsis, which a screen reader
+/// hears as the text it stands for, so the row is still heard whole.
 TextSpan logLineSpan(
   LogLine line, {
   required LogPalette palette,
@@ -342,16 +395,18 @@ TextSpan logLineSpan(
   String? streamLabel,
   List<TextMatch> matches = const [],
   int? currentMatch,
+  Duration? zoneOffset,
+  int windowStart = 0,
 }) {
-  final (:source, :body) = _rowParts(line, container);
+  final (:source, :body) = _rowParts(line, container, zoneOffset);
   final text = source + body.text;
   // A container row's stream mark sits between its time and the gap
   // before the text.
   final mark = container == null
       ? null
       : (
-          start: _containerTimeWidth + 1,
-          end: _containerTimeWidth + 1 + container.stream.name.length,
+          start: _timeWidth + 1,
+          end: _timeWidth + 1 + container.stream.name.length,
         );
   // Each run: its range, its style, and what a screen reader hears for
   // it instead of its text.
@@ -413,10 +468,18 @@ TextSpan logLineSpan(
   run(at, body.text.length, SgrStyle.plain);
 
   // Each run is split where a match starts or ends inside it.
-  final children = <InlineSpan>[];
+  final children = <InlineSpan>[
+    if (windowStart > 0)
+      TextSpan(
+        text: _windowEllipsis,
+        style: palette.sourceStyle,
+        semanticsLabel: text.substring(0, windowStart),
+      ),
+  ];
   var next = 0;
   for (final (start, end, style, label) in runs) {
-    var from = start;
+    if (end <= windowStart) continue;
+    var from = math.max(start, windowStart);
     // A run a match splits speaks its label once, from its first piece.
     String? spoken() {
       if (label == null) return null;
