@@ -148,6 +148,41 @@ void main() {
   }
 
   for (final (button, choice) in [
+    ('Delete', SaveSiblingChoice.delete),
+    ('Keep', SaveSiblingChoice.keep),
+    ('Open', SaveSiblingChoice.open),
+  ]) {
+    testWidgets('the leftover save files prompt answers $choice for $button', (
+      tester,
+    ) async {
+      final navigator = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(
+        MaterialApp(navigatorKey: navigator, home: const SizedBox()),
+      );
+
+      final answer = AppDocumentDialogs(navigator).chooseSaveSiblings(
+        'notes.txt',
+        ['notes.txt.planchette-1.backup', 'notes.txt.planchette-2.edit'],
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Files left by an interrupted save of “notes.txt”'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining(
+          'notes.txt.planchette-1.backup\nnotes.txt.planchette-2.edit',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text(button));
+      await tester.pumpAndSettle();
+
+      expect(await answer, choice);
+    });
+  }
+
+  for (final (button, choice) in [
     ('Don’t save', BulkCloseChoice.discardAll),
     ('Cancel', BulkCloseChoice.cancel),
     ('Save All', BulkCloseChoice.saveAll),

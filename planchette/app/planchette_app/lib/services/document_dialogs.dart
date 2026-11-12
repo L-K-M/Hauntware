@@ -257,6 +257,45 @@ final class AppDocumentDialogs implements DocumentDialogs {
         ) ??
         false;
   }
+
+  @override
+  Future<SaveSiblingChoice> chooseSaveSiblings(
+    String name,
+    List<String> siblings,
+  ) async {
+    final context = navigatorKey.currentContext;
+    if (context == null) return SaveSiblingChoice.keep;
+    return await showDialog<SaveSiblingChoice>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Files left by an interrupted save of “$name”'),
+            content: Text(
+              'An earlier save of this document stopped before it finished '
+              'and left ${siblings.length == 1 ? 'this file' : 'these files'} '
+              'beside it. Each holds a version of its text: the one before '
+              'that save or the one it was writing. Open them to compare, or '
+              'delete them if you do not need them.\n\n${_listed(siblings)}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(context, SaveSiblingChoice.delete),
+                child: const Text('Delete'),
+              ),
+              TextButton(
+                autofocus: true,
+                onPressed: () => Navigator.pop(context, SaveSiblingChoice.keep),
+                child: const Text('Keep'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, SaveSiblingChoice.open),
+                child: const Text('Open'),
+              ),
+            ],
+          ),
+        ) ??
+        SaveSiblingChoice.keep;
+  }
 }
 
 /// A short list of file names for a prompt: a long selection still fits.

@@ -240,6 +240,18 @@ class FakeDialogs implements DocumentDialogs {
     saveElsewhereAsked.add((name, folder));
     return saveElsewhere;
   }
+
+  SaveSiblingChoice siblingChoice = SaveSiblingChoice.keep;
+  final siblingsAsked = <(String, List<String>)>[];
+
+  @override
+  Future<SaveSiblingChoice> chooseSaveSiblings(
+    String name,
+    List<String> siblings,
+  ) async {
+    siblingsAsked.add((name, siblings));
+    return siblingChoice;
+  }
 }
 
 void main() {
