@@ -47,6 +47,34 @@ final class _Link extends TestLinkBase {
 
 const _ok = RemoteCommandResult(exitCode: 0);
 
+/// Records each run's time limit. `slow` runs until its limit and then
+/// fails as `SshLink.run` does; `drop` fails at once, as a lost link.
+final class _TimingLink extends TestLinkBase {
+  _TimingLink(this.timeouts);
+
+  final List<Duration?> timeouts;
+  final commands = <String>[];
+
+  @override
+  Future<RemoteCommandResult> run(
+    String command, {
+    Duration? timeout,
+    int maxOutputBytes = 256 * 1024,
+    List<int>? stdin,
+  }) async {
+    commands.add(command);
+    timeouts.add(timeout);
+    if (command.contains("'slow'")) {
+      await Future<void>.delayed(timeout!);
+      throw const RemoteCommandException('The command did not finish.');
+    }
+    if (command.contains("'drop'")) {
+      throw const RemoteCommandException('The connection is closed.');
+    }
+    return _ok;
+  }
+}
+
 OperationPlan _plan(
   List<PlanStep> steps, {
   RequiredLevel level = RequiredLevel.login,
@@ -77,7 +105,7 @@ void main() {
   });
 
   OperationRunner runner(
-    _Link? link, {
+    TestLinkBase? link, {
     ApiStepRunner? api,
     ExecStepRunner? exec,
   }) => OperationRunner(
@@ -427,6 +455,56 @@ void main() {
       "'replace'",
       "'cleanup'",
     ]);
+  });
+
+  test('each step runs under its own time limit; one that runs past it '
+      'fails as timed out, not as a lost link', () async {
+    final timeouts = <Duration?>[];
+    final slow = _TimingLink(timeouts);
+    const probe = ElevationProbe(
+      sudoVersionLine: 'Sudo version 1.9.16p2',
+      printfIsBuiltin: true,
+    );
+    final plan = _plan([
+      ShellStep(['quick']),
+      ShellStep(['pull'], timeout: StepTimeout.long),
+      ShellStep(['refresh'], elevated: true, timeout: StepTimeout.long),
+    ], level: RequiredLevel.admin);
+    expect(
+      (await runner(slow).run(
+        'plan-1',
+        plan,
+        session: AdminSession.test(ElevatedExecutor(slow, probe), _password),
+      )).outcome,
+      ActionOutcome.succeeded,
+    );
+    expect(timeouts, [StepTimeout.quick, StepTimeout.long, StepTimeout.long]);
+
+    // The link gives up on a step at its limit, as SshLink.run does.
+    final timedOut = await runner(slow).run(
+      'plan-2',
+      _plan(
+        [
+          ShellStep(['write']),
+          ShellStep(['slow'], timeout: const Duration(milliseconds: 20)),
+        ],
+        cleanup: [
+          ShellStep(['cleanup']),
+        ],
+      ),
+    );
+    expect(timedOut.failure, ActionFailure.timedOut);
+    expect(timedOut.failedStep, 1);
+    expect(slow.commands.last, contains("'cleanup'"));
+
+    // A link that drops before the limit is still a transport failure.
+    final dropped = await runner(slow).run(
+      'plan-3',
+      _plan([
+        ShellStep(['drop']),
+      ]),
+    );
+    expect(dropped.failure, ActionFailure.transport);
   });
 
   test('captured output is redacted before it is capped, so a secret '

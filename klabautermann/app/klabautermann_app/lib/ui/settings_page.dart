@@ -15,6 +15,7 @@ import 'package:ghost_keystore/app_lock.dart' show AppLockSettings;
 import '../controllers/cadence_controller.dart';
 import '../controllers/appearance_controller.dart';
 import '../controllers/device_name.dart';
+import '../controllers/editor_display.dart';
 import '../controllers/log_display.dart';
 import '../controllers/monitor_set.dart';
 import '../controllers/pin_publication_controller.dart';
@@ -55,6 +56,7 @@ class SettingsPage extends StatefulWidget {
     this.cadenceCaps,
     this.adminMemory,
     this.logDisplay,
+    this.editorDisplay,
     this.timeDisplay,
     this.deviceName,
     this.safety,
@@ -90,6 +92,10 @@ class SettingsPage extends StatefulWidget {
   /// The log text size and wrapping (A11Y-12) in General; null in tests
   /// that leave it out, where General shows neither.
   final LogDisplaySettings? logDisplay;
+
+  /// The file editors' font and text size (03 §8.5) in Appearance; null in
+  /// tests that leave it out, where the tab shows neither.
+  final EditorDisplaySettings? editorDisplay;
 
   /// Which zone server times show in (A11Y-07), in General; null in tests
   /// that leave it out, where General does not offer it.
@@ -200,6 +206,7 @@ class _SettingsPageState extends State<SettingsPage>
               ),
               SettingsTab.appearance => AppearanceTab(
                 appearance: widget.appearance,
+                editorDisplay: widget.editorDisplay,
               ),
               SettingsTab.servers => ServersTab(
                 monitorSet: widget.monitorSet,

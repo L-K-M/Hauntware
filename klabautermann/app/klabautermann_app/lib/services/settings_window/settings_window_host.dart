@@ -20,6 +20,7 @@ import 'package:ghost_keystore/app_lock.dart' show AppLockSettings;
 
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/device_name.dart';
+import '../../controllers/editor_display.dart' show EditorDisplaySettings;
 import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart';
 import '../../controllers/recovery_controller.dart';
@@ -50,6 +51,7 @@ SettingsWindowHost? settingsWindowHostFor(
   CadenceCapSettings? cadenceCaps,
   AdminMemorySettings? adminMemory,
   LogDisplaySettings? logDisplay,
+  EditorDisplaySettings? editorDisplay,
   TimeDisplaySettings? timeDisplay,
   RecoverySettings? recovery,
 }) => switch (platform) {
@@ -71,6 +73,7 @@ SettingsWindowHost? settingsWindowHostFor(
     cadenceCaps: cadenceCaps,
     adminMemory: adminMemory,
     logDisplay: logDisplay,
+    editorDisplay: editorDisplay,
     timeDisplay: timeDisplay,
     recovery: recovery,
   ),
@@ -106,6 +109,7 @@ final class SettingsWindowHost {
     CadenceCapSettings? cadenceCaps,
     AdminMemorySettings? adminMemory,
     LogDisplaySettings? logDisplay,
+    EditorDisplaySettings? editorDisplay,
     TimeDisplaySettings? timeDisplay,
     RecoverySettings? recovery,
     MethodChannel control = settingsWindowControlChannel,
@@ -125,6 +129,7 @@ final class SettingsWindowHost {
        _cadenceCaps = cadenceCaps,
        _adminMemory = adminMemory,
        _logDisplay = logDisplay,
+       _editorDisplay = editorDisplay,
        _timeDisplay = timeDisplay,
        _recovery = recovery {
     _engine = GhostSettingsWindowHost(
@@ -149,6 +154,7 @@ final class SettingsWindowHost {
           ?cadenceCaps,
           ?adminMemory,
           ?logDisplay,
+          ?editorDisplay,
           ?timeDisplay,
           ?recovery,
         ],
@@ -173,6 +179,7 @@ final class SettingsWindowHost {
   final CadenceCapSettings? _cadenceCaps;
   final AdminMemorySettings? _adminMemory;
   final LogDisplaySettings? _logDisplay;
+  final EditorDisplaySettings? _editorDisplay;
   final TimeDisplaySettings? _timeDisplay;
   final RecoverySettings? _recovery;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
@@ -207,6 +214,10 @@ final class SettingsWindowHost {
     },
     SettingsLinkKey.logDisplay.name: switch (_logDisplay?.value) {
       final display? => encodeLogDisplay(display),
+      null => null,
+    },
+    SettingsLinkKey.editorDisplay.name: switch (_editorDisplay?.value) {
+      final display? => encodeEditorDisplay(display),
       null => null,
     },
     SettingsLinkKey.timeDisplay.name: _timeDisplay?.value.name,
@@ -276,6 +287,8 @@ final class SettingsWindowHost {
         await adminMemory.setRemembered(serverId, remembered: remembered);
       case SettingsLinkMethod.setLogDisplay:
         await _logDisplay?.setLogDisplay(decodeLogDisplay(argument));
+      case SettingsLinkMethod.setEditorDisplay:
+        await _editorDisplay?.setEditorDisplay(decodeEditorDisplay(argument));
       case SettingsLinkMethod.setTimeDisplay:
         await _timeDisplay?.setTimeDisplay(decodeTimeDisplay(argument));
       case SettingsLinkMethod.setDeviceName:

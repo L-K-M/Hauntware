@@ -344,3 +344,17 @@
   encrypted export you can restore on this or another device, with a keep-or-replace
   choice for credentials already here. The export keeps Séance's
   `seance-secrets` wire format, so exports restore across the apps.
+- The remote file editor has a status row, as Séance's and Poltergeist's
+  editors do: the caret's line and column (tap it to go to a line), the
+  selection's size, an unsaved mark, the line ending, the encoding, the
+  indentation, the language and a large-file note. The read-only stack
+  and unit file views show their position and file facts too.
+- The remote file editor's words follow the app's language: Find, Text
+  Tools, the status row, the go-to-line prompt and the other editor
+  controls are translated with the app.
+- Settings > Appearance has a File editor section: choose a font, turn
+  ligatures on or off, and set the text size. Every file editor and the
+  compare view draw in the choice, kept on this device only.
+- A file editor no longer claims unsaved changes after a save whose
+  follow-up read fails. The written text is kept as the base, so the
+  editor, the close prompt and quitting agree that nothing is unsaved.

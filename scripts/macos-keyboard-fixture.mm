@@ -1,7 +1,22 @@
 // The keyboard fixture shared by the four products. Each product's
-// scripts/test-macos-keyboard.mm imports its controller as
-// FixtureController and includes this file, so every product is tested
-// against its own native view controller with the same checks.
+// scripts/test-macos-keyboard.sh compiles this file with its controller
+// named by FIXTURE_CONTROLLER_HEADER and FIXTURE_CONTROLLER_CLASS
+// (scripts/macos-native-fixtures.sh), so every product is tested against
+// its own native view controller with the same checks.
+// FIXTURE_USE_CONTROLLER=0 (--stock-engine) tests the stock controller.
+#import <Cocoa/Cocoa.h>
+#import <FlutterMacOS/FlutterMacOS.h>
+#import <IOKit/hidsystem/IOLLEvent.h>
+#import <objc/runtime.h>
+#define FLUTTER_API_SYMBOL_PREFIX Fixture
+#include "flutter/shell/platform/embedder/embedder.h"
+#include "flutter/shell/platform/embedder/test_utils/key_codes.g.h"
+#if FIXTURE_USE_CONTROLLER
+#import FIXTURE_CONTROLLER_HEADER
+#define FixtureController FIXTURE_CONTROLLER_CLASS
+#else
+#define FixtureController FlutterViewController
+#endif
 
 using namespace flutter::testing::keycodes;
 

@@ -13,6 +13,7 @@ import 'package:flutter/foundation.dart' show ValueNotifier, VoidCallback;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'app_transfer_queue.dart';
+import 'local_volumes.dart' show posixVolumeOf;
 import 'pane_location.dart';
 
 /// The payload an in-app listing-row drag carries (02 §5.1). Built when
@@ -142,11 +143,11 @@ bool paneDropSameFilesystem(FsLocation a, FsLocation b) =>
       _ => false,
     };
 
-/// The volume a Windows local path lives on — a drive letter's `C:` or a
-/// UNC path's `\\server\share` root — so a same-"local" drop across
-/// drives still defaults to copy. POSIX paths return null: one
-/// filesystem namespace from the pane's view (mount boundaries are the
-/// executor's business, not the gesture's).
+/// The volume a local path lives on, so a same-"local" drop across
+/// volumes still defaults to copy: a Windows drive letter's `C:` or a
+/// UNC path's `\\server\share` root, and on POSIX the mount
+/// [posixVolumeOf] names. Relative paths, which name no volume, return
+/// null.
 String? localVolumeOf(String path) {
   if (_windowsDrivePattern.hasMatch(path)) {
     return path.substring(0, 2).toUpperCase();
@@ -158,7 +159,7 @@ String? localVolumeOf(String path) {
     return (shareTail < 0 ? path : path.substring(0, shareTail))
         .toLowerCase();
   }
-  return null;
+  return posixVolumeOf(path);
 }
 
 /// The effective verb for a hover or a drop (02 §5.1). The modifiers
@@ -181,9 +182,10 @@ TransferOperation paneDropVerb({
     return TransferOperation.copy;
   }
   if (source is LocalFsLocation) {
-    // Same-namespace local drops still cross volumes on Windows: a
-    // 'C:' → 'D:' "move" is a copy-then-delete in disguise, so the
-    // default verb must not promise a rename.
+    // Same-namespace local drops still cross volumes: a 'C:' → 'D:' or
+    // '~' → '/Volumes/STICK' "move" is a copy-then-delete in disguise
+    // that empties the source disk, so the default verb must not
+    // promise a rename.
     final destVolume = localVolumeOf(destinationDir);
     if (destVolume != null) {
       for (final root in sourceRoots) {

@@ -10,7 +10,8 @@
 ///   `{type, v, id, removed: true}`, so a forged tombstone can neither
 ///   silence a rule nor drop a protected target;
 /// - a type this build does not know, or a newer `v` of one it knows, is
-///   kept verbatim and skipped;
+///   kept verbatim and skipped: a newer `v` that replaces a record this
+///   build applied leaves it reading the one it applied;
 /// - a record over its type's blob or count cap is refused and trips;
 /// - a `pref` record of an excluded server is skipped, and one whose
 ///   server is absent stays stored, pending, until the server arrives.
@@ -222,12 +223,23 @@ List<String> _strings(Map<String, Object?> payload, String key) =>
 /// a sealed removal's included.
 @immutable
 final class _Entry {
-  const _Entry(this.tuple, this.payload);
+  const _Entry(this.tuple, this.payload, {this.applied});
 
   final SyncTuple tuple;
   final Map<String, Object?> payload;
 
+  /// The last payload of this build's version that applied under this id,
+  /// kept while a newer version's [payload] replaces it: the newer one is
+  /// kept verbatim for its build and skipped here, so this build goes on
+  /// reading what it applied.
+  final Map<String, Object?>? applied;
+
   bool get removed => payload[_removedKey] == true;
+
+  /// What this build reads: [payload] when it has this build's version,
+  /// otherwise [applied].
+  Map<String, Object?>? get readable =>
+      payload[_versionKey] == _payloadVersion ? payload : applied;
 }
 
 /// `klabautermann_records.json`: every `klabautermann:` record the
@@ -245,6 +257,7 @@ final class KlabautermannRecordStore {
   static const String _updatedAtKey = 'updatedAt';
   static const String _deviceIdKey = 'deviceId';
   static const String _payloadKey = 'payload';
+  static const String _appliedKey = 'applied';
 
   /// Opens the file in [supportDirectory]. Never throws; a file it cannot
   /// use leaves the store empty and is reported in [issue].
@@ -288,30 +301,41 @@ final class KlabautermannRecordStore {
 
   /// Every live `pref` record's preferences, by server id, whether or not
   /// its server is in the catalog.
+  /// A record a newer version replaced reads as the one this build
+  /// applied before it, if any.
   Map<String, ServerPrefs> prefs() => {
     for (final MapEntry(:key, :value) in _entries.entries)
-      if (parseKlabautermannId(key) case (
-        type: 'pref',
-        key: final serverId,
-      ) when !value.removed)
-        if (_tryDecode(() => decodeServerPrefs(value.payload)) case final p?)
-          serverId: p,
+      if (parseKlabautermannId(key) case (type: 'pref', key: final serverId))
+        if (value.readable case final payload?
+            when payload[_removedKey] != true)
+          if (_tryDecode(() => decodeServerPrefs(payload)) case final p?)
+            serverId: p,
   };
 
-  /// Every live `rule` record's rule, by rule id.
+  /// Every live `rule` record's rule, by rule id, read as [prefs] reads
+  /// its records.
   List<SyncedRule> rules() => [
     for (final MapEntry(:key, :value) in _entries.entries)
-      if (!value.removed && parseKlabautermannId(key)?.type == 'rule')
-        if (_tryDecode(() => decodeSyncedRule(value.payload)) case final r?) r,
+      if (parseKlabautermannId(key)?.type == 'rule')
+        if (value.readable case final payload?
+            when payload[_removedKey] != true)
+          if (_tryDecode(() => decodeSyncedRule(payload)) case final r?) r,
   ];
 
-  /// Materializes [payload] for [recordId] under [tuple].
+  /// Materializes [payload] for [recordId] under [tuple]. A payload of
+  /// another version keeps what this build last read for [recordId].
   Future<void> put(
     String recordId,
     SyncTuple tuple,
     Map<String, Object?> payload,
   ) {
-    _entries[recordId] = _Entry(tuple, Map.unmodifiable(payload));
+    _entries[recordId] = _Entry(
+      tuple,
+      Map.unmodifiable(payload),
+      applied: payload[_versionKey] == _payloadVersion
+          ? null
+          : _entries[recordId]?.readable,
+    );
     return _save();
   }
 
@@ -349,6 +373,7 @@ final class KlabautermannRecordStore {
           _updatedAtKey: _entries[id]!.tuple.updatedAt,
           _deviceIdKey: _entries[id]!.tuple.deviceId,
           _payloadKey: _entries[id]!.payload,
+          if (_entries[id]!.applied case final applied?) _appliedKey: applied,
         },
     },
   });
@@ -361,20 +386,29 @@ final class KlabautermannRecordStore {
     }
     return {
       for (final MapEntry(:key, :value) in records.entries)
-        key: switch (value) {
-          {
-            _updatedAtKey: final int updatedAt,
-            _deviceIdKey: final String deviceId,
-            _payloadKey: final Map<String, Object?> payload,
-          }
-              when parseKlabautermannId(key) != null =>
-            _Entry(
-              SyncTuple(updatedAt: updatedAt, deviceId: deviceId),
-              Map.unmodifiable(payload),
-            ),
-          _ => throw FormatException('record $key is not a stored record'),
-        },
+        key: _decodeEntry(key, value),
     };
+  }
+
+  static _Entry _decodeEntry(String key, Object? value) {
+    if (value case {
+      _updatedAtKey: final int updatedAt,
+      _deviceIdKey: final String deviceId,
+      _payloadKey: final Map<String, Object?> payload,
+    } when parseKlabautermannId(key) != null) {
+      final tuple = SyncTuple(updatedAt: updatedAt, deviceId: deviceId);
+      switch ((value as Map<String, Object?>)[_appliedKey]) {
+        case null:
+          return _Entry(tuple, Map.unmodifiable(payload));
+        case final Map<String, Object?> applied:
+          return _Entry(
+            tuple,
+            Map.unmodifiable(payload),
+            applied: Map.unmodifiable(applied),
+          );
+      }
+    }
+    throw FormatException('record $key is not a stored record');
   }
 }
 

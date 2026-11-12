@@ -371,7 +371,8 @@ class _Block {
   final List<String> patterns;
   final Map<String, String> directives = {};
 
-  /// The last valid `Port`, like every other directive here.
+  /// The first valid `Port`: ssh keeps the first value it obtains, as for
+  /// every other directive here.
   int? port;
 
   /// The first `Port` the importer refuses, which makes the block invalid.

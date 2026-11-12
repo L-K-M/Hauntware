@@ -20,6 +20,7 @@ void main() {
     String id, {
     List<ShortcutActivator> Function(TargetPlatform)? activators,
     bool enabled = true,
+    bool repeatable = false,
     void Function()? onRun,
   }) {
     return RegisteredCommand(
@@ -27,6 +28,7 @@ void main() {
       scope: CommandScope.app,
       label: (l10n) => id,
       activators: activators,
+      repeatable: repeatable,
       enabled: () => enabled,
       run: (_) async => onRun?.call(),
     );
@@ -108,6 +110,64 @@ void main() {
     await tester.pump();
 
     expect(ran, isTrue);
+  });
+
+  // OS key repeat re-runs only stepping verbs; a one-shot verb still
+  // consumes its repeats so nothing underneath sees them.
+  testWidgets('only a repeatable command re-runs on key repeat', (
+    tester,
+  ) async {
+    var oneShot = 0;
+    var stepping = 0;
+    const stepActivator = SingleActivator(
+      LogicalKeyboardKey.arrowLeft,
+      alt: true,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: CommandChordScope(
+          commands: [
+            command(
+              'once',
+              activators: (_) => [activator],
+              onRun: () => oneShot++,
+            ),
+            command(
+              'step',
+              activators: (_) => const [stepActivator],
+              repeatable: true,
+              onRun: () => stepping++,
+            ),
+          ],
+          child: const Scaffold(
+            body: Focus(autofocus: true, child: SizedBox.expand()),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    Future<void> hold(
+      LogicalKeyboardKey modifier,
+      LogicalKeyboardKey key,
+    ) async {
+      await tester.sendKeyDownEvent(modifier);
+      await tester.sendKeyDownEvent(key);
+      await tester.sendKeyRepeatEvent(key);
+      await tester.sendKeyRepeatEvent(key);
+      await tester.sendKeyUpEvent(key);
+      await tester.sendKeyUpEvent(modifier);
+      await tester.pump();
+    }
+
+    await hold(LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.keyR);
+    await hold(LogicalKeyboardKey.altLeft, LogicalKeyboardKey.arrowLeft);
+
+    expect(oneShot, 1);
+    expect(stepping, 3);
   });
 
   // Windows reports AltGr as Ctrl + right Alt, so Ctrl+Alt+S would
