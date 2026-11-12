@@ -758,6 +758,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get alreadyRunningQuit => 'Quit';
 
   @override
+  String get engineFailedTitle => 'Klabautermann could not start';
+
+  @override
+  String get engineFailedBody =>
+      'Its background engine did not start, so no servers can be shown. Quit and open Klabautermann again. If this keeps happening, reinstall it and include the details below in a bug report.';
+
+  @override
+  String engineFailedDetail(String detail) {
+    return 'Details: $detail';
+  }
+
+  @override
+  String get engineFailedQuit => 'Quit';
+
+  @override
   String get settingsWindowUnreachable =>
       'Settings cannot reach Klabautermann. Close this window and open Settings again.';
 
@@ -4706,6 +4721,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get endpointsStillPending =>
       'Some servers still need confirming: confirm the jump hosts they go through too.';
+
+  @override
+  String get endpointsChangedMeanwhile =>
+      'A server\'s address changed while you confirmed it. Check it again, then confirm.';
 
   @override
   String get endpointsFailed =>

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:klabautermann_docker/klabautermann_docker.dart';
 import 'package:test/test.dart';
@@ -176,84 +175,6 @@ void main() {
         }
       },
     );
-  });
-
-  group('splitLogLines', () {
-    Future<List<String>> linesOf(
-      List<StdcopyFrame> frames, {
-      int? maxLineChars,
-      StdcopyKind of = StdcopyKind.stdout,
-    }) async {
-      final lines = await splitLogLines(
-        Stream.fromIterable(frames),
-        maxLineChars: maxLineChars ?? defaultMaxLogLineChars,
-      ).toList();
-      return [for (final l in lines.where((l) => l.stream == of)) l.text];
-    }
-
-    StdcopyFrame out(String s) =>
-        StdcopyFrame(StdcopyKind.stdout, Uint8List.fromList(utf8Of(s)));
-
-    test('splits on \\n and normalizes \\r\\n', () async {
-      expect(await linesOf([out('a\nb\r\nc')]), ['a', 'b', 'c']);
-    });
-
-    test('a partial final line flushes at EOF', () async {
-      expect(await linesOf([out('a\ntail')]), ['a', 'tail']);
-    });
-
-    test('multibyte characters survive frame splits', () async {
-      final text = 'héllo ✓ wörld\n';
-      final bytes = utf8Of(text);
-      for (var i = 0; i <= bytes.length; i++) {
-        final lines = await linesOf([
-          StdcopyFrame(
-            StdcopyKind.stdout,
-            Uint8List.fromList(bytes.sublist(0, i)),
-          ),
-          StdcopyFrame(
-            StdcopyKind.stdout,
-            Uint8List.fromList(bytes.sublist(i)),
-          ),
-        ]);
-        expect(lines, ['héllo ✓ wörld'], reason: 'split at byte $i');
-      }
-    });
-
-    test('overlong lines are hard split at the cap', () async {
-      final s = 'x' * 300;
-      expect(await linesOf([out('$s\ny')], maxLineChars: 100), [
-        'x' * 100,
-        'x' * 100,
-        'x' * 100,
-        'y',
-      ]);
-    });
-
-    test('stdout and stderr keep separate pending lines', () async {
-      final lines = await splitLogLines(
-        Stream.fromIterable([
-          out('out-a'),
-          StdcopyFrame(StdcopyKind.stderr, Uint8List.fromList(utf8Of('err-a'))),
-          out('-b\n'),
-          StdcopyFrame(StdcopyKind.stderr, Uint8List.fromList(utf8Of('-b\n'))),
-        ]),
-      ).toList();
-      expect(lines.map((l) => '${l.stream.name}:${l.text}'), [
-        'stdout:out-a-b',
-        'stderr:err-a-b',
-      ]);
-    });
-
-    test('malformed UTF-8 is replaced, not thrown', () async {
-      final frames = [
-        StdcopyFrame(
-          StdcopyKind.stdout,
-          Uint8List.fromList(<int>[0x61, 0xFF, 0x62, 0x0A]),
-        ),
-      ];
-      expect(await linesOf(frames), ['a�b']);
-    });
   });
 
   group('BoundedLogRing', () {

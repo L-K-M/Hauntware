@@ -105,6 +105,6 @@ export 'src/store/file_endpoint_pin_store.dart'
 // (CRED-05's desktop export) applies the same owner-only privacy
 // instead of inventing its own writer.
 export 'src/catalog/atomic_file_writer.dart'
-    show AtomicFilePrivacy, AtomicFileWriter;
+    show AtomicFileParentPolicy, AtomicFilePrivacy, AtomicFileWriter;
 export 'src/store/file_permissions.dart' show restrictLocalPathPermissions;
 export 'src/store/local_directory_sync.dart' show syncLocalDirectory;

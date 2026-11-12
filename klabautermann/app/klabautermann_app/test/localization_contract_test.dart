@@ -76,6 +76,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // Instance-lock debugPrint diagnostics; AlreadyRunningApp and
     // StartupIssueNotice tell the user in ARB text.
     "'Klabautermann is already running; this instance quits.'",
+    // Engine start debugPrint diagnostic; EngineFailedApp tells the user
+    // in ARB text.
+    r"'The engine did not start: $error'",
     r"'$instanceLockFileName: ${issue.error}'",
     // Sync state file debugPrint diagnostics; StartupIssueNotice tells
     // the user in ARB text.
@@ -211,9 +214,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // A migration the engine refused, printed; it is tried again.
     r"'Safety preferences of $serverId stay on this device: $error'",
   },
-  // A refused post's diagnostic, printed.
+  // A refused post's and a failed permission check's diagnostics, printed.
   'lib/controllers/alert_notifications.dart': {
     "'while posting an alert notification'",
+    "'while checking notification permission'",
   },
   // The plugin's start-up diagnostic, the Android icon resource, the
   // Windows toast identity (the product name, the application id of
@@ -498,6 +502,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'That conflict is already being resolved'",
     "'ResolvePinConflict'",
     "'ReadPinConflicts'",
+    // A sign-in's or round's request id, matched in the engine's answer.
+    r"'sync-${_count++}'",
   },
   // TRI-03's acknowledgement keys (kind and subject) and the fields they
   // are stored under in settings.json.

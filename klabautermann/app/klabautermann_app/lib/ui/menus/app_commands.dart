@@ -96,7 +96,22 @@ final class AppCommand {
   /// `context.mounted` after an await before using it again.
   final Future<void> Function(BuildContext context) run;
 
+  /// This command, disabled whatever [enabled] says.
+  AppCommand get disabled => AppCommand(
+    id: id,
+    label: label,
+    menuPlacement: menuPlacement,
+    run: run,
+    enabled: _neverEnabled,
+    checked: checked,
+    activators: activators,
+    leftAltOnly: leftAltOnly,
+    repeats: repeats,
+  );
+
   static bool _alwaysEnabled() => true;
+
+  static bool _neverEnabled() => false;
 
   static List<ShortcutActivator> _noActivators(TargetPlatform _) => const [];
 }
@@ -113,6 +128,15 @@ const String kFleetImportSshConfigCommandId = 'fleet.importSshConfig';
 
 /// File ▸ Quit on Linux and Windows.
 const String kAppQuitCommandId = 'app.quit';
+
+/// The commands that stay enabled while the app lock covers the app (03
+/// §8.13): Settings, whose window covers itself with its own locked
+/// notice, and Quit. Every other one would change or open something
+/// behind the lock screen.
+const Set<String> kCommandsWhileLocked = {
+  kAppSettingsCommandId,
+  kAppQuitCommandId,
+};
 
 /// View ▸ Command Palette… (PLT-07, 03 §10.6), on desktops.
 const String kAppCommandPaletteCommandId = 'app.commandPalette';

@@ -67,6 +67,7 @@ final class PinPublicationController extends ChangeNotifier
 
   /// Requests answered in order by the engine's next state or refusal.
   final List<Completer<void>> _pending = [];
+  bool _engineStopped = false;
 
   @override
   PinPublication get value => _value;
@@ -79,6 +80,11 @@ final class PinPublicationController extends ChangeNotifier
       );
     }
     if (asserted == _value.asserted) return;
+    // A stopped engine's port may still take a request without an error,
+    // and nothing would ever answer it.
+    if (_engineStopped) {
+      throw const PinPublicationNotChangedException('The engine stopped');
+    }
     final answered = Completer<void>();
     _pending.add(answered);
     try {
@@ -116,6 +122,7 @@ final class PinPublicationController extends ChangeNotifier
   }
 
   void _onEngineDone() {
+    _engineStopped = true;
     for (final answered in _pending) {
       answered.completeError(
         const PinPublicationNotChangedException('The engine stopped'),

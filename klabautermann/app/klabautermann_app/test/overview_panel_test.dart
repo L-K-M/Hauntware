@@ -234,6 +234,7 @@ Future<_Panel> _pump(
   bool visible = true,
   ValueNotifier<bool>? announce,
   OverviewLayoutController? layout,
+  ValueNotifier<bool>? locked,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -256,6 +257,16 @@ Future<_Panel> _pump(
       theme: theme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      // The app lock's gate stops tickers beneath it while locked, over
+      // the Navigator; this stands in for it.
+      builder: switch (locked) {
+        final locked? => (context, child) => ValueListenableBuilder(
+          valueListenable: locked,
+          builder: (context, locked, _) =>
+              TickerMode(enabled: !locked, child: child!),
+        ),
+        null => null,
+      },
       home: MediaQuery.withClampedTextScaling(
         minScaleFactor: textScale,
         maxScaleFactor: textScale,
@@ -1732,6 +1743,37 @@ void main() {
 
       // Back on stage: where the value stands now is the start.
       navigator.pop();
+      await tester.pumpAndSettle();
+      await cpu(16, 95);
+      await cpu(28, 95);
+      expect(heard(tester), isEmpty);
+      await cpu(30, 50);
+      await cpu(42, 50);
+      expect(heard(tester), ['CPU 50%: back to normal']);
+    });
+
+    testWidgets('nothing is heard while the app is locked (03 §8.13)', (
+      tester,
+    ) async {
+      final announce = ValueNotifier(true);
+      addTearDown(announce.dispose);
+      final locked = ValueNotifier(true);
+      addTearDown(locked.dispose);
+      final panel = await _pump(tester, announce: announce, locked: locked);
+      Future<void> cpu(int seconds, double percent) => panel.sample(
+        tester,
+        busy(percent),
+        at: _start.add(Duration(seconds: seconds)),
+      );
+
+      // The screen reader would speak to whoever stands at the device.
+      await cpu(0, 50);
+      await cpu(2, 95);
+      await cpu(14, 95);
+      expect(heard(tester), isEmpty);
+
+      // Unlocked: where the value stands now is the start.
+      locked.value = false;
       await tester.pumpAndSettle();
       await cpu(16, 95);
       await cpu(28, 95);
