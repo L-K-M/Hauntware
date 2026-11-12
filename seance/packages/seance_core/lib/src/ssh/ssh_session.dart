@@ -36,17 +36,16 @@ const _maxJumpHosts = 16;
 const _connectTimedOutCodes = {60, 110, 10060};
 
 Future<void> _discardCleanup(CleanupAction action) => runSequentialCleanup(
-      [action],
-      actionTimeout: _cleanupActionTimeout,
-      failureMode: CleanupFailureMode.ignore,
-    );
+  [action],
+  actionTimeout: _cleanupActionTimeout,
+  failureMode: CleanupFailureMode.ignore,
+);
 
-Future<void> _discardSessionChannel(SSHSession session) =>
-    runSequentialCleanup(
-      [session.close, () => session.channel.destroy()],
-      actionTimeout: _cleanupActionTimeout,
-      failureMode: CleanupFailureMode.ignore,
-    );
+Future<void> _discardSessionChannel(SSHSession session) => runSequentialCleanup(
+  [session.close, () => session.channel.destroy()],
+  actionTimeout: _cleanupActionTimeout,
+  failureMode: CleanupFailureMode.ignore,
+);
 
 Future<void> _discardForwardChannel(SSHForwardChannel channel) =>
     runSequentialCleanup(
@@ -56,10 +55,10 @@ Future<void> _discardForwardChannel(SSHForwardChannel channel) =>
     );
 
 Future<void> _discardSftpClient(SftpClient client) => runSequentialCleanup(
-      [client.close],
-      actionTimeout: _cleanupActionTimeout,
-      failureMode: CleanupFailureMode.ignore,
-    );
+  [client.close],
+  actionTimeout: _cleanupActionTimeout,
+  failureMode: CleanupFailureMode.ignore,
+);
 
 /// Resolved credentials for one connection. The vault produces these just
 /// before connect; nothing here is persisted.
@@ -70,19 +69,19 @@ class SshCredentials {
   final String? keyPassphrase;
 
   const SshCredentials.password(this.password)
-      : method = AuthMethod.password,
-        privateKeyPem = null,
-        keyPassphrase = null;
+    : method = AuthMethod.password,
+      privateKeyPem = null,
+      keyPassphrase = null;
 
   const SshCredentials.privateKey(this.privateKeyPem, {this.keyPassphrase})
-      : method = AuthMethod.privateKey,
-        password = null;
+    : method = AuthMethod.privateKey,
+      password = null;
 
   const SshCredentials.agent()
-      : method = AuthMethod.agent,
-        password = null,
-        privateKeyPem = null,
-        keyPassphrase = null;
+    : method = AuthMethod.agent,
+      password = null,
+      privateKeyPem = null,
+      keyPassphrase = null;
 }
 
 /// Whether [pem] holds an encrypted private key, which needs a passphrase
@@ -101,6 +100,23 @@ bool privateKeyNeedsPassphrase(String pem) {
   }
 }
 
+/// Whether [passphrase] opens the private key in [pem].
+///
+/// Parses the key the way [_prepareSshHost] does; a key in a format or
+/// cipher dartssh2 cannot decrypt answers true because a different
+/// passphrase would not help. Text that is not a readable private key
+/// answers false.
+bool privateKeyPassphraseOpens(String pem, String passphrase) {
+  try {
+    SSHKeyPair.fromPem(pem, passphrase);
+    return true;
+  } on UnsupportedError {
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// A saved jump host paired with credentials resolved immediately before use.
 final class ResolvedSshHost {
   final ServerConfig config;
@@ -113,12 +129,13 @@ final class ResolvedSshHost {
 typedef SshJumpHostResolver = Future<ResolvedSshHost?> Function(String id);
 
 /// Opens a direct-tcpip channel through an authenticated jump client.
-typedef SshForwardConnector = Future<SSHSocket> Function(
-  SSHClient client,
-  String host,
-  int port,
-  Duration timeout,
-);
+typedef SshForwardConnector =
+    Future<SSHSocket> Function(
+      SSHClient client,
+      String host,
+      int port,
+      Duration timeout,
+    );
 
 /// Loads identities from the native agent at connection time.
 typedef SshAgentIdentityLoader = Future<List<SSHIdentity>> Function();
@@ -156,9 +173,8 @@ final class KeyboardInteractiveChallenge {
 }
 
 /// Answers a keyboard-interactive challenge (e.g. a 2FA/TOTP code).
-typedef KeyboardInteractiveResponder = Future<List<String>> Function(
-  KeyboardInteractiveChallenge challenge,
-);
+typedef KeyboardInteractiveResponder =
+    Future<List<String>> Function(KeyboardInteractiveChallenge challenge);
 
 Future<bool> _verifyHostKey({
   required TofuVerifier tofu,
@@ -398,7 +414,8 @@ String redactConnectionTrace(String line) {
   final firstResponses = _userauthResponses.firstMatch(line);
   final tokenAt = line.indexOf(_infoResponseToken);
   final tokenEnd = tokenAt + _infoResponseToken.length;
-  final countOnly = tokenAt >= 0 &&
+  final countOnly =
+      tokenAt >= 0 &&
       _userauthResponseCount.matchAsPrefix(line, tokenEnd) != null;
   if (tokenAt >= 0 &&
       !countOnly &&
@@ -415,7 +432,6 @@ String redactConnectionTrace(String line) {
     (match) => '${match[1] ?? ''}(responses: [redacted])',
   );
 }
-
 
 /// Why a connection attempt failed, as [SshConnectException.kind]. Typed,
 /// not text: each app can render its own copy, while
@@ -504,6 +520,10 @@ class SshConnectException implements Exception {
   final SshConnectionLog log;
   final SshConnectFailureKind kind;
 
+  /// The configured host whose key failed to load, including a jump host.
+  /// Null for failures that do not identify a local credential source.
+  final String? serverId;
+
   // [kind] is named and optional because other products construct this
   // exception positionally for failures of their own.
   SshConnectException(
@@ -511,6 +531,7 @@ class SshConnectException implements Exception {
     this.cause,
     this.log, {
     this.kind = SshConnectFailureKind.other,
+    this.serverId,
   });
 
   /// The connection stopped at host-key verification: the user (or the
@@ -634,7 +655,8 @@ _ClientLimitation? _clientLimitation(
     if (unsupported.isNotEmpty) {
       return (
         kind: SshConnectFailureKind.unsupportedAlgorithm,
-        summary: 'Could not agree on SSH algorithms with $target: the '
+        summary:
+            'Could not agree on SSH algorithms with $target: the '
             'server requires a ${_categoryNames(unsupported)} algorithm this '
             'client does not support.',
       );
@@ -642,7 +664,8 @@ _ClientLimitation? _clientLimitation(
     final refused = _refusedAlgorithmsOffered(offer, unshared).join(', ');
     return (
       kind: SshConnectFailureKind.insecureAlgorithmsOnly,
-      summary: 'Could not agree on SSH algorithms with $target: the server '
+      summary:
+          'Could not agree on SSH algorithms with $target: the server '
           'offers only algorithms this client refuses as insecure '
           '($refused).',
     );
@@ -657,7 +680,8 @@ _ClientLimitation? _clientLimitation(
   if (!_endedWithoutReason(error) && !_isTimeout(error)) return null;
   return (
     kind: SshConnectFailureKind.keyExchangeTimedOut,
-    summary: 'Could not finish key exchange with $target in time. '
+    summary:
+        'Could not finish key exchange with $target in time. '
         '${kex.name} is finite-field Diffie-Hellman, which can be too slow '
         'on some devices; enabling curve25519-sha256 or an ecdh-sha2 key '
         'exchange on the server avoids it.',
@@ -675,17 +699,16 @@ bool _endedWithoutReason(Object error) =>
 List<String> _refusedAlgorithmsOffered(
   ServerKexInit offer,
   Set<SshAlgorithmCategory> unshared,
-) =>
-    [
-      if (unshared.contains(SshAlgorithmCategory.keyExchange))
-        for (final kex in suiteRefusedSshAlgorithms.kex)
-          if (offer.kex.contains(kex.name)) kex.name,
-      if (unshared.contains(SshAlgorithmCategory.mac))
-        for (final mac in suiteRefusedSshAlgorithms.mac)
-          if (offer.macClientToServer.contains(mac.name) ||
-              offer.macServerToClient.contains(mac.name))
-            mac.name,
-    ];
+) => [
+  if (unshared.contains(SshAlgorithmCategory.keyExchange))
+    for (final kex in suiteRefusedSshAlgorithms.kex)
+      if (offer.kex.contains(kex.name)) kex.name,
+  if (unshared.contains(SshAlgorithmCategory.mac))
+    for (final mac in suiteRefusedSshAlgorithms.mac)
+      if (offer.macClientToServer.contains(mac.name) ||
+          offer.macServerToClient.contains(mac.name))
+        mac.name,
+];
 
 /// [categories] as one phrase, such as "key exchange or cipher".
 String _categoryNames(Set<SshAlgorithmCategory> categories) {
@@ -909,13 +932,12 @@ class SshSession implements SessionTransport {
     String command, {
     Duration? timeout,
     int maxOutputBytes = 256 * 1024,
-  }) =>
-      _execCore.run(
-        command,
-        open: () => _openCommandChannel(command),
-        timeout: timeout,
-        maxOutputBytes: maxOutputBytes,
-      );
+  }) => _execCore.run(
+    command,
+    open: () => _openCommandChannel(command),
+    timeout: timeout,
+    maxOutputBytes: maxOutputBytes,
+  );
 
   Future<SSHSession> _openCommandChannel(String command) async {
     final channel = await boundedOpen(
@@ -991,24 +1013,21 @@ class SshSession implements SessionTransport {
     _remoteFileSystem = null;
     _loopbackForwards.clear();
 
-    await runSequentialCleanup(
-      [
-        for (final subscription in subscriptions) subscription.cancel,
-        for (final forward in forwards)
-          () async {
-            try {
-              await (await forward).close();
-            } on Object {
-              // A forward that never bound has nothing to close.
-            }
-          },
-        if (sftpClient != null) sftpClient.close,
-        shell.close,
-        client.close,
-        engine.dispose,
-      ],
-      actionTimeout: _cleanupActionTimeout,
-    );
+    await runSequentialCleanup([
+      for (final subscription in subscriptions) subscription.cancel,
+      for (final forward in forwards)
+        () async {
+          try {
+            await (await forward).close();
+          } on Object {
+            // A forward that never bound has nothing to close.
+          }
+        },
+      if (sftpClient != null) sftpClient.close,
+      shell.close,
+      client.close,
+      engine.dispose,
+    ], actionTimeout: _cleanupActionTimeout);
   }
 
   @override
@@ -1028,10 +1047,13 @@ SSHUserInfoRequestHandler? _keyboardInteractiveHandler({
     // This is a prompt-text heuristic; it may not reflect whether the UI
     // actually asked the user for a password.
     final promptedPassword = prompts.any(
-        (prompt) => prompt.toLowerCase().contains('password'));
-    onAuthKind(promptedPassword
-        ? AuthKind.promptedPassword
-        : AuthKind.keyboardInteractive);
+      (prompt) => prompt.toLowerCase().contains('password'),
+    );
+    onAuthKind(
+      promptedPassword
+          ? AuthKind.promptedPassword
+          : AuthKind.keyboardInteractive,
+    );
     return responder(
       KeyboardInteractiveChallenge(
         server: config,
@@ -1083,10 +1105,8 @@ Future<(SSHClient, AuthKind)> openAuthenticatedClient({
   );
 
   Future<List<SSHIdentity>>? sharedAgentIdentities;
-  Future<List<SSHIdentity>> agentIdentities() =>
-      sharedAgentIdentities ??= (loadAgentIdentities ??
-              () => SshAgentClient().identities())
-          .call();
+  Future<List<SSHIdentity>> agentIdentities() => sharedAgentIdentities ??=
+      (loadAgentIdentities ?? () => SshAgentClient().identities()).call();
 
   // Prepare every credential before the first network side effect.
   final preparedRoute = <_PreparedSshHost>[];
@@ -1100,11 +1120,12 @@ Future<(SSHClient, AuthKind)> openAuthenticatedClient({
     );
   }
 
-  final socketConnector = connect ??
+  final socketConnector =
+      connect ??
       ((host, port, socketTimeout) =>
           SSHSocket.connect(host, port, timeout: socketTimeout));
-  final forwardConnector = forward ??
-      ((client, host, port, _) => client.forwardLocal(host, port));
+  final forwardConnector =
+      forward ?? ((client, host, port, _) => client.forwardLocal(host, port));
 
   SSHClient? parent;
   AuthKind? authKind;
@@ -1119,8 +1140,10 @@ Future<(SSHClient, AuthKind)> openAuthenticatedClient({
       final label = identity.comment == null
           ? identity.type
           : '${identity.type} (${identity.comment})';
-      note('Offering key: $label '
-          '${SshSessionManager._fingerprint(identity.toPublicKey().encode())}');
+      note(
+        'Offering key: $label '
+        '${SshSessionManager._fingerprint(identity.toPublicKey().encode())}',
+      );
     }
 
     SSHSocket socket;
@@ -1302,7 +1325,9 @@ Future<_PreparedSshHost> _prepareSshHost(
         ),
       );
     } catch (error) {
-      note('Auth method: ${SshSessionManager._methodLabel(credentials.method)}');
+      note(
+        'Auth method: ${SshSessionManager._methodLabel(credentials.method)}',
+      );
       note('Could not load the private key: $error');
       final hint = credentials.keyPassphrase == null
           ? ' (is it passphrase-protected? add the passphrase to this server)'
@@ -1312,6 +1337,7 @@ Future<_PreparedSshHost> _prepareSshHost(
         error,
         log ?? SshConnectionLog(),
         kind: _keyLoadFailureKind(error, credentials),
+        serverId: config.id,
       );
     }
     if (identities.isEmpty) {
@@ -1328,7 +1354,9 @@ Future<_PreparedSshHost> _prepareSshHost(
         );
       }
     } catch (error) {
-      note('Auth method: ${SshSessionManager._methodLabel(credentials.method)}');
+      note(
+        'Auth method: ${SshSessionManager._methodLabel(credentials.method)}',
+      );
       note('Could not load keys from the ssh-agent: $error');
       throw SshConnectException(
         'Could not load ssh-agent keys for $target: $error',
@@ -1423,9 +1451,15 @@ Future<(SSHClient, AuthKind)> _authenticateSshHost({
       hostKeyReached: hostKeyReached,
       target: target,
     );
-    final summary = limitation?.summary ??
+    final summary =
+        limitation?.summary ??
         SshSessionManager._summarizeFailure(
-            error, config, target, credentials, log);
+          error,
+          config,
+          target,
+          credentials,
+          log,
+        );
     note('');
     note(summary);
     final openedClient = client;
@@ -1466,13 +1500,13 @@ final class _OwnedJumpSocket implements SSHSocket {
 
   @override
   Future<void> close() => _cleanup.run(
-        () => runSequentialCleanup(
-          // A forwarded channel may never finish a graceful close. Abort it so
-          // the parent chain is released without one timeout per hop.
-          [_forwarded.destroy, _parent.close],
-          actionTimeout: _cleanupActionTimeout,
-        ),
-      );
+    () => runSequentialCleanup(
+      // A forwarded channel may never finish a graceful close. Abort it so
+      // the parent chain is released without one timeout per hop.
+      [_forwarded.destroy, _parent.close],
+      actionTimeout: _cleanupActionTimeout,
+    ),
+  );
 
   @override
   void destroy() {
@@ -1510,7 +1544,7 @@ class SshSessionManager {
   /// Injectable connector, so tests can substitute a fake transport. Defaults
   /// to a real TCP socket.
   final Future<SSHSocket> Function(String host, int port, Duration timeout)
-      _connect;
+  _connect;
   final _SshRouteDependencies _routeDependencies;
 
   SshSessionManager({
@@ -1518,13 +1552,14 @@ class SshSessionManager {
     required this.onHostKey,
     this.onKeyboardInteractive,
     Future<SSHSocket> Function(String host, int port, Duration timeout)?
-        connect,
+    connect,
     SshJumpHostResolver? resolveJumpHost,
     SshForwardConnector? forward,
     SshAgentIdentityLoader? loadAgentIdentities,
-  }) : _connect = connect ??
-            ((host, port, timeout) =>
-                SSHSocket.connect(host, port, timeout: timeout)),
+  }) : _connect =
+           connect ??
+           ((host, port, timeout) =>
+               SSHSocket.connect(host, port, timeout: timeout)),
        _routeDependencies = _SshRouteDependencies(
          resolveJumpHost,
          forward,
@@ -1576,12 +1611,15 @@ class SshSessionManager {
   @visibleForTesting
   static Uint8List? loginScriptKeystrokesFor(ServerConfig config) =>
       normalizeLoginScript(config.loginScript) == null
-          ? null
-          : loginScriptKeystrokes(config.loginScript!);
+      ? null
+      : loginScriptKeystrokes(config.loginScript!);
 
   /// Send [config]'s optional login script into the freshly opened [shell].
   void _runLoginScript(
-      SSHSession shell, ServerConfig config, void Function(String) note) {
+    SSHSession shell,
+    ServerConfig config,
+    void Function(String) note,
+  ) {
     final keystrokes = loginScriptKeystrokesFor(config);
     if (keystrokes == null) return;
     note('Running login script.');
@@ -1652,23 +1690,36 @@ class SshSessionManager {
   }
 
   static String _methodLabel(AuthMethod method) => switch (method) {
-        AuthMethod.password => 'password',
-        AuthMethod.privateKey => 'public key',
-        AuthMethod.agent => 'ssh-agent',
-      };
+    AuthMethod.password => 'password',
+    AuthMethod.privateKey => 'public key',
+    AuthMethod.agent => 'ssh-agent',
+  };
 
   /// Test seam for [_summarizeFailure], which is otherwise reachable only via a
   /// live handshake.
   @visibleForTesting
-  static String summarizeFailureForTest(Object e, ServerConfig config,
-          SshCredentials credentials, SshConnectionLog log) =>
-      _summarizeFailure(e, config,
-          '${config.username}@${config.host}:${config.port}', credentials, log);
+  static String summarizeFailureForTest(
+    Object e,
+    ServerConfig config,
+    SshCredentials credentials,
+    SshConnectionLog log,
+  ) => _summarizeFailure(
+    e,
+    config,
+    '${config.username}@${config.host}:${config.port}',
+    credentials,
+    log,
+  );
 
   /// Turn dartssh2's terse errors into an actionable one-liner, mining the
   /// captured trace for the server's accepted-methods list when auth failed.
-  static String _summarizeFailure(Object e, ServerConfig config, String target,
-      SshCredentials credentials, SshConnectionLog? log) {
+  static String _summarizeFailure(
+    Object e,
+    ServerConfig config,
+    String target,
+    SshCredentials credentials,
+    SshConnectionLog? log,
+  ) {
     final agentFailure = _sshAgentFailure(e);
     if (credentials.method == AuthMethod.agent && agentFailure != null) {
       return 'ssh-agent failed for $target: $agentFailure';
@@ -1678,35 +1729,41 @@ class SshSessionManager {
       final accepted = _acceptedMethodsFromLog(log);
       final tried = _methodLabel(credentials.method);
       final buffer = StringBuffer(
-          'Authentication failed for $target (tried $tried).');
+        'Authentication failed for $target (tried $tried).',
+      );
       if (accepted != null && accepted.isNotEmpty) {
         buffer.write(' The server accepts: ${accepted.join(', ')}.');
         if (!accepted.contains(_sshMethodName(credentials.method))) {
-          buffer.write(
-              ' Switch this server to a method the host allows.');
+          buffer.write(' Switch this server to a method the host allows.');
         } else if (credentials.method == AuthMethod.privateKey) {
           // The key was presented (publickey is accepted) but the server said
           // no: almost always the key isn't in the target user's
           // authorized_keys, or a different key than expected was configured.
           final key = _offeredKeyFromLog(log);
-          buffer.write(' The offered key'
-              '${key != null ? ' ($key)' : ''} was rejected. Add its public '
-              "half to ${config.username}@${config.host}'s "
-              '~/.ssh/authorized_keys, or configure the key that host already '
-              'trusts.');
+          buffer.write(
+            ' The offered key'
+            '${key != null ? ' ($key)' : ''} was rejected. Add its public '
+            "half to ${config.username}@${config.host}'s "
+            '~/.ssh/authorized_keys, or configure the key that host already '
+            'trusts.',
+          );
         } else if (credentials.method == AuthMethod.agent) {
-          buffer.write(' The offered ssh-agent keys were rejected. '
-              'Load a key trusted by this host, or add one of the loaded '
-              "public keys to ${config.username}@${config.host}'s "
-              '~/.ssh/authorized_keys.');
+          buffer.write(
+            ' The offered ssh-agent keys were rejected. '
+            'Load a key trusted by this host, or add one of the loaded '
+            "public keys to ${config.username}@${config.host}'s "
+            '~/.ssh/authorized_keys.',
+          );
         } else if (config.username == 'root') {
           // The host advertises password but rejected it for root: on stock
           // Debian/Ubuntu this is PermitRootLogin prohibit-password, which
           // blocks password login for root even with the correct password.
-          buffer.write(' The host advertises password auth but rejected it for '
-              'root — many servers set PermitRootLogin prohibit-password, which '
-              'blocks password login for root. Use a key, or log in as a '
-              'non-root user and escalate.');
+          buffer.write(
+            ' The host advertises password auth but rejected it for '
+            'root — many servers set PermitRootLogin prohibit-password, which '
+            'blocks password login for root. Use a key, or log in as a '
+            'non-root user and escalate.',
+          );
         } else {
           buffer.write(' Check the credential (wrong password or key).');
         }
@@ -1742,10 +1799,10 @@ class SshSessionManager {
 
   /// dartssh2's SSH-protocol name for our credential's method.
   static String _sshMethodName(AuthMethod method) => switch (method) {
-        AuthMethod.password => 'password',
-        AuthMethod.privateKey => 'publickey',
-        AuthMethod.agent => 'publickey',
-      };
+    AuthMethod.password => 'password',
+    AuthMethod.privateKey => 'publickey',
+    AuthMethod.agent => 'publickey',
+  };
 
   /// The OpenSSH-style SHA256 fingerprint of a public-key blob (matches
   /// `ssh-keygen -lf`), so a user can eyeball it against `authorized_keys`.
@@ -1786,5 +1843,4 @@ class SshSessionManager {
         .where((s) => s.isNotEmpty)
         .toList();
   }
-
 }

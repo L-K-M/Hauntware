@@ -304,6 +304,70 @@ void main() {
     });
   });
 
+  group('ghostForwardUndoToFocusedText', () {
+    Future<void> pumpField(
+      WidgetTester tester, {
+      Map<Type, Action<Intent>> actions = const {},
+    }) {
+      return tester.pumpWidget(
+        MaterialApp(
+          home: Actions(
+            actions: actions,
+            child: const Scaffold(body: TextField(autofocus: true)),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('a focused text field takes the step, either way', (
+      tester,
+    ) async {
+      var undos = 0;
+      var redos = 0;
+      await pumpField(
+        tester,
+        actions: {
+          UndoTextIntent: CallbackAction<UndoTextIntent>(
+            onInvoke: (_) => undos++,
+          ),
+          RedoTextIntent: CallbackAction<RedoTextIntent>(
+            onInvoke: (_) => redos++,
+          ),
+        },
+      );
+      await tester.pump();
+
+      expect(ghostForwardUndoToFocusedText(true), isTrue);
+      expect(ghostForwardUndoToFocusedText(false), isTrue);
+      expect((undos, redos), (1, 1));
+    });
+
+    testWidgets('returns false while no text field holds focus', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: Focus(autofocus: true, child: SizedBox())),
+        ),
+      );
+      await tester.pump();
+
+      expect(ghostForwardUndoToFocusedText(true), isFalse);
+    });
+
+    testWidgets('a focused field keeps the step it cannot run', (tester) async {
+      var undos = 0;
+      await pumpField(
+        tester,
+        actions: {UndoTextIntent: _RefusedUndo(() => undos++)},
+      );
+      await tester.pump();
+
+      expect(ghostForwardUndoToFocusedText(true), isTrue);
+      expect(undos, 0);
+    });
+  });
+
   GhostMenu menu() => GhostMenu(
     id: 'file',
     title: 'File',
@@ -594,4 +658,18 @@ void main() {
       );
     });
   });
+}
+
+/// An undo action that never runs: [maybeFind] still surfaces it, so a
+/// focused field owns the step even though nothing inside can take it.
+final class _RefusedUndo extends Action<UndoTextIntent> {
+  _RefusedUndo(this._onInvoke);
+
+  final void Function() _onInvoke;
+
+  @override
+  bool get isActionEnabled => false;
+
+  @override
+  void invoke(UndoTextIntent intent) => _onInvoke();
 }

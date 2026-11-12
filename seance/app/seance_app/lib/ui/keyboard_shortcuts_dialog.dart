@@ -144,6 +144,11 @@ List<ShortcutSection> keyboardShortcutSections(TargetPlatform platform) {
         (action: 'Undo', keys: window(WindowCommand.undo)),
         (action: 'Redo', keys: window(WindowCommand.redo)),
         (action: 'Filter servers', keys: keys(serverFilterActivator(platform))),
+        (action: 'Command palette', keys: window(WindowCommand.showPalette)),
+        (
+          action: 'Keyboard shortcuts',
+          keys: window(WindowCommand.showKeyboardShortcuts),
+        ),
         (
           action: 'Settings',
           keys: keys(
