@@ -2460,6 +2460,9 @@ class _RenameEditorState extends State<_RenameEditor> {
                       controller: _text,
                       focusNode: _fieldFocus,
                       autofocus: true,
+                      // File names stay out of the keyboard's personal
+                      // dictionary.
+                      enableIMEPersonalizedLearning: false,
                       maxLines: 1,
                       style: style,
                       decoration: null,
@@ -2977,6 +2980,8 @@ class _PathEditorFieldState extends State<_PathEditorField> {
             controller: _text,
             focusNode: widget.focusNode,
             autofocus: true,
+            // Paths stay out of the keyboard's personal dictionary.
+            enableIMEPersonalizedLearning: false,
             style: poltergeistMonoTextStyle.copyWith(fontSize: 12),
             decoration: InputDecoration(
               isDense: true,
@@ -3352,6 +3357,9 @@ class _QuickSelectFieldState extends State<_QuickSelectField> {
                     controller: _query,
                     focusNode: _fieldFocus,
                     autofocus: true,
+                    // Patterns name files; keep them out of the
+                    // keyboard's personal dictionary.
+                    enableIMEPersonalizedLearning: false,
                     style: Theme.of(context).textTheme.bodySmall,
                     decoration: InputDecoration(
                       isDense: true,

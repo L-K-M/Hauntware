@@ -126,6 +126,8 @@ void main() {
       expect(left.renameTarget!.name, 'report.txt');
       final field = tester.widget<TextField>(find.byKey(fieldKey));
       expect(field.controller!.text, 'report.txt');
+      // Names and paths stay out of the keyboard's personal dictionary.
+      expect(field.enableIMEPersonalizedLearning, isFalse);
       // The stem is selected, the extension survives the first key; the
       // caret end sits at the start so a long name shows its beginning.
       expect(

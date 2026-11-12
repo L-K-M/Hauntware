@@ -158,6 +158,9 @@ class _HomeSearchFieldState extends State<_HomeSearchField> {
         focusNode: widget.focusNode,
         onChanged: widget.onChanged,
         onSubmitted: (_) => widget.onSubmitted(),
+        // Searches name servers, hosts and folders; keep them out of the
+        // keyboard's personal dictionary.
+        enableIMEPersonalizedLearning: false,
         textInputAction: TextInputAction.search,
         textAlignVertical: TextAlignVertical.center,
         style: theme.textTheme.bodyLarge,
