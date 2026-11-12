@@ -63,6 +63,9 @@ final class TimeSeriesRing extends ChangeNotifier {
 
   final List<ChartGap> _gaps = [];
   int _added = 0;
+
+  /// [_added] as of the last [clear]: the samples before it are gone.
+  int _cleared = 0;
   int _version = 0;
   int _latest = 0;
 
@@ -73,7 +76,7 @@ final class TimeSeriesRing extends ChangeNotifier {
   /// Bumped by every sample and gap change.
   int get version => _version;
 
-  int get length => math.min(_added, capacity);
+  int get length => math.min(_added - _cleared, capacity);
 
   /// The gaps, oldest first; the last one may still be open. A gap is
   /// dropped once a sample at or after its end has left the ring, so the
@@ -113,7 +116,7 @@ final class TimeSeriesRing extends ChangeNotifier {
     assert(values.length == lanes, 'one value per lane');
     final micros = _ordered(at);
     final slot = _added % capacity;
-    if (_added >= capacity) _evicted = _times[slot];
+    if (_added - _cleared >= capacity) _evicted = _times[slot];
     _times[slot] = micros;
     for (var lane = 0; lane < lanes; lane++) {
       final value = values[lane];
@@ -125,7 +128,7 @@ final class TimeSeriesRing extends ChangeNotifier {
     if (open != null) {
       _gaps.last = (start: open.start, end: _time(micros), reason: open.reason);
     }
-    _joined[slot] = _added > 0 && open == null ? 1 : 0;
+    _joined[slot] = _added > _cleared && open == null ? 1 : 0;
     _added++;
     _changed();
   }
@@ -140,6 +143,16 @@ final class TimeSeriesRing extends ChangeNotifier {
       _gaps.last = (start: open.start, end: _time(micros), reason: open.reason);
     }
     _gaps.add((start: _time(micros), end: null, reason: reason));
+    _changed();
+  }
+
+  /// Drops every sample and gap, as when the series now describes
+  /// another machine. Times still never go backwards.
+  void clear() {
+    if (_added == _cleared && _gaps.isEmpty) return;
+    _cleared = _added;
+    _gaps.clear();
+    _evicted = null;
     _changed();
   }
 

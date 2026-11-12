@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:meta/meta.dart';
-import 'package:seance_core/catalog.dart' show syncLocalDirectory;
+import 'package:seance_core/catalog.dart'
+    show AtomicFileParentPolicy, AtomicFileWriter;
 import 'package:seance_core/seance_core.dart' show uuidV4;
 
 import '../certificates/tls_check.dart' show TlsEndpoint;
@@ -1170,34 +1171,14 @@ Future<String> unusedCorruptCopyPath(File file, DateTime time) async {
 
 /// The store's default [DeviceSettingsWriter], and the writer for the
 /// other device-local files: the app's `window_state.json` and the
-/// engine's import store. It follows the catalog stores' write order
-/// (`AtomicFileWriter` in `seance_core`, which its barrel does not
-/// export). A sibling temp file with a random name is written and
-/// flushed, renamed over [target], and the directory synced through
-/// `seance_core`'s [syncLocalDirectory] so the rename survives power loss.
-/// A reader, or a crash, sees the old file or the new one, never a partial
-/// one. A failure deletes the temp file and rethrows. Concurrent writes to
-/// one target are the caller's to order: each lands whole, and the last
-/// rename wins.
-Future<void> writeFileAtomically(File target, List<int> bytes) async {
-  await target.parent.create(recursive: true);
-  final temporary = File('${target.path}.tmp-${uuidV4()}');
-  try {
-    final handle = await temporary.open(mode: FileMode.writeOnly);
-    try {
-      await handle.writeFrom(bytes);
-      await handle.flush();
-    } finally {
-      await handle.close();
-    }
-    await temporary.rename(target.path);
-    await syncLocalDirectory(target.parent);
-  } on Object {
-    try {
-      if (await temporary.exists()) await temporary.delete();
-    } on Object {
-      // The write's own failure is the one to report.
-    }
-    rethrow;
-  }
-}
+/// engine's import store. A reader, or a crash, sees the old file or the
+/// new one, never a partial one. A failure deletes the temp file and
+/// rethrows. The shared writer orders replacements of one target by request.
+Future<void> writeFileAtomically(File target, List<int> bytes) =>
+    const AtomicFileWriter().writeBytes(
+      target,
+      bytes,
+      // Retain this store family's directory-link policy inside the shared
+      // request queue, so asynchronous preparation cannot reorder saves.
+      parentPolicy: AtomicFileParentPolicy.requireLinkTargets,
+    );

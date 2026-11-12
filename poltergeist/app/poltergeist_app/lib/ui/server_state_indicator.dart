@@ -104,7 +104,7 @@ class ServerStateGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
 
     // Probe truth has no paint here: a caller that shows reachability
     // paints its own dot for it. Reaching for this glyph with probe truth

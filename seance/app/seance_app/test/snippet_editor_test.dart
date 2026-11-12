@@ -14,12 +14,29 @@ import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
+// Save/Delete and the undo closures use these same entry points. Keep their
+// real stores out of fake async while retaining the UI's fake-clock notices.
+class _SnippetSaveAppState extends AppState {
+  _SnippetSaveAppState(super.services);
+
+  final Zone _ioZone = Zone.current;
+  Future<void>? _mutation;
+
+  @override
+  Future<void> saveSnippet(Snippet snippet) =>
+      _mutation = _ioZone.run<Future<void>>(() => super.saveSnippet(snippet));
+
+  @override
+  Future<void> deleteSnippet(String id) =>
+      _mutation = _ioZone.run<Future<void>>(() => super.deleteSnippet(id));
+}
+
 /// The snippet editor and the undo history it feeds.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory directory;
   late AppServices services;
-  late AppState state;
+  late _SnippetSaveAppState state;
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('seance-snippet-editor-');
@@ -27,10 +44,11 @@ void main() {
         .setMockMethodCallHandler(_pathChannel, (call) async => directory.path);
     FlutterSecureStorage.setMockInitialValues({});
     services = await AppServices.initialize();
-    state = AppState(services);
+    state = _SnippetSaveAppState(services);
   });
 
   tearDown(() async {
+    await state._mutation;
     state.dispose();
     await services.probe.dispose();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -38,6 +56,18 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
     await directory.delete(recursive: true);
   });
+
+  Future<void> finishWrites(WidgetTester tester) async {
+    await tester.runAsync(() async {
+      await state._mutation;
+      final saved = await services.snippetStore.listSnippets();
+      expect(
+        [for (final s in saved) (s.id, s.title, s.body, s.updatedAt)],
+        [for (final s in state.snippets) (s.id, s.title, s.body, s.updatedAt)],
+      );
+    });
+    await tester.pump();
+  }
 
   /// Lets the save's file write finish and the editor close.
   Future<void> saved(WidgetTester tester) async {
@@ -48,6 +78,7 @@ void main() {
       await tester.pump();
     }
     await tester.pumpAndSettle();
+    await finishWrites(tester);
   }
 
   testWidgets('saving a snippet unchanged writes nothing and leaves nothing '
@@ -154,6 +185,7 @@ void main() {
         );
         await tester.pump();
       }
+      await finishWrites(tester);
     }
 
     await tester.tap(find.byType(PopupMenuButton<String>));
@@ -187,6 +219,7 @@ void main() {
         ),
       ),
     );
+
     /// Gives the snippet store's file writes real time until [done]. The
     /// store queues its writes, so a step started here must also finish
     /// here rather than be awaited inside runAsync.
@@ -197,6 +230,7 @@ void main() {
         );
         await tester.pump();
       }
+      await finishWrites(tester);
     }
 
     await tester.tap(find.byTooltip('Save as snippet'));

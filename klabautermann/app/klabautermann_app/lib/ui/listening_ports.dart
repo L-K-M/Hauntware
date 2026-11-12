@@ -5,6 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'read_section.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 
 /// How many characters of a container id name it, as `docker ps` shows.
@@ -35,8 +36,7 @@ List<PortRow> portRows(ListeningPortsRead read) {
       // SO_REUSEPORT gives each worker its own socket on one address.
       addresses: [
         ...?row?.addresses,
-        if (!(row?.addresses.contains(socket.address) ?? false))
-          socket.address,
+        if (!(row?.addresses.contains(socket.address) ?? false)) socket.address,
       ],
       processes: row?.processes ?? socket.processes,
       everyAddress: (row?.everyAddress ?? false) || socket.everyAddress,
@@ -49,57 +49,27 @@ List<PortRow> portRows(ListeningPortsRead read) {
 /// processes behind each and the systemd unit or container that owns
 /// them. It reads when it shows and on request; a server switch reads
 /// the new server's.
-class ListeningPortsSection extends StatefulWidget {
+class ListeningPortsSection extends StatefulWidget implements HostReadSection {
   const ListeningPortsSection({
     super.key,
     required this.monitoring,
     required this.serverId,
   });
 
+  @override
   final MonitoringController monitoring;
+
+  @override
   final String serverId;
 
   @override
   State<ListeningPortsSection> createState() => _ListeningPortsSectionState();
 }
 
-class _ListeningPortsSectionState extends State<ListeningPortsSection> {
-  HostPayload? _read;
-  bool _reading = false;
-
-  /// Bumped per read, so only the newest answer lands.
-  int _ticket = 0;
-
+class _ListeningPortsSectionState extends State<ListeningPortsSection>
+    with HostReadSectionState<ListeningPortsSection> {
   @override
-  void initState() {
-    super.initState();
-    unawaited(_load());
-  }
-
-  @override
-  void didUpdateWidget(ListeningPortsSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.serverId == widget.serverId &&
-        oldWidget.monitoring == widget.monitoring) {
-      return;
-    }
-    _read = null;
-    unawaited(_load());
-  }
-
-  Future<void> _load() async {
-    final ticket = ++_ticket;
-    if (mounted) setState(() => _reading = true);
-    final result = await widget.monitoring.queryHost(
-      widget.serverId,
-      const ListeningPortsQuery(),
-    );
-    if (!mounted || ticket != _ticket) return;
-    setState(() {
-      _read = result.payload;
-      _reading = false;
-    });
-  }
+  HostQuerySpec get hostQuery => const ListeningPortsQuery();
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +81,7 @@ class _ListeningPortsSectionState extends State<ListeningPortsSection> {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: OutlinedButton(
-            onPressed: _reading ? null : () => unawaited(_load()),
+            onPressed: hostReading ? null : () => unawaited(readHost()),
             child: Text(l10n.systemPortsReadAgain),
           ),
         ),
@@ -119,7 +89,7 @@ class _ListeningPortsSectionState extends State<ListeningPortsSection> {
     );
   }
 
-  List<Widget> _lines(AppLocalizations l10n) => switch (_read) {
+  List<Widget> _lines(AppLocalizations l10n) => switch (hostRead) {
     null => [
       PanelNotice(icon: Icons.hourglass_empty, text: l10n.systemPortsReading),
     ],

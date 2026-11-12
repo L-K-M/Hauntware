@@ -33,7 +33,7 @@ class _KeyboardShortcutsDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final platform = theme.platform;
 
     final grouped = <AppMenuId?, List<(String, String)>>{};

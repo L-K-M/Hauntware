@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart';
@@ -13,13 +15,33 @@ import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/theme.dart';
 import 'package:seance_app/ui/adaptive_shell.dart';
 import 'package:seance_app/ui/header_toolbar.dart';
-import 'package:seance_app/ui/macos_toolbar_band.dart';
 import 'package:seance_app/ui/server_list_pane.dart';
 import 'package:seance_app/ui/sidebar_panel.dart';
 import 'package:seance_app/ui/terminal_pane.dart';
 import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+
+// Resize/toggle callbacks persist in the real bootstrap zone, not in the
+// widget clock that would strand the following route test's store bootstrap.
+class _SettingsSaveAppState extends AppState {
+  _SettingsSaveAppState(super.services);
+
+  final Zone _ioZone = Zone.current;
+  Future<void>? _settingsSave;
+
+  @override
+  Future<void> setPaneWidths({
+    required double listWidth,
+    required double utilityWidth,
+  }) => _settingsSave = _ioZone.run<Future<void>>(
+    () => super.setPaneWidths(listWidth: listWidth, utilityWidth: utilityWidth),
+  );
+
+  @override
+  Future<void> setSidebarVisible(bool visible) => _settingsSave = _ioZone
+      .run<Future<void>>(() => super.setSidebarVisible(visible));
+}
 
 /// On macOS the window's titlebar is part of the app, as in Poltergeist:
 /// the wide layout draws its header under the unified toolbar band, with
@@ -30,9 +52,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   Directory? directory;
   AppServices? services;
-  AppState? state;
+  _SettingsSaveAppState? state;
 
   tearDown(() async {
+    await state?._settingsSave;
     state?.dispose();
     state = null;
     await services?.probe.dispose();
@@ -90,7 +113,7 @@ void main() {
           );
       FlutterSecureStorage.setMockInitialValues({});
       services = await AppServices.initialize();
-      state = AppState(services!);
+      state = _SettingsSaveAppState(services!);
       await state!.saveServer(server);
       for (final other in more) {
         await state!.saveServer(other);
@@ -129,6 +152,13 @@ void main() {
   Future<void> unmount(WidgetTester tester) async {
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 50));
+    await tester.runAsync(() async {
+      await state?._settingsSave;
+      final saved = await services!.settingsStore.load();
+      expect(saved.paneListWidth, services!.settings.paneListWidth);
+      expect(saved.paneUtilityWidth, services!.settings.paneUtilityWidth);
+      expect(saved.sidebarHidden, services!.settings.sidebarHidden);
+    });
   }
 
   Future<void> pushRoute(

@@ -3139,6 +3139,30 @@ abstract class AppLocalizations {
   /// **'Accent'**
   String get appearanceSlotAccent;
 
+  /// Appearance section: notice that a chosen accent needs contrast-safe functional tones.
+  ///
+  /// In en, this message translates to:
+  /// **'Low contrast: links and indicators use an adjusted colour.'**
+  String get appearanceAccentAdjusted;
+
+  /// Appearance section: accessible label for the chosen accent preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Chosen accent'**
+  String get appearanceChosenAccentPreview;
+
+  /// Appearance section: accessible label for the adjusted functional accent preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjusted interface colour'**
+  String get appearanceAdjustedAccentPreview;
+
+  /// Appearance section: replaces a low-contrast accent with the suggested accessible colour.
+  ///
+  /// In en, this message translates to:
+  /// **'Use adjusted colour'**
+  String get appearanceUseAdjustedAccent;
+
   /// Colour row: the pane and page background.
   ///
   /// In en, this message translates to:

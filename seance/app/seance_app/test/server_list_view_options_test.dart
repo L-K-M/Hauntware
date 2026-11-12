@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -18,6 +19,27 @@ import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
+// Constructed by boot in real async: the density switch and the row menu
+// fire their settings writes from widget callbacks, which can resume in fake
+// async. Keep those writes in the fixture's I/O zone and expose their
+// completion so teardown can drain them before deleting the store.
+class _SettingsSaveAppState extends AppState {
+  _SettingsSaveAppState(super.services);
+
+  final Zone _ioZone = Zone.current;
+  Future<void>? _settingsSave;
+
+  @override
+  Future<void> setServerListDensity(ServerListDensity density) =>
+      _settingsSave = _ioZone.run<Future<void>>(
+        () => super.setServerListDensity(density),
+      );
+
+  @override
+  Future<void> toggleServerPin(String id) => _settingsSave = _ioZone
+      .run<Future<void>>(() => super.toggleServerPin(id));
+}
+
 /// The server list's two view options: the row density (the rail's and the
 /// home screen's switch), and pinning a server to the top.
 ///
@@ -29,9 +51,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   Directory? directory;
   AppServices? services;
-  AppState? state;
+  _SettingsSaveAppState? state;
 
   tearDown(() async {
+    await state?._settingsSave;
     state?.dispose();
     await services?.probe.dispose();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -76,11 +99,26 @@ void main() {
             );
         FlutterSecureStorage.setMockInitialValues({});
         services = await AppServices.initialize();
-        state = AppState(services!);
+        state = _SettingsSaveAppState(services!);
         for (final config in servers) {
           await state!.saveServer(config);
         }
       });
+
+  // UI settings writes need real async too. Finish the actual save and check
+  // what landed, or its metadata queue can strand the next test's writes.
+  Future<void> tapAndSaveSettings(WidgetTester tester, Finder finder) async {
+    state!._settingsSave = null;
+    await tester.tap(finder);
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      expect(state!._settingsSave, isNotNull);
+      await state!._settingsSave;
+      final saved = await services!.settingsStore.load();
+      expect(saved.serverListDensity, state!.serverListDensity);
+      expect(saved.pinnedServerIds, state!.pinnedServerIds);
+    });
+  }
 
   /// The phone home by default (the widget-test platform is Android); the
   /// density switch lives there.
@@ -276,13 +314,13 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(
+      await tapAndSaveSettings(
+        tester,
         find.descendant(
           of: control,
           matching: find.byTooltip(serverSidebarStrings.compactRows),
         ),
       );
-      await tester.pumpAndSettle();
 
       expect(state!.serverListDensity, ServerListDensity.compact);
       expect(
@@ -308,23 +346,23 @@ void main() {
       );
       expect(control, findsOneWidget);
 
-      await tester.tap(
+      await tapAndSaveSettings(
+        tester,
         find.descendant(
           of: control,
           matching: find.byTooltip(serverSidebarStrings.compactRows),
         ),
       );
-      await tester.pumpAndSettle();
       expect(services!.settings.serverListDensity, ServerListDensity.compact);
       expect(tester.getSize(find.byType(ServerTile)).height, 26);
 
-      await tester.tap(
+      await tapAndSaveSettings(
+        tester,
         find.descendant(
           of: control,
           matching: find.byTooltip(serverSidebarStrings.comfortableRows),
         ),
       );
-      await tester.pumpAndSettle();
       expect(state!.serverListDensity, ServerListDensity.comfortable);
       expect(
         services!.settings.serverListDensity,
@@ -343,8 +381,7 @@ void main() {
       expect(renderedLabels(tester), ['alpha', 'zulu']);
 
       await openVerbs(tester, 'zulu');
-      await tester.tap(find.text('Pin to top'));
-      await tester.pumpAndSettle();
+      await tapAndSaveSettings(tester, find.text('Pin to top'));
 
       expect(state!.pinnedServerIds, {'zulu'});
       expect(renderedLabels(tester), ['zulu', 'alpha']);
@@ -368,8 +405,7 @@ void main() {
         findsNothing,
         reason: 'a pinned row offers the other half of the toggle',
       );
-      await tester.tap(find.text('Unpin'));
-      await tester.pumpAndSettle();
+      await tapAndSaveSettings(tester, find.text('Unpin'));
 
       expect(state!.pinnedServerIds, isEmpty);
       expect(renderedLabels(tester), ['alpha', 'zulu']);

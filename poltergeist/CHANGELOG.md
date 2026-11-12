@@ -24,6 +24,8 @@
   program, bookmark imports, and choosing a key file or a server's image
   showed no panel: file_picker refused them in the unsandboxed app, as it
   did in Séance.
+- Settings and bookmark files use the shared atomic writer and write
+  through symbolic links.
 - **Downloads keep no setuid bit.** A downloaded file took the server's
   whole mode, so a hostile server could leave a setuid or world-writable
   file on your disk. Downloads now keep only the read, write and execute
@@ -51,6 +53,8 @@
   Text fields keep their own editing history.
 - Closing edited text offers Save, Don't save or Cancel. A failed save
   or upload keeps the editor open, including when you choose Save during Quit.
+- The editor's close dialog comes from the shared Ghost UI package, as in
+  Planchette and Séance; its labels are unchanged.
 - Leading controls stay clear of the full-screen traffic lights. AltGr
   types characters without triggering the Ctrl+Alt pane shortcuts.
 - **The header band lines up.** The inspector's tabs are as tall as the
@@ -229,6 +233,12 @@
 - **Sidebar failures notify at the top.** When a sidebar change such as
   a rename or a saved location can't be saved, its notice appears at the
   top of the window like the app's other notices, not at the bottom.
+- **The theme stack is shared.** The theme model, presets, builder and
+  Appearance editor now come from the shared `ghost_theme` package, as
+  Séance's and Klabautermann's do. Stored themes, preset names and the
+  JSON a copied theme carries are unchanged. A chosen accent with low
+  contrast now explains that links and indicators use an adjusted
+  colour, with a button to take the suggested accessible colour.
 
 ## 1.9.0 — first suite release (2026-10-04)
 

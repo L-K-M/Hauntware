@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
@@ -12,6 +13,8 @@ import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/theme.dart';
 import 'package:seance_app/ui/app_menus.dart';
+import 'package:seance_app/ui/built_in_text_editor.dart';
+import 'package:seance_app/ui/server_actions.dart';
 import 'package:seance_app/ui/server_grouping.dart';
 import 'package:seance_app/ui/server_list_density.dart';
 import 'package:seance_app/ui/server_list_pane.dart';
@@ -22,6 +25,28 @@ import 'package:seance_app/ui/terminal_pane.dart';
 import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+
+// Constructed by boot in real async: menu callbacks can resume in fake
+// async even when the gesture starts outside it. Keep their disk writes in
+// the fixture's I/O zone and expose the actual completion to the test.
+class _SettingsSaveAppState extends AppState {
+  _SettingsSaveAppState(super.services);
+
+  final Zone _ioZone = Zone.current;
+  Future<void>? _settingsSave;
+
+  @override
+  Future<({int imported, int skipped})> importSshConfig(String text) =>
+      _ioZone.run(() => super.importSshConfig(text));
+
+  @override
+  Future<void> toggleServerGroup(String key) => _settingsSave = _ioZone
+      .run<Future<void>>(() => super.toggleServerGroup(key));
+
+  @override
+  Future<void> toggleServerPin(String id) => _settingsSave = _ioZone
+      .run<Future<void>>(() => super.toggleServerPin(id));
+}
 
 /// A session the app believes is open, without a network.
 class _OpenSshSession implements SshSession {
@@ -48,9 +73,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   Directory? directory;
   AppServices? services;
-  AppState? state;
+  _SettingsSaveAppState? state;
 
   tearDown(() async {
+    await state?._settingsSave;
     state?.dispose();
     await services?.probe.dispose();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -90,11 +116,26 @@ void main() {
             );
         FlutterSecureStorage.setMockInitialValues({});
         services = await AppServices.initialize();
-        state = AppState(services!);
+        state = _SettingsSaveAppState(services!);
         for (final config in servers) {
           await state!.saveServer(config);
         }
       });
+
+  // UI settings writes need real async too. Finish the actual save before
+  // teardown, or its metadata queue can strand the next test's writes.
+  Future<void> tapAndSaveSettings(WidgetTester tester, Finder finder) async {
+    state!._settingsSave = null;
+    await tester.tap(finder);
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      expect(state!._settingsSave, isNotNull);
+      await state!._settingsSave;
+      final saved = await services!.settingsStore.load();
+      expect(saved.collapsedServerGroups, state!.collapsedServerGroups);
+      expect(saved.pinnedServerIds, state!.pinnedServerIds);
+    });
+  }
 
   /// The rail as the wide layout mounts it, on a desktop theme.
   Future<void> pumpRail(
@@ -324,9 +365,9 @@ void main() {
         server('y'),
       ]);
       await pumpRail(tester);
-      await tester.tap(find.text('Production'));
-      await tester.pumpAndSettle();
       final key = serverGroupKey('Production');
+      await tapAndSaveSettings(tester, find.text('Production'));
+      await tester.pumpAndSettle();
       expect(state!.collapsedServerGroups, {key});
       expect(services!.settings.collapsedServerGroups, {
         key,
@@ -598,7 +639,7 @@ void main() {
       expect(dotOn(production), isNull);
       expect(dotOn(servers), isNull);
 
-      await tester.tap(find.text('Production'));
+      await tapAndSaveSettings(tester, find.text('Production'));
       await tester.pumpAndSettle();
       expect(dotOn(production)?.color, online);
       expect(
@@ -607,7 +648,7 @@ void main() {
         reason: 'the group row already shows it; SERVERS would say it twice',
       );
 
-      await tester.tap(find.text('Production'));
+      await tapAndSaveSettings(tester, find.text('Production'));
       await tester.pumpAndSettle();
       expect(ServerListPane.revealFilter(), isTrue);
       await tester.pumpAndSettle();
@@ -751,7 +792,7 @@ void main() {
         String label() => tester.getSemantics(header).getSemanticsData().label;
         expect(label(), 'Production, 2 servers');
 
-        await tester.tap(find.text('Production'));
+        await tapAndSaveSettings(tester, find.text('Production'));
         await tester.pumpAndSettle();
         expect(label(), 'Production, 2 servers\nConnected server hidden');
 
@@ -808,7 +849,7 @@ void main() {
         kind: PointerDeviceKind.mouse,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Pin to top'));
+      await tapAndSaveSettings(tester, find.text('Pin to top'));
       await tester.pumpAndSettle();
       expect(state!.pinnedServerIds, {'zulu'});
       expect(rendered(tester), ['zulu', 'alpha']);
@@ -909,6 +950,8 @@ void main() {
         const CustomSemanticsAction(label: 'Pin to top'),
       );
       await tester.pumpAndSettle();
+      await tester.runAsync(() => state!._settingsSave!);
+      await tester.pumpAndSettle();
       expect(state!.pinnedServerIds, {'alpha'});
 
       // And an open menu's verbs are nodes a screen reader can reach.
@@ -959,6 +1002,78 @@ void main() {
       }
       expect(find.text(message), findsOneWidget);
       await tester.pumpAndSettle(const Duration(seconds: 10));
+    });
+
+    testWidgets('deleting a server asks its dirty editor first', (
+      tester,
+    ) async {
+      await boot(tester, [server('alpha')]);
+      final editor = EditorTab(
+        id: 'edit',
+        serverId: 'alpha',
+        config: server('alpha'),
+        remotePath: '/etc/motd',
+        localPath: 'motd',
+        ownerEditSessionId: 'owner',
+      );
+      state!.tabs.add(editor);
+      addTearDown(editor.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BuiltInTextEditorScreen(
+            key: editor.editorKey,
+            file: File('${directory!.path}/motd'),
+            remotePath: '/etc/motd',
+            initialText: 'hello\n',
+            dirtyNotifier: editor.dirty,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.enterText(find.byType(TextField), 'changed\n');
+      await tester.pump();
+      expect(editor.dirty.value, isTrue);
+
+      final deleting = confirmDeleteServer(
+        tester.element(find.byType(BuiltInTextEditorScreen)),
+        state!,
+        server('alpha'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Save changes to “motd”?'), findsOneWidget);
+      expect(find.text('Don’t save'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await deleting;
+      expect(state!.configFor('alpha'), isNotNull);
+      expect(state!.tabById('edit'), isNotNull);
+
+      // Don't save authorizes a later close; it does not discard or close
+      // anything when the following server deletion is cancelled.
+      final declinedDelete = confirmDeleteServer(
+        tester.element(find.byType(BuiltInTextEditorScreen)),
+        state!,
+        server('alpha'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Don’t save'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await declinedDelete;
+
+      expect(state!.configFor('alpha'), isNotNull);
+      expect(state!.tabById('edit'), same(editor));
+      expect(editor.dirty.value, isTrue);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'changed\n',
+      );
     });
   });
 }

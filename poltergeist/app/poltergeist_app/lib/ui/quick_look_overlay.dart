@@ -90,7 +90,7 @@ class _Panel extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     return Focus(
       // The panel never takes focus itself; a control inside it that
       // does (the close button after a click) still owes Space and Esc
@@ -348,7 +348,7 @@ class _BodyState extends State<_Body> {
             child: Text(
               l10n.previewTruncatedLabel,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: PoltergeistChrome.of(context).secondaryText,
+                color: PoltergeistChrome.of(context, poltergeistThemeStyle).secondaryText,
               ),
             ),
           ),
@@ -406,7 +406,7 @@ class _BodyState extends State<_Body> {
   Widget _nothing(BuildContext context, {bool folder = false, String? reason}) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,

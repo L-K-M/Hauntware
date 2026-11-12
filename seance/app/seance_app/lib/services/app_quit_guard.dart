@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../ui/built_in_text_editor.dart';
 
 /// The small surface the quit guard needs from the separate Settings window.
 ///
@@ -18,10 +19,19 @@ enum QuitSessionStatus { connecting, connected }
 
 @immutable
 class QuitDirtyEditor {
-  const QuitDirtyEditor({required this.server, required this.path});
+  const QuitDirtyEditor({
+    required this.server,
+    required this.path,
+    this.editorKey,
+  });
 
   final String server;
   final String path;
+
+  /// Handle to the mounted editor, so the quit guard's Save All can ask it
+  /// to save. Null, or a key whose state is not mounted (an offstage tab),
+  /// makes the guard fail closed rather than quit over unsaved text.
+  final GlobalKey<BuiltInTextEditorScreenState>? editorKey;
 }
 
 @immutable
@@ -56,6 +66,7 @@ class QuitRiskSnapshot {
             QuitDirtyEditor(
               server: _safeLine(tab.server.label),
               path: _safeLine(tab.remotePath),
+              editorKey: tab.editorKey,
             ),
           );
         case TerminalSession() when tab.connecting || tab.isConnected:
@@ -84,8 +95,11 @@ class QuitRiskSnapshot {
   bool get isEmpty => dirtyEditors.isEmpty && activeSessions.isEmpty;
 }
 
+/// The quit dialog's answer.
+enum QuitChoice { cancel, saveAll, quit }
+
 typedef QuitDialogPresenter =
-    Future<bool?> Function(BuildContext context, QuitRiskSnapshot snapshot);
+    Future<QuitChoice?> Function(BuildContext context, QuitRiskSnapshot snapshot);
 
 /// Serializes every desktop exit route behind one review of at-risk work.
 final class AppQuitGuard {
@@ -204,7 +218,15 @@ final class AppQuitGuard {
 
     var accepted = false;
     try {
-      accepted = await _presentDialog(context, snapshot) == true;
+      final choice = await _presentDialog(context, snapshot);
+      switch (choice) {
+        case QuitChoice.quit:
+          accepted = true;
+        case QuitChoice.saveAll:
+          accepted = await _saveDirtyEditors(snapshot);
+        case QuitChoice.cancel || null:
+          accepted = false;
+      }
       if (accepted) {
         _accepted = true;
         if (yieldedSettings) {
@@ -219,6 +241,25 @@ final class AppQuitGuard {
     } finally {
       if (!accepted) await restoreSettings();
     }
+  }
+
+  /// Saves every dirty editor the snapshot named, answering whether all of
+  /// them reached a clean state. A missing editor state (an offstage tab the
+  /// guard cannot ask) or a failed save vetoes the quit, so the window stays
+  /// open and the unsaved text is kept.
+  Future<bool> _saveDirtyEditors(QuitRiskSnapshot snapshot) async {
+    for (final editor in snapshot.dirtyEditors) {
+      final state = editor.editorKey?.currentState;
+      if (state == null) return false;
+      if (!await state.saveForQuit()) return false;
+    }
+    // Saving another file awaits I/O after the dialog has closed. A user
+    // can edit an earlier buffer, or open a new dirty tab, in that interval.
+    for (final editor in snapshot.dirtyEditors) {
+      if (editor.editorKey?.currentState?.isReadyToClose != true) return false;
+    }
+    return !(_state?.tabs.whereType<EditorTab>().any((tab) => tab.dirty.value) ??
+        false);
   }
 
   void _report(Object error, StackTrace stackTrace) {
@@ -236,10 +277,10 @@ final class AppQuitGuard {
     );
   }
 
-  static Future<bool?> _showConfirmation(
+  static Future<QuitChoice?> _showConfirmation(
     BuildContext context,
     QuitRiskSnapshot snapshot,
-  ) => showDialog<bool>(
+  ) => showDialog<QuitChoice>(
     context: context,
     barrierDismissible: true,
     builder: (context) => _QuitConfirmationDialog(snapshot: snapshot),
@@ -302,16 +343,22 @@ class _QuitConfirmationDialog extends StatelessWidget {
         TextButton(
           key: const ValueKey('quit-cancel'),
           autofocus: true,
-          onPressed: () => Navigator.of(context).pop(false),
+          onPressed: () => Navigator.of(context).pop(QuitChoice.cancel),
           child: const Text('Cancel'),
         ),
+        if (snapshot.dirtyEditors.isNotEmpty)
+          TextButton(
+            key: const ValueKey('quit-save-all'),
+            onPressed: () => Navigator.of(context).pop(QuitChoice.saveAll),
+            child: const Text('Save All'),
+          ),
         FilledButton(
           key: const ValueKey('quit-confirm'),
           style: FilledButton.styleFrom(
             backgroundColor: colors.error,
             foregroundColor: colors.onError,
           ),
-          onPressed: () => Navigator.of(context).pop(true),
+          onPressed: () => Navigator.of(context).pop(QuitChoice.quit),
           child: const Text('Quit'),
         ),
       ],

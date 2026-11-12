@@ -94,7 +94,7 @@ class HeaderToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final placed = [
       for (final command in commands)
         if (command.toolbarPlacement != null) command,
@@ -318,7 +318,7 @@ class _Capsule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: chrome.capsuleFill,
@@ -367,7 +367,7 @@ class _ToolbarButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final enabled = command.enabled();
     final checked = command.checked?.call() ?? false;
     final color = enabled

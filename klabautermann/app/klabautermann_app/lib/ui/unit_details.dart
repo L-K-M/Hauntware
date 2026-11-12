@@ -11,7 +11,7 @@ import '../l10n/app_localizations.dart';
 import 'edit/editor_display_scope.dart';
 import 'editor_strings.dart' show KlabautermannEditorStrings;
 import 'time_display.dart';
-import 'processes_panel.dart' show kRevealDuration;
+import 'timed_reveal.dart';
 
 /// Below this width the unit file takes a page of its own, as on phones
 /// (03 §10.5).
@@ -264,22 +264,22 @@ class UnitFileView extends StatefulWidget {
 }
 
 class _UnitFileViewState extends State<UnitFileView> {
-  late final AppLifecycleListener _lifecycle;
   UnitPayload? _answer;
   EditorController? _editor;
-  Timer? _reveal;
+  late final TimedReveals<RevealScope> _reveal;
 
   @override
   void initState() {
     super.initState();
-    _lifecycle = AppLifecycleListener(onInactive: _mask);
+    _reveal = TimedReveals(
+      onChanged: () => setState(() => _show(revealed: !_reveal.isEmpty)),
+    );
     unawaited(_read());
   }
 
   @override
   void dispose() {
-    _lifecycle.dispose();
-    _reveal?.cancel();
+    _reveal.dispose();
     _editor?.dispose();
     super.dispose();
   }
@@ -313,27 +313,6 @@ class _UnitFileViewState extends State<UnitFileView> {
     }
   }
 
-  void _toggleReveal() {
-    if (_reveal != null) {
-      _mask();
-      return;
-    }
-    setState(() {
-      _reveal = Timer(kRevealDuration, _mask);
-      _show(revealed: true);
-    });
-  }
-
-  void _mask() {
-    final timer = _reveal;
-    if (timer == null || !mounted) return;
-    timer.cancel();
-    setState(() {
-      _reveal = null;
-      _show(revealed: false);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -351,7 +330,7 @@ class _UnitFileViewState extends State<UnitFileView> {
     }
 
     final masked = answer.text.where((span) => span.isMasked).length;
-    final revealed = _reveal != null;
+    final revealed = _reveal.isRevealed(RevealScope.all);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 8,
@@ -373,7 +352,7 @@ class _UnitFileViewState extends State<UnitFileView> {
                           style: theme.textTheme.bodySmall,
                         ),
                         TextButton.icon(
-                          onPressed: _toggleReveal,
+                          onPressed: () => _reveal.toggle(RevealScope.all),
                           icon: Icon(
                             revealed
                                 ? Icons.visibility_off_outlined

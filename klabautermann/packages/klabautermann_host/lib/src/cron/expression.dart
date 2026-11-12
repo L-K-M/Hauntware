@@ -180,10 +180,10 @@ final class CronExpression {
     final t = text.trim();
     if (t.isEmpty) return null;
     if (t.startsWith('@')) {
-      final macro = _macros[t.toLowerCase()];
-      if (macro == null) {
-        return t.toLowerCase() == '@reboot' ? CronExpression.reboot() : null;
-      }
+      // cron compares the word with strcmp, so `@Daily` is no macro
+      // [R: cronie `entry.c` `load_entry`].
+      final macro = _macros[t];
+      if (macro == null) return t == '@reboot' ? CronExpression.reboot() : null;
       return _parseFields(macro.$2.split(' '), macro: macro.$1);
     }
     final parts = t.split(RegExp(r'\s+'));
@@ -196,7 +196,7 @@ final class CronExpression {
     final hour = _items(parts[1], 0, 23);
     final dayOfMonth = _items(parts[2], 1, 31);
     final month = _items(parts[3], 1, 12, names: _monthNames);
-    final dayOfWeek = _items(parts[4], 0, 7, names: _weekdayNames);
+    final dayOfWeek = _items(parts[4], 0, _lastWeekday, names: _weekdayNames);
     if (minute == null ||
         hour == null ||
         dayOfMonth == null ||
@@ -204,7 +204,7 @@ final class CronExpression {
         dayOfWeek == null) {
       return null;
     }
-    final weekDays = _expand(dayOfWeek, 0, 7);
+    final weekDays = _expand(dayOfWeek, 0, _lastWeekday);
     // A written 7 means sunday (crontab(5)).
     if (weekDays.remove(7)) weekDays.add(0);
     return CronExpression._(
@@ -242,7 +242,7 @@ final class CronExpression {
       final base = slash < 0 ? item : item.substring(0, slash);
       int? step;
       if (slash >= 0) {
-        step = int.tryParse(item.substring(slash + 1)) ?? -1;
+        step = _digits(item.substring(slash + 1)) ?? -1;
         if (step <= 0) return null;
       }
       if (base == '*') {
@@ -257,6 +257,9 @@ final class CronExpression {
       } else {
         lo = _value(base.substring(0, dash), names) ?? -1;
         hi = _value(base.substring(dash + 1), names) ?? -1;
+        // A weekday range ending on 0 below its start ends on sunday 7
+        // (`fri-sun`) [R: cronie `entry.c` `get_range`].
+        if (hi == 0 && lo > hi && max == _lastWeekday) hi = _lastWeekday;
       }
       // hi < lo rejects both an inverted a-b and a bare a/n whose start
       // lies above the maximum. cronie rejects every bare a/n (its
@@ -282,13 +285,21 @@ final class CronExpression {
     return out;
   }
 
-  static int? _value(String token, Map<String, int>? names) {
-    final named = names?[token.toLowerCase()];
-    if (named != null) return named;
+  static int? _value(String token, Map<String, int>? names) =>
+      names?[token.toLowerCase()] ?? _digits(token);
+
+  /// [token] as decimal digits only, as cron reads a number: no sign
+  /// and no `0x` prefix, which `int.tryParse` would take.
+  static int? _digits(String token) {
     if (token.isEmpty || token.length > 4) return null;
-    final digits = int.tryParse(token);
-    return digits != null && digits >= 0 ? digits : null;
+    if (!_decimal.hasMatch(token)) return null;
+    return int.parse(token);
   }
+
+  static final _decimal = RegExp(r'^[0-9]+$');
+
+  /// The day-of-week field's maximum, 7 for sunday as well as 0.
+  static const _lastWeekday = 7;
 
   static const _macros = {
     '@yearly': (CronMacro.yearly, '0 0 1 1 *'),

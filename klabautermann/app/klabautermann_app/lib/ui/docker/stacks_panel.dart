@@ -11,6 +11,7 @@ import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import '../actions/docker_actions.dart'
     show StackActionButtons, StackDownButton, StackServiceMenu;
 import '../hand_off_actions.dart' show FolderHandOffs, folderHandOffsShown;
+import '../panel_kit.dart';
 import 'container_details.dart' show openContainerDetails;
 import 'containers_panel.dart'
     show ContainerHealthBadge, ContainerStateBadge, DockerNotice;
@@ -753,7 +754,7 @@ class StackOverview extends StatelessWidget {
       // STK-23's compose operations run on a verified source only.
       if (verdict is StackVerified)
         StackDownButton(serverId: serverId, project: project.name),
-      _Section(
+      TitledGroup(
         title: l10n.dockerStackSource,
         children: [
           _Fact(
@@ -809,7 +810,7 @@ class StackOverview extends StatelessWidget {
             ),
         ],
       ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerStackServicesHeading,
         children: [
           // CTX-04: every service's logs, merged by time.
@@ -878,28 +879,6 @@ class _ManagedByNote extends StatelessWidget {
       ),
     );
   }
-}
-
-/// A heading over its [children], read as a heading.
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    spacing: 8,
-    children: [
-      Semantics(
-        container: true,
-        header: true,
-        child: Text(title, style: Theme.of(context).textTheme.titleSmall),
-      ),
-      ...children,
-    ],
-  );
 }
 
 /// The profiles a verified stack's files name (STK-09), read once as

@@ -255,7 +255,7 @@ class _ColumnHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final pair = controller.pair;
     final (first, second) = _sideOrder(pair);
     final style = theme.textTheme.labelSmall?.copyWith(
@@ -328,7 +328,7 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final state = syncSectionState(items);
     final toggleable = !mutationsBlocked && items.any(syncRowToggleable);
     return Semantics(
@@ -458,7 +458,7 @@ class _SyncItemRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final tone = switch (syncActionTone(item.effective)) {
       SyncActionTone.create => theme.colorScheme.primary,
       SyncActionTone.update => theme.colorScheme.tertiary,

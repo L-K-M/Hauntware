@@ -1423,6 +1423,9 @@ class _FilterBar extends StatelessWidget {
             width: 180,
             child: TextField(
               controller: filterField,
+              // Filters name synced paths; keep them out of the
+              // keyboard's personal dictionary.
+              enableIMEPersonalizedLearning: false,
               decoration: InputDecoration(
                 hintText: l10n.syncFilterFieldHint,
                 isDense: true,
@@ -1528,7 +1531,7 @@ class _ActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final stats = controller.stats;
     return Container(
       decoration: BoxDecoration(

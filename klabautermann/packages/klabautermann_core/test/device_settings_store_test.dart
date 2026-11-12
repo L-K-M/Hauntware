@@ -1544,5 +1544,26 @@ void main() {
       expect(File('${target.path}/keep').readAsStringSync(), 'kept');
       expect(entries(), [deviceSettingsFileName]);
     });
+
+    test(
+      'writes through a symbolic link and keeps the link',
+      () async {
+        final target = File('${directory.path}/target.json');
+        target.writeAsStringSync('old');
+        final link = Link('${directory.path}/link.json');
+        await link.create(target.path);
+
+        await writeFileAtomically(File(link.path), utf8.encode('new'));
+
+        expect(target.readAsStringSync(), 'new');
+        expect(
+          FileSystemEntity.typeSync(link.path, followLinks: false),
+          FileSystemEntityType.link,
+        );
+      },
+      skip: Platform.isWindows
+          ? 'symbolic links need extra rights on Windows'
+          : null,
+    );
   });
 }

@@ -81,7 +81,7 @@ String? _typeAheadCharacter(KeyEvent event) {
 /// arithmetic.
 double scaledPaneRowExtent(BuildContext context) => MediaQuery.textScalerOf(
   context,
-).scale(PoltergeistChrome.of(context).rowExtent);
+).scale(PoltergeistChrome.of(context, poltergeistThemeStyle).rowExtent);
 
 /// Whether rows take touch gestures (D32 §9: a tap opens, a long-press
 /// selects and opens the action sheet) rather than desktop pointer
@@ -832,6 +832,10 @@ class _PaneViewState extends State<PaneView> {
       // 02 §8.2's Esc order: a pending type-ahead buffer clears
       // below navigation-cancel and above deselect.
       controller.clearTypeAhead();
+    } else if (controller.selectedCount > 0) {
+      // 02 §8.2's last tier: with nothing else to cancel, Esc deselects
+      // (the way out of a Select All without clicking a row).
+      controller.clearSelection();
     } else {
       // Idle: nothing to cancel here — let Esc reach ancestor
       // handlers (app shortcuts) instead of swallowing it.
@@ -1632,7 +1636,7 @@ class _PaneSurface extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final loadingVisible = graceVisible && !controller.connectionLost;
     return ColoredBox(
-      color: PoltergeistChrome.of(context).paneBackground,
+      color: PoltergeistChrome.of(context, poltergeistThemeStyle).paneBackground,
       // One width measure for the column header and every row, so the
       // two can never disagree about which columns fit.
       child: LayoutBuilder(
@@ -2025,7 +2029,7 @@ class _PaneSurface extends StatelessWidget {
                             ? l10n.paneDropHintRemote
                             : l10n.paneDropHintLocal,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: PoltergeistChrome.of(context).secondaryText,
+                          color: PoltergeistChrome.of(context, poltergeistThemeStyle).secondaryText,
                         ),
                       ),
                     ),
@@ -2460,6 +2464,9 @@ class _RenameEditorState extends State<_RenameEditor> {
                       controller: _text,
                       focusNode: _fieldFocus,
                       autofocus: true,
+                      // File names stay out of the keyboard's personal
+                      // dictionary.
+                      enableIMEPersonalizedLearning: false,
                       maxLines: 1,
                       style: style,
                       decoration: null,
@@ -2610,7 +2617,7 @@ class _LocationHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final l10n = AppLocalizations.of(context);
     final loading = controller.loading && loadingVisible;
     return Container(
@@ -2722,7 +2729,7 @@ class _LocationTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final theme = Theme.of(context);
     final location = controller.location;
     final path = location?.path;
@@ -2819,7 +2826,7 @@ class _AncestorMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final palette = FamilyPalette.of(context);
     return MenuAnchor(
       menuChildren: [
@@ -2977,6 +2984,8 @@ class _PathEditorFieldState extends State<_PathEditorField> {
             controller: _text,
             focusNode: widget.focusNode,
             autofocus: true,
+            // Paths stay out of the keyboard's personal dictionary.
+            enableIMEPersonalizedLearning: false,
             style: poltergeistMonoTextStyle.copyWith(fontSize: 12),
             decoration: InputDecoration(
               isDense: true,
@@ -3352,6 +3361,9 @@ class _QuickSelectFieldState extends State<_QuickSelectField> {
                     controller: _query,
                     focusNode: _fieldFocus,
                     autofocus: true,
+                    // Patterns name files; keep them out of the
+                    // keyboard's personal dictionary.
+                    enableIMEPersonalizedLearning: false,
                     style: Theme.of(context).textTheme.bodySmall,
                     decoration: InputDecoration(
                       isDense: true,
