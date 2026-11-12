@@ -12,49 +12,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 readonly APP_ID=ch.lkmc.planchette
-readonly MANIFEST="$ROOT/flatpak/$APP_ID.yml"
-readonly FLATHUB_REPO=https://dl.flathub.org/repo/flathub.flatpakrepo
-readonly WORK="$ROOT/dist/flatpak"
+readonly ASSET_STEM=planchette
+readonly APP_DIR=app/planchette_app
+readonly PACKAGE_NAME=planchette
 
-die() { echo "build-flatpak.sh: $*" >&2; exit 1; }
-
-INSTALL=0
-DEB=""
-for argument in "$@"; do
-  case "$argument" in
-    --install) INSTALL=1 ;;
-    -h|--help) awk 'NR==1&&/^#!/{next} /^set -euo pipefail/{next} /^#/{sub(/^# ?/,"");print;next} {exit}' "$0"; exit 0 ;;
-    *.deb) [ -z "$DEB" ] || die "pass at most one .deb"; DEB="$argument" ;;
-    *) echo "Unknown argument: $argument" >&2; exit 2 ;;
-  esac
-done
-
-# A relative .deb argument names the caller's directory, not the
-# repository root we cd'd into above.
-if [[ -n "$DEB" && "$DEB" != /* ]]; then DEB="$OLDPWD/$DEB"; fi
-
-command -v flatpak-builder >/dev/null 2>&1 ||
-  die "flatpak-builder not found: install flatpak and flatpak-builder"
-command -v dpkg-deb >/dev/null 2>&1 ||
-  die "dpkg-deb not found: install dpkg"
-
-if [[ -z "$DEB" ]]; then
-  (cd app/planchette_app && flutter build linux --release)
-  scripts/package-linux.sh --skip-appimage
-  DEB="$(find dist -maxdepth 1 -name 'planchette_*.deb' -printf '%T@\t%p\n' 2>/dev/null | sort -rn | head -n1 | cut -f2- || true)"
-fi
-[ -f "$DEB" ] || die ".deb not found: $DEB"
-
-# The repack and build are shared with the other products' Flatpaks.
-# shellcheck source=../../scripts/flatpak-repack.sh
-source "$ROOT/../scripts/flatpak-repack.sh"
-flatpak_stage_deb "$DEB" "$WORK" "$APP_ID"
-flatpak_build "$WORK" "$MANIFEST" "$FLATHUB_REPO"
-
-BUNDLE="$ROOT/dist/planchette-linux-x64.flatpak"
-flatpak build-bundle --runtime-repo="$FLATHUB_REPO" \
-  "$WORK/repo" "$BUNDLE" "$APP_ID"
-if ((INSTALL)); then
-  flatpak install --user -y --noninteractive "$BUNDLE"
-fi
-echo "Built ${BUNDLE#"$ROOT"/}"
+# The arguments, the .deb build, the repack and the bundle are shared
+# with the other products' Flatpaks.
+# shellcheck source=SCRIPTDIR/../../scripts/build-flatpak-common.sh
+source "$ROOT/../scripts/build-flatpak-common.sh"
+build_flatpak_main "$@"
