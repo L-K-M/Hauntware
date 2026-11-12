@@ -7,6 +7,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'read_section.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 
 /// The loopback interface's name on Linux.
@@ -47,7 +48,7 @@ const _loopback = 'lo';
 /// state, addresses, MTU, speed, current rates from the `core` stream and
 /// error and drop counts, and the TCP sockets by state. It reads when it
 /// shows and on request; a server switch reads the new server's.
-class InterfacesSection extends StatefulWidget {
+class InterfacesSection extends StatefulWidget implements HostReadSection {
   const InterfacesSection({
     super.key,
     required this.monitoring,
@@ -56,7 +57,10 @@ class InterfacesSection extends StatefulWidget {
     required this.fact,
   });
 
+  @override
   final MonitoringController monitoring;
+
+  @override
   final String serverId;
 
   /// The server's `core` samples, whose per-interface rates the rows show.
@@ -69,44 +73,12 @@ class InterfacesSection extends StatefulWidget {
   State<InterfacesSection> createState() => _InterfacesSectionState();
 }
 
-class _InterfacesSectionState extends State<InterfacesSection> {
-  HostPayload? _read;
-  bool _reading = false;
+class _InterfacesSectionState extends State<InterfacesSection>
+    with HostReadSectionState<InterfacesSection> {
   bool _showAll = false;
 
-  /// Bumped per read, so only the newest answer lands.
-  int _ticket = 0;
-
   @override
-  void initState() {
-    super.initState();
-    unawaited(_load());
-  }
-
-  @override
-  void didUpdateWidget(InterfacesSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.serverId == widget.serverId &&
-        oldWidget.monitoring == widget.monitoring) {
-      return;
-    }
-    _read = null;
-    unawaited(_load());
-  }
-
-  Future<void> _load() async {
-    final ticket = ++_ticket;
-    if (mounted) setState(() => _reading = true);
-    final result = await widget.monitoring.queryHost(
-      widget.serverId,
-      const InterfacesQuery(),
-    );
-    if (!mounted || ticket != _ticket) return;
-    setState(() {
-      _read = result.payload;
-      _reading = false;
-    });
-  }
+  HostQuerySpec get hostQuery => const InterfacesQuery();
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +90,7 @@ class _InterfacesSectionState extends State<InterfacesSection> {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: OutlinedButton(
-            onPressed: _reading ? null : () => unawaited(_load()),
+            onPressed: hostReading ? null : () => unawaited(readHost()),
             child: Text(l10n.systemNetReadAgain),
           ),
         ),
@@ -127,7 +99,7 @@ class _InterfacesSectionState extends State<InterfacesSection> {
   }
 
   List<Widget> _lines(BuildContext context, AppLocalizations l10n) =>
-      switch (_read) {
+      switch (hostRead) {
         null => [
           PanelNotice(icon: Icons.hourglass_empty, text: l10n.systemNetReading),
         ],

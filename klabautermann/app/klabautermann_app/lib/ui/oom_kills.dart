@@ -10,6 +10,7 @@ import 'logs/log_level.dart';
 import 'logs/log_query.dart';
 import 'logs/log_view.dart';
 import 'logs/logs_panel_controller.dart';
+import 'read_section.dart';
 import 'time_display.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 import 'system_view.dart' show uptimeText;
@@ -22,62 +23,32 @@ const String kOomLogPattern = 'oom-kill|out of memory|killed process';
 /// OOM killer ended since boot, and which, linked to their kernel log
 /// lines. It reads when it shows and on request; a server switch reads
 /// the new server's.
-class OomKillsSection extends StatefulWidget {
+class OomKillsSection extends StatefulWidget implements HostReadSection {
   const OomKillsSection({
     super.key,
     required this.monitoring,
     required this.serverId,
   });
 
+  @override
   final MonitoringController monitoring;
+
+  @override
   final String serverId;
 
   @override
   State<OomKillsSection> createState() => _OomKillsSectionState();
 }
 
-class _OomKillsSectionState extends State<OomKillsSection> {
-  HostPayload? _read;
-  bool _reading = false;
-
-  /// Bumped per read, so only the newest answer lands.
-  int _ticket = 0;
-
+class _OomKillsSectionState extends State<OomKillsSection>
+    with HostReadSectionState<OomKillsSection> {
   @override
-  void initState() {
-    super.initState();
-    unawaited(_load());
-  }
-
-  @override
-  void didUpdateWidget(OomKillsSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.serverId == widget.serverId &&
-        oldWidget.monitoring == widget.monitoring) {
-      return;
-    }
-    _read = null;
-    unawaited(_load());
-  }
-
-  Future<void> _load() async {
-    final ticket = ++_ticket;
-    if (mounted) setState(() => _reading = true);
-    final result = await widget.monitoring.queryHost(
-      widget.serverId,
-      const OomKillsQuery(),
-    );
-    if (!mounted || ticket != _ticket) return;
-    setState(() {
-      _read = result.payload;
-      _reading = false;
-    });
-  }
+  HostQuerySpec get hostQuery => const OomKillsQuery();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final read = switch (_read) {
+    final read = switch (hostRead) {
       OomKills(:final read) => read,
       _ => null,
     };
@@ -99,7 +70,7 @@ class _OomKillsSectionState extends State<OomKillsSection> {
                 child: Text(l10n.systemOomShowLog),
               ),
             OutlinedButton(
-              onPressed: _reading ? null : () => unawaited(_load()),
+              onPressed: hostReading ? null : () => unawaited(readHost()),
               child: Text(l10n.systemOomReadAgain),
             ),
           ],
@@ -108,7 +79,7 @@ class _OomKillsSectionState extends State<OomKillsSection> {
     );
   }
 
-  List<Widget> _lines(AppLocalizations l10n) => switch (_read) {
+  List<Widget> _lines(AppLocalizations l10n) => switch (hostRead) {
     null => [
       PanelNotice(icon: Icons.hourglass_empty, text: l10n.systemOomReading),
     ],
