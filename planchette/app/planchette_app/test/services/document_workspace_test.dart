@@ -231,6 +231,15 @@ class FakeDialogs implements DocumentDialogs {
     recoveryAsked.add(name);
     return discardRecovery;
   }
+
+  bool saveElsewhere = false;
+  final saveElsewhereAsked = <(String, String)>[];
+
+  @override
+  Future<bool> offerSaveElsewhere(String name, String folder) async {
+    saveElsewhereAsked.add((name, folder));
+    return saveElsewhere;
+  }
 }
 
 void main() {

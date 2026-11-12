@@ -228,6 +228,35 @@ final class AppDocumentDialogs implements DocumentDialogs {
         ) ??
         false;
   }
+
+  @override
+  Future<bool> offerSaveElsewhere(String name, String folder) async {
+    final context = navigatorKey.currentContext;
+    if (context == null) return false;
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Save “$name” somewhere else?'),
+            content: Text(
+              'The folder $folder does not let Planchette create the '
+              'temporary file a safe save needs, so the file cannot be saved '
+              'there. You can save a copy in another folder instead.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                autofocus: true,
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Save As…'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
 }
 
 /// A short list of file names for a prompt: a long selection still fits.

@@ -125,6 +125,28 @@ void main() {
     });
   }
 
+  for (final (button, accept) in [('Cancel', false), ('Save As…', true)]) {
+    testWidgets('the save elsewhere offer answers $accept for $button', (
+      tester,
+    ) async {
+      final navigator = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(
+        MaterialApp(navigatorKey: navigator, home: const SizedBox()),
+      );
+
+      final answer = AppDocumentDialogs(
+        navigator,
+      ).offerSaveElsewhere('notes.txt', '/locked');
+      await tester.pumpAndSettle();
+      expect(find.text('Save “notes.txt” somewhere else?'), findsOneWidget);
+      expect(find.textContaining('/locked'), findsOneWidget);
+      await tester.tap(find.text(button));
+      await tester.pumpAndSettle();
+
+      expect(await answer, accept);
+    });
+  }
+
   for (final (button, choice) in [
     ('Don’t save', BulkCloseChoice.discardAll),
     ('Cancel', BulkCloseChoice.cancel),

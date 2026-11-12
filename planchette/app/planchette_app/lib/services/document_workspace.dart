@@ -85,6 +85,10 @@ abstract interface class DocumentDialogs {
   /// Whether to delete the recovery copy [name] as its tab closes. True
   /// deletes it; false keeps it, and it opens again at the next launch.
   Future<bool> confirmDiscardRecovery(String name);
+
+  /// Whether to choose another place for [name] after [folder] refused the
+  /// file a save needs beside it. True runs Save As.
+  Future<bool> offerSaveElsewhere(String name, String folder);
 }
 
 /// What other document windows hold, for app-wide open deduplication and
@@ -794,6 +798,15 @@ final class DocumentWorkspace extends ChangeNotifier {
         _saveFailures[tab] = reason;
         _clearScope(tab);
         return false;
+      }
+      // No save into that folder can succeed until its permissions change,
+      // so offer the way on. This save still holds the tab's save slot, so
+      // the Save As runs here rather than queueing behind itself.
+      if (error is TextDocumentFolderNotWritableException &&
+          await _dialog(
+            () => dialogs.offerSaveElsewhere(tab.name, error.folder),
+          )) {
+        return _saveOnce(tab, saveAs: true, access: access);
       }
       _reportError('Could not save ${tab.name}: $error', scope: tab);
       _saveFailures[tab] = '$error';
