@@ -6,10 +6,12 @@ import 'package:seance_app/services/inbox_stores.dart';
 import 'package:seance_core/catalog.dart' show SyncAccountScope;
 import 'package:seance_core/seance_core.dart';
 
+import 'support/atomic_write_blocker.dart';
+
 // The stores beside FileConfigStore commit a change to memory only once its
 // atomic write succeeds (#661's rule), so a rejected change cannot ride a
-// later, unrelated save. A directory at the writer's temp path makes every
-// write fail, as in file_config_store_transaction_test.dart.
+// later, unrelated save. A blocked replacement fails independently of the
+// writer's temp filename or the test process's permissions.
 void main() {
   late Directory directory;
 
@@ -19,8 +21,8 @@ void main() {
 
   tearDown(() => directory.delete(recursive: true));
 
-  Future<Directory> blockWrites(File file) =>
-      Directory('${file.path}.tmp').create();
+  Future<AtomicWriteBlocker> blockWrites(File file) =>
+      AtomicWriteBlocker(file).create();
 
   group('FileSnippetStore', () {
     const original = Snippet(

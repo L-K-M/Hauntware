@@ -541,6 +541,45 @@ void main() {
     expect(monitoring.sampleFor('srv-1', overview).value?.seq, 1);
   });
 
+  test('a server whose endpoint a sync changed keeps no reading from the '
+      'old machine, and its views keep their boxes (SYN-08)', () async {
+    const overview = SampleStream.overview;
+    const core = SampleStream.core;
+    final cpu = monitoring.seriesFor('srv-1', overview, MetricSeries.cpuBusy);
+    final history = monitoring.historyFor('srv-1', MetricSeries.cpuBusy);
+    final box = monitoring.sampleFor('srv-1', overview);
+    final last = monitoring.lastReadingFor('srv-1', overview);
+    final profile = monitoring.profileFor('srv-1');
+    engine
+      ..emit(_sample('srv-1', overview, 1, result: _overview(cpu: 10)))
+      ..emit(_sample('srv-1', core, 2, result: CoreResult(cpu: null)))
+      ..emit(HostProfileChanged('srv-1', HostProfile(virtualization: 'kvm')))
+      ..emit(_sample('srv-2', overview, 1, result: _overview(cpu: 30)));
+    await settle();
+    expect((cpu.length, history.length), (1, 1));
+
+    engine.emit(const EndpointChanged('srv-1'));
+    await settle();
+
+    expect((cpu.length, history.length), (0, 0));
+    expect(history.gaps, isEmpty);
+    expect((box.value, last.value, profile.value), (null, null, null));
+    expect(
+      monitoring.seriesFor('srv-2', overview, MetricSeries.cpuBusy).length,
+      1,
+    );
+
+    // The new machine's readings fill the same boxes; the seq floor stays,
+    // as the engine's count goes on.
+    engine
+      ..emit(_sample('srv-1', overview, 2, result: _overview(cpu: 50)))
+      ..emit(_sample('srv-1', overview, 3, result: _overview(cpu: 60)));
+    await settle();
+    expect(cpu.samples, [60]);
+    expect(monitoring.sampleFor('srv-1', overview), same(box));
+    expect(box.value?.seq, 3);
+  });
+
   test('the latest host profile lands in its server\'s box and leaves '
       'with the server (SYN-08)', () async {
     final kvm = HostProfile(virtualization: 'kvm', container: 'none');

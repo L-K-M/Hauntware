@@ -43,6 +43,24 @@ void main() {
     expect((ring.version, notified), (3, 2));
   });
 
+  test('a clear drops every sample but keeps the running index', () {
+    final ring = _ring(3, [1, 2, 3, 4]);
+    var notified = 0;
+    ring.addListener(() => notified++);
+
+    ring.clear();
+    expect(ring.samples, isEmpty);
+    expect(ring.samplesWithEvicted, isEmpty);
+    expect((ring.added, ring.firstIndex, notified), (4, 4, 1));
+    final cleared = ring.version;
+
+    ring.add(5);
+    expect(ring.samples, [5]);
+    expect(ring.samplesWithEvicted, [5]);
+    expect(ring.firstIndex, 4);
+    expect(ring.version, greaterThan(cleared));
+  });
+
   group('downsampleMinMax', () {
     test('one sample per column is the series itself', () {
       expect(downsampleMinMax([1, null, 3], bucketSize: 1), [

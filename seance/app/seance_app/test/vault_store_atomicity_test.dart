@@ -4,14 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/services/file_stores.dart';
 import 'package:seance_core/seance_core.dart';
 
-/// The atomic write stages through `<path>.tmp`; a directory there fails every
-/// write from now on, at the same point a full disk would, and needs no
-/// permission the test process might already hold.
-Future<void> blockWrites(File file) =>
-    Directory('${file.path}.tmp').create().then((_) {});
+import 'support/atomic_write_blocker.dart';
 
-Future<void> allowWrites(File file) =>
-    Directory('${file.path}.tmp').delete(recursive: true);
+Future<void> blockWrites(File file) =>
+    AtomicWriteBlocker(file).create().then((_) {});
+
+Future<void> allowWrites(File file) => AtomicWriteBlocker(file).delete();
 
 Secret secret(String id) =>
     Secret(id: id, kind: SecretKind.password, value: 'value-$id');

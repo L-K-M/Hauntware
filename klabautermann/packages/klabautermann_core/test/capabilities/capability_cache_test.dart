@@ -284,6 +284,8 @@ void main() {
         Link(cache.path).createSync('${support.path}/gone/here');
         final store = await open();
         expect(await store.probed(_web, _profile()), CacheUpdate.failed);
+        expect(Directory('${support.path}/gone').existsSync(), isFalse);
+        expect(Link(cache.path).targetSync(), '${support.path}/gone/here');
       },
       testOn: 'posix',
     );

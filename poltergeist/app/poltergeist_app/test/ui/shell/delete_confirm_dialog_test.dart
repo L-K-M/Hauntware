@@ -175,6 +175,19 @@ void main() {
     expect(await harness.decision, isA<DeleteCancelled>());
   });
 
+  testWidgets('a preparation error replaces the progress indicator', (
+    tester,
+  ) async {
+    final harness = await _DialogHarness.open(tester);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    harness.preparation.completeError(StateError('counting failed'));
+    await tester.pump();
+    // A settled failure must not look like work still in progress.
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byIcon(Icons.error_outline), findsOneWidget);
+    expect(find.textContaining('counting failed'), findsOneWidget);
+  });
+
   testWidgets('disposing the navigator cancels pending preparation', (
     tester,
   ) async {

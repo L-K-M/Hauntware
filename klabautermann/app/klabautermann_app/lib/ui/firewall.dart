@@ -6,48 +6,28 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/admin_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'admin_mode_chip.dart' show AdminScope;
+import 'read_section.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 
 /// NET-06's section of the System tab: the firewall rules of whichever of
 /// ufw, firewalld, nftables and iptables the server has, read on request
 /// in admin mode, since each needs root. The last read stays until the
 /// next one, and a server switch forgets it.
-class FirewallSection extends StatefulWidget {
+class FirewallSection extends StatefulWidget implements AdminReadSection {
   const FirewallSection({super.key, required this.serverId});
 
+  @override
   final String serverId;
 
   @override
   State<FirewallSection> createState() => _FirewallSectionState();
 }
 
-class _FirewallSectionState extends State<FirewallSection> {
-  FirewallReport? _report;
-
-  /// The servers with a read out. A read outlives a switch away from its
-  /// server, so a switch back must still see it and offer no second one.
-  final _readingServers = <String>{};
-
-  bool get _reading => _readingServers.contains(widget.serverId);
-
+class _FirewallSectionState extends State<FirewallSection>
+    with AdminReadSectionState<FirewallSection, FirewallReport> {
   @override
-  void didUpdateWidget(FirewallSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.serverId == widget.serverId) return;
-    _report = null;
-  }
-
-  Future<void> _read(AdminController admin) async {
-    if (_reading) return;
-    final serverId = widget.serverId;
-    setState(() => _readingServers.add(serverId));
-    final report = await admin.readFirewall(serverId);
-    if (!mounted) return;
-    setState(() {
-      _readingServers.remove(serverId);
-      if (serverId == widget.serverId) _report = report;
-    });
-  }
+  Future<FirewallReport> readReport(AdminController admin, String serverId) =>
+      admin.readFirewall(serverId);
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +35,7 @@ class _FirewallSectionState extends State<FirewallSection> {
     final admin = AdminScope.maybeOf(context);
     final adminOn =
         admin?.stateFor(widget.serverId)?.phase == AdminModePhase.on;
-    final report = _report;
+    final report = adminReport;
     final read = report?.read;
 
     return PanelSection(
@@ -67,7 +47,7 @@ class _FirewallSectionState extends State<FirewallSection> {
             text: l10n.systemFirewallFailed(failure.name),
           ),
         if (read != null) ..._tools(context, l10n, read),
-        if (_reading)
+        if (adminReading)
           Text(l10n.systemFirewallReading)
         else if (!adminOn || admin == null)
           Text(l10n.systemFirewallAdminNeeded)
@@ -75,7 +55,7 @@ class _FirewallSectionState extends State<FirewallSection> {
           Align(
             alignment: AlignmentDirectional.centerStart,
             child: OutlinedButton(
-              onPressed: () => unawaited(_read(admin)),
+              onPressed: () => unawaited(readAdmin(admin)),
               child: Text(
                 report == null
                     ? l10n.systemFirewallRead

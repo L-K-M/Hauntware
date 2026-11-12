@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:seance_core/catalog.dart';
 import 'package:seance_core/seance_core.dart';
-import 'package:seance_core/src/catalog/atomic_file_writer.dart';
 import 'package:seance_core/src/catalog/catalog_controller.dart';
 import 'package:test/test.dart';
 

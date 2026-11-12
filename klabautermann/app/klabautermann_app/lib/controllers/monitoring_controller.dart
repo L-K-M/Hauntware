@@ -779,6 +779,9 @@ final class MonitoringController extends ChangeNotifier {
           }
         }
       case EndpointChanged(:final serverId):
+        // SYN-08: the server's id now names another machine, so what was
+        // read from the old one goes, in place, as its views stay open.
+        _readings[serverId]?.clear();
         // The engine closed the link and dials the server no more until
         // the user confirms it again; a view still open connects again so
         // its rejection says why.
@@ -1166,6 +1169,24 @@ final class _ServerReadings {
     for (final MapEntry(key: series, value: ring) in history.entries) {
       ring.add(sample.at, [series.readFrom(sample.result)]);
     }
+  }
+
+  /// Drops every reading, ring, profile and clock, keeping each box for
+  /// the views that hold it. The seq floor stays: the engine's count for
+  /// the server goes on (D44).
+  void clear() {
+    for (final box in [..._boxes.values, ..._lastReadings.values]) {
+      box.value = null;
+    }
+    for (final ring in _rings.values.expand((rings) => rings.values)) {
+      ring.clear();
+    }
+    for (final ring in _historyRings) {
+      ring.clear();
+    }
+    _afterHole.clear();
+    profile.value = null;
+    clock.value = null;
   }
 
   void dispose() {

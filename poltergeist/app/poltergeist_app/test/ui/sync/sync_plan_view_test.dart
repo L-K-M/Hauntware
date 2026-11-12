@@ -521,6 +521,13 @@ void main() {
     final controller = fakeController(scratch, pair: pair, plan: plan);
     addTearDown(controller.dispose);
     await pumpSyncPlanView(tester, controller);
+    // Names and paths stay out of the keyboard's personal dictionary.
+    expect(
+      tester
+          .widget<TextField>(find.byType(TextField).first)
+          .enableIMEPersonalizedLearning,
+      isFalse,
+    );
     await pumpToReady(tester, controller);
 
     await tester.enterText(find.byType(TextField).first, '  ALPHA ');

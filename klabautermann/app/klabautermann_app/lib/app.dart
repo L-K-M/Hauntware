@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show withMacosToolbarBand;
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostUndoHistory, showCommandPalette;
 import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
@@ -64,7 +65,6 @@ import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
 import 'ui/edit/editor_display_scope.dart' show EditorDisplayScope;
 import 'ui/hand_off_actions.dart' show HandOffScope;
 import 'ui/keyboard_map.dart';
-import 'ui/macos_toolbar_band.dart';
 import 'ui/menus/app_commands.dart';
 import 'ui/menus/app_menu_host.dart';
 import 'ui/palette.dart';

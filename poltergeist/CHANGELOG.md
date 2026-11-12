@@ -28,6 +28,8 @@
   program, bookmark imports, and choosing a key file or a server's image
   showed no panel: file_picker refused them in the unsandboxed app, as it
   did in Séance.
+- Settings and bookmark files use the shared atomic writer and write
+  through symbolic links.
 - **Downloads keep no setuid bit.** A downloaded file took the server's
   whole mode, so a hostile server could leave a setuid or world-writable
   file on your disk. Downloads now keep only the read, write and execute
