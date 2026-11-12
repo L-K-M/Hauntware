@@ -7506,7 +7506,7 @@ abstract class AppLocalizations {
   /// Toast when an action failed; failure is the engine's ActionFailure name.
   ///
   /// In en, this message translates to:
-  /// **'{target} did not finish: {failure, select, noLink{there is no connection to the server.} revalidation{the target changed since the preview.} elevationRefused{admin mode refused the step.} stepFailed{a step failed.} transport{the connection failed during the run.} unsupportedStep{this version cannot run one of its steps.} adminRequired{it needs admin mode.} launchFailed{its operation could not be started on the server.} other{it failed.}}'**
+  /// **'{target} did not finish: {failure, select, noLink{there is no connection to the server.} revalidation{the target changed since the preview.} elevationRefused{admin mode refused the step.} stepFailed{a step failed.} transport{the connection failed during the run.} timedOut{a step ran past its time limit, so Klabautermann stopped waiting for it.} unsupportedStep{this version cannot run one of its steps.} adminRequired{it needs admin mode.} launchFailed{its operation could not be started on the server.} other{it failed.}}'**
   String actionFailed(String target, String failure);
 
   /// Toast when an action failed without a typed reason.
@@ -7524,7 +7524,7 @@ abstract class AppLocalizations {
   /// Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine\'s own networks, which stay.} nothingToPrune{There is nothing to prune.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}'**
+  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine\'s own networks, which stay.} nothingToPrune{There is nothing to prune.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} userWritableDirectory{Another account can change this folder, so Klabautermann does not write there as root.} other{The action was refused.}}'**
   String actionRefused(String reason);
 
   /// Process action (PRC-02): sends SIGTERM, asking the process to end.
@@ -7950,7 +7950,7 @@ abstract class AppLocalizations {
   /// Why a run failed, in the activity record's details; failure is the engine's ActionFailure name.
   ///
   /// In en, this message translates to:
-  /// **'{failure, select, noLink{No connection to the server.} revalidation{The target changed since the preview.} elevationRefused{Admin mode refused the step.} stepFailed{A step failed.} transport{The connection failed during the run.} unsupportedStep{This version could not run a step.} adminRequired{It needed admin mode.} launchFailed{Its operation could not be started on the server.} other{It failed.}}'**
+  /// **'{failure, select, noLink{No connection to the server.} revalidation{The target changed since the preview.} elevationRefused{Admin mode refused the step.} stepFailed{A step failed.} transport{The connection failed during the run.} timedOut{A step ran past its time limit, so Klabautermann stopped waiting for it.} unsupportedStep{This version could not run a step.} adminRequired{It needed admin mode.} launchFailed{Its operation could not be started on the server.} other{It failed.}}'**
   String activityFailure(String failure);
 
   /// A failed step's exit status in an activity record's details.
@@ -11556,8 +11556,14 @@ abstract class AppLocalizations {
   /// Remote editor: why the engine read nothing. reason is the engine's EditReadFailure name.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, noLink{There is no connection to this server.} invalidTarget{Klabautermann does not edit this path.} notFound{There is no file at this path on the host.} adminRequired{Only root can read this file. Turn on admin mode to edit it.} tooLarge{This file is too large for the editor.} notText{This file is not text.} stackUnverified{This stack\'s files are not its verified source, so Klabautermann does not edit them.} failed{The file could not be read.} other{The file could not be read.}}'**
+  /// **'{reason, select, noLink{There is no connection to this server.} invalidTarget{Klabautermann does not edit this path.} notFound{There is no file at this path on the host.} adminRequired{Only root can read this file. Turn on admin mode to edit it.} tooLarge{This file is too large for the editor.} notText{This file is not text.} stackUnverified{This stack\'s files are not its verified source, so Klabautermann does not edit them.} symlink{This path is a symbolic link that cannot be resolved on this host.} failed{The file could not be read.} other{The file could not be read.}}'**
   String editReadFailed(String reason);
+
+  /// Remote editor: under the path the editor opened, when it is a symbolic link; path is the real file that is read and saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Link to {path}'**
+  String editLinkTo(String path);
 
   /// Remote editor: chip on a file only root may write; saving it runs through admin mode.
   ///

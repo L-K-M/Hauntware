@@ -11,14 +11,15 @@ name: Release
 #
 # Atomic publication: the release is created hidden while the build
 # legs attach their assets, the GHCR image is pushed only after every
-# build leg succeeds, and the single publish job flips the draft to
-# public only once the manifest floor, SHA256SUMS and the notes are
-# verified — a public release is never partial, per-app, or sum-less.
+# build leg succeeds and the manifest floor, SHA256SUMS and the notes
+# are verified, and the single publish job then flips the draft to
+# public — a public release is never partial, per-app, or sum-less.
 # Recovery from a failed run: delete the release, never the tag.
 #
 # Signing/secrets inventory (explicit): the only repo secrets are
-# GITHUB_TOKEN and ZAI_API_KEY (review workflow). No signing secrets
-# exist — desktop bundles are unsigned (macOS: ad-hoc — right-click ▸
+# GITHUB_TOKEN and the review workflow's ZAI_API_KEY, MIMO_API_KEY and
+# STEPFUN_API_KEY; this workflow reads GITHUB_TOKEN only. No signing
+# secrets exist — desktop bundles are unsigned (macOS: ad-hoc — right-click ▸
 # Open; Windows: SmartScreen ▸ Run anyway), the Android APKs sign with
 # the committed debug-grade keystores, and the iOS IPAs must be
 # re-signed to sideload. Do not add signing inputs without a decision.
@@ -54,9 +55,9 @@ concurrency:
 permissions:
   # Read-only baseline for any job without its own block; every job
   # below declares what it actually needs. Only the docker job pushes
-  # to GHCR (packages: write); the asset legs, the sums job and the
-  # test gate need contents: write (asset uploads; the gate lists
-  # draft releases, which read-scoped tokens cannot see).
+  # to GHCR (packages: write); the asset legs, the sums and publish
+  # jobs and the test gate need contents: write (asset uploads; the
+  # gate lists draft releases, which read-scoped tokens cannot see).
   contents: read
 
 env:
@@ -117,6 +118,7 @@ jobs:
           esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned: the publish path must not follow a mutable tag)
         with:
+          persist-credentials: false
           ref: ${{ steps.checkout-ref.outputs.ref }}
           fetch-depth: 0
       # Releases are created once and never updated: action-gh-release's
@@ -357,6 +359,7 @@ jobs:
           esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
         with:
+          persist-credentials: false
           ref: ${{ steps.checkout-ref.outputs.ref }}
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
         with:
@@ -370,6 +373,7 @@ jobs:
           (cd planchette/packages/planchette_editor && flutter pub get)
           (cd planchette/packages/ghost_desktop && flutter pub get)
           (cd planchette/packages/ghost_marks && flutter pub get)
+          (cd planchette/packages/ghost_marks_picker && flutter pub get)
           (cd planchette/packages/ghost_theme && flutter pub get)
           (cd planchette/packages/ghost_servers && flutter pub get)
           (cd planchette/packages/ghost_keystore && flutter pub get)
@@ -385,6 +389,7 @@ jobs:
           (cd planchette/packages/planchette_editor && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_desktop && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_marks && flutter analyze --no-pub && flutter test --no-pub)
+          (cd planchette/packages/ghost_marks_picker && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_theme && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_servers && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_keystore && flutter analyze --no-pub && flutter test --no-pub)
@@ -456,6 +461,7 @@ jobs:
           esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
         with:
+          persist-credentials: false
           ref: ${{ steps.checkout-ref.outputs.ref }}
       - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1 (SHA-pinned)
         with:
@@ -508,7 +514,7 @@ jobs:
           # job to get here create the tag at the dispatched commit.
           tag_name: ${{ inputs.tag || github.ref_name }}
           target_commitish: ${{ github.sha }}
-          # Hidden while the matrix legs attach; the sums job publishes
+          # Hidden while the matrix legs attach; the publish job publishes
           # after the floor check, so a public release is never partial.
           draft: true
           prerelease: >-
@@ -584,6 +590,7 @@ jobs:
           esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
         with:
+          persist-credentials: false
           ref: ${{ steps.checkout-ref.outputs.ref }}
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6 (SHA-pinned)
         if: matrix.target == 'android'
@@ -777,6 +784,7 @@ jobs:
           esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
         with:
+          persist-credentials: false
           ref: ${{ steps.checkout-ref.outputs.ref }}
       # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
       # for flutter_secure_storage's keyring backend; flatpak-builder repacks
@@ -852,6 +860,7 @@ jobs:
           esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
         with:
+          persist-credentials: false
           ref: ${{ steps.checkout-ref.outputs.ref }}
       # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
       # for flutter_secure_storage's keyring backend; flatpak-builder repacks
@@ -933,6 +942,7 @@ jobs:
           esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
         with:
+          persist-credentials: false
           ref: ${{ steps.checkout-ref.outputs.ref }}
       # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
       # for flutter_secure_storage's keyring backend; flatpak-builder repacks
@@ -1055,6 +1065,7 @@ jobs:
           esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
         with:
+          persist-credentials: false
           ref: ${{ steps.checkout-ref.outputs.ref }}
       # Match the app's compileOptions (JavaVersion.VERSION_17) so the Gradle
       # build is deterministic rather than tracking the runner's default JDK.
@@ -1302,6 +1313,7 @@ jobs:
           esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
         with:
+          persist-credentials: false
           ref: ${{ steps.checkout-ref.outputs.ref }}
       # Pin the JDK so the Gradle build is deterministic rather than tracking
       # the runner's default; keep in step with the app's compileOptions.
@@ -1556,6 +1568,7 @@ jobs:
           esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
         with:
+          persist-credentials: false
           ref: ${{ steps.checkout-ref.outputs.ref }}
       # Pin the JDK so the Gradle build is deterministic rather than tracking
       # the runner's default; keep in step with the app's compileOptions.
@@ -1725,13 +1738,17 @@ jobs:
           fail_on_unmatched_files: true
 
   # Container image to GitHub Container Registry. It pushes only after
-  # EVERY build leg succeeded — an image must never publish for a
-  # release whose client floor failed. Deployments build from source;
-  # this image is the release artifact for everyone else.
+  # EVERY build leg succeeded and the sums job verified the draft's
+  # manifest floor and checksums: the image is public the moment it is
+  # pushed, so it must never publish for a release that cannot. The
+  # publish job waits for it, so the release never announces a missing
+  # image. Deployments build from source; this image is the release
+  # artifact for everyone else.
   docker:
     name: Docker image
     needs:
       - test
+      - sums
       - server
       - client_planchette
       - client_seance
@@ -1771,6 +1788,7 @@ jobs:
           esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
         with:
+          persist-credentials: false
           ref: ${{ steps.checkout-ref.outputs.ref }}
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4 (SHA-pinned)
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4 (SHA-pinned)
@@ -1838,12 +1856,13 @@ jobs:
 
   # Every release carries SHA-256 checksums for all assets — SHA256SUMS
   # beside the assets, the same sums in the notes — computed by CI after
-  # all assets attach and the GHCR image is published (an integrity
-  # channel, not an origin one). Runs only when every leg succeeded:
-  # sums over a partial asset set would certify a broken release, and
-  # the manifest floor check makes even a silent upload miss loud.
+  # all assets attach (an integrity channel, not an origin one). Runs
+  # only when every leg succeeded: sums over a partial asset set would
+  # certify a broken release, and the manifest floor check makes even a
+  # silent upload miss loud. Everything here edits the hidden draft; the
+  # docker and publish jobs follow it.
   sums:
-    name: Checksums and publish
+    name: Checksums
     needs:
       - server
       - client_planchette
@@ -1853,7 +1872,6 @@ jobs:
       - flatpak_planchette
       - flatpak_seance
       - flatpak_poltergeist
-      - docker
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -1883,6 +1901,7 @@ jobs:
           esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
         with:
+          persist-credentials: false
           ref: ${{ steps.checkout-ref.outputs.ref }}
       - name: Compute SHA256SUMS over the release's assets
         env:
@@ -1992,14 +2011,24 @@ jobs:
             exit 1
           fi
           sha256sum -c --strict SHA256SUMS
-      # The publish itself: no human step, but only now that the floor
-      # check passed, the image is pushed, and the sums are attached and
-      # verified. Idempotent for re-runs: if a prior attempt already
-      # flipped the release public (e.g. a timeout after a successful
-      # call), there is nothing to do -- created-once is the guard job's
-      # invariant, not this step's failure mode, and a spurious red here
-      # would push a healthy published release down the delete-and-retag
-      # path.
+
+  # The publish itself: no human step, but only now that the floor
+  # check passed, the sums are attached and verified, and the image is
+  # pushed. Idempotent for re-runs: if a prior attempt already flipped
+  # the release public (e.g. a timeout after a successful call), there
+  # is nothing to do -- created-once is the guard job's invariant, not
+  # this step's failure mode, and a spurious red here would push a
+  # healthy published release down the delete-and-retag path.
+  publish:
+    name: Publish
+    needs:
+      - sums
+      - docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

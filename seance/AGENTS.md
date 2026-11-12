@@ -245,7 +245,9 @@ compatibility boundary and the limits of the reproduction.
 checks injected Command shortcuts against the real native keyboard pipeline
 without launching the app or posting system input. See
 [the keyboard compatibility note](docs/macos-keyboard-compatibility.md) for
-the fixture, stock-engine reproduction, and limits.
+the fixture, stock-engine reproduction, and limits. Both scripts only name
+Séance's app and controller; their body is the suite's
+`../scripts/macos-native-fixtures.sh`, shared with the sibling products.
 
 The platform folders (android/ios/linux/macos/windows) ARE committed — they
 carry real configuration: the display name (`Séance` — AndroidManifest label;
@@ -307,8 +309,14 @@ compiles the app for android/linux/macos/ios/windows on their native runners
 
 - `scripts/build.sh` — builds every target this host can build (`server`,
   `docker`, `app`, `apk`, `flatpak`); skips targets whose toolchain is missing,
-  fails only
-  on targets you name explicitly. Artifacts are staged into `dist/`; on Linux
+  fails only on targets you name explicitly. Argument handling, staging,
+  `flatpak`, `--install` and the summary come from the suite's
+  `../scripts/product-build-common.sh`, which Poltergeist's and
+  Klabautermann's build.sh also source; this file keeps `server`, `docker`
+  and Séance's own `app` and `apk` steps (CocoaPods check, Apple
+  configuration backup, signing fallback, `flutter create` fallback).
+  `scripts/build-flatpak.sh` likewise wraps `../scripts/build-flatpak-common.sh`.
+  Artifacts are staged into `dist/`; on Linux
   the `app` target additionally runs `scripts/package-linux.sh` to produce a
   `.deb` and an AppImage there, and `flatpak` repacks the `.deb` via
   `scripts/build-flatpak.sh`. `--install` builds the host's app and installs

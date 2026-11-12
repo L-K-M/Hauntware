@@ -5914,6 +5914,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'elevationRefused': 'admin mode refused the step.',
       'stepFailed': 'a step failed.',
       'transport': 'the connection failed during the run.',
+      'timedOut':
+          'a step ran past its time limit, so Klabautermann stopped waiting for it.',
       'unsupportedStep': 'this version cannot run one of its steps.',
       'adminRequired': 'it needs admin mode.',
       'launchFailed': 'its operation could not be started on the server.',
@@ -5966,6 +5968,8 @@ class AppLocalizationsEn extends AppLocalizations {
           'Only the legacy docker-compose is installed, which Klabautermann does not run.',
       'sudoRightMissing':
           'This needs root, and your sudo rule allows only docker.',
+      'userWritableDirectory':
+          'Another account can change this folder, so Klabautermann does not write there as root.',
       'other': 'The action was refused.',
     });
     return '$_temp0';
@@ -6310,6 +6314,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'elevationRefused': 'Admin mode refused the step.',
       'stepFailed': 'A step failed.',
       'transport': 'The connection failed during the run.',
+      'timedOut':
+          'A step ran past its time limit, so Klabautermann stopped waiting for it.',
       'unsupportedStep': 'This version could not run a step.',
       'adminRequired': 'It needed admin mode.',
       'launchFailed': 'Its operation could not be started on the server.',
@@ -9159,10 +9165,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'notText': 'This file is not text.',
       'stackUnverified':
           'This stack\'s files are not its verified source, so Klabautermann does not edit them.',
+      'symlink':
+          'This path is a symbolic link that cannot be resolved on this host.',
       'failed': 'The file could not be read.',
       'other': 'The file could not be read.',
     });
     return '$_temp0';
+  }
+
+  @override
+  String editLinkTo(String path) {
+    return 'Link to $path';
   }
 
   @override

@@ -309,6 +309,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
         target: widget.target,
         text: text,
         baseSha256: base.sha256,
+        resolvedPath: base.resolvedPath,
       ),
       onRun: (planId, _) => _follow(planId, text),
       onRefused: _refused,
@@ -461,7 +462,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
           if (failure == EditReadFailure.adminRequired)
             TurnOnAdminModeButton(serverId: widget.serverId),
         ];
-      case EditContent(:final privileged):
+      case EditContent(:final privileged, :final resolvedPath):
         final editor = _editor!;
         return [
           Wrap(
@@ -470,6 +471,8 @@ class _RemoteEditorState extends State<RemoteEditor> {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               pathLine,
+              if (resolvedPath != null)
+                Text(l10n.editLinkTo(resolvedPath), style: pathLine.style),
               if (privileged)
                 Chip(
                   avatar: const Icon(Icons.admin_panel_settings_outlined),

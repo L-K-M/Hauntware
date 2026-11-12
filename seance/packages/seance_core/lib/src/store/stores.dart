@@ -369,7 +369,8 @@ class InMemoryHostKeyStore implements ConflictAwareHostKeyStore {
   Future<List<HostKey>> all() async => _keys.values.toList();
 
   @override
-  Future<HostKey?> get(String host, int port) async => _keys['$host:$port'];
+  Future<HostKey?> get(String host, int port) async =>
+      _keys[hostKeyLocator(host, port)];
 
   @override
   Future<void> put(HostKey key) async => _keys[key.locator] = key;

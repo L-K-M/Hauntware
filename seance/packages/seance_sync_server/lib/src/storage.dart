@@ -137,6 +137,12 @@ class PullPageLimits {
 /// Bounds one account's current winning rows. Null means unbounded, which
 /// preserves the public storage helpers used by tests and embedders; the HTTP
 /// server always supplies its configured quota.
+///
+/// [maxRecords] counts live rows only. Rows are never removed, so a deletion
+/// is a tombstone row; counting those would let ordinary churn fill an
+/// account for good, with deleting things making it worse rather than better.
+/// [maxBytes] still counts every row, tombstones included, so what an
+/// account can make the server store stays bounded.
 class AccountQuota {
   final int maxRecords;
   final int maxBytes;
@@ -423,6 +429,9 @@ abstract class Storage {
 int _recordBytes(Iterable<EncryptedRecord> records) =>
     records.fold(0, (total, record) => total + record.encodedJsonBytes());
 
+int _liveCount(Iterable<EncryptedRecord> records) =>
+    records.where((record) => !record.deleted).length;
+
 int _inboxBytes(Iterable<InboxItem> items) =>
     items.fold(0, (total, item) => total + item.encodedJsonBytes());
 
@@ -436,8 +445,8 @@ void enforceAccountQuota({
   // Existing deployments may already exceed a newly configured cap. Permit a
   // transaction that does not increase an already-over-budget dimension;
   // refusing a smaller replacement would make the account impossible to
-  // repair without editing SQLite. Record count cannot shrink because current
-  // tombstones are records too, so equality must remain legal there.
+  // repair without editing SQLite. Editing existing records leaves the live
+  // count equal, which must stay legal for an account over the cap.
   final countRefused =
       afterCount > quota.maxRecords &&
       (beforeCount <= quota.maxRecords || afterCount > beforeCount);
@@ -863,9 +872,9 @@ class InMemoryStorage implements Storage {
 
     if (changed && quota != null) {
       enforceAccountQuota(
-        beforeCount: current.length,
+        beforeCount: _liveCount(current.values),
         beforeBytes: _recordBytes(current.values),
-        afterCount: staged.length,
+        afterCount: _liveCount(staged.values),
         afterBytes: _recordBytes(staged.values),
         quota: quota,
       );
@@ -1089,9 +1098,9 @@ class InMemoryStorage implements Storage {
 
     if (migrated != 0 && quota != null) {
       enforceAccountQuota(
-        beforeCount: current.length,
+        beforeCount: _liveCount(current.values),
         beforeBytes: _recordBytes(current.values),
-        afterCount: staged.length,
+        afterCount: _liveCount(staged.values),
         afterBytes: _recordBytes(staged.values),
         quota: quota,
       );

@@ -703,6 +703,53 @@ class SyncCoordinator {
     return changed;
   }
 
+  /// Tombstone every status past retention that the server still holds live.
+  ///
+  /// Each handled proposal mints its own record id, and the server keeps a
+  /// row until it is deleted, so live statuses would otherwise pile up
+  /// against the account's record quota, which every app on the account
+  /// shares. Only a clean, sequenced mirror copy is retired: that is the
+  /// server's row, while a status that never left this device needs no
+  /// tombstone. The tombstone is dated just after the status, so any later
+  /// edit of it still wins, and once the mirror holds a tombstone the id is
+  /// skipped, so devices settle on one tombstone instead of trading them.
+  /// Clients that predate this ignore an `inboxstatus:` tombstone on apply.
+  ///
+  /// Called only after a completed pull, when a clean sequenced copy is known
+  /// to be the server's row. Before the pull a rejected cursor could still
+  /// show that the server never had it.
+  Future<int> _retireExpiredStatuses() async {
+    if (inboxStatusStore == null) return 0;
+    final statusCutoff = _statusCutoff();
+    final dirtyIds = {
+      for (final record in await local.dirtyRecords()) record.id,
+    };
+    var retired = 0;
+    for (final record in await local.allRecords()) {
+      if (record.deleted ||
+          record.seq == null ||
+          record.updatedAt >= statusCutoff ||
+          dirtyIds.contains(record.id) ||
+          !record.id.startsWith(kInboxStatusIdPrefix)) {
+        continue;
+      }
+      final DecryptedRecord status;
+      try {
+        status = await codec.decrypt(record);
+      } catch (_) {
+        // Not this device's to judge: the apply pass reports unreadable rows.
+        continue;
+      }
+      if (status.kind != RecordKind.inboxStatus) continue;
+      final tombstone = status.tombstone(
+        updatedAt: status.updatedAt + 1,
+        deviceId: deviceId,
+      );
+      if (await _stageLocal(tombstone)) retired++;
+    }
+    return retired;
+  }
+
   int _statusCutoff() =>
       now().millisecondsSinceEpoch - kInboxStatusRetention.inMilliseconds;
 
@@ -1766,9 +1813,12 @@ class SyncCoordinator {
       }
       return changed;
     });
+    // Counted apart from [redated] for the reason given there. Pushed by the
+    // same one extra pass, so a retirement does not wait for the next run.
+    final retired = await runLocal(_retireExpiredStatuses);
     var outcome = first;
     var ranSecondPass = false;
-    if (redated != 0) {
+    if (redated != 0 || retired != 0) {
       ranSecondPass = true;
       final second = await pass();
       outcome = SyncOutcome(

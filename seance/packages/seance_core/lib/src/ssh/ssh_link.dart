@@ -54,11 +54,14 @@ enum SshLinkDegradedReason {
 
 /// Working, but the peer demonstrated a limit below the configured one (for
 /// example a tighter `MaxSessions`). [reason] is typed, not text: each app
-/// renders its own copy.
+/// renders its own copy. [seen] is what refused opens have taught the link
+/// so far, as on [SshLinkReady].
 final class SshLinkDegraded extends SshLinkState {
-  const SshLinkDegraded(this.reason) : super._();
+  const SshLinkDegraded(this.reason, {this.seen = const SshLinkSeen()})
+    : super._();
 
   final SshLinkDegradedReason reason;
+  final SshLinkSeen seen;
 }
 
 /// Waiting out a reconnect delay owned by the supervisor above the link.
@@ -294,6 +297,9 @@ final class _SshLink implements SshLink {
   int? _learnedSessionLimit;
   var _forwardingRefused = false;
 
+  /// Set by the first session refusal that arrived with no session open.
+  var _refusedWithNoneOpen = false;
+
   Timer? _pingTimer;
   var _pingOutstanding = false;
   var _dataSinceLastTick = false;
@@ -437,9 +443,26 @@ final class _SshLink implements SshLink {
     serverIdentification: _clientOrNull?.remoteVersion,
   );
 
+  /// Closed is terminal: a refusal or prompt that lands while the close
+  /// path tears down must not report a live state for a dead link.
   void _setState(SshLinkState next) {
+    if (_state is SshLinkClosed) return;
     _state = next;
     if (!_stateController.isClosed) _stateController.add(next);
+  }
+
+  /// Re-emits the working state with the current [seen], so listeners see
+  /// a learned fact without polling; a link that is not working (still
+  /// connecting, or closed) keeps its state.
+  void _publishSeen() {
+    switch (_state) {
+      case SshLinkReady():
+        _setState(SshLinkReady(seen));
+      case SshLinkDegraded(:final reason):
+        _setState(SshLinkDegraded(reason, seen: seen));
+      default:
+        break;
+    }
   }
 
   void _noteInbound() => _dataSinceLastTick = true;
@@ -543,45 +566,61 @@ final class _SshLink implements SshLink {
   /// finds it; [start] hands the grant to the `RemoteProcess`, which owns
   /// both. On open failure the grant is released here. A channel that
   /// arrives after the open timeout is closed on arrival, never leaked.
+  ///
+  /// An open the server refuses at its session limit is not the caller's
+  /// failure: once the link has learned the limit, the open queues on the
+  /// budget like any later one and goes out once more when a slot frees. If
+  /// no slot frees within the open bound, the caller gets that refusal.
   Future<(SSHSession, ChannelGrant)> _openSessionChannel(
     String command, {
     SSHPtyConfig? pty,
     bool trackChannel = true,
   }) async {
-    _throwIfClosingForChannel();
-    final acquire = _budget.acquire(
-      ChannelWaitPriority.userAction,
-      'exec: $command',
-    );
-    final ChannelGrant grant;
-    try {
-      grant = await acquire.timeout(openTimeout);
-    } on TimeoutException {
-      // The waiter stays queued until a slot frees. Its late grant is
-      // released at once, so the command the caller gave up on never runs
-      // and the slot goes to the next waiter.
-      unawaited(acquire.then((late) => late.release(), onError: (_) {}));
-      rethrow;
-    }
-    _pendingOpens++;
-    try {
-      final pending = _client.execute(command, pty: pty);
-      SSHSession channel;
+    ChannelOpenException? refusedAtLimit;
+    while (true) {
+      _throwIfClosingForChannel();
+      final acquire = _budget.acquire(
+        ChannelWaitPriority.userAction,
+        'exec: $command',
+      );
+      final ChannelGrant grant;
       try {
-        channel = await pending.timeout(openTimeout);
-      } catch (_) {
-        // The open was abandoned at its bound; whatever arrives late on it
-        // is owned by nobody — close it on arrival, never leak it.
-        unawaited(pending.then(_discardSession, onError: (_) {}));
+        grant = await acquire.timeout(openTimeout);
+      } on TimeoutException {
+        // The waiter stays queued until a slot frees. Its late grant is
+        // released at once, so the command the caller gave up on never runs
+        // and the slot goes to the next waiter.
+        unawaited(acquire.then((late) => late.release(), onError: (_) {}));
+        if (refusedAtLimit != null) throw refusedAtLimit;
         rethrow;
       }
-      if (trackChannel) _trackChannel(channel, grant);
-      return (channel, grant);
-    } catch (e) {
-      grant.release();
-      throw _classifyOpen(e, ChannelOpenKind.session);
-    } finally {
-      _pendingOpens--;
+      _pendingOpens++;
+      try {
+        final pending = _client.execute(command, pty: pty);
+        SSHSession channel;
+        try {
+          channel = await pending.timeout(openTimeout);
+        } catch (_) {
+          // The open was abandoned at its bound; whatever arrives late on it
+          // is owned by nobody — close it on arrival, never leak it.
+          unawaited(pending.then(_discardSession, onError: (_) {}));
+          rethrow;
+        }
+        if (trackChannel) _trackChannel(channel, grant);
+        return (channel, grant);
+      } catch (e) {
+        final error = _classifyOpen(e, ChannelOpenKind.session, grant: grant);
+        grant.release();
+        if (refusedAtLimit == null &&
+            error is ChannelOpenException &&
+            error.refusal == ChannelRefusal.sessionLimit) {
+          refusedAtLimit = error;
+          continue;
+        }
+        throw error;
+      } finally {
+        _pendingOpens--;
+      }
     }
   }
 
@@ -661,7 +700,7 @@ final class _SshLink implements SshLink {
   // ---- file system --------------------------------------------------------
 
   @override
-  Future<RemoteFileSystem> openFileSystem() {
+  Future<RemoteFileSystem> openFileSystem() async {
     if (_closed || _client.isClosed) {
       throw const RemoteFileException(
         kind: RemoteFileErrorKind.disconnected,
@@ -669,7 +708,7 @@ final class _SshLink implements SshLink {
         message: 'The SSH link is closed.',
       );
     }
-    return Future.value(_fileSystem ??= _LeasedLinkFileSystem(this));
+    return _fileSystem ??= _LeasedLinkFileSystem(this);
   }
 
   // ---- open classification ------------------------------------------------
@@ -683,21 +722,37 @@ final class _SshLink implements SshLink {
     }
   }
 
-  Object _classifyOpen(Object e, ChannelOpenKind kind) {
+  /// Turns a refused open into a [ChannelOpenException] and records what it
+  /// teaches. [grant] is the session open's slot, still held: the count the
+  /// server had open is the slots granted before it.
+  Object _classifyOpen(Object e, ChannelOpenKind kind, {ChannelGrant? grant}) {
     if (e is! SSHChannelOpenError) return e;
-    final refusal = classifyChannelRefusal(
+    final observedOpens = grant == null
+        ? _budget.inUse
+        : _budget.heldBefore(grant);
+    var refusal = classifyChannelRefusal(
       kind,
-      observedOpens: _budget.inUse,
-      effectiveLimit: _budget.effectiveLimit,
       reasonCode: e.code,
       description: e.description,
     );
+    // A limit of zero fails every later session open on the link, so one
+    // refusal with nothing open is not enough to learn it: the first is
+    // reported as it came, and only a second one teaches the limit.
+    if (refusal == ChannelRefusal.sessionLimit && observedOpens == 0) {
+      if (!_refusedWithNoneOpen) {
+        _refusedWithNoneOpen = true;
+        refusal = ChannelRefusal.other;
+      }
+    }
     switch (refusal) {
       case ChannelRefusal.sessionLimit:
-        _budget.learnLimit(_budget.inUse);
+        _budget.learnLimit(observedOpens);
         _learnedSessionLimit = _budget.learnedLimit;
         _setState(
-          const SshLinkDegraded(SshLinkDegradedReason.sessionLimitLearned),
+          SshLinkDegraded(
+            SshLinkDegradedReason.sessionLimitLearned,
+            seen: seen,
+          ),
         );
         return ChannelOpenException(
           refusal,
@@ -706,12 +761,17 @@ final class _SshLink implements SshLink {
         );
       case ChannelRefusal.forwardDisabled:
         _forwardingRefused = true;
-        // A learned fact re-emits Ready with the updated seen, so listeners
-        // see the change without polling; a terminal state stays terminal.
-        if (_state is! SshLinkClosed) _setState(SshLinkReady(seen));
+        _publishSeen();
         return ChannelOpenException(
           refusal,
           'The server refused forwarding: ${e.description}',
+          cause: e,
+        );
+      case ChannelRefusal.connectFailed:
+        return ChannelOpenException(
+          refusal,
+          'The server could not reach the forwarding target: '
+          '${e.description}',
           cause: e,
         );
       case ChannelRefusal.other:
@@ -782,8 +842,9 @@ final class _SshLink implements SshLink {
 /// The link's lazily leased SFTP channel behind a [RemoteFileSystem] facade.
 ///
 /// The lease is shared: every call joins the same in-flight open, so
-/// concurrent users never stack channels. Each operation re-arms an idle
-/// timer; when it fires the SFTP channel closes and the budget slot frees.
+/// concurrent users never stack channels. The idle timer runs only while no
+/// call is in flight; when it fires the SFTP channel closes and the budget
+/// slot frees.
 final class _LeasedLinkFileSystem implements RemoteFileSystem {
   _LeasedLinkFileSystem(this._link);
 
@@ -904,11 +965,34 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
     _inFlightOps++;
     try {
       final lease = await _leaseFs();
-      return await body(lease.fs);
+      try {
+        return await body(lease.fs);
+      } on RemoteFileException catch (e) {
+        // dartssh2 aborts every call once the SFTP channel has ended, and
+        // offers no other signal that it did. Drop that lease so the next
+        // call opens a fresh channel instead of failing on the dead one.
+        if (e.cause is SftpAbortError) _evict(lease);
+        rethrow;
+      }
     } finally {
       _inFlightOps--;
       _armIdle();
     }
+  }
+
+  /// Forgets [lease] if it is still the current one and frees what it
+  /// holds. Calls still running on it fail on their own.
+  void _evict(_FsLease lease) {
+    if (!identical(_leaseValue, lease)) return;
+    _lease = null;
+    _leaseValue = null;
+    unawaited(
+      runSequentialCleanup(
+        [lease.sftp.close, lease.grant.release],
+        actionTimeout: _link.closeTimeout,
+        failureMode: CleanupFailureMode.ignore,
+      ),
+    );
   }
 
   Future<_FsLease> _leaseFs() {
@@ -921,48 +1005,121 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
     );
   }
 
+  /// Leases one SFTP channel inside the budget. A session-limit refusal of
+  /// the channel queues once under the learned limit, as an exec open does.
   Future<_FsLease> _openFs() async {
-    final grant = await _acquireGrant();
-    _link._pendingOpens++;
-    try {
-      final pending = _link._client.sftp();
-      SftpClient sftp;
+    ChannelOpenException? refusedAtLimit;
+    while (true) {
+      final grant = await _acquireGrant(refusedAtLimit);
+      _link._pendingOpens++;
       try {
-        sftp = await pending.timeout(_link.openTimeout);
-      } catch (_) {
-        // The open was abandoned at its bound; whatever arrives late on it
-        // is owned by nobody — close it on arrival, never leak it.
-        unawaited(pending.then(_discardSftp, onError: (_) {}));
-        rethrow;
-      }
-      try {
-        await sftp.handshake.timeout(_link.openTimeout);
-      } catch (_) {
-        unawaited(_discardSftp(sftp));
-        rethrow;
-      }
-      return _leaseValue = _FsLease(DartSshRemoteFileSystem(sftp), sftp, grant);
-    } catch (e) {
-      grant.release();
-      if (_link._closed || _link._client.isClosed || e is TimeoutException) {
-        throw const RemoteFileException(
-          kind: RemoteFileErrorKind.disconnected,
-          operation: 'open SFTP',
-          message: 'The SSH link is closed.',
+        final sftp = await _openSftp();
+        return _leaseValue = _FsLease(
+          DartSshRemoteFileSystem(sftp),
+          sftp,
+          grant,
         );
+      } catch (e) {
+        final error = _link._classifyOpen(
+          e,
+          ChannelOpenKind.session,
+          grant: grant,
+        );
+        grant.release();
+        if (refusedAtLimit == null &&
+            error is ChannelOpenException &&
+            error.refusal == ChannelRefusal.sessionLimit) {
+          refusedAtLimit = error;
+          continue;
+        }
+        throw _openFailure(error);
+      } finally {
+        _link._pendingOpens--;
       }
-      throw RemoteFileException(
-        kind: RemoteFileErrorKind.unsupported,
-        operation: 'open SFTP',
-        message: 'Could not open SFTP on this server: $e',
-        cause: e,
-      );
-    } finally {
-      _link._pendingOpens--;
     }
   }
 
-  Future<ChannelGrant> _acquireGrant() async {
+  /// Opens the channel, requests the subsystem and waits for the SFTP
+  /// version reply.
+  Future<SftpClient> _openSftp() async {
+    final pending = _link._client.sftp();
+    SftpClient sftp;
+    try {
+      sftp = await pending.timeout(_link.openTimeout);
+    } catch (_) {
+      // The open was abandoned at its bound; whatever arrives late on it
+      // is owned by nobody — close it on arrival, never leak it.
+      unawaited(pending.then(_discardSftp, onError: (_) {}));
+      rethrow;
+    }
+    // dartssh2 drops the server's reply to the subsystem request, so a
+    // server without an SFTP subsystem leaves the handshake unanswered
+    // rather than refusing. A server that has one answers within a round
+    // trip once its sftp-server has started, so a bound shorter than the
+    // open bound tells the two apart; it stays long enough for a loaded
+    // host or a slow link, which would otherwise read as having no SFTP.
+    final handshakeBound = _link.openTimeout < _sftpHandshakeBound
+        ? _link.openTimeout
+        : _sftpHandshakeBound;
+    try {
+      await sftp.handshake.timeout(handshakeBound);
+    } on TimeoutException {
+      unawaited(_discardSftp(sftp));
+      throw const _SftpSubsystemSilent();
+    } catch (_) {
+      unawaited(_discardSftp(sftp));
+      rethrow;
+    }
+    return sftp;
+  }
+
+  /// How long a started SFTP subsystem may take to answer its handshake.
+  static const _sftpHandshakeBound = Duration(seconds: 10);
+
+  RemoteFileException _openFailure(Object error) {
+    if (_link._closed || _link._client.isClosed) {
+      return const RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'open SFTP',
+        message: 'The SSH link is closed.',
+      );
+    }
+    return switch (error) {
+      _SftpSubsystemSilent() => RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'open SFTP',
+        message: 'The server did not start its SFTP subsystem.',
+        cause: error,
+      ),
+      TimeoutException() => RemoteFileException(
+        kind: RemoteFileErrorKind.other,
+        operation: 'open SFTP',
+        message: 'The server did not answer the SFTP channel open in time.',
+        cause: error,
+      ),
+      ChannelOpenException(refusal: ChannelRefusal.sessionLimit) =>
+        RemoteFileException(
+          kind: RemoteFileErrorKind.other,
+          operation: 'open SFTP',
+          message:
+              'The server refused another session channel for SFTP: '
+              '$error',
+          cause: error,
+        ),
+      _ => RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'open SFTP',
+        message: 'Could not open SFTP on this server: $error',
+        cause: error,
+      ),
+    };
+  }
+
+  /// [refusedAtLimit] is the refusal a retried open answers with when no
+  /// slot frees in time.
+  Future<ChannelGrant> _acquireGrant([
+    ChannelOpenException? refusedAtLimit,
+  ]) async {
     final acquire = _link._budget.acquire(ChannelWaitPriority.sftp, 'SFTP');
     try {
       return await boundedOpen(
@@ -981,6 +1138,7 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
     } on RemoteFileException {
       rethrow;
     } catch (e) {
+      if (refusedAtLimit != null) throw _openFailure(refusedAtLimit);
       throw RemoteFileException(
         kind: RemoteFileErrorKind.other,
         operation: 'open SFTP',
@@ -996,9 +1154,25 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
     failureMode: CleanupFailureMode.ignore,
   );
 
+  /// Starts the idle period once the last call on the lease has ended.
+  ///
+  /// Calls overlap: a short `stat` can end while a long transfer still runs
+  /// on the same channel, and releasing the lease then would close the
+  /// channel under the transfer. So the timer only runs while nothing is in
+  /// flight, and when it fires it checks again (the adapter's own count
+  /// covers work the facade no longer awaits) before releasing.
   void _armIdle() {
     _idleTimer?.cancel();
-    _idleTimer = Timer(_link.sftpIdleRelease, releaseNow);
+    _idleTimer = null;
+    if (_inFlightOps > 0) return;
+    _idleTimer = Timer(_link.sftpIdleRelease, () {
+      _idleTimer = null;
+      if (hasActiveOperations) {
+        _armIdle();
+        return;
+      }
+      unawaited(releaseNow());
+    });
   }
 
   /// Closes the SFTP channel and frees the budget slot immediately. Called
@@ -1021,6 +1195,14 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
       // A lease that never opened holds nothing to release.
     }
   }
+}
+
+/// The SFTP subsystem did not answer its handshake within the short bound.
+final class _SftpSubsystemSilent implements Exception {
+  const _SftpSubsystemSilent();
+
+  @override
+  String toString() => 'The SFTP subsystem did not answer its handshake.';
 }
 
 final class _FsLease {

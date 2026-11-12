@@ -28,9 +28,15 @@ Flutter upgrade; both fixes depend on private engine selectors.
 | `SWIFT_OBJC_BRIDGING_HEADER` in `klabautermann/app/klabautermann_app/macos/Runner/Configs/AppInfo.xcconfig` | The same setting in `seance/app/seance_app/macos/Runner/Configs/AppInfo.xcconfig` (`f9bd1e1`) | None. |
 | `klabautermann/app/klabautermann_app/macos/Runner.xcodeproj/project.pbxproj` (three file references, the Runner group entries, one Sources build file) | Séance's wiring of the same three files in `seance/app/seance_app/macos/Runner.xcodeproj/project.pbxproj` (`f9bd1e1`) | Own object ids `D7A6C0DE2F8E4A1B00000001` to `D7A6C0DE2F8E4A1B00000004`. |
 | `klabautermann/app/klabautermann_app/macos/RunnerTests/AccessibilityLifecycleTest.mm` | `seance/app/seance_app/macos/RunnerTests/AccessibilityLifecycleTest.mm` (`f9bd1e1`) | `KLABAUTERMANN_USE_GUARD` and the renamed controller. Like Séance's, compiled only by the fixture script, not by the Xcode project. |
-| `klabautermann/scripts/test-macos-keyboard.sh` | `seance/scripts/test-macos-keyboard.sh` (`f9bd1e1`) | App path, `KLABAUTERMANN_USE_CONTROLLER`, temporary directory name and controller file. Same shape as Poltergeist's adaptation. |
-| `klabautermann/scripts/test-macos-keyboard.mm` | `seance/scripts/test-macos-keyboard.mm` (`79a5679`) | Selects the renamed controller. The checks are not copied: it includes the suite's `scripts/macos-keyboard-fixture.mm`. |
-| `klabautermann/scripts/test-macos-accessibility.sh` | `seance/scripts/test-macos-accessibility.sh` (`f9bd1e1`) | App path, `KLABAUTERMANN_USE_GUARD`, temporary directory name and controller file. |
+
+The fixture scripts are no longer copies:
+`klabautermann/scripts/test-macos-keyboard.sh` and
+`klabautermann/scripts/test-macos-accessibility.sh` set the app path, the
+controller and the `KLABAUTERMANN` macro prefix, and source the suite's
+`scripts/macos-native-fixtures.sh`, which all four products share. The
+keyboard checks and the controller import are compiled from
+`scripts/macos-keyboard-fixture.mm`, so there is no per-product `.mm`.
+The lifecycle test above is still Klabautermann's own copy.
 
 `MainFlutterWindow.swift` creates the controller and, since the desktop
 chrome landed, hosts it inside macos_window_utils'
@@ -55,14 +61,16 @@ This is the suite's fourth copy of the controller, after Séance's,
 Poltergeist's and Planchette's, so D32 requires a review for a shared
 plugin first. Reviewed at the copy commit above:
 
-- **The copies.** Klabautermann's controller is Séance's after the
-  rename. Planchette's is Séance's plus multi-view semantics routing
-  (`updateSemantics:`), which forwards only updates that name another
-  view and so never acts in a single-view app. Poltergeist's carries a
-  variant of that routing without Planchette's view-identifier check:
-  the copies have already drifted (04 R18). The lifecycle test is the
-  same in Séance, Planchette and Klabautermann after the rename. The
-  keyboard checks already live once, in
+- **The copies.** The four controllers are two exact variants; after
+  the product rename their code is identical within each pair and only
+  comments differ. Séance's and Klabautermann's are the plain controller
+  with both fixes. Planchette's and Poltergeist's add the multi-view
+  semantics routing (`updateSemantics:`), which forwards only updates that
+  name another view and so never acts in a single-view app; Poltergeist's
+  carries the same view-identifier check as Planchette's, so the earlier
+  drift between them is gone (04 R18). The lifecycle test
+  (`RunnerTests/AccessibilityLifecycleTest.mm`) is the same in all four
+  after the rename. The keyboard checks already live once, in
   `scripts/macos-keyboard-fixture.mm`.
 - **What a plugin takes.** The suite has no macOS plugin package yet;
   `ghost_desktop` is pure Dart. A new one would ship Planchette's
