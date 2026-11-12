@@ -3774,7 +3774,7 @@ abstract class AppLocalizations {
   /// **'{value}'**
   String chartDecimal(double value);
 
-  /// A core heatmap's screen-reader summary: what it measures, how many cores it shows, their average busy share (already formatted) and the busiest core as a chartBarPart, which may carry a chartWithSeverity.
+  /// A core heatmap's screen-reader summary: what it measures, how many cores it shows, their average busy share (already formatted) and the busiest core as a chartBarPart with its name and busy share; it carries no severity.
   ///
   /// In en, this message translates to:
   /// **'{label}: {count, plural, =1{1 core} other{{count} cores}}, average {average}, busiest {busiest}'**
@@ -3784,6 +3784,30 @@ abstract class AppLocalizations {
     String average,
     String busiest,
   );
+
+  /// The time a chart's crosshair readout names on a chart that spans more than a day, with the date, in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String chartDateTime(DateTime time);
+
+  /// A series' value in a chart's crosshair readout when the sample under the crosshair has no known value for it.
+  ///
+  /// In en, this message translates to:
+  /// **'no reading'**
+  String get chartNoReading;
+
+  /// A chart's crosshair readout inside a band without data: no series has a value there, and why, one of chartGapAppClosed, chartGapBackground, chartGapDisconnected or chartGapReadingFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'No reading: {reason}'**
+  String chartNoReadingBecause(String reason);
+
+  /// Screen-reader name of a time-series chart's crosshair readout: swiping up or down, or the arrow keys, moves it to a later or earlier time, and its value reads the time and each series' value there.
+  ///
+  /// In en, this message translates to:
+  /// **'Values at a time'**
+  String get chartReadout;
 
   /// Access tab: the note above the access rows saying the app only shows and copies fix commands and never runs them (CN-24).
   ///
@@ -4888,6 +4912,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not a valid regular expression'**
   String get logsPanelSearchInvalid;
+
+  /// Error under the log search field in regular expression mode when the text does not compile locally but the journal's own PCRE2 search may still accept it, so Search on server stays available.
+  ///
+  /// In en, this message translates to:
+  /// **'Not shown here: this engine cannot read the pattern, but the server may'**
+  String get logsPanelSearchInvalidLocal;
 
   /// Tooltip of the button that reads only the journal entries matching the search, matched by the server, rather than searching the entries already shown.
   ///
@@ -9681,6 +9711,12 @@ abstract class AppLocalizations {
   /// **'No image has an update.'**
   String get dockerImagesNoneUpdates;
 
+  /// Images list: the Updates filter shows nothing because the update check failed, so no image's update is known.
+  ///
+  /// In en, this message translates to:
+  /// **'Which images have an update is not known yet.'**
+  String get dockerImagesUpdatesUnknown;
+
   /// Images list: the button that asks every tag's registry again, even within the six hours a check is kept.
   ///
   /// In en, this message translates to:
@@ -11661,10 +11697,10 @@ abstract class AppLocalizations {
   /// **'Diagnostic bundle for {server}: {count, plural, =1{1 section} other{{count} sections}}'**
   String diagnosticsTitle(String server, int count);
 
-  /// Diagnostic bundle sheet: what the bundle holds and why to check it before sharing.
+  /// Diagnostic bundle sheet: what the bundle holds (identity, process command lines, crontabs, units, mounts, paths) and why to check it before sharing, since redaction only catches secret-shaped values.
   ///
   /// In en, this message translates to:
-  /// **'The raw output of each collector, for a parser bug report. It names this server\'s processes, units, mounts and paths, so read it before you share it.'**
+  /// **'The raw output of each collector, for a parser bug report. It carries this server\'s host name and machine ID, the command lines of its processes, crontab entries and cron jobs, and its units, mounts and paths. Redaction catches secret-shaped values, not host names or internal addresses, so read it before you share it.'**
   String get diagnosticsHint;
 
   /// Diagnostic bundle sheet: the collectors whose sampler did not answer in time, by their wire names, which are not translated.
@@ -13712,6 +13748,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{Acknowledged (1)} other{Acknowledged ({count})}}'**
   String attentionAcknowledgedHeading(int count);
+
+  /// Toast: acknowledging a problem in the attention queue, or taking an acknowledgement back, could not be saved on this device. It still applies until the app quits.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save this acknowledgement, so it lasts only until it quits.'**
+  String get attentionNotSaved;
 
   /// Attention queue: closes it.
   ///

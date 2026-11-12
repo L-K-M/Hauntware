@@ -232,13 +232,20 @@ class LogSearch extends ChangeNotifier {
   /// Whether a query is set that can match.
   bool get _searching => _query.isNotEmpty && !invalidPattern;
 
+  /// The query as a pattern, or null when it does not compile. Unicode
+  /// mode comes first, so `\p{Lu}` and characters outside the BMP match
+  /// as the journal's PCRE2 matches them. It rejects escapes PCRE2 takes,
+  /// such as `a\-b`, so a pattern it refuses gets the lenient mode.
   RegExp? _compile() {
     if (!_regex || _query.isEmpty) return null;
-    try {
-      return RegExp(_query, caseSensitive: _caseSensitive, unicode: true);
-    } on FormatException {
-      return null;
+    for (final unicode in const [true, false]) {
+      try {
+        return RegExp(_query, caseSensitive: _caseSensitive, unicode: unicode);
+      } on FormatException {
+        continue;
+      }
     }
+    return null;
   }
 
   /// Every match in [text]: the limit is the most a text can hold.

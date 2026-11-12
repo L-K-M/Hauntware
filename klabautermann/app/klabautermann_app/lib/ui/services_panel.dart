@@ -960,7 +960,7 @@ Widget _headed({
 );
 
 /// A state the panel is in rather than data, read out when it changes;
-/// [detail] is the server's own error text, shown as it came.
+/// [detail] is the server's own error text, cut to four lines.
 Widget _notice(ThemeData theme, IconData icon, String text, [String? detail]) =>
     Semantics(
       liveRegion: true,
@@ -976,7 +976,12 @@ Widget _notice(ThemeData theme, IconData icon, String text, [String? detail]) =>
               children: [
                 Text(text),
                 if (detail != null && detail.isNotEmpty)
-                  Text(detail, style: theme.textTheme.bodySmall),
+                  Text(
+                    detail,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall,
+                  ),
               ],
             ),
           ),
