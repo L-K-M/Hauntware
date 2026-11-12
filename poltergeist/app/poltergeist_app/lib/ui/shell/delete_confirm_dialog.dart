@@ -164,9 +164,17 @@ class _DeleteDialogState extends State<_DeleteDialog> {
         key: const ValueKey('delete.dialog'),
         content: Row(
           children: [
-            const SizedBox.square(
+            // A settled preparation error is final, so it shows an error
+            // mark rather than a spinner that suggests counting goes on.
+            SizedBox.square(
               dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: _error == null
+                  ? const CircularProgressIndicator(strokeWidth: 2)
+                  : Icon(
+                      Icons.error_outline,
+                      size: 18,
+                      color: theme.colorScheme.error,
+                    ),
             ),
             const SizedBox(width: 12),
             Expanded(
