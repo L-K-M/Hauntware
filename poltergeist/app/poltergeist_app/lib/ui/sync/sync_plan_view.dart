@@ -1423,6 +1423,9 @@ class _FilterBar extends StatelessWidget {
             width: 180,
             child: TextField(
               controller: filterField,
+              // Filters name synced paths; keep them out of the
+              // keyboard's personal dictionary.
+              enableIMEPersonalizedLearning: false,
               decoration: InputDecoration(
                 hintText: l10n.syncFilterFieldHint,
                 isDense: true,

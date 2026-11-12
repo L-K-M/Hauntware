@@ -159,6 +159,11 @@ void main() {
     expect(field, findsOneWidget);
     final text = tester.widget<TextField>(field).controller!;
     expect(text.text, '/home/tester');
+    // Names and paths stay out of the keyboard's personal dictionary.
+    expect(
+      tester.widget<TextField>(field).enableIMEPersonalizedLearning,
+      isFalse,
+    );
     expect(
       text.selection,
       const TextSelection(baseOffset: 0, extentOffset: 12),
