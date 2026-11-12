@@ -193,7 +193,12 @@ final class OperationsController extends ChangeNotifier {
   }
 
   /// Runs the plan [planId] with the user's [confirmation].
+  /// A stopped engine ends it as [ActionRefusalReason.noLink].
   void run(String planId, ActionConfirmation confirmation) {
+    if (_engineStopped) {
+      _end(planId, const RunRefused(ActionRefusalReason.noLink));
+      return;
+    }
     _runs[planId] = const RunInProgress(0, 0);
     notifyListeners();
     _send(RunAction(planId, confirmation));
@@ -345,6 +350,14 @@ final class OperationsController extends ChangeNotifier {
       read.complete(_noEditRead);
     }
     _editReads.clear();
+    // No engine will end these runs; they end as a run it cannot take.
+    final running = [
+      for (final MapEntry(:key, :value) in _runs.entries)
+        if (value is RunInProgress) key,
+    ];
+    for (final planId in running) {
+      _end(planId, const RunRefused(ActionRefusalReason.noLink));
+    }
     notifyListeners();
   }
 

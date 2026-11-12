@@ -196,6 +196,7 @@ class _LogsPanelState extends State<LogsPanel> {
             final journal = _panel.query.source == LogSourceKind.journal;
             final search = LogSearchField(
               search: _panel.search,
+              compact: compact,
               // LOG-06: the journal can match on the server.
               onSearchServer: journal
                   ? (pattern) => _panel.apply(_panel.query.withGrep(pattern))
@@ -764,10 +765,18 @@ class LogStatusNotice extends StatelessWidget {
 /// [onSearchServer], a button hands the search to the server as a
 /// journalctl pattern ([serverLogPattern]).
 class LogSearchField extends StatefulWidget {
-  const LogSearchField({super.key, required this.search, this.onSearchServer});
+  const LogSearchField({
+    super.key,
+    required this.search,
+    this.onSearchServer,
+    this.compact = false,
+  });
 
   final LogSearch search;
   final ValueChanged<String>? onSearchServer;
+
+  /// Whether the field sits on a phone-width row of its own.
+  final bool compact;
 
   @override
   State<LogSearchField> createState() => _LogSearchFieldState();
@@ -788,93 +797,122 @@ class _LogSearchFieldState extends State<LogSearchField> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return ListenableBuilder(
-      listenable: widget.search,
+      // The text too: the server button follows what is typed, which the
+      // debounced search lags behind by up to [_searchDebounce].
+      listenable: Listenable.merge([widget.search, _text]),
       builder: (context, _) {
         final search = widget.search;
         final steppable = search.total > 0;
         final onSearchServer = widget.onSearchServer;
-        return Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _text,
-                autocorrect: false,
-                textInputAction: TextInputAction.search,
-                onChanged: (query) {
-                  _debounce?.cancel();
-                  _debounce = Timer(
-                    _searchDebounce,
-                    () => search.setQuery(query),
-                  );
-                },
-                // Enter steps on and keeps the focus for the next step.
-                onEditingComplete: () {},
-                onSubmitted: (query) {
-                  _debounce?.cancel();
-                  search
-                    ..setQuery(query)
-                    ..next();
-                },
-                decoration: InputDecoration(
-                  isDense: true,
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.search),
-                  // A label, not a hint, so the field keeps its name for
-                  // screen readers once it holds text.
-                  labelText: l10n.logsPanelSearchLabel,
-                  errorText: search.invalidPattern
+        final field = TextField(
+          controller: _text,
+          autocorrect: false,
+          textInputAction: TextInputAction.search,
+          onChanged: (query) {
+            _debounce?.cancel();
+            _debounce = Timer(_searchDebounce, () => search.setQuery(query));
+          },
+          // Enter steps on and keeps the focus for the next step.
+          onEditingComplete: () {},
+          onSubmitted: (query) {
+            _debounce?.cancel();
+            search
+              ..setQuery(query)
+              ..next();
+          },
+          decoration: InputDecoration(
+            isDense: true,
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.search),
+            // A label, not a hint, so the field keeps its name for
+            // screen readers once it holds text.
+            labelText: l10n.logsPanelSearchLabel,
+            // The journal's PCRE2 reads some patterns Dart's engine does
+            // not (inline flags), so the server may still take one.
+            errorText: search.invalidPattern
+                ? (onSearchServer == null
                       ? l10n.logsPanelSearchInvalid
-                      : null,
-                  suffixText: search.query.isEmpty || search.invalidPattern
-                      ? null
-                      : switch (search.currentNumber) {
-                          final number? => l10n.logsPanelSearchPosition(
-                            number,
-                            search.total,
-                          ),
-                          null => l10n.logsPanelSearchMatches(search.total),
-                        },
-                ),
-              ),
-            ),
-            // Outlined when off and filled when on, so the state shows by
-            // more than colour (03 §10.10).
-            IconButton.outlined(
-              isSelected: search.caseSensitive,
-              icon: const Icon(Icons.text_fields),
-              tooltip: l10n.logsPanelSearchCase,
-              onPressed: () => search.setCaseSensitive(!search.caseSensitive),
-            ),
-            IconButton.outlined(
-              isSelected: search.regex,
-              icon: const Icon(Icons.data_object),
-              tooltip: l10n.logsPanelSearchRegex,
-              onPressed: () => search.setRegex(!search.regex),
-            ),
-            if (onSearchServer != null)
-              IconButton(
-                icon: const Icon(Icons.travel_explore),
-                tooltip: l10n.logsPanelSearchServer,
-                onPressed: search.query.isEmpty || search.invalidPattern
-                    ? null
-                    : () => onSearchServer(
+                      : l10n.logsPanelSearchInvalidLocal)
+                : null,
+            suffixText: search.query.isEmpty || search.invalidPattern
+                ? null
+                : switch (search.currentNumber) {
+                    final number? => l10n.logsPanelSearchPosition(
+                      number,
+                      search.total,
+                    ),
+                    null => l10n.logsPanelSearchMatches(search.total),
+                  },
+          ),
+        );
+        // Outlined when off and filled when on, so the state shows by
+        // more than colour (03 §10.10).
+        final toggles = [
+          IconButton.outlined(
+            isSelected: search.caseSensitive,
+            icon: const Icon(Icons.text_fields),
+            tooltip: l10n.logsPanelSearchCase,
+            onPressed: () => search.setCaseSensitive(!search.caseSensitive),
+          ),
+          IconButton.outlined(
+            isSelected: search.regex,
+            icon: const Icon(Icons.data_object),
+            tooltip: l10n.logsPanelSearchRegex,
+            onPressed: () => search.setRegex(!search.regex),
+          ),
+          if (onSearchServer != null)
+            IconButton(
+              icon: const Icon(Icons.travel_explore),
+              tooltip: l10n.logsPanelSearchServer,
+              onPressed: _text.text.isEmpty
+                  ? null
+                  : () {
+                      // Take the typed text now, not the debounced one.
+                      _debounce?.cancel();
+                      search.setQuery(_text.text);
+                      onSearchServer(
                         serverLogPattern(
-                          search.query,
+                          _text.text,
                           regex: search.regex,
                           caseSensitive: search.caseSensitive,
                         ),
-                      ),
-              ),
-            IconButton(
-              icon: const Icon(Icons.keyboard_arrow_up),
-              tooltip: l10n.logsPanelSearchPrevious,
-              onPressed: steppable ? search.previous : null,
+                      );
+                    },
             ),
-            IconButton(
-              icon: const Icon(Icons.keyboard_arrow_down),
-              tooltip: l10n.logsPanelSearchNext,
-              onPressed: steppable ? search.next : null,
+        ];
+        final steps = [
+          IconButton(
+            icon: const Icon(Icons.keyboard_arrow_up),
+            tooltip: l10n.logsPanelSearchPrevious,
+            onPressed: steppable ? search.previous : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.keyboard_arrow_down),
+            tooltip: l10n.logsPanelSearchNext,
+            onPressed: steppable ? search.next : null,
+          ),
+        ];
+        // Five buttons beside the field would leave it 56 px wide at
+        // 320 px: on a phone the toggles take their own row.
+        if (!widget.compact) {
+          return Row(
+            children: [
+              Expanded(child: field),
+              ...toggles,
+              ...steps,
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(child: field),
+                ...steps,
+              ],
             ),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: toggles),
           ],
         );
       },
