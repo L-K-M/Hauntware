@@ -408,6 +408,7 @@ void main() {
         throwsA(isA<AppLockException>()),
       );
       await expectLater(keys.probeKeystore(), throwsA(isA<AppLockException>()));
+      await expectLater(keys.readKeystoreKey(), throwsA(isA<AppLockException>()));
       expect(gate.reads, 0);
 
       await keys.putApiKey('sync.token', 'token');
@@ -428,7 +429,8 @@ void main() {
 
       await keys.probeKeystore();
       expect(await keys.getApiKey('sync.token'), isNull);
-      expect(gate.reads, 2);
+      expect(await keys.readKeystoreKey(), hasLength(32));
+      expect(gate.reads, 3);
     });
   });
 

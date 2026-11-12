@@ -131,8 +131,9 @@ class MasterKeyManager {
     return e.toString();
   }
 
-  /// Installed by the app host: [getApiKey] and [probeKeystore] run through
-  /// [guard], so a locked app hands out no credential. Writes and deletes
+  /// Installed by the app host: [getApiKey], [probeKeystore] and
+  /// [readKeystoreKey] run through [guard], so a locked app hands out no
+  /// credential. Writes and deletes
   /// are not held back, so a sign-out finishes while locked.
   void protectCredentialReads(CredentialReadGuard guard) => _readGuard = guard;
 
@@ -243,7 +244,9 @@ class MasterKeyManager {
   /// `KeyringLocked` the write just recorded because a read happened to
   /// work a moment later. Marking unavailable is no better: an entry that
   /// will not decode is a data problem, not an outage.
-  Future<List<int>?> readKeystoreKey() async {
+  Future<List<int>?> readKeystoreKey() => _guarded(_readKeystoreKey);
+
+  Future<List<int>?> _readKeystoreKey() async {
     try {
       final existing = await _storage.read(key: _masterKeyEntry);
       // An empty entry decodes to no bytes, which is no key either.
