@@ -22,8 +22,8 @@ prints ``<product>=true|false`` lines for ``$GITHUB_OUTPUT`` and, on
 stderr, why each product was selected. ``--all`` selects every product
 (main pushes and manual runs). ``--check-references`` fails when a
 product file names another product's path, relative or quoted from
-the repo root, that neither the dependency graph nor ``_FILE_READERS``
-covers.
+the repo root, or climbs relatively into root docs or tooling, that
+neither the dependency graph nor ``_FILE_READERS`` covers.
 ``--self-test`` checks the rules against a synthetic graph.
 """
 
@@ -55,6 +55,9 @@ _FILE_READERS = {
     # seance_app's platform link test pins app_links to the version
     # Poltergeist runs.
     "poltergeist/app/poltergeist_app/pubspec.yaml": ("seance",),
+    # klabautermann_app's toolchain contract test reads the Flutter pin
+    # from the root AGENTS.md.
+    "AGENTS.md": ("klabautermann",),
 }
 
 # `../../seance/packages/seance_core` or `'poltergeist/test/x'` in a
@@ -62,6 +65,11 @@ _FILE_READERS = {
 _PRODUCT_REFERENCE = re.compile(
     r"(?:(?:\.\./)+|['\"])((?:%s)/[^\s'\"`:,;)\]}]*)" % "|".join(PRODUCTS)
 )
+
+# `../../../AGENTS.md` or `../../docs/x` in a product file: a relative
+# path that may climb out of every product into the root docs and
+# tooling, which select no product on their own.
+_RELATIVE_REFERENCE = re.compile(r"((?:\.\./)+)([A-Za-z0-9_][^\s'\"`:,;)\]}]*)")
 
 # A pubspec `path:` key, block or flow style (`b: {path: ../b}`). A
 # dependency *named* path (`path: ^1.9.1`) matches too; its value is a
@@ -172,6 +180,30 @@ def _pubspecs(*revisions) -> dict:
     return texts
 
 
+def root_targets(source: str, match, graph: dict, tracked) -> list:
+    """Repo paths outside every product a relative reference can name.
+
+    A relative path resolves against the reading file's directory (a
+    Dart import, a shell ``source``) or against the working directory of
+    the command that runs it, which is the owning package (``dart test``,
+    ``flutter test``). Only resolutions that ``tracked`` (files and their
+    directories) holds count, so a path that names nothing is ignored.
+    """
+    climb, rest = match.group(1), match.group(2).rstrip("/")
+    bases = {posixpath.dirname(source)}
+    owner = _owner(source, graph)
+    if owner:
+        bases.add(owner)
+    targets = []
+    for base in sorted(bases):
+        target = posixpath.normpath(posixpath.join(base, climb + rest))
+        if target.startswith("../") or _product(target):
+            continue
+        if target in tracked:
+            targets.append(target)
+    return targets
+
+
 def check_references() -> int:
     """Fail on cross-product relative paths the selection would miss."""
     graph, _ = path_dependencies(_pubspecs("HEAD"))
@@ -180,7 +212,7 @@ def check_references() -> int:
     grep = subprocess.run(
         (
             "git", "grep", "-I", "-z", "-E",
-            r"(\.\./|['\"])(%s)/" % "|".join(PRODUCTS),
+            r"\.\./|['\"](%s)/" % "|".join(PRODUCTS),
             "--", *PRODUCTS, ":!*.md",
         ),
         capture_output=True,
@@ -189,12 +221,19 @@ def check_references() -> int:
     if grep.returncode > 1:
         raise SystemExit(f"ci-affected-products: git grep failed: {grep.stderr}")
 
+    tracked = set()
+    for path in _git("ls-files").splitlines():
+        while path and path not in tracked:
+            tracked.add(path)
+            path = posixpath.dirname(path)
     missed = 0
     for line in grep.stdout.splitlines():
         source, text = line.split("\0", 1)
         reader = _product(source)
-        for match in _PRODUCT_REFERENCE.finditer(text):
-            target = match.group(1).rstrip("/")
+        targets = [m.group(1).rstrip("/") for m in _PRODUCT_REFERENCE.finditer(text)]
+        for match in _RELATIVE_REFERENCE.finditer(text):
+            targets += root_targets(source, match, graph, tracked)
+        for target in targets:
             if _product(target) == reader:
                 continue
             if reader in affected_products([target], graph):
@@ -252,6 +291,7 @@ def self_test() -> int:
         "tool/guards.yaml": set(),
         "docs/design/plan.md": set(),
         "README.md": set(),
+        "AGENTS.md": {"klabautermann"},
         ".github/workflows/ci.yml": everything,
         "scripts/build.sh": everything,
         "pubspec.yaml": everything,
@@ -294,6 +334,26 @@ def self_test() -> int:
         got = [m.group(1) for m in _PRODUCT_REFERENCE.finditer(line)]
         if got != [want]:
             print(f"FAIL reference in {line!r}: got {got}", file=sys.stderr)
+            failures += 1
+
+    tracked = {"AGENTS.md", "docs", "docs/a.md", "seance/app/s/test/t.dart"}
+    relative = {
+        # Read from the package directory `flutter test` runs in.
+        ("klabautermann/app/k/test/t.dart", "File('../../../AGENTS.md')"): ["AGENTS.md"],
+        # Resolves inside a product: the product rules cover it.
+        ("seance/app/s/lib/a.dart", "import '../test/t.dart';"): [],
+        # Names nothing tracked.
+        ("seance/app/s/lib/a.dart", "'../../../../docs/missing.md'"): [],
+        ("seance/app/s/test/t.dart", "'../../../../docs'"): ["docs"],
+    }
+    for (source, line), want in relative.items():
+        got = [
+            target
+            for m in _RELATIVE_REFERENCE.finditer(line)
+            for target in root_targets(source, m, graph, tracked)
+        ]
+        if got != want:
+            print(f"FAIL root reference in {line!r}: got {got}", file=sys.stderr)
             failures += 1
 
     if failures:

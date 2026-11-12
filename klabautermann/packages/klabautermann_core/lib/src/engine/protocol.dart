@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart' show sha256;
 
 // Only plain-data host types cross (D52): none here holds a function, as
 // `Collector` (its argument validators) and `ServerZone` (`offsetAt`) do.
@@ -2821,13 +2824,41 @@ final class EditContent extends EditReadResult {
     this.uid,
     this.gid,
     this.mode,
+    this.resolvedPath,
   });
+
+  /// The content an [EditFile] that ran wrote: [text] with its SHA-256
+  /// recomputed, so the next save plans against it before the follow-up
+  /// read answers, and still does when that read fails.
+  factory EditContent.written(
+    String text, {
+    required bool privileged,
+    int? uid,
+    int? gid,
+    int? mode,
+  }) => EditContent(
+    text: text,
+    sha256: _sha256OfText(text),
+    privileged: privileged,
+    uid: uid,
+    gid: gid,
+    mode: mode,
+  );
 
   final String text;
   final String sha256;
   final bool privileged;
   final int? uid, gid, mode;
+
+  /// The real file a symlinked path names, which was read and which the
+  /// edit writes, leaving the link a link; null when the path opened is
+  /// the real file.
+  final String? resolvedPath;
 }
+
+/// [text]'s UTF-8 SHA-256, the hash an [EditFile]'s compare-and-swap names.
+String _sha256OfText(String text) =>
+    sha256.convert(utf8.encode(text)).toString();
 
 /// A [ReadEditable] that read nothing; [detail] is the end of stderr.
 final class EditReadFailed extends EditReadResult {
@@ -2859,6 +2890,11 @@ enum EditReadFailure {
 
   /// A [StackFileTarget]'s project is not a verified source (STK-07).
   stackUnverified,
+
+  /// The path is a symbolic link the host has no `readlink -f` or
+  /// `realpath` to resolve, so the engine cannot tell which file a write
+  /// through it would change.
+  symlink,
 
   /// The read failed otherwise.
   failed,
@@ -3002,8 +3038,12 @@ enum ActionFailure {
   /// not run.
   stepFailed,
 
-  /// The link failed or timed out during a step.
+  /// The link failed during a step.
   transport,
+
+  /// A step ran past its time limit (`StepTimeout`); the runner closed
+  /// its channel, which can stop the command on the host.
+  timedOut,
 
   /// The engine has no runner for an API step yet (M4 E15).
   unsupportedStep,
@@ -3142,6 +3182,11 @@ enum ActionRefusalReason {
   /// sudo reaches only `docker`, which cannot start a root runner (03
   /// §7.17).
   sudoRightMissing,
+
+  /// Root would write into a directory that an account other than root
+  /// can change, where a swapped symlink could redirect its writes (03
+  /// §7.17, §9).
+  userWritableDirectory,
 }
 
 /// Why [UserCrontabs] read no crontab.
@@ -3521,11 +3566,13 @@ enum DetachedOperationState {
   done,
 
   /// Its record says running but its wrapper is gone, or its PID now
-  /// names another process: it was killed before it could record a
-  /// result (at logout, or by a reboot).
+  /// names another process, in two listings in a row: it was killed
+  /// before it could record a result (at logout, or by a reboot).
   lost,
 
-  /// Its record says running and the engine could not check the wrapper.
+  /// Its record says running and the engine could not check the wrapper,
+  /// or found it gone once: it may have ended after the listing was read,
+  /// which the next listing, 15 s later, shows.
   unknown,
 }
 
@@ -6202,18 +6249,22 @@ final class StackFileTarget extends EditTarget {
 /// target still has [baseSha256], the hash its [ReadEditable] read. The
 /// plan backs the target up first, writes a temp file beside it, carries
 /// its owner, mode, ACL and xattrs over (D67) and renames it over the
-/// target; a crontab goes through `crontab -`.
+/// target; a crontab goes through `crontab -`. [resolvedPath] is the
+/// [EditContent.resolvedPath] the read reported: a link retargeted since
+/// is refused as a changed target.
 final class EditFile extends ActionIntent {
   const EditFile(
     super.serverId, {
     required this.target,
     required this.text,
     required this.baseSha256,
+    this.resolvedPath,
   });
 
   final EditTarget target;
   final String text;
   final String baseSha256;
+  final String? resolvedPath;
 }
 
 /// Whose backups a footprint action or row is (03 §8.11): the login

@@ -524,4 +524,61 @@ void main() {
     await pumpAndOpen(tester, changedKey('NEW', pinned: 'OLD'));
     expect(find.textContaining('Key algorithm changed'), findsNothing);
   });
+
+  testWidgets('a pinned key of unknown type shows no type line', (
+    tester,
+  ) async {
+    // Labelling the pin with the presented key's type would show a pinned
+    // RSA key as ssh-ed25519 in the one dialog meant for a review.
+    await pumpAndOpen(
+      tester,
+      changedKey('NEW', pinned: 'OLD', keyType: 'ssh-ed25519'),
+    );
+
+    expect(
+      tester
+          .widgetList<SelectableText>(find.byType(SelectableText))
+          .map((print) => print.data),
+      ['ssh-ed25519\nSHA256:NEW', 'SHA256:OLD'],
+    );
+  });
+
+  testWidgets('an IPv6 endpoint is bracketed before its port', (tester) async {
+    await pumpAndOpen(
+      tester,
+      const GhostHostKeyPrompt(
+        host: 'fe80::1',
+        port: 22,
+        keyType: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:NEW',
+      ),
+    );
+    expect(find.text('[fe80::1]:22'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    await pumpAndOpen(
+      tester,
+      const GhostHostKeyPrompt(
+        host: '[fe80::1]',
+        port: 22,
+        keyType: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:NEW',
+      ),
+    );
+    expect(find.text('[fe80::1]:22'), findsOneWidget);
+  });
+
+  test('a pin equal to the presented key is a caller bug', () {
+    expect(
+      () => GhostHostKeyPrompt(
+        host: 'example.com',
+        port: 22,
+        keyType: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:SAME',
+        pinnedFingerprintSha256: 'SHA256:SAME',
+      ),
+      throwsA(isA<AssertionError>()),
+    );
+  });
 }

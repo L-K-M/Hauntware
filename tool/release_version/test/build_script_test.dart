@@ -193,11 +193,7 @@ touch "\$dist/klabautermann-artifact"
     Directory(
       p.join(seance.path, 'app', 'seance_app', 'macos'),
     ).createSync(recursive: true);
-    final script = File(p.join(seance.path, 'scripts', 'build.sh'));
-    script.parent.createSync();
-    File(
-      p.join(_repositoryRoot().path, 'seance', 'scripts', 'build.sh'),
-    ).copySync(script.path);
+    final script = _copyProductBuild('seance', seance.path);
     final host = _fakeHost(sandbox, 'Darwin');
     final bin = p.join(sandbox.path, 'fake-bin');
     final flutterLog = File(p.join(sandbox.path, 'flutter.log'));
@@ -259,11 +255,7 @@ buildSettings = {
         Directory(
           p.join(products, 'Release', bundle, 'Contents'),
         ).createSync(recursive: true);
-        final script = File(p.join(root.path, 'scripts', 'build.sh'))
-          ..parent.createSync();
-        File(
-          p.join(_repositoryRoot().path, product, 'scripts', 'build.sh'),
-        ).copySync(script.path);
+        final script = _copyProductBuild(product, root.path);
 
         final host = _fakeHost(sandbox, 'Darwin');
         final bin = p.join(sandbox.path, 'fake-bin');
@@ -327,6 +319,38 @@ fi
         expect(result.exitCode, isNot(0), reason: '${result.stdout}');
         expect(result.stdout, contains('apk: FAILED (copy to dist/)'));
       });
+
+      test(
+        '$product: a stale debug APK is not staged as the release',
+        () async {
+          final build = _realProductBuild(sandbox, product, appDir, 'Linux');
+          final outputs = Directory(
+            p.join(
+              build.root,
+              'app',
+              appDir,
+              'build',
+              'app',
+              'outputs',
+              'flutter-apk',
+            ),
+          )..createSync(recursive: true);
+          // A debug build's leftover, which sorts before app-release.apk.
+          File(
+            p.join(outputs.path, 'app-debug.apk'),
+          ).writeAsStringSync('debug');
+
+          final result = await build.run(['apk']);
+
+          expect(result.exitCode, 0, reason: '${result.stdout}');
+          final staged = Directory(p.join(build.root, 'dist'))
+              .listSync()
+              .whereType<File>()
+              .where((f) => f.path.endsWith('.apk'))
+              .single;
+          expect(staged.readAsStringSync(), isEmpty);
+        },
+      );
 
       test('$product: Linux packaging fails', () async {
         final build = _realProductBuild(sandbox, product, appDir, 'Linux');
@@ -404,11 +428,7 @@ _realProductBuild(
   for (final platform in ['linux', 'android']) {
     Directory(p.join(app, platform)).createSync(recursive: true);
   }
-  final script = File(p.join(root, 'scripts', 'build.sh'))
-    ..parent.createSync(recursive: true);
-  File(
-    p.join(_repositoryRoot().path, product, 'scripts', 'build.sh'),
-  ).copySync(script.path);
+  final script = _copyProductBuild(product, root);
   final packager = File(p.join(root, 'scripts', 'package-linux.sh'))
     ..writeAsStringSync('#!/usr/bin/env bash\n');
   final sdk = p.join(sandbox.path, 'android-sdk');
@@ -448,6 +468,25 @@ touch "$2"
       },
     ),
   );
+}
+
+/// Copies [product]'s real build script to [root]/scripts/build.sh and
+/// the suite's shared body it sources to the sibling ../scripts, the
+/// layout of the checkout.
+File _copyProductBuild(String product, String root) {
+  final repository = _repositoryRoot().path;
+  final script = File(p.join(root, 'scripts', 'build.sh'))
+    ..parent.createSync(recursive: true);
+  File(
+    p.join(repository, product, 'scripts', 'build.sh'),
+  ).copySync(script.path);
+  final common = File(
+    p.join(p.dirname(root), 'scripts', 'product-build-common.sh'),
+  )..parent.createSync(recursive: true);
+  File(
+    p.join(repository, 'scripts', 'product-build-common.sh'),
+  ).copySync(common.path);
+  return script;
 }
 
 /// A fake host on PATH: `uname -s` reports [system], and `open` records

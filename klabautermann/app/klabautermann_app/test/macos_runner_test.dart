@@ -10,6 +10,10 @@ const _runnerDir = 'macos/Runner';
 const _projectPath = 'macos/Runner.xcodeproj/project.pbxproj';
 const _lifecycleTestPath = 'macos/RunnerTests/AccessibilityLifecycleTest.mm';
 const _scriptsDir = '../../scripts';
+const _suiteScriptsDir = '../../../scripts';
+const _sharedFixtures = '$_suiteScriptsDir/macos-native-fixtures.sh';
+const _sourceSharedFixtures =
+    r'source "$repo_root/../scripts/macos-native-fixtures.sh"';
 const _executableBits = 0x49; // 0o111
 
 /// The macOS runner's keyboard and accessibility compatibility controller,
@@ -139,35 +143,64 @@ void main() {
     test('the keyboard fixture compiles this controller into the shared '
         'checks', () {
       final script = readSource('$_scriptsDir/test-macos-keyboard.sh');
-      final fixture = readSource('$_scriptsDir/test-macos-keyboard.mm');
+      final shared = readSource(_sharedFixtures);
+      final fixture = readSource('$_suiteScriptsDir/macos-keyboard-fixture.mm');
 
+      // The wrapper names the controller; the suite's shared body compiles
+      // it and the shared checks (../../scripts/macos-native-fixtures.sh).
+      expect(script, contains('FIXTURE_APP=app/klabautermann_app'));
+      expect(script, contains('FIXTURE_CONTROLLER=$_controller'));
+      expect(script, contains(_sourceSharedFixtures));
+      expect(script, contains(r'macos_keyboard_fixture "$@"'));
       expect(
-        script,
-        contains('runner_dir="\$repo_root/app/klabautermann_app/$_runnerDir"'),
+        shared,
+        contains(r'runner_dir="$repo_root/$FIXTURE_APP/macos/Runner"'),
       );
-      expect(script, contains('"\$runner_dir/$_controller.m"'));
-      expect(script, contains('KLABAUTERMANN_USE_CONTROLLER=1'));
-      expect(script, contains('KLABAUTERMANN_USE_CONTROLLER=0'));
-      expect(fixture, contains('#if KLABAUTERMANN_USE_CONTROLLER'));
-      expect(fixture, contains('#define FixtureController $_controller'));
-
-      const include = '../../scripts/macos-keyboard-fixture.mm';
-      expect(fixture, contains('#include "$include"'));
-      expect(File('$_scriptsDir/$include').existsSync(), isTrue);
+      expect(shared, contains(r'"$runner_dir/$FIXTURE_CONTROLLER.m"'));
+      expect(shared, contains('FIXTURE_USE_CONTROLLER=1'));
+      expect(shared, contains('FIXTURE_USE_CONTROLLER=0'));
+      expect(
+        shared,
+        contains(r'"-DFIXTURE_CONTROLLER_HEADER=\"$FIXTURE_CONTROLLER.h\""'),
+      );
+      expect(
+        shared,
+        contains(r'"-DFIXTURE_CONTROLLER_CLASS=$FIXTURE_CONTROLLER"'),
+      );
+      expect(
+        shared,
+        contains(r'"$MACOS_FIXTURES_DIR/macos-keyboard-fixture.mm"'),
+      );
+      expect(fixture, contains('#if FIXTURE_USE_CONTROLLER'));
+      expect(fixture, contains('#import FIXTURE_CONTROLLER_HEADER'));
+      expect(
+        fixture,
+        contains('#define FixtureController FIXTURE_CONTROLLER_CLASS'),
+      );
+      expect(File('$_runnerDir/$_controller.h').existsSync(), isTrue);
     });
 
     test('the accessibility fixture compiles this controller into the '
         'lifecycle test', () {
       final script = readSource('$_scriptsDir/test-macos-accessibility.sh');
+      final shared = readSource(_sharedFixtures);
       final lifecycle = readSource(_lifecycleTestPath);
 
-      expect(script, contains('"\$runner_dir/$_controller.m"'));
+      expect(script, contains('FIXTURE_APP=app/klabautermann_app'));
+      expect(script, contains('FIXTURE_CONTROLLER=$_controller'));
+      expect(script, contains('FIXTURE_DEFINE=KLABAUTERMANN'));
+      expect(script, contains(_sourceSharedFixtures));
+      expect(script, contains(r'macos_accessibility_fixture "$@"'));
+      expect(shared, contains(r'"$runner_dir/$FIXTURE_CONTROLLER.m"'));
       expect(
-        script,
-        contains('"\$repo_root/app/klabautermann_app/$_lifecycleTestPath"'),
+        shared,
+        contains(
+          r'"$repo_root/$FIXTURE_APP/'
+          '$_lifecycleTestPath"',
+        ),
       );
-      expect(script, contains('KLABAUTERMANN_USE_GUARD=1'));
-      expect(script, contains('KLABAUTERMANN_USE_GUARD=0'));
+      expect(shared, contains(r'"-D${FIXTURE_DEFINE}_USE_GUARD=1"'));
+      expect(shared, contains(r'"-D${FIXTURE_DEFINE}_USE_GUARD=0"'));
       expect(lifecycle, contains('#if KLABAUTERMANN_USE_GUARD'));
       expect(lifecycle, contains('#define FixtureBaseController $_controller'));
     });
