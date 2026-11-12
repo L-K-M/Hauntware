@@ -293,7 +293,9 @@ class _EndpointsDialogState extends State<_EndpointsDialog> {
           maxLines: 8,
           autocorrect: false,
           enableSuggestions: false,
-          keyboardType: TextInputType.url,
+          // One endpoint per line: a URL keyboard would make Return close
+          // the field instead of starting the next line.
+          keyboardType: TextInputType.multiline,
           decoration: InputDecoration(
             helperText: l10n.systemCertificatesHelper(kTlsEndpointsMax),
             helperMaxLines: 3,

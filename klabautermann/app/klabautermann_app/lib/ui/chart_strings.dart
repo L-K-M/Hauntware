@@ -32,5 +32,9 @@ ChartStrings klabautermannChartStrings(AppLocalizations l10n) {
     stale: l10n.chartStale,
     decimal: l10n.chartDecimal,
     heatmapSummary: l10n.chartHeatmapSummary,
+    dateTime: l10n.chartDateTime,
+    noReading: l10n.chartNoReading,
+    noReadingBecause: l10n.chartNoReadingBecause,
+    readout: l10n.chartReadout,
   );
 }

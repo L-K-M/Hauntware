@@ -57,10 +57,16 @@ class UnlistedStacks extends StatefulWidget {
   State<UnlistedStacks> createState() => _UnlistedStacksState();
 }
 
-class _UnlistedStacksState extends State<UnlistedStacks> {
+class _UnlistedStacksState extends State<UnlistedStacks>
+    with AutomaticKeepAliveClientMixin {
   Future<DockerPayload>? _scan;
 
   StackFolders get _folders => widget.monitoring.stackFolders;
+
+  /// Kept while scrolled out of a lazy list: coming back shows the answer
+  /// held rather than asking the server again.
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -102,6 +108,7 @@ class _UnlistedStacksState extends State<UnlistedStacks> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final muted = theme.textTheme.bodySmall?.copyWith(

@@ -9,6 +9,7 @@ import '../l10n/app_localizations.dart';
 import '../services/hand_off.dart';
 import 'actions/action_entry.dart';
 import 'actions/action_preview.dart';
+import 'admin_mode_chip.dart' show AdminScope;
 import 'hand_off_actions.dart';
 import 'system_panel.dart' show PanelSection;
 
@@ -33,9 +34,16 @@ class PinnedServicesScope extends InheritedNotifier<PinnedServicesController> {
 /// root, since the link cannot name the login user's home.
 const String _filesRoot = '/';
 
+/// Whether a reboot can be offered for [serverId]: actions are allowed and
+/// admin mode is on, since a power action is planned in admin mode only
+/// (SYS-03, as the System tab's Power section shows it).
+bool _rebootOffered(BuildContext context, String serverId) =>
+    actionsAllowedAt(context, serverId, ActionEntryPoint.power) &&
+    AdminScope.maybeOf(context)?.stateFor(serverId)?.phase == AdminModePhase.on;
+
 /// Whether [QuickActionsCard] for [serverId] has anything to offer: a
-/// hand-off this device can make, reboot where actions are allowed, or a
-/// pinned service to restart. The Overview leaves the card out otherwise.
+/// hand-off this device can make, reboot where actions are allowed and
+/// admin mode is on, or a pinned service to restart. The Overview leaves the card out otherwise.
 bool quickActionsShown(BuildContext context, String serverId) {
   final launcher = HandOffScope.maybeOf(context);
   final handOff =
@@ -44,7 +52,7 @@ bool quickActionsShown(BuildContext context, String serverId) {
               seanceHandOff(serverId) != null) ||
           (launcher.available(HandOffTarget.poltergeist) &&
               poltergeistHandOff(serverId, path: _filesRoot) != null));
-  final reboot = actionsAllowedAt(context, serverId, ActionEntryPoint.power);
+  final reboot = _rebootOffered(context, serverId);
   final pinned =
       (PinnedServicesScope.maybeOf(context)?.pinsFor(serverId).isNotEmpty ??
           false) &&
@@ -107,18 +115,19 @@ class QuickActionsCard extends StatelessWidget {
                   ],
                 ),
               ),
-            ActionEntry(
-              serverId: serverId,
-              point: ActionEntryPoint.power,
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.power_settings_new),
-                label: Text(l10n.quickActionsReboot),
-                onPressed: () => startAction(
-                  context,
-                  PowerAction(serverId, PowerVerb.reboot),
+            if (_rebootOffered(context, serverId))
+              ActionEntry(
+                serverId: serverId,
+                point: ActionEntryPoint.power,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.power_settings_new),
+                  label: Text(l10n.quickActionsReboot),
+                  onPressed: () => startAction(
+                    context,
+                    PowerAction(serverId, PowerVerb.reboot),
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ],
