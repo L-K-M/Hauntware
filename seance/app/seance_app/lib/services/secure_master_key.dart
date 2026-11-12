@@ -137,7 +137,8 @@ class MasterKeyManager {
   Future<List<int>?> probeKeystore({bool hasExistingVault = false}) async {
     try {
       final existing = await _storage.read(key: _keyName);
-      if (existing != null) {
+      // An empty entry decodes to no bytes: no key, as an absent one.
+      if (existing != null && existing.isNotEmpty) {
         _markAvailable();
         return base64.decode(existing);
       }
@@ -181,7 +182,9 @@ class MasterKeyManager {
   Future<List<int>?> readKeystoreKey() async {
     try {
       final existing = await _storage.read(key: _keyName);
-      return existing == null ? null : base64.decode(existing);
+      // An empty entry decodes to no bytes, which is no key either.
+      if (existing == null || existing.isEmpty) return null;
+      return base64.decode(existing);
     } catch (_) {
       return null;
     }

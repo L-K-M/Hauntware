@@ -370,6 +370,12 @@ abstract class AppLocalizations {
   /// **'Saved secrets are unavailable. Unlock or restore your system credential store, then retry — or enter the secret below.'**
   String get credentialVaultUnavailable;
 
+  /// Banner shown instead of credentialVaultUnavailable when the keystore answered but holds no vault key while saved secrets exist (MasterKeyUnavailableException, D20).
+  ///
+  /// In en, this message translates to:
+  /// **'Saved secrets are locked. Your system credential store no longer holds the key for them, and Poltergeist did not create a new one because that would make them unreadable. Restore the key from a backup of your keychain or credential store, then reconnect, or enter the secret below.'**
+  String get credentialVaultKeyMissing;
+
   /// Sanitized detail for an identity file that cannot be decoded or otherwise read normally.
   ///
   /// In en, this message translates to:
@@ -3642,6 +3648,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The sync server returned weaker password-hashing parameters than Poltergeist accepts — refusing to derive your key (possible downgrade attack).'**
   String get backupKdfRefusal;
+
+  /// Enrollment status when the keystore answered but holds no vault key while saved secrets exist (MasterKeyUnavailableException), so the re-key was refused.
+  ///
+  /// In en, this message translates to:
+  /// **'Your system credential store no longer holds the key for your saved secrets, so they cannot be moved to your sync key. Poltergeist did not create a new key because that would make them unreadable. Restore the key from a backup of your keychain or credential store, then try again.'**
+  String get backupVaultKeyMissing;
 
   /// Label of the enrollment form's server field.
   ///

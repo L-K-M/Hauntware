@@ -192,7 +192,9 @@ Future<void> main(List<String> args) async {
   // keystore while locked.
   if (!appLock.locked) {
     try {
-      final vaultKey = await appLock.read(masterKeys.probeKeystore);
+      final vaultKey = await appLock.read(
+        () => probeVaultKey(masterKeys, vaultStore.file),
+      );
       if (vaultKey != null) await vaultStore.settleRekey(vaultKey);
     } on Object catch (error, stack) {
       errorReporter.report(error, stack);
@@ -204,7 +206,7 @@ Future<void> main(List<String> args) async {
   // provider, so recovery exports, restores and code replacement keep the
   // same boundary.
   Future<SecretVault?> guardedVault() => appLock.read(() async {
-    final key = await masterKeys.probeKeystore();
+    final key = await probeVaultKey(masterKeys, vaultStore.file);
     if (key == null) return null;
     await vaultStore.settleRekey(key);
     return SecretVault(vaultStore, key);
@@ -552,7 +554,15 @@ Future<void> main(List<String> args) async {
         deviceName: deviceName,
       );
     },
-    vaultKey: masterKeys.probeKeystore,
+    // A lost key over a sealed vault leaves backup keyless like a locked
+    // keystore; the credential prompt says which of the two it is.
+    vaultKey: () async {
+      try {
+        return await probeVaultKey(masterKeys, vaultStore.file);
+      } on MasterKeyUnavailableException {
+        return null;
+      }
+    },
     servers: servers,
     vaultStore: vaultStore,
     serverCatalogPublisher: engineSession?.publishServerCatalog,

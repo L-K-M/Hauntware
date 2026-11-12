@@ -13,8 +13,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/bookmark_backup_service.dart';
 import 'package:poltergeist_app/services/settings_models.dart';
+import 'package:poltergeist_app/services/secure_master_key.dart'
+    show MasterKeyUnavailableException;
 import 'package:poltergeist_app/services/sync_account_gate.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
+import 'package:poltergeist_app/ui/settings/backup_enrollment_form.dart';
 import 'package:poltergeist_app/ui/settings/backup_settings.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -398,6 +401,15 @@ void main() {
   setUp(() => h = _Harness());
 
   group('enrollment form (04 §4.3)', () {
+    test('a refused re-key over a lost vault key gets its own status', () {
+      final l10n = lookupAppLocalizations(const Locale('en'));
+
+      expect(
+        describeEnrollmentError(l10n, const MasterKeyUnavailableException()),
+        l10n.backupVaultKeyMissing,
+      );
+    });
+
     testWidgets('D32: preselects the shared Séance account when offered', (
       tester,
     ) async {
