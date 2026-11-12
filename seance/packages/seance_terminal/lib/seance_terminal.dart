@@ -12,6 +12,11 @@ export 'package:xterm/xterm.dart'
         TerminalViewState;
 
 export 'src/byte_session.dart' show TerminalByteSession, TerminalByteTransport;
+export 'src/link_review_dialog.dart'
+    show
+        TerminalLinkReviewDialog,
+        TerminalLinkReviewStrings,
+        showTerminalLinkReview;
 export 'src/paste_policy.dart'
     show
         TerminalPasteChoice,
