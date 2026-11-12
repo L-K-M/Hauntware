@@ -1821,9 +1821,27 @@ fails on a duplicate id or a submenu over 12 items.
 ## 7. Platform integration
 
 ### I1. Single instance on Linux and Windows — M
-Linux uses `G_APPLICATION_NON_UNIQUE` (`linux/runner/my_application.cc`),
-and Windows doesn't forward argv. Opening a file from the file manager
-while Planchette runs starts a second window.
+Implemented: Linux runs a unique GApplication and Windows claims a named
+mutex; a second launch hands its document arguments to the running
+instance over `planchette/documents` and exits. Second-launch behaviour
+on a real Linux or Windows desktop stays a manual check, as for the
+sibling apps. The CLI items below (line and column targets, `--wait`)
+remain open.
+
+Windows file delivery requires the receiver's acknowledgement within five
+seconds. A failed or hung hand-off shows an error and exits nonzero after
+you dismiss it; it never starts a second primary. The source contract is
+automated, not a Windows runtime test. Manual verification on a disposable
+Windows desktop: send a dummy file from an unelevated shell to an elevated
+primary, then repeat with its UI thread paused in a debugger. Both attempts
+must show the failure instead of claiming delivery. Resume the primary and
+verify a normal second launch still opens the file once. These cases were
+not run on this Mac.
+
+As found: Linux used `G_APPLICATION_NON_UNIQUE`
+(`linux/runner/my_application.cc`), and Windows didn't forward argv.
+Opening a file from the file manager while Planchette ran started a
+second window.
 - **Linux**: drop NON_UNIQUE, handle `open`/`command-line` in the primary
   instance, and forward paths to Dart over the existing
   `planchette/documents` channel.

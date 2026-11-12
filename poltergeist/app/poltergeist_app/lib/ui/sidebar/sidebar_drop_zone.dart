@@ -367,7 +367,7 @@ Widget _bookmarkDraggable(
 }) {
   final theme = Theme.of(context);
   if (!isDesktopPlatform(theme.platform)) return child;
-  final chrome = PoltergeistChrome.of(context);
+  final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
   return Draggable<Bookmark>(
     data: bookmark,
     feedback: Material(

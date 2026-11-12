@@ -247,6 +247,35 @@ final class ElevatedExecutor {
     return retry;
   }
 
+  /// Checks [password] for the password rung (3) with
+  /// `sudo -k -S -p '' -v`, password first on stdin, and throws a
+  /// classified [ElevationException] when sudo refuses it. `-k` makes sudo
+  /// ignore cached credentials: under `timestamp_type=global` a record
+  /// another session left lets the prelude's own `sudo -v` pass a wrong
+  /// password (spike S3, 03 D65). sudo-rs checks it too but records
+  /// nothing, so its first command after this takes rung 4.
+  ///
+  /// Throws [RemoteCommandException] and [ChannelOpenException] as [run]
+  /// does, and [ArgumentError] for a password that cannot travel as one
+  /// line.
+  Future<void> validatePassword(String password, {Duration? timeout}) async {
+    _checkPassword(password);
+    final result = await _link.run(
+      "env LC_ALL=C sudo -k -S -p '' -v",
+      stdin: utf8.encode('$password\n'),
+      timeout: timeout,
+    );
+    if (result.exitCode == 0) return;
+    throw ElevationException(
+      classifyElevationStderr(
+            result.stderr,
+            _toolFor(ElevationStrategy.sudoPrelude)!,
+          ) ??
+          ElevationFailureKind.unavailable,
+      result.stderr,
+    );
+  }
+
   /// Starts [argv] as [run] would and hands back the live process, whose
   /// stdin stays open after the password line: the caller streams the
   /// command's own input and closes [RemoteProcess.stdin] when done.

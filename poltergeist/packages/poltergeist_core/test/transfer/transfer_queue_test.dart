@@ -59,6 +59,7 @@ void main() {
     int taskRetryLimit = 5,
     bool Function(FsLocation)? isCaseInsensitiveDestination,
     Duration nameProbeCleanupTimeout = const Duration(seconds: 5),
+    DownloadProvenance? provenance,
   }) {
     connections.leaseCap = leaseCap;
     final created = TransferQueue(
@@ -69,6 +70,7 @@ void main() {
       pipeBufferBytes: pipeBufferBytes ?? 4 * 1024 * 1024,
       isCaseInsensitiveDestination: isCaseInsensitiveDestination,
       nameProbeCleanupTimeout: nameProbeCleanupTimeout,
+      provenance: provenance,
     );
     createdQueues.add(created);
     return created;
@@ -2370,6 +2372,190 @@ void main() {
       expect(s1.fileBytes['/dst/m.txt'], 'mm'.codeUnits);
       expect(s1.entryAt('/src/m.txt'), isNull);
     });
+
+    group('after the copy landed', () {
+      final sourceTime = DateTime.utc(2024, 3, 4, 5, 6, 7);
+      const dropped = RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'post-commit',
+        message: 'transport dropped',
+      );
+
+      TransferTask enqueueMove() {
+        s1.addFile('/src/m.txt', 'mm'.codeUnits, modifiedAt: sourceTime);
+        return enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src/m.txt'],
+            destinationDir: '/dst',
+            operation: TransferOperation.move,
+          ),
+        );
+      }
+
+      test('a link drop in the timestamp update and the source delete '
+          'resumes the move without copying again', () async {
+        var dropTimes = true;
+        s2.setTimesFailure = (_) {
+          if (!dropTimes) return null;
+          dropTimes = false;
+          return dropped;
+        };
+        var dropDelete = true;
+        s1.deleteFailure = (_) {
+          if (!dropDelete) return null;
+          dropDelete = false;
+          return dropped;
+        };
+        final task = enqueueMove();
+        await awaitTaskDone(task);
+
+        expect(
+          task.state,
+          TransferTaskState.completed,
+          reason: task.items.single.error,
+        );
+        expect(task.items.single.state, TransferItemState.completed);
+        expect(s2.uploadCalls, 1);
+        expect(s2.fileBytes['/dst/m.txt'], 'mm'.codeUnits);
+        expect(s2.mtimes['/dst/m.txt'], sourceTime);
+        expect(s1.deleteCalls, 2);
+        expect(s1.entryAt('/src/m.txt'), isNull);
+      });
+
+      test('a source delete whose reply was lost completes the move', () async {
+        s1.deleteFailure = (entry) {
+          s1.deleteFailure = null;
+          // The server removed the source, then the link dropped before
+          // its reply arrived.
+          unawaited(s1.delete(entry));
+          return dropped;
+        };
+        final task = enqueueMove();
+        await awaitTaskDone(task);
+
+        expect(
+          task.state,
+          TransferTaskState.completed,
+          reason: task.items.single.error,
+        );
+        expect(s2.uploadCalls, 1);
+        expect(s2.fileBytes['/dst/m.txt'], 'mm'.codeUnits);
+        expect(s1.entryAt('/src/m.txt'), isNull);
+      });
+
+      test('a resumed move keeps the source when its landed copy was '
+          'replaced', () async {
+        s2.setTimesFailure = (path) {
+          s2.setTimesFailure = null;
+          s2.addFile(path, 'someone else'.codeUnits);
+          return dropped;
+        };
+        final task = enqueueMove();
+        await awaitTaskDone(task);
+
+        final item = task.items.single;
+        expect(item.state, TransferItemState.failed);
+        expect(item.failureRetryPolicy, TransferFailureRetryPolicy.terminal);
+        expect(s2.fileBytes['/dst/m.txt'], 'someone else'.codeUnits);
+        expect(s1.fileBytes['/src/m.txt'], 'mm'.codeUnits);
+        expect(s1.deleteCalls, 0);
+      });
+
+      test('a resumed move copies again when its landed copy vanished',
+          () async {
+        s2.setTimesFailure = (path) {
+          s2.setTimesFailure = null;
+          unawaited(s2.delete(s2.entryAt(path)!));
+          return dropped;
+        };
+        final task = enqueueMove();
+        await awaitTaskDone(task);
+
+        expect(task.state, TransferTaskState.completed);
+        expect(s2.uploadCalls, 2);
+        expect(s2.fileBytes['/dst/m.txt'], 'mm'.codeUnits);
+        expect(s1.entryAt('/src/m.txt'), isNull);
+      });
+
+      for (final kind in [
+        RemoteFileErrorKind.permissionDenied,
+        RemoteFileErrorKind.unsupported,
+        RemoteFileErrorKind.other,
+      ]) {
+        for (final operation in [
+          TransferOperation.copy,
+          TransferOperation.move,
+        ]) {
+          test('a ${kind.name} timestamp refusal completes a landed '
+              '${operation.name} with a note', () async {
+            s1.addFile('/src/f.txt', 'ff'.codeUnits, modifiedAt: sourceTime);
+            s2.setTimesFailure = (path) => RemoteFileException(
+              kind: kind,
+              operation: 'change timestamps for',
+              path: path,
+              message: 'SETSTAT refused',
+            );
+            final task = enqueue(
+              copySpec(
+                source: const ServerFsLocation('s1'),
+                destination: const ServerFsLocation('s2'),
+                rootPaths: ['/src/f.txt'],
+                destinationDir: '/dst',
+                operation: operation,
+              ),
+            );
+            await awaitTaskDone(task);
+
+            final item = task.items.single;
+            expect(task.state, TransferTaskState.completed);
+            expect(item.state, TransferItemState.completed);
+            expect(item.error, contains('SETSTAT refused'));
+            expect(s2.fileBytes['/dst/f.txt'], 'ff'.codeUnits);
+            expect(
+              s1.entryAt('/src/f.txt'),
+              operation == TransferOperation.move ? isNull : isNotNull,
+            );
+          });
+        }
+      }
+
+      test('a refused timestamp update keeps the source when the landed '
+          'copy is gone', () async {
+        s2.setTimesFailure = (path) {
+          s2.setTimesFailure = null;
+          unawaited(s2.delete(s2.entryAt(path)!));
+          return RemoteFileException(
+            kind: RemoteFileErrorKind.permissionDenied,
+            operation: 'change timestamps for',
+            path: path,
+            message: 'SETSTAT refused',
+          );
+        };
+        final task = enqueueMove();
+        await awaitTaskDone(task);
+
+        expect(task.items.single.state, TransferItemState.failed);
+        expect(s1.fileBytes['/src/m.txt'], 'mm'.codeUnits);
+        expect(s1.deleteCalls, 0);
+      });
+
+      test('a timestamp update that finds no file fails the item', () async {
+        s2.setTimesFailure = (path) => RemoteFileException(
+          kind: RemoteFileErrorKind.notFound,
+          operation: 'change timestamps for',
+          path: path,
+          message: 'no such file',
+        );
+        final task = enqueueMove();
+        await awaitTaskDone(task);
+
+        expect(task.items.single.state, TransferItemState.failed);
+        expect(s1.fileBytes['/src/m.txt'], 'mm'.codeUnits);
+        expect(s1.deleteCalls, 0);
+      });
+    });
   });
 
   group('failures', () {
@@ -2405,6 +2591,35 @@ void main() {
       expect(s1.downloadCalls, 2);
       expect(task.retryCount, 0);
       expect(s2.fileBytes['/dst/f.bin'], List.filled(8, 9));
+    });
+
+    test('a retry re-reads a source that changed size after the scan',
+        () async {
+      s1.addFile('/src/log.txt', List.filled(8, 1));
+      // The file grows between the scan and its transfer.
+      s1.downloadFailure = (path) {
+        s1.downloadFailure = null;
+        s1.addFile(path, List.filled(12, 2));
+        return null;
+      };
+      final task = enqueue(
+        copySpec(
+          source: const ServerFsLocation('s1'),
+          destination: const ServerFsLocation('s2'),
+          rootPaths: ['/src/log.txt'],
+          destinationDir: '/dst',
+        ),
+      );
+      await awaitTaskDone(task);
+      final item = task.items.single;
+      expect(item.state, TransferItemState.failed);
+      expect(s2.entryAt('/dst/log.txt'), isNull);
+
+      expect(queue.retryItem(task.id, item.id), isTrue);
+      await awaitTaskDone(task);
+
+      expect(task.state, TransferTaskState.completed, reason: item.error);
+      expect(s2.fileBytes['/dst/log.txt'], List.filled(12, 2));
     });
 
     test('persistent disconnect beyond the retry budget fails the task',
@@ -3070,6 +3285,79 @@ void main() {
         isTrue,
         reason: 'the dir-removal failure must surface as an item event',
       );
+    });
+  });
+
+  group('download provenance', () {
+    DownloadProvenance recorder(List<String> marked) =>
+        DownloadProvenance.forHost(
+          ProvenancePlatform.macos,
+          agent: 'Poltergeist',
+          runProcess: (_, arguments) async {
+            marked.add(arguments.last);
+            return ProcessResult(0, 0, '', '');
+          },
+        );
+
+    test('a remote→local copy marks the landed file', () async {
+      final marked = <String>[];
+      queue = newQueue(provenance: recorder(marked));
+      final localDest = Directory('${tempDir.path}/dl')..createSync();
+      s1.addFile('/src/a.txt', 'aaa'.codeUnits);
+
+      final task = enqueue(
+        copySpec(
+          source: const ServerFsLocation('s1'),
+          destination: const LocalFsLocation(),
+          rootPaths: ['/src/a.txt'],
+          destinationDir: localDest.path,
+        ),
+      );
+      await awaitTaskDone(task);
+
+      expect(task.state, TransferTaskState.completed);
+      // The mark lands on the path the commit wrote, before the item
+      // reported complete.
+      expect(marked, [task.items.single.destinationPath]);
+    });
+
+    test('a local→local copy marks nothing', () async {
+      final marked = <String>[];
+      queue = newQueue(provenance: recorder(marked));
+      writeLocal('b.txt', [1, 2]);
+      final localDest = Directory('${tempDir.path}/ll')..createSync();
+
+      final task = enqueue(
+        copySpec(
+          source: const LocalFsLocation(),
+          destination: const LocalFsLocation(),
+          rootPaths: ['${localSrc.path}/b.txt'],
+          destinationDir: localDest.path,
+        ),
+      );
+      await awaitTaskDone(task);
+
+      expect(task.state, TransferTaskState.completed);
+      expect(marked, isEmpty);
+    });
+
+    test('an upload marks nothing', () async {
+      final marked = <String>[];
+      queue = newQueue(provenance: recorder(marked));
+      writeLocal('u.txt', [1]);
+
+      final task = enqueue(
+        copySpec(
+          source: const LocalFsLocation(),
+          destination: const ServerFsLocation('s1'),
+          rootPaths: ['${localSrc.path}/u.txt'],
+          destinationDir: '/dst',
+        ),
+      );
+      await awaitTaskDone(task);
+
+      expect(task.state, TransferTaskState.completed);
+      expect(marked, isEmpty);
     });
   });
 }

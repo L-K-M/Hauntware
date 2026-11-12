@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
@@ -85,6 +87,38 @@ void main() {
     await tester.pump();
     expect(c.text.text, 'dog dog');
   });
+  testWidgets(
+    'Control+Y redoes on Windows only',
+    (tester) async {
+      final c = EditorController(displayPath: 'test', initialText: 'cat');
+      addTearDown(c.dispose);
+      await tester.pumpWidget(app(c));
+      await tester.pump(const Duration(milliseconds: 600));
+      c.editorFocus.requestFocus();
+      await tester.pump();
+      c.text.value = const TextEditingValue(
+        text: 'cats',
+        selection: TextSelection.collapsed(offset: 4),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      c.undoController.undo();
+      await tester.pump();
+      expect(c.text.text, 'cat');
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyY);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(
+        c.text.text,
+        defaultTargetPlatform == TargetPlatform.windows ? 'cats' : 'cat',
+      );
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.windows,
+      TargetPlatform.linux,
+    }),
+  );
   testWidgets('IME composing text retains framework rendering', (tester) async {
     final c = EditorController(displayPath: '.env', initialText: 'KEY=value');
     addTearDown(c.dispose);
@@ -195,6 +229,34 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.caseFoldingLimited, isFalse);
     expect(find.byIcon(Icons.info_outline), findsNothing);
+  });
+
+  // Documents and searches may hold secrets (an .env file, a remote
+  // config): no editor field may feed the keyboard's learning.
+  testWidgets('editor fields ask the keyboard not to learn their text', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: '.env', initialText: 'K=v\n');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+
+    void expectNoLearning(int atLeast) {
+      final fields = tester.widgetList<TextField>(find.byType(TextField));
+      expect(fields.length, greaterThanOrEqualTo(atLeast));
+      for (final field in fields) {
+        expect(field.enableIMEPersonalizedLearning, isFalse);
+      }
+    }
+
+    c.openSearch(replace: true);
+    await tester.pump();
+    expectNoLearning(3);
+
+    c.closeSearch();
+    c.openGoToLine();
+    await tester.pump();
+    expectNoLearning(2);
   });
 
   testWidgets('restoreFocus returns to the field that last had focus', (

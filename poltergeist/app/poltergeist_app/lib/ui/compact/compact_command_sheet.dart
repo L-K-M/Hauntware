@@ -173,7 +173,7 @@ class _CommandSheetBody extends StatelessWidget {
             child: Text(
               title,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: PoltergeistChrome.of(context).secondaryText,
+                color: PoltergeistChrome.of(context, poltergeistThemeStyle).secondaryText,
               ),
             ),
           ),

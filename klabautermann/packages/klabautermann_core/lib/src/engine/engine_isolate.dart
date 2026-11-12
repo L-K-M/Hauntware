@@ -512,7 +512,8 @@ void engineMain(
   // Verifies a server's footprint (SAF-14, P13) and sends what it found:
   // on every connect, when admin mode turns on (root's part), after an
   // edit or a backup removal, and on request. readFootprint answers
-  // rather than throws.
+  // rather than throws; a lend that fails still answers, with nothing
+  // verified, rather than leaving an unhandled error to end the engine.
   void verifyFootprint(String serverId) {
     final link = links?.link(serverId);
     final profile = profiles[serverId];
@@ -525,7 +526,16 @@ void engineMain(
           profile: profile,
           admin: admin?.session(serverId),
         )),
-      ).then(uiPort.send),
+      ).then(
+        uiPort.send,
+        onError: (Object error) => uiPort.send(
+          FootprintState(
+            serverId,
+            rootUnchecked: true,
+            warnings: ['footprint: $error'],
+          ),
+        ),
+      ),
     );
   }
 
@@ -706,6 +716,10 @@ void engineMain(
               .forEach(uiPort.send);
           history?.observe(event.serverId, event.result, event.at);
         }
+        if (event is Gap) {
+          // Before the reading that resumes the streams, which follows.
+          alerts.gap(event.serverId, event.streams);
+        }
         if (event is Gap && event.streams.any(_historyStreams.contains)) {
           history?.gap(event.serverId, event.from, event.until, event.cause);
         }
@@ -848,10 +862,12 @@ void engineMain(
 
   // Rebuilds the fleet from the store. A server that left it is forgotten
   // (03 §5.1): its samplers, link and attempts end and its subscriptions
-  // go. One that keeps its id under another endpoint loses its cached
-  // profile and its Docker session, which describe another machine
+  // go. One that keeps its id under another endpoint, an import whose
+  // endpoint changed or a synced server in [moved], loses what the engine
+  // learned or chose for that machine: its cached profile and history,
+  // Docker session and choices, admin state, reports and forwards
   // (SYN-08).
-  void refreshFleet() {
+  void refreshFleet({Set<String> moved = const {}}) {
     final previous = fleetIds.isEmpty ? null : fleet;
     fleet = ImportedFleet(
       imports.hosts,
@@ -883,6 +899,7 @@ void engineMain(
     final forgotten = {
       for (final id in before)
         if (!fleetIds.contains(id) ||
+            moved.contains(id) ||
             previous?.endpointOf(id) != fleet.endpointOf(id))
           id,
     };
@@ -936,8 +953,8 @@ void engineMain(
   // Takes [next] as the synced fleet. A trusted server that the account
   // still holds and that is no longer confirmed, with its pins read, had
   // its endpoint changed by a sync (03 §4.7, SYN-08): the app hears it,
-  // its link and log streams close, and its cached profile goes, which
-  // describes another machine. Nothing redials it until the user
+  // its link and log streams close, and refreshFleet forgets what the
+  // engine held for the old machine, as for a moved import. Nothing redials it until the user
   // confirms it again. One whose pins could not be read is only not
   // dialed for now: a store failure is no endpoint change. A server the
   // account no longer holds needs nothing here: refreshFleet drops it
@@ -957,15 +974,11 @@ void engineMain(
         if (next.unreadableIds.contains(id)) id,
     };
     synced = next;
-    refreshFleet();
+    refreshFleet(moved: changed);
     for (final id in changed) {
       uiPort.send(EndpointChanged(id));
       logs?.disconnect(id);
       links?.disconnect(id);
-    }
-    if (changed.isNotEmpty) {
-      unawaited(capabilities?.forget(changed));
-      unawaited(history?.forget(changed));
     }
   }
 
@@ -1430,6 +1443,31 @@ void engineMain(
         );
       case RunSyncRound(:final requestId):
         runSync(SyncOperation.round, sync.runRound, requestId: requestId);
+      case ReadPinConflicts():
+        // Behind any round already queued, so a read never races the diff
+        // that round is about to change.
+        syncTail = syncTail.then((_) async {
+          uiPort.send(PinConflictsChanged(await sync.pinConflicts()));
+        });
+      case ResolvePinConflict(
+        :final locator,
+        :final keepLocal,
+        :final localFingerprintSha256,
+        :final pulledFingerprintSha256,
+      ):
+        syncTail = syncTail.then((_) async {
+          try {
+            final conflicts = await sync.resolvePinConflict(
+              locator,
+              keepLocal: keepLocal,
+              localFingerprintSha256: localFingerprintSha256,
+              pulledFingerprintSha256: pulledFingerprintSha256,
+            );
+            uiPort.send(PinConflictsChanged(conflicts));
+          } on Object catch (error) {
+            uiPort.send(RequestRejected('ResolvePinConflict', '$error'));
+          }
+        });
       case ReadServerDraft(:final requestId, :final serverId):
         uiPort.send(
           ServerDraftRead(
@@ -1727,13 +1765,15 @@ void engineMain(
             ),
           ),
         );
-      case AuditQuery(:final serverId, :final before, :final limit):
-        final (:records, :more) = await audit.query(
+      case AuditQuery(:final serverId, :final after, :final limit):
+        final (:records, :next, :unreadable) = await audit.query(
           serverId,
-          before: before,
+          after: after,
           limit: limit,
         );
-        uiPort.send(AuditRecords(serverId, records, more: more));
+        uiPort.send(
+          AuditRecords(serverId, records, next: next, unreadable: unreadable),
+        );
       case AcknowledgeOperation(:final serverId, :final id):
         final tracker = operations;
         if (tracker == null) {
@@ -1756,9 +1796,12 @@ void engineMain(
       case ReadHistory(:final serverId, :final tier, :final requestId):
         const nothing = HistoryRange(buckets: [], gaps: []);
         // The app waits on the answer, so a read that fails answers
-        // nothing recorded rather than nothing at all.
+        // nothing recorded rather than nothing at all. A server outside
+        // the fleet, such as one a view still shows while it is removed,
+        // has no history to read.
+        final store = fleetIds.contains(serverId) ? history : null;
         final range =
-            await (history?.read(serverId, tier, now: DateTime.now().toUtc()) ??
+            await (store?.read(serverId, tier, now: DateTime.now().toUtc()) ??
                     Future.value(nothing))
                 .catchError((Object _) => nothing);
         uiPort.send(
@@ -2136,7 +2179,7 @@ void engineMain(
           return;
         }
         // Not awaited, as the other reads: runUnitQuery answers rather
-        // than throws.
+        // than throws, and a lend that fails still answers.
         unawaited(
           lendSession(
             serverId,
@@ -2147,7 +2190,19 @@ void engineMain(
               link: link,
               profile: profile,
             ),
-          ).then(uiPort.send),
+          ).then(
+            uiPort.send,
+            onError: (Object error) => uiPort.send(
+              UnitQueryResult(
+                serverId: serverId,
+                requestId: requestId,
+                payload: UnitQueryFailed(
+                  UnitQueryFailure.failed,
+                  detail: '$error',
+                ),
+              ),
+            ),
+          ),
         );
       case JobHistoryQuery(:final serverId, :final requestId, :final query):
         final link = links?.link(serverId);
@@ -2162,7 +2217,7 @@ void engineMain(
           return;
         }
         // Not awaited, as the other reads: the query answers rather than
-        // throws.
+        // throws, and a lend that fails still answers.
         unawaited(
           lendSession(
             serverId,
@@ -2173,7 +2228,19 @@ void engineMain(
               link: link,
               admin: admin?.session(serverId),
             ),
-          ).then(uiPort.send),
+          ).then(
+            uiPort.send,
+            onError: (Object error) => uiPort.send(
+              JobHistoryResult(
+                serverId: serverId,
+                requestId: requestId,
+                payload: JobHistoryFailed(
+                  JobHistoryFailure.failed,
+                  detail: '$error',
+                ),
+              ),
+            ),
+          ),
         );
       case SetSafetyPolicy(:final policy):
         if (validateSafetyPolicy(policy) case final problem?) {
@@ -2407,6 +2474,20 @@ void engineMain(
       keystore.answer(message);
       return;
     }
-    queue = queue.then((_) => handle(message));
+    // A handler that throws costs its own request, not the engine: left
+    // in the chain, the error would skip every later request and, being
+    // unhandled, end the isolate with every link and shell.
+    queue = queue.then(
+      (_) => handle(message).catchError((Object error) {
+        uiPort.send(
+          RequestRejected(
+            message is EngineRequest
+                ? message.runtimeType.toString()
+                : '<unknown>',
+            'engine error: $error',
+          ),
+        );
+      }),
+    );
   });
 }

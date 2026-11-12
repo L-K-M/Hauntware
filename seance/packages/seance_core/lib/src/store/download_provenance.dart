@@ -1,14 +1,16 @@
 import 'dart:developer' as developer;
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
-import 'package:seance_core/seance_core.dart';
-
-import 'external_file_opener.dart';
+import 'package:meta/meta.dart';
+import 'package:seance_protocol/seance_protocol.dart';
 
 /// Runs a program without a shell, like [Process.run].
 typedef ProcessRunner =
     Future<ProcessResult> Function(String executable, List<String> arguments);
+
+/// The desktop platform a [DownloadProvenance] marks for; [unsupported]
+/// covers hosts with no download mark (mobile).
+enum ProvenancePlatform { macos, windows, linux, unsupported }
 
 /// Mark-of-the-Web: zone 3 is the internet zone. The server's address is
 /// left out on purpose, so it does not travel with copies of the file.
@@ -21,39 +23,53 @@ const _quarantineAttribute = 'com.apple.quarantine';
 /// The flags non-Safari downloaders write: quarantined, internet origin.
 const _quarantineFlags = '0081';
 
-/// Marks files Séance writes from a server the way browsers mark downloads,
+ProvenancePlatform get _currentProvenancePlatform {
+  if (Platform.isMacOS) return ProvenancePlatform.macos;
+  if (Platform.isWindows) return ProvenancePlatform.windows;
+  if (Platform.isLinux) return ProvenancePlatform.linux;
+  return ProvenancePlatform.unsupported;
+}
+
+/// Marks files an app writes from a server the way browsers mark downloads,
 /// so the OS treats them as untrusted when they are opened (finding P1-03a):
 /// Mark-of-the-Web on Windows, a quarantine attribute on macOS. Linux has no
 /// equivalent. Best effort: a volume without alternate data streams or
 /// extended attributes must not stop an open, so failures are only logged.
 class DownloadProvenance {
-  /// Marks for the platform Séance runs on.
-  DownloadProvenance() : this.forHost(currentEditorHostPlatform);
+  /// Marks for the platform this host runs on; [agent] is the product name
+  /// written into the quarantine attribute's agent field.
+  DownloadProvenance({required String agent})
+    : this.forHost(_currentProvenancePlatform, agent: agent);
 
   /// Marks as [host] would; [runProcess] stands in for [Process.run].
   @visibleForTesting
-  DownloadProvenance.forHost(this._host, {this._runProcess = Process.run});
+  DownloadProvenance.forHost(
+    this._host, {
+    required this._agent,
+    this._runProcess = Process.run,
+  });
 
-  final EditorHostPlatform? _host;
+  final ProvenancePlatform _host;
+  final String _agent;
   final ProcessRunner _runProcess;
 
   Future<void> markDownloaded(String path) async {
     try {
       switch (_host) {
-        case EditorHostPlatform.windows:
+        case ProvenancePlatform.windows:
           await File(
             '$path$_zoneIdentifierStream',
           ).writeAsString(_zoneIdentifier, flush: true);
-        case EditorHostPlatform.macos:
+        case ProvenancePlatform.macos:
           await _quarantine(path);
-        case EditorHostPlatform.linux:
-        case null:
+        case ProvenancePlatform.linux:
+        case ProvenancePlatform.unsupported:
           return;
       }
     } catch (error, stackTrace) {
       developer.log(
         'Could not mark a downloaded file as untrusted',
-        name: 'seance.app',
+        name: '${_agent.toLowerCase()}.app',
         level: 900,
         error: error,
         stackTrace: stackTrace,
@@ -70,7 +86,7 @@ class DownloadProvenance {
     final value = [
       _quarantineFlags,
       seconds.toRadixString(16),
-      'Seance',
+      _agent,
       uuidV4(),
     ].join(';');
     final hex = value.codeUnits

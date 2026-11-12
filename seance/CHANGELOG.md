@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The Linux package build uses the suite's shared packager and fails early
+  with a clear message when `objdump` is missing, instead of partway through.
+  The built `.deb` and AppImage are unchanged.
 - Deleting a saved server retracts its credential from your sync account
   as well as from this device, unless another server still uses it, so a
   new device no longer picks up the password or key of a server that is
@@ -44,6 +47,13 @@
 - Closing an editor tab with unsaved text asks Save, Don't save or
   Cancel, and Save saves as Ctrl+S does. Closing a terminal tab while a
   command runs in it asks first.
+- The editor's close dialog comes from the shared Ghost UI package, as in
+  Planchette and Poltergeist.
+- Quitting with unsaved editors offers Save All beside Cancel and Quit. It
+  writes every dirty editor, and a failed save or upload keeps the window
+  open.
+- Deleting a server asks its dirty editors to save or discard first, as
+  closing their tabs does; a declined editor cancels the delete.
 - The snippet editor's Save waits for a title and a command, Return in
   the title saves, ⌘Return or Ctrl+Return saves from the command, and
   saving an unchanged snippet writes nothing.

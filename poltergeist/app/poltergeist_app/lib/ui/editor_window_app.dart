@@ -19,7 +19,7 @@ class EditorWindowApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final listenable = appearance;
-    if (listenable == null) return _app(AppAppearance.initial);
+    if (listenable == null) return _app(poltergeistInitialAppearance);
     return ValueListenableBuilder<AppAppearance>(
       valueListenable: listenable,
       builder: (context, value, _) => _app(value),

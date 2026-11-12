@@ -19,11 +19,13 @@ import 'package:klabautermann_app/controllers/cadence_controller.dart';
 import 'package:klabautermann_app/controllers/log_display.dart';
 import 'package:klabautermann_app/controllers/time_display.dart';
 import 'package:klabautermann_app/controllers/sync_secrets_controller.dart';
+import 'package:klabautermann_app/controllers/sync_controller.dart';
 import 'package:klabautermann_app/controllers/threshold_controller.dart';
 import 'package:klabautermann_app/controllers/window_panes.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/device_name.dart';
+import 'package:klabautermann_app/controllers/editor_display.dart';
 import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitor_set.dart';
@@ -35,15 +37,24 @@ import 'package:klabautermann_app/services/settings_window/settings_window_host.
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
 import 'package:klabautermann_app/settings_window_app.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
+import 'package:klabautermann_app/ui/appearance_tab.dart';
 import 'package:klabautermann_app/ui/settings_page.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart' show ChartThresholds;
 import 'package:klabautermann_app/ui/threshold_scope.dart';
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorLigatures, EditorTextSize;
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show MonitorEligibility, SafetyPolicy, ServerSafety;
+    show MonitorEligibility, SafetyPolicy, ServerSafety, SyncPinConflict;
 
 import 'support/device_authenticator.dart';
 import 'support/fake_engine.dart';
 import 'support/harness.dart';
+
+const _pinConflict = SyncPinConflict(
+  locator: 'alpha.example.com:22',
+  localFingerprintSha256: 'SHA256:local',
+  pulledFingerprintSha256: 'SHA256:pulled',
+);
 
 // One engine in a test, so the two ends of the link get a channel each and a
 // relay between them stands in for the runners' byte-for-byte forwarding.
@@ -90,6 +101,35 @@ final class _ManualAppLock extends ChangeNotifier implements AppLockSettings {
 
   @override
   Future<AppLockChange> setEnabled(bool enabled) async => AppLockChange.changed;
+}
+
+/// A pin conflict settings the test resolves by hand.
+final class _PinConflicts extends ChangeNotifier
+    implements PinConflictsSettings {
+  _PinConflicts(this.conflicts);
+
+  @override
+  List<SyncPinConflict> conflicts;
+
+  @override
+  bool resolving = false;
+
+  final List<(String, bool)> asked = [];
+  Future<void> Function()? beforeResolve;
+
+  @override
+  Future<void> resolvePinConflict(
+    SyncPinConflict conflict, {
+    required bool keepLocal,
+  }) async {
+    resolving = true;
+    notifyListeners();
+    asked.add((conflict.locator, keepLocal));
+    await beforeResolve?.call();
+    conflicts = const [];
+    resolving = false;
+    notifyListeners();
+  }
 }
 
 /// The desktop settings window (03 §10.2, D32) over fake channels: the main
@@ -187,6 +227,8 @@ void main() {
     ValueListenable<AccountSize?>? accountSize,
     TimeDisplaySettings? timeDisplay,
     AdminMemorySettings? adminMemory,
+    PinConflictsSettings? pinConflicts,
+    EditorDisplaySettings? editorDisplay,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
@@ -203,7 +245,9 @@ void main() {
       adminMemory: adminMemory,
       logDisplay: logDisplay,
       timeDisplay: timeDisplay,
+      editorDisplay: editorDisplay,
       accountSize: accountSize,
+      pinConflicts: pinConflicts,
       control: _control,
       link: _appLink,
       requestAppExit: () async => AppExitResponse.exit,
@@ -364,8 +408,10 @@ void main() {
     late CadenceCapsController cadenceCaps;
     late AdminMemoryController adminMemory;
     late LogDisplayController logDisplay;
+    late EditorDisplayController editorDisplay;
     late TimeDisplayController timeDisplay;
     late ValueNotifier<AccountSize?> accountSize;
+    late _PinConflicts pinConflicts;
     late SettingsWindowHost host;
 
     setUp(() async {
@@ -419,10 +465,14 @@ void main() {
       addTearDown(adminMemory.dispose);
       logDisplay = LogDisplayController();
       addTearDown(logDisplay.dispose);
+      editorDisplay = EditorDisplayController();
+      addTearDown(editorDisplay.dispose);
       timeDisplay = TimeDisplayController();
       addTearDown(timeDisplay.dispose);
       accountSize = ValueNotifier(null);
       addTearDown(accountSize.dispose);
+      pinConflicts = _PinConflicts(const [_pinConflict]);
+      addTearDown(pinConflicts.dispose);
       host = newHost(
         appearance,
         announcements,
@@ -438,6 +488,8 @@ void main() {
         accountSize,
         timeDisplay,
         adminMemory,
+        pinConflicts,
+        editorDisplay,
       );
     });
 
@@ -636,6 +688,68 @@ void main() {
         windowApp(tester).theme?.colorScheme.surface,
         appearance.value.palette.surface,
       );
+    });
+
+    testWidgets('the Appearance tab\'s file editor display changes the '
+        'app\'s through the link (03 §8.5)', (tester) async {
+      final remote = await pumpBothWindows(tester, appearance);
+      Finder inWindow(Finder finder) =>
+          find.descendant(of: find.byType(SettingsWindowApp), matching: finder);
+      expect(remote.editorDisplay?.value, EditorDisplay.standard);
+
+      // The section is the last block of the Appearance tab's page, below
+      // the theme editor; the tab's ListView is the scrollable.
+      Finder sectionScrollable() => find
+          .descendant(
+            of: find.byType(AppearanceTab),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+
+      Future<void> reveal(Finder finder) async {
+        await tester.scrollUntilVisible(
+          finder,
+          200,
+          scrollable: sectionScrollable(),
+        );
+        await tester.ensureVisible(finder);
+        await tester.pumpAndSettle();
+      }
+
+      final ligatures = inWindow(
+        find.widgetWithText(SwitchListTile, 'Ligatures'),
+      );
+      await reveal(ligatures);
+      await tester.tap(ligatures);
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(editorDisplay.value.ligatures, EditorLigatures.off);
+      expect(remote.editorDisplay?.value.ligatures, EditorLigatures.off);
+
+      final slider = inWindow(find.byKey(const ValueKey('editor.textSize')));
+      await reveal(slider);
+      await tester.drag(slider, const Offset(40, 0));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(
+        editorDisplay.value.textSize,
+        greaterThan(EditorTextSize.standard),
+      );
+      expect(
+        remote.editorDisplay?.value.textSize,
+        editorDisplay.value.textSize,
+      );
+
+      // A change in the app reaches the showing window too.
+      await tester.runAsync(() async {
+        await editorDisplay.setEditorDisplay(
+          EditorDisplay(textSize: EditorTextSize.standard + 2),
+        );
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(remote.editorDisplay?.value.textSize, EditorTextSize.standard + 2);
+      expect(inWindow(find.text('16 pt')), findsOneWidget);
     });
 
     testWidgets('a change in the window the app applies but cannot save '
@@ -938,6 +1052,68 @@ void main() {
       expect(remote.syncSecrets.value, isTrue);
       expect(windowSwitch(), isTrue);
     });
+
+    testWidgets('the Sync tab\'s conflict cards resolve through the link '
+        '(03 §4.9)', (tester) async {
+      final remote = await pumpBothWindows(
+        tester,
+        appearance,
+        tab: SettingsTab.sync,
+      );
+      Finder inWindow(Finder finder) =>
+          find.descendant(of: find.byType(SettingsWindowApp), matching: finder);
+
+      expect(remote.pinConflicts.conflicts, [_pinConflict]);
+      expect(inWindow(find.textContaining('alpha.example.com:22')), findsOne);
+      expect(inWindow(find.text('This device trusts')), findsOneWidget);
+      expect(inWindow(find.text('SHA256:local')), findsOneWidget);
+      expect(inWindow(find.text('The other device synced')), findsOneWidget);
+      expect(inWindow(find.text('SHA256:pulled')), findsOneWidget);
+
+      await tester.tap(
+        inWindow(
+          find.byKey(const ValueKey('settings.pin.keep.alpha.example.com:22')),
+        ),
+      );
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      expect(pinConflicts.asked, [(_pinConflict.locator, true)]);
+      expect(remote.pinConflicts.conflicts, isEmpty);
+      expect(inWindow(find.text('This device trusts')), findsNothing);
+    });
+
+    testWidgets(
+      'disposing a window during pin resolution preserves its result',
+      (tester) async {
+        final started = Completer<void>();
+        final release = Completer<void>();
+        pinConflicts.beforeResolve = () async {
+          started.complete();
+          await release.future;
+        };
+        final remote = (await tester.runAsync(() async {
+          expect(await host.open(SettingsTab.sync), isTrue);
+          return RemoteSettings.connect(link: _windowLink);
+        }))!;
+        var disposed = false;
+        addTearDown(() {
+          if (!disposed) remote.dispose();
+        });
+
+        await tester.runAsync(() async {
+          final pending = remote.pinConflicts.resolvePinConflict(
+            _pinConflict,
+            keepLocal: true,
+          );
+          await started.future.timeout(const Duration(seconds: 5));
+          remote.dispose();
+          disposed = true;
+          release.complete();
+          await pending;
+        });
+      },
+    );
 
     testWidgets('the Sync tab shows the account size the app last heard '
         '(SYN-09)', (tester) async {
@@ -1371,6 +1547,14 @@ void main() {
         ),
       );
       expect(
+        roundTrip(const EditorDisplayNotSavedException('disk full')),
+        isA<EditorDisplayNotSavedException>().having(
+          (error) => error.message,
+          'message',
+          'disk full',
+        ),
+      );
+      expect(
         roundTrip(const AdminMemoryNotSavedException('disk full')),
         isA<AdminMemoryNotSavedException>().having(
           (error) => error.message,
@@ -1436,6 +1620,37 @@ void main() {
         decodeMonitorCandidates(encodeMonitorCandidates(candidates)),
         candidates,
       );
+    });
+
+    test('the pin conflicts cross whole', () {
+      const conflicts = [
+        SyncPinConflict(
+          locator: 'alpha.example.com:22',
+          localFingerprintSha256: 'SHA256:local',
+          pulledFingerprintSha256: 'SHA256:pulled',
+        ),
+        SyncPinConflict(
+          locator: 'bravo.example.com:22',
+          localFingerprintSha256: 'SHA256:local-b',
+          pulledFingerprintSha256: 'SHA256:pulled-b',
+        ),
+      ];
+
+      expect(decodePinConflicts(encodePinConflicts(conflicts)), conflicts);
+      expect(decodePinConflicts(null), isEmpty);
+      expect(decodePinConflicts('nonsense'), isEmpty);
+    });
+
+    test('the editor display crosses whole', () {
+      final display = EditorDisplay(
+        family: 'JetBrains Mono',
+        ligatures: EditorLigatures.off,
+        textSize: 18,
+      );
+
+      expect(decodeEditorDisplay(encodeEditorDisplay(display)), display);
+      // A value it did not write reads as the standard display.
+      expect(decodeEditorDisplay(null), EditorDisplay.standard);
     });
 
     test('uses the channel names 04 §12.3 fixes', () {

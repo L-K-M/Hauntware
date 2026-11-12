@@ -37,7 +37,10 @@ enum _Column { time, target, action, tier, result }
 
 class _ActivityPageState extends State<ActivityPage> {
   final List<AuditRecord> _records = [];
-  bool _more = false;
+
+  /// Where the next page starts, from the engine; null when none remain.
+  AuditCursor? _next;
+  bool _unreadable = false;
   bool _reading = true;
   TableSort? _sort = TableSort(
     _Column.time.name,
@@ -54,12 +57,13 @@ class _ActivityPageState extends State<ActivityPage> {
     setState(() => _reading = true);
     final page = await widget.operations.readAudit(
       widget.serverId,
-      before: _records.lastOrNull?.endedAt,
+      after: _next,
     );
     if (!mounted) return;
     setState(() {
       _records.addAll(page.records);
-      _more = page.more;
+      _next = page.next;
+      _unreadable = _unreadable || page.unreadable;
       _reading = false;
     });
   }
@@ -144,6 +148,8 @@ class _ActivityPageState extends State<ActivityPage> {
           children: [
             Text(l10n.activityDetail),
             if (widget.operations.auditInMemory) Text(l10n.activityInMemory),
+            if (_unreadable && _records.isNotEmpty)
+              Text(l10n.activityUnreadable),
             Expanded(
               child: SortableTable<AuditRecord>(
                 tableId: 'activity',
@@ -157,12 +163,16 @@ class _ActivityPageState extends State<ActivityPage> {
                 empty: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Text(
-                    _reading ? l10n.activityReading : l10n.activityEmpty,
+                    _reading
+                        ? l10n.activityReading
+                        : _unreadable
+                        ? l10n.activityUnreadable
+                        : l10n.activityEmpty,
                   ),
                 ),
               ),
             ),
-            if (_more)
+            if (_next != null)
               Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: TextButton(

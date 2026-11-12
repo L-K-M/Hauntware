@@ -190,18 +190,41 @@ class XtermTerminalEngine implements TerminalEngine {
       return;
     }
     if (code != '7') return;
-    try {
-      final value = args.join(';');
-      final uri = Uri.tryParse(value);
-      if (uri == null || uri.scheme != 'file' || !value.startsWith('file://')) {
-        return;
-      }
-      final path = Uri.decodeComponent(uri.path);
-      if (!path.startsWith('/') || path.contains('\u0000')) return;
-      workingDirectory.value = path;
-    } on FormatException {
-      // Ignore malformed remote metadata; it must never disrupt the terminal.
+    _handleWorkingDirectory(args.join(';'));
+  }
+
+  /// The host of the first OSC 7 report that named one, lower-cased.
+  String? _directoryHost;
+
+  /// Takes `file://host/path` from OSC 7. The path is cut at the first `/`
+  /// after the host and percent-decoded as a whole, rather than parsed as a
+  /// URI, so an unencoded `?` or `#` some emitters leave in stays part of
+  /// it. A report from another host than the session's first is ignored: a
+  /// nested `ssh other` whose shell reports its own directory must not move
+  /// the Files and Git panes onto a path of the wrong machine. An empty
+  /// host or `localhost` names the session's own host.
+  void _handleWorkingDirectory(String value) {
+    const prefix = 'file://';
+    if (!value.startsWith(prefix)) return;
+    final slash = value.indexOf('/', prefix.length);
+    if (slash < 0) return;
+
+    final host = value.substring(prefix.length, slash).toLowerCase();
+    if (host.isNotEmpty && host != 'localhost') {
+      final known = _directoryHost ??= host;
+      if (host != known) return;
     }
+
+    final String path;
+    try {
+      path = Uri.decodeComponent(value.substring(slash));
+    } on ArgumentError {
+      return; // Malformed remote metadata must never disrupt the terminal.
+    } on FormatException {
+      return;
+    }
+    if (path.contains('\u0000')) return;
+    workingDirectory.value = path;
   }
 
   void _handlePromptMarker(List<String> args) {
@@ -249,9 +272,22 @@ class XtermTerminalEngine implements TerminalEngine {
     }
   }
 
+  static final RegExp _shellIntegrationVersion = RegExp(
+    r'^ShellIntegrationVersion=[1-9][0-9]*$',
+  );
+
+  /// Takes `1337;ShellIntegrationVersion=<n>;<shell>` (Séance's snippets)
+  /// and the `;shell=<shell>` form iTerm2's own integration sends, of any
+  /// version.
   void _handleShellIdentity(List<String> args) {
-    if (args.length < 2 || args.first != 'ShellIntegrationVersion=1') return;
-    final shell = switch (args[1].toLowerCase()) {
+    if (args.length < 2 || !_shellIntegrationVersion.hasMatch(args.first)) {
+      return;
+    }
+    const key = 'shell=';
+    final name = args[1].startsWith(key)
+        ? args[1].substring(key.length)
+        : args[1];
+    final shell = switch (name.toLowerCase()) {
       'bash' || 'zsh' || 'sh' => RemoteShellKind.posix,
       'fish' => RemoteShellKind.fish,
       _ => null,
@@ -264,16 +300,19 @@ class XtermTerminalEngine implements TerminalEngine {
   /// The current, not-yet-submitted input line (best effort).
   String get pendingInput => _pendingInput;
 
-  /// If the Ctrl modifier is armed, rewrite the first character of [data] to its
-  /// control code and disarm. Escape sequences (device replies, function keys)
-  /// start with ESC and are passed through unchanged.
+  /// If the Ctrl modifier is armed and [data] is one typed character, send
+  /// that character's control code and disarm. Anything else passes
+  /// unchanged and leaves Ctrl armed for the key it was meant for: a paste
+  /// (several characters, or ESC-led when bracketed), a mouse report or a
+  /// hardware arrow key (ESC-led), as [sendCursorKey] already does.
   String _applyCtrl(String data) {
     if (!ctrlArmed.value) return data;
+    final runes = data.runes;
+    if (runes.length != 1 || runes.first == _escape) return data;
     ctrlArmed.value = false;
-    if (data.isEmpty || data.codeUnitAt(0) == 0x1b) return data;
-    final code = _controlCode(data.codeUnitAt(0));
+    final code = _controlCode(runes.first);
     if (code == null) return data;
-    return String.fromCharCode(code) + data.substring(1);
+    return String.fromCharCode(code);
   }
 
   /// Map a printable ASCII key to the control code Ctrl+key would produce, or
@@ -346,9 +385,13 @@ class XtermTerminalEngine implements TerminalEngine {
 
   /// Type [text] into the session as if the user typed it — used by the
   /// assistant's paste-to-prompt tool. The remote shell echoes it back so it
-  /// appears at the prompt; because it contains no newline it is never executed.
+  /// appears at the prompt. It is cleaned with [PasteSanitizer.sanitize]
+  /// first, so it never executes and cannot steer the terminal: control
+  /// characters other than Tab are dropped, and a line break throws
+  /// [UnsafePasteException] with nothing sent. [sendKey] is the raw path.
   void injectInput(String text) {
     if (_disposed) return;
+    text = PasteSanitizer.sanitize(text);
     _markInputActivity();
     _trackPending(text);
     _input.add(Uint8List.fromList(utf8.encode(text)));

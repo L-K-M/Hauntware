@@ -10,6 +10,8 @@ import 'package:ghost_ui/ghost_ui.dart'
     show CheckedPlatformMenuDelegate, GhostUndoHistory;
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorLigatures, EditorTextSize;
 
 import 'app.dart';
 import 'controllers/admin_controller.dart';
@@ -32,6 +34,7 @@ import 'controllers/device_name.dart';
 import 'controllers/pin_publication_controller.dart';
 import 'controllers/docker_endpoint_choices.dart';
 import 'controllers/docker_notice_controller.dart';
+import 'controllers/editor_display.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
@@ -291,6 +294,21 @@ Future<void> main(List<String> args) async {
     ),
     save: settings.setLogDisplay,
   );
+  // Every file editor's font and text size (03 §8.5), kept per device.
+  final editorDisplay = EditorDisplayController(
+    display: EditorDisplay(
+      family: settings.editorFontFamily ?? '',
+      ligatures: settings.editorLigatures
+          ? EditorLigatures.on
+          : EditorLigatures.off,
+      textSize: settings.editorTextSize ?? EditorTextSize.standard,
+    ),
+    save: (family, ligatures, textSize) => settings.setEditorDisplay(
+      family,
+      ligatures == EditorLigatures.on,
+      textSize,
+    ),
+  );
   // Which zone server times show in (A11Y-07), kept per device.
   final timeDisplay = TimeDisplayController(
     display: settings.serverTimes ? TimeDisplay.server : TimeDisplay.device,
@@ -375,6 +393,9 @@ Future<void> main(List<String> args) async {
     klabautermannMasterKeyManager(),
     guard: appLock.read,
   );
+  // The quarantine diff at startup: the engine needs the keystore above to
+  // read the account's host-key records, so the read follows it.
+  unawaited(sync.readPinConflicts());
   for (final issue in engine.ready.syncStoreIssues) {
     debugPrint('${issue.fileName}: ${issue.kind.name} ${issue.detail ?? ''}');
   }
@@ -566,11 +587,13 @@ Future<void> main(List<String> args) async {
     appLock: appLock,
     syncSecrets: syncSecrets,
     pinPublication: pinPublication,
+    pinConflicts: sync,
     accountSize: sync.accountSize,
     cadence: cadence,
     cadenceCaps: cadenceCaps,
     adminMemory: adminMemory,
     logDisplay: logDisplay,
+    editorDisplay: editorDisplay,
     timeDisplay: timeDisplay,
   );
 
@@ -599,6 +622,7 @@ Future<void> main(List<String> args) async {
       alertRules: alertRules,
       snippets: snippets,
       logDisplay: logDisplay,
+      editorDisplay: editorDisplay,
       timeDisplay: timeDisplay,
       alertNotifications: alertNotifications,
       operations: operations,

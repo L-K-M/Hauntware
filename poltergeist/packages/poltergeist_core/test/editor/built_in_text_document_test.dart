@@ -4,12 +4,12 @@ import 'dart:io';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
 
-// Ported from Séance
-// app/seance_app/test/built_in_text_editor_test.dart @ 2e6d1f1 (the
-// document-I/O half; the widget half lives in the app's editor test) —
-// with the Poltergeist divergences 06 §2.1 pins: LF/no-BOM in-memory
-// text, the LineEnding enum, `.poltergeist-*` sibling names, owner-only
-// temp permissions, and the symlink resolve/refuse rules.
+// The wrapper over planchette_core's text document: argument wiring
+// (expected digest, digest injection, temporary observer), the loader
+// failure classification, the symlink target resolver and the checkout
+// byte-cap sink. The shared load/save mechanics (BOM, line endings,
+// refusals, size limits) are tested in planchette_core's
+// text_document_test.dart.
 void main() {
   late Directory directory;
   late File file;
@@ -38,133 +38,6 @@ void main() {
     expect(await directory.list().length, 1);
   });
 
-  test('preserves a UTF-8 BOM and CRLF line endings byte-for-byte', () async {
-    await file.writeAsBytes([0xef, 0xbb, 0xbf, ...'one\r\ntwo\r\n'.codeUnits]);
-    final document = await loadBuiltInTextDocumentDetails(file);
-
-    // The in-memory invariant: LF, no BOM (06 §2.1).
-    expect(document.text, 'one\ntwo\n');
-    expect(document.hasUtf8Bom, isTrue);
-    expect(document.lineEnding, LineEnding.crlf);
-
-    await saveBuiltInTextDocument(
-      file,
-      '${document.text}three\n',
-      hasUtf8Bom: document.hasUtf8Bom,
-      lineEnding: document.lineEnding,
-      expectedSha256: document.sha256,
-    );
-
-    expect(await file.readAsBytes(), [
-      0xef,
-      0xbb,
-      0xbf,
-      ...'one\r\ntwo\r\nthree\r\n'.codeUnits,
-    ]);
-  });
-
-  test('a second leading BOM is content and survives the round trip', () async {
-    // Utf8Decoder drops a BOM at the start of whatever it is handed, so
-    // stripping one BOM and decoding the rest would also swallow the
-    // U+FEFF right behind it (ported from Séance's fix).
-    const bom = [0xef, 0xbb, 0xbf];
-    await file.writeAsBytes([...bom, ...bom, ...bom, ...'a\n'.codeUnits]);
-    final document = await loadBuiltInTextDocumentDetails(file);
-
-    expect(document.hasUtf8Bom, isTrue);
-    expect(document.text, '﻿﻿a\n');
-
-    await saveBuiltInTextDocument(
-      file,
-      document.text,
-      hasUtf8Bom: document.hasUtf8Bom,
-      lineEnding: document.lineEnding,
-      expectedSha256: document.sha256,
-    );
-
-    expect(await file.readAsBytes(), [
-      ...bom,
-      ...bom,
-      ...bom,
-      ...'a\n'.codeUnits,
-    ]);
-  });
-
-  test('a BOM-less LF file round-trips byte-for-byte', () async {
-    await file.writeAsBytes('one\ntwo\n'.codeUnits);
-    final document = await loadBuiltInTextDocumentDetails(file);
-
-    expect(document.text, 'one\ntwo\n');
-    expect(document.hasUtf8Bom, isFalse);
-    expect(document.lineEnding, LineEnding.lf);
-
-    await saveBuiltInTextDocument(
-      file,
-      document.text,
-      hasUtf8Bom: document.hasUtf8Bom,
-      lineEnding: document.lineEnding,
-      expectedSha256: document.sha256,
-    );
-
-    expect(await file.readAsBytes(), 'one\ntwo\n'.codeUnits);
-  });
-
-  test('mixed line endings normalize on first save by majority vote', () async {
-    // 2 CRLF vs 1 lone LF — the vote is crlf, and the lone LF folds into
-    // the family on save (06 §2.1's pinned normalization).
-    await file.writeAsBytes('a\r\nb\nc\r\n'.codeUnits);
-    final document = await loadBuiltInTextDocumentDetails(file);
-
-    expect(document.text, 'a\nb\nc\n');
-    expect(document.lineEnding, LineEnding.crlf);
-
-    await saveBuiltInTextDocument(
-      file,
-      document.text,
-      hasUtf8Bom: document.hasUtf8Bom,
-      lineEnding: document.lineEnding,
-      expectedSha256: document.sha256,
-    );
-
-    expect(await file.readAsBytes(), 'a\r\nb\r\nc\r\n'.codeUnits);
-  });
-
-  test('a lone-CR file votes LF and normalizes to LF on save', () async {
-    // A lone \r never votes: a CR-only file saves back all-LF (06 §2.1).
-    await file.writeAsBytes('a\rb\rc'.codeUnits);
-    final document = await loadBuiltInTextDocumentDetails(file);
-
-    expect(document.text, 'a\nb\nc');
-    expect(document.lineEnding, LineEnding.lf);
-
-    await saveBuiltInTextDocument(
-      file,
-      document.text,
-      hasUtf8Bom: document.hasUtf8Bom,
-      lineEnding: document.lineEnding,
-      expectedSha256: document.sha256,
-    );
-
-    expect(await file.readAsBytes(), 'a\nb\nc'.codeUnits);
-  });
-
-  test('a single-line file never grows CRLF', () async {
-    await file.writeAsString('single line, no breaks');
-    final document = await loadBuiltInTextDocumentDetails(file);
-
-    expect(document.lineEnding, LineEnding.lf);
-
-    await saveBuiltInTextDocument(
-      file,
-      document.text,
-      hasUtf8Bom: document.hasUtf8Bom,
-      lineEnding: document.lineEnding,
-      expectedSha256: document.sha256,
-    );
-
-    expect(await file.readAsBytes(), 'single line, no breaks'.codeUnits);
-  });
-
   test('refuses to overwrite an independently changed local copy', () async {
     final document = await loadBuiltInTextDocumentDetails(file);
     await file.writeAsString('external change\n');
@@ -179,51 +52,13 @@ void main() {
         isA<BuiltInEditorException>().having(
           (error) => error.message,
           'message',
-          'The local copy changed in another editor. Reopen it before '
+          'The file changed in another editor. Reopen it before '
               'saving to avoid losing those changes.',
         ),
       ),
     );
     // The external change survives untouched.
     expect(await file.readAsString(), 'external change\n');
-  });
-
-  test('rejects malformed, binary, and oversized content', () async {
-    await file.writeAsBytes([0xff]);
-    await expectLater(
-      loadBuiltInTextDocumentDetails(file),
-      throwsA(
-        isA<BuiltInEditorException>().having(
-          (error) => error.message,
-          'message',
-          'This file is not valid UTF-8 text.',
-        ),
-      ),
-    );
-
-    await file.writeAsBytes([0, 1, 2]);
-    await expectLater(
-      loadBuiltInTextDocumentDetails(file),
-      throwsA(
-        isA<BuiltInEditorException>().having(
-          (error) => error.message,
-          'message',
-          'This file appears to be binary, not editable text.',
-        ),
-      ),
-    );
-
-    await file.writeAsBytes([1, 2, 3]);
-    await expectLater(
-      loadBuiltInTextDocumentDetails(file, maximumBytes: 2),
-      throwsA(
-        isA<BuiltInEditorException>().having(
-          (error) => error.message,
-          'message',
-          'The built-in editor supports text files up to 0 MB.',
-        ),
-      ),
-    );
   });
 
   test('refuses a file that changed while it was being opened', () async {
@@ -244,21 +79,10 @@ void main() {
         isA<BuiltInEditorException>().having(
           (error) => error.message,
           'message',
-          'The local copy changed while it was being opened.',
+          'The file changed while it was being opened.',
         ),
       ),
     );
-  });
-
-  test('error messages surface bare — no Exception prefix', () async {
-    await file.writeAsBytes([0xff]);
-    try {
-      await loadBuiltInTextDocumentDetails(file);
-      fail('expected the load to refuse');
-    } on BuiltInEditorException catch (error) {
-      // §2.4's toast contract: error.toString() IS the message.
-      expect(error.toString(), 'This file is not valid UTF-8 text.');
-    }
   });
 
   test('classifies loader failures for localized hosts', () {
@@ -279,7 +103,7 @@ void main() {
     expect(
       classifyBuiltInTextDocumentFailure(
         const BuiltInEditorException(
-          'The local copy changed while it was being opened.',
+          'The file changed while it was being opened.',
         ),
       ),
       BuiltInTextDocumentFailure.changed,
@@ -287,7 +111,7 @@ void main() {
     expect(
       classifyBuiltInTextDocumentFailure(
         const BuiltInEditorException(
-          'The local copy is missing or no longer a regular file.',
+          'The file is missing or no longer a regular file.',
         ),
       ),
       BuiltInTextDocumentFailure.missing,
@@ -303,21 +127,6 @@ void main() {
         const BuiltInEditorException('Unrecognized failure.'),
       ),
       BuiltInTextDocumentFailure.other,
-    );
-  });
-
-  test('the save refuses when the target vanished mid-save', () async {
-    final document = await loadBuiltInTextDocumentDetails(file);
-    await file.delete();
-    await expectLater(
-      saveBuiltInTextDocument(file, 'edit\n', expectedSha256: document.sha256),
-      throwsA(
-        isA<BuiltInEditorException>().having(
-          (error) => error.message,
-          'message',
-          'The local copy is missing or no longer a regular file.',
-        ),
-      ),
     );
   });
 
@@ -350,30 +159,6 @@ void main() {
     expect(await real.readAsString(), 'edited\n');
   });
 
-  test('the save refuses when the target became a symlink', () async {
-    if (Platform.isWindows) return;
-    final document = await loadBuiltInTextDocumentDetails(file);
-    // Swap the target for a symlink after load — the save must refuse
-    // rather than replace the link with a regular file.
-    await file.delete();
-    await Link(file.path).create('${directory.path}/elsewhere.conf');
-
-    await expectLater(
-      saveBuiltInTextDocument(file, 'edit\n', expectedSha256: document.sha256),
-      throwsA(
-        isA<BuiltInEditorException>().having(
-          (error) => error.message,
-          'message',
-          'The local copy is a symbolic link, not a regular file.',
-        ),
-      ),
-    );
-    expect(
-      await FileSystemEntity.type(file.path, followLinks: false),
-      FileSystemEntityType.link,
-    );
-  });
-
   test('the temp sibling is owner-only before the first write', () async {
     if (!Platform.isLinux && !Platform.isMacOS) return;
     // 0644 original: the only window the temp can sit at 0600 is between
@@ -394,34 +179,6 @@ void main() {
     // Step 4 restored the ORIGINAL mode — a 644 original saves back 644.
     final saved = await file.stat();
     expect(saved.mode & 0x1ff, 0x1a4);
-  });
-
-  test('a 0600 checkout stays 0600 after a save', () async {
-    if (!Platform.isLinux && !Platform.isMacOS) return;
-    await Process.run('chmod', ['600', file.path]);
-    final document = await loadBuiltInTextDocumentDetails(file);
-    await saveBuiltInTextDocument(
-      file,
-      'edit\n',
-      hasUtf8Bom: document.hasUtf8Bom,
-      lineEnding: document.lineEnding,
-      expectedSha256: document.sha256,
-    );
-    final saved = await file.stat();
-    expect(saved.mode & 0x1ff, 0x180);
-  });
-
-  test('the encoded output is size-checked too', () async {
-    await expectLater(
-      saveBuiltInTextDocument(file, 'x' * (builtInEditorMaximumBytes + 1)),
-      throwsA(
-        isA<BuiltInEditorException>().having(
-          (error) => error.message,
-          'message',
-          'The edited file exceeds the 4 MB built-in editor limit.',
-        ),
-      ),
-    );
   });
 
   test('the byte-cap sink aborts a stream at the limit', () async {

@@ -27,7 +27,10 @@ class ShellSeam extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
     width: shellSeamWidth,
     height: double.infinity,
-    child: ColoredBox(color: color ?? PoltergeistChrome.of(context).separator),
+    child: ColoredBox(
+      color: color ??
+          PoltergeistChrome.of(context, poltergeistThemeStyle).separator,
+    ),
   );
 
   /// Floats [handle], [extent] wide, centred over the seam in [row] that

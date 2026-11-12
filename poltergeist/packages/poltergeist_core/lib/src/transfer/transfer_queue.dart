@@ -14,6 +14,7 @@ import '../fs/local_file_system.dart';
 import '../fs/local_fs_safety.dart';
 import '../preview/preview_kinds.dart';
 import '../preview/preview_produce.dart';
+import '../product.dart';
 import 'bandwidth_limiter.dart';
 import 'bounded_transfer_sink.dart';
 import 'conflict_policy.dart';
@@ -109,6 +110,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     this.deleteQuantifyTimeout = const Duration(seconds: 10),
     this.nameProbeCleanupTimeout = const Duration(seconds: 5),
     this.persistence,
+    DownloadProvenance? provenance,
   }) : _localFileSystem = localFileSystem ?? LocalFileSystem(),
        _isCaseInsensitiveDestination = isCaseInsensitiveDestination?.call,
        _isFlaggedEntry = isFlaggedEntry ?? _noFlags,
@@ -122,7 +124,8 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
        _maxInFlightFiles = maxInFlightFiles,
        _maxPendingConflicts = maxPendingConflicts,
        downloadLimiter = downloadLimiter ?? BandwidthLimiter(),
-       uploadLimiter = uploadLimiter ?? BandwidthLimiter() {
+       uploadLimiter = uploadLimiter ?? BandwidthLimiter(),
+       _provenance = provenance ?? DownloadProvenance(agent: productName) {
     if (maxInFlightFiles < 1) {
       throw ArgumentError.value(
         maxInFlightFiles,
@@ -143,6 +146,11 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   /// channels through `leaseTransferChannel` (03 §4.3).
   final ConnectionManager connections;
   final RemoteFileSystem _localFileSystem;
+
+  /// Marks every remote→local hop's landed file the way browsers mark
+  /// downloads (P1-03a) — awaited per file so the mark is on before the
+  /// item reports complete; failures stay logged inside it.
+  final DownloadProvenance _provenance;
 
   /// The budget constants the queue enforces — today only
   /// `taskRetryLimit` (the §3.3 reconnect-cycle bound per task).
@@ -2669,6 +2677,11 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           task.state == TransferTaskState.scanning) {
         _setTaskState(runtime, TransferTaskState.running);
       }
+      // Every trash name an attempt tried, and whether an attempt was lost
+      // with the link: the server may have run it and dropped only the
+      // reply, so a retry must look before it acts again.
+      final trashTargets = <String>[];
+      var retried = false;
       while (true) {
         final leases = await _leaseServerIds(
           _serverIds({task.source}),
@@ -2676,14 +2689,28 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         );
         try {
           final fs = _fsFor(task.source, leases);
+          Future<({String resolvedPath, ItemDisposition disposition})?>
+          execute() async {
+            if (retried) {
+              final settled = await _settleRetriedDelete(
+                runtime,
+                fs,
+                work,
+                trashTargets,
+              );
+              if (settled != null) return settled;
+            }
+            return _executeDelete(runtime, fs, work, trashTargets);
+          }
+
           final outcome = work.entry.isDirectory
               ? await _withFileSystemNameProbeIsolation(task.source, () async {
                   _throwIfTaskCancelled(task);
                   await _waitForNameProbeArtifacts(task, fs, work.entry.path);
                   _throwIfTaskCancelled(task);
-                  return _executeDelete(runtime, fs, work);
+                  return execute();
                 }, cancellation: task.cancellation)
-              : await _executeDelete(runtime, fs, work);
+              : await execute();
           // A completed op proves connectivity — the retry budget
           // bounds consecutive losses, not lifetime ones (03 §3.3).
           task.retryCount = 0;
@@ -2695,6 +2722,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           if (error.kind != RemoteFileErrorKind.disconnected) rethrow;
           task.retryCount++;
           if (task.retryCount > poolPolicy.taskRetryLimit) rethrow;
+          retried = true;
           // Retry in place — re-chaining at the tail would let the
           // item's parent run first and break the post-order the
           // permanent path relies on.
@@ -2750,6 +2778,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     _TaskRuntime runtime,
     RemoteFileSystem fs,
     _DeleteWork work,
+    List<String> trashTargets,
   ) async {
     final task = runtime.task;
     final entry = work.entry;
@@ -2799,9 +2828,57 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           entry,
           task.destinationDir,
           () => runtime.nextTrashSequence++,
+          onAttempt: trashTargets.add,
         );
         return (resolvedPath: target, disposition: ItemDisposition.remoteTrash);
     }
+  }
+
+  /// The outcome of a delete whose earlier attempt was lost with the link,
+  /// when that attempt already ran: a permanent delete whose entry is gone,
+  /// or a trash move found under one of the names it tried. Returns null
+  /// while the entry is still in place, so the delete runs again. An entry
+  /// that is gone and not in the trash fails with where to look.
+  Future<({String resolvedPath, ItemDisposition disposition})?>
+  _settleRetriedDelete(
+    _TaskRuntime runtime,
+    RemoteFileSystem fs,
+    _DeleteWork work,
+    List<String> trashTargets,
+  ) async {
+    final task = runtime.task;
+    final entry = work.entry;
+    if (task.source is LocalFsLocation) return null;
+    if (await _statOrNull(fs, entry.path) != null) return null;
+    if (task.spec.disposition == DeleteDisposition.permanent) {
+      return (resolvedPath: entry.path, disposition: ItemDisposition.permanent);
+    }
+
+    // Newest first: the last name tried is the one whose reply was lost.
+    for (final target in trashTargets.reversed) {
+      final trashed = await _statOrNull(fs, target);
+      if (_isTrashedEntry(entry, trashed)) {
+        return (resolvedPath: target, disposition: ItemDisposition.remoteTrash);
+      }
+    }
+    throw RemoteFileException(
+      kind: RemoteFileErrorKind.notFound,
+      operation: 'trash',
+      path: entry.path,
+      message:
+          '"${entry.path}" is gone after the connection dropped, and it '
+          'is not under the names tried in ${task.destinationDir}; it may '
+          'have moved to the trash there',
+    );
+  }
+
+  /// Whether [trashed] is [entry] after a rename. A directory's times can
+  /// change when it moves to a new parent, so only its type is compared;
+  /// the run directory and the sequence-prefixed name are this task's own.
+  static bool _isTrashedEntry(RemoteFileEntry entry, RemoteFileEntry? trashed) {
+    if (trashed == null || trashed.type != entry.type) return false;
+    if (entry.isDirectory) return true;
+    return _sameDeleteIdentity(entry, trashed);
   }
 
   static bool _sameDeleteIdentity(
@@ -2956,7 +3033,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   Future<void> _runFile(_TaskRuntime runtime, _FileWork work) async {
     final task = runtime.task;
     final item = work.item;
-    final file = work.file;
+    var file = work.file;
 
     // A cancel/skip/requeue that settled the item while it sat in
     // `eligible` owns the row — dispatch must not resurrect it.
@@ -3029,6 +3106,18 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       try {
         final srcFs = _fsFor(task.source, leases);
         final dstFs = _fsFor(task.destination, leases);
+        final landed = runtime.landedFiles[item.id];
+        if (landed != null &&
+            await _resumeLandedFile(runtime, srcFs, dstFs, work, landed)) {
+          return;
+        }
+        if (landed == null && runtime.staleSourceItems.contains(item.id)) {
+          final refreshed = await _refreshPlannedSource(runtime, srcFs, work);
+          if (refreshed == null) return;
+          runtime.staleSourceItems.remove(item.id);
+          file = refreshed;
+          work = _FileWork(item: item, file: refreshed);
+        }
         for (var commitTry = 0; ; commitTry++) {
           // The token is one-shot: a dead upload or a pause in the gap
           // cancelled it — never feed a cancelled token to the next pipe.
@@ -3145,6 +3234,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
                 // Point at the actual commit target before the pipe so a
                 // keep-both item reports its numbered path mid-transfer.
                 item.destinationPath = commitPath;
+                final RemoteFileEntry landed;
                 try {
                   if (await _commitLocalMove(
                     task,
@@ -3180,7 +3270,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
                     // cancellation semantics ride the same exception
                     // taxonomy, so the retry/requeue logic below applies
                     // unchanged.
-                    await srcFs.copyLocalFile(
+                    landed = await srcFs.copyLocalFile(
                       file.source.path,
                       commitPath,
                       overwrite: overwrite,
@@ -3191,7 +3281,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
                           _onFileProgress(runtime, item, transferred, total),
                     );
                   } else {
-                    await _pipe(
+                    final piped = await _pipe(
                       source: srcFs,
                       destination: dstFs,
                       readLimiter: task.source is ServerFsLocation
@@ -3218,6 +3308,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
                       onProgress: (transferred, total) =>
                           _onFileProgress(runtime, item, transferred, total),
                     );
+                    landed = piped.destination;
                   }
                 } on RemoteFileException catch (error) {
                   // A stat-checked destination that appeared between decide
@@ -3252,11 +3343,27 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
                   rethrow;
                 }
                 item.destinationPath = commitPath;
-                await _postCommit(runtime, srcFs, dstFs, file, commitPath);
+                // From here the copy exists: a failed post-commit step
+                // resumes on it rather than meeting it as an occupant.
+                final landedFile = _LandedFile(commitPath, landed);
+                runtime.landedFiles[item.id] = landedFile;
+                final note = await _postCommit(
+                  runtime,
+                  srcFs,
+                  dstFs,
+                  file,
+                  landedFile,
+                );
+                runtime.landedFiles.remove(item.id);
                 // A landed file proves connectivity — the retry budget
                 // bounds consecutive losses, not cumulative ones (03 §3.3).
                 task.retryCount = 0;
-                _finishItem(runtime, item, TransferItemState.completed);
+                _finishItem(
+                  runtime,
+                  item,
+                  TransferItemState.completed,
+                  error: note,
+                );
                 return;
               } finally {
                 if (commitClaim != null) {
@@ -3290,10 +3397,16 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     }
   }
 
-  /// Post-commit fixups (03 §4.1): mtime restore is best-effort (a server
-  /// without setStat reports `unsupported`, which is absorbed); the move
-  /// verb then deletes the source file — a delete failure fails the item
-  /// because a move that leaves its source is not complete (02 §5.2).
+  /// Post-commit fixups (03 §4.1): mtime restore is best-effort. A server
+  /// that refuses it (no SETSTAT, a denied or failed status) leaves the
+  /// landed file in place, and the returned note says the time was not
+  /// kept; a move then re-checks the copy before it deletes the source,
+  /// because `unsupported` also covers a path that is no longer a plain
+  /// file. A lost link, a cancel, or a copy that is gone still throws. The
+  /// move verb then deletes the source file, and a delete failure fails the
+  /// item because a move that leaves its source is not complete (02 §5.2).
+  /// A [resumed] delete that finds the source gone completes: the earlier
+  /// attempt's delete ran and only its reply was lost.
   ///
   /// For a move landing on local storage the delete is gated on 00 D26's
   /// durability barrier: the piped copy is byte-verified but only
@@ -3302,29 +3415,206 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   /// the original or a durable copy, never neither. A same-device local
   /// move never reaches here: `_commitLocalMove` renamed the entry
   /// atomically instead.
-  Future<void> _postCommit(
+  Future<String?> _postCommit(
     _TaskRuntime runtime,
     RemoteFileSystem srcFs,
     RemoteFileSystem dstFs,
     PlannedFile file,
-    String destinationPath,
-  ) async {
+    _LandedFile landed, {
+    bool resumed = false,
+  }) async {
+    final destinationPath = landed.path;
+    final isMove = runtime.task.operation == TransferOperation.move;
+    String? note;
     final modifiedAt = file.source.modifiedAt;
     if (modifiedAt != null) {
       try {
         await dstFs.setTimes(destinationPath, modifiedAt: modifiedAt);
       } on RemoteFileException catch (error) {
-        if (error.kind != RemoteFileErrorKind.unsupported) rethrow;
+        if (!_isTimestampRefusal(error.kind)) rethrow;
+        note =
+            'The file was transferred, but its modification time was not '
+            'kept: ${error.message}';
+        if (isMove) await _verifyLandedFile(dstFs, landed, file);
       }
     }
-    if (runtime.task.operation == TransferOperation.move) {
+    if (isMove) {
       if (runtime.task.destination is LocalFsLocation) {
         await flushLocalDestination(destinationPath);
         await _flushLocalDirectoryChain(runtime, p.dirname(destinationPath));
       }
-      await srcFs.delete(file.source);
+      try {
+        await srcFs.delete(file.source);
+      } on RemoteFileException catch (error) {
+        if (!resumed || error.kind != RemoteFileErrorKind.notFound) rethrow;
+      }
     }
+    return note;
   }
+
+  /// [work]'s planned file with its source read again, for a retry: a
+  /// source that grew or shrank since the scan would otherwise fail every
+  /// retry on the planned length. Returns null after failing the item when
+  /// the source is gone or is no longer the same kind of entry.
+  Future<PlannedFile?> _refreshPlannedSource(
+    _TaskRuntime runtime,
+    RemoteFileSystem srcFs,
+    _FileWork work,
+  ) async {
+    final file = work.file;
+    final path = file.source.path;
+    final current = await _statOrNull(srcFs, path);
+    if (current == null || current.type != file.source.type) {
+      _finishItem(
+        runtime,
+        work.item,
+        TransferItemState.failed,
+        error: current == null
+            ? 'the source "$path" is gone'
+            : 'the source "$path" is no longer the same kind of entry',
+        failureKind: current == null
+            ? RemoteFileErrorKind.notFound
+            : RemoteFileErrorKind.conflict,
+      );
+      return null;
+    }
+
+    final refreshed = PlannedFile(
+      source: current,
+      name: file.name,
+      containerKey: file.containerKey,
+      destinationPath: file.destinationPath,
+      existing: file.existing,
+      itemId: file.itemId,
+    );
+    // Later retries and the move's source delete read the plan's entry.
+    final files = runtime.task.plan?.files;
+    final index = files?.indexOf(file) ?? -1;
+    if (index >= 0) files![index] = refreshed;
+    return refreshed;
+  }
+
+  /// Whether a failed timestamp update is the server declining it, after
+  /// which the landed file stays valid. A missing file, a changed type, a
+  /// lost link and a cancel are not refusals.
+  static bool _isTimestampRefusal(RemoteFileErrorKind kind) => switch (kind) {
+    RemoteFileErrorKind.permissionDenied ||
+    RemoteFileErrorKind.unsupported ||
+    RemoteFileErrorKind.other => true,
+    RemoteFileErrorKind.notFound ||
+    RemoteFileErrorKind.conflict ||
+    RemoteFileErrorKind.disconnected ||
+    RemoteFileErrorKind.cancelled => false,
+  };
+
+  /// Re-runs the post-commit steps of a file this run already landed, after
+  /// one of them failed. The landed copy must still be the one the commit
+  /// reported (see [_isLandedFile]); a source is deleted only behind that
+  /// check. Returns false, with the record dropped, when the copy is gone:
+  /// the caller then copies again, which is safe because the source delete
+  /// is the last step and never ran without a verified copy.
+  Future<bool> _resumeLandedFile(
+    _TaskRuntime runtime,
+    RemoteFileSystem srcFs,
+    RemoteFileSystem dstFs,
+    _FileWork work,
+    _LandedFile landed,
+  ) async {
+    final item = work.item;
+    final file = work.file;
+    final current = await _statOrNull(dstFs, landed.path);
+    if (current == null) {
+      runtime.landedFiles.remove(item.id);
+      return false;
+    }
+    if (!_isLandedFile(current, landed, file)) {
+      runtime.landedFiles.remove(item.id);
+      _finishItem(
+        runtime,
+        item,
+        TransferItemState.failed,
+        error:
+            '"${landed.path}" changed after the transfer wrote it; '
+            'the source was kept',
+        failureKind: RemoteFileErrorKind.conflict,
+        failureRetryPolicy: TransferFailureRetryPolicy.terminal,
+      );
+      return true;
+    }
+
+    item.destinationPath = landed.path;
+    // The requeue debited this item's bytes; the copy is whole.
+    _onFileProgress(runtime, item, file.source.size ?? 0, file.source.size);
+    final note = await _postCommit(
+      runtime,
+      srcFs,
+      dstFs,
+      file,
+      landed,
+      resumed: true,
+    );
+    runtime.landedFiles.remove(item.id);
+    runtime.task.retryCount = 0;
+    _finishItem(runtime, item, TransferItemState.completed, error: note);
+    return true;
+  }
+
+  /// Throws unless the landed copy is still the file the commit reported,
+  /// so a move never deletes its source behind a missing or replaced copy.
+  Future<void> _verifyLandedFile(
+    RemoteFileSystem dstFs,
+    _LandedFile landed,
+    PlannedFile file,
+  ) async {
+    final current = await _statOrNull(dstFs, landed.path);
+    if (current == null) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.notFound,
+        operation: 'move',
+        path: landed.path,
+        message:
+            '"${landed.path}" disappeared after the transfer wrote it; '
+            'the source was kept',
+      );
+    }
+    if (_isLandedFile(current, landed, file)) return;
+
+    throw RemoteFileException(
+      kind: RemoteFileErrorKind.conflict,
+      operation: 'move',
+      path: landed.path,
+      message:
+          '"${landed.path}" changed after the transfer wrote it; '
+          'the source was kept',
+    );
+  }
+
+  /// Whether [current] is the file the commit reported in [landed]: still
+  /// a regular file of the committed size, modified at the committed time
+  /// or at the source time a timestamp update set. A server that reports
+  /// no modification time leaves type and size as the evidence.
+  static bool _isLandedFile(
+    RemoteFileEntry current,
+    _LandedFile landed,
+    PlannedFile file,
+  ) {
+    final committed = landed.entry;
+    if (current.type != RemoteFileType.file) return false;
+    if (committed.size == null || current.size != committed.size) {
+      return false;
+    }
+    final committedAt = committed.modifiedAt;
+    if (committedAt == null) return true;
+    final modifiedAt = current.modifiedAt;
+    if (modifiedAt == null) return false;
+    final sourceAt = file.source.modifiedAt;
+    return _sameSecond(modifiedAt, committedAt) ||
+        (sourceAt != null && _sameSecond(modifiedAt, sourceAt));
+  }
+
+  /// SFTP v3 carries whole seconds, so a timestamp update truncates.
+  static bool _sameSecond(DateTime a, DateTime b) =>
+      a.difference(b).inMicroseconds.abs() < Duration.microsecondsPerSecond;
 
   /// D26's same-device local move: rename(2) through the VFS seam — one
   /// atomic directory-entry swap carrying mtime and mode, with no bytes
@@ -3794,6 +4084,9 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       // unwind artifact off the zone's unhandled-error path.
       sink.close().ignore();
       final destinationResult = await uploadFuture;
+      if (destination is LocalFileSystem && source is! LocalFileSystem) {
+        await _provenance.markDownloaded(destinationPath);
+      }
       return (source: sourceResult, destination: destinationResult);
     } catch (error) {
       // A real upload failure beats the sink's incidental close error on
@@ -4655,6 +4948,9 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     item.error = null;
     item.failureKind = null;
     item.failureRetryPolicy = TransferFailureRetryPolicy.retryable;
+    if (!item.isDirectory && task.operation != TransferOperation.delete) {
+      runtime.staleSourceItems.add(item.id);
+    }
     final directory = runtime.directories[item.id];
     if (directory != null) {
       directory.outcome = _DirOutcome.pending;
@@ -5212,6 +5508,12 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   /// scoped to the directories the journal names — never a general
   /// sweep (03 §4.6). Entries modified at/after [adoptedAt] are left
   /// alone: a user resuming mid-sweep may have just minted them.
+  ///
+  /// A server's times are compared with [adoptedAt] on the server's own
+  /// clock, read in each directory that holds a temp (see
+  /// [_serverCutoff]); a server clock that lags would otherwise make
+  /// another client's live temp look old. A directory whose clock cannot
+  /// be read, and a temp without a modification time, are left alone.
   Future<void> _sweepRestoredTemps(
     RestoredTransferTask restored,
     TransferTask task,
@@ -5239,10 +5541,17 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         } on Object {
           continue;
         }
-        for (final entry in entries) {
-          if (!_isTransferTemp(entry.name)) continue;
-          final modified = entry.modifiedAt;
-          if (modified != null && !modified.isBefore(adoptedAt)) continue;
+        final temps = [
+          for (final entry in entries)
+            if (_isTransferTemp(entry.name) && entry.modifiedAt != null) entry,
+        ];
+        if (temps.isEmpty) continue;
+        final cutoff = task.destination is LocalFsLocation
+            ? adoptedAt
+            : await _serverCutoff(fs, directory, adoptedAt);
+        if (cutoff == null) continue;
+        for (final entry in temps) {
+          if (!entry.modifiedAt!.isBefore(cutoff)) continue;
           try {
             await fs.delete(entry);
           } on Object {
@@ -5255,6 +5564,38 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     } finally {
       await _releaseLeases(leases);
     }
+  }
+
+  /// [adoptedAt] on the clock of the server holding [directory], or null
+  /// when that clock cannot be read. An empty probe file written there
+  /// carries the server's time; the local time is taken after its upload
+  /// returns, and SFTP truncates to whole seconds, so both errors move the
+  /// cutoff earlier and only ever spare a temp. The probe is named like a
+  /// transfer temp, so one a crash strands is swept on a later launch.
+  Future<DateTime?> _serverCutoff(
+    RemoteFileSystem fs,
+    String directory,
+    DateTime adoptedAt,
+  ) async {
+    final RemoteFileEntry probe;
+    try {
+      probe = await fs.upload(
+        remoteJoin(directory, '.poltergeist-clock-${uuidV4()}.tmp'),
+        const Stream<List<int>>.empty(),
+        length: 0,
+      );
+    } on Object {
+      return null;
+    }
+    final localNow = DateTime.now();
+    try {
+      await fs.delete(probe);
+    } on Object {
+      // Left for a later sweep: it is named like a transfer temp.
+    }
+    final serverNow = probe.modifiedAt;
+    if (serverNow == null) return null;
+    return adoptedAt.add(serverNow.difference(localNow));
   }
 
   static bool _isTransferTemp(String name) =>
@@ -6503,6 +6844,17 @@ class _TaskRuntime {
   /// Fsynced resolved claims by item survive re-scan retries and crashes.
   final Map<String, Set<String>> durableDestinationClaims = {};
 
+  /// Files whose commit landed while a post-commit step (timestamp,
+  /// durability barrier, a move's source delete) has not finished, by
+  /// item. A retry resumes those steps on the verified copy instead of
+  /// meeting its own output as an occupant. Live state only: after a
+  /// crash the occupied durable claim still fails safe.
+  final Map<String, _LandedFile> landedFiles = {};
+
+  /// File items re-armed by a retry, whose scan-time source entry (size,
+  /// time, mode) is re-read before their next attempt.
+  final Set<String> staleSourceItems = {};
+
   /// Visible probe rows do not block a Move after the probe cleans up.
   final Set<String> nameProbeArtifactItems = {};
 
@@ -6715,6 +7067,14 @@ final class _DeleteWork {
   final TransferItem item;
   final RemoteFileEntry entry;
   final RemoteFileException? listingError;
+}
+
+/// A committed file and the entry its commit reported.
+final class _LandedFile {
+  const _LandedFile(this.path, this.entry);
+
+  final String path;
+  final RemoteFileEntry entry;
 }
 
 /// One in-flight commit's hold on a (endpoint, folded path) registry key.

@@ -499,7 +499,9 @@ sibling port between Séance and Poltergeist; those are recorded in
 (`seance/docs/POLTERGEIST.md:198-201`), in F5d-5. Scheme runner code then
 exists in two apps; X-06 (v1.x) makes Klabautermann the third, with a
 SHARED.md entry. D32's shared-plugin review is due before a fourth copy;
-F5d-5's entry says so.
+F5d-5's entry says so. Planchette's single instance has since taken the
+third copy (the claim and forward logic without a scheme, recorded in
+PORTS.md), so Klabautermann's would be the fourth.
 
 ## 8. Staged PRs
 

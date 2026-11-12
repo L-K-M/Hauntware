@@ -611,6 +611,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   autofocus: true,
                   autocorrect: false,
                   enableSuggestions: false,
+                  enableIMEPersonalizedLearning: false,
                   style: _patternStyle(context),
                   decoration: InputDecoration(
                     hintText: c.useRegularExpression
@@ -793,6 +794,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                 focusNode: c.replacementFocus,
                 autocorrect: false,
                 enableSuggestions: false,
+                enableIMEPersonalizedLearning: false,
                 style: _patternStyle(context),
                 decoration: InputDecoration(
                   hintText: strings.replaceHint,
@@ -953,6 +955,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         focusNode: c.extractionFocus,
         autocorrect: false,
         enableSuggestions: false,
+        enableIMEPersonalizedLearning: false,
         style: _patternStyle(context),
         decoration: InputDecoration(
           hintText: strings.extractTemplateHint,
@@ -1072,6 +1075,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
               autofocus: true,
               autocorrect: false,
               enableSuggestions: false,
+              enableIMEPersonalizedLearning: false,
               // A text keyboard, so touch devices can type line:column.
               keyboardType: TextInputType.text,
               style: theme.textTheme.bodyMedium,
@@ -1364,6 +1368,16 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                             ): const _NewlineIntent(),
                             const SingleActivator(LogicalKeyboardKey.backspace):
                                 const _DeleteIndentIntent(),
+                            // Windows' own redo key; Flutter binds only
+                            // Control+Shift+Z there.
+                            if (Theme.of(context).platform ==
+                                TargetPlatform.windows)
+                              const SingleActivator(
+                                LogicalKeyboardKey.keyY,
+                                control: true,
+                              ): const RedoTextIntent(
+                                SelectionChangedCause.keyboard,
+                              ),
                           },
                           child: TextField(
                             key: const ValueKey('planchette.document'),
@@ -1381,6 +1395,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                             textAlignVertical: TextAlignVertical.top,
                             autocorrect: false,
                             enableSuggestions: false,
+                            // Files can hold secrets (.env, remote
+                            // configs): a privacy hint to the keyboard,
+                            // as every field of the editor gives.
+                            enableIMEPersonalizedLearning: false,
                             smartDashesType: SmartDashesType.disabled,
                             smartQuotesType: SmartQuotesType.disabled,
                             style: _style,
@@ -1769,6 +1787,7 @@ class _ToolBarState extends State<_ToolBar> {
       focusNode: _nodes[option.id],
       autocorrect: false,
       enableSuggestions: false,
+      enableIMEPersonalizedLearning: false,
       keyboardType: option is IntegerOption
           ? TextInputType.number
           : TextInputType.text,

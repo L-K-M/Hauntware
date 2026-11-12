@@ -318,7 +318,7 @@ SidebarAdhocSession? _sessionSavedAs(_SidebarData data, Bookmark bookmark) {
     statuses.map(ghostSessionOf),
   );
   if (live == null) return null;
-  final colors = poltergeistStatusColors(PoltergeistChrome.of(data.context));
+  final colors = poltergeistStatusColors(PoltergeistChrome.of(data.context, poltergeistThemeStyle));
   return (dot: ghostStatusDot(live, colors)!, label: live.label!);
 }
 
@@ -334,7 +334,7 @@ ConnectionServer? _connectionOf(_SidebarData data, String serverId) {
 /// while one is being attempted.
 Color? _connectedRing(BuildContext context, ServerStatus? status) =>
     status?.state == ServerConnectionState.connected
-    ? PoltergeistChrome.of(context).statusConnected
+    ? PoltergeistChrome.of(context, poltergeistThemeStyle).statusConnected
     : null;
 
 bool _isLive(ServerStatus? status) => switch (status?.state) {
@@ -621,7 +621,7 @@ Widget _serverMark(
     return Icon(
       serverIconData(mark.icon),
       size: sidebarGlyphSize(context),
-      color: PoltergeistChrome.of(context).secondaryText,
+      color: PoltergeistChrome.of(context, poltergeistThemeStyle).secondaryText,
     );
   }
   return ServerBadge(

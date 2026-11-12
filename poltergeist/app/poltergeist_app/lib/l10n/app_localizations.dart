@@ -352,6 +352,12 @@ abstract class AppLocalizations {
   /// **'Saved secrets are unavailable. Unlock or restore your system credential store, then retry — or enter the secret below.'**
   String get credentialVaultUnavailable;
 
+  /// Banner shown instead of credentialVaultUnavailable when the keystore answered but holds no vault key while saved secrets exist (MasterKeyUnavailableException, D20).
+  ///
+  /// In en, this message translates to:
+  /// **'Saved secrets are locked. Your system credential store no longer holds the key for them, and Poltergeist did not create a new one because that would make them unreadable. Restore the key from a backup of your keychain or credential store, then reconnect, or enter the secret below.'**
+  String get credentialVaultKeyMissing;
+
   /// Sanitized detail for an identity file that cannot be decoded or otherwise read normally.
   ///
   /// In en, this message translates to:
@@ -3133,6 +3139,30 @@ abstract class AppLocalizations {
   /// **'Accent'**
   String get appearanceSlotAccent;
 
+  /// Appearance section: notice that a chosen accent needs contrast-safe functional tones.
+  ///
+  /// In en, this message translates to:
+  /// **'Low contrast: links and indicators use an adjusted colour.'**
+  String get appearanceAccentAdjusted;
+
+  /// Appearance section: accessible label for the chosen accent preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Chosen accent'**
+  String get appearanceChosenAccentPreview;
+
+  /// Appearance section: accessible label for the adjusted functional accent preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjusted interface colour'**
+  String get appearanceAdjustedAccentPreview;
+
+  /// Appearance section: replaces a low-contrast accent with the suggested accessible colour.
+  ///
+  /// In en, this message translates to:
+  /// **'Use adjusted colour'**
+  String get appearanceUseAdjustedAccent;
+
   /// Colour row: the pane and page background.
   ///
   /// In en, this message translates to:
@@ -3601,6 +3631,12 @@ abstract class AppLocalizations {
   /// **'The sync server returned weaker password-hashing parameters than Poltergeist accepts — refusing to derive your key (possible downgrade attack).'**
   String get backupKdfRefusal;
 
+  /// Enrollment status when the keystore answered but holds no vault key while saved secrets exist (MasterKeyUnavailableException), so the re-key was refused.
+  ///
+  /// In en, this message translates to:
+  /// **'Your system credential store no longer holds the key for your saved secrets, so they cannot be moved to your sync key. Poltergeist did not create a new key because that would make them unreadable. Restore the key from a backup of your keychain or credential store, then try again.'**
+  String get backupVaultKeyMissing;
+
   /// Label of the enrollment form's server field.
   ///
   /// In en, this message translates to:
@@ -3946,7 +3982,7 @@ abstract class AppLocalizations {
   /// Resolves a held locator by adopting the fleet pin — no re-seal for that host (04 §4.4).
   ///
   /// In en, this message translates to:
-  /// **'Use shared key'**
+  /// **'Trust the new key'**
   String get backupSwitchAdoptFleet;
 
   /// Completion copy of the §4.4 switch — pushes may still hold while passphraseUnverified stands.

@@ -1,5 +1,59 @@
 # Séance ports and pin audits
 
+## Download provenance via seance_core (2026-11-10)
+
+Download provenance (Mark-of-the-Web, macOS quarantine) is not a port.
+`DownloadProvenance` lives in `seance_core`
+(`seance/packages/seance_core/lib/src/store/download_provenance.dart`),
+where Séance's own download marking already lived. Poltergeist reaches it
+through the `poltergeist_core` barrel, and `TransferQueue` and
+`SyncExecutor` mark the files they write from a server: Download To,
+remote-to-local moves, managed checkouts, produce and drag-out hops, and
+sync downloads. No Poltergeist source moves, so this is a consumer
+change, not an entry in the port lineage.
+
+- Pin audit: `seance/` changed, so the `SEANCE_PIN_AUDIT_V3` record is
+  re-recorded by the integrator once, not here.
+
+## Multi-window host shared with Planchette (2026-11-11)
+
+Poltergeist's workspace windows and Planchette's document windows are one
+design written twice. Poltergeist is the origin: `7ee26f551` ("Open more
+than one workspace window", 2026-09-25) introduced the host on the app's
+one engine, and Planchette's `fc37e762c` ("Add native multi-window
+support to the desktop app", 2026-10-02) followed it with the same wire
+and the same native structure under its own names. Nothing recorded the
+copy until this entry. No Séance source is involved.
+
+| Poltergeist (`app/poltergeist_app/`) | Planchette (`planchette/app/planchette_app/`) |
+|---|---|
+| `lib/services/workspace_windows/window_host.dart` | `lib/services/window_host.dart` |
+| `lib/services/workspace_windows/workspace_windows.dart` | `lib/services/document_windows.dart` |
+| `lib/services/semantics_view_routing.dart` | `lib/services/semantics_view_routing.dart` |
+| `windows/runner/workspace_windows.{h,cpp}` | `windows/runner/document_windows.{h,cpp}` |
+| `linux/runner/workspace_windows.{h,cc}` | `linux/runner/document_windows.{h,cc}` |
+| `macos/Runner/WorkspaceWindows.swift` | `macos/Runner/DocumentWindows.swift` |
+| `macos/Runner/PoltergeistMultiView.{h,m}` | `macos/Runner/PlanchetteMultiView.{h,m}` |
+
+- Same: the method channel protocol (create, destroy, activate, hide,
+  fullscreen, titles, window-owned file pickers), the per-OS runner
+  structure and the macOS engine multi-view switch. `PlanchetteMultiView.m`
+  equals `PoltergeistMultiView.m` after the product rename, and the two
+  headers differ in one doc comment. The two `semantics_view_routing.dart`
+  files differ only in how they reuse the binding.
+- Different: the Dart halves keep their own models (Poltergeist's
+  workspace seeds, scope and titlebar files; Planchette's document
+  deduplication, quit review and Save As rules), and the channel and
+  class names carry each product's word. Each runner file is a copy that
+  has since diverged, so a change to one is not a change to the other.
+- A shared home is deferred: the Dart host and binding would fit
+  `ghost_desktop`, and the native files a desktop plugin together with the
+  macOS controller review in `klabautermann/docs/SHARED.md` (D32). Window
+  lifecycle on three operating systems only gets device checks by hand,
+  so the extraction is its own change. Until then, fix a defect in one
+  copy and look at the other.
+- Port-back candidates: either side, per defect.
+
 ## Suite links, F5d (2026-10-21)
 
 The link grammar Poltergeist owned since "Cross-app deep links"
@@ -19,6 +73,10 @@ sections 4 to 8).
   link test files ran unchanged. Making `maxFileNameBytes` and
   `utf8ByteLength` public is the one API widening; the alternative was
   a private copy in each package.
+  The parser and display groups of `deep_links_test.dart` were removed
+  on 2026-11-11, once `seance_core/test/links/suite_links_test.dart`
+  held identical cases; the coordinator group and a re-export check
+  stay.
 - F5d-2 adds `parseSeanceConnect`, `buildSeanceConnect`,
   `buildPoltergeistBrowse`, the reserved `klabautermann` constants and
   the link contract corpus (`seance_core/test/fixtures/suite_link_corpus.json`),
@@ -39,6 +97,17 @@ sections 4 to 8).
   Klabautermann the third, with an entry in
   `klabautermann/docs/SHARED.md`; a fourth copy needs the shared-plugin
   review D32 calls for first.
+- Planchette's single instance (`planchette/ANALYSIS.md` I1) copies the
+  claim, wait and present logic of
+  `seance_app/windows/runner/deep_link_scheme.cpp` into
+  `planchette_app/windows/runner/single_instance.{h,cpp}` with
+  Planchette's names (the mutex and window property
+  `ch.lkmc.planchette.single-instance-v1`). It registers no scheme: a
+  second launch sends its document arguments over `WM_COPYDATA`. Its
+  Linux runner follows the same unique GApplication in its own file.
+  That makes Planchette the third app with this runner code, so
+  Klabautermann's X-06 copy would be the fourth and needs D32's
+  shared-plugin review first.
 - Pin audit: `scripts/audit-seance-pin.sh` matched this record after
   each F5d branch; no contributor, licence text, vendored path or
   gitlink changed, so the record itself stays as it is.
@@ -1945,6 +2014,14 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
   save that never uploads, and overwrite — and
   `test/ui/built_in_editor_capture_test.dart` produces the §-required
   PNGs (find bar, conflict dialog) under `POLTERGEIST_CAPTURE=1`.
+- Pruned (2026-11-11): the document-mechanics cases that
+  `built_in_text_document_test.dart` kept from the port are now
+  `planchette_core/test/text_document_test.dart`'s, and
+  `test/ui/editor_syntax_test.dart` no longer re-runs the syntax,
+  search and detection cases through the re-export; they live in
+  `planchette_core/test/editor_syntax_test.dart` and
+  `planchette_editor/test/editor_highlight_test.dart`. Each file keeps
+  the cases of what the app wires itself.
 - Port-back candidates: none.
 
 ## External editors (M7)
@@ -2387,6 +2464,10 @@ behaviour, and is not repeated below.
 - Ported: 2026-09-25
 - Divergences: none.
 - Port-back candidates: none.
+- Moved (2026-11-10): `AppAppearance`, `ThemeModePreference` and the
+  brightness helpers now live in `planchette/packages/ghost_theme`
+  ([design](../../docs/design/ghost-theme.md)); this file keeps
+  Poltergeist's import path and its `poltergeistInitialAppearance`.
 
 ### app/poltergeist_app/lib/theme/theme_palette.dart
 
@@ -2405,6 +2486,12 @@ behaviour, and is not repeated below.
   paints here. `fontFamily` is written with a null-aware map element,
   which this app's lints ask for.
 - Port-back candidates: none.
+- Moved (2026-11-10): the palette model, its JSON keys, hex forms and
+  lenient decode now live in `planchette/packages/ghost_theme`; this
+  file keeps Poltergeist's import path and re-exports the shared names.
+  The terminal block stays dropped, as Poltergeist's style sets
+  `hasTerminal: false`, so a Séance theme still pastes whole except for
+  its terminal colours.
 
 ### app/poltergeist_app/lib/theme/theme_presets.dart
 
@@ -2419,6 +2506,10 @@ behaviour, and is not repeated below.
   keep Séance's values, Bubblegum's deeper `#E63A91` accent included, so
   a shared preset looks the same and matches itself in both apps.
 - Port-back candidates: none.
+- Moved (2026-11-10): the preset tables and codec now live in
+  `planchette/packages/ghost_theme`, bound to `poltergeistThemeStyle`
+  here; `ThemePresets` keeps Poltergeist's names as facades over the
+  shared presets, so the stored names and values are unchanged.
 
 ### app/poltergeist_app/lib/theme/app_theme.dart (applied, not copied)
 
@@ -2450,6 +2541,11 @@ behaviour, and is not repeated below.
     `forAppearance` and `resolvedSlots`; `buildPoltergeistTheme` is the
     default palette, as `SeanceTheme.light()`/`dark()` are.
 - Port-back candidates: none.
+- Moved (2026-11-10): the builder is `ghost_theme`'s `GhostTheme` bound
+  to `poltergeistThemeStyle`; this file keeps Poltergeist's builder
+  names as facades and appends the app-side `CompareDiffColors`, with
+  the dark elevation overlay restored so the whole-`ThemeData` legacy
+  gate is unchanged.
 
 ### app/poltergeist_app/lib/ui/color_picker.dart
 
@@ -2486,6 +2582,12 @@ behaviour, and is not repeated below.
   coalescing, the set-aside Automatic colours, the presets' tiles, the
   mode, Share and Start over are upstream's.
 - Port-back candidates: none.
+- Moved (2026-11-10): the editor is `ghost_theme`'s
+  `GhostAppearanceSection`; this file is the wrapper binding
+  Poltergeist's style, `AppearanceSettingsModel`, ARB words and layout,
+  and keeps its own `_Heading`. The colour picker's strings come from
+  the app's existing `PoltergeistColorPickerStrings`. The shared
+  section's controls and writes are tested in `ghost_theme`.
 
 ### Tests
 
@@ -2493,12 +2595,16 @@ behaviour, and is not repeated below.
   the terminal-block cases become the cross-app cases (Séance's own
   Copy output for its Solarized, verbatim, terminal block and all,
   pastes as this Solarized; a terminal block alone is not a theme).
+  Since 2026-11-10 the model's mechanics are tested in `ghost_theme`; this
+  copy covers Poltergeist's codec.
 - `test/theme/theme_presets_test.dart` from `test/theme_presets_test.dart`:
   no terminal colours; the selection's label is measured over the
   listing; adds the contrast matrix's sidebar row states for every
   preset's dots, with one recorded exception (Solarized's red on its own
   selected pill, 2.80:1; STATUS "Device themes"), and shows a preset
   with its own surface drawing the same at either system brightness.
+  Since 2026-11-10 the preset tables' mechanics are tested in
+  `ghost_theme`; this copy covers Poltergeist's style.
 - `test/theme/theme_build_test.dart` from `test/theme_build_test.dart`:
   the default is compared with the whole pre-theme `ThemeData` and its
   chrome, frozen in `test/theme/legacy_theme.dart` (Poltergeist's own
@@ -2514,7 +2620,9 @@ behaviour, and is not repeated below.
   Appearance group of `test/settings_screen_test.dart` over a fake
   `AppearanceSettingsModel`, plus Poltergeist's own cases (a Séance
   theme with a terminal block, coalesced writes, localized preset names,
-  the font field, the phone-sized Settings dialog).
+  the font field, the phone-sized Settings dialog). Since 2026-11-10 it
+  keeps the adapter and wrapper cases; the shared section's controls
+  and writes are tested in `ghost_theme`.
 - Port-back candidates: the frozen whole-`ThemeData` comparison, which
   would catch a component theme Séance's key-colour list does not name.
 
@@ -2537,9 +2645,9 @@ the commit-level detail, without adding names to docs.
 - Source: `seance_protocol` at `seance/packages/seance_protocol` (path dependency)
 - Component: `seance/` at `HEAD`
 - Lineage: `75b1e84bf231d149d64c295430a9dda9dc7f4ffb`, `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`
-- Identity: 36 lines; `sha256:dfd61c66b342aa5a8c2cf6fae85d417ec8cc79fd4eee2580fd80031d4e9d11fd`
+- Identity: 37 lines; `sha256:5122581cf8870034edd47e849b77c24c1baaaa97f136945a79684883c2ba203b`
 - Unmatched attributions: 1 lines; `sha256:41240f7bf814a29257ba1dcf6ca3af20d744a98f374fdd6781eef8d4950b4bab`
-- License scan: 539 lines; `sha256:c56eede39f2e28a0aed5100158183196082e3080bfebd854a9bb034c22d55fe5`
+- License scan: 519 lines; `sha256:26c431ac681d1ce2a363e46bb8bdabdcb10c1ec40ea8f5f1c7c6ba3962f30302`
 - Vendored paths: 156 lines; `sha256:eba91dd50f0d2540da08a8284a3390dbba09c014ad784ab8dad3ab65e44614c8`
 - Gitlinks: 0 lines; `sha256:8c9771035e10619d9c2e084cc0f914772bfff45bd0b0a37c831f98bdf4a94839`
 <!-- SEANCE_PIN_AUDIT_V3:END -->

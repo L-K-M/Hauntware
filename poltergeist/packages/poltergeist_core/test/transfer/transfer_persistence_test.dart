@@ -1549,10 +1549,16 @@ void main() {
     test('restore sweeps orphaned upload temps in journaled directories '
         'only', () async {
       // Plant a dead temp plus a look-alike that is NOT ours.
-      s1.addFile('/dest/.seance-upload-deadbeef.tmp', [1]);
-      s1.addFile('/dest/.poltergeist-12345678.tmp', [2]);
+      final old = DateTime.utc(2020);
+      s1.clock = DateTime.now;
+      s1.addFile('/dest/.seance-upload-deadbeef.tmp', [1], modifiedAt: old);
+      s1.addFile('/dest/.poltergeist-12345678.tmp', [2], modifiedAt: old);
       s1.addFile('/dest/keep.txt', [3]);
-      s1.addFile('/elsewhere/.seance-upload-99999999.tmp', [4]);
+      s1.addFile(
+        '/elsewhere/.seance-upload-99999999.tmp',
+        [4],
+        modifiedAt: old,
+      );
 
       final crashed = await openStore();
       crashed.appendJournal(
@@ -1584,12 +1590,95 @@ void main() {
       );
     });
 
+    group('the restore sweep reads the server clock', () {
+      Future<void> restoreUploadInto(String destination) async {
+        final crashed = await openStore();
+        crashed.appendJournal(
+          enqueued('task-1', localToRemoteSpec(rootPaths: ['/r'])),
+        );
+        crashed.appendJournal(
+          fileEntry('task-1', 'i1', '/r/f', '$destination/f'),
+        );
+        crashed.appendJournal(
+          ScanCompleteRecord(
+            taskId: 'task-1',
+            totalBytes: 5,
+            skippedSymlinks: 0,
+          ),
+        );
+        await crashed.flush();
+
+        final store = await openStore();
+        final queue = newQueue(persistence: store);
+        await queue.restore();
+      }
+
+      bool probeLeft() => (s1.directories['/dest'] ?? const [])
+          .any((entry) => entry.name.startsWith('.poltergeist-clock-'));
+
+      test('a server clock behind this one keeps a live temp', () async {
+        // Whole seconds, as SFTP v3 reports them, five minutes behind.
+        // Freeze the temp and probe at the same server time so journal
+        // fsync cannot age the fixture across a second before adoption.
+        final behind = DateTime.now().toUtc().subtract(
+          const Duration(minutes: 5),
+        );
+        final serverNow = DateTime.fromMillisecondsSinceEpoch(
+          behind.millisecondsSinceEpoch ~/ 1000 * 1000,
+          isUtc: true,
+        );
+
+        s1.clock = () => serverNow;
+        const live = '/dest/.seance-upload-11111111.tmp';
+        const dead = '/dest/.poltergeist-22222222.tmp';
+        s1.addFile(live, [1], modifiedAt: serverNow);
+        s1.addFile(dead, [
+          2,
+        ], modifiedAt: serverNow.subtract(const Duration(hours: 1)));
+
+        await restoreUploadInto('/dest');
+
+        await pumpUntil(
+          () => s1.entryAt(dead) == null && !probeLeft(),
+          reason: 'the old temp was never swept',
+        );
+        for (var i = 0; i < 20; i++) {
+          await pump();
+        }
+        expect(s1.entryAt(live), isNotNull);
+        expect(probeLeft(), isFalse);
+      });
+
+      test('a server that refuses the clock probe keeps every temp', () async {
+        s1.clock = DateTime.now;
+        const dead = '/dest/.poltergeist-22222222.tmp';
+        s1.addFile(dead, [2], modifiedAt: DateTime.utc(2020));
+        s1.uploadFailure = (path) => const RemoteFileException(
+          kind: RemoteFileErrorKind.permissionDenied,
+          operation: 'upload',
+          message: 'read-only',
+        );
+
+        await restoreUploadInto('/dest');
+
+        await pumpUntil(
+          () => s1.calls.any((call) => call.startsWith('upload:/dest/')),
+          reason: 'the sweep never probed the server clock',
+        );
+        for (var i = 0; i < 20; i++) {
+          await pump();
+        }
+        expect(s1.entryAt(dead), isNotNull);
+      });
+    });
+
     test('restore sweeps temps below a keep-both-renamed directory', () async {
       const resolvedDirectory = '/dest/folder (2)';
       const orphan = '$resolvedDirectory/.poltergeist-deadbeef.tmp';
       s1
+        ..clock = DateTime.now
         ..addDirectory(resolvedDirectory)
-        ..addFile(orphan, [1]);
+        ..addFile(orphan, [1], modifiedAt: DateTime.utc(2020));
 
       final crashed = await openStore();
       crashed.appendJournal(

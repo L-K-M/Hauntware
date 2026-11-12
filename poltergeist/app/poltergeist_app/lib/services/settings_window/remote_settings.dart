@@ -195,7 +195,7 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
         ?.cast<String, Object?>();
     _hasAppearance = appearance != null;
     _appearance._apply(
-      appearance == null ? AppAppearance.initial : decodeAppearance(appearance),
+      appearance == null ? poltergeistInitialAppearance : decodeAppearance(appearance),
     );
 
     final editorTextSize = snapshot[SettingsLinkKey.editorTextSize.name] as int?;
@@ -252,7 +252,7 @@ final class RemoteAppearanceSettings extends ChangeNotifier
   RemoteAppearanceSettings._(this._link);
 
   final _Link _link;
-  AppAppearance _value = AppAppearance.initial;
+  AppAppearance _value = poltergeistInitialAppearance;
 
   void _apply(AppAppearance appearance) {
     if (appearance == _value) return;

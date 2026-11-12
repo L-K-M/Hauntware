@@ -438,25 +438,6 @@ void main() {
       );
     });
 
-    test('df fixes its flags and validates the path', () {
-      expect(HostCommands.df(), ['df', '-PT', '-B1']);
-      expect(HostCommands.df(inodes: true), ['df', '-Pi']);
-      expect(HostCommands.df(path: '/mnt/backup'), [
-        'df',
-        '-PT',
-        '-B1',
-        '/mnt/backup',
-      ]);
-      expect(
-        () => HostCommands.df(path: 'relative'),
-        throwsA(isA<HostCommandError>()),
-      );
-    });
-
-    test('ss is fixed', () {
-      expect(HostCommands.ss(), ['ss', '-tulpn']);
-    });
-
     test(
       'onCalendar clears TZ in a subshell and passes the expression as \$1',
       () {

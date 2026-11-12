@@ -141,6 +141,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/log_display.dart': {
     r"'The log display was not saved: $error'",
   },
+  // The not-saved diagnostic; the Appearance tab prints it and shows its
+  // own ARB text (settingsEditorDisplayNotSaved). The empty default family,
+  // which reads as the editor's own.
+  'lib/controllers/editor_display.dart': {
+    r"'The editor display was not saved: $error'",
+    "''",
+  },
   // The Overview layout's not-saved diagnostic; the cards sheet shows its
   // own ARB toast (overviewCardsNotSaved).
   'lib/controllers/overview_layout.dart': {
@@ -288,6 +295,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'/'",
     // A problem without a subject or detail fills its slot with nothing.
     "''",
+    // The status row's line-ending and encoding names, which the shared
+    // surface spells the same way, and the separator between its facts.
+    "'CRLF'",
+    "'LF'",
+    "'UTF-8 BOM'",
+    "'UTF-8'",
+    "' · '",
     // The unified diff's line break and its line markers, which pick a
     // row's tint; the rows show the diff's own text.
     r"'\n'",
@@ -296,6 +310,133 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'+'",
     "'-'",
     "'@@'",
+  },
+  // The shared-editor strings adapter: the text-tool, option and choice
+  // ids it switches on (the shared catalog's stable machine identifiers),
+  // the ARB list joiners and detail tokens it decomposes, the menu-label
+  // ellipsis composition, and the brace-bearing regex tokens that ride
+  // through gen-l10n as placeholder values because ICU messages cannot
+  // hold literal braces. Every rendered word comes from the ARB catalog.
+  'lib/ui/editor_strings.dart': {
+    '\'  \'',
+    '\'{2,4}\'',
+    '\'{1}\'',
+    '\'{name}\'',
+    '\'\\n\'',
+    '\'{NNNN}\'',
+    '\'sortLines\'',
+    '\'reverseLines\'',
+    '\'shuffleLines\'',
+    '\'removeDuplicateLines\'',
+    '\'removeBlankLines\'',
+    '\'collapseBlankLines\'',
+    '\'uppercase\'',
+    '\'lowercase\'',
+    '\'titleCase\'',
+    '\'sentenceCase\'',
+    '\'camelCase\'',
+    '\'pascalCase\'',
+    '\'snakeCase\'',
+    '\'kebabCase\'',
+    '\'constantCase\'',
+    '\'trimTrailingWhitespace\'',
+    '\'trimLeadingWhitespace\'',
+    '\'normalizeSpaces\'',
+    '\'normalizeLineEndings\'',
+    '\'convertIndentationToSpaces\'',
+    '\'convertIndentationToTabs\'',
+    '\'convertTabsToSpaces\'',
+    '\'hardWrap\'',
+    '\'straightenQuotes\'',
+    '\'zapGremlins\'',
+    '\'removeAnsiEscapes\'',
+    '\'convertToAscii\'',
+    '\'stripDiacritics\'',
+    '\'composeAccents\'',
+    '\'decomposeAccents\'',
+    '\'prefixSuffixLines\'',
+    '\'numberLines\'',
+    '\'unwrapParagraphs\'',
+    '\'joinLinesWith\'',
+    '\'urlEncode\'',
+    '\'urlDecode\'',
+    '\'base64Encode\'',
+    '\'base64Decode\'',
+    '\'htmlEntityEncode\'',
+    '\'htmlEntityDecode\'',
+    '\'escapeJsonString\'',
+    '\'unescapeBackslashSequences\'',
+    '\'formatJson\'',
+    '\'minifyJson\'',
+    '\'insertDate\'',
+    '\'insertDateTime\'',
+    '\'insertUtcTimestamp\'',
+    '\'insertUuid\'',
+    '\'keepLinesMatching\'',
+    '\'deleteLinesMatching\'',
+    '\'extractMatches\'',
+    '\'\$name…\'',
+    '\'order\'',
+    '\'ignoreCase\'',
+    '\'numbersByValue\'',
+    '\'byLength\'',
+    '\'ignoreLeadingWhitespace\'',
+    '\'keepFirstLine\'',
+    '\'adjacentOnly\'',
+    '\'ignoreSurroundingWhitespace\'',
+    '\'keepBlankLines\'',
+    '\'removeEveryCopy\'',
+    '\'controls\'',
+    '\'invisible\'',
+    '\'bidi\'',
+    '\'damaged\'',
+    '\'nonAscii\'',
+    '\'action\'',
+    '\'character\'',
+    '\'mode\'',
+    '\'where\'',
+    '\'text\'',
+    '\'skipBlankLines\'',
+    '\'start\'',
+    '\'step\'',
+    '\'separator\'',
+    '\'padding\'',
+    '\'trim\'',
+    '\'width\'',
+    '\'fill\'',
+    '\'ascending\'',
+    '\'descending\'',
+    '\'insert\'',
+    '\'remove\'',
+    '\'add\'',
+    '\'prefix\'',
+    '\'suffix\'',
+    '\'none\'',
+    '\'spaces\'',
+    '\'zeros\'',
+    '\'delete\'',
+    '\'escape\'',
+    '\'replace\'',
+    '\'entity\'',
+    '\'inPlace\'',
+    '\'clipboard\'',
+    '\'newDocument\'',
+    '\'\'',
+    '\', \'',
+    '\':\'',
+    '\'lines\'',
+    '\'unmapped:\'',
+    'r\'\\u{…}\'',
+  },
+  // The file editor settings section: its ValueKeys, the picker's empty
+  // default family, and the not-saved diagnostic it prints while showing
+  // its own ARB toast.
+  'lib/ui/settings/editor_settings.dart': {
+    "'editor.font'",
+    "'editor.ligatures'",
+    "'editor.textSize'",
+    "''",
+    r"'$error'",
   },
   // The Activity table's key prefix, never shown, and the copied log's
   // line break between JSON records.
@@ -353,9 +494,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'/'",
     "'..'",
   },
-  // A sign-in's or round's request id, matched in the engine's answer.
   'lib/controllers/sync_controller.dart': {
     "'the engine stopped'",
+    // Pin conflict refusals: diagnostics, and the request names the
+    // engine's refusals answer by.
+    "'The engine stopped'",
+    "'That conflict is already being resolved'",
+    "'ResolvePinConflict'",
+    "'ReadPinConflicts'",
+    // A sign-in's or round's request id, matched in the engine's answer.
     r"'sync-${_count++}'",
   },
   // TRI-03's acknowledgement keys (kind and subject) and the fields they
@@ -461,6 +608,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/services/settings_window/settings_window_host.dart': {
     r"'No settings window method $name'",
     "'No pin publication settings'",
+    "'No pin conflict settings'",
     "'No app lock settings'",
     "'No admin memory settings'",
     "'levels'",
@@ -892,6 +1040,16 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
     r"'$text\n'",
     "'text/plain'",
+    // A failed owner-only chmod diagnostic; the export itself saved.
+    r"'Could not restrict a saved export to the owner: $error'",
+    // The share sheet's staged copy: its temporary directory prefix, its
+    // path under that directory, and the quarantine agent field's product
+    // name.
+    "'klabautermann-export-'",
+    r"'${directory.path}${Platform.pathSeparator}$fileName'",
+    "'Klabautermann'",
+    // The URI scheme of a save that has a local path to mark.
+    "'file'",
   },
   'lib/ui/logs/log_text.dart': {
     // A row's unit and PID prefix in classic syslog notation, as
@@ -1027,6 +1185,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/quick_actions.dart': {"'/'", r"'$error'"},
   'lib/ui/fleet_board.dart': {r"'$error'"},
   'lib/ui/settings_page.dart': {r"'$error'"},
+  // The keys tests find a pin conflict card's two resolutions by, and a
+  // resolution failure's diagnostic.
+  'lib/ui/pin_conflict_card.dart': {
+    r"'settings.pin.keep.${conflict.locator}'",
+    r"'settings.pin.accept.${conflict.locator}'",
+    r"'$error'",
+  },
   'lib/ui/thresholds_tab.dart': {r"'$error'"},
   'lib/ui/sortable_table.dart': {
     // FocusNode debug labels.

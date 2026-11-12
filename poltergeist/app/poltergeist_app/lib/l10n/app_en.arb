@@ -201,6 +201,10 @@
   "@credentialVaultUnavailable": {
     "description": "Banner shown when the vault could not be read before prompting (the localized render of the ported keystore exception, D20)."
   },
+  "credentialVaultKeyMissing": "Saved secrets are locked. Your system credential store no longer holds the key for them, and Poltergeist did not create a new one because that would make them unreadable. Restore the key from a backup of your keychain or credential store, then reconnect, or enter the secret below.",
+  "@credentialVaultKeyMissing": {
+    "description": "Banner shown instead of credentialVaultUnavailable when the keystore answered but holds no vault key while saved secrets exist (MasterKeyUnavailableException, D20)."
+  },
   "credentialKeyFileUnreadable": "The file could not be read as text.",
   "@credentialKeyFileUnreadable": {
     "description": "Sanitized detail for an identity file that cannot be decoded or otherwise read normally."
@@ -2644,6 +2648,22 @@
   "@appearanceSlotAccent": {
     "description": "Colour row: the accent (buttons, focus, the active pane's marker). Also the colour picker's title."
   },
+  "appearanceAccentAdjusted": "Low contrast: links and indicators use an adjusted colour.",
+  "@appearanceAccentAdjusted": {
+    "description": "Appearance section: notice that a chosen accent needs contrast-safe functional tones."
+  },
+  "appearanceChosenAccentPreview": "Chosen accent",
+  "@appearanceChosenAccentPreview": {
+    "description": "Appearance section: accessible label for the chosen accent preview."
+  },
+  "appearanceAdjustedAccentPreview": "Adjusted interface colour",
+  "@appearanceAdjustedAccentPreview": {
+    "description": "Appearance section: accessible label for the adjusted functional accent preview."
+  },
+  "appearanceUseAdjustedAccent": "Use adjusted colour",
+  "@appearanceUseAdjustedAccent": {
+    "description": "Appearance section: replaces a low-contrast accent with the suggested accessible colour."
+  },
   "appearanceSlotSurface": "Surface",
   "@appearanceSlotSurface": {
     "description": "Colour row: the pane and page background."
@@ -3032,6 +3052,10 @@
   "@backupKdfRefusal": {
     "description": "04 §4.5's verbatim KDF-downgrade refusal (KdfDowngradeException mirrored in ARB)."
   },
+  "backupVaultKeyMissing": "Your system credential store no longer holds the key for your saved secrets, so they cannot be moved to your sync key. Poltergeist did not create a new key because that would make them unreadable. Restore the key from a backup of your keychain or credential store, then try again.",
+  "@backupVaultKeyMissing": {
+    "description": "Enrollment status when the keystore answered but holds no vault key while saved secrets exist (MasterKeyUnavailableException), so the re-key was refused."
+  },
   "backupServerUrlField": "Sync server URL",
   "@backupServerUrlField": {
     "description": "Label of the enrollment form's server field."
@@ -3326,7 +3350,7 @@
       }
     }
   },
-  "backupSwitchAdoptFleet": "Use shared key",
+  "backupSwitchAdoptFleet": "Trust the new key",
   "@backupSwitchAdoptFleet": {
     "description": "Resolves a held locator by adopting the fleet pin — no re-seal for that host (04 §4.4)."
   },

@@ -18,6 +18,8 @@ import 'package:klabautermann_host/klabautermann_host.dart'
     show HwsSection, OpDirectoryKind, SectionStatus, kRootOpsDir;
 import 'package:seance_core/seance_core.dart'
     show
+        ChannelOpenException,
+        ChannelRefusal,
         ElevatedExecutor,
         ElevationProbe,
         RemoteCommandException,
@@ -189,34 +191,97 @@ void main() {
     expect(reads, [_s1], reason: 'a lost link cancels the re-read');
   });
 
-  test('a wrapper that is gone, or whose PID now names another process, '
-      'is lost; an unchecked one is unknown', () async {
-    String? ticks;
-    var gone = false;
-    var broken = false;
+  test(
+    'a wrapper that is gone, or whose PID now names another process, '
+    'in two listings in a row is lost; an unchecked one is unknown',
+    () async {
+      String? ticks;
+      var gone = false;
+      var broken = false;
+      link.answer = (c) {
+        if (!c.contains('klabautermann-ticks')) return null;
+        if (broken) throw const RemoteCommandException('channel closed');
+        return gone
+            ? const RemoteCommandResult(exitCode: 3)
+            : RemoteCommandResult(exitCode: 0, stdout: '$ticks\n');
+      };
+      final section = _section(
+        user: {_running: _record(_running, state: 'running')},
+      );
+
+      ticks = '778';
+      await tracker.listed(_s1, section);
+      expect(op(_running).state, DetachedOperationState.unknown);
+      await tracker.listed(_s1, section);
+      expect(op(_running).state, DetachedOperationState.lost);
+
+      gone = true;
+      await tracker.listed(_s1, section);
+      expect(op(_running).state, DetachedOperationState.lost);
+
+      broken = true;
+      await tracker.listed(_s1, section);
+      expect(op(_running).state, DetachedOperationState.unknown);
+      expect(
+        await tracker.acknowledge(_s1, _running),
+        'operation not finished',
+      );
+    },
+  );
+
+  test('a wrapper that ended after the listing was read waits for the '
+      'next one, which shows its result', () async {
+    // The wrapper wrote its done record and exited between the ops read
+    // and the PID check: the listing still says running.
+    link.answer = (c) => c.contains('klabautermann-ticks')
+        ? const RemoteCommandResult(exitCode: 3)
+        : null;
+    await tracker.listed(
+      _s1,
+      _section(user: {_running: _record(_running, state: 'running')}),
+    );
+    expect(op(_running).state, DetachedOperationState.unknown);
+    expect(await tracker.acknowledge(_s1, _running), 'operation not finished');
+
+    await clock.elapse(kRunningOperationsReread);
+    expect(reads, [_s1], reason: 'the next listing settles it');
+    await tracker.listed(
+      _s1,
+      _section(user: {_running: _record(_running, exit: 0)}),
+    );
+    expect(op(_running).state, DetachedOperationState.done);
+    expect(op(_running).exitCode, 0);
+  });
+
+  test('a check the link refuses, or cannot finish, leaves the operation '
+      'unknown and ops read again', () async {
+    Object? failure = const ChannelOpenException(
+      ChannelRefusal.sessionLimit,
+      'no session channel',
+    );
     link.answer = (c) {
       if (!c.contains('klabautermann-ticks')) return null;
-      if (broken) throw const RemoteCommandException('channel closed');
-      return gone
-          ? const RemoteCommandResult(exitCode: 3)
-          : RemoteCommandResult(exitCode: 0, stdout: '$ticks\n');
+      if (failure case final error?) throw error;
+      return const RemoteCommandResult(exitCode: 0, stdout: '777\n');
     };
     final section = _section(
       user: {_running: _record(_running, state: 'running')},
     );
 
-    ticks = '778';
-    await tracker.listed(_s1, section);
-    expect(op(_running).state, DetachedOperationState.lost);
-
-    gone = true;
-    await tracker.listed(_s1, section);
-    expect(op(_running).state, DetachedOperationState.lost);
-
-    broken = true;
     await tracker.listed(_s1, section);
     expect(op(_running).state, DetachedOperationState.unknown);
-    expect(await tracker.acknowledge(_s1, _running), 'operation not finished');
+    await clock.elapse(kRunningOperationsReread);
+    expect(reads, [_s1]);
+
+    failure = const RemoteCommandException('channel closed');
+    await tracker.listed(_s1, section);
+    expect(op(_running).state, DetachedOperationState.unknown);
+    await clock.elapse(kRunningOperationsReread);
+    expect(reads, [_s1, _s1]);
+
+    failure = null;
+    await tracker.listed(_s1, section);
+    expect(op(_running).state, DetachedOperationState.running);
   });
 
   test('a record without start ticks runs while its PID exists', () async {
@@ -238,7 +303,7 @@ void main() {
     expect(await tracker.acknowledge(_s1, _done), isNull);
     await pumpEventQueue();
 
-    final (:records, more: _) = await audit.query(_s1);
+    final records = (await audit.query(_s1)).records;
     final record = records.single;
     expect(record.action, kDetachedOperationAction);
     expect(record.targetName, _done);
@@ -463,10 +528,12 @@ void main() {
     link.answer = (c) => c.contains('klabautermann-ticks')
         ? const RemoteCommandResult(exitCode: 3)
         : null;
-    await tracker.listed(
-      _s1,
-      _section(user: {_running: _record(_running, state: 'running')}),
-    );
+    for (var i = 0; i < 2; i++) {
+      await tracker.listed(
+        _s1,
+        _section(user: {_running: _record(_running, state: 'running')}),
+      );
+    }
     await tracker.acknowledge(_s1, _running);
     final record = (await audit.query(_s1)).records.single;
     expect(record.failure, ActionFailure.interrupted);

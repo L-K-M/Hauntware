@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show SyncPinConflict;
 
 import '../../controllers/account_size.dart';
 import '../../controllers/admin_memory.dart';
@@ -17,10 +19,12 @@ import '../../controllers/time_display.dart';
 import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/device_name.dart';
+import '../../controllers/editor_display.dart' show EditorDisplaySettings;
 import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart';
 import '../../controllers/safety_controller.dart';
 import '../../controllers/sync_secrets_controller.dart';
+import '../../controllers/sync_controller.dart' show PinConflictsSettings;
 import '../../controllers/threshold_controller.dart';
 import '../../ui/threshold_scope.dart' show ThresholdMetric;
 import '../stored_safety.dart';
@@ -40,12 +44,14 @@ SettingsWindowHost? settingsWindowHostFor(
   required SyncSecretsSettings syncSecrets,
   ThresholdSettings? thresholds,
   PinPublicationSettings? pinPublication,
+  PinConflictsSettings? pinConflicts,
   ValueListenable<AccountSize?>? accountSize,
   AppLockSettings? appLock,
   CadenceSettings? cadence,
   CadenceCapSettings? cadenceCaps,
   AdminMemorySettings? adminMemory,
   LogDisplaySettings? logDisplay,
+  EditorDisplaySettings? editorDisplay,
   TimeDisplaySettings? timeDisplay,
 }) => switch (platform) {
   TargetPlatform.macOS ||
@@ -60,12 +66,14 @@ SettingsWindowHost? settingsWindowHostFor(
     syncSecrets: syncSecrets,
     thresholds: thresholds,
     pinPublication: pinPublication,
+    pinConflicts: pinConflicts,
     accountSize: accountSize,
     appLock: appLock,
     cadence: cadence,
     cadenceCaps: cadenceCaps,
     adminMemory: adminMemory,
     logDisplay: logDisplay,
+    editorDisplay: editorDisplay,
     timeDisplay: timeDisplay,
   ),
   TargetPlatform.android ||
@@ -94,12 +102,14 @@ final class SettingsWindowHost {
     required SyncSecretsSettings syncSecrets,
     ThresholdSettings? thresholds,
     PinPublicationSettings? pinPublication,
+    PinConflictsSettings? pinConflicts,
     ValueListenable<AccountSize?>? accountSize,
     AppLockSettings? appLock,
     CadenceSettings? cadence,
     CadenceCapSettings? cadenceCaps,
     AdminMemorySettings? adminMemory,
     LogDisplaySettings? logDisplay,
+    EditorDisplaySettings? editorDisplay,
     TimeDisplaySettings? timeDisplay,
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
@@ -112,12 +122,14 @@ final class SettingsWindowHost {
        _syncSecrets = syncSecrets,
        _thresholds = thresholds,
        _pinPublication = pinPublication,
+       _pinConflicts = pinConflicts,
        _accountSize = accountSize,
        _appLock = appLock,
        _cadence = cadence,
        _cadenceCaps = cadenceCaps,
        _adminMemory = adminMemory,
        _logDisplay = logDisplay,
+       _editorDisplay = editorDisplay,
        _timeDisplay = timeDisplay {
     _engine = GhostSettingsWindowHost(
       control: control,
@@ -135,12 +147,14 @@ final class SettingsWindowHost {
           syncSecrets,
           ?thresholds,
           ?pinPublication,
+          ?pinConflicts,
           ?accountSize,
           ?appLock,
           ?cadence,
           ?cadenceCaps,
           ?adminMemory,
           ?logDisplay,
+          ?editorDisplay,
           ?timeDisplay,
         ],
       ),
@@ -158,12 +172,14 @@ final class SettingsWindowHost {
   final SyncSecretsSettings _syncSecrets;
   final ThresholdSettings? _thresholds;
   final PinPublicationSettings? _pinPublication;
+  final PinConflictsSettings? _pinConflicts;
   final ValueListenable<AccountSize?>? _accountSize;
   final AppLockSettings? _appLock;
   final CadenceSettings? _cadence;
   final CadenceCapSettings? _cadenceCaps;
   final AdminMemorySettings? _adminMemory;
   final LogDisplaySettings? _logDisplay;
+  final EditorDisplaySettings? _editorDisplay;
   final TimeDisplaySettings? _timeDisplay;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
 
@@ -199,6 +215,10 @@ final class SettingsWindowHost {
       final display? => encodeLogDisplay(display),
       null => null,
     },
+    SettingsLinkKey.editorDisplay.name: switch (_editorDisplay?.value) {
+      final display? => encodeEditorDisplay(display),
+      null => null,
+    },
     SettingsLinkKey.timeDisplay.name: _timeDisplay?.value.name,
     SettingsLinkKey.deviceName.name: _deviceName.value,
     SettingsLinkKey.thresholds.name: switch (_thresholds) {
@@ -208,6 +228,10 @@ final class SettingsWindowHost {
     SettingsLinkKey.syncSecrets.name: _syncSecrets.value,
     SettingsLinkKey.pinPublication.name: switch (_pinPublication?.value) {
       final value? => encodePinPublication(value),
+      null => null,
+    },
+    SettingsLinkKey.pinConflicts.name: switch (_pinConflicts) {
+      final conflicts? => encodePinConflicts(conflicts.conflicts),
       null => null,
     },
     SettingsLinkKey.accountSize.name: switch (_accountSize?.value) {
@@ -257,6 +281,8 @@ final class SettingsWindowHost {
         await adminMemory.setRemembered(serverId, remembered: remembered);
       case SettingsLinkMethod.setLogDisplay:
         await _logDisplay?.setLogDisplay(decodeLogDisplay(argument));
+      case SettingsLinkMethod.setEditorDisplay:
+        await _editorDisplay?.setEditorDisplay(decodeEditorDisplay(argument));
       case SettingsLinkMethod.setTimeDisplay:
         await _timeDisplay?.setTimeDisplay(decodeTimeDisplay(argument));
       case SettingsLinkMethod.setDeviceName:
@@ -285,6 +311,22 @@ final class SettingsWindowHost {
           throw StateError('No pin publication settings');
         }
         await pinPublication.setAsserted(argument! as bool);
+      case SettingsLinkMethod.resolvePinConflict:
+        final change = (argument! as Map).cast<String, Object?>();
+        final pinConflicts = _pinConflicts;
+        if (pinConflicts == null) {
+          throw StateError('No pin conflict settings');
+        }
+        await pinConflicts.resolvePinConflict(
+          SyncPinConflict(
+            locator: change[SettingsLinkKey.locator.name]! as String,
+            localFingerprintSha256:
+                change[SettingsLinkKey.localFingerprintSha256.name]! as String,
+            pulledFingerprintSha256:
+                change[SettingsLinkKey.pulledFingerprintSha256.name]! as String,
+          ),
+          keepLocal: change[SettingsLinkKey.keepLocal.name]! as bool,
+        );
       case SettingsLinkMethod.setMonitored:
         final change = (argument! as Map).cast<String, Object?>();
         await _monitorSet.setMonitored(

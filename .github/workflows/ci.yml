@@ -9,10 +9,10 @@ name: CI
 # Flutter packages and apps with `flutter pub get`, never mixed.
 # scripts/test.sh mirrors the test steps below for local runs.
 #
-# The client matrices compile 18 targets: 3 Planchette desktop and 5
-# each for Séance, Poltergeist and Klabautermann. release.yml ships 13 of
-# them; Klabautermann's five legs stay CI-only until its preview release
-# job lands at milestone M4 (docs/design/klabautermann, decision 16).
+# The client matrices compile 19 targets: 4 Planchette (three desktop
+# and Android) and 5 each for Séance, Poltergeist and Klabautermann. release.yml ships all
+# of them; Klabautermann's five carry the preview label until its v1
+# (docs/design/klabautermann, decision 16).
 
 on:
   push:
@@ -80,6 +80,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           # The history gate walks every preserved source graph; a
           # shallow checkout cannot reach the M0-era objects.
           fetch-depth: 0
@@ -125,6 +126,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
@@ -159,6 +162,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           # The PR merge commit plus its parents: HEAD^1..HEAD is exactly
           # what merging the PR changes on its base.
           fetch-depth: 2
@@ -189,6 +193,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
@@ -217,6 +223,8 @@ jobs:
         working-directory: seance
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
@@ -327,6 +335,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
@@ -357,6 +367,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
@@ -410,6 +422,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
@@ -457,6 +471,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           fetch-depth: 0
       - uses: dart-lang/setup-dart@v1
         with:
@@ -572,6 +587,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           # The audit walks the preserved Séance history (the imported
           # standalone ancestry included); a shallow checkout fails its
           # non-shallow requirement by design.
@@ -625,8 +641,11 @@ jobs:
       pull-requests: read
     outputs:
       run: ${{ steps.fixture.outputs.run }}
+      sync: ${{ steps.changes.outputs.sync }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dorny/paths-filter@v4
         if: github.event_name == 'pull_request'
         id: changes
@@ -651,6 +670,16 @@ jobs:
             fixture:
               - 'poltergeist/test/integration/**'
               - '.github/workflows/ci.yml'
+            # sync_integration's server and everything its Dockerfile
+            # copies; a server-only PR runs that job without the SSH
+            # fixture job.
+            sync:
+              - 'seance/pubspec.yaml'
+              - 'seance/pubspec.lock'
+              - 'seance/analysis_options.yaml'
+              - 'seance/scripts/licenses/**'
+              - 'seance/packages/seance_sync_server/**'
+              - 'scripts/resolve-package-root.py'
       - name: Require fixture when its lifecycle changes
         id: fixture
         if: >-
@@ -682,6 +711,8 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
@@ -700,11 +731,15 @@ jobs:
   sync_integration:
     name: Sync-server integration tests
     needs: detect_integration
-    if: needs.detect_integration.outputs.run == 'true'
+    if: >-
+      needs.detect_integration.outputs.run == 'true' ||
+      needs.detect_integration.outputs.sync == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
@@ -784,6 +819,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           fetch-depth: 0
       - uses: dorny/paths-filter@v4
         if: github.event_name == 'pull_request'
@@ -797,6 +833,12 @@ jobs:
               - 'seance/packages/seance_core/pubspec.yaml'
               - 'seance/packages/seance_protocol/lib/**'
               - 'seance/packages/seance_protocol/pubspec.yaml'
+              # The sibling cores previous_release.sh compiles into the
+              # sync convergence harness, at HEAD and at the last release.
+              - 'poltergeist/packages/poltergeist_core/lib/**'
+              - 'poltergeist/packages/poltergeist_core/pubspec.yaml'
+              - 'planchette/packages/planchette_core/lib/**'
+              - 'planchette/packages/planchette_core/pubspec.yaml'
               # Poltergeist fixture files the sshd fixture builds on
               # (03 §11.3): the Compose safety checker, the Dockerfile
               # that pins the base image digest, the common sshd config.
@@ -879,6 +921,8 @@ jobs:
       KLABAUTERMANN_EVIDENCE_DIR: ${{ github.workspace }}/klabautermann/build/ci-evidence
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
@@ -924,6 +968,8 @@ jobs:
       KLABAUTERMANN_EVIDENCE_DIR: ${{ github.workspace }}/klabautermann/build/ci-evidence
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -965,6 +1011,8 @@ jobs:
       run: ${{ steps.fixture.outputs.run }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dorny/paths-filter@v4
         if: github.event_name == 'pull_request'
         id: changes
@@ -1048,6 +1096,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@v1
         with:
           # Match budgets.json's calibration; update through recalibration.
@@ -1250,6 +1300,8 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
@@ -1315,6 +1367,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
@@ -1365,6 +1419,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -1468,6 +1524,8 @@ jobs:
     timeout-minutes: 30   # first run downloads the Flutter toolchain
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -1510,6 +1568,8 @@ jobs:
     timeout-minutes: 30   # first run downloads the Flutter toolchain
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -1532,6 +1592,8 @@ jobs:
     timeout-minutes: 30   # first run downloads the Flutter toolchain
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -1547,13 +1609,11 @@ jobs:
         run: flutter test
 
   # ---- Client build matrices (keep in step with release.yml) ------------
-  # Compile every client the release workflow ships — 4 Planchette
-  # + 5 Séance + 5 Poltergeist targets — and run the Linux
+  # Compile every client the release workflow ships (4 Planchette,
+  # 5 Séance, 5 Poltergeist and 5 Klabautermann targets) and run the Linux
   # packaging steps and the native fixtures, so a platform- or
   # packaging-breaking change is caught here, not when a tag tries to
-  # publish. Mirrors release.yml's client jobs minus publishing. The 5
-  # Klabautermann targets build here too, ahead of their release job
-  # (M4, decision 16 of docs/design/klabautermann).
+  # publish. Mirrors release.yml's client jobs minus publishing.
 
   planchette_client:
     name: Planchette client (${{ matrix.target }})
@@ -1579,6 +1639,8 @@ jobs:
             build: windows
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@v6
         if: matrix.target == 'android'
         with:
@@ -1713,6 +1775,8 @@ jobs:
     timeout-minutes: 45   # cold: Flutter toolchain plus ~2 GB of Flathub runtimes
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Linux toolchain and Flatpak
         run: >-
           sudo apt-get update && sudo apt-get install -y
@@ -1768,6 +1832,8 @@ jobs:
             build: windows --release
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # Match the app's compileOptions (JavaVersion.VERSION_17) so the Gradle
       # build is deterministic rather than tracking the runner's default JDK.
       - uses: actions/setup-java@v6
@@ -1917,6 +1983,8 @@ jobs:
     timeout-minutes: 45   # cold: Flutter toolchain plus ~2 GB of Flathub runtimes
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Linux toolchain and Flatpak
         run: >-
           sudo apt-get update && sudo apt-get install -y
@@ -1980,6 +2048,8 @@ jobs:
             build: windows --release
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # Pin the JDK so the Gradle build is deterministic rather than tracking
       # the runner's default; keep in step with the app's compileOptions.
       - uses: actions/setup-java@v6
@@ -2120,6 +2190,8 @@ jobs:
     timeout-minutes: 45   # cold: Flutter toolchain plus ~2 GB of Flathub runtimes
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Linux toolchain and Flatpak
         run: >-
           sudo apt-get update && sudo apt-get install -y
@@ -2145,9 +2217,9 @@ jobs:
   # Klabautermann's legs copy poltergeist_client and add the two native
   # macOS fixtures of seance_client (docs/design/klabautermann, 04
   # §12.1). Like the siblings they build on every PR without a path
-  # filter (owner decision 15, D37). No release leg ships these builds
-  # until client_klabautermann joins release.yml at M4 (decision 16);
-  # keep the two in step from then on.
+  # filter (owner decision 15, D37). release.yml's client_klabautermann
+  # ships the same builds as previews (decision 16); keep the two in
+  # step.
   klabautermann_client:
     name: Klabautermann client (${{ matrix.target }})
     needs: affected
@@ -2180,6 +2252,8 @@ jobs:
             build: windows --release
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # Pin the JDK so the Gradle build is deterministic rather than tracking
       # the runner's default; keep in step with the app's compileOptions.
       - uses: actions/setup-java@v6
@@ -2324,6 +2398,8 @@ jobs:
     timeout-minutes: 45   # cold: Flutter toolchain plus ~2 GB of Flathub runtimes
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Linux toolchain and Flatpak
         run: >-
           sudo apt-get update && sudo apt-get install -y
@@ -2355,6 +2431,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # Build context is the seance subtree root so its pub workspace
       # resolves (same contract as the Dockerfile header).
       - name: Build image
@@ -2391,6 +2469,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable

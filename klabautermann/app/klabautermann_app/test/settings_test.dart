@@ -5,15 +5,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
+import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/cadence_controller.dart';
+import 'package:klabautermann_app/controllers/editor_display.dart';
 import 'package:klabautermann_app/controllers/log_display.dart';
+import 'package:klabautermann_app/controllers/sync_controller.dart';
+import 'package:klabautermann_app/controllers/sync_secrets_controller.dart';
 import 'package:klabautermann_app/controllers/time_display.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/ui/appearance_tab.dart';
 import 'package:klabautermann_app/ui/settings_page.dart';
+import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorLigatures, EditorTextSize;
 
 import 'support/fake_engine.dart';
 import 'support/harness.dart';
+
+const _pinConflict = SyncPinConflict(
+  locator: 'alpha.example.com:22',
+  localFingerprintSha256: 'SHA256:local',
+  pulledFingerprintSha256: 'SHA256:pulled',
+);
 
 /// 03 §10.2: the settings route carries the seven planned tabs as
 /// placeholders; the Appearance tab's theme switch is the part that
@@ -445,6 +459,147 @@ void main() {
     expect(find.text('Refresh limits'), findsNothing);
   });
 
+  Future<void> pumpSyncTab(
+    WidgetTester tester,
+    PinConflictsSettings conflicts,
+  ) async {
+    final syncSecrets = SyncSecretsController(apply: (_) {});
+    addTearDown(syncSecrets.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: SyncTab(syncSecrets: syncSecrets, pinConflicts: conflicts),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('the Sync tab shows a host-key conflict with both keys and '
+      'resolves it', (tester) async {
+    final conflicts = _PinConflicts(const [_pinConflict]);
+    addTearDown(conflicts.dispose);
+    await pumpSyncTab(tester, conflicts);
+
+    expect(find.textContaining('alpha.example.com:22'), findsOneWidget);
+    expect(find.text('This device trusts'), findsOneWidget);
+    expect(find.text('SHA256:local'), findsOneWidget);
+    expect(find.text('The other device synced'), findsOneWidget);
+    expect(find.text('SHA256:pulled'), findsOneWidget);
+    expect(find.text("Keep this device's key"), findsOneWidget);
+    expect(find.text('Trust the new key'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('settings.pin.keep.alpha.example.com:22')),
+    );
+    await tester.pumpAndSettle();
+    expect(conflicts.asked, [(_pinConflict.locator, true)]);
+    expect(conflicts.conflicts, isEmpty);
+  });
+
+  testWidgets('the Sync tab trusts the new key when asked', (tester) async {
+    final conflicts = _PinConflicts(const [_pinConflict]);
+    addTearDown(conflicts.dispose);
+    await pumpSyncTab(tester, conflicts);
+
+    await tester.tap(
+      find.byKey(const ValueKey('settings.pin.accept.alpha.example.com:22')),
+    );
+    await tester.pumpAndSettle();
+    expect(conflicts.asked, [(_pinConflict.locator, false)]);
+  });
+
+  testWidgets('a conflict\'s buttons stay disabled while a resolution is in '
+      'flight', (tester) async {
+    final conflicts = _PinConflicts(const [_pinConflict], resolving: true);
+    addTearDown(conflicts.dispose);
+    await pumpSyncTab(tester, conflicts);
+
+    for (final key in [
+      'settings.pin.keep.alpha.example.com:22',
+      'settings.pin.accept.alpha.example.com:22',
+    ]) {
+      final button = tester.widget<TextButton>(find.byKey(ValueKey(key)));
+      expect(button.onPressed, isNull, reason: key);
+    }
+  });
+
+  testWidgets('a resolution the engine refuses says so', (tester) async {
+    final conflicts = _PinConflicts(const [_pinConflict])..refuse = true;
+    addTearDown(conflicts.dispose);
+    await pumpSyncTab(tester, conflicts);
+
+    await tester.tap(
+      find.byKey(const ValueKey('settings.pin.keep.alpha.example.com:22')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('The host key conflict could not be resolved.'),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('the Appearance tab sets the file editor display (03 §8.5)', (
+    tester,
+  ) async {
+    final appearance = AppearanceController();
+    final display = EditorDisplayController();
+    addTearDown(() {
+      appearance.dispose();
+      display.dispose();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: AppearanceTab(appearance: appearance, editorDisplay: display),
+        ),
+      ),
+    );
+
+    // A ListView builds a little past its viewport, so scrollUntilVisible
+    // can stop with the target just off-screen; ensureVisible then brings
+    // it fully in before a tap.
+    Future<void> reveal(Finder finder) async {
+      await tester.scrollUntilVisible(
+        finder,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.ensureVisible(finder);
+      await tester.pumpAndSettle();
+    }
+
+    await reveal(find.byKey(const ValueKey('editor.font')));
+    expect(find.text('File editor'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('editor.font')));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a font'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    await reveal(find.text('Ligatures'));
+    await tester.tap(find.text('Ligatures'));
+    await tester.pumpAndSettle();
+    expect(display.value.ligatures, EditorLigatures.off);
+
+    await reveal(find.byKey(const ValueKey('editor.textSize')));
+    expect(find.text('14 pt'), findsOneWidget);
+    await tester.drag(
+      find.byKey(const ValueKey('editor.textSize')),
+      const Offset(40, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(display.value.textSize, greaterThan(EditorTextSize.standard));
+  });
+
   testWidgets('back returns to the shell', (tester) async {
     await openSettings(tester);
 
@@ -471,4 +626,32 @@ final class _RefusingAnnouncements extends ValueNotifier<bool>
   @override
   Future<void> setAnnounceThresholdBands(bool announce) async =>
       throw Exception('The settings link is gone.');
+}
+
+/// The host-key quarantine diff as a settings value, with the changes
+/// asked of it.
+final class _PinConflicts extends ChangeNotifier
+    implements PinConflictsSettings {
+  _PinConflicts(this.conflicts, {this.resolving = false});
+
+  @override
+  List<SyncPinConflict> conflicts;
+
+  @override
+  bool resolving;
+
+  final List<(String, bool)> asked = [];
+  bool refuse = false;
+
+  @override
+  Future<void> resolvePinConflict(
+    SyncPinConflict conflict, {
+    required bool keepLocal,
+  }) async {
+    asked.add((conflict.locator, keepLocal));
+    if (refuse) throw const PinConflictNotResolvedException('refused');
+    conflicts = const [];
+    resolving = false;
+    notifyListeners();
+  }
 }

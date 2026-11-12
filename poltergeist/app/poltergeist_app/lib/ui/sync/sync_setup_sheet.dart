@@ -484,6 +484,7 @@ class _SyncSetupSheetState extends State<SyncSetupSheet> {
                               ?.copyWith(
                                 color: PoltergeistChrome.of(
                                   context,
+                                  poltergeistThemeStyle,
                                 ).secondaryText,
                               ),
                         ),
@@ -518,7 +519,7 @@ class _SyncSetupSheetState extends State<SyncSetupSheet> {
 
   Widget _buildContent(BuildContext context, AppLocalizations l10n) {
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final pair = _pair;
     final unavailable = _complete && !_available;
     return Column(
@@ -865,7 +866,7 @@ class _EndpointTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final endpoint = this.endpoint;
     if (endpoint == null) {
       return Column(
@@ -987,7 +988,7 @@ class _DirectionToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final lit = theme.colorScheme.primary;
     final dim = chrome.secondaryText.withValues(alpha: 0.45);
     final leftLit = direction != SyncDirection.leftToRight;
@@ -1142,7 +1143,7 @@ class _CheckRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final enabled = onChanged != null;
     return Row(
       children: [
