@@ -28,6 +28,8 @@
 # Environment:
 #   APPIMAGETOOL      path to (or URL of) an appimagetool AppImage
 #                     [default: pinned 1.9.1 release, cached in ~/.cache/klabautermann]
+#   APPIMAGETOOL_SHA256  SHA-256 a URL in APPIMAGETOOL must match (the
+#                     pinned release has its own; a path runs as given)
 #
 # The packaging logic is the suite's shared Linux packager,
 # ../../scripts/package-linux-common.sh (its header lists the parameters
