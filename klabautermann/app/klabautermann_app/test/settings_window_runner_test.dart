@@ -75,7 +75,8 @@ void main() {
     expect(
       _usesOnlySnapshotValueImports(
         "import 'package:klabautermann_core/klabautermann_core.dart' "
-        'show SyncPinConflict, SecretsRestoreSummary, VaultRestorePolicy;',
+        'show SyncPinConflict, SecretsRestoreSummary, '
+            'VaultRecoveryFailure, VaultRestorePolicy;',
       ),
       isTrue,
     );
@@ -330,6 +331,7 @@ void main() {
 const _snapshotValueTypes = {
   'SyncPinConflict',
   'SecretsRestoreSummary',
+  'VaultRecoveryFailure',
   'VaultRestorePolicy',
 };
 

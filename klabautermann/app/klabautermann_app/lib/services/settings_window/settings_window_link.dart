@@ -13,7 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show SecretsRestoreSummary, SyncPinConflict, VaultRestorePolicy;
+    show SyncPinConflict, VaultRecoveryFailure;
 
 import '../../controllers/account_size.dart';
 import '../../controllers/admin_memory.dart' show AdminMemoryNotSavedException;
