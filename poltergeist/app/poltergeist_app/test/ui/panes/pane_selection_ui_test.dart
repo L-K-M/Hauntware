@@ -773,6 +773,38 @@ void main() {
     }
   });
 
+  // 02 §8.2's Esc order ends with "deselects": below every other tier,
+  // and an idle pane still lets Esc reach its ancestors.
+  testWidgets('Esc after select-all deselects; an idle Esc passes on', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    try {
+      await openFiveRows();
+      await pumpPanes(tester, withChords: true);
+      leftNode.requestFocus();
+      await tester.pump();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(selectedOf(left), {0, 1, 2, 3, 4});
+
+      expect(await tester.sendKeyEvent(LogicalKeyboardKey.escape), isTrue);
+      await tester.pump();
+      expect(selectedOf(left), isEmpty);
+
+      expect(
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape),
+        isFalse,
+        reason: 'nothing left to deselect, so Esc is not swallowed',
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('Cmd+A selects all on macOS; Cmd+Shift+I inverts', (
     tester,
   ) async {

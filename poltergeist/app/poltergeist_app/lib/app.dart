@@ -6,6 +6,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:ghost_keystore/app_lock.dart' show AppLockController;
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostAppLockGate, GhostAppLockStrings;
+import 'package:ghost_desktop/ghost_desktop.dart'
+    show ClaimMacosToolbarBand, withMacosToolbarBand;
 import 'package:poltergeist_core/poltergeist_core.dart'
     show
         BookmarkStore,
@@ -63,7 +65,6 @@ import 'ui/adaptive_shell.dart';
 import 'ui/app_lock_gate.dart';
 import 'ui/inspector/inspector_view.dart' show inspectorDefaultWidth;
 import 'ui/server_editor.dart' show ServerEditorDelegate;
-import 'ui/shell/macos_toolbar_band.dart';
 import 'ui/workspace_shell.dart';
 
 class PoltergeistApp extends StatefulWidget {
@@ -485,8 +486,13 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
   Widget build(BuildContext context) {
     // Built once here, outside the theme's builder, which then only swaps
     // the MaterialApp's themes: the workspace keeps its state through a
-    // re-theme, and is not rebuilt for one.
-    final home = ClaimMacosToolbarBand(child: _buildWorkspace());
+    // re-theme, and is not rebuilt for one. Poltergeist's no-scope
+    // default is the windowed layout, so the shell claims the band back
+    // with or without a runner report.
+    final home = ClaimMacosToolbarBand(
+      windowedWithoutScope: true,
+      child: _buildWorkspace(),
+    );
     final appearance = widget.appearance;
     if (appearance == null) return _app(poltergeistInitialAppearance, home);
     // Rebuilt for a theme change and nothing else: the appearance moves
@@ -519,11 +525,11 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       // controls below the unified toolbar band, which claims clicks
       // for window drag...
       builder: (context, child) {
-        final reserved = ReserveMacosToolbarBand(child: child!);
-        final band = widget.toolbarBand;
-        final withBand = band == null
-            ? reserved
-            : MacosToolbarBandScope(band: band, child: reserved);
+        final withBand = withMacosToolbarBand(
+          widget.toolbarBand,
+          windowedWithoutScope: true,
+          child: child!,
+        );
         final appLock = widget.appLock;
         if (appLock == null) return withBand;
         final l10n = AppLocalizations.of(context);

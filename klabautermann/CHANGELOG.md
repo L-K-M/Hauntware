@@ -6,6 +6,8 @@
   this device trusts, with both fingerprints, and resolves it by keeping
   this device's key or trusting the new one, in the settings route and
   the desktop settings window.
+- Settings files use the shared atomic writer and write through
+  symbolic links.
 - On Android 13 and later, the system back gesture runs the app's own back
   steps, as in Séance and Poltergeist: the disk explorer steps up a folder
   and an editor with unsaved changes asks first.

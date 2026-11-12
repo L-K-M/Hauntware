@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show macosToolbarBandHeight;
 import 'package:klabautermann_app/services/macos_titlebar.dart';
 import 'package:klabautermann_app/ui/coverage.dart' show FleetCoverageChip;
 import 'package:klabautermann_app/ui/desktop_shell.dart';
 import 'package:klabautermann_app/ui/fleet_rail.dart';
 import 'package:klabautermann_app/ui/inspector_pane.dart';
-import 'package:klabautermann_app/ui/macos_toolbar_band.dart';
 import 'package:klabautermann_app/ui/server_workspace.dart';
 import 'package:klabautermann_app/ui/sidebar_kit.dart' show SidebarFilterField;
 

@@ -3,13 +3,15 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart' show FilePicker;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:ghost_desktop/ghost_desktop.dart' show macosTrafficLightsInset;
+import 'package:ghost_desktop/ghost_desktop.dart'
+    show ReserveMacosToolbarBand, macosTrafficLightsInset;
 import 'package:ghost_keystore/ghost_keystore.dart' show AppLockSettings;
 import 'package:ghost_ui/ghost_ui.dart'
-    show GhostUndoHistory;
+    show GhostPaneEdge, GhostResizeHandle, GhostUndoHistory;
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
@@ -125,9 +127,9 @@ import 'server_label_scope.dart';
 import 'shell/connect_dialog.dart';
 import 'shell/header_activity_button.dart';
 import 'shell/header_toolbar.dart';
-import 'shell/macos_toolbar_band.dart';
 import 'shell/shell_commands.dart';
 import 'shell/shell_splitter.dart';
+import 'shell/window_toolbar_passthrough.dart';
 import 'shell/window_commands.dart';
 import 'sidebar/sidebar_view.dart';
 import 'sidebar/seance_commands.dart';
@@ -729,11 +731,9 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   /// queue, and reports its refusals to [_alerts].
   late final DragOutController _dragOut;
 
-  /// The region widths (10 §3.1) and the splitter/header focus nodes.
+  /// The region widths (10 §3.1) and the header filter's focus node.
   late double _sidebarWidth;
   late double _inspectorWidth;
-  final _sidebarSplitterFocus = FocusNode(debugLabel: 'sidebar.splitter');
-  final _inspectorSplitterFocus = FocusNode(debugLabel: 'inspector.splitter');
   final _headerFilterFocus = FocusNode(debugLabel: 'header.filter');
 
   /// The live queue seam the quit guard reads — a lookup, not a
@@ -1047,8 +1047,6 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     _alerts.dispose();
     _dragOut.dispose();
     unawaited(_settledRefresh?.cancel());
-    _sidebarSplitterFocus.dispose();
-    _inspectorSplitterFocus.dispose();
     _headerFilterFocus.dispose();
     _connections?.dispose();
     _disposeWorkspace();
@@ -2048,6 +2046,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
               // The drawer floats over the panes rather than beside their
               // tab strips, so its filter field stays compact.
               child: ReserveMacosToolbarBand(
+                windowedWithoutScope: true,
                 child: SafeArea(child: _buildSidebarView(sshImportCommand)),
               ),
             ),
@@ -2324,31 +2323,26 @@ class _WorkspaceShellState extends State<WorkspaceShell>
               ],
             ),
             end: inspectorWidth,
-            handle: ShellSplitter(
+            handle: GhostResizeHandle(
               key: const ValueKey('inspector.splitter'),
-              focusNode: _inspectorSplitterFocus,
               label: strings.resizeInspector,
-              value: strings.splitterWidthPx(inspectorWidth.round()),
-              increasedValue: strings.splitterWidthPx(
-                _clampInspector(
-                  inspectorWidth + shellSplitterKeyStep,
-                  width,
-                ).round(),
-              ),
-              decreasedValue: strings.splitterWidthPx(
-                _clampInspector(
-                  inspectorWidth - shellSplitterKeyStep,
-                  width,
-                ).round(),
-              ),
-              grow: -1,
-              onResizeStart: () => _inspectorDragWidth = null,
-              onResize: (delta) => _resizeInspector(delta, width),
-              onResizeEnd: _commitInspectorWidth,
+              width: inspectorWidth,
+              minimumWidth: inspectorMinWidth,
+              maximumWidth: inspectorMaxWidth,
+              edge: GhostPaneEdge.trailing,
+              widthAfterStep: (delta) =>
+                  _clampInspector(inspectorWidth + delta, width),
+              onStep: (delta) => _stepInspector(-delta, width),
+              onStart: () => _inspectorDragWidth = null,
+              onDelta: (delta) => _resizeInspector(-delta, width),
+              onEnd: _commitInspectorWidth,
               onReset: () {
                 setState(() => _inspectorWidth = inspectorDefaultWidth);
                 _commitInspectorWidth();
               },
+              dragStartBehavior: DragStartBehavior.down,
+              handleWidth: shellSplitterExtent,
+              valueText: (value) => strings.splitterWidthPx(value.round()),
             ),
           );
 
@@ -2374,6 +2368,26 @@ class _WorkspaceShellState extends State<WorkspaceShell>
 
     // The sidebar | main boundary is a 1 px seam, so the header divider
     // and the sidebar's edge meet; the splitter floats over it.
+    final sidebarSplitter = GhostResizeHandle(
+      key: const ValueKey('sidebar.splitter'),
+      label: strings.resizeSidebar,
+      width: sidebarWidth,
+      minimumWidth: sidebarMinWidth,
+      maximumWidth: sidebarMaxWidth,
+      edge: GhostPaneEdge.leading,
+      widthAfterStep: (delta) => _clampSidebar(sidebarWidth + delta, width),
+      onStep: (delta) => _stepSidebar(delta, width),
+      onStart: () => _sidebarDragWidth = null,
+      onDelta: (delta) => _resizeSidebar(delta, width),
+      onEnd: _commitSidebarWidth,
+      onReset: () {
+        setState(() => _sidebarWidth = sidebarDefaultWidth);
+        _commitSidebarWidth();
+      },
+      dragStartBehavior: DragStartBehavior.down,
+      handleWidth: shellSplitterExtent,
+      valueText: (value) => strings.splitterWidthPx(value.round()),
+    );
     return ShellSeam.straddle(
       Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2411,26 +2425,12 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         ],
       ),
       start: sidebarWidth,
-      handle: ShellSplitter(
-        key: const ValueKey('sidebar.splitter'),
-        focusNode: _sidebarSplitterFocus,
-        nativeTitlebar: unifiedToolbar,
-        label: strings.resizeSidebar,
-        value: strings.splitterWidthPx(sidebarWidth.round()),
-        increasedValue: strings.splitterWidthPx(
-          _clampSidebar(sidebarWidth + shellSplitterKeyStep, width).round(),
-        ),
-        decreasedValue: strings.splitterWidthPx(
-          _clampSidebar(sidebarWidth - shellSplitterKeyStep, width).round(),
-        ),
-        onResizeStart: () => _sidebarDragWidth = null,
-        onResize: (delta) => _resizeSidebar(delta, width),
-        onResizeEnd: _commitSidebarWidth,
-        onReset: () {
-          setState(() => _sidebarWidth = sidebarDefaultWidth);
-          _commitSidebarWidth();
-        },
-      ),
+      // The handle runs the full height under the unified toolbar band,
+      // which claims its top segment for window drag: hand those clicks
+      // to Flutter.
+      handle: unifiedToolbar
+          ? WindowToolbarPassthrough(child: sidebarSplitter)
+          : sidebarSplitter,
     );
   }
 
@@ -2519,6 +2519,15 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   double? _sidebarDragWidth;
   double? _inspectorDragWidth;
 
+  /// One discrete sidebar resize — an arrow key or an assistive adjust —
+  /// as a whole interaction: start, move, commit once at the boundary
+  /// (D32 §3.1).
+  void _stepSidebar(double delta, double windowWidth) {
+    _sidebarDragWidth = null;
+    _resizeSidebar(delta, windowWidth);
+    _commitSidebarWidth();
+  }
+
   /// Sidebar drag/key resize (10 §3.1): clamped to its bounds and to the
   /// room the panes need; dragging well past the minimum hides it as a
   /// user hide.
@@ -2534,6 +2543,18 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     setState(() => _sidebarWidth = _clampSidebar(next, windowWidth));
   }
 
+  /// One discrete inspector resize — an arrow key or an assistive adjust —
+  /// as a whole interaction: start, move, commit once at the boundary
+  /// (D32 §3.1).
+  void _stepInspector(double delta, double windowWidth) {
+    _inspectorDragWidth = null;
+    _resizeInspector(delta, windowWidth);
+    _commitInspectorWidth();
+  }
+
+  /// Inspector drag/key resize (10 §3.1): clamped to its bounds and to the
+  /// room the panes need; dragging well past the minimum hides it as a
+  /// user hide.
   void _resizeInspector(double delta, double windowWidth) {
     final next = (_inspectorDragWidth ?? _inspectorWidth) + delta;
     _inspectorDragWidth = next;

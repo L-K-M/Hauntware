@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -18,6 +19,21 @@ import 'package:seance_app/ui/sidebar/sidebar_kit.dart';
 import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+
+// Constructed by boot in real async: the group header's fold fires its
+// settings write from a widget callback, which can resume in fake async.
+// Keep that write in the fixture's I/O zone and expose its completion so
+// teardown can drain it before deleting the store.
+class _SettingsSaveAppState extends AppState {
+  _SettingsSaveAppState(super.services);
+
+  final Zone _ioZone = Zone.current;
+  Future<void>? _settingsSave;
+
+  @override
+  Future<void> toggleServerGroup(String key) => _settingsSave = _ioZone
+      .run<Future<void>>(() => super.toggleServerGroup(key));
+}
 
 /// Real-font captures of the server list for visual review, in both
 /// postures, both densities and both brightnesses: the desktop rail
@@ -123,13 +139,14 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   Directory? directory;
   AppServices? services;
-  AppState? state;
+  _SettingsSaveAppState? state;
 
   setUpAll(() async {
     await _loadRealFonts();
   });
 
   tearDown(() async {
+    await state?._settingsSave;
     state?.dispose();
     await services?.probe.dispose();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -154,7 +171,7 @@ void main() {
           .setMockMethodCallHandler(_pathChannel, (_) async => directory!.path);
       FlutterSecureStorage.setMockInitialValues({});
       services = await AppServices.initialize();
-      state = AppState(services!);
+      state = _SettingsSaveAppState(services!);
       if (empty) {
         state!.updateInfo = UpdateInfo(
           latestVersion: '1.4.0',
@@ -292,6 +309,21 @@ void main() {
   Future<void> useDensity(WidgetTester tester, ServerListDensity density) =>
       tester.runAsync(() => state!.setServerListDensity(density));
 
+  // The fold's settings write needs real async too. Finish the actual save
+  // and check what landed, or its metadata queue can strand the next test's
+  // writes.
+  Future<void> tapAndSaveSettings(WidgetTester tester, Finder finder) async {
+    state!._settingsSave = null;
+    await tester.tap(finder);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.runAsync(() async {
+      expect(state!._settingsSave, isNotNull);
+      await state!._settingsSave;
+      final saved = await services!.settingsStore.load();
+      expect(saved.collapsedServerGroups, state!.collapsedServerGroups);
+    });
+  }
+
   for (final brightness in Brightness.values) {
     final tone = brightness.name;
 
@@ -358,8 +390,7 @@ void main() {
 
       // Fold the group holding a live session: its row keeps the dot.
       await useDensity(tester, ServerListDensity.comfortable);
-      await tester.tap(find.text('Production'));
-      await tester.pump(const Duration(milliseconds: 300));
+      await tapAndSaveSettings(tester, find.text('Production'));
       expect(workerRow, findsNothing);
       expect(
         tester
