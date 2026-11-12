@@ -34,6 +34,16 @@ const double _wideWidth = 600;
 const double _gap = 16;
 const double _sparklineHeight = 40;
 
+/// [_sparklineHeight] grown with the text: its scale label is text, and
+/// would overflow a fixed height at large sizes.
+double _sparklineHeightIn(BuildContext context) =>
+    MediaQuery.textScalerOf(context).scale(_sparklineHeight);
+
+/// The gap between a gauge and its sparkline, and the least width the
+/// sparkline keeps beside it before the gauge stacks above it.
+const double _chartsGap = 16;
+const double _sparklineMinWidth = 48;
+
 /// The most cores the CPU card draws a bar each for; more read as a
 /// [CoreHeatmap], which fits many on a phone (03 §10.7).
 const int _coreBarLimit = 16;
@@ -1196,34 +1206,54 @@ final class _Cards {
     ChartThresholds? thresholds,
   }) {
     final strings = klabautermannChartStrings(AppLocalizations.of(context));
-    return Row(
-      spacing: 16,
-      children: [
-        Gauge(
-          label: label,
-          part: part,
-          value: value,
-          total: total,
-          unit: unit,
-          strings: strings,
-          thresholds: thresholds,
-          stale: stale,
-        ),
-        Expanded(
-          child: SizedBox(
-            height: _sparklineHeight,
-            child: Sparkline(
-              series: monitoring.seriesFor(serverId, SampleStream.core, series),
-              label: label,
-              unit: unit,
-              strings: strings,
-              max: total != null && total > 0 ? total : null,
-              thresholds: unit == ChartUnit.percent ? thresholds : null,
-              color: stale ? ChartPalette.of(context).muted : null,
-            ),
-          ),
-        ),
-      ],
+    final gauge = Gauge(
+      label: label,
+      part: part,
+      value: value,
+      total: total,
+      unit: unit,
+      strings: strings,
+      thresholds: thresholds,
+      stale: stale,
+    );
+    final sparkline = SizedBox(
+      height: _sparklineHeightIn(context),
+      child: Sparkline(
+        series: monitoring.seriesFor(serverId, SampleStream.core, series),
+        label: label,
+        unit: unit,
+        strings: strings,
+        max: total != null && total > 0 ? total : null,
+        thresholds: unit == ChartUnit.percent ? thresholds : null,
+        color: stale ? ChartPalette.of(context).muted : null,
+      ),
+    );
+    final scaler = MediaQuery.textScalerOf(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // The words under the arc grow with the text and with a severity;
+        // when they leave the sparkline too little room, it goes below.
+        final gaugeWidth = scaler.scale(Gauge.legendWidth);
+        if (gaugeWidth + _chartsGap + _sparklineMinWidth >
+            constraints.maxWidth) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: _chartsGap,
+            children: [
+              Align(alignment: AlignmentDirectional.centerStart, child: gauge),
+              sparkline,
+            ],
+          );
+        }
+
+        return Row(
+          spacing: _chartsGap,
+          children: [
+            gauge,
+            Expanded(child: sparkline),
+          ],
+        );
+      },
     );
   }
 
@@ -1423,7 +1453,7 @@ final class _Cards {
       title: l10n.overviewLoadTitle,
       children: [
         SizedBox(
-          height: _sparklineHeight,
+          height: _sparklineHeightIn(context),
           child: Sparkline(
             series: monitoring.seriesFor(
               serverId,
