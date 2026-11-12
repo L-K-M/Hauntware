@@ -832,6 +832,10 @@ class _PaneViewState extends State<PaneView> {
       // 02 §8.2's Esc order: a pending type-ahead buffer clears
       // below navigation-cancel and above deselect.
       controller.clearTypeAhead();
+    } else if (controller.selectedCount > 0) {
+      // 02 §8.2's last tier: with nothing else to cancel, Esc deselects
+      // (the way out of a Select All without clicking a row).
+      controller.clearSelection();
     } else {
       // Idle: nothing to cancel here — let Esc reach ancestor
       // handlers (app shortcuts) instead of swallowing it.
