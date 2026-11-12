@@ -1117,5 +1117,9 @@ Future<String> unusedCorruptCopyPath(File file, DateTime time) async {
 /// engine's import store. A reader, or a crash, sees the old file or the
 /// new one, never a partial one. A failure deletes the temp file and
 /// rethrows. The shared writer orders replacements of one target by request.
-Future<void> writeFileAtomically(File target, List<int> bytes) =>
-    const AtomicFileWriter().writeBytes(target, bytes);
+Future<void> writeFileAtomically(File target, List<int> bytes) async {
+  // Keep this store family's parent-creation policy: a dangling directory
+  // link means unavailable storage, not a hierarchy for the writer to repair.
+  await target.parent.create(recursive: true);
+  await const AtomicFileWriter().writeBytes(target, bytes);
+}

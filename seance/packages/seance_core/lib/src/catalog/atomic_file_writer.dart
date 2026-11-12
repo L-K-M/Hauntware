@@ -39,7 +39,7 @@ final class AtomicFileWriter {
   const AtomicFileWriter();
 
   static final Map<String, Future<void>> _pendingWrites = {};
-  static Future<void> _resolutionTail = Future<void>.value();
+  static Future<void> _pathAccessTail = Future<void>.value();
 
   /// Replaces [file] with [contents], creating missing parent directories.
   Future<void> write(
@@ -58,8 +58,8 @@ final class AtomicFileWriter {
   }) {
     final result = Completer<void>();
     // Resolve aliases in request order, not in filesystem-completion order.
-    // Only resolution is global; writes to different targets still overlap.
-    final enqueue = _resolutionTail.then((_) async {
+    // Only path metadata is global; data writes to distinct targets overlap.
+    final enqueue = _withPathAccess(() async {
       final target = await _resolveTarget(file);
       final key = _queueKey(target.path);
       final previous = _pendingWrites[key] ?? Future<void>.value();
@@ -76,13 +76,26 @@ final class AtomicFileWriter {
       _pendingWrites[key] = tail;
       result.complete(write);
     });
-    _resolutionTail = enqueue.then<void>(
-      (_) {},
-      onError: (Object error, StackTrace stack) {
-        result.completeError(error, stack);
-      },
+    unawaited(
+      enqueue.then<void>(
+        (_) {},
+        onError: (Object error, StackTrace stack) {
+          result.completeError(error, stack);
+        },
+      ),
     );
     return result.future;
+  }
+
+  Future<T> _withPathAccess<T>(Future<T> Function() operation) {
+    // Windows canonical-path resolution holds a non-delete-sharing handle.
+    // Exclude it from renames, without holding this queue during data I/O.
+    final result = _pathAccessTail.then<T>((_) => operation());
+    _pathAccessTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
   }
 
   Future<void> _writeResolved(
@@ -109,7 +122,7 @@ final class AtomicFileWriter {
       }
       // Never delete a committed file to retry a failed rename. A refused
       // replacement must leave the old snapshot available for recovery.
-      await temporary.rename(target.path);
+      await _withPathAccess(() => temporary.rename(target.path));
       if (ownerOnly) {
         // Rename carries the temp's mode; the explicit chmod also tightens
         // a destination that outlived an odd rename path.
