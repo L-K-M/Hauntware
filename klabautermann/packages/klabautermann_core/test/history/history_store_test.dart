@@ -99,6 +99,20 @@ void main() {
       expect(db.buckets.single.values[AlertMetric.cpuBusy]!.max, 90);
     });
 
+    test('a clock stepped back records again at once, and a bucket after '
+        'now is left out', () async {
+      history
+        ..observe(_web, _cpu(10), _at(600))
+        ..observe(_web, _cpu(20), _at(0))
+        ..observe(_web, _cpu(30), _at(5))
+        ..gap(_web, _at(700), _at(800), GapCause.disconnected);
+
+      final range = await history.read(_web, HistoryTier.minute, now: _at(10));
+      expect([for (final b in range.buckets) b.start], [_at(0)]);
+      expect(range.buckets.single.values[AlertMetric.cpuBusy]!.count, 2);
+      expect(range.gaps, isEmpty);
+    });
+
     test('a bucket older than the tier\'s span is left out', () async {
       history
         ..observe(_web, _cpu(10), _at(0))
@@ -193,6 +207,115 @@ void main() {
       reopened.observe(_web, _cpu(30), _at(120));
       await reopened.flush();
       expect(await ring.length(), size);
+    });
+
+    test(
+      'a restart inside a bucket keeps the readings from before it',
+      () async {
+        final first = await open({_web});
+        first
+          ..observe(_web, _cpu(10), _at(0))
+          ..observe(_web, _cpu(20), _at(60))
+          ..observe(_web, _cpu(30), _at(90));
+        await first.flush();
+
+        final second = await open({_web});
+        second
+          ..observe(_web, _cpu(40), _at(100))
+          ..observe(_web, _cpu(50), _at(180));
+        await second.flush();
+
+        final minute = await second.read(
+          _web,
+          HistoryTier.minute,
+          now: _at(200),
+        );
+        final held = minute.buckets.firstWhere((b) => b.start == _at(60));
+        expect(held.values[AlertMetric.cpuBusy]!.count, 3);
+        final ten = await second.read(
+          _web,
+          HistoryTier.tenMinutes,
+          now: _at(200),
+        );
+        final stat = ten.buckets.single.values[AlertMetric.cpuBusy]!;
+        expect((stat.min, stat.max, stat.mean, stat.count), (10, 50, 30, 5));
+      },
+    );
+
+    test('an exit without a flush loses at most the filling minute', () async {
+      final first = await open({_web});
+      first
+        ..observe(_web, _cpu(10), _at(0))
+        ..observe(_web, _cpu(20), _at(60))
+        ..observe(_web, _cpu(30), _at(120));
+      // Waits for the closed minutes' writes; nothing flushes.
+      await first.read(_web, HistoryTier.minute, now: _at(130));
+
+      final second = await open({_web});
+      final ten = await second.read(
+        _web,
+        HistoryTier.tenMinutes,
+        now: _at(130),
+      );
+      expect(ten.buckets.single.values[AlertMetric.cpuBusy]!.count, 2);
+    });
+
+    test('a read beside a closing minute neither fails nor costs the '
+        'write', () async {
+      final store = await open({_web});
+      store
+        ..observe(_web, _cpu(10), _at(0))
+        ..observe(_web, _cpu(20), _at(60));
+      await store.read(_web, HistoryTier.minute, now: _at(70));
+
+      // The read and the closing minute's write use the same ring file.
+      final reading = store.read(_web, HistoryTier.minute, now: _at(130));
+      store.observe(_web, _cpu(30), _at(120));
+      expect((await reading).buckets, isNotEmpty);
+      await store.flush();
+
+      final minute = await store.read(_web, HistoryTier.minute, now: _at(130));
+      expect(
+        [for (final b in minute.buckets) b.start],
+        [_at(0), _at(60), _at(120)],
+      );
+    });
+
+    test('rings the disk refused to open are opened again by the next '
+        'write', () async {
+      final store = await open({_web});
+      // A file where the server's ring directory belongs fails the open.
+      final blocker = File('${support.path}/history/$_web')
+        ..createSync(recursive: true);
+      store
+        ..observe(_web, _cpu(10), _at(0))
+        ..observe(_web, _cpu(20), _at(60));
+      await store.flush();
+
+      blocker.deleteSync();
+      store
+        ..observe(_web, _cpu(30), _at(120))
+        ..observe(_web, _cpu(40), _at(180));
+      await store.flush();
+
+      final reopened = await open({_web});
+      final minute = await reopened.read(
+        _web,
+        HistoryTier.minute,
+        now: _at(200),
+      );
+      expect([
+        for (final b in minute.buckets) b.start,
+      ], containsAll([_at(120), _at(180)]));
+    });
+
+    test('a read of a server with no rings creates none', () async {
+      final store = await open({_web});
+
+      final range = await store.read(_db, HistoryTier.minute, now: _at(0));
+
+      expect(range.buckets, isEmpty);
+      expect(await Directory('${support.path}/history/$_db').exists(), isFalse);
     });
 
     test('a server leaving the fleet loses its rings, at once or at the '

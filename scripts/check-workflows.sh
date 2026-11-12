@@ -29,6 +29,8 @@
 #      so re-running it stays idempotent,
 #  11. all Android client legs verify the built APK's version code,
 #  12. PR product-job selection follows every cross-product read,
+#  13. every app's Android manifest opts out of backup and transfer
+#      (the Keystore key that seals the vault is never backed up),
 #  14. every Planchette Flutter package is analyzed and tested by CI,
 #      the release gate and scripts/test.sh,
 #  15. no checkout leaves the job token in .git/config.
@@ -335,6 +337,37 @@ python3 scripts/ci-affected-products.py --self-test ||
   err "ci-affected-products self-test failed"
 python3 scripts/ci-affected-products.py --check-references ||
   err "a cross-product file read is missing from ci-affected-products.py"
+
+# --- 13. Android backup stays off -------------------------------------------
+# Every app seals its saved credentials with an Android Keystore key that
+# no backup carries. A restored or transferred copy would bring back a
+# vault nothing can open and a device id two devices then share, so each
+# manifest opts out of Auto Backup and of device-to-device transfer.
+for manifest in */app/*/android/app/src/main/AndroidManifest.xml; do
+  for attribute in \
+    'android:allowBackup="false"' \
+    'android:fullBackupContent="false"' \
+    'android:dataExtractionRules="@xml/data_extraction_rules"'; do
+    grep -qF "$attribute" "$manifest" ||
+      err "$manifest must set $attribute"
+  done
+  rules="${manifest%/AndroidManifest.xml}/res/xml/data_extraction_rules.xml"
+  if [[ ! -f "$rules" ]]; then
+    err "$rules is missing"
+    continue
+  fi
+  for section in cloud-backup device-transfer; do
+    for domain in root file database sharedpref external; do
+      awk -v section="$section" -v domain="$domain" '
+        $0 ~ "<" section ">" { inside = 1; next }
+        $0 ~ "</" section ">" { inside = 0 }
+        inside && $0 ~ "<exclude domain=\"" domain "\" path=\"\\.\"" { found = 1 }
+        END { exit !found }
+      ' "$rules" ||
+        err "$rules must exclude the $domain domain from $section"
+    done
+  done
+done
 
 if [[ "$fail" -ne 0 || "$missing" -ne 0 || "$uncovered" -ne 0 ]]; then
   echo "workflow contract checks FAILED" >&2

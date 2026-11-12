@@ -8,7 +8,6 @@ library;
 
 import 'package:meta/meta.dart';
 
-import '../parse/metrics.dart' show CoreSnapshot;
 import '../parse/models.dart';
 import '../parse/parse_result.dart';
 import '../parse/procs.dart' show ProcsSnapshot;
@@ -18,7 +17,9 @@ import '../parse/procs.dart' show ProcsSnapshot;
 /// A decrease means a wrap on a 32-bit counter (continued modulo 2^32)
 /// and a reset on a 64-bit one, which cannot wrap in practice: a reset
 /// yields `null` so the caller starts a new series instead of reporting a
-/// huge bogus rate.
+/// huge bogus rate. A reading at or past 2^32 shows the counter is wider
+/// than [width] says, as a 32-bit kernel's `/proc/net/dev` counters of a
+/// driver with 64-bit statistics are, so a decrease there is a reset too.
 int? counterDelta(
   int previous,
   int next, {
@@ -26,17 +27,14 @@ int? counterDelta(
 }) {
   if (previous < 0 || next < 0) return null;
   if (next >= previous) return next - previous;
-  if (width == CounterWidth.bits32) {
-    return (1 << 32) - previous + next;
+  if (width == CounterWidth.bits32 && previous < _wrap32 && next < _wrap32) {
+    return _wrap32 - previous + next;
   }
   return null;
 }
 
-/// Whether the host rebooted between two readings (03 §6.4): a changed
-/// `btime` starts a new series. Unknown on either side stays false —
-/// without both boot times a reboot cannot be told from a plain gap.
-bool seriesReset(int? previousBtime, int? nextBtime) =>
-    previousBtime != null && nextBtime != null && previousBtime != nextBtime;
+/// Where a 32-bit counter wraps.
+const _wrap32 = 1 << 32;
 
 /// Per-field CPU occupancy in percent of the jiffy delta between two
 /// `/proc/stat` readings (03 §6.4, §7.1). Percentages of the fields sum
@@ -213,8 +211,8 @@ final class DiskRate {
 
 /// Per-device rates from /proc/diskstats counters (03 §6.4). Devices
 /// missing from either side, reset counters and a zero interval yield no
-/// entry; a device whose timings are missing on either side, or reset,
-/// keeps its throughput without latency and utilization.
+/// entry; a device whose timings are missing on either side keeps its
+/// throughput without latency and utilization.
 Map<String, DiskRate> diskRates(
   List<DiskStatEntry> previous,
   List<DiskStatEntry> next,
@@ -241,9 +239,12 @@ Map<String, DiskRate> diskRates(
     );
     if (rd == null || wr == null || reads == null || writes == null) continue;
 
+    // The kernel prints the timings as unsigned int on every architecture
+    // (`diskstats_show` in block/genhd.c), so they wrap at 2^32 ms even
+    // where the counters above are 64 bits wide.
     int? delta(int? before, int? after) => before == null || after == null
         ? null
-        : counterDelta(before, after, width: width);
+        : counterDelta(before, after, width: CounterWidth.bits32);
     final readMs = delta(p.readMs, n.readMs);
     final writeMs = delta(p.writeMs, n.writeMs);
     final ioMs = delta(p.ioMs, n.ioMs);
@@ -262,73 +263,6 @@ Map<String, DiskRate> diskRates(
     );
   }
   return out;
-}
-
-/// All rates between two `core` snapshots (03 §6.4), or the pieces that
-/// are computable: a changed `btime` or a zero/negative uptime delta
-/// yields empty rate maps (the tick is a gap, not a stale value).
-@immutable
-final class CoreDelta {
-  const CoreDelta({
-    required this.rebooted,
-    required this.elapsedSeconds,
-    this.cpu,
-    required this.perCpu,
-    required this.net,
-    required this.disk,
-  });
-
-  /// `btime` changed: the host rebooted and every counter restarted.
-  final bool rebooted;
-
-  /// Uptime delta between the two ticks, null when either side lacks it.
-  final double? elapsedSeconds;
-
-  /// Aggregate CPU occupancy.
-  final CpuPercentages? cpu;
-
-  /// Per-core busy percent.
-  final Map<String, double> perCpu;
-
-  /// Per-interface byte rates.
-  final Map<String, NetRate> net;
-
-  /// Per-device byte rates.
-  final Map<String, DiskRate> disk;
-}
-
-/// Diffs two `core` snapshots against each other and their uptimes
-/// (03 §6.4).
-CoreDelta diffCoreSnapshots(
-  CoreSnapshot previous,
-  CoreSnapshot next, {
-  CounterWidth width = CounterWidth.bits64,
-}) {
-  final rebooted = seriesReset(previous.btime, next.btime);
-  final prevUp = previous.uptimeSeconds;
-  final nextUp = next.uptimeSeconds;
-  final elapsed = prevUp != null && nextUp != null ? nextUp - prevUp : null;
-  if (rebooted || elapsed == null || elapsed <= 0) {
-    return CoreDelta(
-      rebooted: rebooted,
-      elapsedSeconds: elapsed,
-      perCpu: const {},
-      net: const {},
-      disk: const {},
-    );
-  }
-  final prevCpu = previous.cpu;
-  final nextCpu = next.cpu;
-  return CoreDelta(
-    rebooted: false,
-    elapsedSeconds: elapsed,
-    cpu: prevCpu != null && nextCpu != null
-        ? cpuDeltaPercent(prevCpu, nextCpu)
-        : null,
-    perCpu: perCpuBusyPercent(previous.perCpu, next.perCpu),
-    net: netRates(previous.netdev, next.netdev, elapsed, width: width),
-    disk: diskRates(previous.diskstats, next.diskstats, elapsed, width: width),
-  );
 }
 
 /// Per-pid CPU occupancy between two `procs` snapshots in percent of one
