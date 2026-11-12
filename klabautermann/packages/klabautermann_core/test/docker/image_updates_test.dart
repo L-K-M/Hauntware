@@ -312,6 +312,26 @@ void main() {
     });
   });
 
+  test('a 429 in one read holds its registry back in the later reads of '
+      'the same check', () async {
+    image('sha256:i0', ['busybox:1'], repoDigests: ['busybox@$_old']);
+    host.blocks['busybox:1'] = _head(429, remaining: '0;w=3600');
+    for (var i = 1; i < kRegistryHeadsMax; i++) {
+      image('sha256:q$i', ['quay.io/a/b$i:1'], repoDigests: ['x@$_old']);
+      host.blocks['quay.io/a/b$i:1'] = _head(200, digest: _old);
+    }
+    image('sha256:i1', ['busybox:2'], repoDigests: ['busybox@$_old']);
+    host.blocks['busybox:2'] = _head(200, digest: _old);
+    image('sha256:last', ['quay.io/a/last:1'], repoDigests: ['x@$_old']);
+    host.blocks['quay.io/a/last:1'] = _head(200, digest: _old);
+
+    await check();
+    expect(host.commands, hasLength(2));
+    expect(host.commands.first, contains('busybox:1'));
+    expect(host.commands.last, contains('quay.io/a/last:1'));
+    expect(host.commands.last, isNot(contains('busybox:2')));
+  });
+
   test('the daemon route asks DistributionInspect for each tag, keeps its '
       'refusals as the statuses they stand for, and runs nothing on the '
       'host', () async {

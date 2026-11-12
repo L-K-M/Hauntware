@@ -5699,7 +5699,10 @@ a bottom sheet below 600 dp. It shows the target, each step's exact
 command line or API request in the monospace stack with a root badge on
 elevated steps (SAF-03), the danger findings, protection, impact and
 ownership, who runs it with which credentials, and what it leaves on
-the server, all worded from the engine's typed facts (D35). Tier 1
+the server, all worded from the engine's typed facts (D35). Where admin
+mode elevates without a password, through a root login or a NOPASSWD
+rule (8.3), the engine names the elevated credentials passwordless when
+it holds the plan, so the preview says the run needs no password. Tier 1
 names the target; tier 2 enables Run and Enter only once the target's
 name is typed exactly; Escape and Cancel close it. A toast says when a
 run starts and how it ended. `ActionEntry` wraps every action control

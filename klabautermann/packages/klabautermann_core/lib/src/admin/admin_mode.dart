@@ -24,6 +24,8 @@ import 'package:seance_core/seance_core.dart'
 
 import '../engine/protocol.dart';
 import '../links/prompt_broker.dart';
+import '../operations/operation_plan.dart';
+import '../operations/plan_types.dart';
 
 /// How many times the password is asked for before admin mode fails: a
 /// wrong one gets two retries.
@@ -83,6 +85,16 @@ bool needsPassword(ElevationProbe probe) =>
     probe.sudoVersionLine != null &&
     !probe.sudoNopasswd &&
     probe.printfIsBuiltin;
+
+/// [plan] as [session] would run it: a plan whose elevated steps would
+/// use admin mode's password names none when the account elevates without
+/// one, through a root login or a NOPASSWD rule (03 §8.3 rungs 1 and 2).
+/// Without a session the planner's words stand.
+OperationPlan withAdminCredentials(OperationPlan plan, AdminSession? session) {
+  if (session == null || session.password != null) return plan;
+  if (plan.runner.credentials != RunnerCredentials.adminPassword) return plan;
+  return plan.withCredentials(RunnerCredentials.passwordless);
+}
 
 /// Runs admin mode for every server. It holds no policy: the engine
 /// refuses [enable] for an observe-only or read-only server first.

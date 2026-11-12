@@ -1220,6 +1220,46 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('the path dialog scrolls at 200 % text above a keyboard', (
+      tester,
+    ) async {
+      final choices = DockerEndpointChoices();
+      addTearDown(choices.dispose);
+      await _openPicker(tester, choices);
+      await _pick(tester, 'Find automatically', 'Custom path…');
+      expect(find.text('Custom engine socket'), findsOneWidget);
+
+      // The phone's small screen, the large text and the keyboard arrive
+      // while the dialog shows. The page behind it may overflow at this
+      // size; the dialog may not, so the errors are collected.
+      final reported = <String>[];
+      final onError = FlutterError.onError;
+      FlutterError.onError = (details) =>
+          reported.add(details.toDiagnosticsNode().toStringDeep());
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+      addTearDown(tester.view.resetViewInsets);
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(TextField),
+        ),
+        'srv/engine.sock',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Use'));
+      await tester.pumpAndSettle();
+      FlutterError.onError = onError;
+      expect(find.text('Enter an absolute path, starting with /.'), findsOne);
+      expect(
+        reported.where((error) => error.contains('docker_endpoint_picker')),
+        isEmpty,
+      );
+    });
+
     testWidgets('lays out on a phone at 200 % text', (tester) async {
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);

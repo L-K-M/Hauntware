@@ -76,9 +76,10 @@ void main() {
       ('https://sync.example.com', 'ops', 'pw', 'pp'),
     );
     harness.engine.emit(
-      const SyncStatus(
+      SyncStatus(
         SyncPhase.succeeded,
         operation: SyncOperation.enroll,
+        requestId: request.requestId,
         account: testSyncAccount,
       ),
     );
@@ -161,11 +162,12 @@ void main() {
     expect(button, findsOneWidget);
     await tester.tap(button);
     await tester.pump();
-    expect(harness.engine.sentOfType<RunSyncRound>(), hasLength(1));
+    final round = harness.engine.sentOfType<RunSyncRound>().single;
     harness.engine.emit(
-      const SyncStatus(
+      SyncStatus(
         SyncPhase.failed,
         operation: SyncOperation.round,
+        requestId: (round as RunSyncRound).requestId,
         account: testSyncAccount,
         failure: SyncFailure.unreachable,
       ),
