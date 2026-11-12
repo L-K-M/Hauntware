@@ -435,6 +435,74 @@ void main() {
       expect(_typed(engine), before);
     });
 
+    testWidgets('a paste from the soft keyboard takes the paste policy', (
+      tester,
+    ) async {
+      await pumpPane(tester, platform: TargetPlatform.android);
+      await start(tester);
+      final view = tester.widget<TerminalView>(find.byType(TerminalView));
+
+      view.onKeyboardPaste!('cd /tmp\nrm -rf /');
+      await tester.pumpAndSettle();
+      expect(find.text('Paste 2 lines?'), findsOneWidget);
+      expect(_typed(engine), isEmpty);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(_typed(engine), isEmpty);
+
+      // Bracketed paste is off, so a clean paste asks too, and says why.
+      view.onKeyboardPaste!('cd /tmp\nls');
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'This shell runs each line as it arrives. Check the lines before '
+          'you paste them.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Paste all'));
+      await tester.pumpAndSettle();
+      expect(_typed(engine), contains('cd /tmp\nls'));
+    });
+
+    testWidgets('a link whose text hides its target opens only after the '
+        'review shows it', (tester) async {
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      final opened = <Object?>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        call,
+      ) async {
+        opened.add(call.arguments['url']);
+        return true;
+      });
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        ),
+      );
+      await pumpPane(tester);
+      await start(tester);
+      final view = tester.widget<TerminalView>(find.byType(TerminalView));
+      const target = 'https://login.evil.test/';
+
+      view.onHiddenLinkTap!(Uri.parse(target));
+      await tester.pumpAndSettle();
+      expect(find.text('Open this link?'), findsOneWidget);
+      expect(find.text('login.evil.test'), findsOneWidget);
+      expect(find.text(target), findsOneWidget);
+      expect(opened, isEmpty);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(opened, isEmpty);
+
+      view.onHiddenLinkTap!(Uri.parse(target));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      expect(opened, [target]);
+    });
+
     testWidgets('an ended shell says why and opens again with the same '
         'settings', (tester) async {
       await pumpPane(tester);
