@@ -12,6 +12,8 @@ import 'package:flutter/material.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../services/secure_master_key.dart'
+    show MasterKeyUnavailableException;
 import '../../services/settings_models.dart';
 import '../../services/sync_account_gate.dart';
 import '../../services/uuid.dart';
@@ -24,6 +26,7 @@ String describeEnrollmentError(AppLocalizations l10n, Object error) =>
     switch (error) {
       KdfDowngradeException() => l10n.backupKdfRefusal,
       RegistrationClosedException() => l10n.backupRegistrationClosed,
+      MasterKeyUnavailableException() => l10n.backupVaultKeyMissing,
       _ => l10n.backupEnrollFailed('$error'),
     };
 

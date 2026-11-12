@@ -611,22 +611,45 @@ void main() {
         await drainSetupBacklog();
         final events = <DirectoryWatchEvent>[];
         final subscription = channel.directoryChanges.listen(events.add);
+        final sinceWrite = Stopwatch()..start();
         File('${root.path}/created.txt').writeAsStringSync('new');
-        // A second write inside the debounce window must coalesce into the
-        // same emission — the property the debounce exists for.
         File('${root.path}/created.txt').writeAsStringSync('newer');
 
-        // Await the first emission via the proven timeout; the quiet
-        // window then only guards against a spurious SECOND emission,
-        // which is the property under test — a loaded runner delaying the
-        // debounce past the window can no longer flake the hasLength(1).
+        // The debounce coalesces events delivered less than its interval
+        // apart, which local_directory_watcher_test proves deterministically.
+        // A real backend batches on its own latency (FSEvents can deliver
+        // the two writes, or a late pre-watch event, in separate batches on
+        // a loaded runner), so the emission count is not guaranteed here.
+        // What is: every emission is a debounced `changed` for the watched
+        // path, and the stream settles once the burst is over. Where no
+        // pre-watch event can arrive late, the first emission also cannot
+        // come before the debounce interval.
         await channel.directoryChanges.first.timeout(_watchCrossingTimeout);
-        await Future<void>.delayed(_watchQuietWindow);
+        final firstAfter = sinceWrite.elapsed;
+        var seen = events.length;
+        while (true) {
+          await Future<void>.delayed(_watchQuietWindow);
+          if (events.length == seen) break;
+          seen = events.length;
+          expect(
+            sinceWrite.elapsed,
+            lessThan(_watchCrossingTimeout),
+            reason: 'the watch never went quiet after the burst',
+          );
+        }
         await subscription.cancel();
-        expect(events, hasLength(1));
-        expect(events.single.signal, DirectoryWatchSignal.changed);
-        expect(events.single.path, channel.homePath);
-        expect(events.single.channelId, channel.channelId);
+        expect(events, isNotEmpty);
+        if (!Platform.isMacOS) {
+          expect(
+            firstAfter,
+            greaterThanOrEqualTo(LocalDirectoryWatcher.debounceInterval),
+          );
+        }
+        for (final event in events) {
+          expect(event.signal, DirectoryWatchSignal.changed);
+          expect(event.path, channel.homePath);
+          expect(event.channelId, channel.channelId);
+        }
       },
     );
 
