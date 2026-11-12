@@ -97,22 +97,14 @@ class DocumentStatusBar extends StatelessWidget {
         ),
       ),
       itemBuilder: (_) => [
-        CheckedPopupMenuItem(
-          value: LineEnding.lf,
-          checked: metadata.lineEnding == LineEnding.lf,
-          child: const Text('LF'),
-        ),
-        CheckedPopupMenuItem(
-          value: LineEnding.crlf,
-          checked: metadata.lineEnding == LineEnding.crlf,
-          child: const Text('CRLF'),
-        ),
+        for (final ending in LineEnding.values)
+          CheckedPopupMenuItem(
+            value: ending,
+            checked: metadata.lineEnding == ending,
+            child: Text(ending.label),
+          ),
       ],
-      child: Text(
-        metadata.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
-        maxLines: 1,
-        style: style,
-      ),
+      child: Text(metadata.lineEnding.label, maxLines: 1, style: style),
     );
   }
 

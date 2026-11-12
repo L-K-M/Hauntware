@@ -295,10 +295,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'/'",
     // A problem without a subject or detail fills its slot with nothing.
     "''",
-    // The status row's line-ending and encoding names, which the shared
-    // surface spells the same way, and the separator between its facts.
-    "'CRLF'",
-    "'LF'",
+    // The status row's encoding names, which the shared surface spells
+    // the same way, and the separator between its facts; the line-ending
+    // name comes from the shared document core.
     "'UTF-8 BOM'",
     "'UTF-8'",
     "' · '",

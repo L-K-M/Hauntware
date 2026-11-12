@@ -11,8 +11,26 @@ import 'text_metrics.dart';
 const int textDocumentMaximumBytes = 4 * 1024 * 1024;
 const int defaultTextDocumentMaximumBytes = textDocumentMaximumBytes;
 
-/// The dominant on-disk line ending. Ties and single-line files use LF.
-enum LineEnding { lf, crlf }
+/// The dominant on-disk line ending: whichever of LF, CRLF and lone CR
+/// occurs most often. A tie prefers LF, then CRLF, then CR, so a file
+/// without breaks is LF and CR wins only a strict majority. Normalized
+/// saves write every break, whatever it was on disk, as this ending.
+enum LineEnding {
+  lf('\n', 'LF'),
+  crlf('\r\n', 'CRLF'),
+
+  /// Classic Mac OS: a lone carriage return ends each line.
+  cr('\r', 'CR');
+
+  const LineEnding(this.separator, this.label);
+
+  /// The characters one line break is written as.
+  final String separator;
+
+  /// The conventional abbreviation status bars show. Not localized: the
+  /// names are the same in every language.
+  final String label;
+}
 
 enum Utf8Bom {
   absent,
@@ -195,23 +213,39 @@ Future<TextDocument> loadTextDocument(
       'This file appears to be binary, not editable text.',
     );
   }
-  var crlfCount = 0;
-  var lfCount = 0;
-  for (var i = raw.indexOf('\n'); i >= 0; i = raw.indexOf('\n', i + 1)) {
-    if (i > 0 && raw.codeUnitAt(i - 1) == 0x0d) {
-      crlfCount++;
-    } else {
-      lfCount++;
-    }
-  }
   return TextDocument(
     file: file,
     text: normalization == TextNormalization.preserve ? raw : _foldToLf(raw),
     hasUtf8Bom: leadingBoms > 0,
-    lineEnding: crlfCount > lfCount ? LineEnding.crlf : LineEnding.lf,
+    lineEnding: _dominantLineEnding(raw),
     sha256: after,
   );
 }
+
+/// Counts each break once (a CRLF is not also a CR and an LF) and applies
+/// [LineEnding]'s vote.
+LineEnding _dominantLineEnding(String text) {
+  var crlf = 0;
+  var lf = 0;
+  var cr = 0;
+  for (var i = 0; i < text.length; i++) {
+    switch (text.codeUnitAt(i)) {
+      case _lineFeed:
+        lf++;
+      case _carriageReturn
+          when i + 1 < text.length && text.codeUnitAt(i + 1) == _lineFeed:
+        crlf++;
+        i++;
+      case _carriageReturn:
+        cr++;
+    }
+  }
+  if (lf >= crlf && lf >= cr) return LineEnding.lf;
+  return crlf >= cr ? LineEnding.crlf : LineEnding.cr;
+}
+
+const _lineFeed = 0x0a;
+const _carriageReturn = 0x0d;
 
 /// Replaces an existing regular file only when its digest still matches.
 /// Temporary plaintext is owner-only on POSIX before the first write. The
@@ -538,7 +572,7 @@ int textDocumentByteCount(
 
 String _normalizeLineEndings(String text, LineEnding lineEnding) {
   final folded = _foldToLf(text);
-  return lineEnding == LineEnding.crlf
-      ? folded.replaceAll('\n', '\r\n')
-      : folded;
+  return lineEnding == LineEnding.lf
+      ? folded
+      : folded.replaceAll('\n', lineEnding.separator);
 }

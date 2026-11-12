@@ -995,7 +995,7 @@ class EditorController extends ChangeNotifier {
       current.baseOffset,
       current.extentOffset,
       pasted,
-      separator: bufferLineEnding == LineEnding.crlf ? '\r\n' : '\n',
+      separator: bufferLineEnding.separator,
     );
     _requestCaretReveal(CaretReveal.nearest);
     _setTextValue(

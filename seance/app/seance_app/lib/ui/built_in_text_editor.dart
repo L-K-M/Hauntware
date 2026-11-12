@@ -499,7 +499,7 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
         'Local changes'
       else if (copy != null)
         'In sync',
-      _editor.document?.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
+      (_editor.document?.lineEnding ?? LineEnding.lf).label,
       (_editor.document?.hasUtf8Bom ?? false) ? 'UTF-8 BOM' : 'UTF-8',
       strings.indentation(_editor.indentation),
       strings.languageName(_editor.text.language),

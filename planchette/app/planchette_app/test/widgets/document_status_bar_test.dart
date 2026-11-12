@@ -59,6 +59,22 @@ void main() {
     expect(find.text('CRLF'), findsOneWidget);
   });
 
+  testWidgets('the line ending menu offers CR and shows it once chosen', (
+    tester,
+  ) async {
+    final editor = controller();
+    await mount(tester, editor);
+    await tester.tap(find.text('LF'));
+    await tester.pumpAndSettle();
+    expect(menuItem('LF'), findsOneWidget);
+    expect(menuItem('CRLF'), findsOneWidget);
+    await tester.tap(menuItem('CR'));
+    await tester.pumpAndSettle();
+    expect(editor.metadata.lineEnding, LineEnding.cr);
+    expect(find.text('CR'), findsOneWidget);
+    expect(editor.isDirty, isTrue, reason: 'the next save writes CR breaks');
+  });
+
   testWidgets('BOM choice explains its size and applies next save', (
     tester,
   ) async {

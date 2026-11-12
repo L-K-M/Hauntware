@@ -105,7 +105,11 @@ remote state stay in their applications.
 The editor remains a bounded UTF-8 text editor: a 4 MiB file limit and a
 200,000-character highlighting limit. BOM and dominant line-ending metadata
 survive saves; mixed line endings are normalized according to the existing
-document policy, rather than claimed to be preserved individually.
+document policy, rather than claimed to be preserved individually. The line
+ending is LF, CRLF or a lone CR (classic Mac OS). Loading counts each break
+once, takes the most frequent kind, and breaks a tie toward LF, then CRLF,
+then CR, so a file without breaks is LF and CR needs a strict majority. A
+normalized save writes every break as that one ending.
 
 User-selected local symlinks may be resolved once at open. Managed copies
 must be regular files and reject symlinks. Saves use the resolved identity,

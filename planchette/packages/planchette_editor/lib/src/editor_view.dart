@@ -1128,7 +1128,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         widget.strings.selectionSummary(selected.characters, selected.lines),
       if (c.isSaving) widget.strings.saving,
       if (c.isDirty) widget.strings.unsaved,
-      c.metadata.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
+      c.metadata.lineEnding.label,
       c.metadata.utf8Bom == Utf8Bom.present ? 'UTF-8 BOM' : 'UTF-8',
       widget.strings.indentation(c.indentation),
       widget.strings.languageName(c.text.language),
