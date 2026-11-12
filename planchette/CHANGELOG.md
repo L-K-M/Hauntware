@@ -31,6 +31,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   them.
 
 ### Fixed
+- Windows bounds the wait when handing a file to the running app and
+  requires its acknowledgement. Failed or blocked delivery shows a retryable
+  error instead of claiming the request succeeded.
 - A stored key passphrase that does not open the key is asked for again,
   with a prompt that says the first one failed, instead of failing the
   connection with the same passphrase.
@@ -75,6 +78,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reconnects in the same session use it again.
 - Folder paths in the folder browser's header and the Open Folder on
   server field draw in the bundled code font, as Séance's path bar does.
+- On Linux and Windows, Planchette runs once. Opening a file while it
+  runs hands the file to the running Planchette, and launching it again
+  raises its window, instead of starting a second copy that writes the
+  same settings and window state.
 
 ## [1.9.0] - 2026-10-04
 

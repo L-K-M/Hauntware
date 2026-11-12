@@ -82,6 +82,17 @@ sections 4 to 8).
   Klabautermann the third, with an entry in
   `klabautermann/docs/SHARED.md`; a fourth copy needs the shared-plugin
   review D32 calls for first.
+- Planchette's single instance (`planchette/ANALYSIS.md` I1) copies the
+  claim, wait and present logic of
+  `seance_app/windows/runner/deep_link_scheme.cpp` into
+  `planchette_app/windows/runner/single_instance.{h,cpp}` with
+  Planchette's names (the mutex and window property
+  `ch.lkmc.planchette.single-instance-v1`). It registers no scheme: a
+  second launch sends its document arguments over `WM_COPYDATA`. Its
+  Linux runner follows the same unique GApplication in its own file.
+  That makes Planchette the third app with this runner code, so
+  Klabautermann's X-06 copy would be the fourth and needs D32's
+  shared-plugin review first.
 - Pin audit: `scripts/audit-seance-pin.sh` matched this record after
   each F5d branch; no contributor, licence text, vendored path or
   gitlink changed, so the record itself stays as it is.

@@ -3,10 +3,29 @@
 #include <windows.h>
 
 #include "flutter_window.h"
+#include "single_instance.h"
 #include "utils.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
+  // One instance (planchette/ANALYSIS.md I1): a second launch hands its
+  // document arguments to the running window, or raises it, so two engines
+  // never write the same stores.
+  switch (ClaimOrForwardInstance()) {
+    case InstanceDisposition::kForwarded:
+      return EXIT_SUCCESS;
+    case InstanceDisposition::kFailed:
+      MessageBoxW(
+          nullptr,
+          L"Could not start Planchette or contact its running app. "
+          L"Check that the running app is responding and uses the same "
+          L"permissions, then try again.",
+          L"Planchette", MB_OK | MB_ICONERROR);
+      return EXIT_FAILURE;
+    case InstanceDisposition::kRunPrimary:
+      break;
+  }
+
   // Attach to console when present (e.g., 'flutter run') or create a
   // new console when running with a debugger.
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
