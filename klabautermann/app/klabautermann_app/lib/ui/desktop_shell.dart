@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:ghost_desktop/ghost_desktop.dart'
     show
@@ -529,6 +530,9 @@ class _DesktopShellState extends State<DesktopShell> {
           ? DesktopShell.sidebarResizeHandleKey
           : DesktopShell.inspectorResizeHandleKey,
       label: leading ? l10n.sidebarResize : l10n.inspectorResize,
+      // Tap-to-focus competes with dragging; retain movement before the
+      // drag wins the arena, as the previous pane handles did.
+      dragStartBehavior: DragStartBehavior.down,
       width: leading ? widths.rail : widths.inspector,
       minimumWidth: leading
           ? DesktopShell.minimumRailWidth
