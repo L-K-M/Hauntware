@@ -1,6 +1,8 @@
 import 'dart:async' show unawaited;
 
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
+import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_ui/ghost_ui.dart' show GhostPaneEdge, GhostResizeHandle;
 import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 import 'package:seance_core/seance_core.dart';
@@ -9,7 +11,6 @@ import '../app_state.dart';
 import '../main.dart';
 import '../theme.dart';
 import 'header_toolbar.dart';
-import 'macos_toolbar_band.dart';
 import 'server_list_pane.dart';
 import 'sidebar_panel.dart';
 import 'terminal_pane.dart';
@@ -392,6 +393,7 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
         // sidebar or the inspector keeps the terminal's state (its scroll
         // position, an open find bar) instead of rebuilding it.
         const empty = SizedBox.shrink();
+        // Tap-to-focus competes with dragging; keep the pointer-down distance.
         final utilityHandle = utilityShown
             ? GhostResizeHandle(
                 key: AdaptivePaneLayout.utilityResizeHandleKey,
@@ -400,6 +402,7 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
                 minimumWidth: AdaptiveShell.minimumUtilityWidth,
                 maximumWidth: _maximumUtilityWidth(widths),
                 edge: GhostPaneEdge.trailing,
+                dragStartBehavior: DragStartBehavior.down,
                 widthAfterStep: (delta) => _widthAfterStep(
                   GhostPaneEdge.trailing,
                   currentWidths(),
@@ -465,6 +468,7 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
                 minimumWidth: AdaptiveShell.minimumListWidth,
                 maximumWidth: _maximumListWidth(widths),
                 edge: GhostPaneEdge.leading,
+                dragStartBehavior: DragStartBehavior.down,
                 widthAfterStep: (delta) => _widthAfterStep(
                   GhostPaneEdge.leading,
                   currentWidths(),
