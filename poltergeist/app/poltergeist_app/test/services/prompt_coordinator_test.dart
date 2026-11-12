@@ -1144,6 +1144,53 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('unlocking an encrypted stored key still asks for its passphrase', (
+    tester,
+  ) async {
+    final lock = attachLock();
+    await _pumpHost(tester, navigatorKey, messengerKey);
+    PromptCoordinator.keyPassphraseUsable = (pem, passphrase) =>
+        passphrase == 'right';
+    vault.secret = const Secret(
+      id: 'secret-7',
+      kind: SecretKind.privateKey,
+      value: 'ENCRYPTED PEM',
+    );
+    coordinator.start();
+    bridge.emit(_event(
+      'locked-encrypted-key',
+      EnginePromptKind.credentialNeeded,
+      const CredentialPromptData(
+        host: 'example.com',
+        port: 2222,
+        username: 'deploy',
+        authMethod: AuthMethod.privateKey,
+        secretRef: 'secret-7',
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(vault.reads, isEmpty);
+    expect(bridge.replies, isEmpty);
+    expect(find.byType(AlertDialog), findsNothing);
+
+    await lock.unlock();
+    await tester.pumpAndSettle();
+    expect(vault.reads, ['secret-7']);
+    expect(bridge.replies, isEmpty);
+    expect(find.text('Key passphrase for example.com'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'Passphrase'), 'right');
+    await tester.pump();
+    await tester.tap(dialogConnect);
+    await tester.pumpAndSettle();
+
+    final reply = bridge.replies.single.$3 as CredentialPromptReply;
+    expect(reply.origin, CredentialOrigin.prompted);
+    expect(reply.privateKeyPem, 'ENCRYPTED PEM');
+    expect(reply.keyPassphrase, 'right');
+    expect(vault.puts, isEmpty);
+    expect(reader.reads, isEmpty);
+  });
+
   testWidgets('an encrypted stored key with no passphrase asks only for it', (
     tester,
   ) async {
