@@ -11,7 +11,8 @@
 // the quit question; what is here is Klabautermann's own.
 import 'package:flutter/services.dart';
 import 'package:ghost_theme/ghost_theme.dart';
-import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show SyncPinConflict;
 
 import '../../controllers/account_size.dart';
 import '../../controllers/admin_memory.dart' show AdminMemoryNotSavedException;
