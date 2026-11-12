@@ -42,7 +42,7 @@ dependencies:
   path: 1.9.1
   path_provider: 2.1.6
   # Applies owner-only mode bits to path-bearing local audit files.
-  posix: 6.5.2
+  posix: 6.5.4
   # Share the editor and document layer directly; no host-owned fork.
   planchette_editor:
     path: ../../../planchette/packages/planchette_editor

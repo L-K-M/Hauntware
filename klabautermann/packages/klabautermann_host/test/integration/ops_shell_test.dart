@@ -28,8 +28,7 @@ String? _which(String name) {
 /// Shell name to its binary; BusyBox's applet runs as `sh` through the
 /// symlink each test puts first on PATH.
 final _shells = <String, String>{
-  for (final name in ['dash', 'bash', 'busybox'])
-    if (_which(name) case final p?) name: p,
+  for (final name in ['dash', 'bash', 'busybox']) name: ?_which(name),
 };
 
 String _recordsRoot() {

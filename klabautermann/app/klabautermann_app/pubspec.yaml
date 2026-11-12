@@ -15,7 +15,7 @@ dependencies:
   # The OS-keystore plugin behind ghost_keystore's MasterKeyManager, pinned
   # to Poltergeist's version so the plugin's native code and default
   # options match the sibling's.
-  flutter_secure_storage: 10.3.1
+  flutter_secure_storage: 10.3.4
   # The app lock's device authentication (SAF-20): the system prompt,
   # biometrics with the passcode or PIN as fallback. Pinned to Séance's
   # version, whose app lock this one shares (ghost_keystore's AppLock).
@@ -105,7 +105,7 @@ dependencies:
   package_info_plus: 10.2.2
   # Hand-offs to Séance and Poltergeist (X-03, X-04, X-10): opens their
   # links and probes for a handler. Pinned to the version Poltergeist runs.
-  url_launcher: 6.3.2
+  url_launcher: 6.3.3
 
 dev_dependencies:
   flutter_test:

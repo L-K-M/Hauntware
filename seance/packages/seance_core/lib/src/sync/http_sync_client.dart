@@ -84,8 +84,8 @@ class HttpSyncClient
 
   Map<String, String> get _enrollmentHeaders => {
     'content-type': 'application/json',
-    if (deviceId != null) 'x-seance-device-id': deviceId!,
-    if (deviceName != null) 'x-seance-device-name': deviceName!,
+    'x-seance-device-id': ?deviceId,
+    'x-seance-device-name': ?deviceName,
   };
 
   /// A record or inbox page or push: see [timeout].
@@ -384,7 +384,7 @@ class HttpSyncClient
     final res = await _transfer(
       'GET',
       _uri('/v1/records/legacy', {
-        if (afterId != null) 'after': afterId,
+        'after': ?afterId,
       }),
     );
     if (res.statusCode >= 400) _fail(res);

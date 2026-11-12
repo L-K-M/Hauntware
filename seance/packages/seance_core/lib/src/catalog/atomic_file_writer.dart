@@ -89,7 +89,7 @@ final class AtomicFileWriter {
       );
       late final Future<void> tail;
       tail = write
-          .then<void>((_) {}, onError: (Object _, StackTrace __) {})
+          .then<void>((_) {}, onError: (Object _, StackTrace _) {})
           .whenComplete(() {
             if (identical(_pendingWrites[key], tail)) {
               _pendingWrites.remove(key);
@@ -115,7 +115,7 @@ final class AtomicFileWriter {
     final result = _pathAccessTail.then<T>((_) => operation());
     _pathAccessTail = result.then<void>(
       (_) {},
-      onError: (Object _, StackTrace __) {},
+      onError: (Object _, StackTrace _) {},
     );
     return result;
   }

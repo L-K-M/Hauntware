@@ -314,7 +314,7 @@ flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
           'DEPENDENCY_EXIT_CODE': '$dependencyExitCode',
           'COPY_EXIT_CODE': '$copyExitCode',
           'UPDATE_QUERY_EXIT_CODE': '$updateQueryExitCode',
-          if (userInstallation != null) 'FLATPAK_USER_DIR': userInstallation,
+          'FLATPAK_USER_DIR': ?userInstallation,
         },
         includeParentEnvironment: false,
       );
@@ -594,7 +594,7 @@ Future<ProcessResult> _smokeCheck(
     command,
     prefix.path,
   ],
-  environment: {if (path != null) 'PATH': path},
+  environment: {'PATH': ?path},
 );
 
 Future<ProcessResult> _stage(String deb, String work, String appId) =>

@@ -68,7 +68,7 @@ Future<StartedHttpResponse> sendWithResponseDeadlines(
     unawaited(
       sent.then<void>(
         cancelHttpResponse,
-        onError: (Object _, StackTrace __) {},
+        onError: (Object _, StackTrace _) {},
       ),
     );
     throw http.ClientException(

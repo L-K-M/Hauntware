@@ -20,8 +20,7 @@ import 'package:test/test.dart';
 import '../support/local_process_link.dart';
 
 final _shells = {
-  for (final name in ['dash', 'bash'])
-    if (localShell(name) case final path?) name: path,
+  for (final name in ['dash', 'bash']) name: ?localShell(name),
 };
 
 Future<void> _ready(SamplerSession session) => session.states

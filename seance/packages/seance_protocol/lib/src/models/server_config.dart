@@ -362,15 +362,15 @@ class ServerConfig {
         'syncSecret': syncSecret,
         if (group != null) 'group': group,
         if (color != null) 'color': color!.name,
-        if (custom != null) 'customColor': custom,
+        'customColor': ?custom,
         if (icon != null) 'icon': icon!.name,
         // Written only when they survive validation, so a value this build
         // refuses to draw is never re-published as though it had been
         // accepted. `fromJson` applies the same rule on the way in.
-        if (emoji != null) 'iconEmoji': emoji,
-        if (image != null) 'iconImage': image,
+        'iconEmoji': ?emoji,
+        'iconImage': ?image,
         if (loginScript != null) 'loginScript': loginScript,
-        if (start != null) 'startDirectory': start,
+        'startDirectory': ?start,
         // Written unconditionally, like `syncSecret` and unlike the optional
         // presentation fields above: the two sync-policy booleans are a pair
         // and should read the same way round, and "no, I want this synced" is
