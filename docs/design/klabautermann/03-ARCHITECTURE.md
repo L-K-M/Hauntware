@@ -5836,7 +5836,8 @@ CI.
   tools add their own options, from a table in `argument_masking.dart`
   keyed by the program's base name: the program, or a later token named
   like a known tool (`sudo curl`, a `-c` line's `curl`), starts that
-  tool's command, which runs to a shell separator (`;`, `|`, `&`). A
+  tool's command, which runs to a shell separator (`;`, `|`, `&`, and in
+  the argument after a shell's `-c` a newline outside quotes). A
   listed option's value is masked whether separate, attached or at the
   end of a short option cluster: whole (`sshpass -p`, `redis-cli -a`,
   `mongosh -p`, `docker login -p`, `openssl enc -k`, `curl -b`), after
@@ -5847,7 +5848,12 @@ CI.
   value of `curl -H`, `wget --header` and an httpie `Name:value` operand
   is masked after its name when the name is `Authorization`,
   `Proxy-Authorization`, `Cookie` or `Set-Cookie`, ends in `-Token`,
-  `-Key`, `-Secret` or `-Auth`, or holds `Api-Key` (case-insensitive).
+  `-Key`, `-Secret` or `-Auth`, or holds `Api-Key` (case-insensitive);
+  a blank before the colon masks from the name on. Where the value is
+  a separate token (a `ps` row, an unquoted `-c` line) it is masked, and
+  after an auth scheme alone (`Bearer`, `Basic`, `Token`) so is the
+  next token. A masked value inside a `-c` line keeps the closing quote
+  its kept prefix opened (`-u 'me:********'`).
   `htpasswd -b`'s password operand is found by position, `sshpass`'s
   first operand starts the command it runs, and `docker login` and
   `podman login` are told apart from `run -p 8080:80`. A `-p`, `-a` or

@@ -304,7 +304,7 @@ void main() {
       expect(_shown(['sh', '-c', "curl -fsS -u 'me:a b' https://h | sh"]), [
         'sh',
         '-c',
-        "curl -fsS -u 'me:$_mask https://h | sh",
+        "curl -fsS -u 'me:$_mask' https://h | sh",
       ]);
     });
 
@@ -382,18 +382,77 @@ void main() {
         [
           'sh',
           '-c',
-          'curl -H "Authorization:$_mask -H "Accept: */*" https://h',
+          'curl -H "Authorization:$_mask" -H "Accept: */*" https://h',
         ],
       );
       expect(
         _shown(['sh', '-c', "wget --header='Cookie: a=1; b=2' -q https://h"]),
-        ['sh', '-c', 'wget --header=\'Cookie:$_mask -q https://h'],
+        ['sh', '-c', 'wget --header=\'Cookie:$_mask\' -q https://h'],
       );
     });
 
-    test('a ps fallback header masks the token after the name', () {
+    test('a ps fallback header masks the token after the name, and the '
+        'credential after an auth scheme', () {
       expect(_shown(['curl -H Authorization: Bearer abc https://h']), [
-        'curl -H Authorization: $_mask abc https://h',
+        'curl -H Authorization: $_mask $_mask https://h',
+      ]);
+      expect(_shown(['curl -H Authorization:bearer abc https://h']), [
+        'curl -H Authorization:$_mask $_mask https://h',
+      ]);
+      expect(_shown(['curl -H Proxy-Authorization: Basic eA== https://h']), [
+        'curl -H Proxy-Authorization: $_mask $_mask https://h',
+      ]);
+      expect(
+        _shown(['sh', '-c', 'curl -H Authorization: Token abc https://h']),
+        ['sh', '-c', 'curl -H Authorization: $_mask $_mask https://h'],
+      );
+      // A value that is not a scheme is the credential itself.
+      expect(_shown(['curl -H X-Api-Key: k https://h']), [
+        'curl -H X-Api-Key: $_mask https://h',
+      ]);
+    });
+
+    test('a secret header name with a blank before its colon', () {
+      expect(
+        _shown(['curl', '-H', 'Authorization : Bearer abc', 'https://h']),
+        ['curl', '-H', 'Authorization$_mask', 'https://h'],
+      );
+      expect(_shown(['curl', '-HX-Api-Key\t: k']), [
+        'curl',
+        '-HX-Api-Key$_mask',
+      ]);
+      expect(_shown(['sh', '-c', 'curl -H "Cookie : a=1" https://h']), [
+        'sh',
+        '-c',
+        'curl -H "Cookie$_mask" https://h',
+      ]);
+      // A name alone hides nothing.
+      final bare = ['curl', '-H', 'Authorization', 'https://h'];
+      expect(_shown(bare), bare);
+    });
+
+    test('a newline outside quotes in a -c line ends a command', () {
+      expect(
+        _shown(['sh', '-c', 'docker pull x\ndocker login -p hunter2 reg']),
+        ['sh', '-c', 'docker pull x\ndocker login -p $_mask reg'],
+      );
+      expect(
+        _shown(['bash', '-ec', 'htpasswd -c f u\nhtpasswd -b f v hunter2']),
+        ['bash', '-ec', 'htpasswd -c f u\nhtpasswd -b f v $_mask'],
+      );
+      // A newline inside a quoted value, or in an argument that is not a
+      // -c line, keeps the command going.
+      expect(_shown(['sh', '-c', 'curl -d "{\n}" -u me:x https://h']), [
+        'sh',
+        '-c',
+        'curl -d "{\n}" -u me:$_mask https://h',
+      ]);
+      expect(_shown(['curl', '-d', 'a\nb', '-u', 'me:x']), [
+        'curl',
+        '-d',
+        'a\nb',
+        '-u',
+        'me:$_mask',
       ]);
     });
 
@@ -479,6 +538,11 @@ void main() {
         ['mongosh', '--port', '27017', '-u', 'me', '-p', _mask],
       );
       expect(_shown(['mongo', '-p', 'x']), ['mongo', '-p', _mask]);
+      // The key pattern masks --password, separate or attached.
+      expect(
+        _shown(['mongosh', '--password', 'hunter2', '--password=hunter2']),
+        ['mongosh', '--password', _mask, '--password=$_mask'],
+      );
     });
 
     test('htpasswd -b takes the password as its last positional argument', () {
@@ -666,6 +730,14 @@ void main() {
     ]);
     final names = 'curl ${'x/curl ' * 20000}';
     expect(_shown(['sh', names]), ['sh', names]);
+    // A -c line's quoting is read once, and a kept prefix's quotes once.
+    final lines = '"\n\'x\n' * 30000;
+    expect(_shown(['sh', '-c', lines]), ['sh', '-c', lines]);
+    expect(_shown(['sh', '-c', "curl -u '${'a' * 131000}:x'"]), [
+      'sh',
+      '-c',
+      "curl -u '${'a' * 131000}:$_mask'",
+    ]);
     expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
   });
 

@@ -54,7 +54,8 @@ final class ArgumentMaskingBudget {
 ///
 /// Known tools add their own options ([_knownTools]): the program, or a
 /// later token named like one (`sudo curl`, a `-c` line's `curl`), starts
-/// that tool's command, which runs to a shell separator (`;`, `|`, `&`).
+/// that tool's command, which runs to a shell separator (`;`, `|`, `&`,
+/// or a newline outside quotes in the argument after a shell's `-c`).
 /// Its secret options mask their value, separate or attached, whole or
 /// in part (`curl -u user:********`, `-H 'Authorization:********'`),
 /// and a `-p 8080` stays visible wherever the table does not name it.
@@ -85,11 +86,17 @@ List<MaskedValue> maskCommandLine(
     // Where the last masked value ends; the tokens before it belong to it.
     var maskedTo = 0;
     var startsArgument = true;
+    final line = index > 0 && _shellCommandOption.hasMatch(arguments[index - 1])
+        ? _ShellLine(whole)
+        : null;
     for (final match in _token.allMatches(whole)) {
       final first = startsArgument;
       startsArgument = false;
       tokens._tokensLeft--;
       if (match.start < maskedTo) continue;
+      if (line != null && line.separatesBefore(match.start)) {
+        reader._endCommand();
+      }
       if (tokens._tokensLeft < 0) {
         (shown ??= []).add((
           start: match.start,
@@ -115,11 +122,16 @@ List<MaskedValue> maskCommandLine(
 
       final end = first ? whole.length : _shellWordEnd(whole, match.start);
       if (!first) reader.wordEnded(whole, tokenEnd: match.end, end: end);
+      // A quote the kept prefix opens (`-u 'me:a b'`) stays closed.
+      final hiddenTo = !first && _closesQuote(kept, whole.codeUnitAt(end - 1))
+          ? end - 1
+          : end;
       // A value prefix with nothing after it (`curl -u me:`) hides nothing.
-      if (end > match.end || kept != text) {
+      if (hiddenTo > match.end ||
+          kept != whole.substring(match.start, hiddenTo)) {
         (shown ??= []).add((
           start: match.start,
-          end: end,
+          end: hiddenTo,
           display: '$kept${MaskedValue.maskToken}',
         ));
       }
@@ -175,10 +187,61 @@ int _shellWordEnd(String text, int start) {
 }
 
 /// Space, tab and newline: what a shell splits words at.
-const _blanks = {0x20, 0x09, 0x0A};
+const _blanks = {0x20, 0x09, _newline};
+const _newline = 0x0A;
 const _singleQuote = 0x27;
 const _quotes = {_singleQuote, 0x22};
 const _backslash = 0x5C;
+
+/// Whether [kept], a prefix shown before a mask, leaves a quote open that
+/// [last], the last character of the masked shell word, closes.
+bool _closesQuote(String kept, int last) {
+  int? quote;
+  for (var at = 0; at < kept.length; at++) {
+    final unit = kept.codeUnitAt(at);
+    if (unit == _backslash && quote != _singleQuote) {
+      at++;
+    } else if (unit == quote) {
+      quote = null;
+    } else if (quote == null && _quotes.contains(unit)) {
+      quote = unit;
+    }
+  }
+  return quote != null && quote == last;
+}
+
+/// A shell's `-c` option, alone or ending a cluster (`-c`, `-ec`, `-lc`):
+/// the argument after it is a command line.
+final _shellCommandOption = RegExp(r'^-[A-Za-z]*c$');
+
+/// The quoting of a `-c` line read so far, which tells a newline that
+/// separates commands from one inside a quoted value.
+final class _ShellLine {
+  _ShellLine(this._text);
+
+  final String _text;
+  var _at = 0;
+  int? _quote;
+
+  /// Whether a newline outside quotes lies between the end of the last
+  /// call's span and [to]. Each character is read once over all calls.
+  bool separatesBefore(int to) {
+    var separates = false;
+    for (; _at < to; _at++) {
+      final unit = _text.codeUnitAt(_at);
+      if (unit == _backslash && _quote != _singleQuote) {
+        _at++;
+      } else if (unit == _quote) {
+        _quote = null;
+      } else if (_quote == null && _quotes.contains(unit)) {
+        _quote = unit;
+      } else if (_quote == null && unit == _newline) {
+        separates = true;
+      }
+    }
+    return separates;
+  }
+}
 
 /// Whether [token] is an option whose value, the next token, is secret.
 bool _isSecretOption(String token) {
@@ -229,10 +292,18 @@ final class _CommandLineReader {
   /// with its value still to come.
   var _headerNameOnly = false;
 
+  /// Whether [_pending] is a secret header's value.
+  var _pendingIsHeader = false;
+
+  /// Whether the last token read ended with a secret header's value that
+  /// is an auth scheme alone (`Bearer`), its credential still to come.
+  var _headerSchemeOnly = false;
+
   /// The part of [text] shown before its secret value, as
   /// [_keptBeforeValue] answers it, with the known tools' rules first.
   String? read(String text, {required bool program}) {
     _headerNameOnly = false;
+    _headerSchemeOnly = false;
     final kept = _read(text, program: program);
     if (_endsCommand(text.codeUnitAt(text.length - 1))) _endCommand();
     return kept;
@@ -242,8 +313,12 @@ final class _CommandLineReader {
   /// [tokenEnd] of [text] runs to [end], the end of its shell word.
   void wordEnded(String text, {required int tokenEnd, required int end}) {
     // `-H Authorization: Bearer x` in a ps fallback row or unquoted in a
-    // `-c` line: the value is the next token, as far as it can be told.
-    if (end == tokenEnd && _headerNameOnly) _pending = _Value.whole;
+    // `-c` line: the value is the next token, and after a scheme the one
+    // after it, as far as it can be told.
+    if (end == tokenEnd && (_headerNameOnly || _headerSchemeOnly)) {
+      _pending = _Value.whole;
+      _pendingIsHeader = _headerNameOnly;
+    }
     if (end > tokenEnd && _endsCommand(text.codeUnitAt(end - 1))) {
       _endCommand();
     }
@@ -257,9 +332,12 @@ final class _CommandLineReader {
 
     final pending = _pending;
     final yieldsToOption = _pendingYieldsToOption;
+    final isHeader = _pendingIsHeader;
     _pending = null;
     _pendingYieldsToOption = false;
+    _pendingIsHeader = false;
     if (pending != null && !(yieldsToOption && text.startsWith('-'))) {
+      if (isHeader) _headerSchemeOnly = _isAuthScheme(text);
       return _keptOfValue(text, pending) ?? _keptBeforeValue(text);
     }
 
@@ -320,6 +398,7 @@ final class _CommandLineReader {
     _command = null;
     _pending = null;
     _pendingYieldsToOption = false;
+    _pendingIsHeader = false;
   }
 
   /// The part of [value] shown before its secret part, for an option
@@ -341,10 +420,17 @@ final class _CommandLineReader {
       start++;
     }
     final colon = value.indexOf(':', start);
-    if (colon <= start) return null;
+    if (colon == -1) {
+      // `-H 'Authorization : x'`: a blank before the colon ends the token
+      // at the name, so what follows it in the shell word or argument is
+      // the value.
+      return _isSecretHeader(value.substring(start)) ? value : null;
+    }
+    if (colon == start) return null;
     if (!_isSecretHeader(value.substring(start, colon))) return null;
 
     _headerNameOnly = colon == value.length - 1;
+    _headerSchemeOnly = _isAuthScheme(value.substring(colon + 1));
     return value.substring(0, colon + 1);
   }
 }
@@ -384,6 +470,42 @@ bool _isSecretHeader(String name) {
       _secretHeaderEndings.any(lower.endsWith) ||
       lower.contains('api-key');
 }
+
+/// HTTP authentication schemes in lower case, from the IANA registry and
+/// common APIs (`Token`, `Bot`), which come before the credential. A
+/// doubtful word is listed: masking one more token is the safe direction.
+const _authSchemes = {
+  'basic',
+  'bearer',
+  'digest',
+  'dpop',
+  'gnap',
+  'hoba',
+  'mutual',
+  'negotiate',
+  'ntlm',
+  'oauth',
+  'privatetoken',
+  'scram-sha-1',
+  'scram-sha-256',
+  'vapid',
+  'aws4-hmac-sha256',
+  'token',
+  'bot',
+  'apikey',
+  'key',
+  'sso-key',
+  'ssws',
+  'splunk',
+};
+
+/// Whether [word] is an auth scheme alone, its credential still to come.
+bool _isAuthScheme(String word) =>
+    word.length <= _longestAuthScheme &&
+    _authSchemes.contains(word.toLowerCase());
+
+/// The length of the longest of [_authSchemes].
+const _longestAuthScheme = 16;
 
 /// Which part of an option's value is secret.
 enum _Value {
