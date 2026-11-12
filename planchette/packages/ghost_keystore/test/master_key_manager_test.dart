@@ -171,6 +171,9 @@ enum _State {
   /// Holding a master-key entry that is not base64.
   corrupt,
 
+  /// Holding an empty master-key entry, which base64 decodes to no bytes.
+  blank,
+
   /// Reachable and empty, but every write throws.
   refusesWrites,
 }
@@ -184,6 +187,7 @@ _FakeKeystore _keystore(_State state) => switch (state) {
     readThrows: PlatformException(code: 'KeyringLocked'),
   ),
   _State.corrupt => _FakeKeystore(data: {_masterKeyEntry: 'not base64!'}),
+  _State.blank => _FakeKeystore(data: {_masterKeyEntry: ''}),
   _State.refusesWrites => _FakeKeystore(
     writeThrows: PlatformException(code: 'KeyringLocked'),
   ),
@@ -209,6 +213,10 @@ void main() {
       (_State.locked, true, _Outcome.returnsNull, down, 0),
       (_State.corrupt, false, _Outcome.returnsNull, down, 0),
       (_State.corrupt, true, _Outcome.returnsNull, down, 0),
+      // An empty entry holds no key: a first run mints over it, and beside
+      // a vault it refuses rather than settle with a zero-length key.
+      (_State.blank, false, _Outcome.mints, up, 1),
+      (_State.blank, true, _Outcome.refuses, up, 0),
       (_State.refusesWrites, false, _Outcome.returnsNull, down, 1),
       (_State.refusesWrites, true, _Outcome.refuses, up, 0),
     ];
@@ -268,6 +276,7 @@ void main() {
       (_State.holding, _stored),
       (_State.locked, null),
       (_State.corrupt, null),
+      (_State.blank, null),
       (_State.refusesWrites, null),
     ];
 
