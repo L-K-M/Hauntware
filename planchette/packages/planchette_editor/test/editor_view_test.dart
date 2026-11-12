@@ -203,9 +203,9 @@ void main() {
   ) async {
     final c = EditorController(
       displayPath: 'notes.txt',
-      initialText: 'Die Stra\u00dfe ist breit',
-      caseFolder: (value) =>
-          value.replaceAll('\u00df', 'ss').replaceAll('\u1e9e', 'ss'),
+      initialText: 'Die \u0149 Stra\u00dfe ist breit',
+      // ŉ expands to "ʼn", a length change the search cannot map back.
+      caseFolder: (value) => value.replaceAll('\u0149', '\u02bcn'),
     );
     addTearDown(c.dispose);
     await tester.pumpWidget(app(c));

@@ -616,14 +616,14 @@ void main() {
   });
 
   test('a limited case fold is reported instead of hidden', () {
-    // Unicode full folding expands the sharp s to "ss", which changes
-    // length. A host can supply that fold; the editor must then say the
-    // search was not the case-insensitive one the user asked for.
-    String fullFold(String value) =>
-        value.replaceAll('\u00df', 'ss').replaceAll('\u1e9e', 'ss');
+    // Unicode full folding expands ŉ to "ʼn", which changes length. The
+    // search expands ß itself, but a host fold that changes a run's length
+    // cannot be mapped back; the editor must then say the search was not
+    // the case-insensitive one the user asked for.
+    String fullFold(String value) => value.replaceAll('\u0149', '\u02bcn');
     final editor = EditorController(
       displayPath: 'notes.txt',
-      initialText: 'Die Stra\u00dfe ist breit',
+      initialText: 'Die \u0149 Stra\u00dfe ist breit',
       caseFolder: fullFold,
     );
     addTearDown(editor.dispose);
@@ -632,7 +632,8 @@ void main() {
     expect(editor.caseFoldingLimited, isTrue);
     expect(editor.matches, isEmpty);
 
-    // The default fold preserves length, so nothing is reported.
+    // The default fold expands ß through the search's offset map, so the
+    // match is found and nothing is reported.
     final exact = EditorController(
       displayPath: 'notes.txt',
       initialText: 'Die Stra\u00dfe ist breit',
@@ -641,6 +642,7 @@ void main() {
     exact.openSearch();
     exact.search.text = 'STRASSE';
     expect(exact.caseFoldingLimited, isFalse);
+    expect(exact.matches, hasLength(1));
 
     // Closing the find bar clears the report.
     final closed = EditorController(

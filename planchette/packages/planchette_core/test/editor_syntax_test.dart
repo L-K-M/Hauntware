@@ -533,19 +533,18 @@ void main() {
     // The document side of the guard. Paired with 'a length-changing query is
     // still folded' below, which is the side that must NOT report limited.
     test('a length-changing document is reported and matched exactly', () {
-      // ß uppercases to "SS", which is what a full case fold would expand it
-      // to. Dart's toLowerCase does not do that, so the fold is injected to
-      // reach the path a host with its own folding table would take.
-      String fold(String value) =>
-          value.replaceAll('ß', 'ss').replaceAll('ẞ', 'ss');
-      final result = searchText('Die Straße', 'STRASSE', fold: fold);
+      // The search expands ß itself (see search_full_fold_test.dart), so a
+      // host fold that changes a run's length is reached with a character
+      // the search leaves alone: ŉ, which a full case fold expands to ʼn.
+      String fold(String value) => value.replaceAll('ŉ', 'ʼn');
+      final result = searchText('ŉ Straße', 'STRASSE', fold: fold);
       expect(result.caseFolding, CaseFolding.lengthChanging);
       expect(result.caseFoldedExactly, isFalse);
       // Reported as limited, and the match is the exact one — the honest
       // outcome is "fewer matches than you asked for", not a wrong range.
       expect(result.matches, isEmpty);
-      expect(searchText('Die Straße', 'Straße', fold: fold).matches, [
-        const TextMatch(start: 4, end: 10),
+      expect(searchText('ŉ Straße', 'Straße', fold: fold).matches, [
+        const TextMatch(start: 2, end: 8),
       ]);
       expect(findSearchMatches('ab ab', 'ab', start: 99), isEmpty);
     });
