@@ -215,7 +215,7 @@ class _EditorSettingsSectionState extends State<EditorSettingsSection> {
 
     unawaited(
       _write(
-        display.copyWith(
+        (_pending ?? widget.model.value).copyWith(
           family: chosen.family,
           ligatures: chosen.ligatures == MonoLigatures.on
               ? EditorLigatures.on
