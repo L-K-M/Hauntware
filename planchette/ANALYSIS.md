@@ -1004,6 +1004,12 @@ file — through a link. Decide the policy deliberately: resolve the link
 `resolveOnce`) or keep rejecting but say "destination is a symbolic link".
 Current behavior is safe but confusing; needs a product decision.
 
+**Done on `planchette/text-formats` (2026-11-12)**, resolving the link:
+`LocalDocumentStore.canonicalSavePath` follows the chain to the regular file
+it names, which then takes the usual digest guard and replace question; the
+link stays a link. A dangling link, a link to a folder and a link loop are
+refused with that reason. Tests use real links on Linux.
+
 ### B30. `initialText` plus `loadDocument` is a silent API trap — S (read, 2026-09-27)
 `EditorController`'s constructor only marks `_loading` when
 `initialText == null`; a host passing both gets an editor that never calls
@@ -1091,6 +1097,13 @@ telling the user. Either report the conversion once at load (status-bar
 notice, like #26's disk-change notice) or preserve CR as a third `LineEnding`
 value with round-trip tests. Decide before A9 changes encoding policy: do not
 let a hidden third state leak into a reopened file's bytes.
+
+**Done on `planchette/text-formats` (2026-11-12)** as a third `LineEnding`
+value. A CR-only file records CR and saves back with CR; the vote counts LF,
+CRLF and lone CR once each, and a tie prefers LF, then CRLF, then CR, so a
+mixed file keeps the majority rule. Every host's status line names CR and
+Planchette's line-ending menu offers it. Round-trip tests cover LF, CRLF, CR
+and a mixed file.
 
 ### B36. Toolbar path label has no copy-path action — S (read, 2026-09-27)
 The header's path label is a dim 12px `onSurfaceVariant` with no action
@@ -1750,6 +1763,17 @@ Start with BOM-marked UTF-16 only with lossless round-trip fixtures and endian
 metadata; reject malformed input. Latin-1/CP1252 reopening must be an explicit
 choice, never an automatic guess that silently rewrites bytes. Report precise
 unsupported-encoding diagnostics and preserve content on failed conversion.
+
+**Done on `planchette/text-formats` (2026-11-12).** `TextEncoding` covers
+UTF-8, UTF-16 LE/BE (detected by mark only, saved with it), Latin-1 and
+Windows-1252 (only by explicit choice, from Planchette's Reopen with
+Encoding banner action). Malformed input and unrepresentable characters are
+refused with byte offsets or line and column; nothing is replaced. The
+limit stays in bytes, the status bars show the encoding, and ARCHITECTURE.md
+describes the policy. Still open: Reopen with Encoding for a document that
+already opened (today it is offered only on a refused open), and the
+Séance and Poltergeist hosts have no reopen route; they open UTF-16 and
+keep refusing the rest.
 
 ### A10. Markdown preview — M
 A split view for `.md` using `flutter_markdown` or a small renderer, with
