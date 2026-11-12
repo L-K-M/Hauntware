@@ -5832,11 +5832,27 @@ CI.
   direction. One procs reading reads at most 65,536 tokens: a 1 MiB
   section can hold half a million one-letter arguments, each costing up
   to a microsecond in the shared engine isolate, so past that budget the
-  rest of the argument and every later one are masked whole. Not masked yet: a short option's separate value
-  (`docker login -p`, `sshpass -p`, `redis-cli -a`), `curl -u user:pass`
-  and header values (`Authorization: Bearer`). Masking the argument after
-  any `-p`, `-a` or `-u` would also hide `ssh -p 22`, `mkdir -p` and
-  `sudo -u`, so the trade-off is left to a follow-up after K33. From
+  rest of the argument and every later one are masked whole. Known
+  tools add their own options, from a table in `argument_masking.dart`
+  keyed by the program's base name: the program, or a later token named
+  like a known tool (`sudo curl`, a `-c` line's `curl`), starts that
+  tool's command, which runs to a shell separator (`;`, `|`, `&`). A
+  listed option's value is masked whether separate, attached or at the
+  end of a short option cluster: whole (`sshpass -p`, `redis-cli -a`,
+  `mongosh -p`, `docker login -p`, `openssl enc -k`, `curl -b`), after
+  the first `:` so the user or file stays visible (`curl -u`,
+  `--proxy-user`, `-E file:passphrase`), after the source prefix
+  (`openssl -passin pass:`, whole without one, as httpie's `-a` bearer
+  token), or after Samba's `%` (`smbclient -U user%pass`). The header
+  value of `curl -H`, `wget --header` and an httpie `Name:value` operand
+  is masked after its name when the name is `Authorization`,
+  `Proxy-Authorization`, `Cookie` or `Set-Cookie`, ends in `-Token`,
+  `-Key`, `-Secret` or `-Auth`, or holds `Api-Key` (case-insensitive).
+  `htpasswd -b`'s password operand is found by position, `sshpass`'s
+  first operand starts the command it runs, and `docker login` and
+  `podman login` are told apart from `run -p 8080:80`. A `-p`, `-a` or
+  `-u` the table does not list (`ssh -p 22`, `mkdir -p`, `sudo -u`)
+  stays visible. From
   M3 (D05) the engine masks an inspected container's `Path` and `Args`,
   and its `Entrypoint` and `Cmd`, by the same rules, each pair read as
   one command line, and each health check's output as one argument;
