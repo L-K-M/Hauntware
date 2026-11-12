@@ -501,6 +501,41 @@ void main() {
     expect(emoji, '${'\u{1F600}' * 2047}z');
   });
 
+  test('a parser that throws costs only its own streams their reading', () {
+    // A count past 64 bits makes the meminfo parser throw.
+    const streams = {SampleStream.overview, SampleStream.core, SampleStream.fs};
+    final pipeline = _sampling(streams: streams);
+    final events = pipeline.addTick(
+      streams,
+      reply(1, 1000, [
+        ok('core', '== meminfo ==\nMemTotal: 99999999999999999999999'),
+        ok('fs', ''),
+      ]),
+      _at(0),
+    );
+
+    final results = {
+      for (final sample in events.whereType<Sample>())
+        sample.stream: sample.result,
+    };
+    expect(results.keys, unorderedEquals(streams));
+    for (final stream in [SampleStream.overview, SampleStream.core]) {
+      final result = results[stream] as CollectorUnavailable;
+      expect(result.reason, CollectorUnavailableReason.error);
+      expect(result.detail, startsWith('FormatException'));
+    }
+    expect(results[SampleStream.fs], isA<FsResult>());
+
+    // The failed reading left the rate counters alone: the next one
+    // parses as a first reading.
+    final next = pipeline.addTick(
+      streams,
+      reply(2, 1002, [ok('core', _blocks(0)), ok('fs', '')]),
+      _at(2),
+    );
+    expect(_result<CoreResult>(next), isA<CoreResult>());
+  });
+
   test('a units reading gives K04\'s external-monitor finding', () {
     UnitsResult list(List<SystemdUnit> units) =>
         UnitsResult(UnitsSnapshot(units: units, format: UnitListFormat.json));
