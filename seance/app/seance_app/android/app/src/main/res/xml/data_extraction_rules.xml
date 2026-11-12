@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nothing leaves the device through Android's backup or device-to-device
+     transfer (API 31+; older releases follow android:allowBackup and
+     android:fullBackupContent in the manifest). The saved credentials are
+     sealed with a key in the Android Keystore, which no backup carries, so
+     a restore would bring back a vault nothing can open, and a copied
+     device id would make two devices look like one to sync. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

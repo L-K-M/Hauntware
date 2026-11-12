@@ -905,6 +905,11 @@ void main() {
     test('keeps + literal', () {
       expect(run('urlDecode', '[a+b]'), 'unchanged');
     });
+
+    test('leaves NUL escapes literal, since the buffer cannot hold NUL', () {
+      expect(run('urlDecode', '[name=a%00b]'), 'unchanged');
+      expect(run('urlDecode', '[a%20%00%41]'), '[a %00A]');
+    });
   });
 
   group('base64Encode', () {

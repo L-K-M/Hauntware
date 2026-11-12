@@ -6345,6 +6345,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Nothing has run on this server from this device.';
 
   @override
+  String get activityUnreadable =>
+      'The log file could not be read, so records are missing.';
+
+  @override
   String get activityOlder => 'Show older';
 
   @override

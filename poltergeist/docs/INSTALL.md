@@ -79,8 +79,8 @@ Keyring or KWallet. Without one the app runs fine but refuses to store
 secrets rather than writing them somewhere weaker (that is deliberate).
 The `.deb` declares the library; AppImage and tarball users may need to
 install `libsecret-1-0` (Debian/Ubuntu), `libsecret` (Fedora/Arch), or
-equivalent themselves. The Flatpak talks to the host keyring through the
-Secret Service portal — no extra package needed.
+equivalent themselves. The Flatpak talks to the host keyring's
+Secret Service over the session bus, so it needs no extra package.
 
 ## Android
 
@@ -111,6 +111,11 @@ can build a correctly-signed APK, which is why the checksum verification
 above matters. If the key is ever replaced, existing installs must
 uninstall and reinstall (Android rejects the signature change), and the
 release notes will say so.
+
+Android's backup and phone-to-phone transfer do not carry Poltergeist's
+data: the key that seals your saved credentials never leaves the phone.
+To move to a new phone, install the app there and sign in to sync, or
+add your servers again.
 
 The [README](../README.md#known-issues) lists what the Android build
 does not do yet.

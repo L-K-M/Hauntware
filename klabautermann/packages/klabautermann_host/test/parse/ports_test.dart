@@ -71,6 +71,34 @@ void main() {
     expect(read.owners.containsKey(600), isFalse);
   });
 
+  test('a process name cannot claim another pid for its socket', () {
+    // ss prints /proc/<pid>/comm unescaped, and any user names their own
+    // processes: at most 15 bytes, which may hold `"`, `)` and `,`.
+    final read = parseListeningPorts(
+      _read('ss', [
+        'tcp   LISTEN 0      5      0.0.0.0:4444  0.0.0.0:*    '
+            'users:(("x",pid=1,fd=3)",pid=4242,fd=3))',
+        'tcp   LISTEN 0      5      0.0.0.0:4445  0.0.0.0:*    '
+            'users:(("",pid=1,fd=3),(",pid=4243,fd=3))',
+        'tcp   LISTEN 0      5      0.0.0.0:4446  0.0.0.0:*    '
+            'users:(("a b",pid=7,fd=3),("c",pid=8,fd=4))',
+      ]),
+    )!;
+
+    expect(
+      [
+        for (final s in read.sockets)
+          for (final p in s.processes) '${s.port} ${p.pid} ${p.name}',
+      ],
+      [
+        '4444 4242 x",pid=1,fd=3)',
+        '4445 4243 ",pid=1,fd=3),(',
+        '4446 7 a b',
+        '4446 8 c',
+      ],
+    );
+  });
+
   test('netstat gives TCP listeners and UDP sockets with their process', () {
     final read = parseListeningPorts(
       _read('netstat', [

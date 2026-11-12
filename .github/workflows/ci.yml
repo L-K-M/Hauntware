@@ -9,10 +9,10 @@ name: CI
 # Flutter packages and apps with `flutter pub get`, never mixed.
 # scripts/test.sh mirrors the test steps below for local runs.
 #
-# The client matrices compile 18 targets: 3 Planchette desktop and 5
-# each for Séance, Poltergeist and Klabautermann. release.yml ships 13 of
-# them; Klabautermann's five legs stay CI-only until its preview release
-# job lands at milestone M4 (docs/design/klabautermann, decision 16).
+# The client matrices compile 19 targets: 4 Planchette (three desktop
+# and Android) and 5 each for Séance, Poltergeist and Klabautermann. release.yml ships all
+# of them; Klabautermann's five carry the preview label until its v1
+# (docs/design/klabautermann, decision 16).
 
 on:
   push:
@@ -833,6 +833,12 @@ jobs:
               - 'seance/packages/seance_core/pubspec.yaml'
               - 'seance/packages/seance_protocol/lib/**'
               - 'seance/packages/seance_protocol/pubspec.yaml'
+              # The sibling cores previous_release.sh compiles into the
+              # sync convergence harness, at HEAD and at the last release.
+              - 'poltergeist/packages/poltergeist_core/lib/**'
+              - 'poltergeist/packages/poltergeist_core/pubspec.yaml'
+              - 'planchette/packages/planchette_core/lib/**'
+              - 'planchette/packages/planchette_core/pubspec.yaml'
               # Poltergeist fixture files the sshd fixture builds on
               # (03 §11.3): the Compose safety checker, the Dockerfile
               # that pins the base image digest, the common sshd config.
@@ -1617,13 +1623,11 @@ jobs:
         run: flutter test
 
   # ---- Client build matrices (keep in step with release.yml) ------------
-  # Compile every client the release workflow ships — 4 Planchette
-  # + 5 Séance + 5 Poltergeist targets — and run the Linux
+  # Compile every client the release workflow ships (4 Planchette,
+  # 5 Séance, 5 Poltergeist and 5 Klabautermann targets) and run the Linux
   # packaging steps and the native fixtures, so a platform- or
   # packaging-breaking change is caught here, not when a tag tries to
-  # publish. Mirrors release.yml's client jobs minus publishing. The 5
-  # Klabautermann targets build here too, ahead of their release job
-  # (M4, decision 16 of docs/design/klabautermann).
+  # publish. Mirrors release.yml's client jobs minus publishing.
 
   planchette_client:
     name: Planchette client (${{ matrix.target }})
@@ -2227,9 +2231,9 @@ jobs:
   # Klabautermann's legs copy poltergeist_client and add the two native
   # macOS fixtures of seance_client (docs/design/klabautermann, 04
   # §12.1). Like the siblings they build on every PR without a path
-  # filter (owner decision 15, D37). No release leg ships these builds
-  # until client_klabautermann joins release.yml at M4 (decision 16);
-  # keep the two in step from then on.
+  # filter (owner decision 15, D37). release.yml's client_klabautermann
+  # ships the same builds as previews (decision 16); keep the two in
+  # step.
   klabautermann_client:
     name: Klabautermann client (${{ matrix.target }})
     needs: affected

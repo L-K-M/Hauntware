@@ -2497,7 +2497,8 @@ bool _isHexDigit(int unit) =>
     (unit >= 0x41 && unit <= 0x46);
 
 /// Percent-decodes valid '%XX' runs and leaves the rest literal — a
-/// malformed '%' or bytes that do not form UTF-8 stay as they were.
+/// malformed '%' or bytes that do not form UTF-8 stay as they were, and so
+/// does '%00': a NUL in the buffer would make the document unsavable.
 TextToolOutcome _urlDecode(TextToolRun run) {
   final slice = _sliceOf(run);
   final out = StringBuffer();
@@ -2525,8 +2526,14 @@ TextToolOutcome _urlDecode(TextToolRun run) {
         i + 2 < slice.length &&
         _isHexDigit(slice.codeUnitAt(i + 1)) &&
         _isHexDigit(slice.codeUnitAt(i + 2))) {
-      bytes.add(int.parse(slice.substring(i + 1, i + 3), radix: 16));
+      final byte = int.parse(slice.substring(i + 1, i + 3), radix: 16);
       i += 3;
+      if (byte != 0) {
+        bytes.add(byte);
+        continue;
+      }
+      flushBytes();
+      out.write(slice.substring(i - 3, i));
       continue;
     }
     flushBytes();

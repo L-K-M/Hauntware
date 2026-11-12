@@ -1,6 +1,7 @@
 // The device audit log (03 §8.10, M4 plan M12): append-only per server,
 // redacted steps, newest-first queries, the 90-day prune, a damaged file
 // quarantined, and memory only without the support directory to itself.
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -29,17 +30,20 @@ void main() {
     now: () => now,
   );
 
-  AuditRecord record(DateTime endedAt, {String serverId = _server}) =>
-      AuditRecord(
-        serverId: serverId,
-        action: 'UnitAction',
-        targetName: 'nginx.service',
-        steps: const ['systemctl restart nginx.service'],
-        tier: ConfirmationTier.acknowledge,
-        outcome: ActionOutcome.succeeded,
-        startedAt: endedAt.subtract(const Duration(seconds: 2)),
-        endedAt: endedAt,
-      );
+  AuditRecord record(
+    DateTime endedAt, {
+    String serverId = _server,
+    String targetName = 'nginx.service',
+  }) => AuditRecord(
+    serverId: serverId,
+    action: 'UnitAction',
+    targetName: targetName,
+    steps: const ['systemctl restart nginx.service'],
+    tier: ConfirmationTier.acknowledge,
+    outcome: ActionOutcome.succeeded,
+    startedAt: endedAt.subtract(const Duration(seconds: 2)),
+    endedAt: endedAt,
+  );
 
   File fileOf(String serverId) => File(
     '${root.path}/$auditDirectoryName/${serverFileStem(serverId)}.jsonl',
@@ -62,18 +66,58 @@ void main() {
         now.add(const Duration(minutes: 3)),
       ],
     );
-    expect(page.more, isTrue);
-    final older = await audit.query(
-      _server,
-      before: now.add(const Duration(minutes: 3)),
-    );
+    expect(page.next, isNotNull);
+    final older = await audit.query(_server, after: page.next);
     expect(older.records, hasLength(3));
-    expect(older.more, isFalse);
+    expect(older.next, isNull);
     expect(
       (await audit.query('0b3e7a4c-2f1d-4c5e-9a8b-7c6d5e4f3a2b')).records,
       hasLength(1),
     );
     expect(fileOf(_server).readAsLinesSync(), hasLength(5));
+  });
+
+  test('pages by end time, each record once, when appends come out of '
+      'order or end together (SAF-11)', () async {
+    final audit = log();
+    DateTime at(int minutes) => now.add(Duration(minutes: minutes));
+    for (final minutes in [10, 20, 30, 20, 20]) {
+      await audit.append(record(at(minutes)));
+    }
+    // A detached operation's result, acknowledged long after it ended.
+    await audit.append(record(at(5)));
+    await audit.append(record(at(40)));
+
+    final seen = <DateTime>[];
+    AuditCursor? after;
+    for (var page = 0; page < 10; page++) {
+      final read = await audit.query(_server, after: after, limit: 2);
+      seen.addAll([for (final r in read.records) r.endedAt]);
+      after = read.next;
+      if (after == null) break;
+    }
+
+    expect(seen, [at(40), at(30), at(20), at(20), at(20), at(10), at(5)]);
+  });
+
+  test('a record that ends with a paged tie group is shown once, after '
+      'the ones already paged (SAF-11)', () async {
+    final audit = log();
+    final at = now.add(const Duration(minutes: 20));
+    for (final name in ['a', 'b', 'c']) {
+      await audit.append(record(at, targetName: name));
+    }
+
+    final first = await audit.query(_server, limit: 2);
+    // Ended at the same moment as the records the cursor already counted.
+    await audit.append(record(at, targetName: 'd'));
+    final second = await audit.query(_server, after: first.next, limit: 2);
+
+    final shown = [
+      for (final r in [...first.records, ...second.records]) r.targetName,
+    ];
+    expect(shown.toSet(), {'a', 'b', 'c', 'd'});
+    expect(shown, hasLength(4));
   });
 
   test('records a run with its steps redacted and its typed result', () async {
@@ -146,7 +190,8 @@ void main() {
     ));
     await audit.append(record(now));
 
-    final [plain, skipped] = (await audit.query(_server)).records;
+    // Records that ended together read in append order.
+    final [skipped, plain] = (await audit.query(_server)).records;
     expect(skipped.steps, hasLength(2));
     expect(skipped.skippedSteps, [1]);
     expect(skipped.toJson()['skippedSteps'], [1]);
@@ -178,6 +223,56 @@ void main() {
     ).listSync().where((e) => e.path.contains('.corrupt-'));
     expect(copies, hasLength(1));
     expect(fileOf(_server).readAsLinesSync(), hasLength(2));
+  });
+
+  test('quarantines a line torn inside a character and keeps the rest '
+      '(03 §8.10)', () async {
+    final audit = log();
+    await audit.append(record(now));
+    // An append cut by a crash inside a two-byte character.
+    fileOf(_server).writeAsBytesSync([
+      ...utf8.encode('{"v":1,"target":"caf'),
+      0xC3,
+    ], mode: FileMode.append);
+
+    final read = await audit.query(_server);
+
+    expect([for (final r in read.records) r.endedAt], [now]);
+    expect(read.unreadable, isFalse);
+    expect(fileOf(_server).readAsLinesSync(), hasLength(1));
+    final copies = Directory(
+      '${root.path}/$auditDirectoryName',
+    ).listSync().where((e) => e.path.contains('.corrupt-'));
+    expect(copies, hasLength(1));
+  });
+
+  test('a file that cannot be read answers unreadable', () async {
+    final audit = log();
+    // A directory where the file belongs reads as an I/O error.
+    Directory(fileOf(_server).path).createSync(recursive: true);
+
+    final read = await audit.query(_server);
+
+    expect(read.records, isEmpty);
+    expect(read.unreadable, isTrue);
+  });
+
+  test('keeps the lines of a newer record version verbatim', () async {
+    final audit = log();
+    const newer =
+        '{"v":2,"serverId":"ssh-config:web","endedAt":"2025-01-01T00:00:00Z"}';
+    await audit.append(record(now.subtract(const Duration(days: 91))));
+    fileOf(_server).writeAsStringSync('$newer\n', mode: FileMode.append);
+    await audit.append(record(now));
+    // A damaged line makes the read rewrite the file, and the prune
+    // drops the old record: neither may drop the newer line.
+    fileOf(_server).writeAsStringSync('{"v":1,"half\n', mode: FileMode.append);
+    await audit.prune();
+
+    final read = await audit.query(_server);
+
+    expect([for (final r in read.records) r.endedAt], [now]);
+    expect(fileOf(_server).readAsLinesSync(), [newer, isNotEmpty]);
   });
 
   test('an append during a query that heals the file is kept', () async {

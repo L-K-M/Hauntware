@@ -171,7 +171,7 @@ Future<TextDocument> loadTextDocument(
   await _requireRegularFile(file);
   if (before != after || crypto.sha256.convert(bytes).toString() != after) {
     throw const TextDocumentException(
-      'The local copy changed while it was being opened.',
+      'The file changed while it was being opened.',
     );
   }
 
@@ -372,7 +372,7 @@ Future<String> _writeTextDocument(
       Error.throwWithStackTrace(
         isVanishedPathError(error)
             ? TextDocumentException(
-                'The local copy changed while it was being saved. '
+                'The file changed while it was being saved. '
                 '${_osDetail(error)}',
               )
             : TextDocumentException(
@@ -387,7 +387,7 @@ Future<String> _writeTextDocument(
       await _requireRegularFile(backup);
       if (await textDocumentSha256(backup) != expectedSha256) {
         throw const TextDocumentException(
-          'The local copy changed in another editor. Reopen it before '
+          'The file changed in another editor. Reopen it before '
           'saving to avoid losing those changes.',
         );
       }
@@ -404,7 +404,7 @@ Future<String> _writeTextDocument(
         renameFileWithoutReplacing(backup.path, file.path);
       } on FileSystemException {
         throw TextDocumentException(
-          'The local copy changed while it was being saved. '
+          'The file changed while it was being saved. '
           'The previous copy is preserved at ${backup.path}.',
         );
       }
@@ -473,12 +473,12 @@ Future<void> _requireRegularFile(File file) async {
   final type = await FileSystemEntity.type(file.path, followLinks: false);
   if (type == FileSystemEntityType.link) {
     throw const TextDocumentException(
-      'The local copy is a symbolic link, not a regular file.',
+      'The file is a symbolic link, not a regular file.',
     );
   }
   if (type != FileSystemEntityType.file) {
     throw const TextDocumentException(
-      'The local copy is missing or no longer a regular file.',
+      'The file is missing or no longer a regular file.',
     );
   }
 }

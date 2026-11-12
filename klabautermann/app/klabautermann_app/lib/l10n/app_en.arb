@@ -7678,6 +7678,10 @@
   "@activityEmpty": {
     "description": "Shown when the activity log is empty."
   },
+  "activityUnreadable": "The log file could not be read, so records are missing.",
+  "@activityUnreadable": {
+    "description": "Shown on the activity page when this device could not read the server's audit log file."
+  },
   "activityOlder": "Show older",
   "@activityOlder": {
     "description": "Button that reads the next page of older activity records."

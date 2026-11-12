@@ -7983,6 +7983,12 @@ abstract class AppLocalizations {
   /// **'Nothing has run on this server from this device.'**
   String get activityEmpty;
 
+  /// Shown on the activity page when this device could not read the server's audit log file.
+  ///
+  /// In en, this message translates to:
+  /// **'The log file could not be read, so records are missing.'**
+  String get activityUnreadable;
+
   /// Button that reads the next page of older activity records.
   ///
   /// In en, this message translates to:

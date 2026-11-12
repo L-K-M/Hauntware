@@ -303,7 +303,7 @@ void main() {
     expect(await tracker.acknowledge(_s1, _done), isNull);
     await pumpEventQueue();
 
-    final (:records, more: _) = await audit.query(_s1);
+    final records = (await audit.query(_s1)).records;
     final record = records.single;
     expect(record.action, kDetachedOperationAction);
     expect(record.targetName, _done);
