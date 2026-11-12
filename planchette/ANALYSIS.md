@@ -798,6 +798,15 @@ abandonment, and platform timestamp meaning differs. Offer recovery before
 cleanup, retain lone backups, and require ownership/conflict evidence even
 when preserving a documented retention cutoff.
 
+**Status (2026-11-12, branch `planchette/deferred-3`):** implemented as an offer, not a sweep.
+Opening a local document on the desktop lists its own `.planchette-<uuid>`
+`.edit`/`.backup` siblings, including names the core shortened to 255 bytes,
+and asks once per session: Open, Delete or Keep. A staging file written in the
+last minute is not offered (a save in another process may own it); a delete
+requires the file to be unchanged since it was found, and a backup is kept
+while its document is missing. Still open: a missing target (nothing opens, so
+nothing is offered), A2's journal, and the two-process test.
+
 ### B11. Explain or defer quit during saving — S (inherited read)
 `_confirmQuit` returns false while a tab is busy/saving, and the window treats
 false as doing nothing. Reproduce Cmd+Q during a gated save. Queue quit until
@@ -1134,6 +1143,15 @@ Cross-check against E5: #12's whole-word mode and #44's regex mode flow into
 the same match list, so any offset mapping has to serve all three rather than
 becoming a fourth search model.
 
+**Status (2026-11-12, branch `planchette/deferred-3`):** done for literal search. `searchText` expands
+`ß`, `ẞ`, `İ` and the Latin ligatures in both document and query and maps
+offsets back through a sparse per-expansion table (`search_fold.dart`); a
+document without them builds none. Start, scope, reverse windows, whole word
+and Replace All use mapped offsets, and two hits inside one expansion count
+once. Not covered: Unicode's other full-fold expansions (Greek iota subscript,
+Armenian ligatures, `ŉ`), which need the Unicode data table and its licence
+text, and regex mode, which still uses `RegExp(caseSensitive: false)`.
+
 ## 4. Performance
 
 ### P1. O(document) work per keystroke — L (structural)
@@ -1266,6 +1284,11 @@ Long-term: see P3.
 > "the dirty check", and both were invisible next to a whole-document
 > `TextPainter` layout.
 
+**Status (2026-11-12, branch `planchette/deferred-3`):** not started (size L).
+The entry asks for profile-mode measurements before any structural change,
+and none could be taken in this environment; open PR #744 also reworks the
+editor controller and view this would touch.
+
 ### P2. `IndexedStack` lays out every tab — M (read, Flutter source)
 `RenderIndexedStack` lays out all children and paints one. Resizing the
 window relays out every open document's full text. **Plan:** keep
@@ -1327,6 +1350,11 @@ staging file on save/create. That removes an I/O pass but does not verify the
 actual staged bytes against interference or corruption. Compare guarantees
 and fault-injection coverage first; do not weaken guarded publication solely
 because nominal digests match.
+
+**Status (2026-11-12, branch `planchette/deferred-3`):** not started. Both the load path
+(`loadTextDocument`, `LocalDocumentStore.load`) and the write path are being
+rewritten by open PR #743 (encodings), so an offload now would conflict with
+it. Do it after #743 merges, and measure first as above.
 
 ### P5. Stream Replace All and preflight expansion — M (read)
 `editor_controller.dart:399` allocates an uncapped match list before constructing
@@ -1647,6 +1675,10 @@ processes, missing files, private content, cleanup and newer unsaved revisions.
 An opt-in auto-save (on focus loss or after a delay) is separate from hot
 exit; put its setting in A1.
 
+**Status (2026-11-12, branch `planchette/deferred-3`):** not started (size L). Open Recent (A3) now
+keeps the paths; restoring them as a session, and the dirty-buffer journal,
+remain the design work described above.
+
 ### A3. Open Recent and a recent list in the empty state — M
 Keep the last 20 paths in settings. Show them in File › Open Recent (on
 macOS, prefer `NSDocumentController`'s recents) and in the empty state.
@@ -1657,6 +1689,14 @@ paths explicitly rather than silently reopening the wrong identity.
 The latest source also proposes remembering the last Save As directory per
 file type and supplying `FilePicker.saveFile(initialDirectory: ...)`. Define
 precedence against the current document directory and preserve privacy clearing.
+
+**Status (2026-11-12, branch `planchette/deferred-3`):** done on the desktop. Settings keep the last
+20 local files opened or saved; File › Open Recent lists them (folder shown
+for a shared name) with Clear Menu, and an empty window lists five. A file that
+is gone is removed and reported; one whose folder is also gone stays, with a
+message to connect the disk or share. Android and server copies are not
+listed. Not done: macOS `NSDocumentController` recents (native, unverified
+here) and the per-type Save As directory.
 
 ### A4. Verify native file-drop intake after #43 — M
 #43 reports a `DragTarget<String>` around the shell, newline-separated path
@@ -1880,6 +1920,15 @@ metadata survives in ARCHITECTURE.md. Implement native mechanics in the
 file-operation layer and specify failure behavior before publication.
 Test restricted access and retained metadata, not just ordinary mode bits.
 
+**Status (2026-11-12, branch `planchette/deferred-3`):** extended attributes done on Linux and
+macOS: the guarded save copies every attribute from the original to the
+staged file before publication (`copyExtendedAttributes`), which also carries
+Linux POSIX ACLs (`system.posix_acl_access`) and Finder tags. Failure policy:
+best effort; an attribute the process may not set, or a destination without
+attribute support, is left behind and the save still succeeds. Verified on
+Linux (ext4); macOS not runtime-verified. Still open: owner/group, other hard
+links, macOS ACLs (not xattrs), Windows streams and DACLs.
+
 ### I4. Directory write permission — S
 A writable file in a read-only directory can't be saved, because the
 temp sibling can't be created. Explain this in the error, and offer
@@ -1887,6 +1936,10 @@ temp sibling can't be created. Explain this in the error, and offer
 a `TextDocumentException` naming the unwritable folder and carrying the
 real `osError`. The "Save As…" offer on that error remains open — it is an
 app-level decision tied to the dialogs seam.
+
+**Status (2026-11-12, branch `planchette/deferred-3`):** done as a dialog. The core throws
+`TextDocumentFolderNotWritableException` (naming the folder) for this case;
+the app asks "Save … somewhere else?" and runs Save As from the failed save.
 
 ### I5. Host-neutral wording in core errors — S
 Core messages say "the local copy", which is Poltergeist/Séance
@@ -2877,6 +2930,8 @@ Deferred from the pass, each with its reason:
   that line from the selection (no text is lost).
 - Undo pressed in the same frame as an install can still reach the old text.
 - Export as HTML highlights the whole document on the UI isolate with no cap.
+  **Status (2026-11-12, branch `planchette/deferred-3`):** the page is now tokenized and built in `Isolate.run`
+  (`highlightedHtmlInBackground`); no frame measurement was taken.
 - #48's display-width status column stays with B8: the editor renders a tab as
   one cell, so a width-aware column would disagree with Go to Line.
 - From the review rounds, each confirmed but not worth another round:
