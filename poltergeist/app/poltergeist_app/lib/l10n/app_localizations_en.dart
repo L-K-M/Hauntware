@@ -2519,7 +2519,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get backupSwitchAdoptFleet => 'Use shared key';
+  String get backupSwitchAdoptFleet => 'Trust the new key';
 
   @override
   String get backupSwitchDone =>

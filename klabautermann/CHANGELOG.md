@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Settings > Sync shows a synced host key that conflicts with the one
+  this device trusts, with both fingerprints, and resolves it by keeping
+  this device's key or trusting the new one, in the settings route and
+  the desktop settings window.
 - On Android 13 and later, the system back gesture runs the app's own back
   steps, as in Séance and Poltergeist: the disk explorer steps up a folder
   and an editor with unsaved changes asks first.
