@@ -3,6 +3,8 @@
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
     show CronJob, CrontabManager, kCrontabPauseMarker, parseCrontabText;
+import 'package:klabautermann_core/src/sampling/sample_results.dart'
+    show maskedCronJobs;
 import 'package:test/test.dart';
 
 final _at = DateTime.utc(2026, 10, 21, 8, 30);
@@ -88,6 +90,46 @@ void main() {
         paused.split('\n')[3],
         '${kCrontabPauseMarker}2026-10-21T08:30:00Z '
         '*/5 * * * * /usr/local/bin/poll\r',
+      );
+    });
+
+    test('finds a line the Jobs view shows masked, and resumes it', () {
+      // The app's rows carry 8.9's masked text, which the crontab itself
+      // never holds.
+      const secret =
+          '0 3 * * * PGPASSWORD=hunter2 pg_dump --password=hunter2 app\n';
+      const text = '$_crontab$secret';
+      final shown = maskedCronJobs(_own(text)).values.last;
+      expect(shown.raw, isNot(contains('hunter2')));
+
+      final paused = togglePausedCronJob(text, shown, at: _at);
+      expect(
+        paused,
+        '$_crontab${kCrontabPauseMarker}2026-10-21T08:30:00Z $secret',
+      );
+
+      final row = maskedCronJobs(
+        _own(paused!),
+      ).values.firstWhere((job) => job.paused);
+      expect(togglePausedCronJob(paused, row, at: _at), text);
+    });
+
+    test('answers null when two different lines show as the same masked '
+        'line', () {
+      const text =
+          '0 3 * * * pg_dump --password=first app\n'
+          '0 3 * * * pg_dump --password=second app\n';
+      final shown = maskedCronJobs(_own(text)).values.first;
+      expect(togglePausedCronJob(text, shown, at: _at), isNull);
+
+      // Two identical lines are one line twice: the first is paused.
+      const twice =
+          '0 3 * * * pg_dump --password=same app\n'
+          '0 3 * * * pg_dump --password=same app\n';
+      final same = maskedCronJobs(_own(twice)).values.first;
+      expect(
+        togglePausedCronJob(twice, same, at: _at),
+        startsWith(kCrontabPauseMarker),
       );
     });
 

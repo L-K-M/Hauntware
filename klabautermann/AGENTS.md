@@ -77,6 +77,11 @@ accessibility fixtures modelled on Séance's against the runner's
 [docs/SHARED.md](docs/SHARED.md). Neither launches the app or touches user
 data; `--stock-engine` runs the stock controller and must fail. Rerun them
 after every Flutter upgrade: both fixes rely on private engine selectors.
+Both scripts only name Klabautermann's app and controller; their body is
+the suite's `../scripts/macos-native-fixtures.sh`, shared with the
+siblings. `scripts/build.sh` and `scripts/build-flatpak.sh` are wrappers
+of the same kind over `../scripts/product-build-common.sh` and
+`../scripts/build-flatpak-common.sh`.
 
 `scripts/bench-frame-timing.sh` builds the app in profile mode for the
 Linux desktop and runs spike S5's frame-timing test

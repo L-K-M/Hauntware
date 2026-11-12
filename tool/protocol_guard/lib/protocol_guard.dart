@@ -119,7 +119,12 @@ Future<List<String>> _checkSource(
         ) ??
         false;
     if (allowed && !isPayload) continue;
-    for (final field in _callbackFields(element)) {
+    // Only a payload is followed into the product's classes: engine-side
+    // services (EngineHost) legitimately hold the callback owners above.
+    for (final field in _callbackFields(
+      element,
+      isPayload ? productRoot : null,
+    )) {
       violations.add(
         '$reported: ${element.name}.$field has a function-typed field',
       );
@@ -128,23 +133,35 @@ Future<List<String>> _checkSource(
   return violations;
 }
 
-Set<String> _callbackFields(InterfaceElement element) {
+Set<String> _callbackFields(InterfaceElement element, String? productRoot) {
   final callbacks = <String>{};
   for (final owner in _fieldOwners(element.thisType, {})) {
-    for (final field in owner.element.fields) {
-      if (field.isOriginGetterSetter) continue;
-      if (field.isStatic && owner.element != element) continue;
-
-      final name = field.name;
-      if (name == null) {
-        throw StateError('Unnamed field on ${owner.element.name}');
-      }
-      // Instantiated getters substitute Base<T>.field when T is a callback.
-      final type = owner.getGetter(name)?.returnType ?? field.type;
-      if (_containsFunction(type, {})) callbacks.add(name);
+    for (final (name, type) in _storedFields(
+      owner,
+      includeStatic: owner.element == element,
+    )) {
+      if (_containsFunction(type, {}, productRoot)) callbacks.add(name);
     }
   }
   return callbacks;
+}
+
+// The fields [owner] itself declares, typed as [owner] instantiates them.
+Iterable<(String, DartType)> _storedFields(
+  InterfaceType owner, {
+  required bool includeStatic,
+}) sync* {
+  for (final field in owner.element.fields) {
+    if (field.isOriginGetterSetter) continue;
+    if (field.isStatic && !includeStatic) continue;
+
+    final name = field.name;
+    if (name == null) {
+      throw StateError('Unnamed field on ${owner.element.name}');
+    }
+    // Instantiated getters substitute Base<T>.field when T is a callback.
+    yield (name, owner.getGetter(name)?.returnType ?? field.type);
+  }
 }
 
 // Superclasses and applied mixins retain storage, even behind an overridden
@@ -164,23 +181,43 @@ Iterable<InterfaceType> _fieldOwners(
 }
 
 // Generic and record fields can carry callbacks as readily as direct fields.
-bool _containsFunction(DartType declaredType, Set<DartType> visited) {
+// With a [productRoot], so can a class the product declares, through its own
+// instance fields (`final CallbackBox box;` holding `final void Function()
+// run;`). Classes from the SDK and other packages are judged by their type
+// arguments only.
+bool _containsFunction(
+  DartType declaredType,
+  Set<DartType> visited,
+  String? productRoot,
+) {
   // Extension values carry their representation, including nested wrappers.
   final type = declaredType.extensionTypeErasure;
   if (!visited.add(type)) return false;
   if (type is FunctionType || type.isDartCoreFunction) return true;
+  bool contains(DartType inner) =>
+      _containsFunction(inner, visited, productRoot);
   return switch (type) {
-    InterfaceType() => type.typeArguments.any(
-      (argument) => _containsFunction(argument, visited),
-    ),
+    InterfaceType() =>
+      type.typeArguments.any(contains) ||
+          (_declaredIn(type.element, productRoot) &&
+              _fieldOwners(type, {}).any(
+                (owner) => _storedFields(
+                  owner,
+                  includeStatic: false,
+                ).any((field) => contains(field.$2)),
+              )),
     RecordType() => [
       ...type.positionalFields,
       ...type.namedFields,
-    ].any((field) => _containsFunction(field.type, visited)),
-    TypeParameterType() => _containsFunction(type.bound, visited),
+    ].any((field) => contains(field.type)),
+    TypeParameterType() => contains(type.bound),
     _ => false,
   };
 }
+
+bool _declaredIn(InterfaceElement element, String? productRoot) =>
+    productRoot != null &&
+    p.isWithin(productRoot, element.library.firstFragment.source.fullName);
 
 Future<void> _requireDirectory(Directory directory) async {
   final type = await FileSystemEntity.type(directory.path, followLinks: false);

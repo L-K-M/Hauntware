@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:seance_core/seance_core.dart'
+    show RemoteShellKind, UnsafePasteException;
 import 'package:seance_terminal/seance_terminal.dart';
 import 'package:xterm/xterm.dart';
 
@@ -24,20 +26,20 @@ void main() {
       e.injectInput('ls -l');
       expect(e.pendingInput, 'ls -l');
 
-      e.injectInput(del);
+      e.sendKey(utf8.encode(del));
       expect(e.pendingInput, 'ls -');
 
       e.injectInput('a');
       expect(e.pendingInput, 'ls -a');
 
-      e.injectInput('$esc[C'); // arrow-right escape sequence: ignored
+      e.sendKey(utf8.encode('$esc[C')); // arrow-right sequence: ignored
       expect(e.pendingInput, 'ls -a');
 
-      e.injectInput(cr); // Enter submits — line clears
+      e.sendKey(utf8.encode(cr)); // Enter submits, line clears
       expect(e.pendingInput, '');
 
       e.injectInput('foo');
-      e.injectInput(ctrlU);
+      e.sendKey(utf8.encode(ctrlU));
       expect(e.pendingInput, '');
     },
   );
@@ -48,7 +50,7 @@ void main() {
     e.feed(Uint8List.fromList(utf8.encode(integratedPrompt)));
 
     e.injectInput('echo hi');
-    e.injectInput('\r');
+    e.sendKey(const [0x0d]);
     expect(commands, ['echo hi']);
 
     // A line abandoned with Ctrl-C is not reported as a command.
@@ -78,10 +80,10 @@ void main() {
     );
 
     e.injectInput('sudo ls');
-    e.injectInput('\r');
+    e.sendKey(const [0x0d]);
     e.feed(Uint8List.fromList(utf8.encode('\x1b]133;C\x07Password: ')));
     e.injectInput('hunter2');
-    e.injectInput('\r');
+    e.sendKey(const [0x0d]);
     expect(commands, ['sudo ls']);
 
     // The next prompt takes commands again.
@@ -91,14 +93,14 @@ void main() {
       ),
     );
     e.injectInput('ls');
-    e.injectInput('\r');
+    e.sendKey(const [0x0d]);
     expect(commands, ['sudo ls', 'ls']);
 
     // The integrated state outlives a finished command: a later password
     // prompt is dropped too.
     e.feed(Uint8List.fromList(utf8.encode('\x1b]133;C\x07Password: ')));
     e.injectInput('letmein');
-    e.injectInput('\r');
+    e.sendKey(const [0x0d]);
     expect(commands, ['sudo ls', 'ls']);
   });
 
@@ -107,17 +109,17 @@ void main() {
     final e = XtermTerminalEngine(onCommand: commands.add);
     e.feed(Uint8List.fromList(utf8.encode(integratedPrompt)));
     e.injectInput('make');
-    e.injectInput('\r');
+    e.sendKey(const [0x0d]);
     e.feed(Uint8List.fromList(utf8.encode('\x1b]133;C\x07\x1b]133;D;0\x07')));
 
     // `133;A` and `133;B` are still in flight.
     e.injectInput('typed too soon');
-    e.injectInput('\r');
+    e.sendKey(const [0x0d]);
     expect(commands, ['make']);
 
     e.feed(Uint8List.fromList(utf8.encode('\x1b]133;A\x07\x1b]133;B\x07')));
     e.injectInput('ls');
-    e.injectInput('\r');
+    e.sendKey(const [0x0d]);
     expect(commands, ['make', 'ls']);
   });
 
@@ -126,12 +128,12 @@ void main() {
     final e = XtermTerminalEngine(onCommand: commands.add);
 
     e.injectInput('sudo ls');
-    e.injectInput('\r');
+    e.sendKey(const [0x0d]);
     e.feed(Uint8List.fromList(utf8.encode('Password: ')));
     e.injectInput('hunter2');
-    e.injectInput('\r');
+    e.sendKey(const [0x0d]);
     e.injectInput('ordinary line');
-    e.injectInput('\r');
+    e.sendKey(const [0x0d]);
     expect(commands, isEmpty);
   });
 
@@ -141,7 +143,7 @@ void main() {
 
     e.feed(Uint8List.fromList(utf8.encode('\x1b]133;B\x07')));
     e.injectInput('not a validated prompt');
-    e.injectInput('\r');
+    e.sendKey(const [0x0d]);
     expect(commands, isEmpty);
   });
 
@@ -151,7 +153,7 @@ void main() {
     e.shellMayHaveMoved.addListener(() => ticks++);
 
     e.injectInput('cd /srv');
-    e.injectInput('\r');
+    e.sendKey(const [0x0d]);
     e.sendKey([0x0d]); // an empty line
     e.sendKey([0x1b, 0x5b, 0x41]); // Up recalls history the engine never sees
     e.sendKey([0x0d]);
@@ -697,5 +699,155 @@ void main() {
       expect(sent, isEmpty);
       e.dispose();
     });
+  });
+
+  group('armed Ctrl', () {
+    late XtermTerminalEngine e;
+    late List<int> got;
+
+    setUp(() {
+      e = XtermTerminalEngine();
+      got = [];
+      final sub = e.userInput.listen(got.addAll);
+      addTearDown(() async {
+        await sub.cancel();
+        await e.dispose();
+      });
+    });
+
+    test('a paste passes untouched and leaves Ctrl armed', () async {
+      e.toggleCtrl();
+
+      // Bracketed paste is off, so the paste is one plain text chunk.
+      e.terminal.paste('make install');
+      await pumpEventQueue();
+
+      expect(utf8.decode(got), 'make install');
+      expect(e.ctrlArmed.value, isTrue);
+    });
+
+    test('a mouse report or hardware arrow leaves Ctrl armed', () async {
+      e.toggleCtrl();
+
+      e.terminal.onOutput!('\x1b[<0;3;1M');
+      e.terminal.onOutput!('\x1b[A');
+      await pumpEventQueue();
+      expect(e.ctrlArmed.value, isTrue);
+
+      got.clear();
+      e.terminal.onOutput!('c');
+      await pumpEventQueue();
+      expect(got, [0x03]);
+      expect(e.ctrlArmed.value, isFalse);
+    });
+  });
+
+  group('injectInput', () {
+    test('strips control characters, ESC included', () async {
+      final e = XtermTerminalEngine();
+      addTearDown(e.dispose);
+      final got = <int>[];
+      final sub = e.userInput.listen(got.addAll);
+      addTearDown(sub.cancel);
+
+      e.injectInput('ls\x1b[201~ -l\x07');
+      await pumpEventQueue();
+
+      expect(utf8.decode(got), 'ls[201~ -l');
+      expect(e.pendingInput, 'ls[201~ -l');
+    });
+
+    test('refuses a line break, sending nothing', () async {
+      final e = XtermTerminalEngine();
+      addTearDown(e.dispose);
+      final got = <int>[];
+      final sub = e.userInput.listen(got.addAll);
+      addTearDown(sub.cancel);
+
+      expect(
+        () => e.injectInput('echo a\nrm -rf ~'),
+        throwsA(isA<UnsafePasteException>()),
+      );
+      expect(
+        () => e.injectInput('echo\r'),
+        throwsA(isA<UnsafePasteException>()),
+      );
+      await pumpEventQueue();
+
+      expect(got, isEmpty);
+      expect(e.pendingInput, isEmpty);
+    });
+  });
+
+  group('OSC 7', () {
+    late XtermTerminalEngine e;
+
+    setUp(() {
+      e = XtermTerminalEngine();
+      addTearDown(e.dispose);
+    });
+
+    void osc7(String uri) =>
+        e.feed(Uint8List.fromList(utf8.encode('\x1b]7;$uri\x07')));
+
+    test('keeps an unencoded ? or # in the path', () {
+      osc7('file://server/srv/a?b');
+      expect(e.workingDirectory.value, '/srv/a?b');
+
+      osc7('file://server/srv/#tmp/x%20y');
+      expect(e.workingDirectory.value, '/srv/#tmp/x y');
+    });
+
+    test('ignores a directory on another host', () {
+      osc7('file://server/home/me');
+      // A nested `ssh other` whose shell reports its own directory.
+      osc7('file://other/etc');
+      expect(e.workingDirectory.value, '/home/me');
+
+      // Host names are not case-sensitive; a host-less or localhost URI
+      // names the session's own host.
+      osc7('file://SERVER/srv');
+      expect(e.workingDirectory.value, '/srv');
+      osc7('file:///tmp');
+      expect(e.workingDirectory.value, '/tmp');
+      osc7('file://localhost/var');
+      expect(e.workingDirectory.value, '/var');
+    });
+
+    test('ignores malformed percent-encoding', () {
+      osc7('file://server/ok');
+      osc7('file://server/bad%zz');
+      expect(e.workingDirectory.value, '/ok');
+    });
+  });
+
+  group('OSC 1337 shell identity', () {
+    for (final (sequence, shell) in [
+      ('ShellIntegrationVersion=1;bash', RemoteShellKind.posix),
+      ('ShellIntegrationVersion=13;shell=zsh', RemoteShellKind.posix),
+      ('ShellIntegrationVersion=2;shell=fish', RemoteShellKind.fish),
+      ('ShellIntegrationVersion=5;fish', RemoteShellKind.fish),
+    ]) {
+      test('recognises $sequence', () async {
+        final e = XtermTerminalEngine();
+        addTearDown(e.dispose);
+        e.feed(Uint8List.fromList(utf8.encode('\x1b]1337;$sequence\x07')));
+        expect(e.shellIntegration.value.shell, shell);
+      });
+    }
+
+    for (final sequence in [
+      'ShellIntegrationVersion=0;bash',
+      'ShellIntegrationVersion=x;bash',
+      'ShellIntegrationVersion=1;shell=pwsh',
+      'CurrentDir=/tmp',
+    ]) {
+      test('ignores $sequence', () async {
+        final e = XtermTerminalEngine();
+        addTearDown(e.dispose);
+        e.feed(Uint8List.fromList(utf8.encode('\x1b]1337;$sequence\x07')));
+        expect(e.shellIntegration.value.shell, isNull);
+      });
+    }
   });
 }

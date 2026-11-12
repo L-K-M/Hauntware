@@ -16,6 +16,7 @@ import '../../controllers/time_display.dart';
 import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/device_name.dart';
+import '../../controllers/editor_display.dart';
 import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart';
 import '../../controllers/safety_controller.dart';
@@ -56,6 +57,18 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
   /// in: the app's, from the latest snapshot.
   late final RemoteAppearance appearance = RemoteAppearance._(
     (method, argument) => invoke(method.name, argument),
+  );
+
+  /// The Appearance tab's file editor display (03 §8.5), from the latest
+  /// snapshot; null while the app offers none.
+  RemoteEditorDisplay? get editorDisplay =>
+      _editorDisplay.offered ? _editorDisplay : null;
+
+  late final RemoteEditorDisplay _editorDisplay = RemoteEditorDisplay._(
+    (display) => invoke(
+      SettingsLinkMethod.setEditorDisplay.name,
+      encodeEditorDisplay(display),
+    ),
   );
 
   /// The General tab's A11Y-15 switch, from the latest snapshot.
@@ -186,6 +199,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
             .cast<String, Object?>(),
       ),
     );
+    _editorDisplay._apply(snapshot[SettingsLinkKey.editorDisplay.name]);
     announcements._apply(
       snapshot[SettingsLinkKey.announceThresholdBands.name]! as bool,
     );
@@ -229,6 +243,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
   @override
   void dispose() {
     appearance.dispose();
+    _editorDisplay.dispose();
     announcements.dispose();
     deviceName.dispose();
     _thresholds.dispose();
@@ -365,6 +380,37 @@ final class RemoteLogDisplay extends ChangeNotifier
 
   @override
   Future<void> setLogDisplay(LogDisplay display) async {
+    await _call(display);
+  }
+}
+
+/// [EditorDisplaySettings] over the link: the app's file editor display as
+/// the latest snapshot carries it, and changes that run in the app's
+/// isolate.
+final class RemoteEditorDisplay extends ChangeNotifier
+    implements EditorDisplaySettings {
+  RemoteEditorDisplay._(this._call);
+
+  final Future<Object?> Function(EditorDisplay display) _call;
+
+  /// Whether the app offers an editor display; the first snapshot says.
+  bool offered = false;
+
+  EditorDisplay _value = EditorDisplay.standard;
+
+  void _apply(Object? encoded) {
+    final display = decodeEditorDisplay(encoded);
+    if (offered == (encoded != null) && display == _value) return;
+    offered = encoded != null;
+    _value = display;
+    notifyListeners();
+  }
+
+  @override
+  EditorDisplay get value => _value;
+
+  @override
+  Future<void> setEditorDisplay(EditorDisplay display) async {
     await _call(display);
   }
 }

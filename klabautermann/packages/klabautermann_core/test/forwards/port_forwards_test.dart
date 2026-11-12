@@ -144,6 +144,26 @@ void main() {
     expect(states.last.failure, isNull);
   });
 
+  test('a target that refuses the connection reads as connect failed, '
+      'not as forwarding disabled', () async {
+    final state = await listening('f-1');
+    link.failures.add(
+      const ChannelOpenException(
+        ChannelRefusal.connectFailed,
+        'Connection refused',
+      ),
+    );
+
+    final refused = await Socket.connect(
+      InternetAddress.loopbackIPv4,
+      state.localPort!,
+    );
+    await refused.drain<void>().catchError((Object _) {});
+    await pumpEventQueue();
+    expect(states.last.failure, PortForwardFailure.connectFailed);
+    expect(states.last.ended, isNull);
+  });
+
   test('a lost link and a forgotten server end their forwards', () async {
     await listening('f-1');
     current = null;

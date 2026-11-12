@@ -1,9 +1,9 @@
 name: ghost_marks_picker
 description: >-
   The platform image picker behind ghost_marks' mark picker for Seance and
-  Poltergeist, over file_picker. Kept out of ghost_marks so an app on
-  another picker, or on a win32 major file_picker 11 cannot share, takes
-  the shared appearance without it.
+  Poltergeist, over file_picker 11. Kept out of ghost_marks so an app on
+  another picker, or on a file_picker major that needs a different win32
+  major, takes the shared appearance without it.
 version: 1.9.4
 publish_to: none
 

@@ -2,19 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 
 import '../controllers/appearance_controller.dart';
+import '../controllers/editor_display.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
+import 'settings/editor_settings.dart';
 
 /// The Appearance tab (M4 E25, X-01): ghost_theme's shared editor bound to
 /// Klabautermann's style and words. Presets, the mode, every colour, the
 /// font, the corners, copy and paste, and reset, written through
 /// [AppearanceSettings] as the editor changes them: in the app straight to
 /// its controller, in the desktop settings window over the link. There is
-/// no terminal section; Klabautermann draws no terminal.
+/// no terminal section; Klabautermann draws no terminal. The file editors'
+/// font and text size (03 §8.5) follow.
 class AppearanceTab extends StatefulWidget {
-  const AppearanceTab({super.key, required this.appearance});
+  const AppearanceTab({
+    super.key,
+    required this.appearance,
+    this.editorDisplay,
+  });
 
   final AppearanceSettings appearance;
+
+  /// The file editors' font and text size (03 §8.5); null in tests that
+  /// leave it out, where the tab shows no file editor section.
+  final EditorDisplaySettings? editorDisplay;
 
   @override
   State<AppearanceTab> createState() => _AppearanceTabState();
@@ -41,8 +52,16 @@ class _AppearanceTabState extends State<AppearanceTab> {
       style: klabautermannThemeStyle,
       model: _model,
       strings: KlabautermannAppearanceStrings(l10n),
-      page: (children) =>
-          ListView(padding: const EdgeInsets.all(24), children: children),
+      page: (children) => ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          ...children,
+          if (widget.editorDisplay != null) ...[
+            const Divider(height: 40),
+            EditorSettingsSection(model: widget.editorDisplay!),
+          ],
+        ],
+      ),
       header: (title, {helpTitle, help}) =>
           _SectionHeader(title: title, helpTitle: helpTitle, help: help),
     );

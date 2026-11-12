@@ -6,6 +6,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart' show sha256;
+import 'package:klabautermann_host/klabautermann_host.dart' show EditExit;
 import 'package:seance_core/seance_core.dart' show RemoteCommandResult;
 
 import 'scripted_link.dart';
@@ -33,6 +34,19 @@ final class EditHost extends TestLinkBase {
   /// Directories the presence check sees.
   final directories = <String>{};
 
+  /// Paths the read script finds to be symlinks it cannot resolve.
+  final symlinks = <String>{};
+
+  /// Symlinked paths and the real file in [files] each resolves to.
+  final links = <String, String>{};
+
+  /// What the root-only directory check resolves a directory to; one not
+  /// named here resolves to itself.
+  final physicalDirectories = <String, String>{};
+
+  /// Resolved directories an account other than root can change.
+  final openDirectories = <String>{};
+
   final commands = <String>[];
   bool enforcing = false;
 
@@ -58,7 +72,22 @@ final class EditHost extends TestLinkBase {
       );
     }
     if (command.contains('klabautermann-read')) {
-      return _read(files.keys.where(names).firstOrNull, elevated);
+      if (symlinks.any(names)) {
+        return const RemoteCommandResult(exitCode: EditExit.symlink);
+      }
+      final opened = {...files.keys, ...links.keys}.where(names).firstOrNull;
+      return _read(links[opened] ?? opened, elevated);
+    }
+    if (command.contains('klabautermann-directory')) {
+      final path = files.keys.where(names).first;
+      final directory = path.substring(0, path.lastIndexOf('/'));
+      final physical = physicalDirectories[directory] ?? directory;
+      return RemoteCommandResult(
+        exitCode: openDirectories.contains(physical)
+            ? EditExit.userWritableDirectory
+            : 0,
+        stdout: '$physical\n',
+      );
     }
     if (command.contains("'crontab' '-l'")) return _crontab(command);
     if (command.contains('XDG_CONFIG_HOME')) return _ok('$kHostUserManifest\n');
@@ -109,8 +138,8 @@ final class EditHost extends TestLinkBase {
     }
     final bytes = utf8.encode(file.text).length;
     return _ok(
-      '$bytes ${file.uid} ${file.uid} ${file.mode} ${sha256Of(file.text)}\n'
-      '${file.text}',
+      '$bytes ${file.uid} ${file.uid} ${file.mode} ${sha256Of(file.text)} '
+      '$path\n${file.text}',
     );
   }
 

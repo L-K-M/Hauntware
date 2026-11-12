@@ -14,6 +14,13 @@
 ///     ─▶ copyAttributes ─▶ replaceIfHash ─▶ restorecon (SELinux enforcing)
 ///   any failure after writeTemp ─▶ removeTemp
 /// ```
+///
+/// [EditCommands.readFile] resolves a symlinked target to the file it
+/// names and prints that path; every step then names the real file, so a
+/// link stays a link, as an editor writing through it leaves it. A
+/// root-run write first passes [EditCommands.rootOnlyDirectory] on that
+/// file's directory. The swap still refuses a target that has become a
+/// link ([EditExit.symlink]).
 library;
 
 import '../hws/collector.dart' show ArgValidators;
@@ -111,14 +118,35 @@ abstract final class EditExit {
   /// [EditCommands.sha256List]: a path exists but `sha256sum` could not
   /// read it, so the list is incomplete.
   static const int unreadable = 104;
+
+  /// [EditCommands.readFile]: the target is a symbolic link the host has
+  /// no `readlink -f` or `realpath` to resolve. [EditCommands.replaceIfHash]:
+  /// the real file the plan names has become a link. Renaming over a link
+  /// would replace it with a detached copy and leave the file it names as
+  /// it was.
+  static const int symlink = 105;
+
+  /// [EditCommands.rootOnlyDirectory]: an account other than root could
+  /// change the directory's entries, so root must not write there (03
+  /// §7.17, §9's threat table).
+  static const int userWritableDirectory = 106;
 }
 
 /// What [EditCommands.readFile]'s first line says of the file: its
-/// size, numeric owner and group, permission bits and SHA-256.
-typedef ReadHeader = ({int size, int uid, int gid, int mode, String sha256});
+/// size, numeric owner and group, permission bits and SHA-256, and the
+/// path it read, with every symlink resolved where the host could
+/// resolve them (null from a line without one).
+typedef ReadHeader = ({
+  int size,
+  int uid,
+  int gid,
+  int mode,
+  String sha256,
+  String? path,
+});
 
 /// Reads [EditCommands.readFile]'s first line:
-/// `<size> <uid> <gid> <octal mode> <sha256>`.
+/// `<size> <uid> <gid> <octal mode> <sha256> <path>`.
 ReadHeader? parseReadHeader(String line) {
   final match = _readHeader.firstMatch(line);
   if (match == null) return null;
@@ -127,7 +155,14 @@ ReadHeader? parseReadHeader(String line) {
   final gid = int.tryParse(match[3]!);
   final mode = int.tryParse(match[4]!, radix: 8);
   if (size == null || uid == null || gid == null || mode == null) return null;
-  return (size: size, uid: uid, gid: gid, mode: mode, sha256: match[5]!);
+  return (
+    size: size,
+    uid: uid,
+    gid: gid,
+    mode: mode,
+    sha256: match[5]!,
+    path: match[6],
+  );
 }
 
 /// Reads `sha256sum` output, as [EditCommands.sha256List] prints it, into
@@ -150,7 +185,9 @@ String _unescapeSha256Path(String path) => path.replaceAllMapped(
 );
 
 // `stat -c %a` prints the mode without leading zeros, so 0007 reads `7`.
-final _readHeader = RegExp(r'^(\d+) (\d+) (\d+) ([0-7]{1,4}) ([0-9a-f]{64})$');
+final _readHeader = RegExp(
+  r'^(\d+) (\d+) (\d+) ([0-7]{1,4}) ([0-9a-f]{64})(?: (/.*))?$',
+);
 final _sha256Line = RegExp(r'^(\\)?([0-9a-f]{64})  (/.*)$');
 final _sha256 = RegExp(r'^[0-9a-f]{64}$');
 final _backupName = RegExp(r'^[0-9a-f]{64}-\d{1,12}$');
@@ -158,16 +195,37 @@ final _token = RegExp('^[0-9a-f]{$kEditTempTokenLength}\$');
 // systemd.unit(5)'s characters, less `:`.
 final _unitName = RegExp(r'^[A-Za-z0-9_.@\\-]+$');
 
-/// Prints `<size> <uid> <gid> <mode> <sha256>` and then, when the size is
-/// at most the cap, the content. The hash is of the file as `sha256sum` read it; the
-/// engine checks it against the bytes `cat` printed, which a concurrent
-/// write may have changed between the two reads.
+/// Resolves the target with `readlink -f` (GNU, BusyBox, BSD) or
+/// `realpath`, then prints `<size> <uid> <gid> <mode> <sha256> <path>` of
+/// the resolved path and, when the size is at most the cap, its content.
+/// The hash is of the file as `sha256sum` read it; the engine checks it
+/// against the bytes `cat` printed, which a concurrent write may have
+/// changed between the two reads.
+///
+/// - A dangling link reads as missing, in the words `stat` would use:
+///   BusyBox's `readlink -f` fails on it rather than print its target.
+/// - Where neither tool resolves, a target that is no link reads as it
+///   is, and a link exits [EditExit.symlink]: `stat` would describe the
+///   link while `cat` printed the file it names.
+/// - A resolved path with a newline exits [EditExit.symlink] too, since
+///   the header could not carry it.
 const String _kReadScript = r'''
-i=$(stat -c '%s %u %g %a' -- "$1") || exit
-h=$(sha256sum -- "$1") || exit
-printf '%s %s\n' "$i" "${h%% *}"
+if [ -L "$1" ] && [ ! -e "$1" ]; then
+  printf '%s: No such file or directory\n' "$1" >&2
+  exit 1
+fi
+p=$(readlink -f -- "$1" 2>/dev/null) || p=$(realpath -- "$1" 2>/dev/null) || p=
+case $p in
+/*) ;;
+*) [ ! -L "$1" ] || exit 105; p=$1 ;;
+esac
+case $p in *'
+'*) exit 105 ;; esac
+i=$(stat -c '%s %u %g %a' -- "$p") || exit
+h=$(sha256sum -- "$p") || exit
+printf '%s %s %s\n' "$i" "${h%% *}" "$p"
 s=${i%% *}
-if [ "$s" -le "$2" ]; then exec cat -- "$1"; fi''';
+if [ "$s" -le "$2" ]; then exec cat -- "$p"; fi''';
 
 /// Writes stdin to a new temp file that no other account can read, and
 /// refuses one that already exists (`set -C`).
@@ -195,10 +253,32 @@ fi
 o=$(stat -c %u:%g -- "$t") && m=$(stat -c %a -- "$t") || exit
 chown -- "$o" "$tmp" && chmod -- "$m" "$tmp"''';
 
+/// Prints the target's directory with every symlink resolved, then exits
+/// 0 when it and each directory above it is owned by root and writable by
+/// no group or other account, or [EditExit.userWritableDirectory]. `%a`
+/// prints no leading zeros, so the group digit may be absent; a sticky
+/// directory such as `/tmp` is other-writable and refused too. Matching
+/// the mode as text keeps octal arithmetic, which mksh reads as decimal,
+/// out of it.
+const String _kRootOnlyDirectoryScript = r'''
+d=${1%/*}
+d=$(cd -P "${d:-/}" && pwd -P) || exit
+printf '%s\n' "$d"
+while :; do
+  i=$(stat -c '%u %a' -- "$d") || exit
+  [ "${i%% *}" = 0 ] || exit 106
+  case ${i#* } in *[2367]|*[2367]?) exit 106 ;; esac
+  [ "$d" != / ] || exit 0
+  d=${d%/*}
+  d=${d:-/}
+done''';
+
 /// Re-checks the target's hash right before the rename (03 §8.5's
 /// compare-and-swap); a mismatch exits [EditExit.hashMismatch], and it or
-/// a failed rename removes the temp.
+/// a failed rename removes the temp. A target that has become a symlink
+/// exits [EditExit.symlink], since the rename would replace the link.
 const String _kReplaceIfHashScript = r'''
+if [ -L "$1" ]; then rm -f -- "$2"; exit 105; fi
 h=$(sha256sum -- "$1") || { s=$?; rm -f -- "$2"; exit "$s"; }
 if [ "${h%% *}" != "$3" ]; then rm -f -- "$2"; exit 101; fi
 mv -f -- "$2" "$1" || { s=$?; rm -f -- "$2"; exit "$s"; }''';
@@ -301,9 +381,10 @@ abstract final class EditCommands {
         '.${target.substring(slash + 1)}$kEditTempInfix$token';
   }
 
-  /// `<size> <uid> <gid> <mode> <sha256>` of [path], then its content
-  /// when it is at most [cap] bytes (03 §8.5); [parseReadHeader] reads
-  /// the first line.
+  /// `<size> <uid> <gid> <mode> <sha256> <path>` of [path] with its
+  /// symlinks resolved, then that file's content when it is at most [cap]
+  /// bytes (03 §8.5); [parseReadHeader] reads the first line. A link the
+  /// host cannot resolve exits [EditExit.symlink] and prints nothing.
   static List<String> readFile(String path, {int cap = kEditReadMaxBytes}) {
     _checkPath(path);
     if (cap < 0) throw HostCommandError('negative cap', argument: '$cap');
@@ -334,8 +415,9 @@ abstract final class EditCommands {
   }
 
   /// Renames [temp] over [target] while [target]'s hash is still
-  /// [sha256]; otherwise exits [EditExit.hashMismatch]. A mismatch or a
-  /// failed rename removes [temp].
+  /// [sha256] and it is no symlink; otherwise exits
+  /// [EditExit.hashMismatch] or [EditExit.symlink]. Either, or a failed
+  /// rename, removes [temp].
   static List<String> replaceIfHash(String target, String temp, String sha256) {
     _checkPair(target, temp);
     if (!_sha256.hasMatch(sha256)) {
@@ -386,6 +468,29 @@ abstract final class EditCommands {
     _checkPath(path);
     return ['restorecon', '--', path];
   }
+
+  /// The directory a privileged write of [path] goes into, with its
+  /// symlinks resolved, and whether only root can change it (03 §7.17):
+  /// exits 0 when it and every directory above it are root's alone, else
+  /// [EditExit.userWritableDirectory]. A root-run step in a directory
+  /// another account can write could have its temp file swapped for a
+  /// symlink between steps, redirecting root's writes.
+  static List<String> rootOnlyDirectory(String path) {
+    _checkPath(path);
+    return [
+      'sh',
+      '-c',
+      _kRootOnlyDirectoryScript,
+      'klabautermann-directory',
+      path,
+    ];
+  }
+
+  /// Throws [HostCommandError] unless [path] is a path the edit commands
+  /// take: absolute, normalized, a file name, and free of control
+  /// characters. A resolved path is held to the same rules as the path
+  /// the user opened.
+  static void checkTarget(String path) => _checkPath(path);
 
   /// Removes [temp] after a failed write.
   static List<String> removeTemp(String temp) {

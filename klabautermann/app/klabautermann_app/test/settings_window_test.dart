@@ -25,6 +25,7 @@ import 'package:klabautermann_app/controllers/window_panes.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/device_name.dart';
+import 'package:klabautermann_app/controllers/editor_display.dart';
 import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitor_set.dart';
@@ -36,9 +37,12 @@ import 'package:klabautermann_app/services/settings_window/settings_window_host.
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
 import 'package:klabautermann_app/settings_window_app.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
+import 'package:klabautermann_app/ui/appearance_tab.dart';
 import 'package:klabautermann_app/ui/settings_page.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart' show ChartThresholds;
 import 'package:klabautermann_app/ui/threshold_scope.dart';
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorLigatures, EditorTextSize;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show MonitorEligibility, SafetyPolicy, ServerSafety;
 
@@ -212,6 +216,7 @@ void main() {
     TimeDisplaySettings? timeDisplay,
     AdminMemorySettings? adminMemory,
     UpdateCheckSettings? updateChecks,
+    EditorDisplaySettings? editorDisplay,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
@@ -229,6 +234,7 @@ void main() {
       logDisplay: logDisplay,
       timeDisplay: timeDisplay,
       updateChecks: updateChecks,
+      editorDisplay: editorDisplay,
       accountSize: accountSize,
       control: _control,
       link: _appLink,
@@ -391,6 +397,7 @@ void main() {
     late CadenceCapsController cadenceCaps;
     late AdminMemoryController adminMemory;
     late LogDisplayController logDisplay;
+    late EditorDisplayController editorDisplay;
     late TimeDisplayController timeDisplay;
     late ValueNotifier<AccountSize?> accountSize;
     late SettingsWindowHost host;
@@ -447,6 +454,8 @@ void main() {
       addTearDown(adminMemory.dispose);
       logDisplay = LogDisplayController();
       addTearDown(logDisplay.dispose);
+      editorDisplay = EditorDisplayController();
+      addTearDown(editorDisplay.dispose);
       timeDisplay = TimeDisplayController();
       addTearDown(timeDisplay.dispose);
       accountSize = ValueNotifier(null);
@@ -467,6 +476,7 @@ void main() {
         timeDisplay,
         adminMemory,
         updateChecks,
+        editorDisplay,
       );
     });
 
@@ -665,6 +675,68 @@ void main() {
         windowApp(tester).theme?.colorScheme.surface,
         appearance.value.palette.surface,
       );
+    });
+
+    testWidgets('the Appearance tab\'s file editor display changes the '
+        'app\'s through the link (03 §8.5)', (tester) async {
+      final remote = await pumpBothWindows(tester, appearance);
+      Finder inWindow(Finder finder) =>
+          find.descendant(of: find.byType(SettingsWindowApp), matching: finder);
+      expect(remote.editorDisplay?.value, EditorDisplay.standard);
+
+      // The section is the last block of the Appearance tab's page, below
+      // the theme editor; the tab's ListView is the scrollable.
+      Finder sectionScrollable() => find
+          .descendant(
+            of: find.byType(AppearanceTab),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+
+      Future<void> reveal(Finder finder) async {
+        await tester.scrollUntilVisible(
+          finder,
+          200,
+          scrollable: sectionScrollable(),
+        );
+        await tester.ensureVisible(finder);
+        await tester.pumpAndSettle();
+      }
+
+      final ligatures = inWindow(
+        find.widgetWithText(SwitchListTile, 'Ligatures'),
+      );
+      await reveal(ligatures);
+      await tester.tap(ligatures);
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(editorDisplay.value.ligatures, EditorLigatures.off);
+      expect(remote.editorDisplay?.value.ligatures, EditorLigatures.off);
+
+      final slider = inWindow(find.byKey(const ValueKey('editor.textSize')));
+      await reveal(slider);
+      await tester.drag(slider, const Offset(40, 0));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(
+        editorDisplay.value.textSize,
+        greaterThan(EditorTextSize.standard),
+      );
+      expect(
+        remote.editorDisplay?.value.textSize,
+        editorDisplay.value.textSize,
+      );
+
+      // A change in the app reaches the showing window too.
+      await tester.runAsync(() async {
+        await editorDisplay.setEditorDisplay(
+          EditorDisplay(textSize: EditorTextSize.standard + 2),
+        );
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(remote.editorDisplay?.value.textSize, EditorTextSize.standard + 2);
+      expect(inWindow(find.text('16 pt')), findsOneWidget);
     });
 
     testWidgets('a change in the window the app applies but cannot save '
@@ -1447,6 +1519,14 @@ void main() {
         ),
       );
       expect(
+        roundTrip(const EditorDisplayNotSavedException('disk full')),
+        isA<EditorDisplayNotSavedException>().having(
+          (error) => error.message,
+          'message',
+          'disk full',
+        ),
+      );
+      expect(
         roundTrip(const AdminMemoryNotSavedException('disk full')),
         isA<AdminMemoryNotSavedException>().having(
           (error) => error.message,
@@ -1512,6 +1592,18 @@ void main() {
         decodeMonitorCandidates(encodeMonitorCandidates(candidates)),
         candidates,
       );
+    });
+
+    test('the editor display crosses whole', () {
+      final display = EditorDisplay(
+        family: 'JetBrains Mono',
+        ligatures: EditorLigatures.off,
+        textSize: 18,
+      );
+
+      expect(decodeEditorDisplay(encodeEditorDisplay(display)), display);
+      // A value it did not write reads as the standard display.
+      expect(decodeEditorDisplay(null), EditorDisplay.standard);
     });
 
     test('uses the channel names 04 §12.3 fixes', () {

@@ -367,6 +367,156 @@ void main() {
     expect(find.text('paused'), findsNothing);
   });
 
+  group('with a screen reader', () {
+    Future<OverlayState> pumpHost(
+      WidgetTester tester, {
+      required ValueNotifier<bool> screenReader,
+    }) async {
+      late OverlayState overlay;
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => ValueListenableBuilder<bool>(
+            valueListenable: screenReader,
+            builder: (context, on, _) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(accessibleNavigation: on),
+              child: child!,
+            ),
+          ),
+          home: Builder(
+            builder: (context) {
+              overlay = Overlay.of(context);
+              return const Scaffold();
+            },
+          ),
+        ),
+      );
+      return overlay;
+    }
+
+    testWidgets('a toast with an action stays until it is closed', (
+      tester,
+    ) async {
+      final screenReader = ValueNotifier(true);
+      addTearDown(screenReader.dispose);
+      final overlay = await pumpHost(tester, screenReader: screenReader);
+
+      showTopToast(
+        overlay,
+        message: 'Unlock failed',
+        duration: const Duration(seconds: 2),
+        actionLabel: 'Retry',
+        onAction: () {},
+      );
+      showTopToast(
+        overlay,
+        message: 'Copied',
+        duration: const Duration(seconds: 2),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+
+      // The action outlives its timer; the actionless notice still expires.
+      expect(find.text('Unlock failed'), findsOneWidget);
+      expect(find.text('Copied'), findsNothing);
+      expect(find.byTooltip('Close'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+      expect(find.text('Unlock failed'), findsNothing);
+    });
+
+    testWidgets('turning the screen reader off resumes the timer', (
+      tester,
+    ) async {
+      final screenReader = ValueNotifier(true);
+      addTearDown(screenReader.dispose);
+      final overlay = await pumpHost(tester, screenReader: screenReader);
+
+      showTopToast(
+        overlay,
+        message: 'Unlock failed',
+        duration: const Duration(seconds: 2),
+        actionLabel: 'Retry',
+        onAction: () {},
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 10));
+      expect(find.text('Unlock failed'), findsOneWidget);
+
+      screenReader.value = false;
+      await tester.pump();
+      expect(find.byTooltip('Close'), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(find.text('Unlock failed'), findsNothing);
+    });
+  });
+
+  testWidgets('notices that are never shown are announced', (tester) async {
+    late OverlayState overlay;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            overlay = Overlay.of(context);
+            return const Scaffold();
+          },
+        ),
+      ),
+    );
+
+    for (var i = 1; i <= 4; i++) {
+      showTopToast(
+        overlay,
+        message: 'notice $i',
+        duration: const Duration(minutes: 1),
+      );
+    }
+    await tester.pump();
+    // Visible toasts reach the screen reader as live regions; only the
+    // overflowed one needs an announcement.
+    expect(tester.takeAnnouncements().map((a) => a.message), ['notice 4']);
+
+    // A repeat of the overflowed notice is announced again.
+    showTopToast(
+      overlay,
+      message: 'notice 4',
+      duration: const Duration(minutes: 1),
+    );
+    await tester.pump();
+    expect(tester.takeAnnouncements().map((a) => a.message), ['notice 4']);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a coalesced repeat of a visible notice is announced', (
+    tester,
+  ) async {
+    late OverlayState overlay;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            overlay = Overlay.of(context);
+            return const Scaffold();
+          },
+        ),
+      ),
+    );
+
+    showTopToast(overlay, message: 'Connection lost');
+    await tester.pump();
+    expect(tester.takeAnnouncements(), isEmpty);
+
+    showTopToast(overlay, message: 'Connection lost');
+    await tester.pump();
+    expect(find.text('×2'), findsOneWidget);
+    expect(tester.takeAnnouncements().map((a) => a.message), [
+      'Connection lost',
+    ]);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('toast strip stays bounded with narrow large-text content', (
     tester,
   ) async {

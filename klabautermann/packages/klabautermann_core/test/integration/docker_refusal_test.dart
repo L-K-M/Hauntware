@@ -36,6 +36,11 @@ enum _Outcome {
   /// disabled.
   forwardDisabled,
 
+  /// sshd refused it as connect failed, which seance_core reads as the
+  /// target not answering. OpenSSH sends it for every refused streamlocal
+  /// open, so it does not tell a disabled forward from a missing socket.
+  connectFailed,
+
   /// sshd refused it, and seance_core classified it some other way. No
   /// variant expects this, so the test fails, after the evidence is
   /// written.
@@ -48,8 +53,9 @@ enum _Outcome {
 /// test fails when the fixture's OpenSSH starts doing otherwise.
 ///
 /// Recorded on the base's OpenSSH 10.6: every streamlocal refusal is
-/// reason 2 (connect failed) "open failed" and every `direct-tcpip` one
-/// reason 1 (administratively prohibited) "open failed". sshd logs
+/// reason 2 (connect failed) "open failed", which classifies as
+/// connectFailed, and every `direct-tcpip` one reason 1 (administratively
+/// prohibited) "open failed", which classifies as forwardDisabled. sshd logs
 /// "refused streamlocal port forward" where its streamlocal check refuses
 /// (AllowStreamLocalForwarding, DisableForwarding, `restrict`), and
 /// "Received request to connect to path ..., but the request was denied"
@@ -66,31 +72,31 @@ const _variants = <_Variant>[
   (
     service: FixtureService.noStreamlocal,
     setting: 'AllowStreamLocalForwarding no',
-    streamlocal: _Outcome.forwardDisabled,
+    streamlocal: _Outcome.connectFailed,
     tcp: _Outcome.opened,
   ),
   (
     service: FixtureService.disableForwarding,
     setting: 'DisableForwarding yes',
-    streamlocal: _Outcome.forwardDisabled,
+    streamlocal: _Outcome.connectFailed,
     tcp: _Outcome.forwardDisabled,
   ),
   (
     service: FixtureService.noTcp,
     setting: 'AllowTcpForwarding no',
-    streamlocal: _Outcome.forwardDisabled,
+    streamlocal: _Outcome.connectFailed,
     tcp: _Outcome.forwardDisabled,
   ),
   (
     service: FixtureService.permitOpen,
     setting: 'PermitOpen 127.0.0.1:1',
-    streamlocal: _Outcome.forwardDisabled,
+    streamlocal: _Outcome.connectFailed,
     tcp: _Outcome.forwardDisabled,
   ),
   (
     service: FixtureService.restrict,
     setting: 'authorized_keys restrict',
-    streamlocal: _Outcome.forwardDisabled,
+    streamlocal: _Outcome.connectFailed,
     tcp: _Outcome.forwardDisabled,
   ),
 ];
@@ -255,7 +261,7 @@ void main() {
     expect(writable.exitCode, isNot(0));
     expect(cli.exitCode, isNot(0));
     expect(cli.stderr.toLowerCase(), contains('permission denied'));
-    expect(refused?.refusal, ChannelRefusal.forwardDisabled);
+    expect(refused?.refusal, ChannelRefusal.connectFailed);
   });
 }
 
@@ -263,17 +269,20 @@ void main() {
 typedef _Attempt = ({_Outcome outcome, Object evidence});
 
 /// Runs [open], which opens a channel and uses it, and reports what sshd
-/// did. A refusal classified other than as forwarding disabled reads as
-/// [_Outcome.otherRefusal], which the variant comparison fails on once
-/// the evidence is recorded.
+/// did. A refusal classified as neither forwarding disabled nor connect
+/// failed reads as [_Outcome.otherRefusal], which the variant comparison
+/// fails on once the evidence is recorded.
 Future<_Attempt> _attempt(Future<void> Function() open) async {
   try {
     await open();
     return (outcome: _Outcome.opened, evidence: 'opened');
   } on ChannelOpenException catch (error) {
-    final outcome = error.refusal == ChannelRefusal.forwardDisabled
-        ? _Outcome.forwardDisabled
-        : _Outcome.otherRefusal;
+    final outcome = switch (error.refusal) {
+      ChannelRefusal.forwardDisabled => _Outcome.forwardDisabled,
+      ChannelRefusal.connectFailed => _Outcome.connectFailed,
+      ChannelRefusal.sessionLimit ||
+      ChannelRefusal.other => _Outcome.otherRefusal,
+    };
     return (outcome: outcome, evidence: _evidence(error));
   }
 }
