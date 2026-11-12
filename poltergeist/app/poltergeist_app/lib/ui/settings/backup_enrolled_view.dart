@@ -5,6 +5,8 @@
 // §4.2's sign-out for both, §4.1's typed-confirmation delete for
 // separate only, §4.4's switch entry and its optional post-switch
 // delete offer.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -376,6 +378,16 @@ class _DeleteBackupAccountDialogState
     super.dispose();
   }
 
+  /// The confirm gate: the typed name must equal the account name, and
+  /// no delete may already be running.
+  bool get _confirmed => !_busy && _field.text.trim() == widget.username;
+
+  /// Return in the confirm field confirms, under the same gate as the
+  /// button.
+  void _confirmFromKeyboard() {
+    if (_confirmed) unawaited(_delete());
+  }
+
   Future<void> _delete() async {
     final l10n = AppLocalizations.of(context);
     setState(() {
@@ -414,6 +426,8 @@ class _DeleteBackupAccountDialogState
             controller: _field,
             enabled: !_busy,
             autofocus: true,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _confirmFromKeyboard(),
           ),
           if (_error != null)
             Padding(
@@ -431,9 +445,7 @@ class _DeleteBackupAccountDialogState
           listenable: _field,
           builder: (context, _) => FilledButton(
             key: const ValueKey('backup.delete.confirm'),
-            onPressed: !_busy && _field.text.trim() == widget.username
-                ? _delete
-                : null,
+            onPressed: _confirmed ? _delete : null,
             child: Text(l10n.backupDeleteConfirm),
           ),
         ),
@@ -465,6 +477,27 @@ class _DeleteRetainedAccountDialogState
   void dispose() {
     _field.dispose();
     super.dispose();
+  }
+
+  /// The confirm gate: the typed name must equal the retained account
+  /// name, and no delete may already be running.
+  bool get _confirmed {
+    final retained = widget.service.retainedAccount;
+    return !_busy &&
+        retained != null &&
+        _field.text.trim() == retained.username;
+  }
+
+  Future<void> _confirmRetained() => _run(
+        () => widget.service.deleteRetainedSeparateAccount(
+          confirmedName: _field.text.trim(),
+        ),
+      );
+
+  /// Return in the confirm field confirms, under the same gate as the
+  /// button.
+  void _confirmFromKeyboard() {
+    if (_confirmed) unawaited(_confirmRetained());
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -520,6 +553,8 @@ class _DeleteRetainedAccountDialogState
             controller: _field,
             enabled: !_busy,
             autofocus: true,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _confirmFromKeyboard(),
           ),
           if (_error != null)
             Padding(
@@ -552,15 +587,7 @@ class _DeleteRetainedAccountDialogState
                   listenable: _field,
                   builder: (context, _) => FilledButton(
                     key: const ValueKey('backup.deleteRetained.confirm'),
-                    onPressed:
-                        !_busy && _field.text.trim() == retained.username
-                            ? () => _run(
-                                  () => widget.service
-                                      .deleteRetainedSeparateAccount(
-                                    confirmedName: _field.text.trim(),
-                                  ),
-                                )
-                            : null,
+                    onPressed: _confirmed ? _confirmRetained : null,
                     child: Text(l10n.backupDeleteConfirm),
                   ),
                 ),

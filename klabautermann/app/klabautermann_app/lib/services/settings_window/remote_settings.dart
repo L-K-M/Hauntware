@@ -5,7 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart';
-import 'package:klabautermann_core/klabautermann_core.dart' show SyncPinConflict;
+import 'package:ghost_update/ghost_update.dart';
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show SyncPinConflict;
 
 import '../../controllers/account_size.dart';
 import '../../controllers/admin_memory.dart';
@@ -152,6 +154,14 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     (enabled) => invoke(SettingsLinkMethod.setSyncSecrets.name, enabled),
   );
 
+  /// The General tab's update-check switch, from the latest snapshot; null
+  /// while the app offers none.
+  RemoteUpdateChecks? get updateChecks =>
+      _updateChecks.offered ? _updateChecks : null;
+  late final RemoteUpdateChecks _updateChecks = RemoteUpdateChecks._(
+    (enabled) => invoke(SettingsLinkMethod.setUpdateChecks.name, enabled),
+  );
+
   /// The Sync tab's host key sharing switch, from the latest snapshot.
   late final RemotePinPublication pinPublication = RemotePinPublication._(
     (asserted) => invoke(SettingsLinkMethod.setPinPublication.name, asserted),
@@ -160,16 +170,12 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
   /// The Sync tab's host-key conflicts, from the latest snapshot.
   late final RemotePinConflicts pinConflicts = RemotePinConflicts._(
     (locator, localFingerprintSha256, pulledFingerprintSha256, keepLocal) =>
-        invoke(
-          SettingsLinkMethod.resolvePinConflict.name,
-          {
-            SettingsLinkKey.locator.name: locator,
-            SettingsLinkKey.localFingerprintSha256.name: localFingerprintSha256,
-            SettingsLinkKey.pulledFingerprintSha256.name:
-                pulledFingerprintSha256,
-            SettingsLinkKey.keepLocal.name: keepLocal,
-          },
-        ),
+        invoke(SettingsLinkMethod.resolvePinConflict.name, {
+          SettingsLinkKey.locator.name: locator,
+          SettingsLinkKey.localFingerprintSha256.name: localFingerprintSha256,
+          SettingsLinkKey.pulledFingerprintSha256.name: pulledFingerprintSha256,
+          SettingsLinkKey.keepLocal.name: keepLocal,
+        }),
   );
 
   /// The Sync tab's account size (SYN-09), from the latest snapshot.
@@ -221,6 +227,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
       snapshot[SettingsLinkKey.thresholds.name] as Map<Object?, Object?>?,
     );
     syncSecrets._apply(snapshot[SettingsLinkKey.syncSecrets.name]! as bool);
+    _updateChecks._apply(snapshot[SettingsLinkKey.updateChecks.name] as bool?);
     pinPublication._apply(
       decodePinPublication(
         snapshot[SettingsLinkKey.pinPublication.name] as Map<Object?, Object?>?,
@@ -256,6 +263,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     deviceName.dispose();
     _thresholds.dispose();
     syncSecrets.dispose();
+    _updateChecks.dispose();
     pinPublication.dispose();
     pinConflicts.dispose();
     accountSize.dispose();
@@ -583,6 +591,37 @@ final class RemoteSyncSecrets extends ChangeNotifier
 
   @override
   Future<void> setSyncSecrets(bool enabled) async {
+    await _call(enabled);
+  }
+}
+
+/// [UpdateCheckSettings] over the link: the app's switch as the latest
+/// snapshot carries it, and changes that run in the app's isolate.
+final class RemoteUpdateChecks extends ChangeNotifier
+    implements UpdateCheckSettings {
+  RemoteUpdateChecks._(this._call);
+
+  final Future<Object?> Function(bool enabled) _call;
+
+  /// Whether the app offers the switch; the first snapshot says.
+  bool offered = false;
+
+  // The app's default until the first snapshot, which comes with hello.
+  bool _value = true;
+
+  void _apply(bool? enabled) {
+    final value = enabled ?? _value;
+    if (offered == (enabled != null) && value == _value) return;
+    offered = enabled != null;
+    _value = value;
+    notifyListeners();
+  }
+
+  @override
+  bool get enabled => _value;
+
+  @override
+  Future<void> setEnabled(bool enabled) async {
     await _call(enabled);
   }
 }

@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../app_state.dart';
 import '../main.dart';
 import '../theme.dart';
+import 'app_commands.dart';
 import 'app_menus.dart';
 import 'ghost_servers_adapter.dart';
 import 'inbox_view.dart';
@@ -282,6 +283,9 @@ class _ServerListPaneState extends State<ServerListPane> {
       appBar: AppBar(
         title: const Text('Séance'),
         actions: [
+          // The phone home has no native menu bar, so the ☰ carries the
+          // app's commands; the panes are not part of this posture.
+          const SeanceMenuButton(wide: false),
           ListenableBuilder(
             listenable: state,
             builder: (context, _) =>

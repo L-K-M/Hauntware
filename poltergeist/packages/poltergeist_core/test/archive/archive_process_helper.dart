@@ -57,9 +57,10 @@ Future<void> _commit(String sourcePath, String destinationPath) async {
   );
   final ready = Completer<void>();
   final release = Completer<void>();
+  final inputClosed = Completer<void>();
   final input = stdin.listen((_) {
     if (!release.isCompleted) release.complete();
-  });
+  }, onDone: inputClosed.complete);
   final progress = job.progress.listen((event) async {
     if (event.phase != LocalArchivePhase.preparing || ready.isCompleted) return;
     job.pause();
@@ -74,6 +75,9 @@ Future<void> _commit(String sourcePath, String destinationPath) async {
   final result = await job.done;
   stdout.writeln('result:${p.basename(result.destinationPath)}');
   await progress.cancel();
+  // This helper is one-shot: require the parent to release its input pipe
+  // before the child exits, rather than relying on cancellation of open stdin.
+  await inputClosed.future;
   await input.cancel();
   await service.close();
 }

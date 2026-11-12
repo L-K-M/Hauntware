@@ -560,16 +560,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/services/prompt_coordinator.dart': {
     "'No identity-file reader is wired'",
     "'\${data.username}@\${data.host}'",
-    // An unreachable seam's programming-error text, never shown.
-    "'the vault-first branch reads no identity files'",
   },
   // Monospace rendering of machine data (fingerprints, endpoints,
   // transcripts) plus list joins — no authored copy.
   'lib/ui/connection_status_panel.dart': {"'\\n'"},
-  // An unreachable reply's programming-error text, never shown.
-  'lib/ui/prompts/credential_dialog.dart': {
-    "'Poltergeist never raises the passphrase-only credential prompt'",
-  },
   // Monospace rendering of machine data (endpoints, identity paths) plus
   // null-fallbacks for optional labels — no authored copy.
   'lib/ui/import/ssh_config_import_dialog.dart': {
@@ -1793,9 +1787,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'update:${info.latestVersion}'",
     r"'dragout:${notice.id}'",
   },
-  // The release asset an Android build updates from: the release
-  // manifest's file name, never rendered.
-  'lib/services/update_check_controller.dart': {"'poltergeist-android.apk'"},
   // Path grammar and route text: both path separators, the
   // endpoint:path composition, the empty-string seed, and the `→` route
   // arrow — technical formatting and machine data, reviewed per file.

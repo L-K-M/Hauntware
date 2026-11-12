@@ -23,3 +23,12 @@ final class MissingPrivateKey extends MissingCredential {
 final class UseSshAgent extends MissingCredential {
   const UseSshAgent();
 }
+
+/// A passphrase for a key the device already has. Without the vault offer,
+/// the answer is used for one connection attempt and is not persisted.
+final class KeyPassphraseAnswer {
+  const KeyPassphraseAnswer(this.passphrase, {this.saveToVault = false});
+
+  final String passphrase;
+  final bool saveToVault;
+}

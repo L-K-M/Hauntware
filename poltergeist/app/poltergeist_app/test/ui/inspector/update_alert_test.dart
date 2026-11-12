@@ -3,11 +3,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_apk_update/ghost_apk_update.dart';
+import 'package:ghost_update/ghost_update.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart' as http_testing;
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/session_state.dart';
-import 'package:poltergeist_app/services/update_check_controller.dart';
 import 'package:poltergeist_app/ui/workspace_shell.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -28,6 +28,7 @@ void main() {
     ApkUpdater? updater,
   }) async {
     final updates = UpdateCheckController(
+      androidReleaseAsset: poltergeistAndroidReleaseAsset,
       checker: UpdateChecker(
         repo: poltergeistUpdateRepo,
         client: http_testing.MockClient(

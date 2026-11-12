@@ -136,6 +136,28 @@ GhostCredentialRequest ghostCredentialRequestOf(
   vaultUnavailable: vaultUnavailable,
 );
 
+/// The passphrase-only prompt for an encrypted key whose material is
+/// already known: the stored identity file when [hasKeyFile], else the
+/// stored pasted key. [label] names the server in the title.
+GhostCredentialRequest ghostPassphraseRequestOf({
+  required String label,
+  required String host,
+  required int port,
+  required String username,
+  required bool hasKeyFile,
+  String? initialKeyPath,
+  required bool offerVaultSave,
+}) => GhostCredentialRequest(
+  authMethod: hasKeyFile ? AuthMethod.privateKey : AuthMethod.password,
+  endpointLabel: label,
+  keyField: GhostKeyField.passphraseOnly,
+  username: username,
+  host: host,
+  port: port,
+  initialKeyPath: hasKeyFile ? initialKeyPath : null,
+  offerVaultSave: offerVaultSave,
+);
+
 /// The credential prompt's words in ARB: one title for both methods and no
 /// explanation line. A read failure shows the audited reader's file-system
 /// detail (D18) and nothing of any other error. [vaultKeyMissing] swaps the
@@ -168,6 +190,29 @@ GhostCredentialStrings poltergeistCredentialStrings(
       cancel: l10n.credentialCancel,
       connect: l10n.credentialConnect,
     );
+
+/// The passphrase-only prompt's words in ARB. [retry] explains that the
+/// previous passphrase did not open the key.
+GhostCredentialStrings poltergeistPassphraseStrings(
+  AppLocalizations l10n, {
+  required bool retry,
+}) => GhostCredentialStrings(
+  passwordTitle: l10n.credentialPassphraseTitle,
+  keyPassphraseTitle: l10n.credentialPassphraseTitle,
+  explanation: retry
+      ? l10n.credentialPassphraseRetryExplanation
+      : l10n.credentialPassphraseExplanation,
+  endpoint: (username, host, port) => username == null
+      ? l10n.hostKeyEndpoint(host, port)
+      : l10n.credentialEndpoint(username, host, port),
+  vaultUnavailable: l10n.credentialVaultUnavailable,
+  keyFileField: l10n.credentialKeyFileField,
+  passwordField: l10n.credentialPassphraseField,
+  keyPassphraseField: l10n.credentialPassphraseField,
+  saveInVault: l10n.credentialSaveInVault,
+  cancel: l10n.credentialCancel,
+  connect: l10n.credentialConnect,
+);
 
 /// The connection log view's words in ARB.
 GhostConnectionLogStrings poltergeistConnectionLogStrings(

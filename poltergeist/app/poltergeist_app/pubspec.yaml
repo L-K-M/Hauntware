@@ -55,6 +55,9 @@ dependencies:
   # the process unfrozen while the queue has live work.
   ghost_keepalive:
     path: ../../../planchette/packages/ghost_keepalive
+  # The update check's session state (D19/D23), shared with the suite.
+  ghost_update:
+    path: ../../../planchette/packages/ghost_update
   # The bundled monospace fonts behind the app's code stack.
   ghost_fonts:
     path: ../../../planchette/packages/ghost_fonts

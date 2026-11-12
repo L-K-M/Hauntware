@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
+import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory, showTopToast;
+import 'package:ghost_update/ghost_update.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../controllers/fleet_controller.dart';
@@ -141,6 +144,9 @@ const String kAppCommandPaletteCommandId = 'app.commandPalette';
 /// Help ▸ Keyboard Shortcuts (PLT-06, 03 §10.6), on desktops.
 const String kAppKeyboardShortcutsCommandId = 'app.keyboardShortcuts';
 
+/// Help ▸ Check for Updates… (c3 §shells, D19/D23), on every platform.
+const String kAppCheckForUpdatesCommandId = 'app.checkForUpdates';
+
 /// View ▸ the selected server's tabs (PLT-06), one command per
 /// [ServerPanel]: `view.panel.<name>`.
 String viewPanelCommandId(ServerPanel panel) => 'view.panel.${panel.name}';
@@ -212,6 +218,9 @@ List<ShortcutActivator> primaryChord(
 ///   while no server is selected.
 /// - Keyboard Shortcuts, on desktops with [onShowKeyboardMap], lists the
 ///   keys the app takes: ⌘/ on macOS and Ctrl+/ elsewhere. In Help.
+/// - Check for Updates…, wherever [updates] exists (every platform), asks
+///   for a newer release on demand: a toast links to it, or says none was
+///   found, never "up to date". In Help; in the application menu on macOS.
 ///
 /// The window commands (Minimize, Zoom, Bring All to Front) and Enter
 /// Full Screen are AppKit's own rows on macOS (`buildAppMenus`); Linux and
@@ -227,6 +236,8 @@ List<AppCommand> buildAppCommands({
   Future<void> Function(BuildContext context)? onOpenPalette,
   void Function(BuildContext context, ServerPanel panel)? onOpenPanel,
   Future<void> Function(BuildContext context)? onShowKeyboardMap,
+  UpdateCheckController? updates,
+  Future<void> Function(Uri url)? onOpenRelease,
 }) {
   assert(ServerPanel.values.length <= _panelDigits.length);
   final desktop = switch (platform) {
@@ -386,6 +397,36 @@ List<AppCommand> buildAppCommands({
         menuPlacement: const CommandMenuPlacement(
           menu: AppMenuId.help,
           order: 20,
+        ),
+      ),
+    if (updates != null)
+      AppCommand(
+        id: kAppCheckForUpdatesCommandId,
+        label: (l10n) => l10n.appCheckForUpdatesLabel,
+        run: (context) async {
+          final l10n = AppLocalizations.of(context);
+          final overlay = Overlay.of(context, rootOverlay: true);
+          final info = appVersion == null
+              ? null
+              : await updates.checkNow(appVersion);
+          if (!overlay.mounted) return;
+          if (info == null) {
+            showTopToast(overlay, message: l10n.appUpdateNoneFound);
+            return;
+          }
+          showTopToast(
+            overlay,
+            message: l10n.alertUpdateAvailable(info.latestVersion),
+            actionLabel: l10n.alertActionViewRelease,
+            onAction: onOpenRelease == null
+                ? null
+                : () => unawaited(onOpenRelease(info.releasesUrl)),
+          );
+        },
+        menuPlacement: const CommandMenuPlacement(
+          menu: AppMenuId.help,
+          order: 30,
+          appMenuOnMac: true,
         ),
       ),
     if (fleet.canImportSshConfig)

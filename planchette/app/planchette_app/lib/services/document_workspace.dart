@@ -81,6 +81,10 @@ abstract interface class DocumentDialogs {
   /// see rather than a count.
   Future<BulkCloseChoice> chooseBulkClose(List<String> names);
   Future<bool> confirmRevert(String name);
+
+  /// Whether to delete the recovery copy [name] as its tab closes. True
+  /// deletes it; false keeps it, and it opens again at the next launch.
+  Future<bool> confirmDiscardRecovery(String name);
 }
 
 /// What other document windows hold, for app-wide open deduplication and
@@ -191,6 +195,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     TextToolHistory? toolHistory,
     FolderWorkspace? folders,
     DownloadProvenance? provenance,
+    this.recoveries,
   }) : _paths = pathContext ?? paths.context,
        toolHistory = toolHistory ?? TextToolHistory(),
        folders = folders ?? FolderWorkspace(),
@@ -212,6 +217,9 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   final DocumentStore store;
   final DocumentDialogs dialogs;
+
+  /// Null where the store keeps no recovery copies.
+  final RecoveryCopies? recoveries;
   final FolderWorkspace folders;
   final List<DocumentTab> _documents = [];
   final Map<String, Future<_OpenFailure?>> _opening = {};
@@ -756,7 +764,20 @@ final class DocumentWorkspace extends ChangeNotifier {
       }
       _saveTargets[tab] = (path: target.path, digest: target.digest);
       final result = await tab.editor.save(access: access);
-      if (result == null) return false;
+      if (result == null) {
+        // The editor declines a save whose cleanup would rewrite text an
+        // input method still owns. Say so: nothing else on screen explains
+        // why the save did nothing.
+        if (tab.editor.text.value.composing.isValid) {
+          _reportTabRefusal(
+            '${tab.name} was not saved. Finish typing in the input method, '
+            'then save again.',
+            tab,
+          );
+          _saveFailures[tab] = 'the input method is still composing';
+        }
+        return false;
+      }
       if (result.publishRequested && !result.published) {
         throw StateError('The local copy was saved, but it was not uploaded.');
       }
@@ -1020,14 +1041,31 @@ final class DocumentWorkspace extends ChangeNotifier {
       if (reverting()) return false;
       final text = tab.editor.text.text;
       final language = tab.editor.text.language;
+      final page = highlightedHtml(
+        text: text,
+        tokens: language == null ? const [] : tokenizeSyntax(text, language),
+        palette: palette,
+        title: tab.name,
+      );
+      // The store holds every write to the document limit. Markup and
+      // escaping make a page several times its buffer, so name the page
+      // rather than let the store speak of an edited file.
+      final pageBytes = textDocumentByteCount(
+        page,
+        const TextDocumentMetadata(),
+      );
+      if (pageBytes > textDocumentMaximumBytes) {
+        _reportError(
+          '${tab.name} is too large to export as HTML: the page would be '
+          '${_megabytes(pageBytes, digits: 1)} MB, over the '
+          '${_megabytes(textDocumentMaximumBytes)} MB limit.',
+          scope: scope,
+        );
+        return false;
+      }
       await store.write(
         path: target,
-        text: highlightedHtml(
-          text: text,
-          tokens: language == null ? const [] : tokenizeSyntax(text, language),
-          palette: palette,
-          title: tab.name,
-        ),
+        text: page,
         source: null,
         expectedSha256: digest,
       );
@@ -1045,6 +1083,9 @@ final class DocumentWorkspace extends ChangeNotifier {
       _notify();
     }
   }
+
+  static String _megabytes(int bytes, {int digits = 0}) =>
+      (bytes / (1024 * 1024)).toStringAsFixed(digits);
 
   /// A tab's export failures, apart from its save failures: saving the
   /// document says nothing about an export that did not work.
@@ -1189,6 +1230,13 @@ final class DocumentWorkspace extends ChangeNotifier {
         return false;
       }
       if (!await _confirmTab(tab)) return false;
+      // Asked only for a recovery copy: an await on every close would let
+      // queued saves run in between.
+      var recovery = _recoveryCopyOf(tab);
+      if (recovery != null &&
+          !await _dialog(() => dialogs.confirmDiscardRecovery(tab.name))) {
+        recovery = null;
+      }
       // A save can start in the gap between the decision and the removal, so
       // the tab can still be busy here. Report it rather than closing nothing
       // in silence: _confirmTab returning true means it had nothing to say.
@@ -1201,13 +1249,37 @@ final class DocumentWorkspace extends ChangeNotifier {
       // anymore, so its banner goes with it. Path-scoped and scope-less
       // errors are untouched.
       _clearScope(tab);
-      _rememberClosed(tab);
+      if (recovery == null || !await _discardRecovery(tab.name, recovery)) {
+        _rememberClosed(tab);
+      }
       _notify();
       return true;
     } finally {
       _closingTabs.remove(tab);
       // Finishing a close can be the last thing that blocked a quit.
       _notify();
+    }
+  }
+
+  /// The recovery copy [tab] shows, if any. Only an explicit Delete
+  /// removes one as its tab closes: it may hold the only copy of a
+  /// document's earlier contents.
+  String? _recoveryCopyOf(DocumentTab tab) {
+    final path = tab.path;
+    if (path == null || recoveries?.isRecoveryCopy(path) != true) return null;
+    return path;
+  }
+
+  /// Whether the copy is gone. A failed delete leaves it to open again at
+  /// the next launch, so the close still stands and the failure is said.
+  Future<bool> _discardRecovery(String name, String path) async {
+    try {
+      await recoveries!.discardRecovery(path);
+      return true;
+    } on Object catch (error) {
+      // Unscoped: the tab it was about has closed.
+      _reportError('Could not delete the recovery copy $name: $error');
+      return false;
     }
   }
 

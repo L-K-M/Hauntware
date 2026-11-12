@@ -10,12 +10,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_apk_update/ghost_apk_update.dart';
+import 'package:ghost_update/ghost_update.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart' as http_testing;
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_app/services/app_preferences.dart';
 import 'package:poltergeist_app/services/settings_store.dart';
-import 'package:poltergeist_app/services/update_check_controller.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../support/scripted_apk_updater.dart';
@@ -48,6 +48,7 @@ void main() {
   group('checkForUpdate', () {
     test('a newer release tag surfaces an UpdateInfo', () async {
       final controller = UpdateCheckController(
+        androidReleaseAsset: poltergeistAndroidReleaseAsset,
         checker: UpdateChecker(
           repo: poltergeistUpdateRepo,
           client: clientWith(releaseJson('v9.9.9')),
@@ -67,6 +68,7 @@ void main() {
       'the request is the pinned D19 shape: one GET, no query, no body',
       () async {
         final controller = UpdateCheckController(
+          androidReleaseAsset: poltergeistAndroidReleaseAsset,
           checker: UpdateChecker(
             repo: poltergeistUpdateRepo,
             client: clientWith(releaseJson('v9.9.9')),
@@ -94,6 +96,7 @@ void main() {
 
     test('an up-to-date tag surfaces nothing', () async {
       final controller = UpdateCheckController(
+        androidReleaseAsset: poltergeistAndroidReleaseAsset,
         checker: UpdateChecker(
           repo: poltergeistUpdateRepo,
           client: clientWith(releaseJson('v0.2.0')),
@@ -110,6 +113,7 @@ void main() {
         'not json',
       ]) {
         final controller = UpdateCheckController(
+          androidReleaseAsset: poltergeistAndroidReleaseAsset,
           checker: UpdateChecker(
             repo: poltergeistUpdateRepo,
             client: clientWith(body),
@@ -119,6 +123,7 @@ void main() {
         expect(controller.update, isNull, reason: 'body: $body');
       }
       final offline = UpdateCheckController(
+        androidReleaseAsset: poltergeistAndroidReleaseAsset,
         checker: UpdateChecker(
           repo: poltergeistUpdateRepo,
           client: failingClient(),
@@ -127,6 +132,7 @@ void main() {
       await offline.checkForUpdate('0.2.0');
       expect(offline.update, isNull);
       final rateLimited = UpdateCheckController(
+        androidReleaseAsset: poltergeistAndroidReleaseAsset,
         checker: UpdateChecker(
           repo: poltergeistUpdateRepo,
           client: clientWith('', status: 403),
@@ -140,6 +146,7 @@ void main() {
         () async {
       final release = Completer<http.Response>();
       final controller = UpdateCheckController(
+        androidReleaseAsset: poltergeistAndroidReleaseAsset,
         checker: UpdateChecker(
           repo: poltergeistUpdateRepo,
           client: http_testing.MockClient((request) => release.future),
@@ -156,6 +163,7 @@ void main() {
 
     test('disabled at boot: no request ever leaves', () async {
       final controller = UpdateCheckController(
+        androidReleaseAsset: poltergeistAndroidReleaseAsset,
         enabled: false,
         checker: UpdateChecker(
           repo: poltergeistUpdateRepo,
@@ -171,6 +179,7 @@ void main() {
   group('dismiss and the opt-out toggle', () {
     test('dismiss clears the banner for this session', () async {
       final controller = UpdateCheckController(
+        androidReleaseAsset: poltergeistAndroidReleaseAsset,
         checker: UpdateChecker(
           repo: poltergeistUpdateRepo,
           client: clientWith(releaseJson('v9.9.9')),
@@ -194,6 +203,7 @@ void main() {
       () async {
         final saved = <bool>[];
         final controller = UpdateCheckController(
+          androidReleaseAsset: poltergeistAndroidReleaseAsset,
           checker: UpdateChecker(
             repo: poltergeistUpdateRepo,
             client: clientWith(releaseJson('v9.9.9')),
@@ -216,6 +226,7 @@ void main() {
 
     test('a failed persist reverts the toggle and rethrows', () async {
       final controller = UpdateCheckController(
+        androidReleaseAsset: poltergeistAndroidReleaseAsset,
         checker: UpdateChecker(repo: poltergeistUpdateRepo),
         onEnabledChanged: (_) async => throw StateError('disk full'),
       );
@@ -230,6 +241,7 @@ void main() {
   group('checkNow (the menu\'s Check for Updates…)', () {
     test('runs even with the launch check turned off', () async {
       final controller = UpdateCheckController(
+        androidReleaseAsset: poltergeistAndroidReleaseAsset,
         enabled: false,
         checker: UpdateChecker(
           repo: poltergeistUpdateRepo,
@@ -250,6 +262,7 @@ void main() {
 
     test('answers null for up to date and for a failed check alike', () async {
       final current = UpdateCheckController(
+        androidReleaseAsset: poltergeistAndroidReleaseAsset,
         checker: UpdateChecker(
           repo: poltergeistUpdateRepo,
           client: clientWith(releaseJson('v1.0.0')),
@@ -258,6 +271,7 @@ void main() {
       expect(await current.checkNow('1.0.0'), isNull);
 
       final offline = UpdateCheckController(
+        androidReleaseAsset: poltergeistAndroidReleaseAsset,
         checker: UpdateChecker(
           repo: poltergeistUpdateRepo,
           client: failingClient(),
@@ -271,6 +285,7 @@ void main() {
   group('Android in-place update', () {
     UpdateCheckController controllerWith(ScriptedApkUpdater? updater) =>
         UpdateCheckController(
+          androidReleaseAsset: poltergeistAndroidReleaseAsset,
           checker: UpdateChecker(
             repo: poltergeistUpdateRepo,
             client: clientWith(releaseWithApk('v9.9.9')),
@@ -304,6 +319,7 @@ void main() {
     test('a release without the APK only links out', () async {
       final updater = ScriptedApkUpdater();
       final controller = UpdateCheckController(
+        androidReleaseAsset: poltergeistAndroidReleaseAsset,
         checker: UpdateChecker(
           repo: poltergeistUpdateRepo,
           client: clientWith(releaseJson('v9.9.9')),
@@ -348,7 +364,7 @@ void main() {
       final manifest = File('../../../scripts/release-manifest.txt');
       expect(
         manifest.readAsLinesSync().map((line) => line.trim()),
-        contains(UpdateCheckController.androidReleaseAsset),
+        contains(poltergeistAndroidReleaseAsset),
       );
     });
   });

@@ -17669,6 +17669,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The file editor settings could not be changed.'**
   String get settingsEditorDisplayNotChanged;
+
+  /// Help menu command that asks GitHub for a newer suite release on demand (D19/D23).
+  ///
+  /// In en, this message translates to:
+  /// **'Check for Updates…'**
+  String get appCheckForUpdatesLabel;
+
+  /// Toast after an on-demand update check found no newer release or could not reach GitHub; never claims up to date.
+  ///
+  /// In en, this message translates to:
+  /// **'No newer version was found. If you’re offline, try again later.'**
+  String get appUpdateNoneFound;
+
+  /// Settings > General: the launch update-check switch (c3 §shells, D19/D23).
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get updateCheckEnabledLabel;
+
+  /// Explainer under the update-check switch; the D19/D23 trust claim.
+  ///
+  /// In en, this message translates to:
+  /// **'Checks GitHub on launch. Nothing is downloaded until you choose to update.'**
+  String get updateCheckEnabledSubtitle;
+
+  /// Toast when the update-check switch did not take the change.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting could not be changed.'**
+  String get settingsUpdateCheckNotChanged;
+
+  /// Update banner: a newer release exists (D19).
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann {version} is available'**
+  String alertUpdateAvailable(String version);
+
+  /// Detail under the update banner on Android, before the user chooses Update: the APK's size.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} download'**
+  String alertUpdateDownloadSize(String size);
+
+  /// Update banner title on Android while the release APK downloads.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading Klabautermann {version}…'**
+  String alertUpdateDownloading(String version);
+
+  /// Detail under the downloading update banner.
+  ///
+  /// In en, this message translates to:
+  /// **'{received} of {total}'**
+  String alertUpdateProgress(String received, String total);
+
+  /// Update banner title on Android once the verified APK went to the system installer and the user backed out of it.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann {version} is ready to install'**
+  String alertUpdateReady(String version);
+
+  /// Update banner title on Android after the download or the installer failed; the detail says which.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann {version} could not be installed'**
+  String alertUpdateFailed(String version);
+
+  /// Detail of a failed Android update: offline, timed out, or the server refused the file.
+  ///
+  /// In en, this message translates to:
+  /// **'The download did not finish. Check your connection and try again.'**
+  String get alertUpdateFailedDownload;
+
+  /// Detail of a failed Android update: the APK's size or SHA-256 digest differed from the release's.
+  ///
+  /// In en, this message translates to:
+  /// **'The download did not match the release and was discarded.'**
+  String get alertUpdateFailedVerification;
+
+  /// Detail of a failed Android update: the system installer could not be opened or refused the file.
+  ///
+  /// In en, this message translates to:
+  /// **'Android could not open the installer.'**
+  String get alertUpdateFailedInstaller;
+
+  /// Update banner action on Android: download the release APK and open the system installer.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get alertActionUpdate;
+
+  /// Update banner action on Android: reopen the system installer for the downloaded update.
+  ///
+  /// In en, this message translates to:
+  /// **'Install'**
+  String get alertActionInstall;
+
+  /// Update banner action: stop the running update download.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get alertActionCancel;
+
+  /// Update banner action: retry the failed download or install.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get alertActionRetry;
+
+  /// Update banner action: open the release page in the browser.
+  ///
+  /// In en, this message translates to:
+  /// **'View Release'**
+  String get alertActionViewRelease;
+
+  /// Update banner action: hide the update banner for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get alertActionDismiss;
 }
 
 class _AppLocalizationsDelegate

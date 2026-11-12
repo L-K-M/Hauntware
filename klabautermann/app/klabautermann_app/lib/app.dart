@@ -6,12 +6,14 @@ import 'package:ghost_desktop/ghost_desktop.dart' show withMacosToolbarBand;
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostUndoHistory, showCommandPalette;
 import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
+import 'package:ghost_update/ghost_update.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
     show
         DeviceSettingsIssue,
         ImportStoreIssue,
         InstanceLockUnavailable,
         SyncStoreIssue;
+import 'package:url_launcher/url_launcher.dart';
 
 import 'controllers/admin_controller.dart';
 import 'controllers/admin_memory.dart';
@@ -125,6 +127,7 @@ class KlabautermannApp extends StatelessWidget {
     this.alertNotifications,
     this.operations,
     required this.dockerNotice,
+    this.updates,
     this.sync,
     this.serverEditor,
     this.settingsIssue,
@@ -254,6 +257,10 @@ class KlabautermannApp extends StatelessWidget {
   /// Whether the Docker tab still shows SAF-08's notice on this device
   /// (03 §8.4); like [appearance], it outlives an engine run.
   final DockerNoticeController dockerNotice;
+
+  /// The update check's session state (c3 §shells, D19/D23); null in tests
+  /// that leave it out, where no update banner shows.
+  final UpdateCheckController? updates;
 
   /// Opens hand-offs to Séance and Poltergeist (X-03, X-04, X-10); null in
   /// tests that leave it out, where no hand-off is offered.
@@ -562,6 +569,14 @@ class KlabautermannApp extends StatelessWidget {
                 Builder(
                   builder: (context) {
                     void openSettings() => unawaited(_openSettings(context));
+                    // The update banner's View Release opens the release
+                    // page in the browser; null where there is no check.
+                    final openRelease = updates == null
+                        ? null
+                        : (Uri url) => launchUrl(
+                            url,
+                            mode: LaunchMode.externalApplication,
+                          );
                     // The desktop menus and their shortcuts (03 §10.2),
                     // from the one command registry.
                     final platform = Theme.of(context).platform;
@@ -611,6 +626,8 @@ class KlabautermannApp extends StatelessWidget {
                         _DialogKind.keyboardMap,
                         () => showKeyboardMap(context),
                       ),
+                      updates: updates,
+                      onOpenRelease: openRelease,
                     );
                     return AppMenuHost(
                       // Pane checks and undo labels follow their
@@ -645,6 +662,8 @@ class KlabautermannApp extends StatelessWidget {
                             navigation: navigation,
                             coverage: coverage,
                             onOpenSettings: openSettings,
+                            updates: updates,
+                            openRelease: openRelease,
                             sync: sync,
                             panes: windowPanes,
                             onAddServer: switch (_serverEditing) {
@@ -680,6 +699,7 @@ class KlabautermannApp extends StatelessWidget {
               safety: safety,
               appLock: appLock,
               syncSecrets: syncSecrets,
+              updateChecks: updates,
               pinPublication: pinPublication,
               pinConflicts: sync,
               accountSize: sync?.accountSize,

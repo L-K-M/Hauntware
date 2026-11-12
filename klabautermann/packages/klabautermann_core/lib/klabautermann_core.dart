@@ -297,6 +297,17 @@ export 'package:seance_core/seance_core.dart'
         seanceConnectRoute,
         seanceDeepLinkScheme;
 
+// The update check (c3 §shells): the suite's checker and its result
+// types drive ghost_update's session controller; the app's repository,
+// user agent and Android release asset are Klabautermann's own.
+export 'package:seance_core/seance_core.dart'
+    show ReleaseAsset, UpdateChecker, UpdateInfo;
+export 'src/update/update_check.dart'
+    show
+        klabautermannAndroidReleaseAsset,
+        klabautermannUpdateRepo,
+        klabautermannUpdateUserAgent;
+
 // A one-off command's words, split as a shell would without expanding
 // them (CTX-08).
 export 'src/operations/command_words.dart' show splitCommandWords;

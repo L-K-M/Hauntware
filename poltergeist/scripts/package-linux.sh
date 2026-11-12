@@ -31,6 +31,8 @@
 # Environment:
 #   APPIMAGETOOL      path to (or URL of) an appimagetool AppImage
 #                     [default: pinned 1.9.1 release, cached in ~/.cache/poltergeist]
+#   APPIMAGETOOL_SHA256  SHA-256 a URL in APPIMAGETOOL must match (the
+#                     pinned release has its own; a path runs as given)
 #
 # The packaging logic is shared with the other products in
 # ../../scripts/package-linux-common.sh (its header lists the parameters);
