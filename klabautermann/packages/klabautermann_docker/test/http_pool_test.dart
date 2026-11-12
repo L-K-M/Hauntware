@@ -339,6 +339,75 @@ void main() {
       await expectThrows<DockerTransportException>(client.sendBuffered(getX()));
     });
 
+    test('a failed open serves the request queued behind it', () async {
+      var opens = 0;
+      final daemon = FakeDaemon();
+      final client = DockerHttpClient(
+        () async {
+          opens++;
+          if (opens == 1) {
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+            throw StateError('relay could not start');
+          }
+          return daemon.pair.client;
+        },
+        maxConnections: 1,
+        defaultTimeout: const Duration(seconds: 2),
+      );
+      final first = client.sendBuffered(getX('/a'));
+      final queued = client.sendBuffered(getX('/b'));
+      await expectThrows<DockerTransportException>(first);
+
+      // The freed slot opens a duplex for the queued request at once,
+      // instead of leaving it to wait out its timeout.
+      await daemon.gotText('GET /b').timeout(const Duration(seconds: 1));
+      daemon.feed(wireResponse('200 OK', headers: {'Content-Length': '0'}));
+      await queued;
+      expect(opens, 2);
+    });
+
+    test('a failed waiter open serves the next queued request', () async {
+      final farm = DaemonFarm();
+      var failNext = false;
+      final client = DockerHttpClient(
+        () async {
+          if (failNext) {
+            failNext = false;
+            throw StateError('relay could not start');
+          }
+          return farm.opener();
+        },
+        maxConnections: 1,
+        defaultTimeout: const Duration(seconds: 2),
+      );
+      final first = client.sendBuffered(getX('/a'));
+      await farm.daemons[0].gotBytes(1);
+      final second = client.sendBuffered(getX('/b'));
+      final third = client.sendBuffered(getX('/c'));
+      await pumpEventQueue();
+
+      // The first connection retires; the open for /b fails, and /c must
+      // get the slot back rather than wait out its timeout.
+      failNext = true;
+      farm.daemons[0].feed(
+        wireResponse(
+          '200 OK',
+          headers: {'Content-Length': '0', 'Connection': 'close'},
+        ),
+      );
+      await first;
+      await expectThrows<DockerTransportException>(second);
+      await pumpEventQueue();
+      expect(farm.daemons, hasLength(2));
+      await farm.daemons[1]
+          .gotText('GET /c')
+          .timeout(const Duration(seconds: 1));
+      farm.daemons[1].feed(
+        wireResponse('200 OK', headers: {'Content-Length': '0'}),
+      );
+      await third;
+    });
+
     test('a per-request timeout fails and closes the duplex', () async {
       final daemon = FakeDaemon();
       final client = DockerHttpClient(() async => daemon.pair.client);
@@ -486,6 +555,72 @@ void main() {
     });
   });
 
+  group('duplex done before its stream ends', () {
+    // Both production duplexes complete `done` apart from their stream:
+    // the SSH channel's close can win over bytes still queued behind a
+    // paused subscription. Only the stream's own end is EOF.
+    test('a hijacked stream still delivers the queued tail', () async {
+      final duplex = _EarlyDoneDuplex();
+      final client = DockerHttpClient(() async => duplex);
+      final sent = client.sendHijack(
+        const DockerHttpRequest(method: 'POST', path: '/x', upgrade: true),
+      );
+      await duplex.gotRequest;
+      duplex.inbound.add(latin1.encode('HTTP/1.1 101 UPGRADED\r\n\r\n'));
+      final res = await sent;
+
+      final received = StringBuffer();
+      final ended = Completer<void>();
+      final sub = res.body.stream.listen(
+        (c) => received.write(latin1.decode(c)),
+        onDone: ended.complete,
+      );
+      sub.pause();
+      duplex.inbound
+        ..add(utf8Of('one\n'))
+        ..add(utf8Of('two\n'));
+      unawaited(duplex.inbound.close());
+      duplex.finish();
+      await pumpEventQueue();
+      sub.resume();
+
+      await ended.future.timeout(const Duration(seconds: 2));
+      expect(received.toString(), 'one\ntwo\n');
+    });
+
+    test('a length body still reads the queued bytes', () async {
+      final duplex = _EarlyDoneDuplex();
+      final client = DockerHttpClient(() async => duplex);
+      final sent = client.sendBytes(getX());
+      await duplex.gotRequest;
+      duplex.inbound.add(
+        wireResponse('200 OK', headers: {'Content-Length': '6'}),
+      );
+      final res = await sent;
+
+      final received = <int>[];
+      Object? error;
+      final ended = Completer<void>();
+      final sub = res.body.listen(
+        received.addAll,
+        onError: (Object e) => error = e,
+        onDone: ended.complete,
+      );
+      sub.pause();
+      duplex.inbound
+        ..add(utf8Of('abc'))
+        ..add(utf8Of('def'));
+      unawaited(duplex.inbound.close());
+      duplex.finish();
+      await pumpEventQueue();
+      sub.resume();
+
+      await ended.future.timeout(const Duration(seconds: 2));
+      expect(error, isNull);
+      expect(utf8.decode(received), 'abcdef');
+    });
+  });
+
   group('backpressure', () {
     test('a paused body stream pauses the duplex subscription', () async {
       final daemon = FakeDaemon();
@@ -505,6 +640,43 @@ void main() {
       expect(daemon.pair.clientReadPaused, isFalse);
       await sub.cancel();
     });
+
+    test('a body paused after its release leaves the connection', () async {
+      final farm = DaemonFarm();
+      final client = DockerHttpClient(
+        farm.opener,
+        defaultTimeout: const Duration(seconds: 2),
+      );
+      const lines = '{"a":1}\n{"a":2}\n';
+      final sent = client.sendLines(getX());
+      await farm.daemons[0].gotBytes(1);
+      farm.daemons[0].feed(
+        wireResponse(
+          '200 OK',
+          headers: {'Content-Length': '${lines.length}'},
+          body: utf8Of(lines),
+        ),
+      );
+      final res = await sent;
+
+      // The whole body is read and the connection is idle again while
+      // the consumer still holds the stream; it pauses, then stops.
+      await for (final _ in res.body) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        break;
+      }
+      await pumpEventQueue();
+      expect(farm.daemons[0].pair.clientReadPaused, isFalse);
+
+      final sentBefore = farm.daemons[0].received.length;
+      final next = client.sendBuffered(getX('/y'));
+      await farm.daemons[0].gotBytes(sentBefore + 1);
+      farm.daemons[0].feed(
+        wireResponse('200 OK', headers: {'Content-Length': '0'}),
+      );
+      await next;
+      expect(farm.opens, 1);
+    });
   });
 
   group('client close', () {
@@ -520,4 +692,42 @@ void main() {
       await expectThrows<DockerTransportException>(r2);
     });
   });
+}
+
+/// A duplex whose [done] the test completes on its own, apart from the
+/// end of [stream], as an SSH channel's close or a relay's exit does.
+final class _EarlyDoneDuplex implements ByteDuplex {
+  final inbound = StreamController<List<int>>();
+  final _outbound = StreamController<List<int>>();
+  final _done = Completer<void>();
+  final _request = Completer<void>();
+
+  _EarlyDoneDuplex() {
+    _outbound.stream.listen((_) {
+      if (!_request.isCompleted) _request.complete();
+    });
+  }
+
+  /// Completes once the client wrote its request.
+  Future<void> get gotRequest => _request.future;
+
+  /// The channel closed: `done` completes now, whatever is still queued.
+  void finish() {
+    if (!_done.isCompleted) _done.complete();
+  }
+
+  @override
+  Stream<List<int>> get stream => inbound.stream;
+
+  @override
+  StreamSink<List<int>> get sink => _outbound.sink;
+
+  @override
+  Future<void> get done => _done.future;
+
+  @override
+  Future<void> closeWrite() async {}
+
+  @override
+  Future<void> close() async => finish();
 }

@@ -35,6 +35,7 @@ final class ServerPrefsController extends ChangeNotifier
   Set<String> _syncing = const {};
   final Map<String, Completer<void>> _writes = {};
   var _count = 0;
+  bool _engineStopped = false;
 
   @override
   Map<String, ServerPrefs> get prefs => Map.unmodifiable(_prefs);
@@ -48,6 +49,11 @@ final class ServerPrefsController extends ChangeNotifier
   /// [ServerPrefsNotSavedException] when it was refused.
   @override
   Future<void> write(String serverId, ServerPrefs? prefs) {
+    // A stopped engine's port may still take a request without an error,
+    // and nothing would ever answer it.
+    if (_engineStopped) {
+      return Future.error(const ServerPrefsNotSavedException(null));
+    }
     final requestId = 'prefs-${_count++}';
     final written = Completer<void>();
     _writes[requestId] = written;
@@ -92,6 +98,7 @@ final class ServerPrefsController extends ChangeNotifier
   }
 
   void _onEngineDone() {
+    _engineStopped = true;
     for (final written in _writes.values) {
       written.completeError(const ServerPrefsNotSavedException(null));
     }

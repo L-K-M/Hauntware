@@ -330,6 +330,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quitWhileRunningQuit => 'Quit';
 
   @override
+  String quitWithShellsTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Quit and end $count shells?',
+      one: 'Quit and end 1 shell?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String quitWithShellsBody(int count, String names) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'The shells in $names are open. Quitting ends them.',
+      one: 'The shell in $names is open. Quitting ends it.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get quitWithShellsSeparator => ', ';
+
+  @override
+  String get quitWithShellsQuit => 'Quit';
+
+  @override
   String get menuWindow => 'Window';
 
   @override
@@ -721,6 +749,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get alreadyRunningQuit => 'Quit';
+
+  @override
+  String get engineFailedTitle => 'Klabautermann could not start';
+
+  @override
+  String get engineFailedBody =>
+      'Its background engine did not start, so no servers can be shown. Quit and open Klabautermann again. If this keeps happening, reinstall it and include the details below in a bug report.';
+
+  @override
+  String engineFailedDetail(String detail) {
+    return 'Details: $detail';
+  }
+
+  @override
+  String get engineFailedQuit => 'Quit';
 
   @override
   String get settingsWindowUnreachable =>
@@ -4673,6 +4716,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Some servers still need confirming: confirm the jump hosts they go through too.';
 
   @override
+  String get endpointsChangedMeanwhile =>
+      'A server\'s address changed while you confirmed it. Check it again, then confirm.';
+
+  @override
   String get endpointsFailed =>
       'The confirmation could not be saved on this device, so these servers stay unconfirmed. Try again.';
 
@@ -6931,6 +6978,36 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get themePresetKlabautermann => 'Klabautermann';
+
+  @override
+  String get themePresetGraphite => 'Graphite';
+
+  @override
+  String get themePresetPaper => 'Paper';
+
+  @override
+  String get themePresetNewsprint => 'Newsprint';
+
+  @override
+  String get themePresetSolarized => 'Solarized';
+
+  @override
+  String get themePresetMidnight => 'Midnight';
+
+  @override
+  String get themePresetTerminal => 'Terminal';
+
+  @override
+  String get themePresetVapor => 'Vapor';
+
+  @override
+  String get themePresetBubblegum => 'Bubblegum';
+
+  @override
+  String get themePresetHighContrast => 'High contrast';
+
+  @override
   String get appearanceModeTitle => 'Mode';
 
   @override
@@ -8594,6 +8671,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerShellClearScrollback => 'Clear scrollback';
+
+  @override
+  String get shellEndRunningTitle => 'End the running shell?';
+
+  @override
+  String shellEndRunningBody(String container) {
+    return 'Closing this ends the shell in “$container”.';
+  }
+
+  @override
+  String get shellEndRunningConfirm => 'End shell';
 
   @override
   String get dockerShellKeyEscape => 'Escape';

@@ -244,6 +244,63 @@ void main() {
     ]);
   });
 
+  testWidgets('a confirmation carries the endpoint each row showed, and a '
+      'server a sync moved meanwhile stays listed, saying so', (tester) async {
+    final harness = await _withPending(tester);
+    await _openList(tester);
+
+    await tester.tap(_inList(find.text('label-a')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm 1 server'));
+    await tester.pump();
+    final request =
+        harness.engine.sentOfType<ConfirmEndpoints>().single
+            as ConfirmEndpoints;
+    expect(request.shown, {
+      'a': const ShownEndpoint(
+        host: 'a.example.com',
+        port: 2222,
+        user: 'deploy',
+        jumpRoute: ['edge', 'mid'],
+      ),
+    });
+
+    // A sync moved a before the engine took the confirmation, so the
+    // engine left it unconfirmed.
+    harness.engine.emit(
+      CatalogReplaced([
+        for (final entry in _fleet.entries)
+          if (entry.serverId == 'a')
+            FleetEntry(
+              serverId: 'a',
+              label: 'label-a',
+              host: '203.0.113.9',
+              port: 2222,
+              user: 'deploy',
+              origin: FleetEntryOrigin.synced,
+              jumpRoute: const ['edge', 'mid'],
+              searchText: 'label-a deploy@203.0.113.9:2222',
+              endpoint: EndpointConfirmation.unconfirmed,
+            )
+          else
+            entry,
+      ]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(_title), findsOneWidget);
+    expect(
+      find.text(
+        'A server\'s address changed while you confirmed it. Check it '
+        'again, then confirm.',
+      ),
+      findsOneWidget,
+    );
+    expect(_inList(find.text('deploy@203.0.113.9:2222')), findsOneWidget);
+    // Its toggle was a choice about the old address.
+    expect(_checked(tester, 'a'), isFalse);
+  });
+
   testWidgets('Back and the barrier leave the list open while a '
       'confirmation runs, and close it after', (tester) async {
     final harness = await _withPending(tester);
