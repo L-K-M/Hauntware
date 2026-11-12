@@ -1,6 +1,7 @@
 // TRI-03: the fleet's attention queue, with acknowledgements and notes
 // kept on this device.
 import 'dart:async' show unawaited;
+import 'dart:io' show FileSystemException;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -329,5 +330,61 @@ void main() {
     units(['nginx.service']);
     await tester.pumpAndSettle();
     expect(find.text('2 problems need attention'), findsOne);
+  });
+
+  testWidgets('acknowledging and reopening say when the save fails, and '
+      'still apply until the app quits', (tester) async {
+    tester.view.physicalSize = const Size(1000, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final engine = FakeEngineClient();
+    final fleet = FleetController(
+      engine,
+      servers: const [FleetServer(id: _db, displayName: 'db-1')],
+    );
+    final acks = AttentionAcks(
+      save: (_) => Future.error(const FileSystemException('read-only')),
+    );
+    final monitoring = MonitoringController(engine, attentionAcks: acks);
+    addTearDown(() async {
+      fleet.dispose();
+      monitoring.dispose();
+      await engine.close();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: AttentionView(fleet: fleet, monitoring: monitoring),
+        ),
+      ),
+    );
+    engine.emit(
+      const LinkState(_db, LinkBlocked(LinkBlockedReason.endpointChanged)),
+    );
+    await tester.pumpAndSettle();
+
+    const notSaved =
+        'Klabautermann could not save this acknowledgement, so it lasts only '
+        'until it quits.';
+    await tester.tap(find.text('Acknowledge'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Acknowledge'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Acknowledged (1)'), findsOne);
+    expect(find.text(notSaved), findsOne);
+
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Reopen'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Acknowledged (1)'), findsNothing);
+    expect(find.text(notSaved), findsOne);
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 }

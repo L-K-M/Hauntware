@@ -7,7 +7,11 @@ import 'package:planchette_core/planchette_core.dart'
     show textDocumentMaximumBytes;
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:seance_core/seance_core.dart'
-    show CredentialMissingException, privateKeyNeedsPassphrase;
+    show
+        CredentialMissingException,
+        SshConnectException,
+        SshConnectFailureKind,
+        privateKeyNeedsPassphrase;
 
 import 'document_publication.dart';
 import 'workspace_catalog.dart';
@@ -18,8 +22,9 @@ abstract interface class WorkspaceConnectionPrompts {
   Future<bool> trustHost(HostKeyDecision decision);
   Future<CredentialDraft?> credentials(
     ServerConfig server,
-    CredentialResolutionScope scope,
-  );
+    CredentialResolutionScope scope, {
+    bool retry = false,
+  });
   Future<List<String>> keyboardInteractive(
     KeyboardInteractiveChallenge challenge,
   );
@@ -62,6 +67,11 @@ final class WorkspaceRemoteFiles {
   final void Function(Object, StackTrace)? onError;
   final Map<String, ServerConfig> _servers = {};
   final Map<String, _RemotePublication> _publications = {};
+  // The pool's live resolution scope and a retry's prompted draft, per bound
+  // server id. The retry prompt needs the first resolution's scope, and the
+  // resolver must honour a retry draft instead of prompting again.
+  final Map<String, CredentialResolutionScope> _scopes = {};
+  final Map<String, CredentialDraft> _promptedDrafts = {};
   // The raw pool only binds server configs and disconnects. Channel requests
   // go through [_guarded], so they fail instead of parking while reconnecting.
   ConnectionManager? _connections;
@@ -93,6 +103,14 @@ final class WorkspaceRemoteFiles {
             return server;
           },
           resolveCredentials: (server, scope) async {
+            _scopes[server.id] = scope;
+            final retryDraft = _promptedDrafts[server.id];
+            if (retryDraft != null) {
+              return ResolvedCredentials(
+                credentials: await resolver.resolve(server, draft: retryDraft),
+                origin: CredentialOrigin.prompted,
+              );
+            }
             try {
               final credentials = await resolver.resolve(server);
               final missingPassword =
@@ -122,6 +140,9 @@ final class WorkspaceRemoteFiles {
           tofu: TofuVerifier(catalog.hostKeys),
           onHostKey: _prompts.trustHost,
           onKeyboardInteractive: _prompts.keyboardInteractive,
+          // Trust before secrets (02 §10): an unpinned endpoint's host key
+          // is verified before the credential resolver can prompt.
+          hostKeyPreflight: preflightDartSshHostKey,
         );
     final store = ManagedRemoteFileStore(
       indexFile: File(paths.join(_directory.path, 'managed_remote_files.json')),
@@ -197,15 +218,51 @@ final class WorkspaceRemoteFiles {
     await _start();
     final id = _bind(server);
     final connections = _guarded!;
-    final channel = await connections.openBrowseChannel(
-      id,
-      paneTabId: windowId,
-    );
+    PaneChannel channel;
+    try {
+      while (true) {
+        try {
+          channel = await connections.openBrowseChannel(
+            id,
+            paneTabId: windowId,
+          );
+          break;
+        } on SshConnectException catch (error) {
+          // A stored passphrase that does not open the key is asked for
+          // again; every other failure is not a prompt's business.
+          if (error.kind != SshConnectFailureKind.keyPassphraseWrong &&
+              error.kind != SshConnectFailureKind.keyPassphraseRequired) {
+            rethrow;
+          }
+          final scope = _scopes[id] ?? const _DetachedScope();
+          final retry = await _prompts.credentials(
+            _servers[id]!,
+            scope,
+            retry: true,
+          );
+          if (retry == null) throw StateError('Connection cancelled.');
+          // A jump-host failure carries this kind too, and the target's
+          // prompt cannot fix it; an unchanged answer means another attempt
+          // would only fail the same way.
+          if (_sameDraft(_promptedDrafts[id], retry)) rethrow;
+          _promptedDrafts[id] = retry;
+        }
+      }
+    } finally {
+      _promptedDrafts.remove(id);
+    }
     return (
       server: _servers[id]!,
       channel: channel,
       status: connections.watchServer(id),
     );
+  }
+
+  static bool _sameDraft(CredentialDraft? a, CredentialDraft? b) {
+    if (a == null || b == null) return a == b;
+    return a.password == b.password &&
+        a.privateKeyPem == b.privateKeyPem &&
+        a.keyPassphrase == b.keyPassphrase;
   }
 
   Future<RemoteWorkspaceDocument> openFile(
@@ -308,6 +365,16 @@ final class WorkspaceRemoteFiles {
       await connections.disconnectServer(id);
     }
   }
+}
+
+/// A retry with no captured resolution scope: the pool never resolved this
+/// server, so there is no pool lifetime to dismiss the prompt. The prompt's
+/// own workspace disposal still closes it.
+final class _DetachedScope implements CredentialResolutionScope {
+  const _DetachedScope();
+
+  @override
+  Future<void> get dismissed => Completer<void>().future;
 }
 
 /// The pool parks lease and browse requests until a dropped server reconnects,

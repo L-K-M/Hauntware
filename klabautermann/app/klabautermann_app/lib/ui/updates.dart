@@ -109,7 +109,11 @@ class _UpdatesSectionState extends State<UpdatesSection> {
   bool _reading = false;
   bool _refreshStarted = false;
   RestartReport? _restarts;
-  bool _readingRestarts = false;
+
+  /// The servers with a restarts read out; see [_readRestarts].
+  final _restartReads = <String>{};
+
+  bool get _readingRestarts => _restartReads.contains(widget.serverId);
   int _ticket = 0;
   TableSort? _sort = TableSort(
     UpdateColumn.security.name,
@@ -132,18 +136,20 @@ class _UpdatesSectionState extends State<UpdatesSection> {
     _report = null;
     _refreshStarted = false;
     _restarts = null;
-    _readingRestarts = false;
     unawaited(_read(fresh: false));
   }
 
   Future<void> _readRestarts(AdminController admin) async {
+    // A read outlives a switch away from its server, so a switch back
+    // must still see it and offer no second one.
+    if (_readingRestarts) return;
     final serverId = widget.serverId;
-    setState(() => _readingRestarts = true);
+    setState(() => _restartReads.add(serverId));
     final report = await admin.readRestarts(serverId);
-    if (!mounted || serverId != widget.serverId) return;
+    if (!mounted) return;
     setState(() {
-      _restarts = report;
-      _readingRestarts = false;
+      _restartReads.remove(serverId);
+      if (serverId == widget.serverId) _restarts = report;
     });
   }
 

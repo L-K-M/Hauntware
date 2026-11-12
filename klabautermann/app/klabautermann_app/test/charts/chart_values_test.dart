@@ -87,6 +87,16 @@ void main() {
       expect(chartScaleMax(null, ChartUnit.bytes), 1024);
       expect(chartScaleMax(0, ChartUnit.bytesPerSecond), 1024);
       expect(chartScaleMax(3, ChartUnit.percent), 100);
+      expect(chartScaleMax(100, ChartUnit.percent), 100);
+    });
+
+    test('a percentage past 100 scales to the next whole hundred, so a '
+        'container on several cores is not flattened (CST-03)', () {
+      expect(chartScaleMax(100.5, ChartUnit.percent), 200);
+      expect(chartScaleMax(250, ChartUnit.percent), 300);
+      expect(chartScaleMax(800, ChartUnit.percent), 800);
+      expect(uncheckedChartScaleMax(double.infinity, ChartUnit.percent), 100);
+      expect(uncheckedChartScaleMax(double.nan, ChartUnit.percent), 100);
     });
 
     test('a count scales to 1, 2 or 5 times a power of ten and reads as '

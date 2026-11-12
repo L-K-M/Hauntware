@@ -76,6 +76,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // Instance-lock debugPrint diagnostics; AlreadyRunningApp and
     // StartupIssueNotice tell the user in ARB text.
     "'Klabautermann is already running; this instance quits.'",
+    // Engine start debugPrint diagnostic; EngineFailedApp tells the user
+    // in ARB text.
+    r"'The engine did not start: $error'",
     r"'$instanceLockFileName: ${issue.error}'",
     // Sync state file debugPrint diagnostics; StartupIssueNotice tells
     // the user in ARB text.
@@ -128,7 +131,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'0.0.0.0'",
     "'::'",
     "'http'",
-    r"'${port.hostIp ?? '*'}:$public'",
+    r"'${_hostText(port.hostIp)}:$public'",
+    r"'[$ip]'",
     "'*'",
     "':'",
     r"'[${forward.host}]:${forward.port}'",
@@ -203,9 +207,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // A migration the engine refused, printed; it is tried again.
     r"'Safety preferences of $serverId stay on this device: $error'",
   },
-  // A refused post's diagnostic, printed.
+  // A refused post's and a failed permission check's diagnostics, printed.
   'lib/controllers/alert_notifications.dart': {
     "'while posting an alert notification'",
+    "'while checking notification permission'",
   },
   // The plugin's start-up diagnostic, the Android icon resource, the
   // Windows toast identity (the product name, the application id of
@@ -348,7 +353,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'/'",
     "'..'",
   },
-  'lib/controllers/sync_controller.dart': {"'the engine stopped'"},
+  // A sign-in's or round's request id, matched in the engine's answer.
+  'lib/controllers/sync_controller.dart': {
+    "'the engine stopped'",
+    r"'sync-${_count++}'",
+  },
   // TRI-03's acknowledgement keys (kind and subject) and the fields they
   // are stored under in settings.json.
   'lib/controllers/attention.dart': {
@@ -534,6 +543,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // debugPrint of a dismissal that was not saved; the toast is ARB text.
   'lib/ui/coverage.dart': {r"'$error'"},
+  'lib/ui/attention.dart': {r"'$error'"},
   'lib/ui/docker/container_details.dart': {
     // A mount's type as the Engine API names it, matched, never shown;
     // the empty type a mount without one reads as; the separator between
@@ -896,11 +906,18 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
     r"'\u23ce\u2028'",
     "' '",
-    // A container row's time in ISO 8601 order with a space for the T,
-    // machine data, then its stream as the Engine API names it (CTX-01),
-    // whose spoken name is ARB text (logContainerStream).
-    r"'${iso.substring(0, 10)} ${iso.substring(11, _containerTimeWidth)}'",
-    r"'${_containerTime(container.at)} ${container.stream.name} '",
+    // A row's time in ISO 8601 order with a space for the T, machine
+    // data, then a container row's stream as the Engine API names it
+    // (CTX-01), whose spoken name is ARB text (logContainerStream), or a
+    // journal row's unit (LOG-01).
+    r"'${iso.substring(0, 10)} ${iso.substring(11, _timeWidth)}'",
+    r"'${_rowTime(container.at, zoneOffset)} ${container.stream.name} '",
+    r"'${_rowTime(at, zoneOffset)} '",
+    // The ellipsis that starts a row windowed around its current match (a
+    // symbol, not words; a screen reader hears the text it hides), and
+    // the line breaks the window never starts before.
+    r"'\u2026'",
+    r"'[\n\v\f\r\x85\u2028\u2029]'",
   },
   'lib/ui/logs/log_view.dart': {
     // A FocusNode debug label.
@@ -911,9 +928,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
     "' '",
     r"'[\u2028\u2029]'",
-    // Glyph probes that measure the line height (the space above) and the
-    // advance, never shown.
+    // Glyph probes that measure the line height (the space above), the
+    // advance and the ellipsis, never shown.
     "'W'",
+    r"'\u2026'",
   },
   // The command registry's ids, keys of the menus and shortcuts.
   'lib/ui/menus/app_commands.dart': {
