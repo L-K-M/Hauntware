@@ -162,7 +162,12 @@ void main() {
     final decoded = jsonDecode(await indexFile.readAsString()) as Map;
     expect(decoded['version'], 1);
     expect(decoded['files'], hasLength(3));
-    expect(await File('${indexFile.path}.tmp').exists(), isFalse);
+    final tempNames = await indexFile.parent
+        .list()
+        .where((e) => e is File && e.path.contains('.tmp-'))
+        .map((e) => e.path)
+        .toList();
+    expect(tempNames, isEmpty);
   });
 
   test('quarantines malformed and semantically invalid indexes', () async {

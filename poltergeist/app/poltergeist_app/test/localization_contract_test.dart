@@ -231,7 +231,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // Sync's named skip rule sets (05 §3): a settings.json key.
     "'sync.skipRuleSets'",
   },
-  'lib/services/atomic_file.dart': {r"'.poltergeist-${uuidV4()}.tmp'"},
   // The session-state document's on-disk schema (02 §3): settings.json
   // keys, record field names, and validation diagnostics — the same
   // posture as the sibling versioned stores, never rendered UI copy.

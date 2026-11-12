@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/admin_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'admin_mode_chip.dart' show AdminScope;
+import 'read_section.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 
 /// Builds one labelled fact, with a note under it where one is given.
@@ -17,13 +18,14 @@ typedef SshdFactBuilder =
 /// since `sshd -T` loads the host keys. It says whether sshd lets the
 /// Docker transport forward its socket (03 §5.3). The last read stays
 /// until the next one, and a server switch forgets it.
-class SshdPostureSection extends StatefulWidget {
+class SshdPostureSection extends StatefulWidget implements AdminReadSection {
   const SshdPostureSection({
     super.key,
     required this.serverId,
     required this.fact,
   });
 
+  @override
   final String serverId;
   final SshdFactBuilder fact;
 
@@ -31,33 +33,13 @@ class SshdPostureSection extends StatefulWidget {
   State<SshdPostureSection> createState() => _SshdPostureSectionState();
 }
 
-class _SshdPostureSectionState extends State<SshdPostureSection> {
-  SshdPostureReport? _report;
-
-  /// The servers with a read out. A read outlives a switch away from its
-  /// server, so a switch back must still see it and offer no second one.
-  final _readingServers = <String>{};
-
-  bool get _reading => _readingServers.contains(widget.serverId);
-
+class _SshdPostureSectionState extends State<SshdPostureSection>
+    with AdminReadSectionState<SshdPostureSection, SshdPostureReport> {
   @override
-  void didUpdateWidget(SshdPostureSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.serverId == widget.serverId) return;
-    _report = null;
-  }
-
-  Future<void> _read(AdminController admin) async {
-    if (_reading) return;
-    final serverId = widget.serverId;
-    setState(() => _readingServers.add(serverId));
-    final report = await admin.readSshdPosture(serverId);
-    if (!mounted) return;
-    setState(() {
-      _readingServers.remove(serverId);
-      if (serverId == widget.serverId) _report = report;
-    });
-  }
+  Future<SshdPostureReport> readReport(
+    AdminController admin,
+    String serverId,
+  ) => admin.readSshdPosture(serverId);
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +47,7 @@ class _SshdPostureSectionState extends State<SshdPostureSection> {
     final admin = AdminScope.maybeOf(context);
     final adminOn =
         admin?.stateFor(widget.serverId)?.phase == AdminModePhase.on;
-    final report = _report;
+    final report = adminReport;
     final failure = report?.failure;
     final posture = report?.posture;
 
@@ -79,7 +61,7 @@ class _SshdPostureSectionState extends State<SshdPostureSection> {
             detail: report?.detail,
           ),
         if (posture != null) ..._settings(l10n, posture),
-        if (_reading)
+        if (adminReading)
           Text(l10n.systemSshdReading)
         else if (!adminOn || admin == null)
           Text(l10n.systemSshdAdminNeeded)
@@ -87,7 +69,7 @@ class _SshdPostureSectionState extends State<SshdPostureSection> {
           Align(
             alignment: AlignmentDirectional.centerStart,
             child: OutlinedButton(
-              onPressed: () => unawaited(_read(admin)),
+              onPressed: () => unawaited(readAdmin(admin)),
               child: Text(
                 report == null ? l10n.systemSshdRead : l10n.systemSshdReadAgain,
               ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -20,6 +21,31 @@ import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
+// Constructed in real async: shortcut callbacks must finish their native
+// writes there instead of leaving a shared writer queued in fake async.
+class _PaneSaveAppState extends AppState {
+  _PaneSaveAppState(super.services);
+
+  final Zone _ioZone = Zone.current;
+  Future<void>? _paneSave;
+
+  @override
+  Future<void> setSidebarVisible(bool visible) => _paneSave = _ioZone
+      .run<Future<void>>(() => super.setSidebarVisible(visible));
+
+  @override
+  Future<void> setInspectorVisible(bool visible) => _paneSave = _ioZone
+      .run<Future<void>>(() => super.setInspectorVisible(visible));
+
+  @override
+  Future<void> setInspectorPage(InspectorPage page) =>
+      _paneSave = _ioZone.run<Future<void>>(() => super.setInspectorPage(page));
+
+  @override
+  Future<void> showInspectorPage(InspectorPage page) => _paneSave = _ioZone
+      .run<Future<void>>(() => super.showInspectorPage(page));
+}
+
 /// The window shortcuts (`windowShortcuts` in app_menus.dart) and the
 /// header's pane buttons, driven through the real shell on every platform:
 /// the same panes, the same buttons, each platform's chords.
@@ -27,12 +53,13 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   Directory? directory;
   AppServices? services;
-  AppState? state;
+  _PaneSaveAppState? state;
 
   /// Everything the terminal sent its shell, in order.
   final shellInput = <String>[];
 
   tearDown(() async {
+    await state?._paneSave;
     state?.dispose();
     state = null;
     await services?.probe.dispose();
@@ -63,6 +90,7 @@ void main() {
     for (var i = 0; i < 8; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
+    await tester.runAsync(() async => await state?._paneSave);
   }
 
   Future<void> startServices(WidgetTester tester) => tester.runAsync(() async {
@@ -74,7 +102,7 @@ void main() {
         );
     FlutterSecureStorage.setMockInitialValues({});
     services = await AppServices.initialize();
-    state = AppState(services!);
+    state = _PaneSaveAppState(services!);
     await state!.saveServer(box);
   });
 

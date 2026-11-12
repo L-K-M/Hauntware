@@ -11,6 +11,8 @@ import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/secure_master_key.dart';
 import 'package:seance_core/seance_core.dart';
 
+import 'support/atomic_write_blocker.dart';
+
 const _baseUrl = 'https://sync.test';
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
@@ -347,7 +349,7 @@ void main() {
         );
         await own.vault.putSecret(secret);
         final oldKey = List<int>.of(own.vaultKey!);
-        final blockedSettings = Directory('${own.settingsStore.file.path}.tmp');
+        final blockedSettings = AtomicWriteBlocker(own.settingsStore.file);
         if (failure == _LocalFailure.token) {
           keystore.refuseSyncToken = true;
         } else {

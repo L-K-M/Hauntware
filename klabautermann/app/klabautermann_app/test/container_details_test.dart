@@ -17,7 +17,7 @@ import 'package:klabautermann_app/ui/docker/containers_panel.dart';
 import 'package:klabautermann_app/ui/actions/action_entry.dart'
     show OperationsScope;
 import 'package:klabautermann_app/ui/hand_off_actions.dart' show HandOffScope;
-import 'package:klabautermann_app/ui/processes_panel.dart' show kRevealDuration;
+import 'package:klabautermann_app/ui/timed_reveal.dart' show kRevealDuration;
 import 'package:klabautermann_app/ui/server_safety.dart' show SafetyScope;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -834,6 +834,74 @@ void main() {
     expect(_inDetails(find.text('Health checks')), findsNothing);
     expect(_inDetails(find.text('No mounts.')), findsOneWidget);
     expect(_inDetails(find.text('Not attached to a network.')), findsOneWidget);
+  });
+
+  testWidgets('a container that ended with an error shows its last log '
+      'lines under the diagnosis (TRI-04)', (tester) async {
+    final harness = await _pump(tester);
+    await _open(tester);
+    final details = dockerContainerDetails(
+      _id,
+      status: 'exited',
+      exitCode: 1,
+      health: HealthStatus.none,
+    );
+    await harness.answer(tester, DockerContainerPayload(details));
+    expect(_inDetails(find.text('Exited with an error')), findsOneWidget);
+
+    final open = harness.engine
+        .sentOfType<OpenLogStream>()
+        .cast<OpenLogStream>()
+        .single;
+    expect(open.spec.serverId, _serverId);
+    expect((open.spec.source as ContainerLogSource).containerId, _id);
+    expect((open.spec.window, open.spec.follow), (20, false));
+
+    await harness.emit(
+      tester,
+      LogBatch(
+        streamId: open.streamId,
+        records: const [
+          ContainerRecord(
+            stream: ContainerLogStream.stdout,
+            text: 'starting server',
+          ),
+          ContainerRecord(
+            stream: ContainerLogStream.stderr,
+            text: 'FATAL: could not bind 0.0.0.0:5432',
+          ),
+        ],
+      ),
+    );
+    await harness.emit(
+      tester,
+      LogStreamState(
+        open.streamId,
+        const LogStreamEnded(LogStreamEndReason.oldestReached),
+      ),
+    );
+    expect(_inDetails(find.text('Logs')), findsOneWidget);
+    expect(_inDetails(find.text('starting server')), findsOneWidget);
+    expect(
+      _inDetails(find.text('FATAL: could not bind 0.0.0.0:5432')),
+      findsOneWidget,
+    );
+
+    // Closing the details stops nothing more: the read had ended.
+    harness.inspection.value = null;
+    await tester.pumpAndSettle();
+    expect(harness.engine.sentOfType<CloseStream>(), isEmpty);
+  });
+
+  testWidgets('a failing health check alone reads no logs', (tester) async {
+    final harness = await _pump(tester);
+    await _open(tester);
+    await harness.answer(
+      tester,
+      DockerContainerPayload(dockerContainerDetails(_id)),
+    );
+    expect(_inDetails(find.text('Health check failing')), findsOneWidget);
+    expect(harness.engine.sentOfType<OpenLogStream>(), isEmpty);
   });
 
   group('label links (CTR-11)', () {

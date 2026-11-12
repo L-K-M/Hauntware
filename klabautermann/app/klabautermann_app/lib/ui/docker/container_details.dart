@@ -1,4 +1,4 @@
-import 'dart:async' show Timer, unawaited;
+import 'dart:async' show unawaited;
 import 'dart:convert' show LineSplitter;
 
 import 'package:flutter/foundation.dart';
@@ -10,14 +10,17 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
-import '../../theme/app_theme.dart' show klabautermannThemeStyle;
+import '../../controllers/log_reads.dart';
+import '../../theme/app_theme.dart'
+    show klabautermannMonoStyle, klabautermannThemeStyle;
 import '../actions/action_entry.dart';
 import '../logs/log_export.dart' show showExportSheet;
 import '../actions/docker_actions.dart'
     show ContainerActionButtons, containerActionsShown;
-import '../processes_panel.dart' show kRevealDuration;
+import '../panel_kit.dart';
 import '../processes_view.dart' show argumentText, clipProcessText;
 import '../time_display.dart';
+import '../timed_reveal.dart';
 import '../workspace_dock.dart';
 import 'container_details_view.dart';
 import 'container_diagnosis.dart';
@@ -26,7 +29,7 @@ import 'container_command.dart';
 import 'container_logs.dart';
 import 'container_processes.dart';
 import 'container_terminal.dart';
-import 'containers_panel.dart' show ContainerHealthBadge;
+import 'containers_panel.dart' show ContainerHealthBadge, DockerNotice;
 import 'container_usage_charts.dart';
 import 'containers_view.dart';
 import 'images_view.dart' show shortImageId;
@@ -445,10 +448,8 @@ class ContainerDetailsView extends StatefulWidget {
 }
 
 class _ContainerDetailsViewState extends State<ContainerDetailsView> {
-  /// The revealed values by where they show, each with the timer that
-  /// masks it.
-  final Map<_Shown, Timer> _revealed = {};
-  late final AppLifecycleListener _lifecycle;
+  /// The revealed values by where they show.
+  late final TimedReveals<_Shown> _revealed;
   late ValueListenable<DockerContainerDetails> _details;
 
   DockerController get _docker => widget.monitoring.docker;
@@ -456,7 +457,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
   @override
   void initState() {
     super.initState();
-    _lifecycle = AppLifecycleListener(onInactive: _maskAll);
+    _revealed = TimedReveals(onChanged: () => setState(() {}));
     _details = _docker.openContainer(widget.serverId, widget.container.id);
     _docker.pinStats(widget.serverId, widget.container.id);
   }
@@ -470,7 +471,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
     }
 
     // Another container: nothing revealed carries over.
-    _maskAll();
+    _revealed.maskAll();
     _docker.closeContainer(oldWidget.serverId, oldWidget.container.id);
     _docker.unpinStats(oldWidget.serverId, oldWidget.container.id);
     _details = _docker.openContainer(widget.serverId, widget.container.id);
@@ -479,37 +480,10 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
 
   @override
   void dispose() {
-    _lifecycle.dispose();
-    for (final timer in _revealed.values) {
-      timer.cancel();
-    }
+    _revealed.dispose();
     _docker.closeContainer(widget.serverId, widget.container.id);
     _docker.unpinStats(widget.serverId, widget.container.id);
     super.dispose();
-  }
-
-  void _toggle(_Shown key) {
-    final timer = _revealed.remove(key);
-    setState(() {
-      if (timer != null) {
-        timer.cancel();
-        return;
-      }
-      _revealed[key] = Timer(kRevealDuration, () {
-        if (mounted) setState(() => _revealed.remove(key));
-      });
-    });
-  }
-
-  void _maskAll() {
-    if (_revealed.isEmpty) return;
-
-    setState(() {
-      for (final timer in _revealed.values) {
-        timer.cancel();
-      }
-      _revealed.clear();
-    });
   }
 
   @override
@@ -557,9 +531,12 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
     final failure = read.failure;
     final children = <Widget>[
       if (read.removed)
-        _Notice(icon: Icons.delete_outline, text: l10n.dockerDetailsRemoved)
+        DockerNotice(
+          icon: Icons.delete_outline,
+          text: l10n.dockerDetailsRemoved,
+        )
       else if (failure != null)
-        _Notice(
+        DockerNotice(
           icon: Icons.error_outline,
           text: l10n.dockerDetailsFailed(failure.failure.name),
           detail: failure.detail,
@@ -570,9 +547,12 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
           ),
         ),
       if (container == null && !read.removed && failure == null)
-        _Notice(icon: Icons.hourglass_empty, text: l10n.dockerDetailsReading),
+        DockerNotice(
+          icon: Icons.hourglass_empty,
+          text: l10n.dockerDetailsReading,
+        ),
       if (container != null && (read.removed || failure != null))
-        _Notice(icon: Icons.history, text: l10n.dockerDetailsKept),
+        DockerNotice(icon: Icons.history, text: l10n.dockerDetailsKept),
       if (container != null)
         ..._withUsage(
           _sections(
@@ -628,26 +608,44 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
           l10n.dockerDetailsRevealNote(kRevealDuration.inSeconds),
           style: Theme.of(context).textTheme.bodySmall,
         ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerDetailsOverview,
         children: _overview(context, container, row),
       ),
       if (diagnoseContainer(container) case final diagnoses
           when diagnoses.isNotEmpty)
-        _Section(
+        TitledGroup(
           title: l10n.dockerDiagnosisTitle,
           children: [
-            for (final diagnosis in diagnoses)
-              ContainerDiagnosisRow(diagnosis: diagnosis),
+            _LogTail(
+              monitoring: widget.monitoring,
+              serverId: widget.serverId,
+              containerId: container.id,
+              // A run that ended usually says why in its last lines; a
+              // failing health check's output shows in Health checks.
+              read:
+                  !removed &&
+                  diagnoses.any(
+                    (d) => d.kind != ContainerDiagnosisKind.unhealthy,
+                  ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 8,
+                children: [
+                  for (final diagnosis in diagnoses)
+                    ContainerDiagnosisRow(diagnosis: diagnosis),
+                ],
+              ),
+            ),
           ],
         ),
       if (labelLinks(labels) case final links when links.isNotEmpty)
-        _Section(
+        TitledGroup(
           title: l10n.dockerLinksTitle,
           children: [ContainerLinks(links: links)],
         ),
       if (health != null && health.status != HealthStatus.none)
-        _Section(
+        TitledGroup(
           title: l10n.dockerDetailsHealthTitle,
           children: [
             if (health.log.isEmpty)
@@ -658,7 +656,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
                 _healthCheck(context, index, check),
           ],
         ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerDetailsCommandTitle,
         children: [
           _arguments(
@@ -675,7 +673,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
           ),
         ],
       ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerDetailsEnvTitle,
         children: [
           if (env.isEmpty) _Muted(l10n.dockerDetailsEnvEmpty),
@@ -688,7 +686,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
             ),
         ],
       ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerDetailsLabelsTitle,
         children: [
           if (labels.isEmpty) _Muted(l10n.dockerDetailsLabelsEmpty),
@@ -696,21 +694,21 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
             _value(context, (_Field.label, key), value, name: key),
         ],
       ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerDetailsMountsTitle,
         children: [
           if (container.mounts.isEmpty) _Muted(l10n.dockerDetailsMountsEmpty),
           for (final mount in container.mounts) _Mount(mount: mount),
         ],
       ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerContainersColumnPorts,
         children: [
           if (row.ports.isEmpty) _Muted(l10n.dockerDetailsPortsEmpty),
           for (final port in containerPortLabels(row)) Text(port),
         ],
       ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerDetailsNetworksTitle,
         children: _networks(context, container),
       ),
@@ -776,9 +774,9 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
         health: health,
       ),
       if (state?.oomKilled ?? false)
-        _Notice(icon: Icons.memory, text: l10n.dockerDetailsOomKilled),
+        DockerNotice(icon: Icons.memory, text: l10n.dockerDetailsOomKilled),
       if (error != null && error.isNotEmpty)
-        _Notice(
+        DockerNotice(
           icon: Icons.error_outline,
           text: l10n.dockerDetailsStateError,
           detail: error,
@@ -912,7 +910,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
       );
     }
 
-    final revealed = _revealed.containsKey(key);
+    final revealed = _revealed.isRevealed(key);
     final shown = clipProcessText(revealed ? value.reveal()! : value.display);
     // A masked value is read as masked, never as eight asterisks.
     final spoken = revealed
@@ -929,9 +927,9 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
           ? l10n.dockerDetailsHideHint
           : l10n.dockerDetailsRevealHint,
       excludeSemantics: true,
-      onTap: () => _toggle(key),
+      onTap: () => _revealed.toggle(key),
       child: InkWell(
-        onTap: () => _toggle(key),
+        onTap: () => _revealed.toggle(key),
         child: ConstrainedBox(
           // A touch needs a 48 dp target (A11Y-01); a pointer, the line.
           constraints: BoxConstraints(
@@ -1013,26 +1011,128 @@ String _restartText(AppLocalizations l10n, ContainerRestartPolicy policy) {
   return l10n.dockerDetailsRestartPolicyRetries(words, retries);
 }
 
-/// A heading over its [children], read as a heading.
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.children});
+/// How many of a container's newest log lines its diagnosis shows.
+const _logTailLines = 20;
 
-  final String title;
-  final List<Widget> children;
+/// [child], the diagnosis (TRI-04), over [containerId]'s newest log
+/// lines when [read]: one bounded read while it shows, oldest first as
+/// Docker sends them. Lines show as they arrive; none show when the
+/// read fails, and the Logs view says why there.
+class _LogTail extends StatefulWidget {
+  const _LogTail({
+    required this.monitoring,
+    required this.serverId,
+    required this.containerId,
+    required this.read,
+    required this.child,
+  });
+
+  final MonitoringController monitoring;
+  final String serverId;
+  final String containerId;
+  final bool read;
+  final Widget child;
+
+  @override
+  State<_LogTail> createState() => _LogTailState();
+}
+
+class _LogTailState extends State<_LogTail> {
+  LogRead? _read;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.read) _open();
+  }
+
+  @override
+  void didUpdateWidget(_LogTail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.serverId == widget.serverId &&
+        oldWidget.containerId == widget.containerId &&
+        oldWidget.read == widget.read) {
+      return;
+    }
+
+    _close();
+    if (widget.read) _open();
+  }
+
+  @override
+  void dispose() {
+    _close();
+    super.dispose();
+  }
+
+  void _open() {
+    _read = widget.monitoring.openLogRead(
+      LogStreamSpec(
+        serverId: widget.serverId,
+        source: ContainerLogSource(widget.containerId),
+        window: _logTailLines,
+        follow: false,
+      ),
+    )..addListener(_changed);
+  }
+
+  void _close() {
+    _read
+      ?..removeListener(_changed)
+      ..close();
+    _read = null;
+  }
+
+  void _changed() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
+    final read = _read;
+    if (read == null) return widget.child;
+
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final lines = [
+      for (final record in read.records)
+        if (record is ContainerRecord) record.text,
+    ];
+    final readAll = switch (read.state) {
+      LogReadReported(
+        status: LogStreamEnded(
+          reason: LogStreamEndReason.windowFilled ||
+              LogStreamEndReason.oldestReached,
+        ),
+      ) =>
+        true,
+      _ => false,
+    };
+    if (lines.isEmpty && !readAll) return widget.child;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 8,
       children: [
-        Semantics(
-          container: true,
-          header: true,
-          child: Text(title, style: theme.textTheme.titleSmall),
-        ),
-        ...children,
+        widget.child,
+        _Label(l10n.dockerLogsTitle),
+        if (lines.isEmpty)
+          _Muted(l10n.dockerLogsEmpty)
+        else
+          // One text per line, selectable together.
+          SelectionArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final line in lines)
+                  Text(
+                    line,
+                    style: klabautermannMonoStyle.copyWith(
+                      fontSize: theme.textTheme.bodySmall?.fontSize,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -1296,62 +1396,6 @@ class _RawJson extends StatelessWidget {
             );
           },
         ),
-      ],
-    );
-  }
-}
-
-/// A state in words beside an icon, read as one node, with the engine's
-/// own [detail] under it, never translated, and an optional [action].
-class _Notice extends StatelessWidget {
-  const _Notice({
-    required this.icon,
-    required this.text,
-    this.detail,
-    this.action,
-  });
-
-  final IconData icon;
-  final String text;
-  final String? detail;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    final detail = this.detail;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        MergeSemantics(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 8,
-            children: [
-              Icon(icon, size: 18, color: muted),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  spacing: 4,
-                  children: [
-                    Text(text, style: theme.textTheme.bodyMedium),
-                    if (detail != null && detail.isNotEmpty)
-                      Text(
-                        detail,
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: muted,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        ?action,
       ],
     );
   }

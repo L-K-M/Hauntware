@@ -2,10 +2,10 @@
 
 ## Unreleased
 
-- The background keep-alive (the "Session keep-alive" notification that
-  keeps SSH sessions alive while Séance is in the background) now comes
-  from the shared ghost_keepalive plugin it shares with Poltergeist.
-  Its notification, channel and behavior are unchanged.
+- Settings and sync data files use the shared atomic writer and write
+  through symbolic links, and local store operations share one queue so
+  a failed save does not poison the next one.
+
 - The Linux package build uses the suite's shared packager and fails early
   with a clear message when `objdump` is missing, instead of partway through.
   The built `.deb` and AppImage are unchanged.
@@ -61,6 +61,10 @@
 - The snippet editor's Save waits for a title and a command, Return in
   the title saves, ⌘Return or Ctrl+Return saves from the command, and
   saving an unchanged snippet writes nothing.
+- The background keep-alive (the "Session keep-alive" notification that
+  keeps SSH sessions alive while Séance is in the background) now comes
+  from the shared ghost_keepalive plugin it shares with Poltergeist.
+  Its notification, channel and behavior are unchanged.
 - On the desktop, Import SSH config picks the file, starting in
   `~/.ssh`, instead of asking for its text. The terminal's menu has
   Clear scrollback.

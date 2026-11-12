@@ -6,6 +6,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- Settings and window state files use the shared atomic writer and
+  write through symbolic links.
+
 ### Added
 - `ghost_keepalive` package: the Android background keep-alive (a
   dataSync foreground service and its `ghost_keepalive` channel) shared

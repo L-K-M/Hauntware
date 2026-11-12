@@ -17,6 +17,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:klabautermann_host/klabautermann_host.dart';
 
@@ -235,7 +236,7 @@ final class ServerSamplePipeline {
     String text(HwsSection s) => utf8.decode(s.payload, allowMalformed: true);
 
     // Metrics first, together, so overview and core diff against the
-    // same earlier reading.
+    // same earlier reading. A parser failure here costs both streams.
     final overviewSection = streams.contains(SampleStream.overview)
         ? section(SampleStream.overview)
         : null;
@@ -243,21 +244,27 @@ final class ServerSamplePipeline {
         ? section(SampleStream.core)
         : null;
     bool ok(HwsSection? s) => s != null && s.status == SectionStatus.ok;
-    final core = ok(coreSection)
-        ? parseCore(text(coreSection!), ctx).value
-        : null;
-    final metrics = _metrics.derive(
-      overview: !ok(overviewSection)
-          ? null
-          : identical(overviewSection, coreSection)
-          ? core
-          : overviewSection!.collector == Collector.core.wireName
-          ? parseCore(text(overviewSection), ctx).value
-          : parseOverview(text(overviewSection), ctx).value,
-      core: core,
-      uptime: reply.uptimeSeconds,
-      profile: _profile,
-    );
+    ({OverviewResult? overview, CoreResult? core})? metrics;
+    CollectorUnavailable? metricsFailure;
+    try {
+      final core = ok(coreSection)
+          ? parseCore(text(coreSection!), ctx).value
+          : null;
+      metrics = _metrics.derive(
+        overview: !ok(overviewSection)
+            ? null
+            : identical(overviewSection, coreSection)
+            ? core
+            : overviewSection!.collector == Collector.core.wireName
+            ? parseCore(text(overviewSection), ctx).value
+            : parseOverview(text(overviewSection), ctx).value,
+        core: core,
+        uptime: reply.uptimeSeconds,
+        profile: _profile,
+      );
+    } on Object catch (error) {
+      metricsFailure = _parserFailed(error);
+    }
 
     final results = <SampleStream, SampleResult>{};
     for (final stream in streams) {
@@ -270,40 +277,48 @@ final class ServerSamplePipeline {
       }
 
       final unavailable = collectorUnavailable(s);
-      results[stream] =
-          unavailable ??
-          switch (stream) {
-            SampleStream.overview => metrics.overview!,
-            SampleStream.core => metrics.core!,
-            SampleStream.fs => FsResult(parseFs(text(s), ctx).value),
-            SampleStream.identity => identityResult(
-              parseIdentity(text(s), ctx).value,
-            ),
-            SampleStream.procs => _procs(
-              parseProcs(text(s), ctx).value,
-              // The host reads the `B` uptime before the reply's first
-              // collector, so it times `procs` only when `procs` ran
-              // first; behind another, its share interval is unknown.
-              identical(s, reply.sections.first) ? reply.uptimeSeconds : null,
-              _bootedAt(reply.uptimeSeconds, at),
-            ),
-            SampleStream.units || SampleStream.userUnits => UnitsResult(
-              parseUnits(text(s), ctx).value,
-            ),
-            SampleStream.failedUnits => FailedUnitsResult(
-              parseUnits(text(s), ctx).value.failed,
-            ),
-            SampleStream.timers || SampleStream.userTimers => TimersResult(
-              parseTimers(text(s), ctx).value,
-            ),
-            SampleStream.gpu => GpuResult(parseGpu(text(s), ctx).value),
-            SampleStream.temps => TempsResult(parseTemps(text(s), ctx).value),
-            SampleStream.cron => cronResult(
-              parseCron(text(s), ctx).value,
-              _profile,
-              at,
-            ),
-          };
+      if (unavailable != null) {
+        results[stream] = unavailable;
+        continue;
+      }
+      // A parser that throws on what the host sent costs that stream's
+      // reading, not the tick: the reply's other streams still go out,
+      // and the error reaches the panel as the collector's failure.
+      try {
+        results[stream] = switch (stream) {
+          SampleStream.overview => metricsFailure ?? metrics!.overview!,
+          SampleStream.core => metricsFailure ?? metrics!.core!,
+          SampleStream.fs => FsResult(parseFs(text(s), ctx).value),
+          SampleStream.identity => identityResult(
+            parseIdentity(text(s), ctx).value,
+          ),
+          SampleStream.procs => _procs(
+            parseProcs(text(s), ctx).value,
+            // The host reads the `B` uptime before the reply's first
+            // collector, so it times `procs` only when `procs` ran
+            // first; behind another, its share interval is unknown.
+            identical(s, reply.sections.first) ? reply.uptimeSeconds : null,
+            _bootedAt(reply.uptimeSeconds, at),
+          ),
+          SampleStream.units ||
+          SampleStream.userUnits => UnitsResult(parseUnits(text(s), ctx).value),
+          SampleStream.failedUnits => FailedUnitsResult(
+            parseUnits(text(s), ctx).value.failed,
+          ),
+          SampleStream.timers || SampleStream.userTimers => TimersResult(
+            parseTimers(text(s), ctx).value,
+          ),
+          SampleStream.gpu => GpuResult(parseGpu(text(s), ctx).value),
+          SampleStream.temps => TempsResult(parseTemps(text(s), ctx).value),
+          SampleStream.cron => cronResult(
+            parseCron(text(s), ctx).value,
+            _profile,
+            at,
+          ),
+        };
+      } on Object catch (error) {
+        results[stream] = _parserFailed(error);
+      }
     }
 
     return [
@@ -317,6 +332,20 @@ final class ServerSamplePipeline {
           result: result,
         ),
     ];
+  }
+
+  /// A parser's [error] on a section, as that collector's failure.
+  static CollectorUnavailable _parserFailed(Object error) {
+    final text = stripControlChars('$error').trim();
+    var end = min(text.length, kCollectorDetailMaxChars);
+    // Step back from a high surrogate, so the cut never leaves half a pair.
+    if (end < text.length && (text.codeUnitAt(end - 1) & 0xFC00) == 0xD800) {
+      end--;
+    }
+    return CollectorUnavailable(
+      CollectorUnavailableReason.error,
+      detail: text.substring(0, end),
+    );
   }
 
   ProcsResult _procs(ProcsSnapshot next, double? uptime, DateTime? bootedAt) {

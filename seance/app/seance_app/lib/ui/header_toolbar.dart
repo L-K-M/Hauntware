@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:ghost_desktop/ghost_desktop.dart' show macosTrafficLightsInset;
+import 'package:ghost_desktop/ghost_desktop.dart'
+    show MacosToolbarBandScope, macosTrafficLightsInset;
 import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 import 'package:seance_core/seance_core.dart';
@@ -10,7 +11,6 @@ import '../main.dart';
 import '../theme.dart';
 import 'adaptive_shell.dart' show PaneVisibility;
 import 'app_menus.dart';
-import 'macos_toolbar_band.dart';
 import 'server_appearance.dart';
 
 /// The space before the first control where nothing sits ahead of it.

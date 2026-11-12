@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:seance_core/catalog.dart';
 import 'package:seance_core/seance_core.dart';
-import 'package:seance_core/src/catalog/atomic_file_writer.dart';
 import 'package:test/test.dart';
 
 final _fixedNow = DateTime.utc(2026, 9, 20, 12);

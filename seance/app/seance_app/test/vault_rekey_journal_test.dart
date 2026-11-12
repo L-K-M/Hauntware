@@ -9,6 +9,8 @@ import 'package:seance_app/services/file_stores.dart';
 import 'package:seance_app/services/secure_master_key.dart';
 import 'package:seance_core/seance_core.dart';
 
+import 'support/atomic_write_blocker.dart';
+
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
 /// An OS keystore that keeps what it is given, and can be locked the way an
@@ -484,7 +486,7 @@ void main() {
             'a failed settle preserves the session until recovery '
             '(writeThrows=$writeThrows, restart=$restart)', () async {
           await enrolled();
-          final blockedWrite = Directory('${vaultFile.path}.tmp');
+          final blockedWrite = AtomicWriteBlocker(vaultFile);
           // Staging has already succeeded by the time the keystore writes.
           // Refuse only the final vault write after the new key is installed.
           keystore.onWrite = () => blockedWrite.create();

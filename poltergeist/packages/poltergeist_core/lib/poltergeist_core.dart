@@ -212,6 +212,8 @@ export 'src/bookmarks/bookmark_store.dart'
         bookmarkQuarantinePath;
 export 'package:seance_core/catalog.dart'
     show
+        AtomicFilePrivacy,
+        AtomicFileWriter,
         PersistentLocalRecordStore,
         SyncCursorRejectedException,
         SyncRecordStore,

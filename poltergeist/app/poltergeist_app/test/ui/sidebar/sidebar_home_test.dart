@@ -218,6 +218,14 @@ void main() {
       expect(find.text('deploy@demo.example.com'), findsNothing);
       // The search bar and the "+" stay Home's own.
       expect(find.byKey(const ValueKey('sidebar.home.search')), findsOneWidget);
+      // Names and paths stay out of the keyboard's personal dictionary.
+      final search = tester.widget<TextField>(
+        find.descendant(
+          of: find.byKey(const ValueKey('sidebar.home.search')),
+          matching: find.byType(TextField),
+        ),
+      );
+      expect(search.enableIMEPersonalizedLearning, isFalse);
       expect(find.byKey(const ValueKey('sidebar.home.add')), findsOneWidget);
     });
 

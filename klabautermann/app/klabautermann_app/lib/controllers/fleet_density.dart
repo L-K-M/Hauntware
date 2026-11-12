@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'persisted_setting.dart';
 
 /// FL-08's layouts for the fleet board, the desktop workspace's view of
 /// every server while none is open (03 §10.3): [auto] picks [cards] for
@@ -49,35 +49,20 @@ final class FleetDensityNotSavedException implements Exception {
 /// callback, as in most tests, it is held in memory only. A change
 /// applies before it is saved, and picking the same layout after a failed
 /// save tries the save again.
-final class FleetDensityController extends ChangeNotifier
-    implements ValueListenable<FleetDensity> {
+final class FleetDensityController extends PersistedSetting<FleetDensity> {
   FleetDensityController({FleetDensity density = FleetDensity.auto, this._save})
-    : _value = density,
-      _saved = density;
+    : super(density);
 
-  FleetDensity _value;
-  FleetDensity _saved;
   final Future<void> Function(String name)? _save;
-
-  @override
-  FleetDensity get value => _value;
 
   /// Picks [density]; a no-op when it is in force and saved. Throws
   /// [FleetDensityNotSavedException] when it applied but was not saved.
-  Future<void> setDensity(FleetDensity density) async {
-    if (density == _value && density == _saved) return;
-    if (density != _value) {
-      _value = density;
-      notifyListeners();
-    }
-    try {
-      await _save?.call(density.name);
-      _saved = density;
-    } on Exception catch (error, stackTrace) {
-      Error.throwWithStackTrace(
-        FleetDensityNotSavedException('The fleet layout was not saved: $error'),
-        stackTrace,
-      );
-    }
-  }
+  Future<void> setDensity(FleetDensity density) => change(density);
+
+  @override
+  Future<void>? save(FleetDensity density) => _save?.call(density.name);
+
+  @override
+  Exception notSaved(Object error) =>
+      FleetDensityNotSavedException('The fleet layout was not saved: $error');
 }
