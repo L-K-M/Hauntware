@@ -49,6 +49,27 @@
   Mac app's do. ⌃⌘S and ⌥⌘I, or Ctrl+Alt+S and Ctrl+Alt+I, toggle them,
   and ⌥⌘1 to ⌥⌘5, or Ctrl+Alt+1 to Ctrl+Alt+5, open Files, Context,
   Git, Snippets and the Assistant. The window remembers all three.
+- Linux, Windows and phones get a ☰ menu in the header and the phone
+  home's app bar, with the app's commands as File, Edit, View, Terminal
+  and Help submenus, each row showing its chord. macOS keeps its native
+  menu and hides the ☰.
+- Check for Updates… is in the application menu on macOS and in Help
+  everywhere else, and in the command palette. It runs even when the
+  launch check is off; when no newer version is found it says so without
+  claiming you are up to date.
+- On macOS, the Edit menu works while a built-in editor tab is focused:
+  File ▸ Save (⌘S) saves the file, as Ctrl+S does, and Edit ▸ Find… (⌘F)
+  opens the editor's find bar.
+- Undo and Redo name the change they would take ("Undo Pin to top") and
+  are dimmed when there is nothing to take back, in the ☰ Edit menu and,
+  on macOS, in Edit.
+- Help ▸ Keyboard Shortcuts (⌘/ or Ctrl+/) opens the shortcut list, which
+  names the new chords.
+- The command palette (⇧⌘P or Ctrl+Shift+P, View ▸ Command Palette…)
+  lists the app's commands with their menu paths and chords, and runs the
+  one you pick.
+- About Séance is in Help on Linux, Windows and phones, with the version
+  and licenses; macOS keeps its application menu's About.
 - Undo works outside text fields: ⌘Z, or Ctrl+Z outside the terminal,
   takes back snippet changes and server pins and duplicates, and a
   notice says what it undid. Deleting a snippet no longer asks first;

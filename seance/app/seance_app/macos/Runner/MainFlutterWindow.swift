@@ -48,6 +48,22 @@ class MainFlutterWindow: NSWindow {
   /// terminal, and otherwise fall back to the native behaviour (text fields).
   private var terminalFocused = false
 
+  /// Whether the active tab's built-in editor is mounted. Pushed from Dart
+  /// so File ▸ Save and Edit ▸ Find… validate only while the editor is up.
+  private var editorActive = false
+
+  /// The Edit menu's Undo and Redo rows: Dart owns their titles and
+  /// enabled state, pushed with setUndoItem / setRedoItem as the history
+  /// changes. They start disabled, matching an empty history.
+  private var undoItem: NSMenuItem?
+  private var redoItem: NSMenuItem?
+
+  /// File ▸ Save and the Edit menu's Find… row, valid only while the
+  /// editor is active and this window is key (the Settings window keeps
+  /// its own keys).
+  private var saveItem: NSMenuItem?
+  private var findItem: NSMenuItem?
+
   /// View ▸ "Use Compact Sidebar Rows" / "Use Comfortable Sidebar Rows": one
   /// item whose title Dart owns and sets to the density it would switch to,
   /// so the copy lives in one place. Hidden (with its separator) until Dart
@@ -96,6 +112,25 @@ class MainFlutterWindow: NSWindow {
       case "setServerListDensityTitle":
         self?.densityTitle = call.arguments as? String
         self?.applyDensityTitle()
+        result(nil)
+      case "setEditorActive":
+        self?.editorActive = (call.arguments as? Bool) ?? false
+        result(nil)
+      case "setUndoItem":
+        guard let arguments = call.arguments as? [String: Any] else {
+          result(FlutterMethodNotImplemented)
+          return
+        }
+        self?.undoItem?.title = arguments["title"] as? String ?? "Undo"
+        self?.undoItem?.isEnabled = arguments["enabled"] as? Bool ?? false
+        result(nil)
+      case "setRedoItem":
+        guard let arguments = call.arguments as? [String: Any] else {
+          result(FlutterMethodNotImplemented)
+          return
+        }
+        self?.redoItem?.title = arguments["title"] as? String ?? "Redo"
+        self?.redoItem?.isEnabled = arguments["enabled"] as? Bool ?? false
         result(nil)
       default:
         result(FlutterMethodNotImplemented)
@@ -282,12 +317,24 @@ class MainFlutterWindow: NSWindow {
        let settings = appMenu.items.first(where: {
          $0.title.hasPrefix("Preferences") || $0.title.hasPrefix("Settings")
        }) {
+      // The manual check sits before Settings…, as the sibling apps'
+      // application menus do.
+      let checkForUpdates = NSMenuItem(
+        title: "Check for Updates…",
+        action: #selector(didSelectCheckForUpdates),
+        keyEquivalent: "")
+      checkForUpdates.target = self
+      appMenu.insertItem(
+        checkForUpdates,
+        at: appMenu.items.firstIndex(of: settings) ?? 1)
       settings.title = "Settings…"
       settings.target = self
       settings.action = #selector(didSelectSettings)
       settings.keyEquivalent = ","
       settings.keyEquivalentModifierMask = [.command]
     }
+
+    installFileMenu(mainMenu)
 
     let terminalSubmenu = NSMenu(title: "Terminal")
     let newTab = NSMenuItem(
@@ -326,9 +373,47 @@ class MainFlutterWindow: NSWindow {
       densityItem = density
       densitySeparator = separator
       applyDensityTitle()
+
+      let palette = NSMenuItem(
+        title: "Command Palette…",
+        action: #selector(didSelectCommandPalette),
+        keyEquivalent: "p")
+      palette.target = self
+      palette.keyEquivalentModifierMask = [.command, .shift]
+      viewMenu.insertItem(palette, at: 2)
+    }
+
+    if let helpMenu = mainMenu.items.first(where: { $0.title == "Help" })?.submenu {
+      let shortcuts = NSMenuItem(
+        title: "Keyboard Shortcuts",
+        action: #selector(didSelectKeyboardShortcuts),
+        keyEquivalent: "/")
+      shortcuts.target = self
+      shortcuts.keyEquivalentModifierMask = [.command]
+      helpMenu.addItem(shortcuts)
     }
 
     retargetEditMenu(mainMenu)
+  }
+
+  /// File ▸ Save: the built-in editor's save, while its tab is active.
+  private func installFileMenu(_ mainMenu: NSMenu) {
+    let fileMenu = NSMenu(title: "File")
+    let save = NSMenuItem(
+      title: "Save",
+      action: #selector(editSave),
+      keyEquivalent: "s")
+    save.target = self
+    fileMenu.addItem(save)
+    saveItem = save
+    let fileItem = NSMenuItem(title: "File", action: nil, keyEquivalent: "")
+    fileItem.submenu = fileMenu
+    let editIndex = mainMenu.indexOfItem(withTitle: "Edit")
+    if editIndex >= 0 {
+      mainMenu.insertItem(fileItem, at: editIndex)
+    } else {
+      mainMenu.addItem(fileItem)
+    }
   }
 
   /// Title the density item with the latest name from Dart, or keep it (and
@@ -352,6 +437,9 @@ class MainFlutterWindow: NSWindow {
     let copySel = NSSelectorFromString("copy:")
     let pasteSel = NSSelectorFromString("paste:")
     let selectAllSel = NSSelectorFromString("selectAll:")
+    let undoSel = NSSelectorFromString("undo:")
+    let redoSel = NSSelectorFromString("redo:")
+    let findSel = NSSelectorFromString("performFindPanelAction:")
     for topItem in mainMenu.items {
       guard let submenu = topItem.submenu else { continue }
       for item in submenu.items {
@@ -364,9 +452,42 @@ class MainFlutterWindow: NSWindow {
         } else if item.action == selectAllSel {
           item.target = self
           item.action = #selector(editSelectAll(_:))
+        } else if item.action == undoSel {
+          item.target = self
+          item.action = #selector(editUndo(_:))
+          item.isEnabled = false
+          undoItem = item
+        } else if item.action == redoSel {
+          item.target = self
+          item.action = #selector(editRedo(_:))
+          item.isEnabled = false
+          redoItem = item
+        }
+      }
+      // Find… sits in the Edit menu's Find submenu, not at its top level.
+      if let findMenu = submenu.items.first(where: { $0.title == "Find" })?.submenu {
+        for item in findMenu.items where item.action == findSel && item.tag == 1 {
+          item.target = self
+          item.action = #selector(editFind(_:))
+          findItem = item
         }
       }
     }
+  }
+
+  /// Save and Find… are valid only while the active tab's built-in editor
+  /// is mounted and this window is key; the Settings window keeps its own
+  /// keys, and the handlers no-op without it. Undo and Redo carry the
+  /// enabled state Dart pushes, which the menu's own autoenabling would
+  /// otherwise ignore.
+  override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+    if menuItem === saveItem || menuItem === findItem {
+      return editorActive && isKeyWindow
+    }
+    if menuItem === undoItem || menuItem === redoItem {
+      return menuItem.isEnabled
+    }
+    return super.validateMenuItem(menuItem)
   }
 
   private var routesEditToTerminal: Bool {
@@ -515,5 +636,46 @@ class MainFlutterWindow: NSWindow {
 
   @objc private func didSelectToggleDensity() {
     menuChannel?.invokeMethod("toggleServerListDensity", arguments: nil)
+  }
+
+  @objc private func editSave(_ sender: Any?) {
+    guard isKeyWindow else { return }
+    menuChannel?.invokeMethod("editSave", arguments: nil)
+  }
+
+  @objc private func editFind(_ sender: Any?) {
+    guard isKeyWindow else { return }
+    menuChannel?.invokeMethod("editFind", arguments: nil)
+  }
+
+  /// Undo and redo step the app's history, or the focused text field's
+  /// when the key window is another one (Settings); Dart's step yields to
+  /// a focused field inside this window.
+  @objc private func editUndo(_ sender: Any?) {
+    if isKeyWindow {
+      menuChannel?.invokeMethod("editUndo", arguments: nil)
+    } else {
+      _ = NSApp.sendAction(NSSelectorFromString("undo:"), to: nil, from: sender)
+    }
+  }
+
+  @objc private func editRedo(_ sender: Any?) {
+    if isKeyWindow {
+      menuChannel?.invokeMethod("editRedo", arguments: nil)
+    } else {
+      _ = NSApp.sendAction(NSSelectorFromString("redo:"), to: nil, from: sender)
+    }
+  }
+
+  @objc private func didSelectCheckForUpdates() {
+    menuChannel?.invokeMethod("checkForUpdates", arguments: nil)
+  }
+
+  @objc private func didSelectCommandPalette() {
+    menuChannel?.invokeMethod("commandPalette", arguments: nil)
+  }
+
+  @objc private func didSelectKeyboardShortcuts() {
+    menuChannel?.invokeMethod("keyboardShortcuts", arguments: nil)
   }
 }

@@ -395,6 +395,8 @@ void main() {
         'Undo': '⌘Z',
         'Redo': '⇧⌘Z',
         'Filter servers': '⌥⌘F',
+        'Command palette': '⇧⌘P',
+        'Keyboard shortcuts': '⌘/',
         'Settings': '⌘,',
       });
     });
@@ -432,6 +434,8 @@ void main() {
         'Undo': 'Ctrl+Z',
         'Redo': 'Ctrl+Shift+Z or Ctrl+Y',
         'Filter servers': 'Ctrl+Alt+F',
+        'Command palette': 'Ctrl+Shift+P',
+        'Keyboard shortcuts': 'Ctrl+/',
         'Settings': 'Ctrl+,',
       });
     });

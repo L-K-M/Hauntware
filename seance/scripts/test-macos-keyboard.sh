@@ -14,3 +14,4 @@ FIXTURE_CONTROLLER=SeanceFlutterViewController
 # shellcheck source=SCRIPTDIR/../../scripts/macos-native-fixtures.sh
 source "$repo_root/../scripts/macos-native-fixtures.sh"
 macos_keyboard_fixture "$@"
+"$repo_root/scripts/test-macos-menu.sh"
