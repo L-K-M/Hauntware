@@ -55,6 +55,8 @@ class TerminalView extends StatefulWidget {
     this.autofocus = false,
     this.onTapUp,
     this.onLinkTap,
+    this.onHiddenLinkTap,
+    this.onKeyboardPaste,
     this.onSecondaryTapDown,
     this.onSecondaryTapUp,
     this.onTouchSelectionEnd,
@@ -111,6 +113,21 @@ class TerminalView extends StatefulWidget {
   /// [seance fork] Opens visible HTTP(S) links on Ctrl-click (Cmd-click on
   /// Apple platforms) or touch tap. Plain mouse clicks retain selection behavior.
   final ValueChanged<Uri>? onLinkTap;
+
+  /// [seance fork] Takes the same gestures as [onLinkTap] on an OSC 8
+  /// hyperlink whose text does not spell out its target
+  /// ([Buffer.isLinkTargetHiddenAt]): the host shows the target and lets the
+  /// user decide before anything opens. When null, such a link goes to
+  /// [onLinkTap] as before, so a host that has not wired a review keeps
+  /// opening labelled links.
+  final ValueChanged<Uri>? onHiddenLinkTap;
+
+  /// [seance fork] Receives text the soft keyboard inserted that is a paste
+  /// rather than typing, such as a keyboard's clipboard chip or paste
+  /// suggestion: more than one character holding a line break or another
+  /// control character. The host cleans and reviews it as it does its own
+  /// paste. When null, the text goes through [Terminal.paste].
+  final ValueChanged<String>? onKeyboardPaste;
 
   /// Function called when the user taps on the terminal with a secondary
   /// button.
@@ -201,7 +218,7 @@ class TerminalViewState extends State<TerminalView> {
   /// [seance fork] The link the press now down opens instead of reaching a
   /// mouse-reporting remote, captured at mouse-down, or null when that press
   /// reaches the remote; see [_claimPressForLink].
-  Uri? _pressOpensLink;
+  _FollowableLink? _pressOpensLink;
 
   Uri? _hoveredLink;
   bool _hoverInvalidationPending = false;
@@ -425,10 +442,10 @@ class TerminalViewState extends State<TerminalView> {
     );
 
     child = MouseRegion(
-      cursor: widget.onLinkTap != null && _hoveredLink != null
+      cursor: _followsLinks && _hoveredLink != null
           ? SystemMouseCursors.click
           : widget.mouseCursor,
-      onHover: widget.onLinkTap == null ? null : _onLinkHover,
+      onHover: _followsLinks ? _onLinkHover : null,
       onExit: (_) {
         _hoverPosition = null;
         _setHoveredLink(null);
@@ -471,7 +488,7 @@ class TerminalViewState extends State<TerminalView> {
   /// it goes up or down, so the hand follows Cmd without the pointer moving.
   bool _onLinkModifierKey(KeyEvent event) {
     if (_hoverPosition != null &&
-        widget.onLinkTap != null &&
+        _followsLinks &&
         _linkModifierKeys.contains(event.logicalKey)) {
       _refreshLinkHover();
     }
@@ -486,7 +503,24 @@ class TerminalViewState extends State<TerminalView> {
     );
     _setHoveredLink(_remoteOwnsTapAt(offset) && !_linkModifierOutranksRemote
         ? null
-        : widget.terminal.buffer.getLinkAt(offset));
+        : _followableLinkAt(offset)?.uri);
+  }
+
+  bool get _followsLinks =>
+      widget.onLinkTap != null || widget.onHiddenLinkTap != null;
+
+  /// [seance fork] The link at [offset] with the callback that follows it:
+  /// [TerminalView.onHiddenLinkTap] when its text hides its target and the
+  /// host gave one, else [TerminalView.onLinkTap]. Null when there is no
+  /// link, or no callback to follow it.
+  _FollowableLink? _followableLinkAt(CellOffset offset) {
+    final buffer = widget.terminal.buffer;
+    final uri = buffer.getLinkAt(offset);
+    if (uri == null) return null;
+    final follow = buffer.isLinkTargetHiddenAt(offset)
+        ? widget.onHiddenLinkTap ?? widget.onLinkTap
+        : widget.onLinkTap;
+    return follow == null ? null : _FollowableLink(uri, follow);
   }
 
   bool _remoteOwnsTapAt(CellOffset offset) =>
@@ -528,7 +562,7 @@ class TerminalViewState extends State<TerminalView> {
     // no release can act on a stale one.
     _pressOpensLink = null;
 
-    if (widget.onLinkTap == null || tapCount != 1) return false;
+    if (!_followsLinks || tapCount != 1) return false;
 
     final keys = HardwareKeyboard.instance;
     final linkGesture = press.kind == PointerDeviceKind.touch ||
@@ -543,7 +577,7 @@ class TerminalViewState extends State<TerminalView> {
     // modifiers do in between.
     if (!_linkModifierOutranksRemote && _remoteOwnsTapAt(offset)) return false;
 
-    _pressOpensLink = widget.terminal.buffer.getLinkAt(offset);
+    _pressOpensLink = _followableLinkAt(offset);
     return _pressOpensLink != null;
   }
 
@@ -576,7 +610,7 @@ class TerminalViewState extends State<TerminalView> {
       // Intentionally no re-validation at release: the press decided, and a
       // link that scrolled away between the press and its release must not
       // eat the click.
-      widget.onLinkTap?.call(claimedLink);
+      claimedLink.follow(claimedLink.uri);
     } else {
       final keys = HardwareKeyboard.instance;
       final linkGesture = details.kind == PointerDeviceKind.touch ||
@@ -585,14 +619,13 @@ class TerminalViewState extends State<TerminalView> {
       // Click-only mouse reporting consumes DOWN but not UP. Keep that
       // release from opening a browser even when the gesture handler passes
       // it through.
-      if (widget.onLinkTap != null &&
-          _tapCount == 1 &&
+      if (_tapCount == 1 &&
           linkGesture &&
           !keys.isShiftPressed &&
           !keys.isAltPressed &&
           !_remoteOwnsTapAt(offset)) {
-        final link = widget.terminal.buffer.getLinkAt(offset);
-        if (link != null) widget.onLinkTap!(link);
+        final link = _followableLinkAt(offset);
+        link?.follow(link.uri);
       }
     }
     widget.onTapUp?.call(details, offset);
@@ -827,6 +860,17 @@ class TerminalViewState extends State<TerminalView> {
   }
 
   void _onInsert(String text) {
+    if (_isKeyboardPaste(text)) {
+      final paste = widget.onKeyboardPaste;
+      if (paste != null) {
+        paste(text);
+      } else {
+        widget.terminal.paste(text);
+      }
+      _scrollToBottom();
+      return;
+    }
+
     final key = charToTerminalKey(text.trim());
 
     // On mobile platforms there is no guarantee that virtual keyboard will
@@ -1008,4 +1052,34 @@ class _TerminalView extends LeafRenderObjectWidget {
       ..onEditableRect = onEditableRect
       ..composingText = composingText;
   }
+}
+
+/// [seance fork] A link and the host callback that follows it.
+class _FollowableLink {
+  const _FollowableLink(this.uri, this.follow);
+
+  final Uri uri;
+  final ValueChanged<Uri> follow;
+}
+
+/// [seance fork] Whether [text], which the soft keyboard (IME) inserted in one
+/// go, is a paste rather than typing.
+///
+/// Length cannot tell them apart: a keyboard commits a whole word or phrase
+/// at once (glide typing, a suggestion, autocorrect, dictation) as well as
+/// its own clipboard. What makes inserted text able to run or steer the
+/// remote is a control character: a line break is an Enter, and ESC starts a
+/// sequence that can end a bracketed paste early. Typing sends such a key on
+/// its own (Enter as a lone line break, Tab, Backspace), never inside other
+/// text. So text of more than one character holding a C0 control or DEL is
+/// a paste; anything else is typed exactly as before. A keyboard that
+/// committed a word and its Enter in one delta is therefore treated as a
+/// paste too, which costs at most a second Enter and never runs the line
+/// unseen.
+bool _isKeyboardPaste(String text) {
+  if (text.runes.length < 2) return false;
+  for (final codeUnit in text.codeUnits) {
+    if (codeUnit < 0x20 || codeUnit == 0x7f) return true;
+  }
+  return false;
 }

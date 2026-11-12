@@ -251,6 +251,72 @@ void main() {
       }
     });
 
+    test('a blank cell inside a link is not a link', () {
+      // A remote can open a hyperlink and print a screen of spaces: the next
+      // tap anywhere on them must not follow it.
+      final terminal =
+          terminalWith(link('https://login-example.test/', 'go    x'));
+      expect(
+        terminal.buffer.getLinkAt(const CellOffset(0, 0)),
+        Uri.parse('https://login-example.test/'),
+      );
+      for (final x in [2, 3, 5]) {
+        expect(
+          terminal.buffer.getLinkAt(CellOffset(x, 0)),
+          isNull,
+          reason: 'cell $x',
+        );
+        expect(terminal.buffer.isLinkTargetHiddenAt(CellOffset(x, 0)), isFalse);
+      }
+    });
+
+    test('a target the text does not show is hidden', () {
+      final terminal = terminalWith(
+        '${link('https://real.test/auth', 'https://decoy.test')} '
+        '${link('https://example.com/auth', 'Click here')}',
+      );
+      expect(
+        terminal.buffer.isLinkTargetHiddenAt(const CellOffset(4, 0)),
+        isTrue,
+      );
+      expect(
+        terminal.buffer.isLinkTargetHiddenAt(const CellOffset(20, 0)),
+        isTrue,
+      );
+    });
+
+    test('a target the text spells out is visible', () {
+      final terminal = terminalWith(
+        '${link('https://example.com/a', 'https://example.com/a')} '
+        'https://plain.test',
+      );
+      expect(
+        terminal.buffer.isLinkTargetHiddenAt(const CellOffset(4, 0)),
+        isFalse,
+      );
+      // A URL read from the text is the text.
+      expect(
+        terminal.buffer.isLinkTargetHiddenAt(const CellOffset(26, 0)),
+        isFalse,
+      );
+    });
+
+    test('a target the program wrapped over hard newlines is visible', () {
+      final terminal = terminalWith(link(
+        authUrl,
+        'https://accounts.google.com/signin/continue?sarp=1&scc=1\r\n'
+        '&continue=https://developers.google.com/gemini-code-assist/auth/\r\n'
+        'auth_success_gemini&plt=AKgnsbvMnFUSEQgw6JBfDTqw0Qr',
+      ));
+      for (final row in [0, 1, 2]) {
+        expect(
+          terminal.buffer.isLinkTargetHiddenAt(CellOffset(4, row)),
+          isFalse,
+          reason: 'row $row',
+        );
+      }
+    });
+
     test('an erased cell carries no link', () {
       final terminal = terminalWith('\x1b]8;;https://example.com\x1b\\link me');
       // The redraw a full-screen program does while a hyperlink is open must
