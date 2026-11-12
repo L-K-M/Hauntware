@@ -31,6 +31,7 @@ import 'package:planchette_editor/planchette_editor.dart'
 import 'services/app_settings.dart';
 import 'services/document_windows.dart';
 import 'services/document_workspace.dart';
+import 'services/recent_documents.dart';
 import 'services/settings_dialog.dart';
 import 'services/workspace_remote_files.dart';
 import 'ui/workspace_servers_dialog.dart';
@@ -305,7 +306,120 @@ class _DocumentShellState extends State<_DocumentShell>
   }
 
   void _changed() {
+    _rememberRecentDocuments();
     if (mounted) setState(() {});
+  }
+
+  /// The path each tab was last added to Open Recent under, so a
+  /// notification that changes nothing about a tab does not move its entry
+  /// back to the top. A Save As gives the tab a new path, which is recorded.
+  final Expando<String> _recordedPaths = Expando('recorded path');
+
+  /// Adds every local file this window holds to Open Recent once it has
+  /// loaded. Server copies reopen through their browser and Android has only
+  /// provider documents, whose grants do not outlive the session, so
+  /// neither is listed.
+  void _rememberRecentDocuments() {
+    if (android) return;
+    var next = settings.value;
+    for (final tab in workspace.documents) {
+      final path = tab.path;
+      if (path == null ||
+          tab.publication != null ||
+          tab.editor.isLoading ||
+          tab.editor.error != null ||
+          _recordedPaths[tab] == path) {
+        continue;
+      }
+      _recordedPaths[tab] = path;
+      next = next.withRecentDocument(path);
+    }
+    if (next != settings.value) unawaited(settings.update(next));
+  }
+
+  /// Opens a file from Open Recent, saying what happened when it cannot: a
+  /// file that is gone leaves the list, and one whose folder is not
+  /// available stays on it.
+  Future<void> _openRecent(String path) async {
+    if (workspace.interactionLocked) return;
+    final name = paths.basename(path);
+    switch (await recentDocumentState(workspace.store, path)) {
+      case RecentDocumentState.available:
+        await workspace.open(path);
+      case RecentDocumentState.missing:
+        await settings.update(settings.value.withoutRecentDocument(path));
+        workspace.reportError(
+          '$name is no longer at $path, so it was removed from Open Recent.',
+        );
+      case RecentDocumentState.folderUnavailable:
+        workspace.reportError(
+          'Could not open $name: the folder ${paths.dirname(path)} is not '
+          'available. If it is on a disk or share that is not connected, '
+          'connect it and try again.',
+        );
+    }
+  }
+
+  /// How many remembered files the empty window offers; the menu has all.
+  static const _emptyStateRecentLimit = 5;
+
+  /// The newest remembered files under the empty window's buttons, so the
+  /// usual next step is one click away. Nothing on Android, which keeps no
+  /// list.
+  List<Widget> _emptyStateRecents(BuildContext context) {
+    final recent = settings.value.recentDocuments;
+    if (android || recent.isEmpty) return const [];
+    return [
+      const SizedBox(height: 24),
+      Text('Recent', style: Theme.of(context).textTheme.titleSmall),
+      const SizedBox(height: 8),
+      for (final path in recent.take(_emptyStateRecentLimit))
+        Tooltip(
+          message: path,
+          child: TextButton(
+            onPressed: workspace.interactionLocked
+                ? null
+                : () => unawaited(_openRecent(path)),
+            child: Text(paths.basename(path)),
+          ),
+        ),
+    ];
+  }
+
+  /// One row per remembered file. A name shared by two entries shows the
+  /// folder too, so the rows can be told apart.
+  List<_Command> _recentDocumentCommands({required bool unlocked}) {
+    final recent = settings.value.recentDocuments;
+    if (recent.isEmpty) {
+      return const [
+        _Command(
+          'No Recent Documents',
+          _noop,
+          enabled: false,
+          inPalette: false,
+        ),
+      ];
+    }
+    final names = recent.map(paths.basename).toList();
+    return [
+      for (final (index, path) in recent.indexed)
+        _Command(
+          names.where((name) => name == names[index]).length > 1
+              ? '${names[index]} (${paths.dirname(path)})'
+              : names[index],
+          () => unawaited(_openRecent(path)),
+          enabled: unlocked,
+          id: 'openRecent:$index',
+        ),
+      _Command(
+        'Clear Menu',
+        () => unawaited(
+          settings.update(settings.value.copyWith(recentDocuments: const [])),
+        ),
+        enabled: unlocked,
+        id: 'clearRecentDocuments',
+      ),
+    ];
   }
 
   void _rememberTextFocus() {
@@ -834,6 +948,8 @@ class _DocumentShellState extends State<_DocumentShell>
           shortcut: _shortcut(LogicalKeyboardKey.keyO),
           enabled: unlocked,
         ),
+        if (!android)
+          _Submenu('Open Recent', _recentDocumentCommands(unlocked: unlocked)),
         if (widget.pickFolder != null)
           _Command(
             'Open Folder…',
@@ -1746,6 +1862,7 @@ class _DocumentShellState extends State<_DocumentShell>
                                       ),
                                     ],
                                   ),
+                                  ..._emptyStateRecents(context),
                                 ],
                               ),
                             )
