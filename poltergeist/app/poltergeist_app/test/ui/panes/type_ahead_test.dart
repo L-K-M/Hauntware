@@ -248,6 +248,11 @@ void main() {
     await tester.pump();
     final field = find.byKey(const ValueKey('pane.left.quickSelect.field'));
     expect(field, findsOneWidget);
+    // Names and paths stay out of the keyboard's personal dictionary.
+    expect(
+      tester.widget<TextField>(field).enableIMEPersonalizedLearning,
+      isFalse,
+    );
     expect(
       tester.binding.focusManager.primaryFocus?.context
           ?.findAncestorWidgetOfExactType<EditableText>(),
