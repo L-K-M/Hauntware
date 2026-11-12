@@ -632,4 +632,52 @@ void main() {
     final right = results.single!.pair.right as RemoteEndpoint;
     expect(right.server, same(initialServer));
   });
+
+  testWidgets('Return in the typed-confirmation field saves like Save', (
+    tester,
+  ) async {
+    final results = await _pumpEditor(tester, initial: testSyncPair());
+    await tester.tap(find.text('Options'));
+    await tester.pumpAndSettle();
+
+    final fraction = find.widgetWithText(
+      TextField,
+      'Typed-confirmation threshold',
+    );
+    await tester.enterText(fraction, '0.25');
+    await tester.pump();
+
+    await tester.showKeyboard(fraction);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    // One save, through the same gate and result as Save.
+    expect(results, hasLength(1));
+    expect(results.single!.pair.id, 'pair-1');
+    expect(results.single!.pair.rules.deleteFractionWarn, 0.25);
+  });
+
+  testWidgets('Return stays inert while the pair is invalid', (tester) async {
+    final results = await _pumpEditor(tester, initial: testSyncPair());
+    await tester.tap(find.text('Options'));
+    await tester.pumpAndSettle();
+
+    // Clearing the name leaves Save unarmed; Return saves nothing.
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), '');
+    await tester.pump();
+    expect(
+      tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'))
+          .onPressed,
+      isNull,
+    );
+
+    await tester.showKeyboard(
+      find.widgetWithText(TextField, 'Typed-confirmation threshold'),
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(results, isEmpty);
+    expect(find.text('Save'), findsOneWidget);
+  });
 }

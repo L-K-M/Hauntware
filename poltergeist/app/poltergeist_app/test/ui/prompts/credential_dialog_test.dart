@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/identity_file_reader.dart';
+import 'package:poltergeist_app/ui/ghost_servers_adapter.dart';
 import 'package:poltergeist_app/ui/prompts/credential_dialog.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -367,5 +368,59 @@ void main() {
     expect(reads, 0);
     expect(find.text('Choose a key file.'), findsOneWidget);
     expect(find.byType(AlertDialog), findsOneWidget);
+  });
+
+  testWidgets('passphrase-only form shows key file and retry explanation', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () async {
+                await showCredentialDialog(
+                  context,
+                  const CredentialPromptData(
+                    host: 'example.com',
+                    port: 2222,
+                    username: 'deploy',
+                    authMethod: AuthMethod.privateKey,
+                    identityFilePath: '~/.ssh/id_ed25519',
+                    secretRef: 'secret-7',
+                  ),
+                  request: ghostPassphraseRequestOf(
+                    label: 'example.com',
+                    host: 'example.com',
+                    port: 2222,
+                    username: 'deploy',
+                    hasKeyFile: true,
+                    initialKeyPath: '~/.ssh/id_ed25519',
+                    offerVaultSave: true,
+                  ),
+                  retry: true,
+                );
+              },
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Key passphrase for example.com'), findsOneWidget);
+    expect(
+      find.textContaining('That passphrase did not open the key.'),
+      findsOneWidget,
+    );
+    expect(find.text('~/.ssh/id_ed25519'), findsOneWidget);
+    expect(find.text('Save in vault'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Key file'), findsNothing);
   });
 }
