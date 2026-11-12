@@ -1735,7 +1735,7 @@ jobs:
 
   # Container image to GitHub Container Registry. It pushes only after
   # EVERY build leg succeeded and the sums job verified the draft's
-  # manifest floor and checksums — the image is public the moment it is
+  # manifest floor and checksums: the image is public the moment it is
   # pushed, so it must never publish for a release that cannot. The
   # publish job waits for it, so the release never announces a missing
   # image. Deployments build from source; this image is the release
