@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show SyncPinConflict;
 
 import '../../controllers/account_size.dart';
 import '../../controllers/admin_memory.dart';
@@ -22,6 +24,7 @@ import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart';
 import '../../controllers/safety_controller.dart';
 import '../../controllers/sync_secrets_controller.dart';
+import '../../controllers/sync_controller.dart' show PinConflictsSettings;
 import '../../controllers/threshold_controller.dart';
 import '../../ui/threshold_scope.dart' show ThresholdMetric;
 import '../stored_safety.dart';
@@ -41,6 +44,7 @@ SettingsWindowHost? settingsWindowHostFor(
   required SyncSecretsSettings syncSecrets,
   ThresholdSettings? thresholds,
   PinPublicationSettings? pinPublication,
+  PinConflictsSettings? pinConflicts,
   ValueListenable<AccountSize?>? accountSize,
   AppLockSettings? appLock,
   CadenceSettings? cadence,
@@ -62,6 +66,7 @@ SettingsWindowHost? settingsWindowHostFor(
     syncSecrets: syncSecrets,
     thresholds: thresholds,
     pinPublication: pinPublication,
+    pinConflicts: pinConflicts,
     accountSize: accountSize,
     appLock: appLock,
     cadence: cadence,
@@ -97,6 +102,7 @@ final class SettingsWindowHost {
     required SyncSecretsSettings syncSecrets,
     ThresholdSettings? thresholds,
     PinPublicationSettings? pinPublication,
+    PinConflictsSettings? pinConflicts,
     ValueListenable<AccountSize?>? accountSize,
     AppLockSettings? appLock,
     CadenceSettings? cadence,
@@ -116,6 +122,7 @@ final class SettingsWindowHost {
        _syncSecrets = syncSecrets,
        _thresholds = thresholds,
        _pinPublication = pinPublication,
+       _pinConflicts = pinConflicts,
        _accountSize = accountSize,
        _appLock = appLock,
        _cadence = cadence,
@@ -140,6 +147,7 @@ final class SettingsWindowHost {
           syncSecrets,
           ?thresholds,
           ?pinPublication,
+          ?pinConflicts,
           ?accountSize,
           ?appLock,
           ?cadence,
@@ -164,6 +172,7 @@ final class SettingsWindowHost {
   final SyncSecretsSettings _syncSecrets;
   final ThresholdSettings? _thresholds;
   final PinPublicationSettings? _pinPublication;
+  final PinConflictsSettings? _pinConflicts;
   final ValueListenable<AccountSize?>? _accountSize;
   final AppLockSettings? _appLock;
   final CadenceSettings? _cadence;
@@ -219,6 +228,10 @@ final class SettingsWindowHost {
     SettingsLinkKey.syncSecrets.name: _syncSecrets.value,
     SettingsLinkKey.pinPublication.name: switch (_pinPublication?.value) {
       final value? => encodePinPublication(value),
+      null => null,
+    },
+    SettingsLinkKey.pinConflicts.name: switch (_pinConflicts) {
+      final conflicts? => encodePinConflicts(conflicts.conflicts),
       null => null,
     },
     SettingsLinkKey.accountSize.name: switch (_accountSize?.value) {
@@ -298,6 +311,22 @@ final class SettingsWindowHost {
           throw StateError('No pin publication settings');
         }
         await pinPublication.setAsserted(argument! as bool);
+      case SettingsLinkMethod.resolvePinConflict:
+        final change = (argument! as Map).cast<String, Object?>();
+        final pinConflicts = _pinConflicts;
+        if (pinConflicts == null) {
+          throw StateError('No pin conflict settings');
+        }
+        await pinConflicts.resolvePinConflict(
+          SyncPinConflict(
+            locator: change[SettingsLinkKey.locator.name]! as String,
+            localFingerprintSha256:
+                change[SettingsLinkKey.localFingerprintSha256.name]! as String,
+            pulledFingerprintSha256:
+                change[SettingsLinkKey.pulledFingerprintSha256.name]! as String,
+          ),
+          keepLocal: change[SettingsLinkKey.keepLocal.name]! as bool,
+        );
       case SettingsLinkMethod.setMonitored:
         final change = (argument! as Map).cast<String, Object?>();
         await _monitorSet.setMonitored(

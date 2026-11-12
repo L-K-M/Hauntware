@@ -241,7 +241,8 @@ Map<String, List<NetAddress>>? _addresses(String text) {
   } on FormatException {
     for (final line in text.split('\n')) {
       final match = _oneLineAddr.firstMatch(line);
-      if (match == null) continue;
+      final prefix = int.tryParse(match?[4] ?? '');
+      if (match == null || prefix == null) continue;
       final name = match[1]!.split('@').first;
       (out[name] ??= []).add(
         NetAddress(
@@ -249,7 +250,7 @@ Map<String, List<NetAddress>>? _addresses(String text) {
               ? NetAddressFamily.ipv6
               : NetAddressFamily.ipv4,
           address: match[3]!,
-          prefixLength: int.parse(match[4]!),
+          prefixLength: prefix,
           scope: match[5],
         ),
       );
@@ -292,7 +293,8 @@ SocketCounts _sockets(List<String> tcpLines, List<String> sockstat) {
     if (match == null) continue;
     final code = int.parse(match[1]!, radix: 16);
     final state = TcpState.values.where((s) => s.code == code).firstOrNull;
-    if (state != null) tcp[state] = (tcp[state] ?? 0) + int.parse(match[2]!);
+    final count = int.tryParse(match[2]!);
+    if (state != null && count != null) tcp[state] = (tcp[state] ?? 0) + count;
   }
 
   // `UDP: inuse 4 mem 2` and, from sockstat6, `UDP6: inuse 2`.

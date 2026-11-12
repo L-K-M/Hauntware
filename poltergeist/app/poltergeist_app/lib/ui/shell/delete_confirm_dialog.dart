@@ -156,7 +156,7 @@ class _DeleteDialogState extends State<_DeleteDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final confirmation = _confirmation;
 
     if (confirmation == null) {

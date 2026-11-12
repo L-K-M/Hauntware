@@ -118,7 +118,7 @@ void main() {
           ),
           child: Builder(
             builder: (context) {
-              looked = PoltergeistChrome.of(context);
+              looked = PoltergeistChrome.of(context, poltergeistThemeStyle);
               return const SizedBox();
             },
           ),
@@ -131,7 +131,7 @@ void main() {
   });
 
   test('a new device is drawn in Vapor, whatever the system says', () {
-    final themes = poltergeistThemesFor(AppAppearance.initial);
+    final themes = poltergeistThemesFor(poltergeistInitialAppearance);
     expect(themes.theme, same(themes.darkTheme));
     expect(themes.theme.brightness, Brightness.dark);
     expect(themes.theme.colorScheme.surface, ThemePresets.vapor.surface);
@@ -160,8 +160,25 @@ void main() {
 
       // A dark surface of its own makes the theme dark, whatever was asked.
       expect(theme.brightness, Brightness.dark);
-      expect(scheme.primary, palette.accent);
-      expect(scheme.onPrimary, const Color(0xFFFFFFFF));
+      // The shared theme adjusts a custom accent to the nearest tone that
+      // clears body text on each chrome region, keeping the picked fill
+      // exact for filled controls (ghost_theme's accent legibility).
+      expect(scheme.primary, chrome.activePaneIndicator);
+      expect(scheme.onPrimary, legibleOn(scheme.primary));
+      expect(chrome.accentFill, palette.accent);
+      expect(chrome.onAccentFill, const Color(0xFFFFFFFF));
+      expect(
+        contrastRatio(chrome.activePaneIndicator, chrome.paneBackground),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrastRatio(chrome.sidebarIndicator, chrome.sidebarBackground),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrastRatio(chrome.headerIndicator, chrome.headerBackground),
+        greaterThanOrEqualTo(4.5),
+      );
       expect(scheme.surface, palette.surface);
       expect(theme.scaffoldBackgroundColor, palette.surface);
       expect(chrome.paneBackground, palette.surface);
@@ -178,7 +195,6 @@ void main() {
       expect(theme.dividerColor, palette.hairline);
       expect(chrome.selectionFill, palette.selection);
       expect(chrome.onSelection, const Color(0xFFFFFFFF));
-      expect(chrome.activePaneIndicator, palette.accent);
       expect(chrome.statusConnected, palette.online);
       expect(chrome.statusFailed, palette.offline);
       expect(chrome.statusConnecting, palette.connecting);
@@ -223,10 +239,21 @@ void main() {
       // Mixed from the palette's own colours, not the slate tables.
       expect(scheme.surfaceContainerLow, isNot(const Color(0xFFF1F2F4)));
       expect(scheme.inverseSurface, palette.text);
-      // The unknown dot follows the mixed outline, as it always followed
-      // the scheme's.
+      // The shared builder holds the status colours to the table's
+      // fallbacks (Séance's behaviour), so a custom surface does not move
+      // the unknown dot with the mixed outline. It stays legible on the
+      // surface all the same.
       final chrome = theme.extension<PoltergeistChrome>()!;
-      expect(chrome.statusUnknown, scheme.outline);
+      expect(
+        chrome.statusUnknown,
+        buildPoltergeistTheme(Brightness.light)
+            .extension<PoltergeistChrome>()!
+            .statusUnknown,
+      );
+      expect(
+        contrastRatio(chrome.statusUnknown, scheme.surface),
+        greaterThanOrEqualTo(3.0),
+      );
     });
 
     test('a light selection gets a dark label', () {

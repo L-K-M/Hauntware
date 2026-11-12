@@ -1198,6 +1198,18 @@ void main() {
           findsOneWidget,
         );
       }
+      // The dialog words the choice as the enrolled view does.
+      expect(
+        find.descendant(of: dialog, matching: find.text('Trust the new key')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: dialog,
+          matching: find.text("Keep this device's key"),
+        ),
+        findsOneWidget,
+      );
       expect(find.byKey(const ValueKey('backup.switch.close')), findsNothing);
       await tester.tap(
         find.byKey(

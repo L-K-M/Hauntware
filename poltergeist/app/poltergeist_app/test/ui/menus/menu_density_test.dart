@@ -75,6 +75,7 @@ void main() {
       // The hint trails in the secondary colour; the label leads.
       final chrome = PoltergeistChrome.of(
         tester.element(find.byType(MenuShortcutHint)),
+        poltergeistThemeStyle,
       );
       final hint = tester.widget<Text>(
         find.descendant(

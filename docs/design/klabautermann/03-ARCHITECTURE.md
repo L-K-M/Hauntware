@@ -6580,7 +6580,7 @@ shows there.
 
 | Requests (UI to engine) | Events (engine to UI) |
 |---|---|
-| `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound` | `CatalogReplaced(entries)`, `SnippetsChanged(snippets)` when the round changed Séance's snippets (M6 N65b, also sent at start), `SyncStatus(phase, operation, account, failure, passphraseUnverified)` |
+| `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound`, `ReadPinConflicts`, `ResolvePinConflict(locator, keepLocal, localFingerprintSha256, pulledFingerprintSha256)` | `CatalogReplaced(entries)`, `SnippetsChanged(snippets)` when the round changed Séance's snippets (M6 N65b, also sent at start), `SyncStatus(phase, operation, account, failure, passphraseUnverified, pinConflicts)`, `PinConflictsChanged(conflicts)` |
 | `ReadServerDraft(requestId, serverId)`; `SaveServer(requestId, draft, credential?)`, `DeleteServer(requestId, serverId)`, `SetServerPrefs(requestId, serverId, prefs?)`, `PutRule(requestId, ruleId, rule, target?)`, `RemoveRule(requestId, ruleId)` (M05) | `ServerDraftRead(requestId, draft?)`; `CatalogReplaced`, then `AlertRulesChanged(rules)` when a rule write changed the rules (M6 N50c), then `CatalogWritten(requestId, serverId?, credentialWritten)` or `CatalogWriteRefused(requestId, failure, detail?)`, then the round's `SyncStatus` |
 | `DuplicateServer(requestId, serverId)` (M09b): a new server from a synced one, its own id, timestamps and "copy" label, and its own copy of the credential, never a shared vault entry; a copy of a confirmed endpoint is confirmed | As `SaveServer`, with the copy's id in `CatalogWritten.serverId` |
 | `TestServerConnection(requestId, draft, credential)` (M09b): the editor's Test connection over the links' credentials, pins and prompts; a host key trusted during it holds for that attempt only; rejected while links are off | `Prompt`s as a connect sends them, then `ServerConnectionTested(requestId, ok, summary, notes, log)`, the summary, notes and redacted transcript as seance_core's `runConnectionTest` words them |
@@ -7126,6 +7126,19 @@ the engine in `engine_isolate.dart` beside it):
   key without minting, write it) and `AnswerKeystore` carries its
   result (done, a value, or refused with a diagnostic); a write the app
   refuses throws in the engine, and a read reads as none.
+- **Version 3 (pin conflicts).** The host-key quarantine diff joined
+  version 3 the same way (03 §4.9, §10.1). `SyncPinConflict` names a
+  `host:port` locator and both fingerprints; `ReadPinConflicts` answers
+  `PinConflictsChanged(conflicts)`, and `ResolvePinConflict(locator,
+  keepLocal, localFingerprintSha256, pulledFingerprintSha256)` keeps this
+  device's pin and re-pushes it, or trusts the pulled key, then answers
+  the same. It carries the fingerprints the user saw and does nothing
+  when the conflict now holds other keys, so a decision never applies to
+  a key that arrived after it. `SyncStatus.pinConflicts` carries the
+  diff after a succeeded operation and is null when it is unchanged, so a
+  failed round keeps the previous list. Settings > Sync and the desktop
+  settings window show each conflict with both fingerprints and the two
+  resolutions, and disable them while one is in flight.
 - **Version 3 (M2 endpoints).** Endpoint confirmation joined version 3
   the same way (K41, D64, 4.7). `FleetEntry` gained `endpoint`, null for
   an import; `ConnectRejectedReason` gained `endpointNotConfirmed`;

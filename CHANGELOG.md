@@ -75,6 +75,12 @@
   their asset names start with `klabautermann-preview-`, except the
   .deb, which keeps Debian's versioned name. Its
   [changelog](klabautermann/CHANGELOG.md) tracks the work so far.
+- Android's backup and phone-to-phone transfer no longer copy
+  Planchette's, Séance's, Poltergeist's or Klabautermann's data. The key
+  that seals your saved credentials never leaves the phone, so a
+  restored copy could not open them, and it would have given two phones
+  one device id for sync. To move to a new phone, install the app there
+  and sign in to sync, or add your servers again.
 
 ### Fixed
 

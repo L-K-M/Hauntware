@@ -377,7 +377,7 @@ class _TabStripState extends State<_TabStrip> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final l10n = AppLocalizations.of(context);
     final tabs = widget.tabs;
     return Semantics(
@@ -750,7 +750,7 @@ class _TabChipState extends State<_TabChip> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final tab = widget.tab;
     final tabs = widget.tabs;
     final controller = tab.controller;
