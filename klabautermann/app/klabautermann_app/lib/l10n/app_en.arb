@@ -13708,6 +13708,44 @@
       }
     }
   },
+  "paletteQueryHint": "Type a command",
+  "@paletteQueryHint": {
+    "description": "Command palette: the filter field's hint."
+  },
+  "paletteNoMatches": "No matching commands",
+  "@paletteNoMatches": {
+    "description": "Command palette: shown when no command matches the filter."
+  },
+  "paletteKeywordMatch": "matches \"{keyword}\"",
+  "@paletteKeywordMatch": {
+    "description": "Command palette: a row's second line when one of its search words, not its name, matched the filter.",
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteKeywordMatchWithDescription": "matches \"{keyword}\": {description}",
+  "@paletteKeywordMatchWithDescription": {
+    "description": "Command palette: the same line for a row that also describes what it does.",
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      },
+      "description": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteUnavailable": "{label}, unavailable",
+  "@paletteUnavailable": {
+    "description": "Command palette: what a screen reader hears when the highlight reaches a row that cannot run right now.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
   "paletteContainerDescription": "{state} · {image}",
   "@paletteContainerDescription": {
     "description": "Command palette: a container row's second line, its state and image.",

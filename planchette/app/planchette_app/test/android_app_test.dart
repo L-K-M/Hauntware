@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show commandPaletteQueryKey;
 import 'package:planchette_app/android_app.dart';
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/document_workspace.dart';
@@ -96,10 +97,7 @@ void main() {
     addTearDown(tester.view.resetViewInsets);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await tester.enterText(
-      find.byKey(const ValueKey('planchette.palette.query')),
-      'Settings',
-    );
+    await tester.enterText(find.byKey(commandPaletteQueryKey), 'Settings');
     await tester.pumpAndSettle();
     tester.view.resetViewInsets();
     await tester.tap(find.text('Settings…'));

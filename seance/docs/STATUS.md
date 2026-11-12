@@ -2109,8 +2109,8 @@ revocation and concurrent login/deletion lifecycle work remain separate.
 13. **Android background keep-alive is CI-verified only.** The foreground-
     service anchor (the shared `ghost_keepalive` plugin's
     `GhostKeepAlivePlugin`/`KeepAliveService`, driven by
-    `services/background_keep_alive.dart`'s `BackgroundKeepAlive` — moved
-    to the plugin — through the `ghost_keepalive` channel, with
+    `services/background_keep_alive.dart`'s `BackgroundKeepAlive` moved
+    to the plugin through the `ghost_keepalive` channel, with
     `services/keep_alive_strings.dart` supplying Séance's notification
     strings) is unit-tested (the plugin's
     `background_keep_alive_test.dart` and `backend_channel_test.dart`) and

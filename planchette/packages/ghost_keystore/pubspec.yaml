@@ -1,9 +1,10 @@
 name: ghost_keystore
 description: >-
-  The OS-keystore master key and API-key entries shared by Seance,
-  Poltergeist and Klabautermann: MasterKeyManager over
+  The OS-keystore master key and API-key entries of Poltergeist,
+  Klabautermann and Planchette: MasterKeyManager over
   flutter_secure_storage, parameterized by each product's entry names so
-  every product keeps its own entries; and the device-local app lock.
+  every product keeps its own entries (Seance still keeps its own
+  manager); and the device-local app lock.
 version: 1.9.4
 publish_to: none
 
