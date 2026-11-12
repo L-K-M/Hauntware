@@ -23,27 +23,36 @@ import 'package:test/test.dart';
 import 'support/ssh_peer.dart';
 
 ServerConfig _server() => ServerConfig(
-      id: 's',
-      label: 's',
-      host: 'unreachable.example.com',
-      port: 2222,
-      username: 'me',
-      authMethod: AuthMethod.password,
-      createdAt: 0,
-      updatedAt: 0,
-    );
+  id: 's',
+  label: 's',
+  host: 'unreachable.example.com',
+  port: 2222,
+  username: 'me',
+  authMethod: AuthMethod.password,
+  createdAt: 0,
+  updatedAt: 0,
+);
 
 SSHIdentity _agentIdentity() => SSHIdentity.custom(
-      type: 'ssh-ed25519',
-      publicKey: SSHRawHostKey(Uint8List.fromList([
-        0, 0, 0, 11,
-        ...utf8.encode('ssh-ed25519'),
-        0, 0, 0, 32, ...List.filled(32, 7),
-      ])),
-      signer: (_) => throw StateError('signing is not reached'),
-      comment: 'test agent key',
-      shouldProbe: true,
-    );
+  type: 'ssh-ed25519',
+  publicKey: SSHRawHostKey(
+    Uint8List.fromList([
+      0,
+      0,
+      0,
+      11,
+      ...utf8.encode('ssh-ed25519'),
+      0,
+      0,
+      0,
+      32,
+      ...List.filled(32, 7),
+    ]),
+  ),
+  signer: (_) => throw StateError('signing is not reached'),
+  comment: 'test agent key',
+  shouldProbe: true,
+);
 
 /// An OpenSSH ed25519 private key made for one test, encrypted under
 /// [passphrase] when one is given. Made at run time so that no private key
@@ -54,8 +63,8 @@ SSHIdentity _agentIdentity() => SSHIdentity.custom(
 String _generatedKeyPem({String? passphrase}) {
   final random = Random.secure();
   Uint8List randomBytes(int length) => Uint8List.fromList(
-        List<int>.generate(length, (_) => random.nextInt(256)),
-      );
+    List<int>.generate(length, (_) => random.nextInt(256)),
+  );
   final publicKey = randomBytes(32);
   return OpenSSHEd25519KeyPair(
     publicKey,
@@ -138,26 +147,30 @@ void main() {
       expect(updates, 2);
     });
 
-    test('freeze stops recording and notifying (no per-packet rebuild storm)',
-        () {
-      var updates = 0;
-      final log = SshConnectionLog(onUpdate: () => updates++);
-      log.add('connecting');
-      log.freeze();
-      log.add('trace after connect'); // dartssh2 keeps calling printTrace
-      expect(log.lines, ['connecting'], reason: 'frozen adds are dropped');
-      expect(updates, 1, reason: 'onUpdate must not fire once frozen');
-    });
+    test(
+      'freeze stops recording and notifying (no per-packet rebuild storm)',
+      () {
+        var updates = 0;
+        final log = SshConnectionLog(onUpdate: () => updates++);
+        log.add('connecting');
+        log.freeze();
+        log.add('trace after connect'); // dartssh2 keeps calling printTrace
+        expect(log.lines, ['connecting'], reason: 'frozen adds are dropped');
+        expect(updates, 1, reason: 'onUpdate must not fire once frozen');
+      },
+    );
 
-    test('caps the transcript so a busy session cannot grow it without limit',
-        () {
-      final log = SshConnectionLog();
-      for (var i = 0; i < 1000; i++) {
-        log.add('line $i');
-      }
-      expect(log.lines.length, lessThanOrEqualTo(400));
-      expect(log.lines.last, 'line 999'); // newest kept
-    });
+    test(
+      'caps the transcript so a busy session cannot grow it without limit',
+      () {
+        final log = SshConnectionLog();
+        for (var i = 0; i < 1000; i++) {
+          log.add('line $i');
+        }
+        expect(log.lines.length, lessThanOrEqualTo(400));
+        expect(log.lines.last, 'line 999'); // newest kept
+      },
+    );
   });
 
   group('SshConnectException', () {
@@ -201,87 +214,109 @@ void main() {
   });
 
   group('SshSessionManager.connect diagnostics', () {
-    test('a TCP failure surfaces a readable SshConnectException with a log',
-        () async {
-      final mgr = SshSessionManager(
-        tofu: TofuVerifier(InMemoryHostKeyStore()),
-        onHostKey: (_) async => true,
-        connect: (host, port, timeout) async =>
-            throw Exception('Connection refused'),
-      );
-      final log = SshConnectionLog();
-      final engine = HeadlessTerminalEngine();
+    test(
+      'a TCP failure surfaces a readable SshConnectException with a log',
+      () async {
+        final mgr = SshSessionManager(
+          tofu: TofuVerifier(InMemoryHostKeyStore()),
+          onHostKey: (_) async => true,
+          connect: (host, port, timeout) async =>
+              throw Exception('Connection refused'),
+        );
+        final log = SshConnectionLog();
+        final engine = HeadlessTerminalEngine();
 
-      await expectLater(
-        () => mgr.connect(
-          config: _server(),
-          credentials: const SshCredentials.password('pw'),
-          engine: engine,
-          log: log,
-        ),
-        throwsA(isA<SshConnectException>()
-            .having((e) => e.message, 'message', contains('Could not reach'))
-            .having((e) => e.kind, 'kind', SshConnectFailureKind.unreachable)),
-      );
+        await expectLater(
+          () => mgr.connect(
+            config: _server(),
+            credentials: const SshCredentials.password('pw'),
+            engine: engine,
+            log: log,
+          ),
+          throwsA(
+            isA<SshConnectException>()
+                .having(
+                  (e) => e.message,
+                  'message',
+                  contains('Could not reach'),
+                )
+                .having(
+                  (e) => e.kind,
+                  'kind',
+                  SshConnectFailureKind.unreachable,
+                ),
+          ),
+        );
 
-      // The transcript records the target and the attempted method, so the UI
-      // can show *what happened* rather than a bare error.
-      expect(log.toString(), contains('me@unreachable.example.com:2222'));
-      expect(log.toString(), contains('Auth method: password'));
+        // The transcript records the target and the attempted method, so the UI
+        // can show *what happened* rather than a bare error.
+        expect(log.toString(), contains('me@unreachable.example.com:2222'));
+        expect(log.toString(), contains('Auth method: password'));
 
-      await engine.dispose();
-    });
+        await engine.dispose();
+      },
+    );
 
-    test('an invalid private key is rejected before opening a socket',
-        () async {
-      var connectorCalled = false;
-      final mgr = SshSessionManager(
-        tofu: TofuVerifier(InMemoryHostKeyStore()),
-        onHostKey: (_) async => true,
-        connect: (host, port, timeout) async {
-          connectorCalled = true;
-          throw StateError('should not connect');
-        },
-      );
-      final log = SshConnectionLog();
-      final engine = HeadlessTerminalEngine();
+    test(
+      'an invalid private key is rejected before opening a socket',
+      () async {
+        var connectorCalled = false;
+        final mgr = SshSessionManager(
+          tofu: TofuVerifier(InMemoryHostKeyStore()),
+          onHostKey: (_) async => true,
+          connect: (host, port, timeout) async {
+            connectorCalled = true;
+            throw StateError('should not connect');
+          },
+        );
+        final log = SshConnectionLog();
+        final engine = HeadlessTerminalEngine();
 
-      await expectLater(
-        () => mgr.connect(
-          config: _server(),
-          credentials: const SshCredentials.privateKey('not a PEM key'),
-          engine: engine,
-          log: log,
-        ),
-        throwsA(isA<SshConnectException>()
-            .having(
-              (e) => e.message,
-              'message',
-              contains('Could not load the private key'),
-            )
-            .having((e) => e.kind, 'kind', SshConnectFailureKind.keyUnreadable)),
-      );
+        await expectLater(
+          () => mgr.connect(
+            config: _server(),
+            credentials: const SshCredentials.privateKey('not a PEM key'),
+            engine: engine,
+            log: log,
+          ),
+          throwsA(
+            isA<SshConnectException>()
+                .having(
+                  (e) => e.message,
+                  'message',
+                  contains('Could not load the private key'),
+                )
+                .having(
+                  (e) => e.kind,
+                  'kind',
+                  SshConnectFailureKind.keyUnreadable,
+                ),
+          ),
+        );
 
-      expect(connectorCalled, isFalse);
-      expect(log.toString(), contains('Auth method: public key'));
-      expect(log.toString(), contains('Could not load the private key'));
-      expect(log.toString(), isNot(contains('Connecting to')));
-      await engine.dispose();
-    });
+        expect(connectorCalled, isFalse);
+        expect(log.toString(), contains('Auth method: public key'));
+        expect(log.toString(), contains('Could not load the private key'));
+        expect(log.toString(), isNot(contains('Connecting to')));
+        await engine.dispose();
+      },
+    );
 
     SshConnectionLog logWith(List<String> accepted) => SshConnectionLog()
-      ..add('  <- sock: SSH_Message_Userauth_Failure('
-          'methodsLeft: [${accepted.join(', ')}], partialSuccess: false)');
+      ..add(
+        '  <- sock: SSH_Message_Userauth_Failure('
+        'methodsLeft: [${accepted.join(', ')}], partialSuccess: false)',
+      );
 
     ServerConfig config(String user) => ServerConfig(
-          id: 's',
-          label: 's',
-          host: 'h.example.com',
-          port: 22,
-          username: user,
-          createdAt: 0,
-          updatedAt: 0,
-        );
+      id: 's',
+      label: 's',
+      host: 'h.example.com',
+      port: 22,
+      username: user,
+      createdAt: 0,
+      updatedAt: 0,
+    );
 
     test('auth summary flags root password rejection (prohibit-password)', () {
       final msg = SshSessionManager.summarizeFailureForTest(
@@ -294,39 +329,50 @@ void main() {
       expect(msg, contains('prohibit-password'));
     });
 
-    test('auth summary tells you to switch method when password is not offered',
-        () {
-      final msg = SshSessionManager.summarizeFailureForTest(
-        SSHAuthFailError('All authentication methods failed'),
-        config('me'),
-        const SshCredentials.password('pw'),
-        logWith(['publickey']),
-      );
-      expect(msg, contains('The server accepts: publickey'));
-      expect(msg, contains('Switch this server to a method the host allows'));
-    });
+    test(
+      'auth summary tells you to switch method when password is not offered',
+      () {
+        final msg = SshSessionManager.summarizeFailureForTest(
+          SSHAuthFailError('All authentication methods failed'),
+          config('me'),
+          const SshCredentials.password('pw'),
+          logWith(['publickey']),
+        );
+        expect(msg, contains('The server accepts: publickey'));
+        expect(msg, contains('Switch this server to a method the host allows'));
+      },
+    );
 
-    test('auth summary names the rejected key and points at authorized_keys',
-        () {
-      final log = SshConnectionLog()
-        ..add('Offering key: ssh-ed25519 SHA256:AbCdEf123')
-        ..add('  <- sock: SSH_Message_Userauth_Failure('
-            'methodsLeft: [publickey, password], partialSuccess: false)');
-      final msg = SshSessionManager.summarizeFailureForTest(
-        SSHAuthFailError('All authentication methods failed'),
-        config('root'),
-        const SshCredentials.privateKey('pem'),
-        log,
-      );
-      expect(msg, contains('SHA256:AbCdEf123'));
-      expect(msg, contains('authorized_keys'));
-      // Shared by every product, so it names none of them.
-      expect(msg, contains('The offered key (ssh-ed25519 SHA256:AbCdEf123) '
-          'was rejected.'));
-      expect(msg, isNot(contains('Séance')));
-      // A rejected key must not be misreported as prohibit-password.
-      expect(msg, isNot(contains('prohibit-password')));
-    });
+    test(
+      'auth summary names the rejected key and points at authorized_keys',
+      () {
+        final log = SshConnectionLog()
+          ..add('Offering key: ssh-ed25519 SHA256:AbCdEf123')
+          ..add(
+            '  <- sock: SSH_Message_Userauth_Failure('
+            'methodsLeft: [publickey, password], partialSuccess: false)',
+          );
+        final msg = SshSessionManager.summarizeFailureForTest(
+          SSHAuthFailError('All authentication methods failed'),
+          config('root'),
+          const SshCredentials.privateKey('pem'),
+          log,
+        );
+        expect(msg, contains('SHA256:AbCdEf123'));
+        expect(msg, contains('authorized_keys'));
+        // Shared by every product, so it names none of them.
+        expect(
+          msg,
+          contains(
+            'The offered key (ssh-ed25519 SHA256:AbCdEf123) '
+            'was rejected.',
+          ),
+        );
+        expect(msg, isNot(contains('Séance')));
+        // A rejected key must not be misreported as prohibit-password.
+        expect(msg, isNot(contains('prohibit-password')));
+      },
+    );
 
     test('auth summary explains rejected ssh-agent keys', () {
       final msg = SshSessionManager.summarizeFailureForTest(
@@ -362,101 +408,122 @@ void main() {
       );
     });
 
-    test('auth summary says check-the-credential for a non-root password reject',
-        () {
-      final msg = SshSessionManager.summarizeFailureForTest(
-        SSHAuthFailError('All authentication methods failed'),
-        config('deploy'),
-        const SshCredentials.password('pw'),
-        logWith(['publickey', 'password']),
-      );
-      expect(msg, contains('Check the credential'));
-    });
+    test(
+      'auth summary says check-the-credential for a non-root password reject',
+      () {
+        final msg = SshSessionManager.summarizeFailureForTest(
+          SSHAuthFailError('All authentication methods failed'),
+          config('deploy'),
+          const SshCredentials.password('pw'),
+          logWith(['publickey', 'password']),
+        );
+        expect(msg, contains('Check the credential'));
+      },
+    );
 
-    test('an agent loader failure is actionable before network activity',
-        () async {
-      var connectorCalled = false;
-      final mgr = SshSessionManager(
-        tofu: TofuVerifier(InMemoryHostKeyStore()),
-        onHostKey: (_) async => true,
-        connect: (host, port, timeout) async {
-          connectorCalled = true;
-          throw StateError('should not connect');
-        },
-        loadAgentIdentities: () async => throw StateError('agent unavailable'),
-      );
-      final engine = HeadlessTerminalEngine();
-      await expectLater(
-        () => mgr.connect(
-          config: _server(),
-          credentials: const SshCredentials.agent(),
-          engine: engine,
-        ),
-        throwsA(isA<SshConnectException>()
-            .having((error) => error.message, 'message', contains('ssh-agent'))
-            // An agent that cannot be reached is not an empty one.
-            .having((e) => e.kind, 'kind', SshConnectFailureKind.other)),
-      );
-      expect(connectorCalled, isFalse);
-      await engine.dispose();
-    });
+    test(
+      'an agent loader failure is actionable before network activity',
+      () async {
+        var connectorCalled = false;
+        final mgr = SshSessionManager(
+          tofu: TofuVerifier(InMemoryHostKeyStore()),
+          onHostKey: (_) async => true,
+          connect: (host, port, timeout) async {
+            connectorCalled = true;
+            throw StateError('should not connect');
+          },
+          loadAgentIdentities: () async =>
+              throw StateError('agent unavailable'),
+        );
+        final engine = HeadlessTerminalEngine();
+        await expectLater(
+          () => mgr.connect(
+            config: _server(),
+            credentials: const SshCredentials.agent(),
+            engine: engine,
+          ),
+          throwsA(
+            isA<SshConnectException>()
+                .having(
+                  (error) => error.message,
+                  'message',
+                  contains('ssh-agent'),
+                )
+                // An agent that cannot be reached is not an empty one.
+                .having((e) => e.kind, 'kind', SshConnectFailureKind.other),
+          ),
+        );
+        expect(connectorCalled, isFalse);
+        await engine.dispose();
+      },
+    );
 
-    test('an empty ssh-agent fails as agentEmpty before network activity',
-        () async {
-      var connectorCalled = false;
-      final mgr = SshSessionManager(
-        tofu: TofuVerifier(InMemoryHostKeyStore()),
-        onHostKey: (_) async => true,
-        connect: (host, port, timeout) async {
-          connectorCalled = true;
-          throw StateError('should not connect');
-        },
-        loadAgentIdentities: () async => const [],
-      );
-      final engine = HeadlessTerminalEngine();
-      await expectLater(
-        () => mgr.connect(
-          config: _server(),
-          credentials: const SshCredentials.agent(),
-          engine: engine,
-        ),
-        throwsA(isA<SshConnectException>()
-            .having((e) => e.message, 'message', contains('no keys loaded'))
-            .having((e) => e.kind, 'kind', SshConnectFailureKind.agentEmpty)),
-      );
-      expect(connectorCalled, isFalse);
-      await engine.dispose();
-    });
+    test(
+      'an empty ssh-agent fails as agentEmpty before network activity',
+      () async {
+        var connectorCalled = false;
+        final mgr = SshSessionManager(
+          tofu: TofuVerifier(InMemoryHostKeyStore()),
+          onHostKey: (_) async => true,
+          connect: (host, port, timeout) async {
+            connectorCalled = true;
+            throw StateError('should not connect');
+          },
+          loadAgentIdentities: () async => const [],
+        );
+        final engine = HeadlessTerminalEngine();
+        await expectLater(
+          () => mgr.connect(
+            config: _server(),
+            credentials: const SshCredentials.agent(),
+            engine: engine,
+          ),
+          throwsA(
+            isA<SshConnectException>()
+                .having((e) => e.message, 'message', contains('no keys loaded'))
+                .having(
+                  (e) => e.kind,
+                  'kind',
+                  SshConnectFailureKind.agentEmpty,
+                ),
+          ),
+        );
+        expect(connectorCalled, isFalse);
+        await engine.dispose();
+      },
+    );
 
-    test('a shell that does not open after authentication is of kind other',
-        () async {
-      // The peer authenticates the client and then fails the connection on
-      // the shell's channel open.
-      var channelOpenSeen = false;
-      final peer = SshPeerSocket()
-        ..onUnknownMessage = (_) {
-          channelOpenSeen = true;
-          throw StateError('the test peer opens no shell');
-        };
-      final mgr = SshSessionManager(
-        tofu: TofuVerifier(InMemoryHostKeyStore()),
-        onHostKey: (_) async => true,
-        connect: (host, port, timeout) async => peer,
-      );
-      final log = SshConnectionLog();
-      final engine = HeadlessTerminalEngine();
-      await expectLater(
-        () => mgr.connect(
-          config: _server(),
-          credentials: const SshCredentials.password('pw'),
-          engine: engine,
-          log: log,
-        ),
-        throwsA(_failureOfKind(SshConnectFailureKind.other)),
-      );
-      expect(channelOpenSeen, isTrue, reason: 'authentication succeeded');
-      await engine.dispose();
-    });
+    test(
+      'a shell that does not open after authentication is of kind other',
+      () async {
+        // The peer authenticates the client and then fails the connection on
+        // the shell's channel open.
+        var channelOpenSeen = false;
+        final peer = SshPeerSocket()
+          ..onUnknownMessage = (_) {
+            channelOpenSeen = true;
+            throw StateError('the test peer opens no shell');
+          };
+        final mgr = SshSessionManager(
+          tofu: TofuVerifier(InMemoryHostKeyStore()),
+          onHostKey: (_) async => true,
+          connect: (host, port, timeout) async => peer,
+        );
+        final log = SshConnectionLog();
+        final engine = HeadlessTerminalEngine();
+        await expectLater(
+          () => mgr.connect(
+            config: _server(),
+            credentials: const SshCredentials.password('pw'),
+            engine: engine,
+            log: log,
+          ),
+          throwsA(_failureOfKind(SshConnectFailureKind.other)),
+        );
+        expect(channelOpenSeen, isTrue, reason: 'authentication succeeded');
+        await engine.dispose();
+      },
+    );
   });
 
   group('SshSessionManager.openAuthenticatedClient diagnostics', () {
@@ -477,10 +544,15 @@ void main() {
           loadAgentIdentities: () async => [_agentIdentity()],
           log: log,
         ),
-        throwsA(isA<SshConnectException>()
-            .having((error) => error.message, 'message',
-                contains('Could not reach'))
-            .having((e) => e.kind, 'kind', SshConnectFailureKind.unreachable)),
+        throwsA(
+          isA<SshConnectException>()
+              .having(
+                (error) => error.message,
+                'message',
+                contains('Could not reach'),
+              )
+              .having((e) => e.kind, 'kind', SshConnectFailureKind.unreachable),
+        ),
       );
 
       expect(connectorCalled, isTrue);
@@ -501,8 +573,13 @@ void main() {
               throw Exception('Connection refused'),
           log: log,
         ),
-        throwsA(isA<SshConnectException>().having(
-            (e) => e.message, 'message', contains('Could not reach'))),
+        throwsA(
+          isA<SshConnectException>().having(
+            (e) => e.message,
+            'message',
+            contains('Could not reach'),
+          ),
+        ),
       );
 
       expect(log.toString(), contains('Auth method: password'));
@@ -599,10 +676,15 @@ void main() {
               SshPeerSocket(authentication: PeerAuthentication.reject),
           keepAliveInterval: null,
         ),
-        throwsA(isA<SshConnectException>()
-            .having((e) => e.cause, 'cause', isA<SSHAuthFailError>())
-            .having((e) => e.kind, 'kind',
-                SshConnectFailureKind.authenticationRejected)),
+        throwsA(
+          isA<SshConnectException>()
+              .having((e) => e.cause, 'cause', isA<SSHAuthFailError>())
+              .having(
+                (e) => e.kind,
+                'kind',
+                SshConnectFailureKind.authenticationRejected,
+              ),
+        ),
       );
     });
   });
@@ -626,6 +708,53 @@ void main() {
       expect(failure.kind, SshConnectFailureKind.keyPassphraseWrong);
       expect(connectorCalled, isFalse);
     });
+
+    test(
+      'a jump-key failure identifies the host that needs a passphrase',
+      () async {
+        final target = _server().copyWith(jumpHostId: 'jump');
+        const jump = ServerConfig(
+          id: 'jump',
+          label: 'Jump',
+          host: 'jump.invalid',
+          username: 'deploy',
+          authMethod: AuthMethod.privateKey,
+          createdAt: 1,
+          updatedAt: 1,
+        );
+        var dialed = false;
+        await expectLater(
+          openAuthenticatedClient(
+            config: target,
+            credentials: const SshCredentials.password('password'),
+            tofu: TofuVerifier(InMemoryHostKeyStore()),
+            onHostKey: (_) async => true,
+            resolveJumpHost: (id) async => id == jump.id
+                ? ResolvedSshHost(
+                    jump,
+                    SshCredentials.privateKey(
+                      _generatedKeyPem(passphrase: 'right'),
+                    ),
+                  )
+                : null,
+            connect: (_, _, _) async {
+              dialed = true;
+              throw StateError('must not dial');
+            },
+          ),
+          throwsA(
+            isA<SshConnectException>()
+                .having(
+                  (e) => e.kind,
+                  'kind',
+                  SshConnectFailureKind.keyPassphraseRequired,
+                )
+                .having((e) => e.serverId, 'serverId', jump.id),
+          ),
+        );
+        expect(dialed, isFalse);
+      },
+    );
 
     test('an encrypted key with its passphrase loads and dials', () async {
       // The fixture's own check: every key the helper encrypts is one its
@@ -676,6 +805,45 @@ void main() {
     });
   });
 
+  group('privateKeyPassphraseOpens', () {
+    test('accepts the right passphrase for an encrypted key', () {
+      expect(
+        privateKeyPassphraseOpens(
+          _generatedKeyPem(passphrase: 'secret'),
+          'secret',
+        ),
+        isTrue,
+      );
+    });
+
+    test('rejects a wrong passphrase for an encrypted key', () {
+      expect(
+        privateKeyPassphraseOpens(
+          _generatedKeyPem(passphrase: 'secret'),
+          'wrong',
+        ),
+        isFalse,
+      );
+    });
+
+    test('rejects a missing passphrase for an encrypted key', () {
+      expect(
+        privateKeyPassphraseOpens(_generatedKeyPem(passphrase: 'secret'), ''),
+        isFalse,
+      );
+    });
+
+    test('rejects text that is not a readable private key', () {
+      for (final text in ['not a PEM key', '', 'garbage']) {
+        expect(
+          privateKeyPassphraseOpens(text, 'secret'),
+          isFalse,
+          reason: text,
+        );
+      }
+    });
+  });
+
   group('login script keystrokes', () {
     test('the script is one typed line: text plus a single Enter', () {
       final bytes = SshSessionManager.loginScriptKeystrokes('tmux attach');
@@ -698,31 +866,40 @@ void main() {
     });
 
     test('blank input is rejected with a clear error', () {
-      expect(() => SshSessionManager.loginScriptKeystrokes('   '),
-          throwsArgumentError);
-      expect(() => SshSessionManager.loginScriptKeystrokes(''),
-          throwsArgumentError);
+      expect(
+        () => SshSessionManager.loginScriptKeystrokes('   '),
+        throwsArgumentError,
+      );
+      expect(
+        () => SshSessionManager.loginScriptKeystrokes(''),
+        throwsArgumentError,
+      );
     });
 
     ServerConfig configWithScript(String? script) => ServerConfig(
-          id: 's1',
-          label: 'l',
-          host: 'h',
-          username: 'u',
-          loginScript: script,
-          createdAt: 1,
-          updatedAt: 2,
-        );
+      id: 's1',
+      label: 'l',
+      host: 'h',
+      username: 'u',
+      loginScript: script,
+      createdAt: 1,
+      updatedAt: 2,
+    );
 
     test('a config without a usable script contributes no keystrokes', () {
       // The const constructor does not normalize, so the connect-time seam
       // must decide on its own that whitespace-only means "nothing to run".
-      expect(SshSessionManager.loginScriptKeystrokesFor(
-          configWithScript(null)), isNull);
-      expect(SshSessionManager.loginScriptKeystrokesFor(
-          configWithScript('  \r\n ')), isNull);
+      expect(
+        SshSessionManager.loginScriptKeystrokesFor(configWithScript(null)),
+        isNull,
+      );
+      expect(
+        SshSessionManager.loginScriptKeystrokesFor(configWithScript('  \r\n ')),
+        isNull,
+      );
       final keystrokes = SshSessionManager.loginScriptKeystrokesFor(
-          configWithScript('cd work'));
+        configWithScript('cd work'),
+      );
       expect(keystrokes, utf8.encode('cd work\n'));
     });
   });
@@ -737,10 +914,14 @@ void main() {
       // password. The transcript is shown with a Copy button beside it and is
       // meant for bug reports, so the list shape stays neutralised at capture.
       final log = SshConnectionLog();
-      log.add('-> sock: SSH_Message_Userauth_InfoResponse'
-          '(responses: [hunter2, 123456])');
-      log.add('-> sock: SSH_Message_Userauth_Request(user: deploy, '
-          'serviceName: ssh-connection, methodName: password)');
+      log.add(
+        '-> sock: SSH_Message_Userauth_InfoResponse'
+        '(responses: [hunter2, 123456])',
+      );
+      log.add(
+        '-> sock: SSH_Message_Userauth_Request(user: deploy, '
+        'serviceName: ssh-connection, methodName: password)',
+      );
 
       expect(log.toString(), isNot(contains('hunter2')));
       expect(log.toString(), isNot(contains('123456')));
@@ -761,14 +942,18 @@ void main() {
       // prints as `responses: [pas]sword])`. A bracket-bounded match would
       // stop after `[pas]` and leave the rest in the transcript.
       final log = SshConnectionLog();
-      log.add('-> sock: SSH_Message_Userauth_InfoResponse'
-          '(responses: [pas]sword])');
+      log.add(
+        '-> sock: SSH_Message_Userauth_InfoResponse'
+        '(responses: [pas]sword])',
+      );
       // The case that tells a greedy match from a lazy one: here the
       // password *contains* the terminator, so a pattern stopping at the
       // first `])` would leave `tail])` in the transcript verbatim while
       // every other case in this group still passed.
-      log.add('-> sock: SSH_Message_Userauth_InfoResponse'
-          '(responses: [secret])tail])');
+      log.add(
+        '-> sock: SSH_Message_Userauth_InfoResponse'
+        '(responses: [secret])tail])',
+      );
       expect(log.toString(), isNot(contains('tail')));
       expect(log.toString(), isNot(contains('sword')));
       // And the head of the first answer, which every other assertion here
@@ -808,22 +993,36 @@ void main() {
       // otherwise leave one out.
       for (final breakChar in ['\n', '\r', '\u2028', '\u2029']) {
         final log = SshConnectionLog();
-        log.add('-> sock: SSH_Message_Userauth_InfoResponse'
-            '(responses: [pas${breakChar}sword])');
+        log.add(
+          '-> sock: SSH_Message_Userauth_InfoResponse'
+          '(responses: [pas${breakChar}sword])',
+        );
         final at =
             'U+${breakChar.runes.first.toRadixString(16).padLeft(4, '0')}';
-        expect(log.toString(), isNot(contains('sword')),
-            reason: 'leaked past $at');
+        expect(
+          log.toString(),
+          isNot(contains('sword')),
+          reason: 'leaked past $at',
+        );
         // And the half *before* the break, which the bracket test pins for
         // its own case: a match anchored after the terminator would redact
         // the tail and leave `responses: [pas` standing, satisfying every
         // assertion about `sword`.
-        expect(log.toString(), isNot(contains('pas')),
-            reason: 'head leaked before $at');
-        expect(log.lines.join('\n'), isNot(contains('sword')),
-            reason: 'view leaked past $at');
-        expect(log.lines.join('\n'), isNot(contains('pas')),
-            reason: 'view head leaked before $at');
+        expect(
+          log.toString(),
+          isNot(contains('pas')),
+          reason: 'head leaked before $at',
+        );
+        expect(
+          log.lines.join('\n'),
+          isNot(contains('sword')),
+          reason: 'view leaked past $at',
+        );
+        expect(
+          log.lines.join('\n'),
+          isNot(contains('pas')),
+          reason: 'view head leaked before $at',
+        );
         expect(log.toString(), contains('[redacted])'));
       }
     });
@@ -841,8 +1040,10 @@ void main() {
       // compile error and no call site can reach the runtime guard by
       // accident. Cast past that and the view still refuses, because nothing
       // may append past the redaction in `add`.
-      expect(() => (lines as List<String>).add('third'),
-          throwsUnsupportedError);
+      expect(
+        () => (lines as List<String>).add('third'),
+        throwsUnsupportedError,
+      );
       // And left it alone: a view that mutated before throwing would satisfy
       // the expectation above while appending past the redaction anyway.
       expect(lines, hasLength(2));
@@ -895,8 +1096,10 @@ void main() {
       // withhold, and had only that occurrence replaced — leaving the
       // credential ahead of it in the transcript verbatim.
       final log = SshConnectionLog();
-      log.add('-> sock: SSH_Message_Userauth_InfoResponse(answers: [hunter2])'
-          ' … then (responses: [ok])');
+      log.add(
+        '-> sock: SSH_Message_Userauth_InfoResponse(answers: [hunter2])'
+        ' … then (responses: [ok])',
+      );
       expect(log.toString(), isNot(contains('hunter2')));
       expect(log.toString(), contains('does not recognize'));
       // And on the view, which the group's opening comment requires of
@@ -911,8 +1114,10 @@ void main() {
       // pub upgrade that changed it would make the pattern miss silently —
       // this is what turns that into over-redaction instead of a leak.
       final log = SshConnectionLog();
-      log.add('-> sock: SSH_Message_Userauth_InfoResponse'
-          '(numResponses: 1, answers: [hunter2])');
+      log.add(
+        '-> sock: SSH_Message_Userauth_InfoResponse'
+        '(numResponses: 1, answers: [hunter2])',
+      );
       expect(log.toString(), isNot(contains('hunter2')));
       expect(log.toString(), contains('does not recognize'));
       // And on the view, which the group's opening comment requires of
@@ -1049,8 +1254,10 @@ void main() {
       // Loose spacing must not loosen the shape: `answers:` is a rename, not
       // a spacing tweak, and it has to be withheld whole rather than pass.
       final log = SshConnectionLog();
-      log.add('-> sock: SSH_Message_Userauth_InfoResponse'
-          '(answers: [hunter2])');
+      log.add(
+        '-> sock: SSH_Message_Userauth_InfoResponse'
+        '(answers: [hunter2])',
+      );
       expect(log.toString(), isNot(contains('hunter2')));
       expect(log.toString(), contains('does not recognize'));
       // And on the view, which the group's opening comment requires of
@@ -1076,7 +1283,8 @@ void main() {
     });
 
     test('redaction leaves an ordinary trace line untouched', () {
-      const line = '  <- sock: SSH_Message_Userauth_Failure('
+      const line =
+          '  <- sock: SSH_Message_Userauth_Failure('
           'methodsLeft: [publickey], partialSuccess: false)';
       expect(redactConnectionTrace(line), line);
     });
