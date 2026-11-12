@@ -7,7 +7,13 @@ import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/overview_layout.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart'
-    show ChartSeverity, ChartThresholds, CoreHeatmap, Gauge, StackedBar;
+    show
+        ChartSeverity,
+        ChartThresholds,
+        CoreHeatmap,
+        Gauge,
+        Sparkline,
+        StackedBar;
 import 'package:klabautermann_app/ui/cpu_hints.dart';
 import 'package:klabautermann_app/ui/overview_cards.dart';
 import 'package:klabautermann_app/ui/overview_panel.dart';
@@ -62,11 +68,12 @@ CoreResult _core({
     'cpu2': 3,
   },
   MemoryUsage? memory = _memory,
+  CpuPercentages? cpu,
   Map<MetricField, MetricWithheldReason> withheld = const {},
   StallShares? cpuPressure,
   StallShares? memoryPressure,
 }) => CoreResult(
-  cpu: CpuPercentages(const [12, 0, 5, 80, 3, 0, 0, 0], 17),
+  cpu: cpu ?? CpuPercentages(const [12, 0, 5, 80, 3, 0, 0, 0], 17),
   cpuPressure: cpuPressure,
   memoryPressure: memoryPressure,
   perCpu: perCpu,
@@ -704,6 +711,48 @@ void main() {
         );
       }
       expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final (textScale, size) in [
+    (3.0, const Size(360, 2400)),
+    (2.0, const Size(320, 1800)),
+  ]) {
+    testWidgets('a gauge whose words reach their cap stacks above its '
+        'sparkline at ${(textScale * 100).round()} % text on a '
+        '${size.width.round()} px phone (A11Y-09)', (tester) async {
+      final panel = await _pump(tester, size: size, textScale: textScale);
+      await panel.sample(
+        tester,
+        // Busy and used enough for the legends to carry a severity.
+        _core(
+          memory: const MemoryUsage(
+            totalBytes: 16 * _gib,
+            usedBytes: 15 * _gib,
+            availableBytes: 1 * _gib,
+            buffersBytes: 0,
+            cachedBytes: 0,
+            sharedBytes: 0,
+            swapTotalBytes: 2 * _gib,
+            swapUsedBytes: 2 * _gib,
+            zfsArcCountedAsUsed: false,
+          ),
+          cpu: CpuPercentages(const [90, 0, 6, 2, 2, 0, 0, 0], 17),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+
+      final gauge = find.byType(Gauge).first;
+      final sparkline = find.byType(Sparkline).first;
+      expect(
+        tester.getTopLeft(sparkline).dy,
+        greaterThanOrEqualTo(tester.getBottomLeft(gauge).dy),
+        reason: 'the sparkline sits under the gauge, with the row full width',
+      );
+      expect(
+        tester.getSize(sparkline).width,
+        greaterThan(tester.getSize(gauge).width),
+      );
     });
   }
 

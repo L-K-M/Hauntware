@@ -117,10 +117,27 @@ class LogViewController extends ChangeNotifier {
   /// Replaces every entry with [records], as [addContainer] appends them,
   /// keeping [following]: a merged view (CTX-04) that takes a line older
   /// than its newest rebuilds in time order without jumping to the end.
-  void replaceContainer(List<ContainerRecord> records) {
+  /// [droppedBefore] puts a dropped-lines record of the given count before
+  /// the record at each index, [records]'s length for one after the last.
+  void replaceContainer(
+    List<ContainerRecord> records, {
+    Map<int, int> droppedBefore = const {},
+  }) {
     _buffer.clear();
     _slots.clear();
-    addContainer(records);
+    if (droppedBefore.isEmpty) {
+      addContainer(records);
+      return;
+    }
+
+    var from = 0;
+    var dropped = 0;
+    for (final at in droppedBefore.keys.toList()..sort()) {
+      addContainer(records.sublist(from, at), dropped: dropped);
+      from = at;
+      dropped = droppedBefore[at]!;
+    }
+    addContainer(records.sublist(from), dropped: dropped);
   }
 
   /// Empties the view and follows again, since an empty view has no place

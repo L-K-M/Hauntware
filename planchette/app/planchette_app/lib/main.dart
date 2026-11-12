@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'android_app.dart';
 import 'planchette_app.dart';
 import 'services/app_settings.dart';
+import 'services/app_version.dart';
 import 'services/desktop_window.dart';
 import 'services/document_dialogs.dart';
 import 'services/document_store.dart';
@@ -27,8 +28,9 @@ Future<void> main(List<String> arguments) async {
   PlanchetteBinding.ensureInitialized();
   // The licenses page lists the APK's Maven libraries too (Android).
   registerPlatformLicenses();
+  final appVersion = await readAppVersion();
   if (Platform.isAndroid) {
-    await runAndroidApp();
+    await runAndroidApp(appVersion: appVersion);
     return;
   }
   // Loaded before the window exists: the stored theme is the one source for
@@ -122,6 +124,7 @@ Future<void> main(List<String> arguments) async {
         pickFolder:
             (window.workspace.dialogs as AppDocumentDialogs).pickDirectory,
         remoteFiles: openRemoteFiles,
+        appVersion: appVersion,
       ),
     ),
   );

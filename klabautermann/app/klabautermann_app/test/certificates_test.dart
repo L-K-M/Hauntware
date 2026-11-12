@@ -202,6 +202,11 @@ void main() {
       findsOneWidget,
     );
 
+    // Return starts the next endpoint's line rather than closing the field.
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).keyboardType,
+      TextInputType.multiline,
+    );
     await tester.enterText(find.byType(TextField), 'example.com');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
