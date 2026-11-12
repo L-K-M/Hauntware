@@ -27,6 +27,12 @@ dependencies:
     path: ../../packages/ghost_ui
   path: 1.9.1
   path_provider: 2.1.6
+  # The running build's version for Settings › About (lib/services/
+  # app_version.dart), read once by the app's isolate. Not Poltergeist's
+  # 8.3.1: that one needs win32 5, which would take
+  # flutter_secure_storage_windows back from 4.2.2 to 4.1.0, before its
+  # fixes for concurrent reads and writes losing data.
+  package_info_plus: 10.2.2
   planchette_core:
     path: ../../packages/planchette_core
   planchette_editor:

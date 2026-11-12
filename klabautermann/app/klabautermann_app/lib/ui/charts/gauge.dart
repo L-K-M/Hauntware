@@ -158,7 +158,7 @@ class Gauge extends StatelessWidget {
             // The value in words under the arc, with its severity: the only
             // place the severity shows in words (A11Y-01).
             ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: scaler.scale(_legendWidth)),
+              constraints: BoxConstraints(maxWidth: scaler.scale(legendWidth)),
               child: Text(
                 legend,
                 style: theme.textTheme.labelSmall?.copyWith(
@@ -173,8 +173,9 @@ class Gauge extends StatelessWidget {
     );
   }
 
-  /// How wide the words under the arc may grow before they wrap.
-  static const _legendWidth = 128.0;
+  /// How wide the words under the arc may grow before they wrap, before
+  /// text scaling.
+  static const legendWidth = 128.0;
 }
 
 /// Where a threshold starts on a [Gauge]'s arc, as a share of the arc, and
