@@ -167,6 +167,30 @@ Intent? ghostEditingTextIntent(MenuSerializableShortcut shortcut) {
   };
 }
 
+/// Forwards an undo or redo step to the focused text field, the way the
+/// Edit-verb retargeting ([ghostEditingTextIntent]) does for the native
+/// menu: a focused [EditableText] keeps its own history, so the step is
+/// that field's and not the host's. Returns whether a field held the
+/// primary focus, even when its resolved handler cannot run the
+/// intent, so an app-data step never fires underneath a field that
+/// merely refused it. [EditableText]'s own handlers are always enabled;
+/// only an override can refuse.
+bool ghostForwardUndoToFocusedText(bool undo) {
+  final focus = FocusManager.instance.primaryFocus?.context;
+  if (focus == null ||
+      focus.findAncestorWidgetOfExactType<EditableText>() == null) {
+    return false;
+  }
+  final intent = undo
+      ? const UndoTextIntent(SelectionChangedCause.keyboard)
+      : const RedoTextIntent(SelectionChangedCause.keyboard);
+  final action = Actions.maybeFind(focus, intent: intent);
+  if (action != null && action.isEnabled(intent)) {
+    Actions.invoke(focus, intent);
+  }
+  return true;
+}
+
 // -- macOS native serialization ----------------------------------------
 
 /// Produces the native `onSelected` for a leaf row. Returning null falls

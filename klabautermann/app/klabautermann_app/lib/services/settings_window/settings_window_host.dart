@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
+import 'package:ghost_update/ghost_update.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
     show SyncPinConflict, VaultRecoveryFailure, VaultRestorePolicy;
 
@@ -56,6 +57,7 @@ SettingsWindowHost? settingsWindowHostFor(
   EditorDisplaySettings? editorDisplay,
   TimeDisplaySettings? timeDisplay,
   RecoverySettings? recovery,
+  UpdateCheckSettings? updateChecks,
 }) => switch (platform) {
   TargetPlatform.macOS ||
   TargetPlatform.linux ||
@@ -79,6 +81,7 @@ SettingsWindowHost? settingsWindowHostFor(
     editorDisplay: editorDisplay,
     timeDisplay: timeDisplay,
     recovery: recovery,
+    updateChecks: updateChecks,
   ),
   TargetPlatform.android ||
   TargetPlatform.iOS ||
@@ -116,6 +119,7 @@ final class SettingsWindowHost {
     EditorDisplaySettings? editorDisplay,
     TimeDisplaySettings? timeDisplay,
     RecoverySettings? recovery,
+    UpdateCheckSettings? updateChecks,
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
@@ -136,7 +140,8 @@ final class SettingsWindowHost {
        _logDisplay = logDisplay,
        _editorDisplay = editorDisplay,
        _timeDisplay = timeDisplay,
-       _recovery = recovery {
+       _recovery = recovery,
+       _updateChecks = updateChecks {
     _engine = GhostSettingsWindowHost(
       control: control,
       link: link,
@@ -163,6 +168,7 @@ final class SettingsWindowHost {
           ?editorDisplay,
           ?timeDisplay,
           ?recovery,
+          ?updateChecks,
         ],
       ),
       encodeError: encodeLinkError,
@@ -189,6 +195,7 @@ final class SettingsWindowHost {
   final EditorDisplaySettings? _editorDisplay;
   final TimeDisplaySettings? _timeDisplay;
   final RecoverySettings? _recovery;
+  final UpdateCheckSettings? _updateChecks;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
 
   @visibleForTesting
@@ -234,6 +241,7 @@ final class SettingsWindowHost {
       null => null,
     },
     SettingsLinkKey.syncSecrets.name: _syncSecrets.value,
+    SettingsLinkKey.updateChecks.name: _updateChecks?.enabled,
     SettingsLinkKey.pinPublication.name: switch (_pinPublication?.value) {
       final value? => encodePinPublication(value),
       null => null,
@@ -322,6 +330,8 @@ final class SettingsWindowHost {
         );
       case SettingsLinkMethod.setSyncSecrets:
         await _syncSecrets.setSyncSecrets(argument! as bool);
+      case SettingsLinkMethod.setUpdateChecks:
+        await _updateChecks?.setEnabled(argument! as bool);
       case SettingsLinkMethod.setPinPublication:
         final pinPublication = _pinPublication;
         if (pinPublication == null) {

@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:ghost_keystore/app_lock.dart' show AppLockController;
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostAppLockGate, GhostAppLockStrings;
+import 'package:ghost_update/ghost_update.dart';
 import 'package:ghost_desktop/ghost_desktop.dart'
     show ClaimMacosToolbarBand, withMacosToolbarBand;
 import 'package:poltergeist_core/poltergeist_core.dart'
@@ -56,7 +57,6 @@ import 'services/sync_environment.dart';
 import 'services/sync_queue_facade.dart';
 import 'services/third_party_bookmark_import_setup.dart';
 import 'services/transfer_limits_controller.dart';
-import 'services/update_check_controller.dart';
 import 'services/workspace_library.dart';
 import 'services/workspace_windows/workspace_windows.dart';
 import 'theme/app_appearance.dart';

@@ -12,6 +12,7 @@ import 'package:ghost_desktop/ghost_desktop.dart'
 import 'package:ghost_keystore/ghost_keystore.dart' show AppLockSettings;
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostPaneEdge, GhostResizeHandle, GhostUndoHistory;
+import 'package:ghost_update/ghost_update.dart';
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
@@ -77,7 +78,6 @@ import '../services/sync_environment.dart';
 import '../services/sync_plan_controller.dart';
 import '../services/sync_queue_facade.dart';
 import '../services/third_party_bookmark_import_setup.dart';
-import '../services/update_check_controller.dart';
 import '../services/transfer_limits_controller.dart';
 import '../services/uuid.dart';
 import '../services/workspace_controller.dart';

@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/services/appearance_controller.dart';
-import 'package:poltergeist_app/services/update_check_controller.dart';
+import 'package:ghost_update/ghost_update.dart';
 import 'package:poltergeist_app/theme/app_appearance.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
 import 'package:poltergeist_app/theme/theme_presets.dart';
 import 'package:poltergeist_app/ui/workspace_shell.dart';
+import 'package:poltergeist_core/poltergeist_core.dart';
 
 /// The MaterialApp above the whole app is drawn in the device's theme and
 /// rebuilds for a theme change and for nothing else: the shell below it
@@ -18,6 +19,8 @@ void main() {
     addTearDown(tester.view.reset);
     final appearance = AppearanceController();
     final updates = UpdateCheckController(
+      checker: UpdateChecker(repo: poltergeistUpdateRepo),
+      androidReleaseAsset: poltergeistAndroidReleaseAsset,
       enabled: true,
       onEnabledChanged: (_) async {},
     );

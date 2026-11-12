@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/services/engine_session.dart';
-import 'package:poltergeist_app/services/update_check_controller.dart';
+import 'package:ghost_update/ghost_update.dart';
 import 'package:poltergeist_app/ui/menus/app_menu_commands.dart';
 import 'package:poltergeist_app/ui/panes/pane_commands.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -50,7 +50,11 @@ void main() {
         bookmarks: bookmarks,
         engineSession: session,
         navigatorKey: navigatorKey,
-        updateCheck: UpdateCheckController(enabled: false),
+        updateCheck: UpdateCheckController(
+          checker: UpdateChecker(repo: poltergeistUpdateRepo),
+          androidReleaseAsset: poltergeistAndroidReleaseAsset,
+          enabled: false,
+        ),
       ),
     );
     await tester.pumpAndSettle();

@@ -21,7 +21,7 @@ import 'package:poltergeist_app/services/settings_store.dart';
 import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 import 'package:poltergeist_app/services/ssh_config_import_setup.dart';
 import 'package:poltergeist_app/services/sync_queue_facade.dart';
-import 'package:poltergeist_app/services/update_check_controller.dart';
+import 'package:ghost_update/ghost_update.dart';
 import 'package:poltergeist_app/services/window_full_screen.dart';
 import 'package:poltergeist_app/services/workspace_controller.dart';
 import 'package:poltergeist_app/services/workspace_library.dart';
@@ -152,7 +152,10 @@ Future<void> _pumpShell(
         transferQueue: queue,
         workspaces: workspaces,
         bookmarkBackup: backup,
-        updateCheck: UpdateCheckController(),
+        updateCheck: UpdateCheckController(
+          checker: UpdateChecker(repo: poltergeistUpdateRepo),
+          androidReleaseAsset: poltergeistAndroidReleaseAsset,
+        ),
         directoryGrouping: folders,
         syncEnvironment: testSyncEnvironment(scratch),
         syncTasks: SyncQueueTasks(),

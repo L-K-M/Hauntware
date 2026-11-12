@@ -69,6 +69,13 @@ dependencies:
   # The Android APK's Maven library notices on the licenses page.
   ghost_licenses:
     path: ../../../planchette/packages/ghost_licenses
+  # The shared update-check session (c3 §shells, D19/D23): the launch
+  # check's opt-out, banner and in-flight state, and on Android the
+  # user-chosen APK install it drives.
+  ghost_update:
+    path: ../../../planchette/packages/ghost_update
+  ghost_apk_update:
+    path: ../../../planchette/packages/ghost_apk_update
   # The log viewer's text search (LOG-05, 03 D56): Planchette's find-bar
   # search with its case folding.
   planchette_core:
@@ -118,6 +125,10 @@ dev_dependencies:
   flutter_driver:
     sdk: flutter
   flutter_lints: 6.0.0
+  # The update check's request-shape test (test/services/
+  # update_check_controller_test.dart) answers with a mocked client;
+  # test-only, nothing shipped.
+  http: 1.6.0
   # The suite's shared localization contract scanner (03 §3.5 F1b, D35),
   # as Poltergeist consumes it; test-only, nothing shipped.
   l10n_contract:

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show ghostFormatBinarySize, showTopToast;
+import 'package:ghost_update/ghost_update.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
     show MonitorEligibility, kAdminExpiryChoices, kMonitorSetLimit;
 
@@ -64,6 +65,7 @@ class SettingsPage extends StatefulWidget {
     this.safety,
     this.appLock,
     this.syncSecrets,
+    this.updateChecks,
     this.pinPublication,
     this.pinConflicts,
     this.accountSize,
@@ -116,6 +118,10 @@ class SettingsPage extends StatefulWidget {
 
   /// Null in tests that leave it out, where the Sync tab is a placeholder.
   final SyncSecretsSettings? syncSecrets;
+
+  /// The launch update check's opt-out (c3 §shells, D19/D23) in General;
+  /// null in tests that leave it out, where General shows no switch.
+  final UpdateCheckSettings? updateChecks;
 
   /// The host key sharing assertion; null in tests that leave it out.
   final PinPublicationSettings? pinPublication;
@@ -209,6 +215,7 @@ class _SettingsPageState extends State<SettingsPage>
                 logDisplay: widget.logDisplay,
                 timeDisplay: widget.timeDisplay,
                 deviceName: widget.deviceName,
+                updateChecks: widget.updateChecks,
                 appVersion: widget.appVersion,
               ),
               SettingsTab.appearance => AppearanceTab(
@@ -255,6 +262,7 @@ class GeneralTab extends StatelessWidget {
     this.logDisplay,
     this.timeDisplay,
     this.deviceName,
+    this.updateChecks,
     required this.appVersion,
   });
 
@@ -271,6 +279,9 @@ class GeneralTab extends StatelessWidget {
 
   /// As [SettingsPage.deviceName].
   final DeviceNameSettings? deviceName;
+
+  /// As [SettingsPage.updateChecks].
+  final UpdateCheckSettings? updateChecks;
 
   /// As [SettingsPage.appVersion].
   final String? appVersion;
@@ -364,18 +375,38 @@ class GeneralTab extends StatelessWidget {
     }
   }
 
+  /// As [_set], for the update check.
+  Future<void> _setUpdateChecks(
+    BuildContext context,
+    UpdateCheckSettings updateChecks,
+    bool enabled,
+  ) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await updateChecks.setEnabled(enabled);
+    } on Exception catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsUpdateCheckNotChanged);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final cadence = this.cadence;
     final logDisplay = this.logDisplay;
     final timeDisplay = this.timeDisplay;
+    final updateChecks = this.updateChecks;
     return ListenableBuilder(
       listenable: Listenable.merge([
         announcements,
         ?cadence,
         ?logDisplay,
         ?timeDisplay,
+        ?updateChecks,
       ]),
       builder: (context, _) => ListView(
         padding: const EdgeInsets.all(24),
@@ -512,6 +543,16 @@ class GeneralTab extends StatelessWidget {
             subtitle: Text(appVersionLine(l10n, appVersion)),
             onTap: () => showAppAboutDialog(context, version: appVersion),
           ),
+          if (updateChecks != null)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: updateChecks.enabled,
+              onChanged: (enabled) => unawaited(
+                _setUpdateChecks(context, updateChecks, enabled),
+              ),
+              title: Text(l10n.updateCheckEnabledLabel),
+              subtitle: Text(l10n.updateCheckEnabledSubtitle),
+            ),
         ],
       ),
     );

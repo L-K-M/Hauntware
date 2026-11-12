@@ -14110,4 +14110,82 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsEditorDisplayNotChanged =>
       'The file editor settings could not be changed.';
+
+  @override
+  String get appCheckForUpdatesLabel => 'Check for Updates…';
+
+  @override
+  String get appUpdateNoneFound =>
+      'No newer version was found. If you’re offline, try again later.';
+
+  @override
+  String get updateCheckEnabledLabel => 'Check for updates';
+
+  @override
+  String get updateCheckEnabledSubtitle =>
+      'Checks GitHub on launch. Nothing is downloaded until you choose to update.';
+
+  @override
+  String get settingsUpdateCheckNotChanged =>
+      'The setting could not be changed.';
+
+  @override
+  String alertUpdateAvailable(String version) {
+    return 'Klabautermann $version is available';
+  }
+
+  @override
+  String alertUpdateDownloadSize(String size) {
+    return '$size download';
+  }
+
+  @override
+  String alertUpdateDownloading(String version) {
+    return 'Downloading Klabautermann $version…';
+  }
+
+  @override
+  String alertUpdateProgress(String received, String total) {
+    return '$received of $total';
+  }
+
+  @override
+  String alertUpdateReady(String version) {
+    return 'Klabautermann $version is ready to install';
+  }
+
+  @override
+  String alertUpdateFailed(String version) {
+    return 'Klabautermann $version could not be installed';
+  }
+
+  @override
+  String get alertUpdateFailedDownload =>
+      'The download did not finish. Check your connection and try again.';
+
+  @override
+  String get alertUpdateFailedVerification =>
+      'The download did not match the release and was discarded.';
+
+  @override
+  String get alertUpdateFailedInstaller =>
+      'Android could not open the installer.';
+
+  @override
+  String get alertActionUpdate => 'Update';
+
+  @override
+  String get alertActionInstall => 'Install';
+
+  @override
+  String get alertActionCancel => 'Cancel';
+
+  @override
+  String get alertActionRetry => 'Retry';
+
+  @override
+  String get alertActionViewRelease => 'View Release';
+
+  @override
+  String get alertActionDismiss => 'Dismiss';
 }

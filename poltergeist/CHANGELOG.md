@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **The update check moved into the suite.** The once-per-launch
+  latest-release check and its Android in-place update now live in the
+  shared `ghost_update` package, which Klabautermann also uses; behavior
+  is unchanged.
 - **The account switch words its key choice like Settings.** The held-key
   dialog's adopt button now reads Trust the new key, matching the enrolled
   view and Séance.

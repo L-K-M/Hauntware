@@ -421,6 +421,13 @@ packages:
       relative: true
     source: path
     version: "1.9.4"
+  ghost_update:
+    dependency: "direct main"
+    description:
+      path: "../../../planchette/packages/ghost_update"
+      relative: true
+    source: path
+    version: "1.9.4"
   glob:
     dependency: transitive
     description:

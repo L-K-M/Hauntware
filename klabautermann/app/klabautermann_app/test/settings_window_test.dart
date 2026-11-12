@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
 import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
 import 'package:ghost_theme/ghost_theme.dart';
+import 'package:ghost_update/ghost_update.dart';
 import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/admin_memory.dart';
@@ -91,6 +92,22 @@ final class _RefusingAppearance extends ChangeNotifier
     ThemePalette palette,
     ThemeModePreference mode,
   ) async => throw StateError('read-only appearance');
+}
+
+/// An update-check switch the test flips by hand.
+final class _FakeUpdateChecks extends ChangeNotifier
+    implements UpdateCheckSettings {
+  @override
+  bool enabled = true;
+
+  final List<bool> applied = [];
+
+  @override
+  Future<void> setEnabled(bool enabled) async {
+    applied.add(enabled);
+    this.enabled = enabled;
+    notifyListeners();
+  }
 }
 
 /// An app lock the test locks and unlocks by hand.
@@ -273,6 +290,13 @@ void main() {
     return syncSecrets;
   }
 
+  /// An update-check switch applying to nothing, disposed after the test.
+  _FakeUpdateChecks newUpdateChecks() {
+    final updateChecks = _FakeUpdateChecks();
+    addTearDown(updateChecks.dispose);
+    return updateChecks;
+  }
+
   /// A device name applying to nothing, disposed after the test.
   DeviceNameController newDeviceName() {
     final deviceName = DeviceNameController(
@@ -298,8 +322,9 @@ void main() {
     ValueListenable<AccountSize?>? accountSize,
     TimeDisplaySettings? timeDisplay,
     AdminMemorySettings? adminMemory,
-    PinConflictsSettings? pinConflicts,
+    UpdateCheckSettings? updateChecks,
     EditorDisplaySettings? editorDisplay,
+    PinConflictsSettings? pinConflicts,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
@@ -316,6 +341,7 @@ void main() {
       adminMemory: adminMemory,
       logDisplay: logDisplay,
       timeDisplay: timeDisplay,
+      updateChecks: updateChecks,
       editorDisplay: editorDisplay,
       accountSize: accountSize,
       pinConflicts: pinConflicts,
@@ -493,6 +519,7 @@ void main() {
     late List<SafetyPolicy> applied;
     late SyncSecretsController syncSecrets;
     late List<bool> syncApplied;
+    late _FakeUpdateChecks updateChecks;
     late DeviceNameController deviceName;
     late List<String> namesApplied;
     late FakeDeviceAuthenticator device;
@@ -535,6 +562,7 @@ void main() {
       syncApplied = [];
       syncSecrets = SyncSecretsController(apply: syncApplied.add);
       addTearDown(syncSecrets.dispose);
+      updateChecks = newUpdateChecks();
       namesApplied = [];
       deviceName = DeviceNameController(
         fallback: 'Klabautermann on Linux',
@@ -583,8 +611,9 @@ void main() {
         accountSize,
         timeDisplay,
         adminMemory,
-        pinConflicts,
+        updateChecks,
         editorDisplay,
+        pinConflicts,
       );
     });
 
@@ -922,6 +951,53 @@ void main() {
       });
       await tester.pumpAndSettle();
       expect(windowSwitch(), isTrue);
+    });
+
+    testWidgets('the General tab\'s update-check switch changes the app\'s '
+        'through the link (D19/D23)', (tester) async {
+      final remote = await pumpBothWindows(
+        tester,
+        appearance,
+        tab: SettingsTab.general,
+      );
+      Finder windowSwitch() => find.descendant(
+        of: find.byType(SettingsWindowApp),
+        matching: find.widgetWithText(SwitchListTile, 'Check for updates'),
+      );
+      expect(remote.updateChecks?.enabled, isTrue);
+      // The switch sits in About, at the end of the tab.
+      await tester.scrollUntilVisible(
+        windowSwitch(),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.descendant(
+                of: find.byType(SettingsWindowApp),
+                matching: find.byType(GeneralTab),
+              ),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      expect(tester.widget<SwitchListTile>(windowSwitch()).value, isTrue);
+
+      await tester.tap(windowSwitch());
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      expect(updateChecks.enabled, isFalse);
+      expect(updateChecks.applied, [false]);
+      expect(remote.updateChecks?.enabled, isFalse);
+      expect(tester.widget<SwitchListTile>(windowSwitch()).value, isFalse);
+
+      // A change in the app reaches the showing window too.
+      await tester.runAsync(() async {
+        await updateChecks.setEnabled(true);
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(remote.updateChecks?.enabled, isTrue);
+      expect(tester.widget<SwitchListTile>(windowSwitch()).value, isTrue);
     });
 
     testWidgets('the Alerts tab\'s usage bands change the app\'s through '

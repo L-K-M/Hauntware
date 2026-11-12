@@ -17079,5 +17079,118 @@
   "settingsEditorDisplayNotChanged": "The file editor settings could not be changed.",
   "@settingsEditorDisplayNotChanged": {
     "description": "Toast when a file editor display change was refused."
+  },
+  "appCheckForUpdatesLabel": "Check for Updates…",
+  "@appCheckForUpdatesLabel": {
+    "description": "Help menu command that asks GitHub for a newer suite release on demand (D19/D23)."
+  },
+  "appUpdateNoneFound": "No newer version was found. If you’re offline, try again later.",
+  "@appUpdateNoneFound": {
+    "description": "Toast after an on-demand update check found no newer release or could not reach GitHub; never claims up to date."
+  },
+  "updateCheckEnabledLabel": "Check for updates",
+  "@updateCheckEnabledLabel": {
+    "description": "Settings > General: the launch update-check switch (c3 §shells, D19/D23)."
+  },
+  "updateCheckEnabledSubtitle": "Checks GitHub on launch. Nothing is downloaded until you choose to update.",
+  "@updateCheckEnabledSubtitle": {
+    "description": "Explainer under the update-check switch; the D19/D23 trust claim."
+  },
+  "settingsUpdateCheckNotChanged": "The setting could not be changed.",
+  "@settingsUpdateCheckNotChanged": {
+    "description": "Toast when the update-check switch did not take the change."
+  },
+  "alertUpdateAvailable": "Klabautermann {version} is available",
+  "@alertUpdateAvailable": {
+    "description": "Update banner: a newer release exists (D19).",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "alertUpdateDownloadSize": "{size} download",
+  "@alertUpdateDownloadSize": {
+    "description": "Detail under the update banner on Android, before the user chooses Update: the APK's size.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "alertUpdateDownloading": "Downloading Klabautermann {version}…",
+  "@alertUpdateDownloading": {
+    "description": "Update banner title on Android while the release APK downloads.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "alertUpdateProgress": "{received} of {total}",
+  "@alertUpdateProgress": {
+    "description": "Detail under the downloading update banner.",
+    "placeholders": {
+      "received": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "alertUpdateReady": "Klabautermann {version} is ready to install",
+  "@alertUpdateReady": {
+    "description": "Update banner title on Android once the verified APK went to the system installer and the user backed out of it.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "alertUpdateFailed": "Klabautermann {version} could not be installed",
+  "@alertUpdateFailed": {
+    "description": "Update banner title on Android after the download or the installer failed; the detail says which.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "alertUpdateFailedDownload": "The download did not finish. Check your connection and try again.",
+  "@alertUpdateFailedDownload": {
+    "description": "Detail of a failed Android update: offline, timed out, or the server refused the file."
+  },
+  "alertUpdateFailedVerification": "The download did not match the release and was discarded.",
+  "@alertUpdateFailedVerification": {
+    "description": "Detail of a failed Android update: the APK's size or SHA-256 digest differed from the release's."
+  },
+  "alertUpdateFailedInstaller": "Android could not open the installer.",
+  "@alertUpdateFailedInstaller": {
+    "description": "Detail of a failed Android update: the system installer could not be opened or refused the file."
+  },
+  "alertActionUpdate": "Update",
+  "@alertActionUpdate": {
+    "description": "Update banner action on Android: download the release APK and open the system installer."
+  },
+  "alertActionInstall": "Install",
+  "@alertActionInstall": {
+    "description": "Update banner action on Android: reopen the system installer for the downloaded update."
+  },
+  "alertActionCancel": "Cancel",
+  "@alertActionCancel": {
+    "description": "Update banner action: stop the running update download."
+  },
+  "alertActionRetry": "Retry",
+  "@alertActionRetry": {
+    "description": "Update banner action: retry the failed download or install."
+  },
+  "alertActionViewRelease": "View Release",
+  "@alertActionViewRelease": {
+    "description": "Update banner action: open the release page in the browser."
+  },
+  "alertActionDismiss": "Dismiss",
+  "@alertActionDismiss": {
+    "description": "Update banner action: hide the update banner for this session."
   }
 }

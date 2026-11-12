@@ -119,6 +119,10 @@ enum SettingsLinkMethod {
   /// bool.
   setSyncSecrets,
 
+  /// The General tab's update-check switch (c3 §shells, D19/D23); the
+  /// argument is a bool.
+  setUpdateChecks,
+
   /// The Sync tab's host key sharing switch (M5 plan M07); the argument is
   /// a bool.
   setPinPublication,
@@ -201,6 +205,10 @@ enum SettingsLinkKey {
   metric,
   levels,
   syncSecrets,
+
+  /// The General tab's update-check switch (c3 §shells, D19/D23), or null
+  /// when the app offers none.
+  updateChecks,
 
   /// The host key sharing assertion, an object of [release] and
   /// [asserted], or null when the app holds none.

@@ -1698,11 +1698,28 @@ class AppState extends ChangeNotifier {
   /// What the app's Undo takes back outside text fields (GhostUndoHistory).
   final GhostUndoHistory undoHistory = GhostUndoHistory();
 
+  /// Bumped when a built-in editor mounts or unmounts. The ☰ menu's Find
+  /// row and the native macOS menu's Save/Find gate read the active tab's
+  /// mounted editor, so they need to know when that editor comes and goes,
+  /// without polling and without an unrelated app notification. Mounts and
+  /// unmounts are rare; no keystroke notifies it. Ephemeral UI state: not
+  /// persisted, not in the protocol.
+  final ValueNotifier<int> editorMountRevision = ValueNotifier(0);
+
   /// Whether the wide layout shows its server list (the sidebar button).
   bool get sidebarVisible => !services.settings.sidebarHidden;
 
   /// Whether the wide layout shows its inspector (the inspector button).
   bool get inspectorVisible => !services.settings.inspectorHidden;
+
+  /// The shell's current layout posture: true below the shell's breakpoint,
+  /// where the side panes become screens. Published by the shell's layout so
+  /// surfaces whose context sits above it (the root chord and native menu
+  /// handler) resolve the visible shell's command set when they call
+  /// `openCommandPalette`, instead of an inherited lookup that answers wide
+  /// from above the provider. Ephemeral UI state: not persisted, not in
+  /// the protocol.
+  final ValueNotifier<bool> shellNarrow = ValueNotifier(false);
 
   /// The inspector's open page; Files until the user picks another.
   InspectorPage get inspectorPage =>
@@ -3114,6 +3131,20 @@ class AppState extends ChangeNotifier {
       updateInfo = info;
       notifyListeners();
     }
+  }
+
+  /// The menu's Check for Updates…: the user asked, so it runs even while
+  /// the launch check is opted out, and a newer release sets [updateInfo]
+  /// exactly as the launch check's would. Returns that release, or null:
+  /// the checker answers null both when this is the latest version and
+  /// when GitHub could not be reached, so the caller must not claim either.
+  Future<UpdateInfo?> checkNow(String currentVersion) async {
+    final info = await _updateChecker.check(currentVersion);
+    if (info != null) {
+      updateInfo = info;
+      notifyListeners();
+    }
+    return info;
   }
 
   // --- Terminal appearance ---

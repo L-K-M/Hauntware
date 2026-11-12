@@ -463,6 +463,13 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  ghost_apk_update:
+    dependency: "direct main"
+    description:
+      path: "../../../planchette/packages/ghost_apk_update"
+      relative: true
+    source: path
+    version: "1.9.4"
   ghost_desktop:
     dependency: "direct main"
     description:
@@ -519,6 +526,13 @@ packages:
       relative: true
     source: path
     version: "1.9.4"
+  ghost_update:
+    dependency: "direct main"
+    description:
+      path: "../../../planchette/packages/ghost_update"
+      relative: true
+    source: path
+    version: "1.9.4"
   glob:
     dependency: transitive
     description:
@@ -536,7 +550,7 @@ packages:
     source: hosted
     version: "2.0.2"
   http:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: http
       sha256: "87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412"
