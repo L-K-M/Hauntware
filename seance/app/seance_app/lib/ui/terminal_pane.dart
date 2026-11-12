@@ -10,7 +10,8 @@ import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 import 'package:planchette_editor/planchette_editor.dart'
     show GhostMenuDivider, GhostMenuItem;
 import 'package:seance_core/seance_core.dart';
-import 'package:seance_terminal/seance_terminal.dart' show TerminalKeyboardBar;
+import 'package:seance_terminal/seance_terminal.dart'
+    show TerminalKeyboardBar, showTerminalLinkReview;
 import 'package:xterm/xterm.dart';
 
 import '../app_state.dart';
@@ -1471,6 +1472,11 @@ class _SessionViewState extends State<_SessionView> {
           onKeyEvent: _handleKeyEvent,
           onTapUp: _moveCaret,
           onLinkTap: _openLink,
+          onHiddenLinkTap: (uri) => unawaited(_reviewLink(uri)),
+          // The soft keyboard's own paste takes the same policy as every
+          // other paste rather than the view's plain bracketed paste.
+          onKeyboardPaste: (text) =>
+              unawaited(terminalPasteText(widget.tab, text, context: context)),
           textStyle: appearance.style,
           theme: appearance.theme,
           keyboardAppearance: appearance.brightness,
@@ -1615,6 +1621,13 @@ class _SessionViewState extends State<_SessionView> {
   Future<void> _openLink(Uri uri) async {
     if (await openWebLink(uri) || !mounted) return;
     showTopToastIn(context, message: 'Could not open link.');
+  }
+
+  /// A link whose text does not show its target (an OSC 8 label such as
+  /// "Click here") opens only after the user has seen where it leads.
+  Future<void> _reviewLink(Uri uri) async {
+    if (!await showTerminalLinkReview(context, uri) || !mounted) return;
+    await _openLink(uri);
   }
 
   /// Intercept a few shortcuts before the terminal consumes the keystroke: the
