@@ -4,6 +4,8 @@
 /// forged-header rules, and the `ps -eo`/`ps w` fallback blocks.
 library;
 
+import 'dart:convert';
+
 import 'package:meta/meta.dart';
 
 import '../hws/program.dart' show kTimeoutAbsentMarker;
@@ -46,6 +48,7 @@ final class ProcEntry {
     this.stime,
     this.startTicks,
     List<String>? argv,
+    this.argvTruncated = false,
     this.argsJoined,
   }) : argv = argv == null ? null : List.unmodifiable(argv);
 
@@ -86,6 +89,11 @@ final class ProcEntry {
   /// (kernel threads).
   final List<String>? argv;
 
+  /// Whether [argv] reached the host's per-file byte cap (D48), so its
+  /// last argument may be cut and later ones missing. A command line of
+  /// exactly the cap reads as truncated too.
+  final bool argvTruncated;
+
   /// The whitespace-joined command line when only `ps` was available;
   /// argument boundaries are unrecoverable there (03 §7.2 masking note).
   final String? argsJoined;
@@ -108,6 +116,7 @@ final class ProcEntry {
     'stime': stime,
     'startTicks': startTicks,
     'argv': argv,
+    if (argvTruncated) 'argvTruncated': true,
     'argsJoined': argsJoined,
   };
 }
@@ -119,6 +128,7 @@ final class ProcsSnapshot {
     List<ProcEntry>? processes,
     this.totalProcesses,
     this.selection,
+    this.cmdlineByteCap,
     this.argvSource = ProcsArgvSource.none,
     this.forgedHeaders = 0,
     this.skippedPids = 0,
@@ -134,6 +144,10 @@ final class ProcsSnapshot {
 
   /// How the host chose the rows; null when the `meta` block lacked it.
   final ProcsSelection? selection;
+
+  /// The bytes of each command line the host sent at most (D48); null
+  /// when it sent them whole, as a `head` without `-c` does.
+  final int? cmdlineByteCap;
 
   /// Whether the host left processes out (PRC-01's "showing N of M":
   /// [processes] of [totalProcesses]).
@@ -161,6 +175,7 @@ final class ProcsSnapshot {
     'processes': processes.map((p) => p.toJson()).toList(),
     'totalProcesses': totalProcesses,
     'selection': selection?.name,
+    'cmdlineByteCap': ?cmdlineByteCap,
     'argvSource': argvSource.name,
     'forgedHeaders': forgedHeaders,
     'skippedPids': skippedPids,
@@ -171,7 +186,13 @@ final class ProcsSnapshot {
 /// Parses a `procs` section payload; never throws (03 §6.5).
 ParseResult<ProcsSnapshot> parseProcs(String raw, ParseContext ctx) {
   final warnings = <String>[];
-  final split = splitBlocks(raw, kTimeoutAbsentMarker);
+  // The argv blocks come last and carry what any local user puts in their
+  // own command line, so a header there is argument text (03 §7.2).
+  final split = splitBlocks(
+    raw,
+    kTimeoutAbsentMarker,
+    verbatimBlocks: const {'cmdline', 'ps', 'ps_w'},
+  );
   if (split.timeoutAbsent) {
     warnings.add('procs ran without a timeout guard');
   }
@@ -200,12 +221,19 @@ ParseResult<ProcsSnapshot> parseProcs(String raw, ParseContext ctx) {
   var argvSource = ProcsArgvSource.none;
   Map<int, List<String>?> argv = const {};
   Map<int, _PsRow> psRows = const {};
+  Set<int> truncated = const {};
   var forgedHeaders = 0;
   var skippedPids = 0;
   if (blocks['cmdline'] case final lines? when lines.isNotEmpty) {
     argvSource = ProcsArgvSource.cmdline;
     final r = _parseCmdline(lines, rows.keys.toSet(), warnings);
     argv = r.entries;
+    if (meta.cmdlineCap case final cap?) {
+      truncated = {
+        for (final MapEntry(:key, :value) in r.entries.entries)
+          if (value != null && r.bytes[key]! >= cap) key,
+      };
+    }
     forgedHeaders = r.forged;
     skippedPids = r.skipped;
   } else if (blocks['ps'] case final lines?) {
@@ -235,6 +263,7 @@ ParseResult<ProcsSnapshot> parseProcs(String raw, ParseContext ctx) {
         stime: r.stime,
         startTicks: r.startTicks,
         argv: argv[pid],
+        argvTruncated: truncated.contains(pid),
         argsJoined: argv.containsKey(pid) ? null : ps?.args,
       ),
     );
@@ -262,6 +291,7 @@ ParseResult<ProcsSnapshot> parseProcs(String raw, ParseContext ctx) {
       processes: entries,
       totalProcesses: meta.total,
       selection: meta.selection,
+      cmdlineByteCap: meta.cmdlineCap,
       argvSource: argvSource,
       forgedHeaders: forgedHeaders,
       skippedPids: skippedPids,
@@ -314,55 +344,66 @@ _Row? _parseRow(String line, List<String> warnings) {
   return _Row(fields, numbers, rest);
 }
 
-/// The `meta` block: the `total=` count and the `selection=` wire name.
-/// Only the first line of each counts: the fragment writes this block
-/// first, and a command line holding a `== meta ==` line reopens it
-/// (splitBlocks) to append forged lines.
-({int? total, ProcsSelection? selection}) _parseMeta(
+/// The `meta` block: the `total=` count, the `selection=` wire name and,
+/// when the host capped each command line, the `cmdline_cap=` bytes.
+/// Only the first line of each counts. A command line holding a
+/// `== meta ==` line cannot reopen the block, since the argv blocks are
+/// verbatim, but a repeat still warns rather than overrides.
+({int? total, ProcsSelection? selection, int? cmdlineCap}) _parseMeta(
   List<String>? lines,
   List<String> warnings,
 ) {
   if (lines == null) {
     warnings.add('procs: missing meta block');
-    return (total: null, selection: null);
+    return (total: null, selection: null, cmdlineCap: null);
   }
   int? total;
   ProcsSelection? selection;
+  int? cmdlineCap;
   final seen = <String>{};
   for (final line in lines) {
-    final key = line.startsWith('total=')
-        ? 'total='
-        : line.startsWith('selection=')
-        ? 'selection='
-        : null;
+    final key = const [
+      'total=',
+      'selection=',
+      'cmdline_cap=',
+    ].where(line.startsWith).firstOrNull;
     if (key == null) continue;
+    final value = line.substring(key.length);
     if (!seen.add(key)) {
       warnings.add('procs: meta block repeats $key');
     } else if (key == 'total=') {
-      total = int.tryParse(line.substring(6));
+      total = int.tryParse(value);
+    } else if (key == 'cmdline_cap=') {
+      cmdlineCap = switch (int.tryParse(value)) {
+        final cap? when cap > 0 => cap,
+        _ => null,
+      };
     } else {
-      final name = line.substring(10);
       selection = ProcsSelection.values
-          .where((s) => s.wireName == name)
+          .where((s) => s.wireName == value)
           .firstOrNull;
     }
   }
   if (total == null) warnings.add('procs: meta block lacks the total');
   if (selection == null) warnings.add('procs: meta block lacks the selection');
-  return (total: total, selection: selection);
+  return (total: total, selection: selection, cmdlineCap: cmdlineCap);
 }
 
 /// The result of the `cmdline` block pass.
 final class _CmdlineResult {
-  _CmdlineResult(this.entries, this.forged, this.skipped);
+  _CmdlineResult(this.entries, this.bytes, this.forged, this.skipped);
 
   /// pid to argv; a null value is the "command line unavailable" mark of
   /// 03 §7.2 (forged header named or interrupted this entry).
   final Map<int, List<String>?> entries;
+
+  /// pid to the UTF-8 length of its entry's content: the bytes the host
+  /// sent, unless the payload held malformed UTF-8.
+  final Map<int, int> bytes;
   final int forged, skipped;
 }
 
-/// Splits the `head -n 1000 <pid>/cmdline... | tr '\000' '\037'` dump
+/// Splits the `head -c 1536 <pid>/cmdline... | tr '\000' '\037'` dump
 /// into per-pid argument vectors (03 §7.2).
 ///
 /// Real `==> <pid>/cmdline <==` headers appear once each, in the order of
@@ -378,6 +419,7 @@ _CmdlineResult _parseCmdline(
 ) {
   final header = RegExp(r'^==> (\d+)/cmdline <==$');
   final entries = <int, List<String>?>{};
+  final bytes = <int, int>{};
   final unavailable = <int>{};
   final seen = <int>{};
   var lastPidText = '';
@@ -402,19 +444,22 @@ _CmdlineResult _parseCmdline(
       return;
     }
     entries[pid] = _splitArgs(buf);
+    bytes[pid] = utf8.encode(buf.join('\n')).length;
   }
 
   for (final line in content) {
     final m = header.firstMatch(line);
     if (m != null) {
       final pidText = m[1]!;
-      final pid = int.parse(pidText);
+      // A pid past int range names no process: only an argument holds it.
+      final pid = int.tryParse(pidText);
       final forgedHeader =
+          pid == null ||
           seen.contains(pid) ||
           (lastPidText.isNotEmpty && pidText.compareTo(lastPidText) <= 0);
       if (forgedHeader) {
         forged++;
-        unavailable.add(pid);
+        if (pid != null) unavailable.add(pid);
         if (current != null) unavailable.add(current);
         // The forged line is argument bytes of the entry it interrupts;
         // that entry is already marked, so keep accounting simple.
@@ -453,7 +498,7 @@ _CmdlineResult _parseCmdline(
   if (entries.isEmpty && forged == 0 && skipped == 0) {
     warnings.add('cmdline: block carried no headers');
   }
-  return _CmdlineResult(entries, forged, skipped);
+  return _CmdlineResult(entries, bytes, forged, skipped);
 }
 
 /// Turns one entry's content lines back into the argv list: the content

@@ -16,10 +16,10 @@ enum BuiltInTextDocumentFailure { invalidUtf8, binary, changed, missing, other }
 
 const _invalidUtf8Message = 'This file is not valid UTF-8 text.';
 const _binaryMessage = 'This file appears to be binary, not editable text.';
-const _changedMessage = 'The local copy changed while it was being opened.';
+const _changedMessage = 'The file changed while it was being opened.';
 const _missingMessage = 'The file no longer exists.';
 const _missingOrNonregularMessage =
-    'The local copy is missing or no longer a regular file.';
+    'The file is missing or no longer a regular file.';
 
 /// Adapts Planchette's stable message contract to a localized host enum.
 BuiltInTextDocumentFailure classifyBuiltInTextDocumentFailure(

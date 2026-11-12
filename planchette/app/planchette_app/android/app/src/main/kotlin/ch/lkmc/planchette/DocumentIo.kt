@@ -76,4 +76,15 @@ internal class DocumentIo(private val recoveryDirectory: File) {
         }
         backup.delete()
     }
+
+    /** Deletes a recovery copy once the user has saved its text elsewhere.
+     * Only a regular file directly inside the recovery directory qualifies,
+     * so an identity passed in from Dart can never name another app file. */
+    fun discard(file: File) {
+        val candidate = file.canonicalFile
+        require(candidate.parentFile == recoveryDirectory.canonicalFile && candidate.isFile) {
+            "Only recovery copies can be discarded."
+        }
+        if (!candidate.delete()) throw IOException("Could not delete the recovery copy.")
+    }
 }

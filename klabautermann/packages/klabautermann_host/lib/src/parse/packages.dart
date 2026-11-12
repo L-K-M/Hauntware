@@ -99,6 +99,10 @@ const kPackageUpdatesKept = 1000;
 /// The most of a manager's error text a failed check keeps.
 const _detailLimit = 300;
 
+/// The furthest instant a [DateTime] holds either side of the epoch, in
+/// seconds (100,000,000 days).
+const _maxInstantSeconds = 8640000000000;
+
 /// A section header: `== <key>` with an optional value.
 final _header = RegExp(r'^== (\w+)(?: (.*))?$');
 
@@ -128,7 +132,11 @@ PackageCheck parsePackageCheck(String raw) {
 
   final (reboot, rebootPackages) = _reboot(values['reboot'], bodies['reboot']);
   final cached = int.tryParse(values['cache'] ?? '');
-  final cachedAt = cached == null
+  // An mtime a DateTime cannot hold reads as unknown instead of throwing.
+  final cachedAt =
+      cached == null ||
+          cached < -_maxInstantSeconds ||
+          cached > _maxInstantSeconds
       ? null
       : DateTime.fromMillisecondsSinceEpoch(cached * 1000, isUtc: true);
   final manager = PackageManager.values.asNameMap()[values['manager']];

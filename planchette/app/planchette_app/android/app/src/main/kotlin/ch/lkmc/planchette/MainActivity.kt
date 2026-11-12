@@ -82,6 +82,12 @@ class MainActivity : FlutterActivity() {
                 created.remove(path)
                 return null
             }
+            "discardRecovery" -> {
+                require(uri.scheme == "file") { "Only recovery copies can be discarded." }
+                DocumentIo(recoveryDirectory).discard(File(requireNotNull(uri.path)))
+                documents.remove(path)
+                return null
+            }
             else -> throw IllegalArgumentException("Unknown document operation: ${call.method}")
         }
     }

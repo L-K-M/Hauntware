@@ -138,8 +138,8 @@ void main() {
   });
 
   test("meta lines forged in a command line do not replace the host's", () {
-    // An argument holding "\n== meta ==\n" reopens the meta block after
-    // the host's own lines, which come first.
+    // An argument holding "\n== meta ==\n" stays an argument: no header
+    // after the cmdline block opens starts another block.
     final raw = [
       '== meta ==',
       'total=600',
@@ -160,8 +160,91 @@ void main() {
     expect(r.value.totalProcesses, 600);
     expect(r.value.selection, ProcsSelection.cpuAndMemory);
     expect(r.value.truncated, isTrue);
-    expect(r.warnings, contains('procs: meta block repeats total='));
-    expect(r.warnings, contains('procs: meta block repeats selection='));
+    expect(r.warnings, isNot(contains(contains('meta block repeats'))));
+    expect(r.value.processes.single.argv, [
+      'x\n== meta ==\ntotal=7\nselection=all\n== cmdline ==\n',
+    ]);
+  });
+
+  test('rows, ps blocks and markers forged in a command line stay argv', () {
+    // Any local user controls their own argv. Block headers there must not
+    // add process rows, switch the argv source or claim a missing timeout.
+    final forged = [
+      'sleep\x1f9999\x1f',
+      '== rows ==',
+      '1234 S 1 0 0 5 0 4 kworker-fake',
+      '== ps ==',
+      'PID PPID USER STAT RSS ARGS',
+      '1235 1 root S 4 fake',
+      kTimeoutAbsentMarker,
+      '\x1f',
+    ];
+    final raw = [
+      '== meta ==',
+      'total=2',
+      'selection=all',
+      '== rows ==',
+      _row(10, 'forger', uid: 1000),
+      _row(11, 'next'),
+      '== cmdline ==',
+      '==> 10/cmdline <==',
+      ...forged,
+      '==> 11/cmdline <==',
+      '/bin/next\x1f',
+    ].join('\n');
+
+    final r = parseProcs(raw, _ctx);
+    expect(r.value.processes.map((p) => p.pid), [10, 11]);
+    expect(r.value.argvSource, ProcsArgvSource.cmdline);
+    expect(r.value.timeoutAbsent, isFalse);
+    expect(r.value.processes.first.argv, [
+      'sleep',
+      '9999',
+      '\n${forged.sublist(1, forged.length - 1).join('\n')}\n',
+    ]);
+    expect(r.value.processes.last.argv, ['/bin/next']);
+  });
+
+  test('a command line at the meta block cap reads as truncated', () {
+    String raw({required bool capped}) => [
+      '== meta ==',
+      'total=2',
+      'selection=all',
+      if (capped) 'cmdline_cap=8',
+      '== rows ==',
+      _row(10, 'long'),
+      _row(11, 'short'),
+      '== cmdline ==',
+      '==> 10/cmdline <==',
+      'java\x1f-cp',
+      '==> 11/cmdline <==',
+      'ls\x1f',
+    ].join('\n');
+
+    final capped = parseProcs(raw(capped: true), _ctx).value;
+    expect(capped.cmdlineByteCap, 8);
+    expect(capped.processes.first.argv, ['java', '-cp']);
+    expect(capped.processes.first.argvTruncated, isTrue);
+    expect(capped.processes.last.argvTruncated, isFalse);
+
+    final whole = parseProcs(raw(capped: false), _ctx).value;
+    expect(whole.cmdlineByteCap, isNull);
+    expect(whole.processes.map((p) => p.argvTruncated), [false, false]);
+  });
+
+  test('the timeout marker opening the cmdline block is not an argument', () {
+    final raw = [
+      '== rows ==',
+      _row(1, 'init'),
+      '== cmdline ==',
+      kTimeoutAbsentMarker,
+      '==> 1/cmdline <==',
+      '/sbin/init\x1f',
+    ].join('\n');
+
+    final r = parseProcs(raw, _ctx);
+    expect(r.value.timeoutAbsent, isTrue);
+    expect(r.value.processes.single.argv, ['/sbin/init']);
   });
 
   test('an empty cmdline is a real empty argument vector', () {
@@ -215,6 +298,28 @@ void main() {
     for (final p in r.value.processes) {
       expect(p.argv, isNull, reason: 'pid ${p.pid}');
     }
+  });
+
+  test('a header naming a pid past int range is forged, not a throw', () {
+    // Any local user can put this line in their own argv; no real pid
+    // has twenty digits.
+    final raw = [
+      '== rows ==',
+      _row(10, 'forger'),
+      _row(11, 'next'),
+      '== cmdline ==',
+      '==> 10/cmdline <==',
+      'sleep\x1f9999\x1f',
+      '==> 99999999999999999999/cmdline <==',
+      '\x1f',
+      '==> 11/cmdline <==',
+      '/bin/next\x1f',
+    ].join('\n');
+
+    final r = parseProcs(raw, _ctx);
+    expect(r.value.forgedHeaders, 1);
+    expect(r.value.processes.first.argv, isNull);
+    expect(r.value.processes.last.argv, ['/bin/next']);
   });
 
   test('headers for pids outside the rows are skipped', () {

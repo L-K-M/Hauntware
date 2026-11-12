@@ -2,6 +2,8 @@
 /// [HostCommands.listeningPorts] prints them.
 library;
 
+import 'dart:math';
+
 import 'package:meta/meta.dart';
 
 import '../commands/commands.dart'
@@ -77,7 +79,12 @@ final class ListeningPortsRead {
   final Map<int, ProcessAttribution> owners;
 }
 
-final _ssProcess = RegExp(r'\("((?:[^"\\]|\\.)*)",pid=(\d+)');
+/// One holder's fields after its name in ss's `users:` column.
+final _ssHolderTail = RegExp(r'",pid=(\d{1,10}),fd=\d{1,10}\)');
+
+/// The longest process name ss prints: it reads `/proc/<pid>/comm` into
+/// 16 bytes with the NUL.
+const _ssNameMax = 15;
 final _netstatProcess = RegExp(r'^(\d+)/(.*)$');
 
 /// The read in [raw], or null when it is not the read's output.
@@ -135,17 +142,67 @@ ListeningSocket? _ssLine(String line) {
   final protocol = _protocol(words[0]);
   final local = _hostPort(words[4]);
   if (protocol == null || local == null) return null;
+  final users = line.indexOf('users:(');
   final seen = <int>{};
   return ListeningSocket(
     protocol: protocol,
     address: local.$1,
     port: local.$2,
     processes: [
-      for (final match in _ssProcess.allMatches(words.skip(6).join(' ')))
-        if (seen.add(int.parse(match[2]!)))
-          PortProcess(name: match[1]!, pid: int.parse(match[2]!)),
+      if (users >= 0)
+        for (final p in _ssHolders(line.substring(users + 7).trimRight()))
+          if (seen.add(p.pid)) p,
     ],
   );
+}
+
+/// The holders in ss's `users:(...)` column after its `users:(`:
+/// `("sshd",pid=812,fd=3),("sshd",pid=813,fd=3))`.
+///
+/// ss prints each name as `/proc/<pid>/comm` holds it, with only
+/// unprintable bytes replaced, and any user names their own processes, so
+/// a name may itself hold `",pid=1,fd=3)` to claim another pid. The
+/// column is read as a whole, with names of at most [_ssNameMax]
+/// characters, and the holders are kept only when exactly one reading
+/// fits; an ambiguous or malformed column lists none.
+List<PortProcess> _ssHolders(String column) {
+  // ways[i]: how many readings (0, 1 or 2 for "several") the column has
+  // from a holder starting at i, and the end of that holder in the one
+  // reading that counts. Filled from the right, so no recursion.
+  final ways = List.filled(column.length + 1, 0);
+  final ends = List.filled(column.length + 1, -1);
+  for (var i = column.length - 2; i >= 0; i--) {
+    if (!column.startsWith('("', i)) continue;
+    for (var n = 0; n <= _ssNameMax; n++) {
+      final tail = _ssHolderTail.matchAsPrefix(column, i + 2 + n);
+      if (tail == null) continue;
+      final end = tail.end;
+      final rest = switch (column.length - end) {
+        1 when column[end] == ')' => 1,
+        > 1 when column[end] == ',' => ways[end + 1],
+        _ => 0,
+      };
+      if (rest == 0) continue;
+      ways[i] = min(2, ways[i] + rest);
+      ends[i] = end;
+    }
+  }
+  if (ways[0] != 1) return const [];
+
+  final holders = <PortProcess>[];
+  for (var i = 0; i < column.length && ends[i] >= 0; i = ends[i] + 1) {
+    final tail = _ssHolderTail.matchAsPrefix(
+      column,
+      column.lastIndexOf('",pid=', ends[i]),
+    )!;
+    holders.add(
+      PortProcess(
+        name: column.substring(i + 2, tail.start),
+        pid: int.parse(tail[1]!),
+      ),
+    );
+  }
+  return holders;
 }
 
 /// `tcp 0 0 0.0.0.0:22 0.0.0.0:* LISTEN 812/sshd` and, for UDP, the same
