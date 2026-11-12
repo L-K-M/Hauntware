@@ -104,8 +104,16 @@ Future<DockerPayload> checkImageUpdates({
     }
   } else if (due.isNotEmpty) {
     final local = await _localDigests(client, due.map((e) => e.image.id));
-    for (var start = 0; start < due.length; start += kRegistryHeadsMax) {
-      final batch = due.skip(start).take(kRegistryHeadsMax).toList();
+    var pending = due;
+    while (true) {
+      // One registry's 429 holds back its tags in later batches too.
+      pending = [
+        for (final entry in pending)
+          if (!_backingOff(cache, entry.reference.registry, now)) entry,
+      ];
+      if (pending.isEmpty) break;
+      final batch = pending.take(kRegistryHeadsMax).toList();
+      pending = pending.skip(batch.length).toList();
       final heads = await _readHeads(run, batch);
       if (heads == null) {
         return const DockerQueryFailed(

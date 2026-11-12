@@ -108,10 +108,12 @@ void main() {
     await tester.pump();
     expect(harness.engine.sentOfType<SetPinPublication>(), isEmpty);
 
+    final enroll = harness.engine.sentOfType<EnrollSync>().single;
     harness.engine.emit(
-      const SyncStatus(
+      SyncStatus(
         SyncPhase.succeeded,
         operation: SyncOperation.enroll,
+        requestId: (enroll as EnrollSync).requestId,
         account: testSyncAccount,
       ),
     );

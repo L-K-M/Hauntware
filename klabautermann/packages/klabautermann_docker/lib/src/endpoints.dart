@@ -170,56 +170,6 @@ extension DockerEndpoints on DockerClient {
     cancelToken: cancelToken,
   );
 
-  /// `GET /containers/{id}/logs` demultiplexed into lines (03 §5.6).
-  /// [tty] comes from inspect `Config.Tty`; the framing is cross-checked
-  /// with the response `Content-Type` when the API is at least 1.42.
-  Future<DockerResponse<Stream<LogLine>>> containerLogLines(
-    String id, {
-    required bool tty,
-    bool follow = true,
-    bool stdout = true,
-    bool stderr = true,
-    bool timestamps = true,
-    int? tail,
-    LogTimestamp? since,
-    LogTimestamp? until,
-    Duration? timeout,
-    DockerCancelToken? cancelToken,
-  }) async {
-    final res = await containerLogsRaw(
-      id,
-      follow: follow,
-      stdout: stdout,
-      stderr: stderr,
-      timestamps: timestamps,
-      tail: tail,
-      since: since,
-      until: until,
-      timeout: timeout,
-      cancelToken: cancelToken,
-    );
-    final choice = resolveLogFraming(
-      negotiated: apiVersion,
-      tty: tty,
-      contentType: res.headers.value('Content-Type'),
-    );
-    final frames = choice.framing == LogFraming.raw
-        ? rawLogFrames(res.body)
-        : demuxStdcopy(res.body);
-    var lines = splitLogLines(frames);
-    // 03 §5.6: `since` is inclusive, so a resumed stream re-sends the
-    // boundary line; drop it up to and including the last delivered one.
-    if (since != null && timestamps) {
-      lines = dropInclusiveSinceLines(lines, since);
-    }
-    return DockerResponse<Stream<LogLine>>(
-      statusCode: res.statusCode,
-      reasonPhrase: res.reasonPhrase,
-      headers: res.headers,
-      body: lines,
-    );
-  }
-
   /// `POST /containers/{id}/start` (03 §7.12 CTR-02).
   Future<void> startContainer(
     String id, {

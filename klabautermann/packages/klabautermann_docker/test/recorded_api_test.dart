@@ -270,20 +270,16 @@ void main() {
               expect(choice.warning, isNull);
             }
 
-            final res = await client.containerLogLines(
+            final lines = await _logLines(
+              client,
               container,
               tty: tty,
               follow: false,
               tail: 20,
             );
-            final lines = await res.body.toList();
             expect(lines, isNotEmpty, reason: exchange);
             for (final line in lines) {
-              expect(
-                parseTimestampedLogLine(line).value.timestamp,
-                isNotNull,
-                reason: line.text,
-              );
+              expect(line.timestamp, isNotNull, reason: line.message);
             }
           }
         });
@@ -331,13 +327,16 @@ void main() {
           final follow = await _follow(client);
           final since = _parseSince(corpus['logs-since'].query['since']!);
 
-          final res = await client.containerLogLines(
-            'job',
-            tty: false,
-            follow: false,
-            since: since,
-          );
-          final resumed = [for (final l in await res.body.toList()) _key(l)];
+          final resumed = [
+            for (final l in await _logLines(
+              client,
+              'job',
+              tty: false,
+              follow: false,
+              since: since,
+            ))
+              _key(l),
+          ];
           final expected = [
             for (final l in follow)
               if (_timestamp(l) > since) _key(l),
@@ -351,16 +350,14 @@ void main() {
             for (final l in follow)
               if (_timestamp(l) <= since) l,
           ];
-          final last = lastDeliveredTimestamp(
-            delivered.map((l) => parseTimestampedLogLine(l).value),
-          )!;
+          final last = lastDeliveredTimestamp(delivered)!;
           final resend = [
             for (final l in follow)
               if (_timestamp(l) >= last) l,
           ];
           expect(resend.length, greaterThan(expected.length));
           final kept = [
-            await for (final l in dropInclusiveSinceLines(
+            await for (final l in dropInclusiveSince(
               Stream.fromIterable(resend),
               last,
             ))
@@ -489,9 +486,37 @@ Stream<DockerParseResult<DockerEvent>> _events(
   );
 }
 
-Future<List<LogLine>> _follow(DockerClient client) async {
-  final res = await client.containerLogLines('job', tty: false);
-  return res.body.toList();
+Future<List<TimestampedLogLine>> _follow(DockerClient client) =>
+    _logLines(client, 'job', tty: false);
+
+/// Reads a container's logs the way the engine's log reader does: the
+/// raw response, its framing resolved, lines joined, and the inclusive
+/// `since` boundary dropped.
+Future<List<TimestampedLogLine>> _logLines(
+  DockerClient client,
+  String id, {
+  required bool tty,
+  bool follow = true,
+  int? tail,
+  LogTimestamp? since,
+}) async {
+  final res = await client.containerLogsRaw(
+    id,
+    follow: follow,
+    tail: tail,
+    since: since,
+  );
+  final framing = resolveLogFraming(
+    negotiated: client.apiVersion,
+    tty: tty,
+    contentType: res.headers.value('Content-Type'),
+  ).framing;
+  var lines = joinTimestampedLogLines(
+    framing == LogFraming.raw ? rawLogFrames(res.body) : demuxStdcopy(res.body),
+    framing: framing,
+  );
+  if (since != null) lines = dropInclusiveSince(lines, since);
+  return lines.toList();
 }
 
 LogTimestamp _parseSince(String value) {
@@ -502,9 +527,8 @@ LogTimestamp _parseSince(String value) {
   );
 }
 
-LogTimestamp _timestamp(LogLine line) =>
-    parseTimestampedLogLine(line).value.timestamp!;
+LogTimestamp _timestamp(TimestampedLogLine line) => line.timestamp!;
 
-String _message(LogLine line) => parseTimestampedLogLine(line).value.message;
+String _message(TimestampedLogLine line) => line.message;
 
-String _key(LogLine line) => '${line.stream.name} ${_message(line)}';
+String _key(TimestampedLogLine line) => '${line.stream.name} ${line.message}';

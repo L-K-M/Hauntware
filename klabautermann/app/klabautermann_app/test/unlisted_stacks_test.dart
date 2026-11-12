@@ -227,6 +227,48 @@ void main() {
       expect(scans(), hasLength(2));
     });
 
+    testWidgets('scrolling away from the section and back scans once', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        stored: {
+          _serverId: ['/opt/stacks'],
+        },
+        stacks: [
+          for (var i = 0; i < 40; i++)
+            dockerStack('stack$i', [
+              dockerService('app', [dockerContainer('c$i', name: 'app-$i')]),
+            ]),
+        ],
+      );
+      tester.view.physicalSize = const Size(1200, 400);
+      await tester.pumpAndSettle();
+      // The section is built, and scans, as the list reaches it.
+      expect(scans(), isEmpty);
+      final list = find.byType(ListView).first;
+      await tester.drag(list, const Offset(0, -20000));
+      await tester.pumpAndSettle();
+      engine.emit(
+        dockerAnswer(scans().single, DockerStackScanPayload(const [])),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Stacks without containers'), findsOneWidget);
+
+      await tester.drag(list, const Offset(0, 20000));
+      await tester.pumpAndSettle();
+      expect(find.text('Stacks without containers'), findsNothing);
+      await tester.drag(list, const Offset(0, -20000));
+      await tester.pumpAndSettle();
+      expect(find.text('Stacks without containers'), findsOneWidget);
+      expect(scans(), hasLength(1));
+      expect(
+        find.text('Every stack in these folders has containers.'),
+        findsOneWidget,
+        reason: 'what the scan found is still shown',
+      );
+    });
+
     testWidgets('a relative folder is refused in the dialog', (tester) async {
       await pump(tester);
       await tester.tap(find.text('Choose folders'));

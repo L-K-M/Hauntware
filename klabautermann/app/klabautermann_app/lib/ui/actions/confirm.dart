@@ -28,6 +28,25 @@ class ActionConfirm extends StatefulWidget {
   State<ActionConfirm> createState() => _ActionConfirmState();
 }
 
+/// Run is autofocused for tier 1, so a key still held from the gesture that
+/// opened the preview would otherwise activate it through auto-repeat before
+/// the user has read anything. Only a fresh press activates; repeats are
+/// swallowed. The typed tier is exempt because its text field needs Space.
+const _activateOnPressOnly = <ShortcutActivator, Intent>{
+  SingleActivator(LogicalKeyboardKey.enter, includeRepeats: false):
+      ActivateIntent(),
+  SingleActivator(LogicalKeyboardKey.numpadEnter, includeRepeats: false):
+      ActivateIntent(),
+  SingleActivator(LogicalKeyboardKey.space, includeRepeats: false):
+      ActivateIntent(),
+  SingleActivator(LogicalKeyboardKey.enter):
+      DoNothingAndStopPropagationIntent(),
+  SingleActivator(LogicalKeyboardKey.numpadEnter):
+      DoNothingAndStopPropagationIntent(),
+  SingleActivator(LogicalKeyboardKey.space):
+      DoNothingAndStopPropagationIntent(),
+};
+
 class _ActionConfirmState extends State<ActionConfirm> {
   final _phrase = TextEditingController();
 
@@ -58,40 +77,46 @@ class _ActionConfirmState extends State<ActionConfirm> {
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): widget.onCancel,
       },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 12,
-        children: [
-          if (_typed)
-            TextField(
-              controller: _phrase,
-              autofocus: true,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: InputDecoration(
-                labelText: l10n.actionConfirmType(widget.targetName),
-              ),
-              onChanged: (_) => setState(() {}),
-              onSubmitted: (_) => _confirm(),
-            )
-          else
-            Text(l10n.actionConfirmNames(widget.targetName)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            spacing: 8,
-            children: [
-              TextButton(
-                onPressed: widget.onCancel,
-                child: Text(l10n.actionConfirmCancel),
-              ),
-              FilledButton(
-                autofocus: !_typed,
-                onPressed: _ready ? _confirm : null,
-                child: Text(l10n.actionConfirmRun),
-              ),
-            ],
-          ),
-        ],
+      child: Shortcuts(
+        shortcuts: _typed ? const {} : _activateOnPressOnly,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 12,
+          children: [
+            if (_typed)
+              TextField(
+                controller: _phrase,
+                autofocus: true,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(
+                  labelText: l10n.actionConfirmType(widget.targetName),
+                ),
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => _confirm(),
+              )
+            else
+              Text(l10n.actionConfirmNames(widget.targetName)),
+            // Wraps instead of clipping Run at large text on a narrow phone.
+            OverflowBar(
+              alignment: MainAxisAlignment.end,
+              overflowAlignment: OverflowBarAlignment.end,
+              spacing: 8,
+              overflowSpacing: 8,
+              children: [
+                TextButton(
+                  onPressed: widget.onCancel,
+                  child: Text(l10n.actionConfirmCancel),
+                ),
+                FilledButton(
+                  autofocus: !_typed,
+                  onPressed: _ready ? _confirm : null,
+                  child: Text(l10n.actionConfirmRun),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
