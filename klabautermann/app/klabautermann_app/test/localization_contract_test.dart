@@ -1059,11 +1059,18 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
     r"'\u23ce\u2028'",
     "' '",
-    // A container row's time in ISO 8601 order with a space for the T,
-    // machine data, then its stream as the Engine API names it (CTX-01),
-    // whose spoken name is ARB text (logContainerStream).
-    r"'${iso.substring(0, 10)} ${iso.substring(11, _containerTimeWidth)}'",
-    r"'${_containerTime(container.at)} ${container.stream.name} '",
+    // A row's time in ISO 8601 order with a space for the T, machine
+    // data, then a container row's stream as the Engine API names it
+    // (CTX-01), whose spoken name is ARB text (logContainerStream), or a
+    // journal row's unit (LOG-01).
+    r"'${iso.substring(0, 10)} ${iso.substring(11, _timeWidth)}'",
+    r"'${_rowTime(container.at, zoneOffset)} ${container.stream.name} '",
+    r"'${_rowTime(at, zoneOffset)} '",
+    // The ellipsis that starts a row windowed around its current match (a
+    // symbol, not words; a screen reader hears the text it hides), and
+    // the line breaks the window never starts before.
+    r"'\u2026'",
+    r"'[\n\v\f\r\x85\u2028\u2029]'",
   },
   'lib/ui/logs/log_view.dart': {
     // A FocusNode debug label.
@@ -1074,9 +1081,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
     "' '",
     r"'[\u2028\u2029]'",
-    // Glyph probes that measure the line height (the space above) and the
-    // advance, never shown.
+    // Glyph probes that measure the line height (the space above), the
+    // advance and the ellipsis, never shown.
     "'W'",
+    r"'\u2026'",
   },
   // The command registry's ids, keys of the menus and shortcuts.
   'lib/ui/menus/app_commands.dart': {

@@ -12,7 +12,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
-import 'log_text.dart';
 import 'log_view_controller.dart';
 
 /// Where LOG-10's export goes besides the clipboard: a file the user
@@ -153,8 +152,8 @@ class LogExportScope extends InheritedWidget {
 }
 
 /// What LOG-10 exports of [logs]: each held row as the view shows it, a
-/// journal row with its unit and PID and a container row with its time
-/// and stream, without SGR escapes; dropped lines say how many in
+/// journal row with its time, unit and PID and a container row with its
+/// time and stream, without SGR escapes; dropped lines say how many in
 /// [dropped]'s words.
 List<String> logExportLines(
   LogViewController logs, {
@@ -162,7 +161,7 @@ List<String> logExportLines(
 }) => [
   for (var i = 0; i < logs.length; i++)
     switch (logs[i]) {
-      final LogLine line => logRowText(line, container: logs.containerOf(line)),
+      final LogLine line => logs.rowText(line),
       LogDroppedLines(:final count) => dropped(count),
     },
 ];
