@@ -61,7 +61,7 @@ void main() {
     await tester.pumpWidget(const PoltergeistApp());
 
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
-    final expected = poltergeistThemesFor(AppAppearance.initial);
+    final expected = poltergeistThemesFor(poltergeistInitialAppearance);
     expect(app.themeMode, expected.themeMode);
     expect(app.theme?.colorScheme, expected.theme.colorScheme);
     expect(app.darkTheme?.colorScheme, expected.darkTheme.colorScheme);

@@ -2004,7 +2004,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
 
     final platform = Theme.of(context).platform;
     final mac = platform == TargetPlatform.macOS;
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     // D32 §3.2's last stage: below 600 dp a touch window takes the
     // compact posture (10 §9). It draws edge to edge — its app bars and
     // sheets take the system insets themselves — and its sidebar is
@@ -2115,7 +2115,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     required RegisteredCommand? sshImportCommand,
   }) {
     final strings = AppLocalizations.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final sidebarWidth = _sidebarWidth;
     final inspectorWidth = _inspectorWidth;
     final sidebarWanted = sidebar != null && !workspace.sidebarHidden;
@@ -4916,7 +4916,7 @@ class _HeaderTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final tab = workspace.activePane.activeTab;
     final controller = tab?.controller;
     final title = tab == null ? l10n.headerTitleEmpty : paneTabTitle(tab, l10n);
@@ -5100,7 +5100,7 @@ class _HeaderFilterFieldState extends State<_HeaderFilterField> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final pane = _bound;
     final active = pane != null && pane.filterActive;
     return SizedBox(

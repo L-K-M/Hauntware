@@ -437,47 +437,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'app.settings'",
     "'Settings needs a section to show.'",
   },
-  // The Appearance section's empty font field and the pretty-printed
-  // clipboard's indent, and the font field's test key: plumbing, never
-  // rendered. Preset names reach the screen through ARB (presetLabels).
-  'lib/ui/settings/appearance_settings.dart': {
-    "''",
-    "'  '",
-    "'appearance.fontFamily'",
-  },
-  // A theme's stored form, shared with Séance so a copied theme pastes
-  // into either app: its JSON keys, the hex notation's prefixes and
-  // glue, and the stored name of a palette that is no preset. The
-  // Appearance section never shows the stored name (see presetLabels).
-  'lib/theme/theme_palette.dart': {
-    "'#'",
-    "'0x'",
-    "''",
-    r"'$digit$digit'",
-    r"r'^[0-9a-f]+$'",
-    "'0'",
-    r"'$rgb${alpha.toRadixString(16).padLeft(2, '0')}'",
-    r"'#${hex.toUpperCase()}'",
-    "'Custom'",
-    "'name'",
-    "'accent'",
-    "'fontFamily'",
-    "'cornerScale'",
-  },
-  // The presets' stored names: English and the same as Séance's, so a
-  // pasted preset keeps its name in either app. Shown through ARB
-  // (themePreset*), never as these literals.
+  // The brand preset's and the initial preset's stored names: English
+  // and the same as Séance's, so a pasted preset keeps its name in either
+  // app. Shown through ARB (themePreset*), never as these literals.
   'lib/theme/theme_presets.dart': {
     "'Poltergeist'",
-    "'Graphite'",
-    "'Paper'",
-    "'Newsprint'",
-    "'Solarized'",
-    "'Midnight'",
-    "'Terminal'",
     "'Vapor'",
-    "'Bubblegum'",
-    "'High contrast'",
   },
   // The Settings window's wire (D36): channel names, the argument its
   // engine starts with, and the diagnostics of a malformed or orphaned

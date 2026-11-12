@@ -3139,6 +3139,30 @@ abstract class AppLocalizations {
   /// **'Accent'**
   String get appearanceSlotAccent;
 
+  /// Appearance section: notice that a chosen accent needs contrast-safe functional tones.
+  ///
+  /// In en, this message translates to:
+  /// **'Low contrast: links and indicators use an adjusted colour.'**
+  String get appearanceAccentAdjusted;
+
+  /// Appearance section: accessible label for the chosen accent preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Chosen accent'**
+  String get appearanceChosenAccentPreview;
+
+  /// Appearance section: accessible label for the adjusted functional accent preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjusted interface colour'**
+  String get appearanceAdjustedAccentPreview;
+
+  /// Appearance section: replaces a low-contrast accent with the suggested accessible colour.
+  ///
+  /// In en, this message translates to:
+  /// **'Use adjusted colour'**
+  String get appearanceUseAdjustedAccent;
+
   /// Colour row: the pane and page background.
   ///
   /// In en, this message translates to:
@@ -3958,7 +3982,7 @@ abstract class AppLocalizations {
   /// Resolves a held locator by adopting the fleet pin — no re-seal for that host (04 §4.4).
   ///
   /// In en, this message translates to:
-  /// **'Use shared key'**
+  /// **'Trust the new key'**
   String get backupSwitchAdoptFleet;
 
   /// Completion copy of the §4.4 switch — pushes may still hold while passphraseUnverified stands.

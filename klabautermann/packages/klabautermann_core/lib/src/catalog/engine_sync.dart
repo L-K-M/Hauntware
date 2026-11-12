@@ -13,6 +13,7 @@ import 'package:seance_core/catalog.dart'
         CatalogMode,
         ConflictAwareHostKeyStore,
         FileServerConfigStore,
+        HostKeyConflict,
         HostKeyMutationGate,
         KdfDowngradeException,
         PersistentLocalRecordStore,
@@ -417,12 +418,15 @@ final class EngineSync {
         );
       });
       _account = SyncAccountInfo(baseUrl: baseUrl, username: username);
-      await _vault.exclusive(() => _coordinator(result.vaultKey).applyPulled());
+      final report = await _vault.exclusive(
+        () => _coordinator(result.vaultKey).applyPulled(),
+      );
       return _status(
         operation,
         SyncPhase.succeeded,
         unverified: result.passphraseUnverified,
         budget: prefixBudgetOf(await _records.allRecords()),
+        pinConflicts: _syncPinConflicts(report.pinConflicts),
       );
     } on Object catch (error) {
       // The store applies a change in memory before it saves, so a login
@@ -478,6 +482,7 @@ final class EngineSync {
         SyncPhase.succeeded,
         unverified: await _enrollment!.passphraseUnverified(),
         budget: prefixBudgetOf(await _records.allRecords()),
+        pinConflicts: _syncPinConflicts(result.report.pinConflicts),
       );
     } on Object catch (error) {
       return _failedWith(operation, error);
@@ -485,6 +490,76 @@ final class EngineSync {
       api.close();
     }
   }
+
+  /// The host-key quarantine diff as it stands: every stored `hostkey:`
+  /// record whose key differs from the pin this device trusts. Empty when
+  /// the engine cannot read the account's records, so a startup read shows
+  /// nothing rather than failing.
+  Future<List<SyncPinConflict>> pinConflicts() async {
+    if (_account == null || _refusal(SyncOperation.round) != null) {
+      return const [];
+    }
+    try {
+      final key = await _keystore.readMasterKey();
+      if (key == null) return const [];
+      return await _vault.exclusive(
+        () async => _syncPinConflicts(await _coordinator(key).pinConflicts()),
+      );
+    } on Object {
+      return const [];
+    }
+  }
+
+  /// Resolves the conflict at [locator] and returns the quarantine diff as
+  /// it stands afterwards. [keepLocal] keeps this device's pin and re-pushes
+  /// it; otherwise the pulled key is trusted. A resolution whose
+  /// fingerprints no longer match the ones shown is a no-op. Throws when
+  /// the engine holds no exclusive access, no enrollment, or no vault key,
+  /// so the isolate can answer [RequestRejected].
+  Future<List<SyncPinConflict>> resolvePinConflict(
+    String locator, {
+    required bool keepLocal,
+    required String localFingerprintSha256,
+    required String pulledFingerprintSha256,
+  }) async {
+    if (_refusal(SyncOperation.round) case final refused?) {
+      throw StateError(refused.detail ?? refused.failure?.name ?? 'refused');
+    }
+    final key = await _keystore.readMasterKey();
+    if (key == null) throw const SyncVaultKeyUnavailableException();
+    final coordinator = _coordinator(key);
+    return _vault.exclusive(() async {
+      HostKeyConflict? conflict;
+      for (final candidate in await coordinator.pinConflicts()) {
+        if (candidate.locator == locator &&
+            candidate.local.fingerprintSha256 == localFingerprintSha256 &&
+            candidate.pulled.fingerprintSha256 == pulledFingerprintSha256) {
+          conflict = candidate;
+          break;
+        }
+      }
+      if (conflict == null) {
+        return _syncPinConflicts(await coordinator.pinConflicts());
+      }
+      if (keepLocal) {
+        await coordinator.keepLocalPin(conflict);
+      } else {
+        await coordinator.acceptPulledPin(conflict);
+      }
+      return _syncPinConflicts(await coordinator.pinConflicts());
+    });
+  }
+
+  static List<SyncPinConflict> _syncPinConflicts(
+    List<HostKeyConflict> conflicts,
+  ) => [
+    for (final conflict in conflicts)
+      SyncPinConflict(
+        locator: conflict.locator,
+        localFingerprintSha256: conflict.local.fingerprintSha256,
+        pulledFingerprintSha256: conflict.pulled.fingerprintSha256,
+      ),
+  ];
 
   /// The synced server [serverId] as the server editor shows it, or null
   /// when the catalog lists none by that id or cannot be read.
@@ -852,6 +927,7 @@ final class EngineSync {
     SyncFailure? failure,
     String? detail,
     SyncPrefixBudget? budget,
+    List<SyncPinConflict>? pinConflicts,
   }) => SyncStatus(
     phase,
     operation: operation,
@@ -860,6 +936,7 @@ final class EngineSync {
     passphraseUnverified: unverified,
     detail: detail,
     prefixBudget: budget,
+    pinConflicts: pinConflicts == null ? null : List.unmodifiable(pinConflicts),
   );
 
   SyncStatus _failed(

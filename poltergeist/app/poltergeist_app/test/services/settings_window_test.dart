@@ -367,7 +367,7 @@ void main() {
     expect(remote.editorFont, isNull);
     expect(remote.directoryGrouping, isNull);
     expect(remote.doubleClickAction, isNull);
-    expect(remote.theme.value, AppAppearance.initial);
+    expect(remote.theme.value, poltergeistInitialAppearance);
   });
 
   group('double-click action', () {
@@ -525,7 +525,7 @@ void main() {
 
     test('set in the window, re-themes the app and the window', () async {
       final remote = await openWindow();
-      expect(remote.theme.value, AppAppearance.initial);
+      expect(remote.theme.value, poltergeistInitialAppearance);
       final palette = ThemePresets.bubblegum.copyWith(cornerScale: 0.35);
 
       await remote.appearance!.setAppearance(

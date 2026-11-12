@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 import 'package:seance_core/seance_core.dart';
 
@@ -11,7 +12,6 @@ import '../services/remote_files_controller.dart';
 import '../theme.dart';
 import 'editor_syntax.dart' show seanceEditorSyntaxTheme;
 import 'session_label.dart' show editorTabLabel;
-import 'top_toast.dart';
 
 export '../services/editor_document.dart';
 
@@ -87,6 +87,10 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
   bool _missingBannerDismissed = false;
 
   bool get isDirty => _editor.isDirty;
+
+  /// A batch quit rechecks this after every editor has finished saving.
+  bool get isReadyToClose =>
+      mounted && !_reloading && !_editor.isBusy && !_editor.isDirty;
   bool? get _remoteChanged =>
       widget.remoteFiles?.remoteChangedFor(widget.remotePath);
   bool get _remoteMissing {
@@ -201,43 +205,47 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
   /// file can be, and lets the tab close only once nothing is left unsaved.
   Future<bool> confirmDiscard() => _editor.confirmClose(() async {
     if (!mounted) return false;
-    final choice = await showDialog<_CloseChoice>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Save changes to “${editorTabLabel(widget.remotePath)}”?'),
-        content: const Text(
-          'Changes not saved to the managed local copy will be lost.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, _CloseChoice.discard),
-            child: const Text('Don’t save'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, _CloseChoice.keepEditing),
-            child: const Text('Cancel'),
-          ),
-          // Not while a reload from the server holds the buffer: a save
-          // would do nothing and the tab would stay open unexplained.
-          if (!_reloading)
-            FilledButton(
-              autofocus: true,
-              onPressed: () => Navigator.pop(context, _CloseChoice.save),
-              child: const Text('Save'),
-            ),
-        ],
-      ),
+    final choice = await showGhostCloseDialog(
+      context,
+      title: 'Save changes to “${editorTabLabel(widget.remotePath)}”?',
+      body: 'Changes not saved to the managed local copy will be lost.',
+      showSave: !_reloading,
     );
     switch (choice) {
-      case _CloseChoice.save:
+      case GhostCloseChoice.save:
         await _save(upload: widget.onUpload != null);
         return mounted && !_editor.isDirty;
-      case _CloseChoice.discard:
+      case GhostCloseChoice.dontSave:
         return true;
-      case _CloseChoice.keepEditing || null:
+      case GhostCloseChoice.cancel || null:
         return false;
     }
   });
+
+  /// Saves the buffer for the quit guard's Save All, without asking again.
+  /// Answers whether nothing is left unsaved, matching the close dialog's
+  /// Save check. A failed save answers false, so the guard keeps the
+  /// window open.
+  Future<bool> saveForQuit() async {
+    if (!mounted || _reloading) return false;
+    try {
+      final result = await _editor.save(
+        mode: widget.onUpload != null
+            ? EditorSaveMode.primary
+            : EditorSaveMode.local,
+        access: EditorSaveAccess.confirmedClose,
+      );
+      return mounted &&
+          result != null &&
+          (!result.publishRequested || result.published) &&
+          !result.hasUnsavedChanges &&
+          !_editor.isBusy &&
+          !_editor.isDirty;
+    } catch (error) {
+      if (mounted) showTopToastIn(context, message: error.toString());
+      return false;
+    }
+  }
 
   /// Save the document, uploading when the editor opened from a remote
   /// checkout, as ⌘S in the tab does.
@@ -566,7 +574,3 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
     );
   }
 }
-
-/// The answer to the close question
-/// ([BuiltInTextEditorScreenState.confirmDiscard]).
-enum _CloseChoice { save, discard, keepEditing }

@@ -1618,25 +1618,23 @@ void main() {
 
       test('a server clock behind this one keeps a live temp', () async {
         // Whole seconds, as SFTP v3 reports them, five minutes behind.
-        DateTime serverNow() {
-          final behind = DateTime.now().toUtc().subtract(
-            const Duration(minutes: 5),
-          );
-          return DateTime.fromMillisecondsSinceEpoch(
-            behind.millisecondsSinceEpoch ~/ 1000 * 1000,
-            isUtc: true,
-          );
-        }
+        // Freeze the temp and probe at the same server time so journal
+        // fsync cannot age the fixture across a second before adoption.
+        final behind = DateTime.now().toUtc().subtract(
+          const Duration(minutes: 5),
+        );
+        final serverNow = DateTime.fromMillisecondsSinceEpoch(
+          behind.millisecondsSinceEpoch ~/ 1000 * 1000,
+          isUtc: true,
+        );
 
-        s1.clock = serverNow;
+        s1.clock = () => serverNow;
         const live = '/dest/.seance-upload-11111111.tmp';
         const dead = '/dest/.poltergeist-22222222.tmp';
-        s1.addFile(live, [1], modifiedAt: serverNow());
-        s1.addFile(
-          dead,
-          [2],
-          modifiedAt: serverNow().subtract(const Duration(hours: 1)),
-        );
+        s1.addFile(live, [1], modifiedAt: serverNow);
+        s1.addFile(dead, [
+          2,
+        ], modifiedAt: serverNow.subtract(const Duration(hours: 1)));
 
         await restoreUploadInto('/dest');
 

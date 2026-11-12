@@ -4,8 +4,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as paths;
 import 'package:planchette_core/planchette_core.dart';
+import 'package:planchette_app/services/document_publication.dart';
 import 'package:planchette_app/services/document_store.dart';
 import 'package:planchette_app/services/document_workspace.dart';
+import 'package:seance_core/seance_core.dart';
 
 String testPath(String name) => paths.join(Directory.systemTemp.path, name);
 
@@ -135,6 +137,24 @@ class MemoryDocuments implements DocumentStore {
       _activeWrites--;
     }
   }
+}
+
+class _FakePublication extends DocumentPublication {
+  _FakePublication({required this.displayPath, required this.sourcePath});
+
+  @override
+  final String displayPath;
+  @override
+  final String sourcePath;
+
+  @override
+  bool get pending => false;
+  @override
+  void localSaved(String digest) {}
+  @override
+  Future<bool> publish() async => true;
+  @override
+  Future<void> discard() async {}
 }
 
 class FakeDialogs implements DocumentDialogs {
@@ -2252,4 +2272,92 @@ void main() {
       expect(workspace.interactionLocked, isFalse);
     },
   );
+
+  group('download provenance', () {
+    const palette = HtmlPalette(
+      background: '#ffffff',
+      foreground: '#000000',
+      tokens: {SyntaxTokenType.comment: '#777777'},
+    );
+
+    DocumentWorkspace workspaceMarking(List<String> marked) {
+      final created = DocumentWorkspace(
+        store: store,
+        dialogs: dialogs,
+        provenance: DownloadProvenance.forHost(
+          ProvenancePlatform.macos,
+          agent: 'Planchette',
+          runProcess: (_, arguments) async {
+            marked.add(arguments.last);
+            return ProcessResult(0, 0, '', '');
+          },
+        ),
+      );
+      addTearDown(created.dispose);
+      return created;
+    }
+
+    Future<DocumentTab> openRemote(
+      DocumentWorkspace workspace,
+      String name,
+    ) async {
+      store.files[testPath(name)] = document(name, 'remote text');
+      await workspace.openManaged(
+        testPath(name),
+        _FakePublication(
+          displayPath: 'server:/remote/$name',
+          sourcePath: '/remote/$name',
+        ),
+      );
+      return workspace.active!;
+    }
+
+    test('a remote document\'s Save As marks the local copy', () async {
+      final marked = <String>[];
+      final marking = workspaceMarking(marked);
+      final tab = await openRemote(marking, 'managed.txt');
+      tab.editor.text.text = 'edited remote';
+      dialogs.savePath = testPath('copy.txt');
+
+      expect(await marking.save(tab, saveAs: true), isTrue);
+      expect(store.files[testPath('copy.txt')]!.text, 'edited remote');
+      expect(marked, [testPath('copy.txt')]);
+    });
+
+    test('a local document\'s Save As marks nothing', () async {
+      final marked = <String>[];
+      final marking = workspaceMarking(marked);
+      store.files[testPath('one.txt')] = document('one.txt', 'disk');
+      await marking.open(testPath('one.txt'));
+      final tab = marking.active!;
+      tab.editor.text.text = 'edited';
+      dialogs.savePath = testPath('copy.txt');
+
+      expect(await marking.save(tab, saveAs: true), isTrue);
+      expect(marked, isEmpty);
+    });
+
+    test('a remote document\'s HTML export marks the page', () async {
+      final marked = <String>[];
+      final marking = workspaceMarking(marked);
+      final tab = await openRemote(marking, 'managed.txt');
+      dialogs.savePath = testPath('managed.html');
+
+      expect(await marking.exportHtml(tab, palette), isTrue);
+      expect(marked, [testPath('managed.html')]);
+    });
+
+    test('a local document\'s HTML export marks nothing', () async {
+      final marked = <String>[];
+      final marking = workspaceMarking(marked);
+      store.files[testPath('one.txt')] = document('one.txt', 'disk');
+      await marking.open(testPath('one.txt'));
+      final tab = marking.active!;
+      dialogs.savePath = testPath('one.html');
+
+      expect(await marking.exportHtml(tab, palette), isTrue);
+      expect(store.files, contains(testPath('one.html')));
+      expect(marked, isEmpty);
+    });
+  });
 }
