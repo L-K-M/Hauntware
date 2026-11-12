@@ -64,6 +64,20 @@ void main() {
     expect(find.textContaining('could not be checked'), findsOneWidget);
   });
 
+  testWidgets('says why it asks about a clean paste', (tester) async {
+    await open(
+      tester,
+      subject: const TerminalPasteReview(
+        text: 'a\nb',
+        lineCount: 2,
+        findings: [],
+      ),
+    );
+    expect(find.text('Paste 2 lines?'), findsOneWidget);
+    expect(find.textContaining('runs each line as it arrives'), findsOneWidget);
+    expect(find.textContaining('look dangerous'), findsNothing);
+  });
+
   testWidgets('a dismissed review pastes nothing', (tester) async {
     final answer = await open(tester);
     await tester.tapAt(const Offset(4, 4));

@@ -263,7 +263,8 @@ void main() {
       find.byType(PlanchetteEditor),
     );
     expect(editor.controller.text.text, 'TOKEN=old\n');
-    expect(find.text('Not saved'), findsOneWidget);
+    // The dirty marker is part of the combined editor status row.
+    expect(find.textContaining('Not saved'), findsOneWidget);
   });
 
   testWidgets('a backup that reads back with another hash is not opened', (

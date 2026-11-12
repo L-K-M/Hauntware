@@ -100,12 +100,42 @@ void main() {
       await duplex.close();
     });
 
-    test('a tcpip refusal also classifies as forwardDisabled', () async {
+    test(
+      'an administratively prohibited tcpip open is forwardDisabled',
+      () async {
+        final link = await openTestLink();
+        addTearDown(link.link.close);
+        link.peer.tcpipRefusal = (
+          reasonCode: peerRefusalAdministrativelyProhibited,
+          description: 'administratively prohibited',
+        );
+
+        await expectLater(
+          link.link.openTcpStream('10.0.0.5', 5432),
+          throwsA(
+            isA<ChannelOpenException>().having(
+              (error) => error.refusal,
+              'refusal',
+              ChannelRefusal.forwardDisabled,
+            ),
+          ),
+        );
+        expect(link.link.seen.forwardingRefused, isTrue);
+      },
+    );
+
+    test('a closed target port is connectFailed and teaches the link '
+        'nothing', () async {
       final link = await openTestLink();
       addTearDown(link.link.close);
+      final states = <SshLinkState>[];
+      final subscription = link.link.states.listen(states.add);
+      addTearDown(subscription.cancel);
+      // What OpenSSH and Dropbear send when the target refuses the
+      // connection: forwarding works, nothing listens there.
       link.peer.tcpipRefusal = (
         reasonCode: peerRefusalConnectFailed,
-        description: 'connect failed',
+        description: 'Connection refused',
       );
 
       await expectLater(
@@ -114,10 +144,13 @@ void main() {
           isA<ChannelOpenException>().having(
             (error) => error.refusal,
             'refusal',
-            ChannelRefusal.forwardDisabled,
+            ChannelRefusal.connectFailed,
           ),
         ),
       );
+      expect(link.link.seen.forwardingRefused, isFalse);
+      await pumpEventQueue();
+      expect(states, [isA<SshLinkReady>()]);
     });
   });
 

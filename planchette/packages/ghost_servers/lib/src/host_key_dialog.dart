@@ -22,7 +22,10 @@ final class GhostHostKeyPrompt {
     required this.fingerprintSha256,
     this.pinnedFingerprintSha256,
     this.pinnedKeyType,
-  });
+  }) : assert(
+         pinnedFingerprintSha256 != fingerprintSha256,
+         'A key matching its pin is trusted and never prompts',
+       );
 
   final String host;
   final int port;
@@ -38,9 +41,9 @@ final class GhostHostKeyPrompt {
   final String? pinnedFingerprintSha256;
 
   /// The pinned key's algorithm, where the host knows it. The review
-  /// labels the pinned fingerprint with [keyType] when this is null:
-  /// Séance passes its pinned key's type, Poltergeist's engine payload
-  /// carries none.
+  /// shows the pinned fingerprint without a type when this is null, since
+  /// the presented key's type may not be the pinned one: Séance passes
+  /// its pinned key's type, Poltergeist's engine payload carries none.
   final String? pinnedKeyType;
 
   /// Whether this is the changed-key review rather than a first use.
@@ -49,8 +52,8 @@ final class GhostHostKeyPrompt {
   /// decisions never reach the dialog: `seance_core`'s host-key check
   /// connects without asking when the presented key matches the pinned
   /// one, and a first use has no pin (docs/design/ghost-servers-part1.md
-  /// §7.2). A caller that ever prompts for a key matching its pin must
-  /// leave [pinnedFingerprintSha256] null.
+  /// §7.2). A pin equal to the presented fingerprint is a caller bug and
+  /// fails the constructor's assertion.
   bool get isChanged => pinnedFingerprintSha256 != null;
 }
 
@@ -87,8 +90,8 @@ final class GhostHostKeyStrings {
   /// The notice shown when both key algorithms are known and differ.
   final String Function(String previous, String presented) keyTypeChanged;
 
-  /// The endpoint line, from the host as configured (no IPv6 brackets) and
-  /// the port.
+  /// The endpoint line, from the host (a bare IPv6 address already
+  /// bracketed) and the port.
   final String Function(String host, int port) endpoint;
 
   /// The label over a first use's fingerprint.
@@ -119,6 +122,13 @@ String _keyTypeChanged(String previous, String presented) =>
     'Key algorithm changed from $previous to $presented.';
 
 String _endpoint(String host, int port) => '$host:$port';
+
+/// The host as the endpoint line shows it: a bare IPv6 address gains
+/// brackets, so its colons cannot be read as the port separator.
+String _displayHost(String host) =>
+    host.contains(':') && !(host.startsWith('[') && host.endsWith(']'))
+    ? '[$host]'
+    : host;
 
 /// Shows the trust-on-first-use prompt. On a *changed* key this is a hard,
 /// visually alarming block that requires explicit re-pinning — never a
@@ -237,7 +247,7 @@ class _HostKeyDialogState extends State<_HostKeyDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(strings.endpoint(prompt.host, prompt.port)),
+              Text(strings.endpoint(_displayHost(prompt.host), prompt.port)),
               if (changed) ...[
                 const SizedBox(height: 8),
                 Text(strings.changedReviewInstruction),
@@ -253,7 +263,7 @@ class _HostKeyDialogState extends State<_HostKeyDialog> {
                 const SizedBox(height: 8),
                 _Fingerprint(
                   label: strings.previousLabel,
-                  type: previousType ?? prompt.keyType,
+                  type: previousType,
                   value: prompt.pinnedFingerprintSha256!,
                   monoStyle: widget.monoStyle,
                 ),
@@ -306,7 +316,9 @@ class _HostKeyDialogState extends State<_HostKeyDialog> {
 
 class _Fingerprint extends StatelessWidget {
   final String label;
-  final String type;
+
+  /// Null when the host does not know the key's algorithm.
+  final String? type;
   final String value;
   final TextStyle monoStyle;
 
@@ -324,7 +336,7 @@ class _Fingerprint extends StatelessWidget {
       children: [
         Text(label, style: Theme.of(context).textTheme.labelSmall),
         SelectableText(
-          '$type\n$value',
+          type == null ? value : '$type\n$value',
           style: monoStyle.copyWith(fontSize: 12),
         ),
       ],

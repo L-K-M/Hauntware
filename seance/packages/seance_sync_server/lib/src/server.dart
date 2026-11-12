@@ -19,6 +19,21 @@ import 'storage.dart';
 
 part 'inbox_handlers.dart';
 
+/// Rate-limit source from the socket peer shelf_io reports, honouring
+/// `X-Forwarded-For` only as [resolver] allows. The resolver is built once, so
+/// its trusted networks are parsed at startup rather than per request.
+String Function(Request) _connectionSource(ClientAddressResolver resolver) =>
+    (request) {
+      final info = request.context['shelf.io.connection_info'];
+      final peer = info is HttpConnectionInfo
+          ? info.remoteAddress.address
+          : 'unknown';
+      return resolver.resolve(
+        peerAddress: peer,
+        forwardedFor: request.headers['x-forwarded-for'],
+      );
+    };
+
 /// The Séance sync server. A dumb, breach-tolerant blob store: it authenticates
 /// devices, stores end-to-end encrypted records, and resolves conflicts with
 /// the same last-write-wins rule the client uses. It can decrypt nothing.
@@ -85,16 +100,7 @@ class SyncServer {
   }) : _now = now ?? DateTime.now,
        _sourceFor =
            sourceFor ??
-           ((request) {
-             final info = request.context['shelf.io.connection_info'];
-             final peer = info is HttpConnectionInfo
-                 ? info.remoteAddress.address
-                 : 'unknown';
-             return ClientAddressResolver(settings.trustedProxies).resolve(
-               peerAddress: peer,
-               forwardedFor: request.headers['x-forwarded-for'],
-             );
-           }),
+           _connectionSource(ClientAddressResolver(settings.trustedProxies)),
        authGlobalLimiter =
            authGlobalLimiter ??
            RateLimiter(

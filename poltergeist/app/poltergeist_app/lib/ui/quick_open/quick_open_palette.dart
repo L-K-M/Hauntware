@@ -472,6 +472,9 @@ class _QuickOpenPaletteState extends State<_QuickOpenPalette> {
                     controller: _queryController,
                     focusNode: _fieldFocus,
                     autofocus: true,
+                    // Queries name files and remote paths; keep them
+                    // out of the keyboard's personal dictionary.
+                    enableIMEPersonalizedLearning: false,
                     decoration: InputDecoration(
                       hintText: l10n.quickOpenFieldHint,
                       prefixIcon: const Icon(Icons.search, size: 20),

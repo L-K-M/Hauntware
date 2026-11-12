@@ -925,6 +925,35 @@ void main() {
       expect(controller.pairId, isNotEmpty);
     });
 
+    // Byte progress reaches the activity panel through the task binding;
+    // the plan view shows none of it, so a per-chunk notify would only
+    // rebuild the whole plan table for every chunk of a large file.
+    test('byte progress does not notify the plan view', () async {
+      File('${left.path}/big.bin').writeAsBytesSync(
+        List<int>.filled(8 * 1024 * 1024, 7),
+      );
+      final tasks = SyncQueueTasks();
+      final controller = realController(const SyncRuleSet(), tasks: tasks);
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await pumpUntil(() => !controller.trashPurgeBlocksActions);
+
+      var progressEvents = 0;
+      final progress = tasks.events
+          .where((event) => event is TransferQueueProgressEvent)
+          .listen((_) => progressEvents++);
+      addTearDown(progress.cancel);
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      await controller.run();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.phase, SyncPlanPhase.completed);
+      expect(progressEvents, greaterThan(4));
+      expect(notifications, lessThan(progressEvents ~/ 4));
+    });
+
     test('run preflight freezes the reviewed pair and plan', () async {
       File('${left.path}/a.txt').writeAsStringSync('alpha');
       final controller = realController(const SyncRuleSet());

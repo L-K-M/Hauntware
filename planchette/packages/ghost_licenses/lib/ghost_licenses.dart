@@ -24,28 +24,67 @@ void registerPlatformLicenses() {
   LicenseRegistry.addLicense(_androidLibraryLicenses);
 }
 
+/// The licenses page folds every source into one stream, so an error from
+/// this source would replace Flutter's, Dart's and the pub packages'
+/// notices with the error text. A failure is reported and shown as one
+/// entry instead.
 Stream<LicenseEntry> _androidLibraryLicenses() async* {
-  final definitions = await _channel.invokeMethod<String>('libraryDefinitions');
-  if (definitions == null) {
-    throw StateError('The Android host returned no library definitions.');
+  final List<LicenseEntry> entries;
+  try {
+    final definitions = await _channel.invokeMethod<String>(
+      'libraryDefinitions',
+    );
+    if (definitions == null) {
+      throw StateError('The Android host returned no library definitions.');
+    }
+    entries = libraryLicenses(definitions);
+  } catch (error, stack) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stack,
+        library: 'ghost_licenses',
+        context: ErrorDescription('while reading the Android library notices'),
+      ),
+    );
+    yield const LicenseEntryWithLineBreaks([
+      'Android libraries',
+    ], 'The notices of the Android libraries could not be read.');
+    return;
   }
-  yield* Stream.fromIterable(libraryLicenses(definitions));
+  yield* Stream.fromIterable(entries);
 }
 
 /// The license entries of AboutLibraries library definitions [json]: one
 /// per license, naming every library (with its version) that uses it, so
 /// the licenses page lists each library and shows the full text.
+///
+/// A library entry without an id or a license list is skipped; the release
+/// checks keep such an entry from shipping. Throws [FormatException] when
+/// [json] is not a definitions object at all.
 @visibleForTesting
 List<LicenseEntry> libraryLicenses(String json) {
-  final definitions = jsonDecode(json) as Map<String, Object?>;
-  final licenses = definitions['licenses']! as Map<String, Object?>;
+  final definitions = jsonDecode(json);
+  if (definitions is! Map<String, Object?> ||
+      definitions['libraries'] is! List<Object?>) {
+    throw const FormatException('Not AboutLibraries library definitions.');
+  }
+  final licenses = switch (definitions['licenses']) {
+    final Map<String, Object?> licenses => licenses,
+    _ => const <String, Object?>{},
+  };
   final users = <String, List<String>>{};
   for (final library in definitions['libraries']! as List<Object?>) {
-    final fields = library! as Map<String, Object?>;
-    final version = fields['artifactVersion'] as String?;
-    final name = [fields['uniqueId']! as String, ?version].join(' ');
-    for (final key in fields['licenses']! as List<Object?>) {
-      users.putIfAbsent(key! as String, () => []).add(name);
+    if (library case {
+      'uniqueId': final String id,
+      'licenses': final List<Object?> keys,
+    }) {
+      if (keys.any((key) => key is! String)) continue;
+      final version = library['artifactVersion'];
+      final name = [id, if (version is String) version].join(' ');
+      for (final key in keys.cast<String>()) {
+        users.putIfAbsent(key, () => []).add(name);
+      }
     }
   }
 
@@ -58,9 +97,11 @@ List<LicenseEntry> libraryLicenses(String json) {
 /// A license's text, or its name and URL when the definitions carry no
 /// text (the release checks keep that from shipping).
 String _text(String key, Object? license) {
-  final fields = license as Map<String, Object?>? ?? const {};
-  final content = fields['content'] as String?;
-  if (content != null && content.trim().isNotEmpty) return content;
+  final fields = license is Map<String, Object?> ? license : const {};
+  final content = fields['content'];
+  if (content is String && content.trim().isNotEmpty) return content;
 
-  return [fields['name'] ?? key, ?fields['url']].join('\n\n');
+  final name = fields['name'];
+  final url = fields['url'];
+  return [name is String ? name : key, if (url is String) url].join('\n\n');
 }

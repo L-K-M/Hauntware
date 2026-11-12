@@ -72,20 +72,30 @@ void main() {
       expect(localVolumeOf(r'\\NAS\media'), r'\\nas\media');
     });
 
-    test('POSIX paths carry no volume boundary', () {
-      // Path shape alone cannot see mount points: a local drop onto a
-      // different mount (e.g. /home -> /mnt/usb) still defaults to move,
-      // unlike the Windows cross-drive default of copy. Same-server
-      // "rename" moves have the same blindness across server mounts.
-      // An engine-side cross-device check (statfs) is follow-up if
-      // parity is wanted; until then this is the POSIX simplification.
-      expect(localVolumeOf('/home/tester'), isNull);
-      expect(localVolumeOf('/mnt/usb/x'), isNull);
+    test('POSIX paths outside a mount directory share the root volume', () {
+      expect(localVolumeOf('/home/tester'), '/');
+      expect(localVolumeOf('/'), '/');
+      expect(localVolumeOf('/srv/www/index.html'), '/');
+      // The mount directory itself is part of the root filesystem.
+      expect(localVolumeOf('/Volumes'), '/');
+      expect(localVolumeOf('/mnt'), '/');
+    });
+
+    test('POSIX paths under the OS mount directories name their mount', () {
+      expect(localVolumeOf('/Volumes/STICK/photos'), '/Volumes/STICK');
+      expect(localVolumeOf('/Volumes/STICK'), '/Volumes/STICK');
+      expect(localVolumeOf('/media/x/STICK/a'), '/media/x/STICK');
+      expect(localVolumeOf('/run/media/x/STICK'), '/run/media/x/STICK');
+      expect(localVolumeOf('/mnt/usb/x'), '/mnt/usb');
+      expect(localVolumeOf('/mnt/usb/'), '/mnt/usb');
+      // /media/NAME (no user level) cannot be told from /media/$USER by
+      // shape; both read as a mount, erring toward a copy.
+      expect(localVolumeOf('/media/STICK'), '/media/STICK');
     });
 
     test('a colon in position 1 does not make a POSIX volume', () {
       // '/:notes/sub' is a root-level POSIX entry, not drive ':'.
-      expect(localVolumeOf('/:notes/sub'), isNull);
+      expect(localVolumeOf('/:notes/sub'), '/');
       expect(localVolumeOf('c:\\x'), 'C:');
     });
 
@@ -180,6 +190,65 @@ void main() {
         verb(
           sourceRoots: const ['/home/x'],
           destinationDir: '/:notes/sub',
+        ),
+        TransferOperation.move,
+      );
+    });
+
+    test('a local drop onto another POSIX mount defaults to copy', () {
+      for (final dest in [
+        '/Volumes/STICK',
+        '/Volumes/STICK/backup',
+        '/media/x/STICK',
+        '/run/media/x/STICK/photos',
+        '/mnt/nas/share',
+      ]) {
+        expect(
+          verb(
+            sourceRoots: const ['/home/tester/Photos/a.jpg'],
+            destinationDir: dest,
+          ),
+          TransferOperation.copy,
+          reason: dest,
+        );
+      }
+      // And back from the stick to the home folder.
+      expect(
+        verb(
+          sourceRoots: const ['/media/x/STICK/a.jpg'],
+          destinationDir: '/home/tester',
+        ),
+        TransferOperation.copy,
+      );
+      // Between two sticks.
+      expect(
+        verb(
+          sourceRoots: const ['/Volumes/A/a.jpg'],
+          destinationDir: '/Volumes/B',
+        ),
+        TransferOperation.copy,
+      );
+    });
+
+    test('a local drop inside one POSIX mount defaults to move', () {
+      expect(
+        verb(
+          sourceRoots: const ['/Volumes/STICK/a.jpg'],
+          destinationDir: '/Volumes/STICK/backup',
+        ),
+        TransferOperation.move,
+      );
+      expect(
+        verb(
+          sourceRoots: const ['/media/x/STICK/a/b.jpg'],
+          destinationDir: '/media/x/STICK/c',
+        ),
+        TransferOperation.move,
+      );
+      expect(
+        verb(
+          sourceRoots: const ['/home/tester/a.jpg'],
+          destinationDir: '/srv/other',
         ),
         TransferOperation.move,
       );

@@ -8,6 +8,8 @@ import 'package:planchette_editor/planchette_editor.dart'
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'edit/editor_display_scope.dart';
+import 'editor_strings.dart' show KlabautermannEditorStrings;
 import 'time_display.dart';
 import 'processes_panel.dart' show kRevealDuration;
 
@@ -336,6 +338,8 @@ class _UnitFileViewState extends State<UnitFileView> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final display =
+        EditorDisplayScope.maybeOf(context) ?? EditorDisplay.standard;
     final answer = _answer;
     if (answer == null) return Text(l10n.unitFileReading);
     if (answer is UnitQueryFailed) {
@@ -406,7 +410,9 @@ class _UnitFileViewState extends State<UnitFileView> {
                   key: ObjectKey(editor),
                   controller: editor,
                   editingLocked: true,
-                  showStatus: false,
+                  strings: KlabautermannEditorStrings(l10n),
+                  textStyle: editorDisplayTextStyle(display),
+                  ligatures: display.ligatures,
                 ),
               ),
             ),
