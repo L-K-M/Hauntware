@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
+import 'package:seance_core/seance_core.dart' show SshConnectFailureKind;
 import 'package:test/test.dart';
 
 import 'pool_fakes.dart';
@@ -467,6 +468,86 @@ void main() {
       expect(h.credentialResolveCalls, 1);
       expect(pane.fs, isA<RemoteFileSystem>());
       completeWithoutTimers(time, pane.close());
+    });
+  });
+
+  // A rejected login, a refused host key or a broken key cannot succeed on a
+  // later attempt; retrying one every backoff cap would hammer the server
+  // (and trip fail2ban) while the pane only shows "reconnecting".
+  for (final kind in [
+    SshConnectFailureKind.authenticationRejected,
+    SshConnectFailureKind.hostKeyRefused,
+    SshConnectFailureKind.keyPassphraseWrong,
+    SshConnectFailureKind.keyUnreadable,
+    SshConnectFailureKind.routeInvalid,
+  ]) {
+    test('a ${kind.name} connect failure stops recovery and surfaces it', () {
+      fakeAsync((time) {
+        final h = PoolHarness()..addServer('s1');
+        final statuses = <ServerStatus>[];
+        final subscription = h.manager.watchServer('s1').listen(statuses.add);
+        browsePane(time, h, 'a');
+        final failure = h.opener.connectFailure = SshConnectException(
+          'Authentication failed for test@example.com.',
+          StateError('server said no'),
+          SshConnectionLog(),
+          kind: kind,
+        );
+        h.opener.transports.single.die();
+        time.flushMicrotasks();
+        final failed = expectLater(
+          h.manager.openBrowseChannel('s1', paneTabId: 'b'),
+          throwsA(same(failure)),
+        );
+        time.elapse(_firstDelay);
+        completeWithoutTimers(time, failed);
+
+        expect(h.opener.calls, hasLength(2));
+        time.elapse(const Duration(minutes: 5));
+        time.flushMicrotasks();
+        expect(h.opener.calls, hasLength(2));
+        expect(statuses.last.state, ServerConnectionState.disconnected);
+        expect(
+          statuses.last.detail,
+          'Authentication failed for test@example.com.',
+        );
+        expect(time.pendingTimers, isEmpty);
+        unawaited(subscription.cancel());
+        completeWithoutTimers(time, h.manager.disconnectServer('s1'));
+      });
+    });
+  }
+
+  test('saved credentials rejected after re-resolution stop recovery', () {
+    fakeAsync((time) {
+      final h = PoolHarness(
+        opener: FakeTransportOpener(growthRequiresChallenge: true),
+      )..addServer('s1');
+      browsePane(time, h, 'a');
+      final failure = h.opener.connectFailure = SshConnectException(
+        'Authentication failed.',
+        StateError('rotated password'),
+        SshConnectionLog(),
+        kind: SshConnectFailureKind.authenticationRejected,
+      );
+      h.opener.transports.single.die();
+      time.flushMicrotasks();
+      final failed = expectLater(
+        h.manager.openBrowseChannel('s1', paneTabId: 'b'),
+        throwsA(same(failure)),
+      );
+      time.elapse(const Duration(seconds: 3));
+      completeWithoutTimers(time, failed);
+
+      // The challenge re-resolved the saved secret once; its rejection
+      // ends recovery instead of repeating every backoff cap.
+      expect(h.opener.calls, hasLength(3));
+      expect(h.opener.calls.last.prompting, ConnectPrompting.enabled);
+      expect(h.credentialResolveCalls, 2);
+      time.elapse(const Duration(minutes: 5));
+      expect(h.opener.calls, hasLength(3));
+      expect(time.pendingTimers, isEmpty);
+      completeWithoutTimers(time, h.manager.disconnectServer('s1'));
     });
   });
 

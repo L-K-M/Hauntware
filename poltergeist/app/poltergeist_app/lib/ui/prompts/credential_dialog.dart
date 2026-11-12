@@ -39,6 +39,8 @@ class CredentialDialogResult {
 ///
 /// Pass [request] and [retry] for the passphrase-only form, which asks for
 /// the passphrase of a key whose material is already known.
+/// [vaultKeyMissing] words the [vaultUnavailable] banner for a keystore
+/// that no longer holds the key of a vault with saved secrets.
 Future<CredentialDialogResult?> showCredentialDialog(
   BuildContext context,
   CredentialPromptData data, {
@@ -46,6 +48,7 @@ Future<CredentialDialogResult?> showCredentialDialog(
   bool retry = false,
   Future<String> Function(String path)? readKeyFile,
   bool vaultUnavailable = false,
+  bool vaultKeyMissing = false,
   GlobalKey? dialogKey,
 }) async {
   final l10n = AppLocalizations.of(context);
@@ -55,7 +58,7 @@ Future<CredentialDialogResult?> showCredentialDialog(
     request ?? ghostCredentialRequestOf(data, vaultUnavailable: vaultUnavailable),
     strings: passphraseOnly
         ? poltergeistPassphraseStrings(l10n, retry: retry)
-        : poltergeistCredentialStrings(l10n),
+        : poltergeistCredentialStrings(l10n, vaultKeyMissing: vaultKeyMissing),
     readKeyFile: readKeyFile,
     monoStyle: poltergeistMonoTextStyle,
     dialogKey: dialogKey,

@@ -161,6 +161,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Saved secrets are unavailable. Unlock or restore your system credential store, then retry — or enter the secret below.';
 
   @override
+  String get credentialVaultKeyMissing =>
+      'Saved secrets are locked. Your system credential store no longer holds the key for them, and Poltergeist did not create a new one because that would make them unreadable. Restore the key from a backup of your keychain or credential store, then reconnect, or enter the secret below.';
+
+  @override
   String get credentialKeyFileUnreadable =>
       'The file could not be read as text.';
 
@@ -2301,6 +2305,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get backupKdfRefusal =>
       'The sync server returned weaker password-hashing parameters than Poltergeist accepts — refusing to derive your key (possible downgrade attack).';
+
+  @override
+  String get backupVaultKeyMissing =>
+      'Your system credential store no longer holds the key for your saved secrets, so they cannot be moved to your sync key. Poltergeist did not create a new key because that would make them unreadable. Restore the key from a backup of your keychain or credential store, then try again.';
 
   @override
   String get backupServerUrlField => 'Sync server URL';

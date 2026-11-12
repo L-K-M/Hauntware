@@ -12,6 +12,7 @@ import '../ui/prompts/host_key_dialog.dart';
 import '../ui/prompts/keyboard_interactive_dialog.dart';
 import 'application_error_reporter.dart';
 import 'identity_file_reader.dart';
+import 'secure_master_key.dart' show MasterKeyUnavailableException;
 
 /// One prompt flowing through the coordinator: the engine event plus the
 /// `dismissed` flag every post-await path rechecks (09 §3.1) — the engine
@@ -293,6 +294,7 @@ class PromptCoordinator {
     // falls through to the passphrase-only loop below.
     var vaultUnavailable = false;
     (Secret, SshCredentials)? stored;
+    var vaultKeyMissing = false;
     if (data.authMethod != AuthMethod.agent &&
         data.secretRef != null &&
         vault != null) {
@@ -309,10 +311,13 @@ class PromptCoordinator {
           }
           stored = resolved;
         }
-      } on Object {
+      } on Object catch (error) {
         // The dialog's banner renders the ported keystore failure through
-        // ARB (D20), never the raw exception message.
+        // ARB (D20), never the raw exception message. A keystore that lost
+        // the key of a sealed vault gets its own words: retrying cannot fix
+        // it, restoring the key can.
         vaultUnavailable = true;
+        vaultKeyMissing = error is MasterKeyUnavailableException;
       }
     }
 
@@ -341,6 +346,7 @@ class PromptCoordinator {
       data,
       readKeyFile: (path) => _readIdentityFile(data, path),
       vaultUnavailable: vaultUnavailable,
+      vaultKeyMissing: vaultKeyMissing,
       dialogKey: pending.dialogKey,
     );
     if (_wasDismissed(pending)) {
