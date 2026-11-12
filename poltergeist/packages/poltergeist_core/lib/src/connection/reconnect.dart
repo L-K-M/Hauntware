@@ -161,9 +161,13 @@ extension _PoolRecovery on PooledConnectionManager {
           }
           if (error is RemoteFileException) {
             if (error.kind != RemoteFileErrorKind.disconnected) rethrow;
+          } else if (error is SshConnectException) {
+            // A rejected login or a refused host key fails the same way on
+            // every attempt; retrying it would only feed the server's
+            // brute-force defences. Tear down so the user sees why.
+            if (!_isTransientConnectFailure(error.kind)) rethrow;
           } else if (error is! AuthChallengeRequiredError &&
-              error is! _ReconnectUnavailable &&
-              error is! SshConnectException) {
+              error is! _ReconnectUnavailable) {
             rethrow;
           }
           failures++;
@@ -449,6 +453,28 @@ extension _PoolRecovery on PooledConnectionManager {
     }
   }
 }
+
+/// Whether a later attempt can succeed without the user changing anything:
+/// the network, the server's readiness or a dropped handshake. Credential,
+/// key, host-key, route and algorithm failures need the user, and `other`
+/// stays retryable because it also covers handshake drops and an agent that
+/// could not be reached.
+bool _isTransientConnectFailure(SshConnectFailureKind kind) => switch (kind) {
+  SshConnectFailureKind.unreachable ||
+  SshConnectFailureKind.timedOut ||
+  SshConnectFailureKind.keyExchangeTimedOut ||
+  SshConnectFailureKind.closedBeforeKeyExchange ||
+  SshConnectFailureKind.other => true,
+  SshConnectFailureKind.routeInvalid ||
+  SshConnectFailureKind.keyPassphraseRequired ||
+  SshConnectFailureKind.keyPassphraseWrong ||
+  SshConnectFailureKind.keyUnreadable ||
+  SshConnectFailureKind.agentEmpty ||
+  SshConnectFailureKind.authenticationRejected ||
+  SshConnectFailureKind.hostKeyRefused ||
+  SshConnectFailureKind.unsupportedAlgorithm ||
+  SshConnectFailureKind.insecureAlgorithmsOnly => false,
+};
 
 class _ReconnectResolutionFailure implements Exception {
   final Object _cause;

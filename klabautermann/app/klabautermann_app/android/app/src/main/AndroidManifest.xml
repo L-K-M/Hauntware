@@ -5,13 +5,18 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- The app lock's biometric prompt (SAF-20, local_auth). -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <!-- Predictive back (Android 13+): the system hands a back to Flutter
+         only while the app has one of its own to take (the disk explorer's
+         folder trail, an editor's unsaved changes) and otherwise runs its
+         own back-to-home. Older releases ignore the attribute. -->
     <application
         android:label="Klabautermann"
         android:allowBackup="false"
         android:fullBackupContent="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

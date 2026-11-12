@@ -451,19 +451,22 @@ class RemoteTrash {
   /// whole delete task — each attempt (collision retries included)
   /// consumes a fresh value, so names can never collide within a run and
   /// a foreign occupant just costs a bump. Returns the trash path the
-  /// entry moved to.
+  /// entry moved to. [onAttempt] sees each target before its rename, so a
+  /// caller whose rename reply is lost can still find where it went.
   Future<String> moveToTrash(
     RemoteFileSystem fs,
     RemoteFileEntry entry,
     String runDirectory,
-    int Function() nextSequence,
-  ) async {
+    int Function() nextSequence, {
+    void Function(String target)? onAttempt,
+  }) async {
     for (var attempt = 0; attempt < maxNameAttempts; attempt++) {
       final sequence = nextSequence();
       final target = remoteJoin(
         runDirectory,
         '${sequence.toString().padLeft(6, '0')}-${entry.name}',
       );
+      onAttempt?.call(target);
       try {
         // overwrite: false — a collision is a bump, never a clobber
         // (SFTP v3's fail-when-target-exists is the common path).
