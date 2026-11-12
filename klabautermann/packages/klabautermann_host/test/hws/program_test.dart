@@ -156,6 +156,19 @@ void main() {
       );
     });
 
+    test('procs caps each command line at kProcsCmdlineByteCap bytes', () {
+      final procs = collectorFragments[Collector.procs]!;
+      expect(procs, contains("_ho='-c $kProcsCmdlineByteCap'"));
+      expect(procs, contains('_cap="\${NL}cmdline_cap=$kProcsCmdlineByteCap"'));
+      // The rows and head headers left room for: 03 §6.2's section cap
+      // must hold every kept row at its longest with a capped argv.
+      const rowBytes = 120, headerBytes = 25;
+      expect(
+        kProcsRowCap * (rowBytes + headerBytes + kProcsCmdlineByteCap),
+        lessThan(kMaxSectionBytes * 0.85),
+      );
+    });
+
     test('the READY marker is the program last line', () {
       for (final kind in SamplerKind.values) {
         final program = buildSamplerProgram(kind: kind, nonce: nonce);

@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
@@ -85,6 +87,38 @@ void main() {
     await tester.pump();
     expect(c.text.text, 'dog dog');
   });
+  testWidgets(
+    'Control+Y redoes on Windows only',
+    (tester) async {
+      final c = EditorController(displayPath: 'test', initialText: 'cat');
+      addTearDown(c.dispose);
+      await tester.pumpWidget(app(c));
+      await tester.pump(const Duration(milliseconds: 600));
+      c.editorFocus.requestFocus();
+      await tester.pump();
+      c.text.value = const TextEditingValue(
+        text: 'cats',
+        selection: TextSelection.collapsed(offset: 4),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      c.undoController.undo();
+      await tester.pump();
+      expect(c.text.text, 'cat');
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyY);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(
+        c.text.text,
+        defaultTargetPlatform == TargetPlatform.windows ? 'cats' : 'cat',
+      );
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.windows,
+      TargetPlatform.linux,
+    }),
+  );
   testWidgets('IME composing text retains framework rendering', (tester) async {
     final c = EditorController(displayPath: '.env', initialText: 'KEY=value');
     addTearDown(c.dispose);

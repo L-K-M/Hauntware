@@ -2,6 +2,7 @@ package ch.lkmc.planchette
 
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.IOException
 import java.io.OutputStream
 import org.junit.Assert.*
@@ -75,5 +76,24 @@ class DocumentIoTest {
                 { ByteArrayInputStream(original) }, { ByteArrayOutputStream() })
         }
         assertArrayEquals(original, recovery.listFiles()!!.single().readBytes())
+    }
+
+    @Test fun discardRemovesOnlyDirectRecoveryCopies() {
+        val recovery = temporary.newFolder()
+        val copy = File(recovery, "recovery-1-file.txt").apply { writeText("old") }
+        val nested = File(recovery, "nested").apply { mkdirs() }
+        val nestedCopy = File(nested, "recovery-2-file.txt").apply { writeText("old") }
+        val outside = temporary.newFile("settings.json")
+        val io = DocumentIo(recovery)
+
+        for (file in listOf(outside, nested, nestedCopy, File(recovery, "../settings.json"))) {
+            assertThrows(IllegalArgumentException::class.java) { io.discard(file) }
+        }
+        assertTrue(outside.isFile)
+        assertTrue(nestedCopy.isFile)
+
+        io.discard(copy)
+        assertFalse(copy.exists())
+        assertThrows(IllegalArgumentException::class.java) { io.discard(copy) }
     }
 }

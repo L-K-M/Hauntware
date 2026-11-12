@@ -1,8 +1,9 @@
 /// Parser for `journalctl -o json` output (03 §7.6): one JSON object per
 /// line carrying journald's `__CURSOR`, `__REALTIME_TIMESTAMP`,
 /// `PRIORITY`, `_SYSTEMD_UNIT`, `SYSLOG_IDENTIFIER` and `MESSAGE` fields.
-/// A field may be a string or a byte array (binary-safe MESSAGE values);
-/// both decode leniently and malformed lines warn and skip.
+/// A field may be a string, a byte array (binary-safe MESSAGE values) or,
+/// when repeated, an array of those; all decode leniently and malformed
+/// lines warn and skip.
 library;
 
 import 'dart:convert';
@@ -111,14 +112,25 @@ JournalEntry? _decodeLine(String line) {
 
 /// One field value: a string stays a string, a byte array decodes
 /// leniently, and a number or boolean stringifies (journald's cursor
-/// and timestamps arrive as decimal strings either way). An object,
-/// which journalctl never prints, reads as null: stringifying one
-/// recurses once per nesting level, so a hostile line would overflow the
-/// stack.
+/// and timestamps arrive as decimal strings either way). A field the
+/// entry holds more than once arrives as an array of its values, each a
+/// string or a byte array, and reads as those values joined by newlines.
+/// An object, which journalctl never prints, reads as null, and so does a
+/// deeper array: stringifying one recurses once per nesting level, so a
+/// hostile line would overflow the stack.
 String? _fieldValue(Object? v) {
+  if (v is List && v.isNotEmpty && v.every((e) => e is String || e is List)) {
+    final values = v.map(_singleValue).nonNulls;
+    return values.isEmpty ? null : values.join('\n');
+  }
+  return _singleValue(v);
+}
+
+String? _singleValue(Object? v) {
   if (v is String) return v;
   if (v is num || v is bool) return '$v';
   if (v is List) {
+    if (v.any((b) => b is List)) return null;
     return utf8.decode(
       v.map((b) => b is int ? b & 0xff : 0).toList(),
       allowMalformed: true,
