@@ -31,6 +31,7 @@ final class AlertRulesController extends ChangeNotifier {
   List<SyncedRule> _rules = const [];
   final Map<String, Completer<void>> _writes = {};
   var _count = 0;
+  bool _engineStopped = false;
 
   /// Every live rule, by id.
   List<SyncedRule> get rules => _rules;
@@ -53,6 +54,11 @@ final class AlertRulesController extends ChangeNotifier {
       _send((requestId) => RemoveRule(requestId: requestId, ruleId: id));
 
   Future<void> _send(EngineRequest Function(String requestId) request) {
+    // A stopped engine's port may still take a request without an error,
+    // and nothing would ever answer it.
+    if (_engineStopped) {
+      return Future.error(const AlertRuleNotSavedException(null));
+    }
     final requestId = 'rule-${_count++}';
     final written = Completer<void>();
     _writes[requestId] = written;
@@ -81,6 +87,7 @@ final class AlertRulesController extends ChangeNotifier {
   }
 
   void _onEngineDone() {
+    _engineStopped = true;
     for (final written in _writes.values) {
       written.completeError(const AlertRuleNotSavedException(null));
     }

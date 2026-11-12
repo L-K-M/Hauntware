@@ -309,6 +309,63 @@ void main() {
     addTearDown(reopened.dispose);
     await reopened.load();
     expect(reopened.notices.join(), contains('Local keys remain trusted'));
+
+    // Keeping the pin records the rejected fingerprint, so the conflict
+    // clears and a later sync does not raise the same key again.
+    await catalog.resolvePinConflict(
+      catalog.hostKeyConflicts.single,
+      keepLocal: true,
+    );
+    expect(catalog.hostKeyConflicts, isEmpty);
+    expect(
+      catalog.notices.join(),
+      isNot(contains('Local keys remain trusted')),
+    );
+    await catalog.sync();
+    expect(catalog.hostKeyConflicts, isEmpty);
+    expect(
+      (await catalog.hostKeys.get(local.host, local.port))?.fingerprintSha256,
+      local.fingerprintSha256,
+    );
+  });
+
+  test('accepting a pulled pin installs the synced key', () async {
+    await server.seedServer();
+    final local = HostKey(
+      host: 'alpha.example',
+      port: 22,
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'local-fingerprint',
+      pinnedAt: 1,
+    );
+    final remote = HostKey(
+      host: local.host,
+      port: local.port,
+      type: local.type,
+      fingerprintSha256: 'remote-fingerprint',
+      pinnedAt: 2,
+    );
+    await catalog.hostKeys.put(local);
+    server.add(
+      await server.seal(remote.recordId, RecordKind.hostKey, remote.toJson()),
+    );
+    await signIn();
+    expect(catalog.hostKeyConflicts, hasLength(1));
+
+    await catalog.resolvePinConflict(
+      catalog.hostKeyConflicts.single,
+      keepLocal: false,
+    );
+
+    expect(catalog.hostKeyConflicts, isEmpty);
+    expect(
+      catalog.notices.join(),
+      isNot(contains('Local keys remain trusted')),
+    );
+    expect(
+      (await catalog.hostKeys.get(local.host, local.port))?.fingerprintSha256,
+      remote.fingerprintSha256,
+    );
   });
 
   test(

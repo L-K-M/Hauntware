@@ -23,25 +23,29 @@ class FirewallSection extends StatefulWidget {
 
 class _FirewallSectionState extends State<FirewallSection> {
   FirewallReport? _report;
-  bool _reading = false;
+
+  /// The servers with a read out. A read outlives a switch away from its
+  /// server, so a switch back must still see it and offer no second one.
+  final _readingServers = <String>{};
+
+  bool get _reading => _readingServers.contains(widget.serverId);
 
   @override
   void didUpdateWidget(FirewallSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.serverId == widget.serverId) return;
     _report = null;
-    _reading = false;
   }
 
   Future<void> _read(AdminController admin) async {
     if (_reading) return;
     final serverId = widget.serverId;
-    setState(() => _reading = true);
+    setState(() => _readingServers.add(serverId));
     final report = await admin.readFirewall(serverId);
-    if (!mounted || serverId != widget.serverId) return;
+    if (!mounted) return;
     setState(() {
-      _report = report;
-      _reading = false;
+      _readingServers.remove(serverId);
+      if (serverId == widget.serverId) _report = report;
     });
   }
 
