@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'read_section.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection, SystemSection;
 
 /// DSK-05's part of a mount's details: the source it is mounted from and
@@ -97,57 +98,27 @@ class _MountOptionsState extends State<MountOptions> {
 /// DSK-14's section of the System tab: the swap partitions and files, how
 /// much of each is used and their priority. It reads when it shows and on
 /// request; a server switch reads the new server's.
-class SwapSection extends StatefulWidget {
+class SwapSection extends StatefulWidget implements HostReadSection {
   const SwapSection({
     super.key,
     required this.monitoring,
     required this.serverId,
   });
 
+  @override
   final MonitoringController monitoring;
+
+  @override
   final String serverId;
 
   @override
   State<SwapSection> createState() => _SwapSectionState();
 }
 
-class _SwapSectionState extends State<SwapSection> {
-  HostPayload? _read;
-  bool _reading = false;
-
-  /// Bumped per read, so only the newest answer lands.
-  int _ticket = 0;
-
+class _SwapSectionState extends State<SwapSection>
+    with HostReadSectionState<SwapSection> {
   @override
-  void initState() {
-    super.initState();
-    unawaited(_load());
-  }
-
-  @override
-  void didUpdateWidget(SwapSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.serverId == widget.serverId &&
-        oldWidget.monitoring == widget.monitoring) {
-      return;
-    }
-    _read = null;
-    unawaited(_load());
-  }
-
-  Future<void> _load() async {
-    final ticket = ++_ticket;
-    if (mounted) setState(() => _reading = true);
-    final result = await widget.monitoring.queryHost(
-      widget.serverId,
-      const MountsQuery(),
-    );
-    if (!mounted || ticket != _ticket) return;
-    setState(() {
-      _read = result.payload;
-      _reading = false;
-    });
-  }
+  HostQuerySpec get hostQuery => const MountsQuery();
 
   @override
   Widget build(BuildContext context) {
@@ -160,7 +131,7 @@ class _SwapSectionState extends State<SwapSection> {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: OutlinedButton(
-            onPressed: _reading ? null : () => unawaited(_load()),
+            onPressed: hostReading ? null : () => unawaited(readHost()),
             child: Text(l10n.systemSwapReadAgain),
           ),
         ),
@@ -168,7 +139,7 @@ class _SwapSectionState extends State<SwapSection> {
     );
   }
 
-  List<Widget> _lines(AppLocalizations l10n) => switch (_read) {
+  List<Widget> _lines(AppLocalizations l10n) => switch (hostRead) {
     null => [
       PanelNotice(icon: Icons.hourglass_empty, text: l10n.systemSwapReading),
     ],

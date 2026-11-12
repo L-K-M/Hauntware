@@ -1,4 +1,4 @@
-import 'dart:async' show Timer, unawaited;
+import 'dart:async' show unawaited;
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
@@ -14,7 +14,9 @@ import 'freshness.dart';
 import 'process_detail_view.dart';
 import 'processes_view.dart';
 import 'sortable_table.dart';
+import 'state_notice.dart';
 import 'time_display.dart';
+import 'timed_reveal.dart';
 
 /// The panel width from which the processes show as the sortable table;
 /// narrower, as on a phone, they show as a list of two-line rows rather
@@ -30,10 +32,6 @@ const double _headerShare = 0.4;
 /// stream's slowest cadence in 03 §6.4 (10 s, Cellular saver), the rule
 /// `kFleetRowStaleAfter` keeps for the fleet's streams.
 const Duration _staleAfter = Duration(seconds: 20);
-
-/// How long a revealed argument shows before it is masked again (SAF-07:
-/// a reveal is temporary).
-const Duration kRevealDuration = Duration(seconds: 30);
 
 /// The Processes tab (03 §10.4, PRC-01): the server's processes by CPU,
 /// memory, user, start time and command, with a filter, "showing N of M"
@@ -164,14 +162,14 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                 listenable: clock,
                 builder: (context, _) {
                   final now = _freshness(reading, sampling);
-                  return _Notice(
+                  return StateNotice(
                     icon: now.stale ? Icons.history : Icons.schedule,
                     text: freshnessText(l10n, now),
                   );
                 },
               ),
             if (unavailable != null)
-              _Notice(
+              StateNotice(
                 icon: unavailable.reason == CollectorUnavailableReason.timeout
                     ? Icons.timer_off_outlined
                     : Icons.error_outline,
@@ -179,9 +177,12 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                 detail: unavailable.detail,
               )
             else if (result == null)
-              _Notice(icon: Icons.hourglass_empty, text: l10n.processesWaiting),
+              StateNotice(
+                icon: Icons.hourglass_empty,
+                text: l10n.processesWaiting,
+              ),
             if (leftOut != null)
-              _Notice(
+              StateNotice(
                 icon: Icons.filter_alt_outlined,
                 text: switch (leftOut.total) {
                   final total? => l10n.processesShownOf(leftOut.shown, total),
@@ -189,7 +190,7 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                 },
               ),
             if (flagCounts.isNotEmpty)
-              _Notice(
+              StateNotice(
                 icon: Icons.warning_amber,
                 text: [
                   for (final MapEntry(:key, :value) in flagCounts.entries)
@@ -764,10 +765,8 @@ class _ProcessSheet extends StatefulWidget {
 }
 
 class _ProcessSheetState extends State<_ProcessSheet> {
-  /// The revealed arguments and variables by kind and index, each with
-  /// the timer that masks it.
-  final Map<_Revealed, Timer> _revealed = {};
-  late final AppLifecycleListener _lifecycle;
+  /// The revealed arguments and variables by kind and index.
+  late final TimedReveals<_Revealed> _revealed;
 
   /// The process read's answer, null while it reads.
   HostPayload? _detail;
@@ -779,7 +778,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
   @override
   void initState() {
     super.initState();
-    _lifecycle = AppLifecycleListener(onInactive: _maskAll);
+    _revealed = TimedReveals(onChanged: () => setState(() {}));
     if (widget.row.startTicks != null) unawaited(_read());
   }
 
@@ -798,45 +797,14 @@ class _ProcessSheetState extends State<_ProcessSheet> {
       _detail = result.payload;
       _reading = false;
       // A new read can list other variables at the same places.
-      _revealed.removeWhere((key, timer) {
-        if (key.$1 != _MaskedKind.variable) return false;
-        timer.cancel();
-        return true;
-      });
+      _revealed.discard(where: (key) => key.$1 == _MaskedKind.variable);
     });
   }
 
   @override
   void dispose() {
-    _lifecycle.dispose();
-    for (final timer in _revealed.values) {
-      timer.cancel();
-    }
+    _revealed.dispose();
     super.dispose();
-  }
-
-  void _toggle(_Revealed key) {
-    final timer = _revealed.remove(key);
-    setState(() {
-      if (timer != null) {
-        timer.cancel();
-        return;
-      }
-      _revealed[key] = Timer(kRevealDuration, () {
-        if (mounted) setState(() => _revealed.remove(key));
-      });
-    });
-  }
-
-  void _maskAll() {
-    if (_revealed.isEmpty) return;
-
-    setState(() {
-      for (final timer in _revealed.values) {
-        timer.cancel();
-      }
-      _revealed.clear();
-    });
   }
 
   @override
@@ -872,7 +840,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             spacing: 12,
             children: [
-              _Notice(
+              StateNotice(
                 icon: freshness.stale ? Icons.history : Icons.schedule,
                 text: freshnessText(l10n, freshness),
               ),
@@ -891,7 +859,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
         ),
       ),
       if (arguments.isEmpty)
-        _Notice(
+        StateNotice(
           icon: Icons.info_outline,
           text: l10n.processesCommandUnavailable,
         )
@@ -915,12 +883,15 @@ class _ProcessSheetState extends State<_ProcessSheet> {
           ),
         ),
         if (detail.environmentDenied)
-          _Notice(
+          StateNotice(
             icon: Icons.lock_outline,
             text: l10n.processesEnvironmentDenied,
           )
         else if (environment == null || environment.isEmpty)
-          _Notice(icon: Icons.info_outline, text: l10n.processesEnvironmentNone)
+          StateNotice(
+            icon: Icons.info_outline,
+            text: l10n.processesEnvironmentNone,
+          )
         else if (environment.length >= kProcessEnvironLimit)
           Text(
             l10n.processesEnvironmentCapped(kProcessEnvironLimit),
@@ -961,11 +932,11 @@ class _ProcessSheetState extends State<_ProcessSheet> {
     final theme = Theme.of(context);
     final canRead = widget.row.startTicks != null;
     final status = switch (_detail) {
-      _ when !canRead => _Notice(
+      _ when !canRead => StateNotice(
         icon: Icons.info_outline,
         text: l10n.processesDetailNoStart,
       ),
-      null => _Notice(
+      null => StateNotice(
         icon: Icons.hourglass_empty,
         text: l10n.processesDetailReading,
       ),
@@ -976,16 +947,16 @@ class _ProcessSheetState extends State<_ProcessSheet> {
           unknown: l10n.chartUnknownValue,
         ),
       ),
-      ProcessEnded(:final end) => _Notice(
+      ProcessEnded(:final end) => StateNotice(
         icon: Icons.history,
         text: l10n.processesDetailEnded(end.name),
       ),
-      HostQueryFailed(:final failure, :final detail) => _Notice(
+      HostQueryFailed(:final failure, :final detail) => StateNotice(
         icon: Icons.error_outline,
         text: l10n.processesDetailFailed(failure.name),
         detail: detail,
       ),
-      _ => _Notice(
+      _ => StateNotice(
         icon: Icons.error_outline,
         text: l10n.processesDetailFailed(HostQueryFailure.failed.name),
       ),
@@ -1049,7 +1020,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
       return MergeSemantics(child: named(Text(clipProcessText(value.display))));
     }
 
-    final revealed = _revealed.containsKey(key);
+    final revealed = _revealed.isRevealed(key);
     final shown = clipProcessText(revealed ? value.reveal()! : value.display);
     // A masked value is read as masked, never as eight asterisks.
     final spoken = revealed
@@ -1063,9 +1034,9 @@ class _ProcessSheetState extends State<_ProcessSheet> {
           : l10n.processesEnvironmentEntry(name, spoken),
       hint: revealed ? l10n.processesHideHint : l10n.processesRevealHint,
       excludeSemantics: true,
-      onTap: () => _toggle(key),
+      onTap: () => _revealed.toggle(key),
       child: InkWell(
-        onTap: () => _toggle(key),
+        onTap: () => _revealed.toggle(key),
         child: ConstrainedBox(
           // A touch needs a 48 dp target (A11Y-01); a pointer, the line.
           constraints: BoxConstraints(
@@ -1137,49 +1108,6 @@ class _Facts extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-/// A state in words beside an icon, read as one node; the icon adds a
-/// shape, the text carries the meaning (A11Y-01). [detail] is the host's
-/// error output, never translated.
-class _Notice extends StatelessWidget {
-  const _Notice({required this.icon, required this.text, this.detail});
-
-  final IconData icon;
-  final String text;
-  final String? detail;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    final detail = this.detail;
-    return MergeSemantics(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 8,
-        children: [
-          Icon(icon, size: 18, color: muted),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 4,
-              children: [
-                Text(text, style: theme.textTheme.bodyMedium),
-                if (detail != null && detail.isNotEmpty)
-                  Text(
-                    detail,
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
