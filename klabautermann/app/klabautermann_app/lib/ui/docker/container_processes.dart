@@ -7,6 +7,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/docker_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
+import '../panel_kit.dart';
 import '../timed_reveal.dart';
 import 'containers_panel.dart' show DockerNotice;
 
@@ -112,21 +113,9 @@ class _ContainerProcessesSectionState extends State<ContainerProcessesSection>
   Widget build(BuildContext context) {
     super.build(context);
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      spacing: 8,
-      children: [
-        Semantics(
-          container: true,
-          header: true,
-          child: Text(
-            l10n.dockerProcessesTitle,
-            style: theme.textTheme.titleSmall,
-          ),
-        ),
-        ..._body(context, l10n),
-      ],
+    return TitledGroup(
+      title: l10n.dockerProcessesTitle,
+      children: _body(context, l10n),
     );
   }
 

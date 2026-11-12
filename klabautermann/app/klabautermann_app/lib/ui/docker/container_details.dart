@@ -17,6 +17,7 @@ import '../actions/action_entry.dart';
 import '../logs/log_export.dart' show showExportSheet;
 import '../actions/docker_actions.dart'
     show ContainerActionButtons, containerActionsShown;
+import '../panel_kit.dart';
 import '../processes_view.dart' show argumentText, clipProcessText;
 import '../time_display.dart';
 import '../timed_reveal.dart';
@@ -607,13 +608,13 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
           l10n.dockerDetailsRevealNote(kRevealDuration.inSeconds),
           style: Theme.of(context).textTheme.bodySmall,
         ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerDetailsOverview,
         children: _overview(context, container, row),
       ),
       if (diagnoseContainer(container) case final diagnoses
           when diagnoses.isNotEmpty)
-        _Section(
+        TitledGroup(
           title: l10n.dockerDiagnosisTitle,
           children: [
             _LogTail(
@@ -639,12 +640,12 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
           ],
         ),
       if (labelLinks(labels) case final links when links.isNotEmpty)
-        _Section(
+        TitledGroup(
           title: l10n.dockerLinksTitle,
           children: [ContainerLinks(links: links)],
         ),
       if (health != null && health.status != HealthStatus.none)
-        _Section(
+        TitledGroup(
           title: l10n.dockerDetailsHealthTitle,
           children: [
             if (health.log.isEmpty)
@@ -655,7 +656,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
                 _healthCheck(context, index, check),
           ],
         ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerDetailsCommandTitle,
         children: [
           _arguments(
@@ -672,7 +673,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
           ),
         ],
       ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerDetailsEnvTitle,
         children: [
           if (env.isEmpty) _Muted(l10n.dockerDetailsEnvEmpty),
@@ -685,7 +686,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
             ),
         ],
       ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerDetailsLabelsTitle,
         children: [
           if (labels.isEmpty) _Muted(l10n.dockerDetailsLabelsEmpty),
@@ -693,21 +694,21 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
             _value(context, (_Field.label, key), value, name: key),
         ],
       ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerDetailsMountsTitle,
         children: [
           if (container.mounts.isEmpty) _Muted(l10n.dockerDetailsMountsEmpty),
           for (final mount in container.mounts) _Mount(mount: mount),
         ],
       ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerContainersColumnPorts,
         children: [
           if (row.ports.isEmpty) _Muted(l10n.dockerDetailsPortsEmpty),
           for (final port in containerPortLabels(row)) Text(port),
         ],
       ),
-      _Section(
+      TitledGroup(
         title: l10n.dockerDetailsNetworksTitle,
         children: _networks(context, container),
       ),
@@ -1132,31 +1133,6 @@ class _LogTailState extends State<_LogTail> {
               ],
             ),
           ),
-      ],
-    );
-  }
-}
-
-/// A heading over its [children], read as a heading.
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      spacing: 8,
-      children: [
-        Semantics(
-          container: true,
-          header: true,
-          child: Text(title, style: theme.textTheme.titleSmall),
-        ),
-        ...children,
       ],
     );
   }
