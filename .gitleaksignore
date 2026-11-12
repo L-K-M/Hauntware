@@ -35,3 +35,6 @@ f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-a
 f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-api-key:233
 f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-api-key:299
 f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-api-key:415
+# Synthetic user:group operand (`sudo -u www:data`) in the argument masking
+# tests; curl-auth-user reads it as curl's -u credentials. No credential.
+cfff9d0cc5809f0f651808d26d1280362b518741:klabautermann/packages/klabautermann_core/test/sampling/argument_masking_test.dart:curl-auth-user:614
