@@ -31,8 +31,10 @@ abstract interface class TerminalByteTransport {
 ///
 /// When [TerminalByteTransport.output] ends, input stops and [onClosed]
 /// fires once; the engine stays, so the host can keep showing what the
-/// far end printed until it calls [close]. When output fails, the
-/// session tears down as [close] does, and [onClosed] fires once.
+/// far end printed until it calls [close]. When output fails, or the far
+/// end throws from [TerminalByteTransport.write] or
+/// [TerminalByteTransport.resize], the session tears down as [close]
+/// does, and [onClosed] fires once.
 final class TerminalByteSession implements SessionTransport {
   TerminalByteSession({
     required XtermTerminalEngine engine,
@@ -46,7 +48,14 @@ final class TerminalByteSession implements SessionTransport {
       cancelOnError: true,
     );
     _input = engine.userInput.listen((bytes) {
-      if (!_closed && !_endedRemotely) _transport.write(bytes);
+      if (_closed || _endedRemotely) return;
+      try {
+        _transport.write(bytes);
+      } on Object {
+        // A far end that cannot take input is gone: every later keystroke
+        // would be lost while the session looked open.
+        _ended(failed: true);
+      }
     });
     engine.terminal.onResize = (width, height, _, _) =>
         resize(TerminalSize(width, height));
@@ -82,7 +91,14 @@ final class TerminalByteSession implements SessionTransport {
     if (_closed) return;
     _engine.resize(size);
     // A far end that ended has no TTY left to size.
-    if (!_endedRemotely) _transport.resize(columns: size.cols, rows: size.rows);
+    if (_endedRemotely) return;
+    try {
+      _transport.resize(columns: size.cols, rows: size.rows);
+    } on Object {
+      // The view resizes during layout, where the host's onClosed must not
+      // run; end the session just after.
+      scheduleMicrotask(() => _ended(failed: true));
+    }
   }
 
   @override

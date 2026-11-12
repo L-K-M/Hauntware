@@ -46,7 +46,7 @@ struct VisibleWindowSearch {
 
 std::wstring ExecutablePath() {
   DWORD capacity = kInitialPathCapacity;
-  while (capacity <= kMaximumPathCapacity) {
+  while (true) {
     std::vector<wchar_t> buffer(capacity);
     SetLastError(ERROR_SUCCESS);
     const DWORD length =
@@ -57,9 +57,14 @@ std::wstring ExecutablePath() {
     if (length < capacity - 1 || GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
       return std::wstring(buffer.data(), length);
     }
-    capacity *= 2;
+    if (capacity == kMaximumPathCapacity) {
+      return std::wstring();
+    }
+    // Doubling from MAX_PATH skips the maximum itself (16640 to 33280), so
+    // the last attempt is clamped to it.
+    capacity = capacity > kMaximumPathCapacity / 2 ? kMaximumPathCapacity
+                                                   : capacity * 2;
   }
-  return std::wstring();
 }
 
 bool SetStringValue(HKEY key, const wchar_t* name,

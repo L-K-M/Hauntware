@@ -1220,9 +1220,12 @@ class SqliteStorage implements Storage {
     );
   }
 
+  /// Live rows and the bytes of every row. See [AccountQuota] for why a
+  /// tombstone counts toward bytes but not rows.
   (int, int) _recordUsage(String username) {
     final row = _db.select(
-      'SELECT COUNT(*) AS n, COALESCE(SUM(encoded_size), 0) AS bytes '
+      'SELECT COALESCE(SUM(deleted = 0), 0) AS n, '
+      'COALESCE(SUM(encoded_size), 0) AS bytes '
       'FROM records WHERE username = ?',
       [username],
     ).single;

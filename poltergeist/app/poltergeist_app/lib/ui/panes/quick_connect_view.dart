@@ -155,8 +155,11 @@ class _QuickConnectViewState extends State<QuickConnectView> {
               focusNode: widget.focusNode,
               // An address is not prose: no autocorrect, no
               // suggestions, and the URL keyboard where one exists.
+              // user:password@host is stripped only after typing, so
+              // the keyboard must not learn the password either.
               autocorrect: false,
               enableSuggestions: false,
+              enableIMEPersonalizedLearning: false,
               keyboardType: TextInputType.url,
               decoration: InputDecoration(
                 labelText: l10n.quickConnectAddressLabel,

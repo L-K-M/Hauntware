@@ -32,5 +32,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Inspect every pinned image manifest
         run: klabautermann/test/integration/check_image_pins.sh

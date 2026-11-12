@@ -297,11 +297,13 @@ Rules, in order:
 3. Text with a line break is linted with `inspect`. Lines are split at
    `\r\n`, `\r` and `\n`, the split `sanitizeFirstLine` already uses
    (`paste_sanitizer.dart:33`), so no line reaches `sanitize` with a CR.
-   No findings: every line goes through `PasteSanitizer.sanitize`, the
-   lines are joined with `\n`, and the result is pasted. Findings, or an `inspect` error: the
-   policy calls `confirm`; `pasteAll` pastes as above, `firstLineOnly`
-   pastes `PasteSanitizer.sanitizeFirstLine(text)`, `cancel` pastes
-   nothing.
+   No findings while the remote has bracketed paste on: every line goes
+   through `PasteSanitizer.sanitize`, the lines are joined with `\n`, and
+   the result is pasted. Findings, an `inspect` error, or bracketed paste
+   off (bash before 5.1, dash, busybox `sh` and most REPLs run each line
+   as it arrives): the policy calls `confirm`; `pasteAll` pastes as
+   above, `firstLineOnly` pastes `PasteSanitizer.sanitizeFirstLine(text)`,
+   `cancel` pastes nothing.
 
 Sanitizing per line removes ESC, so pasted text cannot end bracketed
 paste early. Joining with `\n` matches what Séance's raw paste sends for
@@ -313,10 +315,12 @@ Séance does not adopt the policy in M5. Its raw clipboard paste is
 shipped behaviour (1.4), and D3 puts behaviour changes in their own PRs.
 
 The policy covers only paste paths the host routes through it. xterm's
-default shortcut paste must stay off, as in Séance (1.4), and a phone's
-own paste in the soft keyboard reaches xterm as text input that no policy
-sees [guess]. M12's tests cover the menu, context-menu and shortcut
-paths.
+default shortcut paste must stay off, as in Séance (1.4). A phone's own
+paste in the soft keyboard arrives as one text delta; the fork hands an
+insert of more than one character holding a control character to
+`TerminalView.onKeyboardPaste` (bracketed `Terminal.paste` without one,
+PATCHES.md 50), which a host routes through the policy. M12's tests
+cover the menu, context-menu and shortcut paths.
 
 ### 3.4 Contract test
 

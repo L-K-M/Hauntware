@@ -222,6 +222,7 @@ void main() {
             keyType: 'ssh-ed25519',
             fingerprintSha256: 'SHA256:presented',
             pinnedFingerprintSha256: 'SHA256:pinned',
+            pinnedKeyType: 'ssh-rsa',
           ),
         ),
       );
@@ -1039,6 +1040,7 @@ void _expectPromptData(EnginePromptData actual, EnginePromptData expected) {
       expect(got.keyType, sent.keyType);
       expect(got.fingerprintSha256, sent.fingerprintSha256);
       expect(got.pinnedFingerprintSha256, sent.pinnedFingerprintSha256);
+      expect(got.pinnedKeyType, sent.pinnedKeyType);
     case (
       final KeyboardInteractivePromptData sent,
       final KeyboardInteractivePromptData got,

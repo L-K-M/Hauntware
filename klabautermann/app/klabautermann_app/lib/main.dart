@@ -367,6 +367,7 @@ Future<void> main(List<String> args) async {
   quitGuard = AppQuitGuard(
     operations: operations,
     contextOf: () => appNavigatorKey.currentContext,
+    shells: () => monitoring.terminals.shells,
     lock: appLock,
   );
   EngineKeystoreResponder(

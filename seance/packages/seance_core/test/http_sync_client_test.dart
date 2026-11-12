@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' show min;
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -160,6 +161,83 @@ void main() {
         sync.pull(since: 0),
         throwsA(isA<TimeoutException>()),
       );
+    });
+
+    // A page of up to 8 MiB on a slow link takes longer than the per-request
+    // timeout, but keeps moving. Only a stall, or the overall cap, may end it.
+    // Trailing whitespace stands in for records: about 30 chunks.
+    final page = utf8.encode(
+      jsonEncode(const PullResponse(records: [], latestSeq: 0).toJson()) +
+          ' ' * 2000,
+    );
+
+    test('a slow download that keeps moving completes', () async {
+      final sync = HttpSyncClient(
+        baseUrl: 'https://host',
+        client: _SlowClient(page, gap: const Duration(milliseconds: 10)),
+        timeout: const Duration(milliseconds: 60),
+      );
+      final response = await sync.pullPage(since: 0);
+      expect(response.latestSeq, 0);
+    });
+
+    test('a download that stalls between chunks times out', () async {
+      final sync = HttpSyncClient(
+        baseUrl: 'https://host',
+        client: _SlowClient(
+          page,
+          gap: const Duration(milliseconds: 5),
+          stallAfter: 3,
+        ),
+        timeout: const Duration(milliseconds: 60),
+      );
+      await expectLater(
+        sync.pullPage(since: 0),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+
+    test('a transfer that never ends hits the overall cap', () async {
+      final sync = HttpSyncClient(
+        baseUrl: 'https://host',
+        client: _SlowClient(
+          List.filled(1 << 20, 0x20),
+          gap: const Duration(milliseconds: 5),
+        ),
+        timeout: const Duration(milliseconds: 60),
+        maxTransferDuration: const Duration(milliseconds: 150),
+      );
+      await expectLater(
+        sync.pullPage(since: 0),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+
+    test('a slow upload that keeps moving completes', () async {
+      final response = utf8.encode(
+        jsonEncode(const PushResponse(results: [], latestSeq: 0).toJson()),
+      );
+      final client = _SlowClient(
+        response,
+        gap: const Duration(milliseconds: 1),
+        uploadGap: const Duration(milliseconds: 10),
+      );
+      final sync = HttpSyncClient(
+        baseUrl: 'https://host',
+        client: client,
+        timeout: const Duration(milliseconds: 60),
+      );
+      await sync.push([
+        EncryptedRecord(
+          id: 'big',
+          updatedAt: 1,
+          deviceId: 'device',
+          deleted: false,
+          seq: null,
+          blob: Uint8List(256 * 1024),
+        ),
+      ]);
+      expect(client.uploaded, greaterThan(256 * 1024));
     });
   });
 
@@ -408,5 +486,57 @@ void main() {
       );
       await expectLater(sync.listItems(since: 0), throwsFormatException);
     });
+  }
+}
+
+/// A transport that trickles bodies in small chunks, like a slow link.
+///
+/// The request body is read at [uploadGap] per started 16 KiB, however it is
+/// chunked, and the response is sent at [gap] per 64-byte chunk. With
+/// [stallAfter] the response stops after that many chunks and never finishes.
+class _SlowClient extends http.BaseClient {
+  _SlowClient(
+    this._body, {
+    required this.gap,
+    this.uploadGap = Duration.zero,
+    this.stallAfter,
+  });
+
+  static const _chunk = 64;
+  static const _uploadBlock = 16 * 1024;
+
+  final List<int> _body;
+  final Duration gap;
+  final Duration uploadGap;
+  final int? stallAfter;
+  int uploaded = 0;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    await for (final chunk in request.finalize()) {
+      uploaded += chunk.length;
+      final blocks = (chunk.length + _uploadBlock - 1) ~/ _uploadBlock;
+      for (var block = 0; block < blocks; block++) {
+        await Future<void>.delayed(uploadGap);
+      }
+    }
+    return http.StreamedResponse(
+      _trickle(),
+      200,
+      headers: {'content-type': 'application/json; charset=utf-8'},
+      request: request,
+    );
+  }
+
+  Stream<List<int>> _trickle() async* {
+    var sent = 0;
+    for (var offset = 0; offset < _body.length; offset += _chunk) {
+      if (stallAfter != null && sent == stallAfter) {
+        await Completer<void>().future;
+      }
+      await Future<void>.delayed(gap);
+      yield _body.sublist(offset, min(offset + _chunk, _body.length));
+      sent++;
+    }
   }
 }

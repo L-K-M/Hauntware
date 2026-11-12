@@ -1126,6 +1126,9 @@ void main() {
     final data = review.data as HostKeyPromptData;
     expect(data.fingerprintSha256, 'SHA256:changed');
     expect(data.pinnedFingerprintSha256, 'SHA256:pinned');
+    // The review labels the old fingerprint with the pinned key's own
+    // type, which can differ from the presented one after a rebuild.
+    expect(data.pinnedKeyType, _pinnedKey.type);
     h.reply(review, const HostKeyPromptReply(accepted: false));
     await h.pumping();
 

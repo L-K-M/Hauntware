@@ -885,6 +885,56 @@ void main() {
     expect(await a.statuses.listStatuses(), isEmpty);
   });
 
+  test('a status past retention is retired from the server', () async {
+    // Every handled proposal mints a record id. Left live on the server
+    // after retention, those rows would fill the account's record quota.
+    final pairing = await connect(a);
+    final status = InboxStatus(
+      appId: pairing.appId,
+      proposalId: 'p1',
+      state: InboxStatusState.ran,
+      updatedAt: _t0.millisecondsSinceEpoch,
+    );
+    await a.statuses.putStatus(status);
+    await a.sync.run(records);
+    await b.sync.run(records);
+    expect(records._store[status.recordId]?.deleted, isFalse);
+
+    a.clock = _t0.add(const Duration(days: 31));
+    b.clock = a.clock;
+    await a.inbox.pruneStatuses();
+    await a.sync.run(records);
+    final retired = records._store[status.recordId]!;
+    expect(retired.deleted, isTrue);
+    final opened = await codec.decrypt(retired);
+    expect(opened.kind, RecordKind.inboxStatus);
+    expect(opened.updatedAt, greaterThan(status.updatedAt));
+
+    // Every device converges on one tombstone and then leaves it alone.
+    await b.sync.run(records);
+    await a.sync.run(records);
+    final settled = records._seq;
+    await b.sync.run(records);
+    await a.sync.run(records);
+    expect(records._seq, settled);
+    expect(records._store[status.recordId]!.deleted, isTrue);
+    expect(await b.statuses.getStatus(pairing.appId, 'p1'), isNotNull);
+  });
+
+  test('an unpublished status past retention is not tombstoned', () async {
+    final pairing = await connect(a);
+    await a.sync.run(records);
+    final old = InboxStatus(
+      appId: pairing.appId,
+      proposalId: 'old',
+      state: InboxStatusState.ran,
+      updatedAt: _t0.millisecondsSinceEpoch - 31 * 86400000,
+    );
+    await a.statuses.putStatus(old);
+    await a.sync.run(records);
+    expect(records._store.containsKey(old.recordId), isFalse);
+  });
+
   group('resolveInboxTarget', () {
     final app = InboxApp(
       id: newInboxAppId(),

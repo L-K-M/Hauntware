@@ -2,7 +2,8 @@
 
 A tiny, self-hostable sync server for Séance. It stores **end-to-end encrypted**
 record blobs and resolves conflicts by last-write-wins. It can decrypt nothing:
-a full database compromise leaks only opaque ciphertext.
+a full database compromise exposes ciphertext and account metadata, and lets an
+attacker guess weak passwords offline (see [Security model](#security-model)).
 
 ## Run with Docker
 
@@ -114,6 +115,39 @@ The `.env` file is gitignored, so updates keep the setting. Use
 `SEANCE_PUBLISH_ADDR=0.0.0.0` for every interface (firewall it), or attach the
 proxy and this service to a shared Docker network and skip publishing entirely.
 
+### Client addresses behind a reverse proxy
+
+Login, prelogin and registration are rate-limited per source address. Behind a
+proxy the server sees the proxy (or Docker's gateway) as the source of every
+request, so all your devices share one allowance, and anyone who sends 60
+prelogin requests a minute locks every device out of signing in until they
+stop. Tell the server which peers may report the real client address:
+
+1. Make the proxy send `X-Forwarded-For`. Caddy, Traefik and Nginx Proxy
+   Manager do so by default; plain nginx needs
+   `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`.
+2. Set `SEANCE_TRUSTED_PROXIES` in `packages/seance_sync_server/.env` to the
+   address the server sees the proxy connect from. It takes comma-separated
+   IP addresses and CIDR networks, so an address Docker may change when the
+   stack is recreated can be covered by its network:
+
+   ```bash
+   # Proxy on the host or in another container, reaching the published port:
+   # connections arrive from the gateway of this stack's Docker network.
+   SEANCE_TRUSTED_PROXIES=172.16.0.0/12,192.168.0.0/16
+   ```
+
+   `docker network inspect` shows the subnet Compose chose. An address or
+   network that is not a valid IP or CIDR stops the server at startup with a
+   message naming the setting, and `/0` is refused.
+
+Trust only peers that cannot be reached by anyone else. Docker's port
+publishing relays every connection through the gateway, so trusting it is safe
+only while the port is published on `127.0.0.1` or on the bridge gateway (the
+setups above), never on `0.0.0.0` without a firewall, where every internet
+client would arrive through the gateway and could choose its own rate-limit
+key with the header. A header from a peer that is not trusted is ignored.
+
 ### Troubleshooting: the app reports a 502
 
 A 502 is never produced by this server — it comes from whatever sits in front
@@ -158,13 +192,13 @@ Omit `--db` for an ephemeral in-memory store.
 | `SEANCE_AUTH_SOURCE_MAX_ATTEMPTS` | — | `60` | Auth requests per network source per source window |
 | `SEANCE_AUTH_SOURCE_WINDOW_SECONDS` | — | `60` | Source auth window |
 | `SEANCE_RATE_LIMIT_MAX_BUCKETS` | — | `4096` | Maximum keyed buckets per limiter before overflow sharing |
-| `SEANCE_TRUSTED_PROXIES` | — | *(empty)* | Exact comma-separated proxy IPs allowed to supply `X-Forwarded-For` |
+| `SEANCE_TRUSTED_PROXIES` | — | *(empty)* | Comma-separated proxy IPs or CIDR networks allowed to supply `X-Forwarded-For` (see [Client addresses behind a reverse proxy](#client-addresses-behind-a-reverse-proxy)) |
 | `SEANCE_SESSION_TTL_SECONDS` | — | `2592000` | Bearer-session lifetime (30 days) |
 | `SEANCE_MAX_SESSIONS_PER_ACCOUNT` | — | `20` | Active sessions retained per account, evicting least recently used |
 | `SEANCE_MAX_RECORDS_PER_PULL` | — | `1000` | Records or inbox items returned per page |
 | `SEANCE_MAX_PULL_BODY_BYTES` | — | `8388608` | Maximum encoded JSON bytes per record or inbox page |
-| `SEANCE_MAX_RECORDS_PER_ACCOUNT` | — | `5000` | Current records and, separately, pending inbox items per account |
-| `SEANCE_MAX_ACCOUNT_BYTES` | — | `41943040` | Encoded record and, separately, inbox-item bytes per account |
+| `SEANCE_MAX_RECORDS_PER_ACCOUNT` | — | `5000` | Live records (deletions do not count) and, separately, pending inbox items per account |
+| `SEANCE_MAX_ACCOUNT_BYTES` | — | `41943040` | Encoded record bytes, deletions included, and, separately, inbox-item bytes per account |
 
 ## API (protocol v4)
 
@@ -313,17 +347,25 @@ DTOs and the database schema are unchanged; this is not an account migration.
 
 ## Security model
 
-- The client derives a vault key and an **independent** auth verifier from the
-  passphrase (Argon2id + HKDF domain separation). Only the verifier reaches the
-  server, and it is stored as a salted SHA-256 hash — a DB leak does not allow
-  login (the raw verifier is needed and cannot be recovered from the hash).
+- The client derives an auth verifier from the account password and a vault
+  key from the encryption passphrase (Argon2id, then HKDF with separate
+  labels). Only the verifier reaches the server, which stores a salted SHA-256
+  hash of it, so a copy of the database cannot be replayed to sign in. It does
+  let an attacker guess the password offline: each guess costs one Argon2id
+  run with the account's parameters, which slows guessing but does not stop it
+  for a weak or common password. A compromised server sees the raw verifier at
+  every sign-in and can guess the same way.
+- When the account password and the encryption passphrase are the same
+  string, both keys come from the same Argon2id result, so a guessed password
+  also opens every record. A separate, strong encryption passphrase keeps the
+  records sealed even if the password is guessed.
 - Record payloads are sealed client-side with XChaCha20-Poly1305. The server
   stores `nonce ‖ ciphertext ‖ mac` and never holds a key.
 - Registration, prelogin and login have global and network-source limits.
   Failed logins also have an account limit; a correct verifier remains usable.
-  Forwarded addresses are accepted only from configured exact-IP proxies,
-  including equivalent IPv4-mapped IPv6 addresses. Malformed or oversized
-  forwarding chains fall back to the immediate peer.
+  Forwarded addresses are accepted only from configured proxy addresses or
+  CIDR networks, including equivalent IPv4-mapped IPv6 addresses. Malformed or
+  oversized forwarding chains fall back to the immediate peer.
 - Active limiter buckets are never evicted. When all keyed buckets are active,
   unseen keys share a bounded overflow bucket, so saturation can temporarily
   throttle new clients. Set the global/source budgets and bucket capacity for

@@ -345,6 +345,48 @@ void main() {
       expect(queue.enqueuedDeletes.single.rootPaths, ['/home/tester/a.txt']);
     });
 
+    // OS key repeat must not re-run one-shot verbs: each repeat would
+    // enqueue another trash or duplicate of the same selection before
+    // the first task settles and the listing refreshes.
+    Future<void> hold(
+      WidgetTester tester,
+      LogicalKeyboardKey key, {
+      LogicalKeyboardKey? modifier,
+    }) async {
+      listing.requestFocus();
+      await tester.pump();
+      if (modifier != null) await tester.sendKeyDownEvent(modifier);
+      await tester.sendKeyDownEvent(key);
+      for (var i = 0; i < 3; i++) {
+        await tester.sendKeyRepeatEvent(key);
+      }
+      await tester.sendKeyUpEvent(key);
+      if (modifier != null) await tester.sendKeyUpEvent(modifier);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('holding Delete trashes the selection once', (tester) async {
+      await pumpShell(tester, TargetPlatform.linux);
+
+      await hold(tester, LogicalKeyboardKey.delete);
+
+      expect(queue.enqueuedDeletes, hasLength(1));
+    });
+
+    testWidgets('holding Ctrl+D duplicates the selection once', (
+      tester,
+    ) async {
+      await pumpShell(tester, TargetPlatform.linux);
+
+      await hold(
+        tester,
+        LogicalKeyboardKey.keyD,
+        modifier: LogicalKeyboardKey.controlLeft,
+      );
+
+      expect(queue.enqueuedSpecs, hasLength(1));
+    });
+
     testWidgets('Cmd-Backspace and Opt-Cmd-Backspace on macOS', (
       tester,
     ) async {

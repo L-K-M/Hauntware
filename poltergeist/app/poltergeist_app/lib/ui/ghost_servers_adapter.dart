@@ -138,8 +138,12 @@ GhostCredentialRequest ghostCredentialRequestOf(
 
 /// The credential prompt's words in ARB: one title for both methods and no
 /// explanation line. A read failure shows the audited reader's file-system
-/// detail (D18) and nothing of any other error.
-GhostCredentialStrings poltergeistCredentialStrings(AppLocalizations l10n) =>
+/// detail (D18) and nothing of any other error. [vaultKeyMissing] swaps the
+/// vault banner for the lost-key wording.
+GhostCredentialStrings poltergeistCredentialStrings(
+  AppLocalizations l10n, {
+  bool vaultKeyMissing = false,
+}) =>
     GhostCredentialStrings(
       passwordTitle: (_) => l10n.credentialTitle,
       privateKeyTitle: (_) => l10n.credentialTitle,
@@ -147,7 +151,9 @@ GhostCredentialStrings poltergeistCredentialStrings(AppLocalizations l10n) =>
       endpoint: (username, host, port) => username == null
           ? l10n.hostKeyEndpoint(host, port)
           : l10n.credentialEndpoint(username, host, port),
-      vaultUnavailable: l10n.credentialVaultUnavailable,
+      vaultUnavailable: vaultKeyMissing
+          ? l10n.credentialVaultKeyMissing
+          : l10n.credentialVaultUnavailable,
       passwordField: l10n.credentialPasswordField,
       keyFileField: l10n.credentialKeyFileField,
       keyFileRequired: l10n.credentialKeyFileRequired,

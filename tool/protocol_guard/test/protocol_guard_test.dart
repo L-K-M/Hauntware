@@ -208,6 +208,57 @@ class Data { late $fieldType callback; }
     });
   }
 
+  for (final fieldType in [
+    'CallbackBox',
+    'PrivateBox',
+    'InheritedBox',
+    'Outer',
+    'List<CallbackBox>',
+  ]) {
+    test('rejects external callback class field: $fieldType', () async {
+      await fixture._write('$_core/lib/box.dart', '''
+class CallbackBox { CallbackBox(this.run); final void Function() run; }
+class PrivateBox { PrivateBox(this._run); final void Function() _run; }
+class InheritedBox extends CallbackBox { InheritedBox(super.run); }
+class Outer { Outer(this.box); final CallbackBox box; }
+''');
+      await fixture._write('$_engine/data.dart', '''
+import '../../box.dart';
+import 'protocol.dart';
+class Data extends EngineEvent { late $fieldType callback; }
+''');
+      expect(await fixture._check(), [contains('Data.callback')]);
+    });
+  }
+
+  test('lets engine services hold callback-owning product classes', () async {
+    await fixture._write('$_core/lib/box.dart', '''
+class CallbackBox { CallbackBox(this.run); final void Function() run; }
+''');
+    await fixture._write('$_engine/host.dart', '''
+import '../../box.dart';
+class Host { late CallbackBox box; }
+''');
+    expect(await fixture._check(), isEmpty);
+  });
+
+  test('allows external data classes, self-references and statics', () async {
+    await fixture._write('$_core/lib/box.dart', '''
+class Node { Node(this.next); final Node? next; final label = 'x'; }
+class Hooks { static final run = () {}; final int count = 0; }
+''');
+    await fixture._write('$_engine/data.dart', '''
+import '../../box.dart';
+import 'protocol.dart';
+class Data extends EngineEvent {
+  late Node node;
+  late Hooks hooks;
+  late Uri uri;
+}
+''');
+    expect(await fixture._check(), isEmpty);
+  });
+
   test(
     'allows a phantom callback argument with an integer representation',
     () async {

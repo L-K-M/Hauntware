@@ -12,6 +12,9 @@ class TerminalPasteReviewStrings {
         'Some of these lines look dangerous. Each line runs as you paste it.',
     this.unchecked =
         'These lines could not be checked. Each line runs as you paste it.',
+    this.unbracketed =
+        'This shell runs each line as it arrives. Check them before you '
+        'paste.',
     this.finding = _englishFinding,
     this.pasteAll = 'Paste all',
     this.firstLineOnly = 'First line only',
@@ -27,6 +30,10 @@ class TerminalPasteReviewStrings {
   /// In their place, when the linter could not check the text.
   final String unchecked;
 
+  /// In their place, when the linter found nothing but the remote has
+  /// bracketed paste off.
+  final String unbracketed;
+
   /// One finding: its line, counted from 1, and what it does.
   final String Function(int line, String explanation) finding;
 
@@ -41,9 +48,9 @@ class TerminalPasteReviewStrings {
       'Line $line: $explanation';
 }
 
-/// Asks about a multi-line paste the linter flagged, or could not check
-/// ([TerminalPastePolicy.confirm]): paste everything, the first line only,
-/// or nothing.
+/// Asks about a multi-line paste the linter flagged, could not check, or
+/// that the remote would run line by line ([TerminalPastePolicy.confirm]):
+/// paste everything, the first line only, or nothing.
 class TerminalPasteReviewDialog extends StatelessWidget {
   const TerminalPasteReviewDialog({
     super.key,
@@ -65,7 +72,11 @@ class TerminalPasteReviewDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(findings == null ? strings.unchecked : strings.findings),
+            Text(switch (findings) {
+              null => strings.unchecked,
+              [] => strings.unbracketed,
+              _ => strings.findings,
+            }),
             for (final finding in findings ?? const <TerminalPasteFinding>[])
               Padding(
                 padding: const EdgeInsets.only(top: 8),
