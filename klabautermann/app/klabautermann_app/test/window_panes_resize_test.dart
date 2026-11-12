@@ -77,6 +77,21 @@ void main() {
       expect(panes.sidebarWidth, 320);
     });
 
+    testWidgets('a tap then drag keeps the full rail movement', (tester) async {
+      final panes = WindowPanesController();
+      await pumpApp(tester, servers: twoServers, windowPanes: panes);
+      final handle = find.byKey(DesktopShell.sidebarResizeHandleKey);
+
+      await tester.tap(handle);
+      await tester.pump();
+      final before = railWidth(tester);
+      await tester.drag(handle, const Offset(80, 0));
+      await tester.pump();
+
+      expect(railWidth(tester), before + 80);
+      expect(panes.sidebarWidth, before + 80);
+    });
+
     testWidgets('dragging the inspector seam resizes the inspector', (
       tester,
     ) async {
