@@ -1033,14 +1033,31 @@ final class DocumentWorkspace extends ChangeNotifier {
       if (reverting()) return false;
       final text = tab.editor.text.text;
       final language = tab.editor.text.language;
+      final page = highlightedHtml(
+        text: text,
+        tokens: language == null ? const [] : tokenizeSyntax(text, language),
+        palette: palette,
+        title: tab.name,
+      );
+      // The store holds every write to the document limit. Markup and
+      // escaping make a page several times its buffer, so name the page
+      // rather than let the store speak of an edited file.
+      final pageBytes = textDocumentByteCount(
+        page,
+        const TextDocumentMetadata(),
+      );
+      if (pageBytes > textDocumentMaximumBytes) {
+        _reportError(
+          '${tab.name} is too large to export as HTML: the page would be '
+          '${_megabytes(pageBytes, digits: 1)} MB, over the '
+          '${_megabytes(textDocumentMaximumBytes)} MB limit.',
+          scope: scope,
+        );
+        return false;
+      }
       await store.write(
         path: target,
-        text: highlightedHtml(
-          text: text,
-          tokens: language == null ? const [] : tokenizeSyntax(text, language),
-          palette: palette,
-          title: tab.name,
-        ),
+        text: page,
         source: null,
         expectedSha256: digest,
       );
@@ -1058,6 +1075,9 @@ final class DocumentWorkspace extends ChangeNotifier {
       _notify();
     }
   }
+
+  static String _megabytes(int bytes, {int digits = 0}) =>
+      (bytes / (1024 * 1024)).toStringAsFixed(digits);
 
   /// A tab's export failures, apart from its save failures: saving the
   /// document says nothing about an export that did not work.
