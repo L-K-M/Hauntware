@@ -11,6 +11,7 @@ import 'package:ghost_desktop/ghost_desktop.dart'
 import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostPaneEdge, GhostResizeHandle, formatShortcutActivator;
+import 'package:ghost_update/ghost_update.dart';
 import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 
 import '../controllers/coverage_controller.dart';
@@ -46,6 +47,8 @@ class DesktopShell extends StatefulWidget {
     required this.coverage,
     required this.onOpenSettings,
     this.onAddServer,
+    this.updates,
+    this.openRelease,
     this.sync,
     this.navigation,
     required this.panes,
@@ -58,6 +61,14 @@ class DesktopShell extends StatefulWidget {
   final CoverageController coverage;
   final VoidCallback onOpenSettings;
   final VoidCallback? onAddServer;
+
+  /// The update check whose banner heads the workspace; null in tests
+  /// that leave it out, where no banner shows.
+  final UpdateCheckController? updates;
+
+  /// Opens the release page the banner's View Release action names.
+  final Future<void> Function(Uri url)? openRelease;
+
   final SyncController? sync;
 
   /// Whether the rail and the inspector show: the composition root keeps
@@ -288,6 +299,8 @@ class _DesktopShellState extends State<DesktopShell> {
                 placement: CoveragePlacement.desktopWorkspace,
                 coverage: widget.coverage,
                 fleet: fleet,
+                updates: widget.updates,
+                openRelease: widget.openRelease,
                 child: ServerWorkspace(
                   fleet: fleet,
                   monitoring: monitoring,
