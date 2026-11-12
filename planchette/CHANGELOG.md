@@ -47,6 +47,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   as the default. The discard button reads "Don't save", as in Séance and
   Poltergeist.
 
+
 ### Fixed
 - A stored key passphrase that does not open the key is asked for again,
   with a prompt that says the first one failed, instead of failing the
