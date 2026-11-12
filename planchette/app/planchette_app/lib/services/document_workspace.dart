@@ -756,7 +756,20 @@ final class DocumentWorkspace extends ChangeNotifier {
       }
       _saveTargets[tab] = (path: target.path, digest: target.digest);
       final result = await tab.editor.save(access: access);
-      if (result == null) return false;
+      if (result == null) {
+        // The editor declines a save whose cleanup would rewrite text an
+        // input method still owns. Say so: nothing else on screen explains
+        // why the save did nothing.
+        if (tab.editor.text.value.composing.isValid) {
+          _reportTabRefusal(
+            '${tab.name} was not saved. Finish typing in the input method, '
+            'then save again.',
+            tab,
+          );
+          _saveFailures[tab] = 'the input method is still composing';
+        }
+        return false;
+      }
       if (result.publishRequested && !result.published) {
         throw StateError('The local copy was saved, but it was not uploaded.');
       }

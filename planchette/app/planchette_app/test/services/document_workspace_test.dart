@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart'
+    show TextEditingValue, TextRange, TextSelection;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as paths;
 import 'package:planchette_core/planchette_core.dart';
@@ -1124,6 +1126,28 @@ void main() {
     // The refusal is about a state that has now passed.
     expect(await workspace.closeTab(tab), isTrue);
     expect(workspace.error, isNull);
+  });
+
+  test('a save refused during IME composition says why', () async {
+    final tab = await openOne();
+    // Cleanup cannot rewrite text an input method still owns.
+    workspace.saveOptions = const TextSaveOptions(
+      trailingWhitespace: TrailingWhitespacePolicy.trim,
+    );
+    tab.editor.text.value = const TextEditingValue(
+      text: 'disk  ',
+      selection: TextSelection.collapsed(offset: 6),
+      composing: TextRange(start: 4, end: 6),
+    );
+    workspace.newDocument()!.editor.text.text = 'other';
+    workspace.select(tab);
+
+    expect(await workspace.save(tab), isFalse);
+    expect(workspace.error, contains('input method'));
+    expect(store.writes, isEmpty);
+
+    expect(await workspace.saveAll(), isFalse);
+    expect(workspace.error, contains('one.txt (the input method'));
   });
 
   test('a locked workspace refuses a close silently', () async {
