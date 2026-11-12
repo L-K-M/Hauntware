@@ -114,6 +114,7 @@ exit 1
         'planchette/packages/ghost_servers/pubspec.yaml',
         'planchette/packages/ghost_theme/pubspec.yaml',
         'planchette/packages/ghost_ui/pubspec.yaml',
+        'planchette/packages/ghost_update/pubspec.yaml',
         'planchette/packages/planchette_core/pubspec.yaml',
         'planchette/packages/planchette_editor/pubspec.yaml',
         'seance/app/seance_app/pubspec.yaml',

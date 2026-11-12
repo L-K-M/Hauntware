@@ -13,8 +13,11 @@
 @Timeout(Duration(minutes: 6))
 library;
 
+import 'dart:math' show max;
+
 import 'package:klabautermann_core/klabautermann_core.dart';
-import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show EditCommands, HostCommands;
 import 'package:seance_core/seance_core.dart' show SshLink;
 import 'package:test/test.dart';
 
@@ -244,15 +247,23 @@ void main() {
     final content = read.result as EditContent;
     final edited = content.text.replaceFirst('seeded', 'edited');
     expect(edited, isNot(content.text), reason: 'the edit must change it');
-    await planAndRun(
-      engine,
-      EditFile(
-        dockerServer,
-        target: const FileTarget(_editedFile),
-        text: edited,
-        baseSha256: content.sha256,
-      ),
+    final edit = EditFile(
+      dockerServer,
+      target: const FileTarget(_editedFile),
+      text: edited,
+      baseSha256: content.sha256,
     );
+    final planned = await planAnswer(engine, edit);
+    if (planned case ActionRefused(:final reason)) {
+      // A noLink refusal here once followed the redial on CI and has not
+      // reproduced locally; the engine reports only the reason, so record
+      // what the host and sshd say before failing.
+      fail(
+        'planning the edit was refused: $reason\n'
+        '${await _diagnoseEditRefusal(fixture, engine, edit)}',
+      );
+    }
+    expectSucceeded(await run(engine, planned as ActionPlanned));
     await planAndRun(
       engine,
       const RemoveBackups(
@@ -267,6 +278,79 @@ void main() {
       (e) => e.serverId == dockerServer && e.status is LinkClosed,
     );
   });
+}
+
+/// How many of the Docker host's last log lines a refused edit reports.
+const _sshdLogTail = 40;
+
+/// What the host says about a refused edit plan: the reads planning makes,
+/// replayed as the fixture user over a link of their own, with each exit
+/// code and stderr; sshd's latest log lines (penalties, refused sessions);
+/// and whether planning the same edit again is still refused. Never
+/// throws, so the refusal itself stays the failure.
+Future<String> _diagnoseEditRefusal(
+  Fixture fixture,
+  FixtureEngine engine,
+  EditFile edit,
+) async {
+  final report = StringBuffer('diagnosis:\n');
+  Future<void> step(String name, Future<String> Function() body) async {
+    try {
+      report.writeln('- $name: ${await body()}');
+    } on Object catch (error) {
+      report.writeln('- $name threw: $error');
+    }
+  }
+
+  await step('the edit planned again', () async {
+    final answer = await planAnswer(engine, edit);
+    return answer is ActionRefused ? 'refused: ${answer.reason}' : 'planned';
+  });
+
+  SshLink? link;
+  await step('a new link as ${fixture.user}', () async {
+    link = await connectDockerHost(
+      fixture,
+      FixtureService.dockerHost,
+      fixture.user,
+    );
+    return 'ready';
+  });
+  if (link case final link?) {
+    Future<String> replay(List<String> argv) async {
+      final result = await link.run(
+        HostCommands.commandLine(argv, quote: quoteShellWord),
+        stdin: const [],
+      );
+      final stdout = result.stdout.length > 200
+          ? '${result.stdout.substring(0, 200)}...'
+          : result.stdout;
+      return 'exit ${result.exitCode}, stdout ${stdout.trim()}, '
+          'stderr ${result.stderr.trim()}';
+    }
+
+    await step('read', () => replay(EditCommands.readFile(_editedFile)));
+    await step('backups dir', () => replay(EditCommands.userBackupsDir()));
+    await step('manifest path', () => replay(EditCommands.userManifestPath()));
+    await step('manifest read', () async {
+      final path = (await link.run(
+        HostCommands.commandLine(
+          EditCommands.userManifestPath(),
+          quote: quoteShellWord,
+        ),
+        stdin: const [],
+      )).stdout.trim();
+      return replay(EditCommands.manifestRead(path));
+    });
+    await step('selinux', () => replay(EditCommands.selinuxEnforcing()));
+  }
+
+  await step('${FixtureService.dockerHost.composeName} log', () async {
+    final lines = await fixture.logs(FixtureService.dockerHost);
+    final tail = lines.skip(max(0, lines.length - _sshdLogTail));
+    return '\n  ${tail.join('\n  ')}';
+  });
+  return '$report';
 }
 
 /// [commandLine]'s stdout over [link]; a non-zero exit fails the test.

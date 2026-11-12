@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:ghost_update/ghost_update.dart';
 
 import '../controllers/coverage_controller.dart';
 import '../controllers/fleet_controller.dart';
@@ -27,6 +30,8 @@ class AdaptiveShell extends StatelessWidget {
     required this.coverage,
     required this.onOpenSettings,
     this.onAddServer,
+    this.updates,
+    this.openRelease,
     this.sync,
     this.navigation,
     required this.panes,
@@ -41,6 +46,13 @@ class AdaptiveShell extends StatelessWidget {
   /// The sync account behind the sync control; null shows the control
   /// idle with no action.
   final SyncController? sync;
+
+  /// The update check whose banner heads the workspace; null in tests
+  /// that leave it out, where no banner shows.
+  final UpdateCheckController? updates;
+
+  /// Opens the release page the banner's View Release action names.
+  final Future<void> Function(Uri url)? openRelease;
 
   /// Where the command palette sends the desktop workspace.
   final WorkspaceNavigation? navigation;
@@ -57,6 +69,8 @@ class AdaptiveShell extends StatelessWidget {
         coverage: coverage,
         onOpenSettings: onOpenSettings,
         onAddServer: onAddServer,
+        updates: updates,
+        openRelease: openRelease,
         sync: sync,
         navigation: navigation,
         panes: panes,
@@ -68,6 +82,8 @@ class AdaptiveShell extends StatelessWidget {
       coverage: coverage,
       onOpenSettings: onOpenSettings,
       onAddServer: onAddServer,
+      updates: updates,
+      openRelease: openRelease,
       sync: sync,
     );
   }

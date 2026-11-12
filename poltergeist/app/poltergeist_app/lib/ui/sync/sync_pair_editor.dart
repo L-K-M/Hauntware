@@ -253,6 +253,13 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
       _leftPath.text.trim().isNotEmpty &&
       _rightPath.text.trim().isNotEmpty;
 
+  /// Return in the last text field saves, under the same gate as Save.
+  /// Every earlier text field keeps its own action.
+  void _saveFromKeyboard() {
+    if (!_valid) return;
+    Navigator.of(context).pop(_result());
+  }
+
   SyncEndpoint _endpointFor(Bookmark? server, TextEditingController path) =>
       server == null
           ? LocalEndpoint(path.text.trim())
@@ -693,6 +700,8 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
                             RegExp(r'[0-9.]'),
                           ),
                         ],
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _saveFromKeyboard(),
                         decoration: InputDecoration(
                           labelText: l10n.syncEditorFractionWarnLabel,
                         ),
@@ -758,9 +767,7 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
           child: Text(l10n.syncCancel),
         ),
         FilledButton(
-          onPressed: _valid
-              ? () => Navigator.of(context).pop(_result())
-              : null,
+          onPressed: _valid ? _saveFromKeyboard : null,
           child: Text(widget.saveLabel ?? l10n.syncEditorSave),
         ),
       ],

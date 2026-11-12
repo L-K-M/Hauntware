@@ -3,7 +3,11 @@ import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_ui/ghost_ui.dart'
-    show GhostChordBinding, GhostUndoHistory, dispatchGhostChord;
+    show
+        GhostChordBinding,
+        GhostUndoHistory,
+        dispatchGhostChord,
+        ghostForwardUndoToFocusedText;
 import 'package:seance_core/seance_core.dart'
     show DangerLinter, DangerSeverity;
 import 'package:seance_terminal/seance_terminal.dart'
@@ -17,7 +21,9 @@ import 'package:seance_terminal/seance_terminal.dart'
 import '../app_state.dart';
 import '../main.dart';
 import '../services/local_settings_backend.dart';
+import 'app_commands.dart';
 import 'command_generator.dart';
+import 'keyboard_shortcuts_dialog.dart';
 import 'inspector_page.dart';
 import 'server_list_density.dart';
 import 'server_list_pane.dart';
@@ -157,11 +163,13 @@ void terminalSelectAll(TerminalSession tab) {
 /// talk over, both ways.
 const MethodChannel macMenuChannel = MethodChannel('seance/menu');
 
-/// Wire the native macOS menu items to app actions, and keep the one item
-/// whose title Dart owns in step: View's density item, which names the
-/// density it switches to ("Use Compact Sidebar Rows"). One item with a
-/// flipping title rather than a checked pair, the pattern Poltergeist's
-/// View menu uses for the same command (sibling contract §10.5).
+/// Wire the native macOS menu items to app actions, and keep the items
+/// whose titles and enabled states Dart owns in step: View's density item,
+/// which names the density it switches to ("Use Compact Sidebar Rows"),
+/// and Edit's Undo/Redo rows, named by the history's current change. One
+/// density item with a flipping title rather than a checked pair, the
+/// pattern Poltergeist's View menu uses for the same command (sibling
+/// contract §10.5).
 void installMacMenu(AppState state, {MethodChannel channel = macMenuChannel}) {
   channel.setMethodCallHandler((call) async {
     switch (call.method) {
@@ -187,13 +195,58 @@ void installMacMenu(AppState state, {MethodChannel channel = macMenuChannel}) {
         if (state.activeSession != null) {
           terminalSelectAll(state.activeSession!);
         }
+      // Native File ▸ Save and Edit ▸ Find…, forwarded only while the
+      // built-in editor's tab is active (the native side gates the items
+      // on the pushed flag; the handler no-ops without a mounted editor).
+      case 'editSave':
+        if (state.activeTab case final EditorTab tab) {
+          await tab.editorKey.currentState?.save();
+        }
+      case 'editFind':
+        if (state.activeTab case final EditorTab tab) {
+          tab.editorKey.currentState?.openSearch();
+        }
+      // Native Edit ▸ Undo/Redo: the same step the window chords take,
+      // which yields to a focused text field or the editor.
+      case 'editUndo' || 'editRedo':
+        final overlay = navigatorKey.currentState?.overlay;
+        if (overlay != null) {
+          unawaited(
+            stepUndoHistory(
+              overlay,
+              state.undoHistory,
+              call.method == 'editUndo'
+                  ? WindowCommand.undo
+                  : WindowCommand.redo,
+              yieldToFocusedText: true,
+            ),
+          );
+        }
+      case 'commandPalette':
+        final context = navigatorKey.currentContext;
+        if (context != null) unawaited(openCommandPalette(context, state));
+      case 'keyboardShortcuts':
+        final context = navigatorKey.currentContext;
+        if (context != null) unawaited(showKeyboardShortcuts(context));
+      case 'checkForUpdates':
+        final context = navigatorKey.currentContext;
+        final overlay = navigatorKey.currentState?.overlay;
+        if (context != null && overlay != null) {
+          unawaited(
+            runCheckForUpdates(context, state, overlay: overlay),
+          );
+        }
     }
     return null;
   });
 
   // Retitled on every density change, from the menu or either switch, and
-  // on nothing else: the state notifies for far more than this.
+  // on nothing else: the state notifies for far more than this. The
+  // editor's mounted state rides the same notification plus its own mount
+  // revision, which fires when a tab's editor comes or goes without the
+  // active tab changing (the narrow screen switch).
   ServerListDensity? titled;
+  var editorActive = false;
   void retitle() {
     final density = state.serverListDensity;
     if (density == titled) return;
@@ -206,8 +259,48 @@ void installMacMenu(AppState state, {MethodChannel channel = macMenuChannel}) {
     );
   }
 
+  void pushEditorActive() {
+    // The active tab alone is not enough: in the narrow posture the editor
+    // can be unmounted by the screen switch while its tab stays active, and
+    // the native items must not validate with nothing to act on.
+    final tab = state.activeTab;
+    final active = tab is EditorTab && tab.editorKey.currentState != null;
+    if (active == editorActive) return;
+    editorActive = active;
+    unawaited(channel.invokeMethod<void>('setEditorActive', active));
+  }
+
+  void syncNativeMenu() {
+    retitle();
+    pushEditorActive();
+  }
+
   retitle();
-  state.addListener(retitle);
+  pushEditorActive();
+  state.addListener(syncNativeMenu);
+
+  // The Undo/Redo rows read the history's current names, as the density
+  // item reads its setting: pushed on history notifications, and only
+  // then. The native rows start disabled, matching an empty history.
+  void pushHistoryItems() {
+    final undoName = state.undoHistory.undoName;
+    final redoName = state.undoHistory.redoName;
+    unawaited(
+      channel.invokeMethod<void>('setUndoItem', {
+        'title': undoName == null ? 'Undo' : 'Undo $undoName',
+        'enabled': undoName != null,
+      }),
+    );
+    unawaited(
+      channel.invokeMethod<void>('setRedoItem', {
+        'title': redoName == null ? 'Redo' : 'Redo $redoName',
+        'enabled': redoName != null,
+      }),
+    );
+  }
+
+  state.undoHistory.addListener(pushHistoryItems);
+  state.editorMountRevision.addListener(pushEditorActive);
 }
 
 /// The View menu's density item at [current]: the choice it switches to.
@@ -436,7 +529,8 @@ void _runTabCommand(BuildContext context, AppState state, TabCommand command) {
 }
 
 /// What a window shortcut does: show or hide a side pane, open an
-/// inspector page, or step the app's undo history ([GhostUndoHistory]).
+/// inspector page, open the command palette or the shortcut list, or step
+/// the app's undo history ([GhostUndoHistory]).
 enum WindowCommand {
   toggleSidebar,
   toggleInspector,
@@ -445,12 +539,19 @@ enum WindowCommand {
   showGit,
   showSnippets,
   showAssistant,
+  showPalette,
+  showKeyboardShortcuts,
   undo,
   redo;
 
   /// Whether the command steps the app's undo history, which stands down
   /// wherever a text field or the editor keeps a history of its own.
   bool get stepsHistory => this == undo || this == redo;
+
+  /// Whether the command's chord stands down when it reaches the window
+  /// shortcuts from a focused terminal off Apple platforms, because the
+  /// shell reads that byte first: Ctrl+/ is readline's undo.
+  bool get standsDownInTerminal => this == showKeyboardShortcuts;
 }
 
 /// Where a key reached the window shortcuts from. The terminal hands keys
@@ -496,6 +597,11 @@ const List<WindowCommand> _pageCommands = [
   WindowCommand.showAssistant,
 ];
 
+/// The window command that opens [page], for hosts that build their own
+/// menus from the shortcut tables.
+WindowCommand inspectorPageCommand(InspectorPage page) =>
+    _pageCommands[page.index];
+
 final List<WindowShortcut> _appleWindowShortcuts = [
   const WindowShortcut._(
     SingleActivator(LogicalKeyboardKey.keyS, meta: true, control: true),
@@ -510,6 +616,14 @@ final List<WindowShortcut> _appleWindowShortcuts = [
       SingleActivator(_tabNumberKeys[i], meta: true, alt: true),
       command,
     ),
+  const WindowShortcut._(
+    SingleActivator(LogicalKeyboardKey.keyP, meta: true, shift: true),
+    WindowCommand.showPalette,
+  ),
+  const WindowShortcut._(
+    SingleActivator(LogicalKeyboardKey.slash, meta: true),
+    WindowCommand.showKeyboardShortcuts,
+  ),
   const WindowShortcut._(
     SingleActivator(LogicalKeyboardKey.keyZ, meta: true),
     WindowCommand.undo,
@@ -537,6 +651,14 @@ final List<WindowShortcut> _otherWindowShortcuts = [
       command,
       leftAltOnly: true,
     ),
+  const WindowShortcut._(
+    SingleActivator(LogicalKeyboardKey.keyP, control: true, shift: true),
+    WindowCommand.showPalette,
+  ),
+  const WindowShortcut._(
+    SingleActivator(LogicalKeyboardKey.slash, control: true),
+    WindowCommand.showKeyboardShortcuts,
+  ),
   const WindowShortcut._(
     SingleActivator(LogicalKeyboardKey.keyZ, control: true),
     WindowCommand.undo,
@@ -567,11 +689,26 @@ KeyEventResult handleWindowShortcut(
   final platform = Theme.of(context).platform;
   final apple =
       platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
-  final historyStandsDown =
-      _focusKeepsTextHistory() || (!apple && origin == ShortcutOrigin.terminal);
+  final fromTerminal = origin == ShortcutOrigin.terminal;
+  final historyStandsDown = _focusKeepsTextHistory() || (!apple && fromTerminal);
+  if (!apple && fromTerminal) {
+    final keyboard = HardwareKeyboard.instance;
+    final terminalChord = windowShortcuts(platform).any(
+      (shortcut) =>
+          shortcut.command.standsDownInTerminal &&
+          shortcut.chord.accepts(event, keyboard),
+    );
+    if (terminalChord) {
+      // The shell reads this key: xterm may not map it to bytes itself, but
+      // the app must not take it either. Stop here so the window-level
+      // handler, which sees the same key bubbling up, cannot.
+      return KeyEventResult.skipRemainingHandlers;
+    }
+  }
   return dispatchGhostChord([
     for (final shortcut in windowShortcuts(platform))
-      if (!(shortcut.command.stepsHistory && historyStandsDown))
+      if (!(shortcut.command.stepsHistory && historyStandsDown) &&
+          !(shortcut.command.standsDownInTerminal && !apple && fromTerminal))
         GhostChordBinding(
           activator: shortcut.chord,
           // A held toggle would flicker the pane; a held ⌘Z steps back
@@ -616,12 +753,17 @@ void runWindowCommand(
       unawaited(state.showInspectorPage(InspectorPage.snippets));
     case WindowCommand.showAssistant:
       unawaited(state.showInspectorPage(InspectorPage.assistant));
+    case WindowCommand.showPalette:
+      unawaited(openCommandPalette(context, state));
+    case WindowCommand.showKeyboardShortcuts:
+      unawaited(showKeyboardShortcuts(context));
     case WindowCommand.undo || WindowCommand.redo:
       unawaited(
         stepUndoHistory(
           Overlay.of(context, rootOverlay: true),
           state.undoHistory,
           command,
+          yieldToFocusedText: true,
         ),
       );
   }
@@ -633,12 +775,19 @@ void runWindowCommand(
 /// [WindowCommand.redo]. The root [overlay] outlives the pane that
 /// triggered the step, so the notice is not lost if that pane unmounts
 /// while the change is being applied.
+///
+/// With [yieldToFocusedText] a focused text field keeps the step for its
+/// own history ([ghostForwardUndoToFocusedText]), as the menus' Undo
+/// rows do. A deletion notice's own Undo leaves it off so the notice
+/// still targets its change while a field holds focus.
 Future<void> stepUndoHistory(
   OverlayState overlay,
   GhostUndoHistory history,
-  WindowCommand command,
-) async {
+  WindowCommand command, {
+  bool yieldToFocusedText = false,
+}) async {
   final undo = command == WindowCommand.undo;
+  if (yieldToFocusedText && ghostForwardUndoToFocusedText(undo)) return;
   final name = undo ? history.undoName : history.redoName;
   if (name == null) return;
   try {

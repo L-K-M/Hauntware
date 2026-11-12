@@ -37,6 +37,9 @@ export 'package:seance_core/seance_core.dart'
         UpdateInfo,
         Argon2Params,
         AuthKind,
+        // Connect-time key passphrase validation shared with seance_core.
+        privateKeyNeedsPassphrase,
+        privateKeyPassphraseOpens,
         // The suite's link grammar (docs/design/suite-links.md section 5):
         // the browse parser, outbound Séance links and display safety.
         DeepLinkFailure,
@@ -253,7 +256,10 @@ export 'package:seance_core/catalog.dart'
         SyncTrackingServerStore,
         serverStoreQuarantinePath;
 export 'src/update/update_check.dart'
-    show poltergeistUpdateRepo, poltergeistUpdateUserAgent;
+    show
+        poltergeistAndroidReleaseAsset,
+        poltergeistUpdateRepo,
+        poltergeistUpdateUserAgent;
 export 'package:seance_core/catalog.dart'
     show
         InMemoryPinVerdictStore,

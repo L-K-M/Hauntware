@@ -13,6 +13,7 @@ import 'package:ghost_keepalive/ghost_keepalive.dart'
     show BackgroundKeepAlive;
 import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:ghost_ui/ghost_ui.dart' show CheckedPlatformMenuDelegate;
+import 'package:ghost_update/ghost_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -69,7 +70,6 @@ import 'services/third_party_bookmark_import_setup.dart';
 import 'services/transfer_queue_session.dart';
 import 'services/settings_window/settings_window_host.dart';
 import 'services/settings_window/settings_window_link.dart';
-import 'services/update_check_controller.dart';
 import 'services/view_preferences_store.dart';
 import 'services/workspace_library.dart';
 import 'services/workspace_list_store.dart';
@@ -580,7 +580,12 @@ Future<void> main(List<String> args) async {
   // Séance's UpdateChecker pinned to this repo. On Android the alert
   // can download the release APK once the user chooses Update (D23).
   final updateCheck = UpdateCheckController(
+    checker: UpdateChecker(
+      repo: poltergeistUpdateRepo,
+      userAgent: poltergeistUpdateUserAgent,
+    ),
     apkUpdater: Platform.isAndroid ? ApkUpdater() : null,
+    androidReleaseAsset: poltergeistAndroidReleaseAsset,
     enabled: await preferences.loadUpdateChecksEnabled(),
     onEnabledChanged: preferences.saveUpdateChecksEnabled,
   );

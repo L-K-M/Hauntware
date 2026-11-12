@@ -2,12 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart' show showAboutDialog;
 import 'package:flutter/widgets.dart';
+import 'package:ghost_update/ghost_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/registered_command.dart';
-import '../../services/update_check_controller.dart';
 import '../top_toast.dart';
 
 /// The macOS application menu's manual update check (10 §8).
