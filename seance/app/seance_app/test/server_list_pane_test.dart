@@ -34,6 +34,10 @@ class _SettingsSaveAppState extends AppState {
   Future<void>? _settingsSave;
 
   @override
+  Future<({int imported, int skipped})> importSshConfig(String text) =>
+      _ioZone.run(() => super.importSshConfig(text));
+
+  @override
   Future<void> toggleServerGroup(String key) => _settingsSave = _ioZone
       .run<Future<void>>(() => super.toggleServerGroup(key));
 
