@@ -9,8 +9,8 @@ name: CI
 # Flutter packages and apps with `flutter pub get`, never mixed.
 # scripts/test.sh mirrors the test steps below for local runs.
 #
-# The client matrices compile 18 targets: 3 Planchette desktop and 5
-# each for Séance, Poltergeist and Klabautermann. release.yml ships all
+# The client matrices compile 19 targets: 4 Planchette (three desktop
+# and Android) and 5 each for Séance, Poltergeist and Klabautermann. release.yml ships all
 # of them; Klabautermann's five carry the preview label until its v1
 # (docs/design/klabautermann, decision 16).
 
@@ -1553,8 +1553,8 @@ jobs:
         run: flutter test
 
   # ---- Client build matrices (keep in step with release.yml) ------------
-  # Compile every client the release workflow ships — 4 Planchette
-  # + 5 Séance + 5 Poltergeist targets — and run the Linux
+  # Compile every client the release workflow ships (4 Planchette,
+  # 5 Séance, 5 Poltergeist and 5 Klabautermann targets) and run the Linux
   # packaging steps and the native fixtures, so a platform- or
   # packaging-breaking change is caught here, not when a tag tries to
   # publish. Mirrors release.yml's client jobs minus publishing.
