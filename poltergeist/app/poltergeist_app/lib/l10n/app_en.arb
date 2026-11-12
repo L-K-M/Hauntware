@@ -185,6 +185,23 @@
   "@credentialPassphraseField": {
     "description": "Label of the private-key passphrase field."
   },
+  "credentialPassphraseTitle": "Key passphrase for {label}",
+  "@credentialPassphraseTitle": {
+    "description": "Title of the dialog that asks for the passphrase of an encrypted private key when connecting.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "credentialPassphraseExplanation": "Unlock the key saved in your vault. Used for this connection only unless you choose to save the passphrase.",
+  "@credentialPassphraseExplanation": {
+    "description": "Explains the vault-first saved key and optional passphrase saving."
+  },
+  "credentialPassphraseRetryExplanation": "That passphrase did not open the key. Try again. It is used for this connection only unless you choose to save it.",
+  "@credentialPassphraseRetryExplanation": {
+    "description": "Line under the key passphrase dialog's title when the previous passphrase did not open the key."
+  },
   "credentialSaveInVault": "Save in vault",
   "@credentialSaveInVault": {
     "description": "Checkbox storing the entered secret in the local vault."

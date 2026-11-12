@@ -157,6 +157,7 @@ class _DocumentShellState extends State<_DocumentShell>
   DocumentWindow? get window => widget.window;
   bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
   bool get android => defaultTargetPlatform == TargetPlatform.android;
+  bool get windows => defaultTargetPlatform == TargetPlatform.windows;
 
   /// Native file drops are wired on the desktops; the mobile runners have
   /// no drop bridge, so the target stays unregistered there.
@@ -971,7 +972,14 @@ class _DocumentShellState extends State<_DocumentShell>
           () =>
               _textAction(const RedoTextIntent(SelectionChangedCause.keyboard)),
           mnemonic: 'r',
-          shortcut: _shortcut(LogicalKeyboardKey.keyZ, shift: true),
+          // Windows programs name Ctrl+Y for Redo; Ctrl+Shift+Z keeps working
+          // there as the alias.
+          shortcut: windows
+              ? _shortcut(LogicalKeyboardKey.keyY)
+              : _shortcut(LogicalKeyboardKey.keyZ, shift: true),
+          aliases: [
+            if (windows) _shortcut(LogicalKeyboardKey.keyZ, shift: true),
+          ],
           enabled: ready,
         ),
         const _Separator(),

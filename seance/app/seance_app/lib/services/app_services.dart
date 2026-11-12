@@ -1359,9 +1359,18 @@ class AppServices {
     return vault.getSecret(ref);
   }
 
-  /// Resolves a saved jump host at connection time, including its credential.
-  Future<ResolvedSshHost?> resolveJumpHost(String id) =>
-      _credentialResolver.jumpHostResolver(configStore.getServer)(id);
+  /// Resolves a saved jump host, optionally with this attempt's passphrase.
+  Future<ResolvedSshHost?> resolveJumpHost(
+    String id, {
+    String? draftKeyPassphrase,
+  }) async {
+    final config = await configStore.getServer(id);
+    if (config == null) return null;
+    return ResolvedSshHost(
+      config,
+      await resolveCredentials(config, draftKeyPassphrase: draftKeyPassphrase),
+    );
+  }
 
   /// Read a "reference, don't store" identity file for [config], through the
   /// server's security-scoped bookmark when one exists (a Browse…-picked key

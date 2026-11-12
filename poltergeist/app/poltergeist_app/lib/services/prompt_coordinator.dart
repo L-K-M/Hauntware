@@ -8,6 +8,7 @@ import 'package:ghost_keystore/app_lock.dart'
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
+import '../ui/ghost_servers_adapter.dart';
 import '../ui/prompts/credential_dialog.dart';
 import '../ui/prompts/host_key_dialog.dart';
 import '../ui/prompts/keyboard_interactive_dialog.dart';
@@ -25,7 +26,8 @@ class _PendingPrompt {
   final EnginePromptEvent event;
 
   /// Identifies this prompt's dialog route without touching unrelated routes.
-  final dialogKey = GlobalKey();
+  /// Reassigned when a retry opens a second route for the same prompt.
+  GlobalKey dialogKey = GlobalKey();
 
   /// Set when the engine withdrew the prompt before an answer was applied.
   bool dismissed = false;
@@ -84,6 +86,18 @@ class PromptCoordinator {
     this.scaffoldMessengerKey,
     ApplicationErrorReporter? errorReporter,
   }) : _errorReporter = errorReporter ?? ApplicationErrorReporter();
+
+  /// Whether a stored private key's [passphrase] lets it open: an
+  /// unencrypted key needs none, an encrypted one needs a passphrase that
+  /// actually decrypts it. Overridable so tests need no generated key; the
+  /// default reads only the key's container and tries the passphrase.
+  @visibleForTesting
+  static bool Function(String pem, String? passphrase) keyPassphraseUsable =
+      _defaultKeyPassphraseUsable;
+
+  static bool _defaultKeyPassphraseUsable(String pem, String? passphrase) =>
+      !privateKeyNeedsPassphrase(pem) ||
+      (passphrase != null && privateKeyPassphraseOpens(pem, passphrase));
 
   /// Starts consuming the engine's prompt streams. Idempotent.
   void start() {
@@ -317,8 +331,11 @@ class PromptCoordinator {
     final data = pending.event.data as CredentialPromptData;
 
     // Vault first (03 §3.2): a stored, kind-matching secret answers without
-    // a dialog, and its stored provenance lets the pool grow.
+    // a dialog, and its stored provenance lets the pool grow. An encrypted
+    // key whose stored passphrase is missing or wrong cannot answer; it
+    // falls through to the passphrase-only loop below.
     var vaultUnavailable = false;
+    (Secret, SshCredentials)? stored;
     var vaultKeyMissing = false;
     if (data.authMethod != AuthMethod.agent &&
         data.secretRef != null &&
@@ -332,15 +349,19 @@ class PromptCoordinator {
         }
       }
       try {
-        final stored = await (lock == null
+        final resolved = await (lock == null
             ? _storedCredentials(vault!, data)
             : lock.read(() => _storedCredentials(vault!, data)));
-        if (stored != null) {
-          if (!_wasDismissed(pending)) {
-            _reply(pending, _storedReply(stored));
+        if (resolved != null) {
+          final (secret, credentials) = resolved;
+          if (_storedKeyUsable(secret, credentials)) {
+            if (!_wasDismissed(pending)) {
+              _reply(pending, _storedReply(credentials));
+            }
+            _finishShowing();
+            return;
           }
-          _finishShowing();
-          return;
+          stored = resolved;
         }
       } on AppLockException {
         if (lock == null || !lock.locked) {
@@ -375,6 +396,12 @@ class PromptCoordinator {
     if (context == null || !context.mounted) {
       _reply(pending, _cancelledCredentialReply);
       _finishShowing();
+      return;
+    }
+
+    if (stored != null) {
+      final (secret, _) = stored;
+      await _showPassphrasePrompt(pending, data, secret);
       return;
     }
 
@@ -417,6 +444,92 @@ class PromptCoordinator {
     }
     if (savedToVault) await _offerRecoveryCode();
     _finishShowing();
+  }
+
+  /// Asks for the passphrase of the stored key in [stored], verifies each
+  /// answer against that key, and re-asks with a retry explanation when the
+  /// passphrase does not open it. The key material is already in the vault,
+  /// so only the passphrase is asked for.
+  Future<void> _showPassphrasePrompt(
+    _PendingPrompt pending,
+    CredentialPromptData data,
+    Secret stored,
+  ) async {
+    final pem = stored.value;
+    var retry = false;
+
+    while (true) {
+      if (_wasDismissed(pending)) {
+        _finishShowing();
+        return;
+      }
+      // Inline the mounted check so the context use is lint-clean across
+      // the previous iteration's await (09 §3.1: re-fetch after every await).
+      final context = navigatorKey.currentContext;
+      if (context == null || !context.mounted) {
+        _reply(pending, _cancelledCredentialReply);
+        _finishShowing();
+        return;
+      }
+
+      final result = await showCredentialDialog(
+        context,
+        data,
+        request: ghostPassphraseRequestOf(
+          label: data.host,
+          host: data.host,
+          port: data.port,
+          username: data.username,
+          // Vault-first authenticates the saved PEM, not a file binding
+          // retained for switching the server back to its other key source.
+          hasKeyFile: false,
+          offerVaultSave: true,
+        ),
+        retry: retry,
+        dialogKey: pending.dialogKey,
+      );
+      // The pop future completes before the route's exit animation; the
+      // retry needs its own key so the leaving route can finish.
+      pending.dialogKey = GlobalKey();
+
+      if (_wasDismissed(pending)) {
+        _finishShowing();
+        return;
+      }
+      if (result == null) {
+        _reply(pending, _cancelledCredentialReply);
+        _finishShowing();
+        return;
+      }
+
+      final passphrase = result.password ?? result.keyPassphrase;
+      if (passphrase == null || passphrase.isEmpty) {
+        // The dialog's answer is disabled until the field is filled; a blank
+        // answer is treated as no answer.
+        _reply(pending, _cancelledCredentialReply);
+        _finishShowing();
+        return;
+      }
+
+      if (!keyPassphraseUsable(pem, passphrase)) {
+        retry = true;
+        continue;
+      }
+
+      if (result.saveToVault) await _savePassphraseToVault(stored, passphrase);
+      if (!_wasDismissed(pending)) {
+        _reply(
+          pending,
+          CredentialPromptReply(
+            privateKeyPem: pem,
+            keyPassphrase: passphrase,
+            origin: CredentialOrigin.prompted,
+          ),
+        );
+      }
+      _finishShowing();
+      return;
+    }
   }
 
   static const _cancelledCredentialReply = CredentialPromptReply(
@@ -495,6 +608,36 @@ class PromptCoordinator {
     }
   }
 
+  /// Saves a local edit to the current key, not the snapshot shown before
+  /// the question. A deleted or rotated key must not be recreated.
+  Future<void> _savePassphraseToVault(Secret stored, String passphrase) async {
+    final vault = this.vault;
+    if (vault == null) return;
+
+    try {
+      final current = await vault.getSecret(stored.id);
+      if (current == null ||
+          current.kind != stored.kind ||
+          current.value != stored.value) {
+        _showNotice();
+        return;
+      }
+      await vault.putLocalSecret(
+        current.copyWith(keyPassphrase: passphrase),
+        updatedAt: DateTime.now().toUtc().millisecondsSinceEpoch,
+      );
+    } on Object catch (error, stackTrace) {
+      // Saving is an offer, not a requirement: the connect proceeds with
+      // the entered passphrase; only the save failed (02 §10).
+      _errorReporter.report(error, stackTrace);
+      try {
+        _showNotice();
+      } on Object {
+        // Teardown can remove the notice surface; the answer still proceeds.
+      }
+    }
+  }
+
   void _showNotice() {
     final messenger = scaffoldMessengerKey?.currentState;
     final context = navigatorKey.currentContext;
@@ -504,40 +647,46 @@ class PromptCoordinator {
     );
   }
 
-  /// The vault-first answer from the shared resolver, or null when the vault
-  /// holds nothing usable for [data] and the dialog must ask.
+  /// The vault-first answer: the stored secret and the credentials it
+  /// resolves to, or null when the vault holds nothing usable for [data] and
+  /// the dialog must ask.
   ///
-  /// Under `substituteEmpty` an absent entry resolves to an empty credential,
-  /// as do an empty stored value and a kind mismatch ([_VaultFirstSource]
-  /// hides those); empty means "ask". The config deliberately omits
-  /// [CredentialPromptData.identityFilePath]: this branch has never read key
+  /// An absent entry, an empty stored value and a kind mismatch all mean
+  /// "ask". The branch reads the stored entry directly and never reads key
   /// files (the dialog does, through [_readIdentityFile]), so a stored key
-  /// still answers when the server also names a key file.
-  static Future<SshCredentials?> _storedCredentials(
+  /// still answers when the server also names a key file. The passphrase
+  /// slot is the pasted-key one, [Secret.keyPassphrase], because that is
+  /// what the vault-first answer authenticates with.
+  static Future<(Secret, SshCredentials)?> _storedCredentials(
     SecretVault vault,
     CredentialPromptData data,
   ) async {
-    final resolver = CredentialResolver(
-      _VaultFirstSource(vault, data.authMethod),
-      missingSecretPolicy: MissingSecretPolicy.substituteEmpty,
-    );
-    final credentials = await resolver.resolve(
-      ServerConfig(
-        id: data.secretRef ?? data.host,
-        label: '${data.username}@${data.host}',
-        host: data.host,
-        port: data.port,
-        username: data.username,
-        authMethod: data.authMethod,
-        secretRef: data.secretRef,
-        createdAt: 0,
-        updatedAt: 0,
-      ),
-    );
+    final secretRef = data.secretRef;
+    if (secretRef == null) return null;
 
-    final value = credentials.password ?? credentials.privateKeyPem;
-    return (value == null || value.isEmpty) ? null : credentials;
+    final secret = await vault.getSecret(secretRef);
+    if (secret == null ||
+        secret.value.isEmpty ||
+        !_secretMatches(secret, data.authMethod)) {
+      return null;
+    }
+
+    final credentials = switch (secret.kind) {
+      SecretKind.password => SshCredentials.password(secret.value),
+      SecretKind.privateKey => SshCredentials.privateKey(
+        secret.value,
+        keyPassphrase: secret.keyPassphrase,
+      ),
+    };
+    return (secret, credentials);
   }
+
+  /// Whether the stored key can answer without a passphrase prompt: a
+  /// password always can; a private key needs a passphrase that opens it
+  /// ([keyPassphraseUsable]).
+  static bool _storedKeyUsable(Secret secret, SshCredentials credentials) =>
+      secret.kind == SecretKind.password ||
+      keyPassphraseUsable(secret.value, credentials.keyPassphrase);
 
   static bool _secretMatches(Secret secret, AuthMethod method) =>
       (secret.kind == SecretKind.privateKey &&
@@ -562,30 +711,4 @@ class PromptCoordinator {
     _showing = null;
     _drain();
   }
-}
-
-/// What the vault-first branch lets [CredentialResolver] see: a stored
-/// secret only when its kind matches the prompt's auth method, so a password
-/// entry is never offered as a key or the reverse. It reads no key files.
-final class _VaultFirstSource implements CredentialSource {
-  const _VaultFirstSource(this._vault, this._authMethod);
-
-  final SecretVault _vault;
-  final AuthMethod _authMethod;
-
-  @override
-  Future<Secret?> storedSecret(String secretRef) async {
-    final secret = await _vault.getSecret(secretRef);
-    if (secret == null) return null;
-
-    return PromptCoordinator._secretMatches(secret, _authMethod)
-        ? secret
-        : null;
-  }
-
-  /// Unreachable: [PromptCoordinator._storedCredentials] resolves a config
-  /// without an identity-file path, and only such a path reaches this seam.
-  @override
-  Future<String> identityFile(ServerConfig config, CredentialDraft? draft) =>
-      throw StateError('the vault-first branch reads no identity files');
 }

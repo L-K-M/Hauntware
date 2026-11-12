@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/bookmark_backup_service.dart';
+import 'package:poltergeist_app/services/settings_models.dart';
 import 'package:poltergeist_app/services/secure_master_key.dart'
     show MasterKeyUnavailableException;
 import 'package:poltergeist_app/services/sync_account_gate.dart';
@@ -121,6 +122,112 @@ extension on _Harness {
       ),
     );
   }
+}
+
+/// The enrolled view's model with scripted retained-account state:
+/// §4.4's optional delete has no real-service path without a durable
+/// settings document, and widget tests stay off the filesystem.
+final class _FakeBackupModel extends ChangeNotifier
+    implements BackupSettingsModel {
+  _FakeBackupModel({
+    required this.account,
+    required this.retainedAccount,
+    required this.deleteSeparateOffered,
+  });
+
+  @override
+  final SyncAccount? account;
+
+  @override
+  bool syncing = false;
+
+  @override
+  bool syncSecrets = false;
+
+  @override
+  Set<String> notices = {};
+
+  @override
+  bool passphraseUnverified = false;
+
+  @override
+  List<HostKeyConflict> pinConflicts = [];
+
+  @override
+  Set<String> trippedIds = {};
+
+  @override
+  String? quarantinedPath;
+
+  @override
+  DateTime? lastSyncAt;
+
+  @override
+  String? lastSyncError;
+
+  @override
+  final RetainedBackupAccount? retainedAccount;
+
+  @override
+  final bool deleteSeparateOffered;
+
+  final deleteRetainedCalls = <String>[];
+
+  @override
+  Future<void> setSyncSecrets(bool enabled) async {}
+
+  @override
+  Future<void> registerSeparate({
+    required String baseUrl,
+    required String username,
+    required String password,
+    required String encryptionPassphrase,
+  }) async {}
+
+  @override
+  Future<void> loginAccount({
+    required String baseUrl,
+    required String username,
+    required String password,
+    required String encryptionPassphrase,
+    required SyncAccountMode mode,
+  }) async {}
+
+  @override
+  Future<void> backUpNow() async {}
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<void> deleteSeparateAccount({required String confirmedName}) async {}
+
+  @override
+  Future<BackupSwitchOutcome> switchToShared({
+    required String baseUrl,
+    required String username,
+    required String password,
+    required String encryptionPassphrase,
+  }) async => BackupSwitchOutcome(
+    held: const [],
+    passphraseUnverified: false,
+  );
+
+  @override
+  Future<void> resolvePinConflict(
+    HostKeyConflict conflict, {
+    required bool keepLocal,
+  }) async {}
+
+  @override
+  Future<void> deleteRetainedSeparateAccount({
+    required String confirmedName,
+  }) async {
+    deleteRetainedCalls.add(confirmedName);
+  }
+
+  @override
+  Future<void> declineRetainedDelete() async {}
 }
 
 Widget _wrap(Widget child, {ThemeData? theme}) => MaterialApp(
@@ -773,6 +880,129 @@ void main() {
       expect(
         find.byKey(const ValueKey('backup.enroll.continue')),
         findsOneWidget,
+      );
+    });
+
+    testWidgets('Return in the delete field confirms like the button', (
+      tester,
+    ) async {
+      final service = await h.enrolled();
+      await _pumpSection(tester, service);
+      await tester.pumpAndSettle();
+      await _tapVisible(tester, const ValueKey('backup.enrolled.delete'));
+      await tester.pumpAndSettle();
+
+      // A wrong name arms nothing: Return is inert.
+      await tester.enterText(
+        find.byKey(const ValueKey('backup.delete.confirmField')),
+        'wrong-name',
+      );
+      await tester.pumpAndSettle();
+      await tester.showKeyboard(
+        find.byKey(const ValueKey('backup.delete.confirmField')),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('backup.delete.dialog')),
+        findsOneWidget,
+      );
+      expect(h.server.deleteAccountCalls, 0);
+
+      // The exact name arms the button; Return confirms through it, once.
+      await tester.enterText(
+        find.byKey(const ValueKey('backup.delete.confirmField')),
+        'ghost-abcd1234',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        _enabled(tester, const ValueKey('backup.delete.confirm')),
+        isTrue,
+      );
+      await tester.showKeyboard(
+        find.byKey(const ValueKey('backup.delete.confirmField')),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(h.server.deleteAccountCalls, 1);
+      expect(
+        find.byKey(const ValueKey('backup.delete.dialog')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('Return in the retained delete field confirms like the '
+        'button', (tester) async {
+      final model = _FakeBackupModel(
+        account: SyncAccount(
+          baseUrl: 'https://sync.example',
+          username: 'fleet-user',
+          mode: SyncAccountMode.shared,
+        ),
+        retainedAccount: const RetainedBackupAccount(
+          baseUrl: 'https://sync.example',
+          username: 'old-user',
+        ),
+        deleteSeparateOffered: true,
+      );
+      addTearDown(model.dispose);
+      await tester.pumpWidget(_wrap(BackupSettingsSection(service: model)));
+      await tester.pumpAndSettle();
+
+      await _tapVisible(
+        tester,
+        const ValueKey('backup.enrolled.deleteRetained'),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('backup.deleteRetained.dialog')),
+        findsOneWidget,
+      );
+
+      // A wrong name arms nothing: Return is inert.
+      await tester.enterText(
+        find.byKey(const ValueKey('backup.deleteRetained.confirmField')),
+        'wrong-name',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        _enabled(tester, const ValueKey('backup.deleteRetained.confirm')),
+        isFalse,
+      );
+      await tester.showKeyboard(
+        find.byKey(const ValueKey('backup.deleteRetained.confirmField')),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('backup.deleteRetained.dialog')),
+        findsOneWidget,
+      );
+      expect(model.deleteRetainedCalls, isEmpty);
+
+      // The exact name arms the button; Return confirms through it, once.
+      await tester.enterText(
+        find.byKey(const ValueKey('backup.deleteRetained.confirmField')),
+        'old-user',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        _enabled(tester, const ValueKey('backup.deleteRetained.confirm')),
+        isTrue,
+      );
+      await tester.showKeyboard(
+        find.byKey(const ValueKey('backup.deleteRetained.confirmField')),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(model.deleteRetainedCalls, ['old-user']);
+      expect(
+        find.byKey(const ValueKey('backup.deleteRetained.dialog')),
+        findsNothing,
       );
     });
   });

@@ -209,6 +209,167 @@ void main() {
       });
     }
   });
+
+  group('appimagetool download', () {
+    test('a download that does not match the pinned digest never runs', () {
+      final run = _resolveAppImageTool(download: _tamperedTool);
+
+      expect(run.result.exitCode, isNot(0));
+      expect(run.result.stderr, contains('SHA-256'));
+      expect(run.result.stdout, isNot(contains('APPIMAGE_TOOL=')));
+      expect(run.fetched, 1);
+      expect(run.ran, isFalse, reason: 'the tampered tool must not run');
+      expect(run.cachedTools, isEmpty);
+    });
+
+    test('a URL override is fetched only with its digest', () {
+      final run = _resolveAppImageTool(
+        environment: {'APPIMAGETOOL': 'https://example.invalid/appimagetool'},
+        download: _goodTool,
+      );
+
+      expect(run.result.exitCode, isNot(0));
+      expect(run.result.stderr, contains('APPIMAGETOOL_SHA256'));
+      expect(run.fetched, 0);
+    });
+
+    test('a verified download is cached, and a changed cache is '
+        'fetched again', () {
+      final environment = {
+        'APPIMAGETOOL': 'https://example.invalid/appimagetool',
+        'APPIMAGETOOL_SHA256': _sha256Of(_goodTool),
+      };
+      final first = _resolveAppImageTool(
+        environment: environment,
+        download: _goodTool,
+      );
+      expect(
+        first.result.exitCode,
+        0,
+        reason: '${first.result.stdout}\n${first.result.stderr}',
+      );
+      expect(first.fetched, 1);
+      final cached = first.cachedTools.single;
+      expect(first.result.stdout, contains('APPIMAGE_TOOL=${cached.path}'));
+      expect(cached.readAsStringSync(), _goodTool);
+
+      final reused = _resolveAppImageTool(
+        environment: environment,
+        download: _goodTool,
+        home: first.home,
+      );
+      expect(reused.result.exitCode, 0);
+      expect(reused.fetched, 0, reason: 'a verified cache is reused');
+
+      cached.writeAsStringSync(_tamperedTool);
+      final refetched = _resolveAppImageTool(
+        environment: environment,
+        download: _goodTool,
+        home: first.home,
+      );
+      expect(refetched.result.exitCode, 0);
+      expect(refetched.fetched, 1, reason: 'a changed cache is not run');
+      expect(cached.readAsStringSync(), _goodTool);
+      expect(refetched.ran, isFalse);
+    });
+  });
+}
+
+/// Stand-ins for downloaded appimagetool binaries: the tampered one
+/// leaves a mark if anything executes it.
+const _goodTool = '#!/bin/sh\nexit 0\n';
+const _tamperedTool = '#!/bin/sh\ntouch "\$HOME/ran"\n';
+
+String _sha256Of(String text) {
+  final result = Process.runSync('bash', [
+    '-c',
+    r'printf %s "$1" | { sha256sum 2>/dev/null || shasum -a 256; } '
+        r"| cut -d' ' -f1",
+    'sha256',
+    text,
+  ]);
+  return (result.stdout as String).trim();
+}
+
+/// Sources the shared packager, resolves appimagetool with a stub `curl`
+/// that serves [download] and counts its calls, and runs what resolved.
+/// [home] carries a cache over from an earlier run.
+({
+  ProcessResult result,
+  int fetched,
+  bool ran,
+  List<File> cachedTools,
+  Directory home,
+})
+_resolveAppImageTool({
+  Map<String, String> environment = const {},
+  required String download,
+  Directory? home,
+}) {
+  final sandbox = Directory.systemTemp.createTempSync('appimagetool-test-');
+  addTearDown(() => sandbox.deleteSync(recursive: true));
+  final runHome =
+      home ?? (Directory(p.join(sandbox.path, 'home'))..createSync());
+
+  final served = File(p.join(sandbox.path, 'served'))
+    ..writeAsStringSync(download);
+  final calls = File(p.join(sandbox.path, 'curl-calls'));
+  final bin = Directory(p.join(sandbox.path, 'bin'))..createSync();
+  final curl = File(p.join(bin.path, 'curl'))
+    ..writeAsStringSync(r'''#!/usr/bin/env bash
+out=""
+while (($#)); do
+  case "$1" in
+    -o) out="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+echo call >> "$CURL_CALLS"
+cp "$CURL_SERVED" "$out"
+''');
+  Process.runSync('chmod', ['+x', curl.path]);
+
+  final common = p.join(
+    _repositoryRoot.parent.path,
+    'scripts/package-linux-common.sh',
+  );
+  final result = Process.runSync(
+    'bash',
+    [
+      '-c',
+      // Runs the resolved tool as build_appimage would.
+      r'set -e; source "$1"; resolve_appimagetool; '
+          r'echo "APPIMAGE_TOOL=$APPIMAGE_TOOL"; "$APPIMAGE_TOOL"',
+      'resolve',
+      common,
+    ],
+    environment: {
+      ...Platform.environment,
+      'APPIMAGETOOL': '',
+      'APPIMAGETOOL_SHA256': '',
+      ...environment,
+      'HOME': runHome.path,
+      'PACKAGE_NAME': 'probe',
+      'PATH': '${bin.path}:${Platform.environment['PATH']}',
+      'CURL_CALLS': calls.path,
+      'CURL_SERVED': served.path,
+    },
+  );
+
+  final cache = Directory(p.join(runHome.path, '.cache/probe'));
+  return (
+    result: result,
+    fetched: calls.existsSync() ? calls.readAsLinesSync().length : 0,
+    ran: File(p.join(runHome.path, 'ran')).existsSync(),
+    cachedTools: cache.existsSync()
+        ? cache
+              .listSync()
+              .whereType<File>()
+              .where((file) => file.path.endsWith('.AppImage'))
+              .toList()
+        : <File>[],
+    home: runHome,
+  );
 }
 
 const _iconSizes = [16, 24, 32, 48, 64, 96, 128, 256, 512];

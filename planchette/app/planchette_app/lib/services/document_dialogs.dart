@@ -199,6 +199,35 @@ final class AppDocumentDialogs implements DocumentDialogs {
         ) ??
         false;
   }
+
+  @override
+  Future<bool> confirmDiscardRecovery(String name) async {
+    final context = navigatorKey.currentContext;
+    if (context == null) return false;
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Delete the recovery copy “$name”?'),
+            content: const Text(
+              'It holds the earlier contents of a document Planchette could '
+              'not save. If you keep it, it opens again the next time you '
+              'start Planchette.',
+            ),
+            actions: [
+              TextButton(
+                autofocus: true,
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Keep'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
 }
 
 /// A short list of file names for a prompt: a long selection still fits.

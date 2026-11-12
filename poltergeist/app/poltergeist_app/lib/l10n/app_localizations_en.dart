@@ -135,6 +135,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get credentialPassphraseField => 'Passphrase';
 
   @override
+  String credentialPassphraseTitle(String label) {
+    return 'Key passphrase for $label';
+  }
+
+  @override
+  String get credentialPassphraseExplanation =>
+      'Unlock the key saved in your vault. Used for this connection only unless you choose to save the passphrase.';
+
+  @override
+  String get credentialPassphraseRetryExplanation =>
+      'That passphrase did not open the key. Try again. It is used for this connection only unless you choose to save it.';
+
+  @override
   String get credentialSaveInVault => 'Save in vault';
 
   @override

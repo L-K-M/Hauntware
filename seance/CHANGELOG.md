@@ -38,6 +38,11 @@
   the last one did. `IdentityFile none` signs in through the agent
   instead of naming a key file called "none", and `HostName %h.example`
   becomes the host's own name with that domain.
+- An encrypted SSH key with a missing or wrong passphrase offers Enter
+  passphrase on the connection error, including when the key belongs to
+  a jump host. A wrong answer asks again. Use the answer for one attempt
+  without writing it to the vault, or choose Save in vault to keep it in
+  the key's own passphrase slot. Referenced key files stay referenced.
 - The window has the same layout on Linux, Windows, macOS and tablets: a
   header with the server's name, Generate command and buttons that hide
   the server list (the sidebar) and the side panel (the inspector), as a
