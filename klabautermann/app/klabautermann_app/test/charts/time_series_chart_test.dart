@@ -1,14 +1,20 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:ghost_ui/ghost_ui.dart' show contrastRatio;
 import 'package:klabautermann_app/ui/charts/charts.dart';
+import 'package:klabautermann_app/ui/charts/chart_marks.dart'
+    show ThresholdBand, thresholdBandAlpha;
 import 'package:klabautermann_app/ui/charts/time_series_chart.dart'
-    show TimeSeriesPainter, firstTimeSeriesTick;
+    show TimeSeriesCrosshairPainter, TimeSeriesPainter, firstTimeSeriesTick;
+import 'package:klabautermann_app/ui/charts/time_series_crosshair.dart'
+    show TimeSeriesGapHit, TimeSeriesSampleHit;
 
 import '../support/charts.dart';
 
@@ -43,9 +49,15 @@ TimeSeriesRing _network() {
   return ring;
 }
 
-Widget _chart(TimeSeriesRing ring, {DateTime? end, double? max}) => chartFrame(
+Widget _chart(
+  TimeSeriesRing ring, {
+  DateTime? end,
+  double? max,
+  double width = 400,
+  ChartThresholds? thresholds,
+}) => chartFrame(
   SizedBox(
-    width: 400,
+    width: width,
     height: 200,
     child: TimeSeriesChart(
       data: ring,
@@ -55,19 +67,50 @@ Widget _chart(TimeSeriesRing ring, {DateTime? end, double? max}) => chartFrame(
       source: 'Sampled by this device while connected',
       end: end ?? _end,
       max: max,
+      thresholds: thresholds,
     ),
   ),
 );
 
-/// The contours of every path [painter] strokes in [color], as bounds. A
-/// recorded paint keeps its colour as 8-bit channels, so the match is on
-/// those.
+final _crosshair = find.byWidgetPredicate(
+  (widget) =>
+      widget is CustomPaint && widget.painter is TimeSeriesCrosshairPainter,
+);
+
+TimeSeriesCrosshairPainter? _crosshairOf(WidgetTester tester) =>
+    _crosshair.evaluate().isEmpty
+    ? null
+    : tester.widget<CustomPaint>(_crosshair).painter!
+          as TimeSeriesCrosshairPainter;
+
+/// Where [second] of the window falls on screen, halfway up the plot.
+Offset _onPlot(WidgetTester tester, num second) {
+  final painter = _painterOf(tester);
+  final plot = painter.plotRectFor(tester.getSize(_plot));
+  final micros =
+      _at(0).microsecondsSinceEpoch + (second * Duration.microsecondsPerSecond);
+  return tester.getTopLeft(_plot) +
+      Offset(painter.xOf(plot, micros.round()), plot.center.dy);
+}
+
+/// The readout's box on screen.
+Rect _readoutRect(WidgetTester tester) => tester.getRect(
+  find
+      .ancestor(of: find.textContaining('PM'), matching: find.byType(FittedBox))
+      .first,
+);
+
+/// The contours of every path [painter] strokes in [color], as bounds; a
+/// series' marker is filled, so it is left out. A recorded paint keeps
+/// its colour as 8-bit channels, so the match is on those.
 List<Rect> _contours(TimeSeriesPainter painter, Size size, Color color) {
   final canvas = TestRecordingCanvas();
   painter.paint(canvas, size);
   return [
     for (final call in canvas.invocations)
       if (call.invocation.memberName == #drawPath &&
+          (call.invocation.positionalArguments[1] as Paint).style ==
+              PaintingStyle.stroke &&
           (call.invocation.positionalArguments[1] as Paint).color.toARGB32() ==
               color.toARGB32())
         for (final metric
@@ -105,10 +148,12 @@ void main() {
 
     final bands = _bands(painter, size);
     expect(bands, hasLength(2));
-    // The open gap reaches the right edge.
+    // The open gap reaches the plot's right edge, which leaves room for a
+    // marker on a sample there.
+    expect(bands.last.right, closeTo(painter.plotRectFor(size).right, 0.01));
     expect(
-      bands.last.right,
-      closeTo(size.width - TimeSeriesPainter.strokeWidth / 2, 0.01),
+      painter.plotRectFor(size).right,
+      size.width - TimeSeriesPainter.markerReach,
     );
 
     final receive = _contours(painter, size, palette.series[0]);
@@ -571,7 +616,7 @@ void main() {
     }
 
     // Runs under any TZ, CI's UTC included: the zone comes from the test.
-    final edge = size.width - TimeSeriesPainter.strokeWidth / 2;
+    final edge = size.width - TimeSeriesPainter.markerReach;
     expect(
       ticksIn(const Duration(hours: 5, minutes: 45)).last,
       closeTo(edge, 0.01),
@@ -617,5 +662,424 @@ void main() {
       _chart(ring, end: _end.add(const Duration(seconds: 2))),
     );
     expect(_painterOf(tester).shouldRepaint(after), isTrue);
+  });
+
+  group('crosshair', () {
+    testWidgets('follows a hovering mouse to the nearest sample', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_chart(_network()));
+      final base = _painterOf(tester);
+      expect(_crosshairOf(tester), isNull);
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: Offset.zero);
+      await mouse.moveTo(_onPlot(tester, 302));
+      await tester.pump();
+
+      final hit = _crosshairOf(tester)!.hit as TimeSeriesSampleHit;
+      expect(hit.at, _at(300).microsecondsSinceEpoch);
+      expect(find.text('12:05:00\u202fPM'), findsOneWidget);
+      expect(find.text('Receive 1.5 MiB/s'), findsOneWidget);
+      expect(find.text('Transmit 256 KiB/s'), findsOneWidget);
+      // Moving the crosshair neither rebuilds the chart nor repaints its
+      // lines.
+      expect(identical(_painterOf(tester), base), isTrue);
+
+      // An unknown value reads as no reading.
+      await mouse.moveTo(_onPlot(tester, 351));
+      await tester.pump();
+      expect(find.text('Receive no reading'), findsOneWidget);
+
+      await mouse.moveTo(Offset.zero);
+      await tester.pump();
+      expect(_crosshairOf(tester), isNull);
+      expect(find.textContaining('Receive '), findsNothing);
+    });
+
+    testWidgets('says no reading and why inside a gap', (tester) async {
+      await tester.pumpWidget(_chart(_network()));
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: Offset.zero);
+      await mouse.moveTo(_onPlot(tester, 180));
+      await tester.pump();
+
+      expect(_crosshairOf(tester)!.hit, isA<TimeSeriesGapHit>());
+      expect(find.text('No reading: disconnected'), findsOneWidget);
+      expect(find.textContaining('Receive '), findsNothing);
+    });
+
+    testWidgets('follows a dragging finger and goes when it lifts', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_chart(_network()));
+      final finger = await tester.startGesture(_onPlot(tester, 40));
+      await finger.moveBy(const Offset(20, 0));
+      await finger.moveTo(_onPlot(tester, 100));
+      await tester.pump();
+      expect(_crosshairOf(tester)!.hit.at, _at(100).microsecondsSinceEpoch);
+      expect(find.text('12:01:40\u202fPM'), findsOneWidget);
+
+      await finger.up();
+      await tester.pump();
+      expect(_crosshairOf(tester), isNull);
+    });
+
+    testWidgets('moves with the arrow keys while focused', (tester) async {
+      await tester.pumpWidget(_chart(_network()));
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(_crosshairOf(tester), isNull);
+
+      // The first key starts at the newest stop: the open gap's middle.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(_crosshairOf(tester)!.hit, isA<TimeSeriesGapHit>());
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(
+        _crosshairOf(tester)!.hit,
+        TimeSeriesSampleHit(42, _at(530).microsecondsSinceEpoch),
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.home);
+      await tester.pump();
+      expect(_crosshairOf(tester)!.hit.at, _at(0).microsecondsSinceEpoch);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(_crosshairOf(tester)!.hit.at, _at(10).microsecondsSinceEpoch);
+      expect(find.text('Receive 1 MiB/s'), findsOneWidget);
+
+      // Focus leaving takes the crosshair with it.
+      FocusManager.instance.primaryFocus!.unfocus();
+      await tester.pump();
+      await tester.pump();
+      expect(_crosshairOf(tester), isNull);
+    });
+
+    testWidgets('offers the readout as an adjustable value', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(_chart(_network()));
+      final readout = find.semantics.byLabel('Values at a time');
+      expect(
+        readout.evaluate().single,
+        matchesSemantics(
+          label: 'Values at a time',
+          isFocusable: true,
+          hasIncreaseAction: true,
+          hasDecreaseAction: true,
+          hasFocusAction: true,
+        ),
+      );
+
+      tester.semantics.decrease(readout);
+      await tester.pump();
+      tester.semantics.decrease(readout);
+      await tester.pump();
+      expect(
+        readout.evaluate().single.value,
+        '12:08:50\u202fPM, Receive 1.5 MiB/s, Transmit 256 KiB/s',
+      );
+      // The series summaries stay as they were.
+      expect(
+        find.semantics.byLabel(
+          'Transmit: now unknown, lowest 256 KiB/s, highest 256 KiB/s, steady',
+        ),
+        findsOne,
+      );
+      semantics.dispose();
+    });
+
+    testWidgets('puts the readout beside the rule, not over it', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_chart(_network()));
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      for (final second in [10, 300, 530]) {
+        final point = _onPlot(tester, second);
+        await mouse.moveTo(point);
+        await tester.pump();
+        final rule = _onPlot(tester, second).dx;
+        final box = _readoutRect(tester);
+        expect(
+          box.right <= rule || box.left >= rule,
+          isTrue,
+          reason: '$box covers the rule at $rule',
+        );
+        expect(
+          tester.getRect(find.byType(TimeSeriesChart)).contains(box.center),
+          isTrue,
+        );
+      }
+      // Near the right edge it goes before the rule.
+      expect(_readoutRect(tester).right, lessThan(_onPlot(tester, 530).dx));
+    });
+
+    for (final scale in [2.0, 3.0]) {
+      for (final width in [400.0, 120.0]) {
+        testWidgets('fits the chart at ${scale}x text, ${width.round()} wide', (
+          tester,
+        ) async {
+          tester.platformDispatcher.textScaleFactorTestValue = scale;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          await tester.pumpWidget(_chart(_network(), width: width));
+          // At triple text the value labels can take a narrow chart's whole
+          // width; with no plot there is nothing to point at.
+          final plot = _painterOf(tester).plotRectFor(tester.getSize(_plot));
+          if (plot.width <= 0) {
+            await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+            await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+            await tester.pump();
+            expect(tester.takeException(), isNull);
+            expect(_crosshairOf(tester)?.hit, isNotNull);
+            return;
+          }
+          final mouse = await tester.createGesture(
+            kind: PointerDeviceKind.mouse,
+          );
+          addTearDown(mouse.removePointer);
+          for (final second in [10, 180, 300, 530]) {
+            await mouse.moveTo(_onPlot(tester, second));
+            await tester.pump();
+            expect(tester.takeException(), isNull);
+            final chart = tester.getRect(find.byType(TimeSeriesChart));
+            final box = _readoutRect(tester);
+            expect(box.left, greaterThanOrEqualTo(chart.left - 0.01));
+            expect(box.right, lessThanOrEqualTo(chart.right + 0.01));
+            expect(box.top, greaterThanOrEqualTo(chart.top - 0.01));
+            expect(box.bottom, lessThanOrEqualTo(chart.bottom + 0.01));
+          }
+        });
+      }
+    }
+
+    test('repaints when the chart or the hit changes', () {
+      final ring = TimeSeriesRing(capacity: 2, lanes: 1);
+      addTearDown(ring.dispose);
+      TimeSeriesPainter chart() => TimeSeriesPainter(
+        data: ring,
+        version: ring.version,
+        from: 0,
+        to: 10,
+        scaleMax: 100,
+        unit: ChartUnit.percent,
+        strings: testChartStrings,
+        colors: const [Colors.blue],
+        gaps: const [],
+        summaries: const [],
+        textStyle: const TextStyle(fontSize: 11, color: Colors.black),
+        textScaler: TextScaler.noScaling,
+        textDirection: TextDirection.ltr,
+        background: Colors.white,
+      );
+      final base = chart();
+      final painter = TimeSeriesCrosshairPainter(
+        chart: base,
+        hit: const TimeSeriesSampleHit(0, 4),
+        ink: Colors.black,
+      );
+      bool repaints(TimeSeriesCrosshairPainter next) =>
+          next.shouldRepaint(painter);
+      expect(
+        repaints(
+          TimeSeriesCrosshairPainter(
+            chart: base,
+            hit: const TimeSeriesSampleHit(0, 4),
+            ink: Colors.black,
+          ),
+        ),
+        isFalse,
+      );
+      expect(
+        repaints(
+          TimeSeriesCrosshairPainter(
+            chart: base,
+            hit: const TimeSeriesSampleHit(1, 5),
+            ink: Colors.black,
+          ),
+        ),
+        isTrue,
+      );
+      expect(
+        repaints(
+          TimeSeriesCrosshairPainter(
+            chart: chart(),
+            hit: const TimeSeriesSampleHit(0, 4),
+            ink: Colors.black,
+          ),
+        ),
+        isTrue,
+      );
+      expect(
+        repaints(
+          TimeSeriesCrosshairPainter(
+            chart: base,
+            hit: const TimeSeriesSampleHit(0, 4),
+            ink: Colors.red,
+          ),
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  group('thresholds', () {
+    const levels = ChartThresholds(warning: 80, critical: 90);
+
+    testWidgets('draws the bands and names each level', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(
+        chartFrame(
+          SizedBox(
+            width: 400,
+            height: 200,
+            child: TimeSeriesChart(
+              data: _network(),
+              labels: const ['Receive', 'Transmit'],
+              unit: ChartUnit.percent,
+              strings: testChartStrings,
+              source: '',
+              end: _end,
+              thresholds: levels,
+            ),
+          ),
+        ),
+      );
+      final painter = _painterOf(tester);
+      final palette = ChartPalette.of(tester.element(_plot));
+      expect(painter.warningBand, (from: 80.0, color: palette.warning));
+      expect(painter.criticalBand, (from: 90.0, color: palette.critical));
+
+      final size = tester.getSize(_plot);
+      final plot = painter.plotRectFor(size);
+      final canvas = TestRecordingCanvas();
+      painter.paint(canvas, size);
+      Rect? rule(Color color) => [
+        for (final call in canvas.invocations)
+          if (call.invocation.memberName == #drawRect &&
+              (call.invocation.positionalArguments[1] as Paint).color
+                      .toARGB32() ==
+                  color.toARGB32())
+            call.invocation.positionalArguments.first as Rect,
+      ].singleOrNull;
+      expect(
+        rule(palette.warning)!.bottom,
+        closeTo(painter.yOf(plot, 80), 0.01),
+      );
+      expect(
+        rule(palette.critical)!.bottom,
+        closeTo(painter.yOf(plot, 90), 0.01),
+      );
+      expect(
+        rule(palette.critical.withValues(alpha: thresholdBandAlpha))!.top,
+        plot.top,
+      );
+
+      expect(find.text('warning 80%'), findsOneWidget);
+      expect(find.text('critical 90%'), findsOneWidget);
+      expect(find.semantics.byLabel('warning 80%, critical 90%'), findsOne);
+      semantics.dispose();
+    });
+
+    testWidgets('leaves out a level above the scale', (tester) async {
+      await tester.pumpWidget(
+        _chart(
+          _network(),
+          max: 2 * _mebibyte,
+          thresholds: ChartThresholds(
+            warning: _mebibyte,
+            critical: 4 * _mebibyte,
+          ),
+        ),
+      );
+      expect(find.text('warning 1 MiB/s'), findsOneWidget);
+      expect(find.textContaining('critical'), findsNothing);
+    });
+
+    test('repaints on a band change', () {
+      final ring = TimeSeriesRing(capacity: 2, lanes: 1);
+      addTearDown(ring.dispose);
+      TimeSeriesPainter painter({ThresholdBand? warning, String? words}) =>
+          TimeSeriesPainter(
+            data: ring,
+            version: ring.version,
+            from: 0,
+            to: 10,
+            scaleMax: 100,
+            unit: ChartUnit.percent,
+            strings: testChartStrings,
+            colors: const [Colors.blue],
+            gaps: const [],
+            summaries: const [],
+            textStyle: const TextStyle(fontSize: 11, color: Colors.black),
+            textScaler: TextScaler.noScaling,
+            textDirection: TextDirection.ltr,
+            background: Colors.white,
+            warningBand: warning,
+            thresholdSummary: words,
+          );
+      final none = painter();
+      expect(painter().shouldRepaint(none), isFalse);
+      expect(
+        painter(warning: (from: 80, color: Colors.amber)).shouldRepaint(none),
+        isTrue,
+      );
+      expect(
+        painter(words: 'warning 80%').shouldRebuildSemantics(none),
+        isTrue,
+      );
+    });
+  });
+
+  testWidgets("marks each series' latest point with its own shape", (
+    tester,
+  ) async {
+    await tester.pumpWidget(_chart(_network()));
+    final painter = _painterOf(tester);
+    final size = tester.getSize(_plot);
+    final plot = painter.plotRectFor(size);
+    final palette = ChartPalette.of(tester.element(_plot));
+    final canvas = TestRecordingCanvas();
+    painter.paint(canvas, size);
+    // Each marker is one filled path in its series' colour.
+    List<Rect> marks(Color color) => [
+      for (final call in canvas.invocations)
+        if (call.invocation.memberName == #drawPath &&
+            (call.invocation.positionalArguments[1] as Paint).style ==
+                PaintingStyle.fill &&
+            (call.invocation.positionalArguments[1] as Paint).color
+                    .toARGB32() ==
+                color.toARGB32())
+          (call.invocation.positionalArguments.first as Path).getBounds(),
+    ];
+    final receive = marks(palette.series[0]).single;
+    final transmit = marks(palette.series[1]).single;
+    // Both at 12:08:50, the last sample before the open gap.
+    final x = painter.xOf(plot, _at(530).microsecondsSinceEpoch);
+    expect(receive.center.dx, closeTo(x, 0.01));
+    expect(
+      transmit.center.dy,
+      closeTo(painter.yOf(plot, 0.25 * _mebibyte), 0.5),
+    );
+    // A circle and a square: their bounds differ in size.
+    expect(receive.size, isNot(transmit.size));
+
+    // A window with no known sample draws no marker.
+    await tester.pumpWidget(
+      _chart(_network(), end: _end.add(const Duration(minutes: 20))),
+    );
+    final empty = TestRecordingCanvas();
+    _painterOf(tester).paint(empty, size);
+    expect(
+      empty.invocations.where(
+        (call) =>
+            call.invocation.memberName == #drawPath &&
+            (call.invocation.positionalArguments[1] as Paint).style ==
+                PaintingStyle.fill,
+      ),
+      isEmpty,
+    );
   });
 }

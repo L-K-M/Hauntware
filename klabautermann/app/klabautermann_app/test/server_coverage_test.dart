@@ -7,6 +7,7 @@ import 'package:klabautermann_app/ui/chart_strings.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart'
     show TimeSeriesChart, chartGapText;
 import 'package:klabautermann_app/ui/server_coverage.dart';
+import 'package:klabautermann_app/ui/threshold_scope.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/charts.dart'
@@ -216,6 +217,14 @@ void main() {
     expect(
       find.text('Paused while Klabautermann is in the background.'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets("the session chart draws the CPU's levels", (tester) async {
+    await _pumpCard(tester);
+    expect(
+      tester.widget<TimeSeriesChart>(find.byType(TimeSeriesChart)).thresholds,
+      kDefaultThresholds,
     );
   });
 

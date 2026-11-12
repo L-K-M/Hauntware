@@ -408,11 +408,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
     final columns = _shownColumns(allColumns, _chosen);
     final terms = searchTerms(_search.text);
     final selecting = _selecting && _bulkAllowed(context);
-    final shown = containersShown(
-      containers,
-      runningOnly: _runningOnly,
-      terms: terms,
-    );
+    final shown = _shownContainers(containers);
     final entries = containerListEntries(
       containers,
       runningOnly: _runningOnly || _top,
@@ -665,11 +661,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
       for (final container in containers)
         if (_selected.contains(container.id)) container,
     ];
-    final shown = containersShown(
-      containers,
-      runningOnly: _runningOnly,
-      terms: searchTerms(_search.text),
-    );
+    final shown = _shownContainers(containers);
     final tooMany = selected.length > kContainerBulkMax;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1161,6 +1153,16 @@ class _ContainersPanelState extends State<ContainersPanel> {
       ),
     ];
   }
+
+  /// The containers the list shows, which Select all and the project
+  /// toggles act on. The Top view lists running containers only, whatever
+  /// the running filter says, so a selection never takes one it hides.
+  List<ContainerSummary> _shownContainers(List<ContainerSummary> containers) =>
+      containersShown(
+        containers,
+        runningOnly: _runningOnly || _top,
+        terms: searchTerms(_search.text),
+      );
 
   /// The columns shown, the name first, then [chosen]'s in order.
   List<SortableTableColumn<ContainerListEntry>> _shownColumns(

@@ -61,6 +61,7 @@ final class JournalFields {
     required this.priority,
     required this.source,
     required this.pid,
+    required this._realtimeUs,
     required this.messageNotSent,
     required this.fieldsLeftOut,
     required this._encoded,
@@ -75,6 +76,18 @@ final class JournalFields {
 
   /// `_PID`, when it parsed.
   final int? pid;
+
+  /// `__REALTIME_TIMESTAMP` in microseconds since the epoch, kept as a
+  /// number rather than a [DateTime] so an entry holds one object less.
+  final int? _realtimeUs;
+
+  /// When the entry was written ([JournalEntry.timestampUtc]), in UTC: the
+  /// row's time column. Null when the entry carried no timestamp, or one
+  /// a [DateTime] cannot hold.
+  DateTime? get at => switch (_realtimeUs) {
+    final us? => DateTime.fromMicrosecondsSinceEpoch(us, isUtc: true),
+    null => null,
+  };
 
   /// Whether MESSAGE arrived as JSON null: `journalctl -o json` sends a
   /// field larger than 4,096 bytes as null unless it runs with `--all`.
@@ -277,6 +290,7 @@ final class LogBuffer {
           priority: entry.priority,
           source: source,
           pid: entry.pid,
+          realtimeUs: entry.timestampUtc?.microsecondsSinceEpoch,
           messageNotSent:
               entry.fields.containsKey('MESSAGE') && message == null,
           fieldsLeftOut: leftOut,
