@@ -54,16 +54,38 @@ void main() {
       contains(RegExp(r'await runSettingsWindow\(\);\s*return;')),
     );
 
-    // The window's own files import nothing from the engine package. The
-    // screens they render are shared with the main window and may import
-    // it, and the window's isolate loads the whole program anyway, so the
-    // D18 guarantee is the early return above, not the imports.
+    // Snapshot codecs may use value types from the product barrel, but
+    // never expose its engine or store entry points. The isolate loads
+    // the whole program anyway: D18's runtime guarantee is the early
+    // return above, not the absence of domain-model imports.
     for (final path in [
       'lib/settings_window_app.dart',
       'lib/services/settings_window/remote_settings.dart',
       'lib/services/settings_window/settings_window_link.dart',
     ]) {
-      expect(readSource(path), isNot(contains('klabautermann_core')));
+      expect(
+        _usesOnlySnapshotValueImports(readSource(path)),
+        isTrue,
+        reason: path,
+      );
+    }
+  });
+
+  test('settings value imports cannot expose engine entry points', () {
+    expect(
+      _usesOnlySnapshotValueImports(
+        "import 'package:klabautermann_core/klabautermann_core.dart' "
+        'show SyncPinConflict, SecretsRestoreSummary, VaultRestorePolicy;',
+      ),
+      isTrue,
+    );
+    for (final directive in [
+      "import 'package:klabautermann_core/klabautermann_core.dart';",
+      "import 'package:klabautermann_core/klabautermann_core.dart' "
+          'show IsolateEngineClient;',
+      "import 'package:klabautermann_core/src/engine/engine_isolate.dart';",
+    ]) {
+      expect(_usesOnlySnapshotValueImports(directive), isFalse);
     }
   });
 
@@ -303,4 +325,25 @@ void main() {
       }
     });
   });
+}
+
+const _snapshotValueTypes = {
+  'SyncPinConflict',
+  'SecretsRestoreSummary',
+  'VaultRestorePolicy',
+};
+
+final _snapshotValueImport = RegExp(
+  r"import\s+'package:klabautermann_core/klabautermann_core\.dart'"
+  r'\s+show\s+([^;]+);',
+);
+
+bool _usesOnlySnapshotValueImports(String source) {
+  for (final match in _snapshotValueImport.allMatches(source)) {
+    final names = match.group(1)!.split(',').map((name) => name.trim());
+    if (names.any((name) => !_snapshotValueTypes.contains(name))) return false;
+  }
+  return !source
+      .replaceAll(_snapshotValueImport, '')
+      .contains('klabautermann_core');
 }
