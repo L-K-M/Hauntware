@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:seance_core/seance_core.dart';
 import 'package:seance_sync_server/seance_sync_server.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
 /// End-to-end: a real server over a socket, the real HTTP client, real E2E
@@ -146,6 +147,72 @@ void main() {
     });
   });
 
+  test('a full account takes edits and keeps new records waiting', () async {
+    // SQLite, as deployed: the per-record path runs behind a savepoint.
+    final server = SyncServer(
+      storage: SqliteStorage(sqlite3.openInMemory()),
+      settings: const ServerSettings(
+        openRegistration: true,
+        bindAddress: '127.0.0.1',
+        port: 0,
+        maxRecordsPerAccount: 2,
+      ),
+    );
+    final running = await server.start();
+    addTearDown(running.close);
+    final client = await registerDevice(
+      'http://${running.host}:${running.port}',
+      'full',
+    );
+
+    final store = InMemoryLocalRecordStore();
+    await store.putLocal(record('a', blobBytes: 16));
+    await store.putLocal(record('b', blobBytes: 16));
+    await SyncEngine(store).sync(client);
+
+    await store.putLocal(
+      EncryptedRecord(
+        id: 'a',
+        updatedAt: 2,
+        deviceId: 'device-A',
+        deleted: false,
+        seq: null,
+        blob: secureRandomBytes(16),
+      ),
+    );
+    await store.putLocal(record('c', blobBytes: 16));
+    await expectLater(
+      SyncEngine(store).sync(client),
+      throwsA(
+        isA<SyncRecordsRefused>()
+            .having((e) => e.code, 'code', 'account_quota_exceeded')
+            .having((e) => e.awaitingSpaceIds, 'awaiting space', ['c']),
+      ),
+    );
+    final afterEdit = await client.pull(since: 0);
+    expect(afterEdit.records.firstWhere((r) => r.id == 'a').updatedAt, 2);
+    expect(afterEdit.records.map((r) => r.id), isNot(contains('c')));
+    expect((await store.dirtyRecords()).map((r) => r.id), ['c']);
+
+    // Deleting `b` in the same push as the waiting record makes its room.
+    await store.putLocal(
+      EncryptedRecord(
+        id: 'b',
+        updatedAt: 3,
+        deviceId: 'device-A',
+        deleted: true,
+        seq: null,
+        blob: secureRandomBytes(16),
+      ),
+    );
+    await SyncEngine(store).sync(client);
+    expect(await store.dirtyRecords(), isEmpty);
+    final live = (await client.pull(
+      since: 0,
+    )).records.where((r) => !r.deleted).map((r) => r.id);
+    expect(live, unorderedEquals(['a', 'c']));
+  });
+
   test('a pull-page cap isolates only the record that cannot fit', () async {
     final baseUrl = await startServer(maxPullBodyBytes: 512);
     final client = await registerDevice(baseUrl, 'pull-bounded');
@@ -177,8 +244,16 @@ void main() {
     // Pushed directly rather than through the engine: the engine would split a
     // body one byte too large and converge anyway, hiding the disagreement.
     final records = [for (var i = 0; i < 4; i++) record('r$i', blobBytes: 700)];
+    // Measured as the client sends it, opted in to per-record refusals.
     final exactBody = utf8
-        .encode(jsonEncode(PushRequest(records: records).toJson()))
+        .encode(
+          jsonEncode(
+            PushRequest(
+              records: records,
+              refusalScope: PushRefusalScope.record,
+            ).toJson(),
+          ),
+        )
         .length;
 
     final atLimit = await registerDevice(

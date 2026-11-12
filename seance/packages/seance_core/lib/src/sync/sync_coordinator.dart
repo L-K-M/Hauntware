@@ -1711,8 +1711,8 @@ class SyncCoordinator {
 
   /// One full synchronization round.
   ///
-  /// Throws [SyncRecordsRefused] if the server refused records as too large,
-  /// but only once everything else is done: what was pulled is applied and
+  /// Throws [SyncRecordsRefused] if the server refused records as too large
+  /// or for the account quota, but only once everything else is done: what was pulled is applied and
   /// confirmed tombstones are pruned first. Thrown straight from the engine, a
   /// record the server refuses on every round would keep this device from
   /// ever applying another device's edit or deletion even though the durable
@@ -1754,6 +1754,7 @@ class SyncCoordinator {
     // every refused record that is still dirty again, so it knows which are
     // still refused and which a pulled copy has since settled.
     var refused = const <RefusedRecord>[];
+    var awaitingSpace = const <RefusedRecord>[];
     Future<SyncOutcome> pass() async {
       try {
         final outcome = await engine.sync(
@@ -1783,9 +1784,11 @@ class SyncCoordinator {
           },
         );
         refused = const [];
+        awaitingSpace = const [];
         return outcome;
       } on SyncRecordsRefused catch (error) {
         refused = error.records;
+        awaitingSpace = error.awaitingSpace;
         return error.outcome;
       }
     }
@@ -1838,8 +1841,14 @@ class SyncCoordinator {
         for (final record in refused) await _describeRefused(record.id),
       ];
     });
-    if (describedRefusals.isEmpty) return outcome;
-    throw SyncRecordsRefused(describedRefusals, outcome: outcome);
+    if (describedRefusals.isEmpty && awaitingSpace.isEmpty) return outcome;
+    // Waiting records are reported by count, so they are not read back and
+    // decrypted to be named.
+    throw SyncRecordsRefused(
+      describedRefusals,
+      awaitingSpace: awaitingSpace,
+      outcome: outcome,
+    );
   }
 
   /// A refused record as the user knows it: what it is and what it is called.

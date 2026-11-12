@@ -1,5 +1,9 @@
 import 'package:seance_protocol/seance_protocol.dart';
 
+/// The scope [HttpSyncClient.push] sends. A push that names no scope is a
+/// little smaller, so sizing for this one is safe for every transport.
+const _sentRefusalScope = PushRefusalScope.record;
+
 /// Splits [records] into pushes that fit [limits], preserving the order of
 /// every record that fits a body at all (the rest are deferred to the end, as
 /// described below).
@@ -35,6 +39,7 @@ List<List<EncryptedRecord>> batchForPush(
     final bodyAlone = PushRequest.bodyBytesFor(
       recordCount: 1,
       recordBytes: recordBytes,
+      refusalScope: _sentRefusalScope,
     );
     // The blob cap is measured on the *decoded* blob, which is what the server
     // measures — not on the record's encoded size, which carries the base64
@@ -48,6 +53,7 @@ List<List<EncryptedRecord>> batchForPush(
     final bodyWithRecord = PushRequest.bodyBytesFor(
       recordCount: batch.length + 1,
       recordBytes: batchRecordBytes + recordBytes,
+      refusalScope: _sentRefusalScope,
     );
     final full = bodyWithRecord > limits.maxBodyBytes ||
         batch.length + 1 > limits.maxRecordsPerPush;

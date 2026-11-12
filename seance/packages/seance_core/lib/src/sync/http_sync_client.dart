@@ -373,7 +373,15 @@ class HttpSyncClient
     final res = await _transfer(
       'PUT',
       _uri('/v1/records'),
-      body: jsonEncode(PushRequest(records: records).toJson()),
+      // Opting in to per-record refusals lets a full account still take
+      // edits to records it holds. An older server ignores the field and
+      // refuses the whole push instead, which the callers already handle.
+      body: jsonEncode(
+        PushRequest(
+          records: records,
+          refusalScope: PushRefusalScope.record,
+        ).toJson(),
+      ),
     );
     if (res.statusCode >= 400) _fail(res);
     return PushResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>);

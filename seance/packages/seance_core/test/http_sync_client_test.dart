@@ -241,6 +241,35 @@ void main() {
     });
   });
 
+  group('HttpSyncClient push', () {
+    test('opts in to per-record refusals and reads them', () async {
+      Map<String, dynamic>? sent;
+      final sync = HttpSyncClient(
+        baseUrl: 'https://host',
+        client: MockClient((request) async {
+          sent = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response(
+            jsonEncode(const PushResponse(
+              results: [PushResult(id: 'a', seq: 3, accepted: true)],
+              refused: [
+                PushRefusal(id: 'b', reason: PushRefusalReason.accountQuota),
+              ],
+              latestSeq: 3,
+            ).toJson()),
+            200,
+          );
+        }),
+      );
+
+      final response = await sync.push([_record('a', 1), _record('b', 2)]);
+
+      expect(sent!['refusalScope'], 'record');
+      expect(response.results.single.id, 'a');
+      expect(response.refused.single.id, 'b');
+      expect(response.refused.single.reason, PushRefusalReason.accountQuota);
+    });
+  });
+
   group('HttpSyncClient record pagination', () {
     test('aggregates a stable snapshot and carries the continuation', () async {
       final queries = <Map<String, String>>[];

@@ -14,9 +14,14 @@ EncryptedRecord rec(String id, {int blobBytes = 0}) => EncryptedRecord(
       blob: Uint8List(blobBytes),
     );
 
-/// The body the server would measure for [batch].
-int bodyBytes(List<EncryptedRecord> batch) =>
-    utf8.encode(jsonEncode(PushRequest(records: batch).toJson())).length;
+/// The body the server would measure for [batch], sent as [HttpSyncClient]
+/// sends it: opted in to per-record refusals.
+int bodyBytes(List<EncryptedRecord> batch) => utf8
+    .encode(jsonEncode(PushRequest(
+      records: batch,
+      refusalScope: PushRefusalScope.record,
+    ).toJson()))
+    .length;
 
 List<String> idsOf(List<List<EncryptedRecord>> batches) =>
     [for (final batch in batches) ...batch.map((r) => r.id)];
