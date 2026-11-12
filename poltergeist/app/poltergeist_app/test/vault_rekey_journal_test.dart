@@ -38,6 +38,11 @@ class _Keystore extends FlutterSecureStorage {
   /// written and reports the write as failed.
   String? substituteOnWrite;
 
+  /// The keystore whose next write drops the entry and then fails, the
+  /// way a backend that discards its store on an error leaves it: still
+  /// readable, holding nothing. One-shot, so a later write would succeed.
+  bool dropEntryOnNextWrite = false;
+
   void _check() {
     if (locked) {
       throw PlatformException(code: 'KeyringLocked', message: 'KeyringLocked');
@@ -73,6 +78,11 @@ class _Keystore extends FlutterSecureStorage {
     await onWrite?.call();
     if (failWrite) {
       throw PlatformException(code: 'Unknown', message: 'write refused');
+    }
+    if (dropEntryOnNextWrite) {
+      dropEntryOnNextWrite = false;
+      _map.remove(key);
+      throw PlatformException(code: 'Unknown', message: 'store discarded');
     }
     if (value == null) {
       _map.remove(key);
@@ -242,6 +252,49 @@ void main() {
       expect((await SecretVault(reopened, newKey).getSecret('a'))!.value,
           'value-a');
       expect(await journalFile.exists(), isFalse);
+    });
+
+    test('a keyring that drops the entry on a failed write mints nothing '
+        'and keeps the journal', () async {
+      await enrolled();
+      keystore.dropEntryOnNextWrite = true;
+
+      await expectLater(() => credentials.writeVaultKey(newKey),
+          throwsA(isA<KeystoreException>()));
+
+      // The witness read finds no entry. Minting one there would answer
+      // with a key neither staged generation matches, and settling
+      // against it would discard the journal while the keystore holds a
+      // key nothing on disk opens.
+      expect(keystore._map, isEmpty, reason: 'no key may be minted');
+      expect(await journalFile.exists(), isTrue);
+      expect(
+          (await SecretVault(vaultStore, oldKey).getSecret('a'))!.value,
+          'value-a');
+      // Once the keystore holds the new key, the next launch settles the
+      // still-staged journal onto the generation that key opens.
+      await poltergeistMasterKeyManager(keystore).setKeystoreKey(newKey);
+      final reopened = FileVaultStore(vaultFile);
+      expect(await reopened.settleRekey(newKey), VaultRekeyOutcome.adopted);
+      expect((await SecretVault(reopened, newKey).getSecret('a'))!.value,
+          'value-a');
+    });
+
+    test('a keystore that lost its entry refuses the re-key and mints '
+        'nothing', () async {
+      await enrolled();
+      // The keystore forgot the vault key while vault.json still holds a
+      // secret sealed under it.
+      keystore._map.clear();
+
+      await expectLater(() => credentials.writeVaultKey(newKey),
+          throwsA(isA<MasterKeyUnavailableException>()));
+
+      expect(keystore._map, isEmpty, reason: 'no key may be minted');
+      expect(await journalFile.exists(), isFalse);
+      expect(
+          (await SecretVault(vaultStore, oldKey).getSecret('a'))!.value,
+          'value-a');
     });
 
     test('a locked keystore cannot even begin the re-key', () async {
