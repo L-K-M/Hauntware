@@ -27,6 +27,8 @@ import 'package:planchette_core/planchette_core.dart'
         toggleBlockComments;
 
 import 'code_editing_controller.dart';
+import 'document_scroll_controller.dart';
+import 'edit_history.dart';
 import 'pattern_find.dart';
 import 'search_history.dart';
 import 'text_tool_history.dart';
@@ -93,6 +95,8 @@ class EditorController extends ChangeNotifier {
     }
     text = CodeEditingController(language: syntaxLanguageFor(displayPath));
     text.addListener(_textChanged);
+    undoController.onUndo.addListener(undo);
+    undoController.onRedo.addListener(redo);
     search.addListener(_queryChanged);
     replacement.addListener(_replacementChanged);
     extraction.addListener(_extractionChanged);
@@ -169,20 +173,20 @@ class EditorController extends ChangeNotifier {
 
   TextSaveOptions saveOptions = const TextSaveOptions();
 
-  /// How old the last value change must be before a tool run applies, so
-  /// the run lands in its own undo step. Flutter's undo history merges
-  /// value changes that arrive inside this window — currently 500 ms in
-  /// the framework — and offers no way to flush a pending step, so a run
-  /// has to wait it out instead. A change during the wait restarts it.
+  /// How old the last value change must be before a tool run applies. A
+  /// change during the wait restarts it, so a run never cuts into typing.
+  /// The wait dates from Flutter's field history, which merged changes
+  /// inside its 500 ms window; the editor's [EditHistory] gives every
+  /// command write a step of its own, so the wait is no longer what keeps
+  /// a run's undo step separate.
   final Duration undoQuiet;
 
-  /// The default [undoQuiet]: Flutter's undo-merge window itself — a
-  /// change this old has already committed its undo step. Tests pump past
-  /// this instead of duplicating the number.
-  static const defaultUndoQuiet = Duration(milliseconds: 500);
+  /// The default [undoQuiet], the typing pause of [EditHistory]. Tests pump
+  /// past this instead of duplicating the number.
+  static const defaultUndoQuiet = EditHistory.defaultTypingPause;
 
-  /// The clock the last field change was stamped with; the pending undo
-  /// step it belongs to commits [undoQuiet] after this.
+  /// The clock the last field change was stamped with; a tool run waits
+  /// until this is [undoQuiet] old.
   DateTime _lastValueChangeAt = DateTime.fromMillisecondsSinceEpoch(0);
   TextEditingValue _seenValue = const TextEditingValue();
 
@@ -229,8 +233,27 @@ class EditorController extends ChangeNotifier {
     if (_focusMemory == node) _focusMemory = null;
   }
 
-  final scroll = ScrollController();
+  final scroll = DocumentScrollController();
+
+  /// Undo and redo for the document, and whether either is available now.
+  /// It drives the editor's own [EditHistory], not Flutter's: the document
+  /// field keeps a snapshot history of its own that the view keeps bounded
+  /// and never reads.
   final undoController = UndoHistoryController();
+
+  /// The document's undo history. It records the buffer's changes as they
+  /// land, by comparing each text with [_historyText].
+  final _history = EditHistory();
+
+  /// The text and selection the history last saw. While an input method
+  /// composes, the change waits here and is recorded when the composition
+  /// ends, so undo never returns to a half-composed word.
+  String _historyText = '';
+  TextSelection _historySelection = const TextSelection.collapsed(offset: 0);
+
+  /// While undo or redo writes the buffer: that write is the history's own
+  /// and is not recorded again.
+  bool _applyingHistory = false;
 
   /// The node to focus when this editor's tab becomes active. Deactivation
   /// unfocuses all three, so remembering the last-focused node lets a tab
@@ -970,7 +993,7 @@ class EditorController extends ChangeNotifier {
 
   /// Pastes the clipboard with later lines reindented to the caret line.
   /// Default paste is untouched. Reads the clipboard first, then waits out
-  /// the undo throttle so the insert is one undo step; the caret is reread
+  /// [undoQuiet]; the insert is one undo step, and the caret is reread
   /// afterwards, so a move during the waits pastes where it now stands.
   /// A buffer that changed meanwhile is left alone.
   Future<bool> pasteAndMatchIndentation() async {
@@ -1052,10 +1075,8 @@ class EditorController extends ChangeNotifier {
   /// Otherwise the report of the run lands in [toolReport]: the buffer
   /// changed, nothing needed changing, or the tool refused with a reason.
   ///
-  /// The run waits out [undoQuiet] first: Flutter's undo history merges
-  /// changes that close together into one step, and a tool result must be
-  /// a step of its own so Undo returns the buffer to what it was before
-  /// the run rather than before the last typing pause.
+  /// The run waits out [undoQuiet] first and lands as one undo step of its
+  /// own, so Undo returns the buffer to what it was before the run.
   Future<TextToolOutcome?> runTextTool(
     String toolId, {
     Map<String, Object?> options = const {},
@@ -1460,11 +1481,8 @@ class EditorController extends ChangeNotifier {
   }
 
   /// Waits until the last change to the text field's value is at least
-  /// [undoQuiet] old. The undo history merges changes inside the window
-  /// into one step and offers no flush, so a tool run waits it out — the
-  /// pending step commits, the tool's lands after it, and Undo returns to
-  /// the state before the run. A change during the wait restarts it, so a
-  /// run mid-typing keeps waiting rather than cutting in.
+  /// [undoQuiet] old. A change during the wait restarts it, so a run
+  /// mid-typing keeps waiting rather than cutting in.
   Future<void> _waitForUndoQuiet() async {
     while (!_disposed) {
       final wait = undoQuiet - _now().difference(_lastValueChangeAt);
@@ -1520,12 +1538,14 @@ class EditorController extends ChangeNotifier {
         _isHighSurrogate(value.codeUnitAt(caret - 1))) {
       caret--;
     }
-    _setTextValue(
-      TextEditingValue(
-        text: value,
-        selection: TextSelection.collapsed(offset: caret),
-      ),
-    );
+    // A load, reload or revert starts a new history: undo must not reach back
+    // into the previous text. Baselining first keeps the write itself out.
+    final selection = TextSelection.collapsed(offset: caret);
+    _history.clear();
+    _historyText = value;
+    _historySelection = selection;
+    _setTextValue(TextEditingValue(text: value, selection: selection));
+    _syncUndoState();
     _detectLanguage();
     _detectIndentation(reset: true);
     _checkProblems();
@@ -1612,12 +1632,103 @@ class EditorController extends ChangeNotifier {
     }
   }
 
-  /// Undo and redo deliver a stored value as one buffer write; a restored
-  /// bracket is not the user typing it, so the command layer suppresses pair
-  /// completion for the delivery.
-  void undo() => _suppressCodeInput(undoController.undo);
+  /// Takes back the newest undo step. A composition in progress is recorded
+  /// first, as a step of its own, so it is what this takes back.
+  void undo() {
+    if (!_canStepHistory) return;
+    _recordPendingComposition();
+    final value = _history.undo(text.text);
+    if (value == null) {
+      _syncUndoState();
+      return;
+    }
+    _applyHistoryValue(value);
+  }
 
-  void redo() => _suppressCodeInput(undoController.redo);
+  /// Makes the step [undo] last took back again.
+  void redo() {
+    if (!_canStepHistory) return;
+    _recordPendingComposition();
+    final value = _history.redo(text.text);
+    if (value == null) {
+      _syncUndoState();
+      return;
+    }
+    _applyHistoryValue(value);
+  }
+
+  bool get _canStepHistory =>
+      !_disposed && !_loading && _error == null && !editingLocked;
+
+  /// Records a change a composition left unrecorded, ending the composition
+  /// it belonged to: undo and redo replace the text the input method was
+  /// composing in.
+  void _recordPendingComposition() {
+    if (text.text == _historyText) return;
+    _history.record(
+      before: _historyText,
+      after: text.text,
+      selectionBefore: _historySelection,
+      selectionAfter: text.selection,
+      origin: EditOrigin.command,
+      at: _now(),
+    );
+    _historyText = text.text;
+    _historySelection = text.selection;
+  }
+
+  /// Delivers an undo or redo result as one buffer write. A restored bracket
+  /// is not the user typing it, so pair completion stays out, and the view
+  /// scrolls to the restored caret as it does after typing.
+  void _applyHistoryValue(TextEditingValue value) {
+    _requestCaretReveal(CaretReveal.nearest);
+    _applyingHistory = true;
+    try {
+      _suppressCodeInput(() => text.value = value);
+    } finally {
+      _applyingHistory = false;
+    }
+    _historyText = text.text;
+    _historySelection = text.selection;
+    _syncUndoState();
+  }
+
+  /// Records the buffer's change since the history last looked, once the
+  /// change has settled: after pair completion, and not mid-composition.
+  void _trackHistory() {
+    final value = text.value;
+    if (_applyingHistory || identical(value.text, _historyText)) {
+      if (!value.composing.isValid) _historySelection = value.selection;
+      return;
+    }
+    if (value.composing.isValid) {
+      _syncUndoState();
+      return;
+    }
+    _history.record(
+      before: _historyText,
+      after: value.text,
+      selectionBefore: _historySelection,
+      selectionAfter: value.selection,
+      origin: _arrangingEdit || Zone.current[_codeInputZone] == true
+          ? EditOrigin.command
+          : EditOrigin.typing,
+      at: _now(),
+    );
+    _historyText = value.text;
+    _historySelection = value.selection;
+    _syncUndoState();
+  }
+
+  /// Publishes what undo and redo can do. A composition not yet recorded
+  /// counts as something to undo, and as a new edit it hides redo.
+  void _syncUndoState() {
+    final pending = !identical(text.text, _historyText);
+    undoController.value = UndoHistoryValue(
+      canUndo: _history.canUndo || pending,
+      canRedo: _history.canRedo && !pending,
+    );
+  }
 
   /// Holds code-input suppression across [body] and its synchronous writes.
   T _suppressCodeInput<T>(T Function() body) {
@@ -1630,10 +1741,8 @@ class EditorController extends ChangeNotifier {
   }
 
   void _textChanged() {
-    // A tool run waits out this stamp so its result is a step of its own.
-    // EditableText's shouldChangeUndoStack pushes only text and composing
-    // changes — a caret move never opens a throttle window — so the stamp
-    // tracks exactly those.
+    // A tool run waits out this stamp. Only text and composing changes
+    // count: a caret move is not typing.
     final value = text.value;
     if (value.text != _seenValue.text ||
         value.composing != _seenValue.composing) {
@@ -1669,6 +1778,7 @@ class EditorController extends ChangeNotifier {
       _followProblems(before);
       if (_searchOpen) _followEdit(before);
     }
+    _trackHistory();
     _notify();
   }
 
@@ -3442,6 +3552,8 @@ class EditorController extends ChangeNotifier {
     extractionFocus.dispose();
     goToLineFocus.dispose();
     scroll.dispose();
+    undoController.onUndo.removeListener(undo);
+    undoController.onRedo.removeListener(redo);
     undoController.dispose();
     _barPreviewTimer?.cancel();
     super.dispose();

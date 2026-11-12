@@ -21,8 +21,8 @@ Widget app(
   ),
 );
 
-// From #19, which found the bug; the fix is a remount of the document field
-// rather than #19's replacement of the text controller.
+// From #19, which found the bug. An install now clears the editor's own
+// history; the document field is still remounted for its snapshot history.
 void main() {
   testWidgets('a confirmed reload clears undo at the buffer boundary', (
     tester,
@@ -42,9 +42,7 @@ void main() {
     await c.initialize();
     await tester.pump();
     expect(c.text.text, 'original');
-    // UndoHistory records any focused-controller change but coalesces it
-    // through a 500ms throttle, and a stack with a single entry cannot
-    // undo — two settled edits are needed to prove the sever.
+    // Two settled edits, so there is more than one step to reach back for.
     c.editorFocus.requestFocus();
     await tester.pump();
     c.text.value = const TextEditingValue(
@@ -89,9 +87,7 @@ void main() {
     );
     await tester.pump();
     expect(c.text.text, 'reloaded more');
-    // Undo keeps working inside the new buffer. Entries are throttled
-    // 500ms and the cleared stack re-baselines on the first post-swap
-    // edit, so a revert needs two settled edits.
+    // Undo keeps working inside the new buffer.
     c.text.value = const TextEditingValue(
       text: 'reloaded more+',
       selection: TextSelection.collapsed(offset: 14),

@@ -1,4 +1,5 @@
 // Extracted from Poltergeist and Seance; see the repository provenance notes.
+import 'package:flutter/foundation.dart' show internal;
 import 'package:flutter/material.dart';
 import 'package:planchette_core/planchette_core.dart'
     hide SearchResult, findSearchMatches, searchText;
@@ -301,6 +302,12 @@ class CodeEditingController extends TextEditingController {
   List<SyntaxToken> _tokens = const [];
 
   CodeEditingController({this.language, this.theme = EditorSyntaxTheme.dark});
+
+  /// Has every listener, the document field included, read this controller
+  /// again although nothing changed. The editor view calls it after it
+  /// remounts the field: the new field starts its caret on a notification.
+  @internal
+  void remindListeners() => notifyListeners();
 
   List<TextRange> get searchMatches => _matches;
   int get activeMatchIndex => _activeMatchIndex;
