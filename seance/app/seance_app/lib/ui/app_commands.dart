@@ -364,7 +364,15 @@ Future<void> runCheckForUpdates(
 }) async {
   final rootOverlay = overlay ?? Overlay.of(context, rootOverlay: true);
   final version = state.appVersion;
-  final info = version == null ? null : await state.checkNow(version);
+  if (version == null) {
+    if (!rootOverlay.mounted) return;
+    showTopToast(
+      rootOverlay,
+      message: 'Could not read the app version. No update check was run.',
+    );
+    return;
+  }
+  final info = await state.checkNow(version);
   if (!rootOverlay.mounted) return;
   if (info == null) {
     showTopToast(
