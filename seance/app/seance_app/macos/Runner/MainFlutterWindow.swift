@@ -485,7 +485,7 @@ class MainFlutterWindow: NSWindow {
       return editorActive && isKeyWindow
     }
     if menuItem === undoItem || menuItem === redoItem {
-      return menuItem.isEnabled && isKeyWindow
+      return menuItem.isEnabled
     }
     return super.validateMenuItem(menuItem)
   }

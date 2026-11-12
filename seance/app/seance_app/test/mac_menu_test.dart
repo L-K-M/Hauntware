@@ -295,9 +295,7 @@ void main() {
     await fromNative(tester, 'checkForUpdates');
     await tester.pump();
     expect(
-      find.text(
-        'No newer version was found. If you’re offline, try again later.',
-      ),
+      find.text('Could not read the app version. No update check was run.'),
       findsOneWidget,
     );
   });

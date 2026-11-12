@@ -293,6 +293,51 @@ void main() {
     },
   );
 
+  test('every platform has the chords the command model uses', () {
+    final state = _state();
+    addTearDown(state.dispose);
+    for (final platform in TargetPlatform.values) {
+      for (final wide in [false, true]) {
+        expect(
+          () => seanceCommands(state, platform, wide: wide),
+          returnsNormally,
+          reason: '$platform, wide=$wide',
+        );
+      }
+    }
+  });
+
+  testWidgets('an unknown version explicitly skips the manual check', (
+    tester,
+  ) async {
+    final checker = _ScriptedChecker((_) async => null);
+    final state = AppState(_Services(), updateChecker: checker);
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => runCheckForUpdates(context, state),
+              child: const Text('Check'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Check'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(checker.calls, isEmpty);
+    expect(
+      find.text('Could not read the app version. No update check was run.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('No newer version was found'), findsNothing);
+  });
+
   testWidgets('the manual check says no newer version was found, never "up to '
       'date"', (tester) async {
     final state = AppState(
