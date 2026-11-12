@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:meta/meta.dart';
-import 'package:seance_core/catalog.dart' show AtomicFileWriter;
+import 'package:seance_core/catalog.dart'
+    show AtomicFileParentPolicy, AtomicFileWriter;
 import 'package:seance_core/seance_core.dart' show uuidV4;
 
 import '../certificates/tls_check.dart' show TlsEndpoint;
@@ -1117,9 +1118,11 @@ Future<String> unusedCorruptCopyPath(File file, DateTime time) async {
 /// engine's import store. A reader, or a crash, sees the old file or the
 /// new one, never a partial one. A failure deletes the temp file and
 /// rethrows. The shared writer orders replacements of one target by request.
-Future<void> writeFileAtomically(File target, List<int> bytes) async {
-  // Keep this store family's parent-creation policy: a dangling directory
-  // link means unavailable storage, not a hierarchy for the writer to repair.
-  await target.parent.create(recursive: true);
-  await const AtomicFileWriter().writeBytes(target, bytes);
-}
+Future<void> writeFileAtomically(File target, List<int> bytes) =>
+    const AtomicFileWriter().writeBytes(
+      target,
+      bytes,
+      // Retain this store family's directory-link policy inside the shared
+      // request queue, so asynchronous preparation cannot reorder saves.
+      parentPolicy: AtomicFileParentPolicy.requireLinkTargets,
+    );
