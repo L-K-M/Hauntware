@@ -39,13 +39,15 @@ Future<void> signInThroughTheSheet(
   await tester.pumpAndSettle();
   await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
   await tester.pump();
+  final request = engine.sentOfType<EnrollSync>().last as EnrollSync;
   engine.emit(
-    answer ??
-        const SyncStatus(
-          SyncPhase.succeeded,
-          operation: SyncOperation.enroll,
-          account: testSyncAccount,
-        ),
+    (answer ??
+            const SyncStatus(
+              SyncPhase.succeeded,
+              operation: SyncOperation.enroll,
+              account: testSyncAccount,
+            ))
+        .answering(request.requestId),
   );
   await tester.pumpAndSettle();
 }

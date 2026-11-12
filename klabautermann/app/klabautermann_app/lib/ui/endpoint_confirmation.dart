@@ -110,7 +110,14 @@ class EndpointConfirmationDialog extends StatefulWidget {
 class _EndpointConfirmationDialogState
     extends State<EndpointConfirmationDialog> {
   final _search = TextEditingController();
-  final Set<String> _selected = {};
+
+  /// The toggled rows with the endpoint each showed when toggled: a row
+  /// whose endpoint a sync changes since counts as untoggled, so a
+  /// confirmation never carries a choice made about another address.
+  final Map<String, ShownEndpoint> _selected = {};
+
+  bool _isSelected(FleetEntry entry) =>
+      _selected[entry.serverId] == ShownEndpoint.of(entry);
   bool _busy = false;
   String? _error;
 
@@ -120,29 +127,33 @@ class _EndpointConfirmationDialogState
     super.dispose();
   }
 
-  Future<void> _confirm(List<String> serverIds) async {
+  /// Confirms [entries] as this list shows them.
+  Future<void> _confirm(List<FleetEntry> entries) async {
     final l10n = AppLocalizations.of(context);
     final overlay = Overlay.of(context, rootOverlay: true);
     setState(() {
       _busy = true;
       _error = null;
     });
-    final result = await widget.fleet.confirmEndpoints(serverIds);
+    final result = await widget.fleet.confirmEndpoints(entries);
     if (!mounted) return;
 
     switch (result) {
       case EndpointConfirmResult.confirmed:
         Navigator.of(context).pop();
-        showTopToast(
-          overlay,
-          message: l10n.endpointsConfirmed(serverIds.length),
-        );
+        showTopToast(overlay, message: l10n.endpointsConfirmed(entries.length));
       // In both, the toggles stay, so trying again is one press; the
       // selection counts only the rows the fleet still lists.
       case EndpointConfirmResult.stillPending:
         setState(() {
           _busy = false;
           _error = l10n.endpointsStillPending;
+        });
+      // The row now shows the new endpoint, still toggled.
+      case EndpointConfirmResult.changed:
+        setState(() {
+          _busy = false;
+          _error = l10n.endpointsChangedMeanwhile;
         });
       case EndpointConfirmResult.failed:
         setState(() {
@@ -167,7 +178,7 @@ class _EndpointConfirmationDialogState
       ];
       final selected = [
         for (final entry in pending)
-          if (_selected.contains(entry.serverId)) entry.serverId,
+          if (_isSelected(entry)) entry,
       ];
       final error = _error;
 
@@ -204,12 +215,12 @@ class _EndpointConfirmationDialogState
           for (final entry in shown)
             _EndpointRow(
               entry: entry,
-              selected: _selected.contains(entry.serverId),
+              selected: _isSelected(entry),
               onChanged: _busy
                   ? null
                   : (on) => setState(() {
                       if (on) {
-                        _selected.add(entry.serverId);
+                        _selected[entry.serverId] = ShownEndpoint.of(entry);
                       } else {
                         _selected.remove(entry.serverId);
                       }
@@ -244,9 +255,7 @@ class _EndpointConfirmationDialogState
               child: Text(material.closeButtonLabel),
             ),
             OutlinedButton(
-              onPressed: _busy || shown.isEmpty
-                  ? null
-                  : () => _confirm([for (final entry in shown) entry.serverId]),
+              onPressed: _busy || shown.isEmpty ? null : () => _confirm(shown),
               child: Text(l10n.endpointsConfirmAllShown),
             ),
             FilledButton(

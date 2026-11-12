@@ -996,6 +996,42 @@ void main() {
       expect(_order(tester), ['nginx']);
     });
 
+    testWidgets('the Updates filter does not claim there are none while the '
+        'check runs, after it failed, or before it found some', (tester) async {
+      final panel = await _pump(tester);
+      await panel.list(tester, containers: _containers);
+      await _choose(tester, 'Updates');
+      expect(find.text('No image has an update.'), findsNothing);
+      // The button says so as well.
+      expect(find.text('Checking for updates…'), findsNWidgets(2));
+
+      await panel.emit(
+        tester,
+        dockerAnswer(
+          lastCheck(panel),
+          const DockerQueryFailed(DockerQueryFailure.connectionFailed),
+        ),
+      );
+      expect(find.text('No image has an update.'), findsNothing);
+      expect(
+        find.text('Which images have an update is not known yet.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Try again'));
+      await tester.pump();
+      await panel.emit(
+        tester,
+        dockerAnswer(
+          lastCheck(panel),
+          DockerImageUpdatesPayload([
+            row('nginx:1.27', _nginx, ImageUpdateStatus.upToDate),
+          ]),
+        ),
+      );
+      expect(find.text('No image has an update.'), findsOneWidget);
+    });
+
     testWidgets('a host without curl offers the engine route with its cost', (
       tester,
     ) async {

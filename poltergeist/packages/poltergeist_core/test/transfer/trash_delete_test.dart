@@ -654,6 +654,103 @@ void main() {
       expect(remoteFs.deleteCalls, 0);
     });
 
+    group('a retry after a lost reply', () {
+      const dropped = RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'delete',
+        message: 'transport dropped',
+      );
+
+      test('completes a permanent delete the server already ran', () async {
+        final queue = newQueue();
+        remoteFs.addFile('/data/a.txt', [1]);
+        remoteFs.deleteFailure = (entry) {
+          remoteFs.deleteFailure = null;
+          unawaited(remoteFs.delete(entry));
+          return dropped;
+        };
+
+        final task = await queue.enqueueDelete(
+          const DeleteRequest(
+            source: ServerFsLocation('srv1'),
+            rootPaths: ['/data/a.txt'],
+            disposition: DeleteDisposition.permanent,
+            confirmed: true,
+          ),
+        );
+        await awaitTaskDone(task);
+
+        final item = task.items.single;
+        expect(task.state, TransferTaskState.completed, reason: item.error);
+        expect(item.disposition, ItemDisposition.permanent);
+        expect(remoteFs.entryAt('/data/a.txt'), isNull);
+      });
+
+      test('adopts the trash entry the lost move created', () async {
+        final queue = newQueue(
+          remoteTrashEnabled: (_) => true,
+          remoteTrash: RemoteTrash(runIdMinter: () => 'run-7'),
+        );
+        remoteFs.addFile('/data/a.txt', [1]);
+        remoteFs.renameFailure = (oldPath, newPath) {
+          remoteFs.renameFailure = null;
+          unawaited(remoteFs.rename(oldPath, newPath));
+          return dropped;
+        };
+
+        final task = await queue.enqueueDelete(
+          const DeleteRequest(
+            source: ServerFsLocation('srv1'),
+            rootPaths: ['/data/a.txt'],
+            disposition: DeleteDisposition.trash,
+          ),
+        );
+        await awaitTaskDone(task);
+
+        const trashed = '/data/.poltergeist-trash/run-7/000001-a.txt';
+        final item = task.items.single;
+        expect(task.state, TransferTaskState.completed, reason: item.error);
+        expect(item.disposition, ItemDisposition.remoteTrash);
+        expect(item.destinationPath, trashed);
+        expect(remoteFs.fileBytes[trashed], [1]);
+        expect(
+          persistence.journal
+              .whereType<FileCompletedRecord>()
+              .single
+              .resolvedPath,
+          trashed,
+        );
+      });
+
+      test('fails honestly when the entry is gone but not in the trash',
+          () async {
+        final queue = newQueue(
+          remoteTrashEnabled: (_) => true,
+          remoteTrash: RemoteTrash(runIdMinter: () => 'run-7'),
+        );
+        remoteFs.addFile('/data/a.txt', [1]);
+        remoteFs.renameFailure = (oldPath, newPath) {
+          remoteFs.renameFailure = null;
+          unawaited(remoteFs.delete(remoteFs.entryAt(oldPath)!));
+          return dropped;
+        };
+
+        final task = await queue.enqueueDelete(
+          const DeleteRequest(
+            source: ServerFsLocation('srv1'),
+            rootPaths: ['/data/a.txt'],
+            disposition: DeleteDisposition.trash,
+          ),
+        );
+        await awaitTaskDone(task);
+
+        final item = task.items.single;
+        expect(item.state, TransferItemState.failed);
+        expect(item.failureKind, RemoteFileErrorKind.notFound);
+        expect(item.error, contains('/data/.poltergeist-trash/run-7'));
+      });
+    });
+
     test('local trash delivers through the backend; the VFS raw delete '
         'never runs', () async {
       final queue = newQueue(
