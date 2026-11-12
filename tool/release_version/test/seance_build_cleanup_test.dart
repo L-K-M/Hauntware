@@ -229,6 +229,13 @@ class _BuildFixture {
     File(
       p.join(findRepositoryRoot().path, 'seance', 'scripts', 'build.sh'),
     ).copySync(script.path);
+    // The script sources the suite's shared body from ../scripts.
+    final common = File(
+      p.join(sandbox.path, 'scripts', 'product-build-common.sh'),
+    )..parent.createSync(recursive: true);
+    File(
+      p.join(findRepositoryRoot().path, 'scripts', 'product-build-common.sh'),
+    ).copySync(common.path);
     for (final platform in ['ios', 'macos', 'android']) {
       Directory(p.join(app, platform)).createSync(recursive: true);
     }

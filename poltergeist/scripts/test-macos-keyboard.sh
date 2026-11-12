@@ -1,49 +1,16 @@
 #!/usr/bin/env bash
+# Compiles Poltergeist's native view controller into the shared keyboard
+# fixture (../../scripts/macos-keyboard-fixture.mm) and runs it. macOS
+# only; --stock-engine runs the same checks against the stock controller.
+# The body is shared by the four products:
+# ../../scripts/macos-native-fixtures.sh.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ "$(uname -s)" != Darwin ]]; then
-  echo "This native keyboard test requires macOS." >&2
-  exit 1
-fi
+FIXTURE_PRODUCT=poltergeist
+FIXTURE_APP=app/poltergeist_app
+FIXTURE_CONTROLLER=PoltergeistFlutterViewController
 
-generated_config="$repo_root/app/poltergeist_app/macos/Flutter/ephemeral/Flutter-Generated.xcconfig"
-flutter_sdk="${FLUTTER_ROOT:-}"
-if [[ -z "$flutter_sdk" && -f "$generated_config" ]]; then
-  flutter_sdk="$(sed -n 's/^FLUTTER_ROOT=//p' "$generated_config")"
-fi
-if [[ -z "$flutter_sdk" ]]; then
-  echo "Set FLUTTER_ROOT or run flutter build macos before this test." >&2
-  exit 1
-fi
-
-framework_dir="$flutter_sdk/bin/cache/artifacts/engine/darwin-x64-release/FlutterMacOS.xcframework/macos-arm64_x86_64"
-if [[ ! -d "$framework_dir" ]]; then
-  echo "Missing macOS release engine. Run flutter precache --macos." >&2
-  exit 1
-fi
-
-controller_flags=(-DPOLTERGEIST_USE_CONTROLLER=1)
-if [[ $# == 1 && "$1" == --stock-engine ]]; then
-  controller_flags=(-DPOLTERGEIST_USE_CONTROLLER=0)
-elif [[ $# != 0 ]]; then
-  echo "Usage: $0 [--stock-engine]" >&2
-  exit 1
-fi
-
-test_dir="$(mktemp -d "${TMPDIR:-/tmp}/poltergeist-keyboard.XXXXXX")"
-trap 'rm -rf "$test_dir"' EXIT
-runner_dir="$repo_root/app/poltergeist_app/macos/Runner"
-# Compile the actual controller against the bundled engine. The executable
-# supplies only framework replies; it starts no Dart application or window,
-# and never posts input to the system.
-xcrun clang -fobjc-arc -F "$framework_dir" -I "$runner_dir" \
-  -c "$runner_dir/PoltergeistFlutterViewController.m" \
-  -o "$test_dir/controller.o"
-xcrun clang++ -std=c++17 -fobjc-arc -framework Cocoa -framework FlutterMacOS \
-  -F "$framework_dir" -I "$flutter_sdk/engine/src" -I "$runner_dir" \
-  -Wl,-rpath,"$framework_dir" "${controller_flags[@]}" -x objective-c++ \
-  "$repo_root/scripts/test-macos-keyboard.mm" \
-  -x none "$test_dir/controller.o" \
-  -o "$test_dir/keyboard-test"
-"$test_dir/keyboard-test"
+# shellcheck source=SCRIPTDIR/../../scripts/macos-native-fixtures.sh
+source "$repo_root/../scripts/macos-native-fixtures.sh"
+macos_keyboard_fixture "$@"
