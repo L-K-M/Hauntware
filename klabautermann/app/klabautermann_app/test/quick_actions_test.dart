@@ -4,11 +4,13 @@ import 'dart:io' show FileSystemException;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/operations_controller.dart';
 import 'package:klabautermann_app/controllers/pinned_services.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/actions/action_entry.dart';
+import 'package:klabautermann_app/ui/admin_mode_chip.dart' show AdminScope;
 import 'package:klabautermann_app/ui/quick_actions.dart';
 import 'package:klabautermann_app/ui/server_safety.dart' show SafetyScope;
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -68,8 +70,10 @@ void main() {
     WidgetTester tester, {
     required Widget child,
     bool management = true,
+    bool adminMode = true,
   }) async {
     final engine = FakeEngineClient();
+    final admin = AdminController(engine);
     final operations = OperationsController(engine);
     final safety = SafetyController(
       initial: SafetyPolicy(
@@ -80,6 +84,7 @@ void main() {
     final pins = PinnedServicesController();
     addTearDown(() async {
       pins.dispose();
+      admin.dispose();
       safety.dispose();
       operations.dispose();
       await engine.close();
@@ -92,12 +97,19 @@ void main() {
           safety: safety,
           child: OperationsScope(
             operations: operations,
-            child: PinnedServicesScope(pins: pins, child: child!),
+            child: AdminScope(
+              admin: admin,
+              child: PinnedServicesScope(pins: pins, child: child!),
+            ),
           ),
         ),
         home: Scaffold(body: child),
       ),
     );
+    if (adminMode) {
+      engine.emit(const AdminModeState(_serverId, AdminModePhase.on));
+      await tester.pumpAndSettle();
+    }
     return (engine, pins);
   }
 
@@ -161,5 +173,30 @@ void main() {
       ),
       isFalse,
     );
+  });
+
+  testWidgets('Reboot is offered in admin mode only, as the System tab does', (
+    tester,
+  ) async {
+    late bool shown;
+    final (engine, _) = await pump(
+      tester,
+      adminMode: false,
+      child: Builder(
+        builder: (context) {
+          shown = quickActionsShown(context, _serverId);
+          return shown
+              ? const QuickActionsCard(serverId: _serverId)
+              : const SizedBox.shrink();
+        },
+      ),
+    );
+    expect(shown, isFalse);
+    expect(find.text('Reboot'), findsNothing);
+
+    engine.emit(const AdminModeState(_serverId, AdminModePhase.on));
+    await tester.pumpAndSettle();
+    expect(shown, isTrue);
+    expect(find.text('Reboot'), findsOneWidget);
   });
 }

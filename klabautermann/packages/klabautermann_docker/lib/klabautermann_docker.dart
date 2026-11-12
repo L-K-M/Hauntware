@@ -122,7 +122,6 @@ export 'src/log_resume.dart'
     show
         TimestampedLogLine,
         dropInclusiveSince,
-        dropInclusiveSinceLines,
         joinTimestampedLogLines,
         lastDeliveredTimestamp,
         parseTimestampedLogLine,
@@ -225,5 +224,4 @@ export 'src/stdcopy.dart'
         defaultMaxStdcopyFrameBytes,
         demuxStdcopy,
         rawLogFrames,
-        resolveLogFraming,
-        splitLogLines;
+        resolveLogFraming;

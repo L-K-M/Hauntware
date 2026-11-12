@@ -3,6 +3,8 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'log_text.dart' show logRowText;
+
 /// What a container's log line keeps besides its text (CTX-01): the
 /// stream it came from and when the daemon received it, null when it
 /// carried no timestamp.
@@ -57,10 +59,21 @@ extension type const _ContainerSlot(int bits) {
 /// small integer an entry from the first container line on, and drops
 /// them as their entries leave. At the buffer's 50,000 entries that is
 /// about 400 KiB besides the buffer's own budget (03 §11.4).
+///
+/// Rows' times show at [zoneOffset], which the [LogView] showing it keeps
+/// at the time display's choice for [serverId] (A11Y-07), so the view,
+/// a search over it and an export all read the same [rowText].
 class LogViewController extends ChangeNotifier {
-  LogViewController({LogBuffer? buffer}) : _buffer = buffer ?? LogBuffer();
+  LogViewController({LogBuffer? buffer, this.serverId})
+    : _buffer = buffer ?? LogBuffer();
 
   final LogBuffer _buffer;
+
+  /// The server the lines come from, whose zone their times can show in;
+  /// null shows them in this device's zone.
+  final String? serverId;
+
+  Duration? _zoneOffset;
   final _following = ValueNotifier(true);
 
   /// The [_ContainerSlot] of each entry from seq [_slotsFrom] on, kept in
@@ -84,6 +97,22 @@ class LogViewController extends ChangeNotifier {
     if (index < 0 || index >= _slots.length) return null;
     return _slots.elementAt(index).line;
   }
+
+  /// The offset rows' times show at, or null for this device's zone.
+  Duration? get zoneOffset => _zoneOffset;
+
+  /// Shows rows' times at [offset], or in this device's zone when it is
+  /// null, and notifies when that changed the rows.
+  void setZoneOffset(Duration? offset) {
+    if (offset == _zoneOffset) return;
+    _zoneOffset = offset;
+    notifyListeners();
+  }
+
+  /// [line]'s row as the view shows it ([logRowText]): what a search reads
+  /// and an export writes.
+  String rowText(LogLine line) =>
+      logRowText(line, container: containerOf(line), zoneOffset: _zoneOffset);
 
   /// Whether the view keeps the newest line in sight as lines arrive.
   ValueListenable<bool> get following => _following;
@@ -117,10 +146,27 @@ class LogViewController extends ChangeNotifier {
   /// Replaces every entry with [records], as [addContainer] appends them,
   /// keeping [following]: a merged view (CTX-04) that takes a line older
   /// than its newest rebuilds in time order without jumping to the end.
-  void replaceContainer(List<ContainerRecord> records) {
+  /// [droppedBefore] puts a dropped-lines record of the given count before
+  /// the record at each index, [records]'s length for one after the last.
+  void replaceContainer(
+    List<ContainerRecord> records, {
+    Map<int, int> droppedBefore = const {},
+  }) {
     _buffer.clear();
     _slots.clear();
-    addContainer(records);
+    if (droppedBefore.isEmpty) {
+      addContainer(records);
+      return;
+    }
+
+    var from = 0;
+    var dropped = 0;
+    for (final at in droppedBefore.keys.toList()..sort()) {
+      addContainer(records.sublist(from, at), dropped: dropped);
+      from = at;
+      dropped = droppedBefore[at]!;
+    }
+    addContainer(records.sublist(from), dropped: dropped);
   }
 
   /// Empties the view and follows again, since an empty view has no place

@@ -73,6 +73,7 @@ class PlanchetteApp extends StatelessWidget {
     this.onQuit,
     this.pickFolder,
     this.remoteFiles,
+    this.appVersion,
   });
 
   /// This window's documents. Equals `window.workspace` when [window] is
@@ -98,6 +99,10 @@ class PlanchetteApp extends StatelessWidget {
   final Future<String?> Function()? pickFolder;
   final Future<WorkspaceRemoteFiles> Function()? remoteFiles;
 
+  /// The running build for Settings › About; null when the platform could
+  /// not tell.
+  final String? appVersion;
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: settings,
@@ -116,6 +121,7 @@ class PlanchetteApp extends StatelessWidget {
         onQuit: onQuit,
         pickFolder: pickFolder,
         remoteFiles: remoteFiles,
+        appVersion: appVersion,
       ),
     ),
   );
@@ -130,6 +136,7 @@ class _DocumentShell extends StatefulWidget {
     this.onQuit,
     this.pickFolder,
     this.remoteFiles,
+    this.appVersion,
   });
   final DocumentWorkspace workspace;
   final SettingsController settings;
@@ -138,6 +145,7 @@ class _DocumentShell extends StatefulWidget {
   final Future<void> Function()? onQuit;
   final Future<String?> Function()? pickFolder;
   final Future<WorkspaceRemoteFiles> Function()? remoteFiles;
+  final String? appVersion;
 
   @override
   State<_DocumentShell> createState() => _DocumentShellState();
@@ -228,7 +236,11 @@ class _DocumentShellState extends State<_DocumentShell>
     if (_settingsOpen || workspace.interactionLocked) return;
     _settingsOpen = true;
     try {
-      await SettingsDialog.show(context, settings: settings);
+      await SettingsDialog.show(
+        context,
+        settings: settings,
+        appVersion: widget.appVersion,
+      );
     } finally {
       _settingsOpen = false;
     }

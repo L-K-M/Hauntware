@@ -20,6 +20,9 @@ LogPalette _palette(Brightness brightness) => LogPalette.fromTheme(
         ),
 );
 
+/// A journal `__REALTIME_TIMESTAMP`: 2026-10-15 09:05:07.123 UTC.
+const _written = '1792055107123000';
+
 /// The contrast [style]'s text has where it is drawn.
 double _contrast(TextStyle style, LogPalette palette) =>
     contrastRatio(style.color!, style.backgroundColor ?? palette.background);
@@ -397,6 +400,144 @@ void main() {
       expect(runs.map((run) => run.text), ['cron.service: ', 'hi']);
       expect(runs.first.style, _palette(Brightness.light).sourceStyle);
     });
+
+    test('start with the time they were written, as container rows do', () {
+      final line = journal({
+        '__REALTIME_TIMESTAMP': _written,
+        '_SYSTEMD_UNIT': 'cron.service',
+        '_PID': '7',
+        'MESSAGE': 'hi',
+      });
+      final local = DateTime.utc(2026, 10, 15, 9, 5, 7).toLocal();
+      String two(int value) => '$value'.padLeft(2, '0');
+      expect(
+        logRowText(line),
+        '${local.year}-${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}:${two(local.second)} '
+        'cron.service[7]: hi',
+        reason: 'no zone offset: this device\'s zone',
+      );
+      expect(
+        logRowText(line, zoneOffset: const Duration(hours: -10)),
+        '2026-10-14 23:05:07 cron.service[7]: hi',
+        reason: 'the server\'s zone, the day before',
+      );
+      expect(
+        logRowText(line, zoneOffset: const Duration(hours: 5, minutes: 30)),
+        '2026-10-15 14:35:07 cron.service[7]: hi',
+      );
+      expect(
+        logRowText(journal({'MESSAGE': 'hi'}), zoneOffset: Duration.zero),
+        'hi',
+        reason: 'no timestamp, no time column',
+      );
+    });
+
+    test('the time is drawn and spoken once with the unit and PID', () {
+      final span = logLineSpan(
+        journal({
+          '__REALTIME_TIMESTAMP': _written,
+          '_SYSTEMD_UNIT': 'cron.service',
+          'MESSAGE': 'hi',
+        }),
+        palette: _palette(Brightness.light),
+        base: const TextStyle(),
+        zoneOffset: Duration.zero,
+      );
+
+      final runs = span.children!.cast<TextSpan>();
+      expect(runs.map((run) => run.text), [
+        '2026-10-15 09:05:07 cron.service: ',
+        'hi',
+      ]);
+      expect(runs.first.style, _palette(Brightness.light).sourceStyle);
+      expect(runs.map((run) => run.semanticsLabel), [null, null]);
+    });
+  });
+
+  group('a current match the row does not show (LOG-05)', () {
+    const text = '2026-10-15 09:05:07 cron.service: one\u23ce\u2028two three';
+
+    test('the window starts a third of the room left before the match', () {
+      final match = TextMatch(start: text.indexOf('three'), end: text.length);
+      // 20 cells: one for the ellipsis, five for the match, and a third
+      // of the fourteen left, four, before it.
+      expect(
+        logMatchWindowStart(text, match, cells: 20),
+        match.start - 4,
+        reason: 'not before the line the match is on',
+      );
+      const long = 'abcdefghijklmnopqrstuvwxyz';
+      expect(
+        logMatchWindowStart(
+          long,
+          const TextMatch(start: 20, end: 22),
+          cells: 11,
+        ),
+        18,
+      );
+      expect(
+        logMatchWindowStart(
+          long,
+          const TextMatch(start: 20, end: 26),
+          cells: 4,
+        ),
+        20,
+        reason: 'no room: the match starts the window',
+      );
+      expect(
+        logMatchWindowStart(long, const TextMatch(start: 2, end: 4), cells: 30),
+        0,
+      );
+    });
+
+    test('never starts before the line the match is on', () {
+      final match = TextMatch(
+        start: text.indexOf('two'),
+        end: text.indexOf('two') + 3,
+      );
+      expect(logMatchWindowStart(text, match, cells: 80), text.indexOf('two'));
+      // Nor inside a surrogate pair.
+      const pair = 'ab\u{1F600}cdef';
+      expect(
+        logMatchWindowStart(pair, const TextMatch(start: 5, end: 6), cells: 8),
+        2,
+      );
+    });
+
+    test(
+      'a windowed row starts with an ellipsis that speaks what it hides',
+      () {
+        final palette = _palette(Brightness.light);
+        final match = TextMatch(start: text.indexOf('three'), end: text.length);
+        final start = text.indexOf('two');
+        final span = logLineSpan(
+          (LogBuffer()..addJournal([
+                JournalEntry({
+                  '__REALTIME_TIMESTAMP': _written,
+                  '_SYSTEMD_UNIT': 'cron.service',
+                  'MESSAGE': 'one\ntwo three',
+                }),
+              ]))[0]
+              as LogLine,
+          palette: palette,
+          base: const TextStyle(),
+          zoneOffset: Duration.zero,
+          matches: [match],
+          currentMatch: 0,
+          windowStart: start,
+        );
+
+        final runs = span.children!.cast<TextSpan>();
+        expect(runs.map((run) => run.text), ['\u2026', 'two ', 'three']);
+        expect(runs.first.semanticsLabel, text.substring(0, start));
+        expect(runs.last.style!.decoration, TextDecoration.underline);
+        expect(
+          span.toPlainText(includeSemanticsLabels: false),
+          '\u2026two three',
+        );
+      },
+    );
   });
 
   group('container rows (CTX-01)', () {

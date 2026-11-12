@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
+import 'package:ghost_ui/ghost_ui.dart' show ghostIsDesktopPlatform;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/docker_controller.dart';
@@ -1074,7 +1075,12 @@ class _ContainerRow extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 40),
+            // A touch needs a 48 dp target (A11Y-01); a pointer, the line.
+            constraints: BoxConstraints(
+              minHeight: ghostIsDesktopPlatform(theme.platform)
+                  ? 40
+                  : kMinInteractiveDimension,
+            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: Row(
