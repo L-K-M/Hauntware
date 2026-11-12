@@ -8,6 +8,7 @@ import 'package:planchette_app/services/document_workspace.dart';
 import 'package:planchette_app/services/workspace_catalog.dart';
 import 'package:planchette_app/services/workspace_remote_files.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
+import 'package:seance_core/seance_core.dart' show SshConnectFailureKind;
 
 import 'document_workspace_test.dart' show FakeDialogs;
 
@@ -95,6 +96,8 @@ class _Connections implements ConnectionManager {
   _Connections(String root) : fs = _RemoteFiles(root);
   final _RemoteFiles fs;
   bool offline = false;
+  Object? openFailure;
+  int openFailures = 0;
   final opened = <String>[];
 
   // Mirrors the pool after a drop: leases and opens park until it reconnects.
@@ -116,6 +119,10 @@ class _Connections implements ConnectionManager {
     required String paneTabId,
   }) async {
     await reconnect?.future;
+    if (openFailures > 0) {
+      openFailures--;
+      throw openFailure!;
+    }
     opened.add(serverId);
     return _Browse(fs, '/', () => browseClosed++);
   }
@@ -189,12 +196,40 @@ class _NoPrompts implements WorkspaceConnectionPrompts {
   @override
   Future<CredentialDraft?> credentials(
     ServerConfig server,
-    CredentialResolutionScope scope,
-  ) async => throw StateError('Unexpected credential prompt');
+    CredentialResolutionScope scope, {
+    bool retry = false,
+  }) async => throw StateError('Unexpected credential prompt');
   @override
   Future<List<String>> keyboardInteractive(
     KeyboardInteractiveChallenge challenge,
   ) async => throw StateError('Unexpected keyboard prompt');
+}
+
+class _Prompting implements WorkspaceConnectionPrompts {
+  final calls = <(ServerConfig, bool)>[];
+  Future<CredentialDraft?> Function(
+    ServerConfig,
+    CredentialResolutionScope,
+    bool,
+  )?
+  onCredentials;
+
+  @override
+  Future<bool> trustHost(HostKeyDecision decision) async => true;
+  @override
+  Future<CredentialDraft?> credentials(
+    ServerConfig server,
+    CredentialResolutionScope scope, {
+    bool retry = false,
+  }) async {
+    calls.add((server, retry));
+    return onCredentials?.call(server, scope, retry);
+  }
+
+  @override
+  Future<List<String>> keyboardInteractive(
+    KeyboardInteractiveChallenge challenge,
+  ) async => const [];
 }
 
 void main() {
@@ -523,4 +558,76 @@ void main() {
       expect(await remote.readAsString(), 'original');
     },
   );
+
+  WorkspaceRemoteFiles promptedFiles(_Prompting prompts) {
+    final files = WorkspaceRemoteFiles(
+      directory: Directory(paths.join(directory.path, 'managed')),
+      catalog: catalog,
+      prompts: prompts,
+      connections: connections,
+      isDocumentOpen: (path) => workspace.tabForPath(path) != null,
+    );
+    addTearDown(files.close);
+    return files;
+  }
+
+  SshConnectException wrongPassphrase() => SshConnectException(
+    'The passphrase did not open the key.',
+    StateError('passphrase'),
+    SshConnectionLog(),
+    kind: SshConnectFailureKind.keyPassphraseWrong,
+  );
+
+  test(
+    'a wrong key passphrase is asked for again and the retry connects',
+    () async {
+      final prompts = _Prompting()
+        ..onCredentials = (server, scope, retry) async => CredentialDraft(
+          keyPassphrase: retry ? 'correct passphrase' : 'wrong passphrase',
+        );
+      final files = promptedFiles(prompts);
+      connections
+        ..openFailure = wrongPassphrase()
+        ..openFailures = 1;
+
+      final connection = await files.connect(server, windowId: 'window-1');
+
+      expect(connection.server.id, isNotEmpty);
+      expect(prompts.calls, hasLength(1));
+      expect(prompts.calls.single.$2, isTrue);
+      expect(connections.opened, hasLength(1));
+    },
+  );
+
+  test('cancelling the passphrase retry fails the connection', () async {
+    final prompts = _Prompting()
+      ..onCredentials = (server, scope, retry) async => null;
+    final files = promptedFiles(prompts);
+    connections
+      ..openFailure = wrongPassphrase()
+      ..openFailures = 1;
+
+    await expectLater(
+      files.connect(server, windowId: 'window-1'),
+      throwsStateError,
+    );
+    expect(prompts.calls.single.$2, isTrue);
+  });
+
+  test('an unchanged passphrase answer stops the retry', () async {
+    final prompts = _Prompting()
+      ..onCredentials = (server, scope, retry) async =>
+          CredentialDraft(keyPassphrase: 'same passphrase');
+    final files = promptedFiles(prompts);
+    connections
+      ..openFailure = wrongPassphrase()
+      ..openFailures = 2;
+
+    await expectLater(
+      files.connect(server, windowId: 'window-1'),
+      throwsA(isA<SshConnectException>()),
+    );
+    expect(prompts.calls, hasLength(2));
+    expect(prompts.calls.every((call) => call.$2), isTrue);
+  });
 }

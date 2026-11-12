@@ -210,6 +210,31 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('a retry prompt explains the failed passphrase', (tester) async {
+    final key = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      MaterialApp(navigatorKey: key, home: const Scaffold()),
+    );
+    final prompts = AppWorkspaceConnectionPrompts(
+      () => (context: key.currentContext!, workspace: workspace),
+      pickKeyText: (_) async => null,
+    );
+    unawaited(
+      prompts
+          .credentials(server, _Scope(), retry: true)
+          .then<Object?>((value) => value),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'That passphrase did not open the key. Try again. It is used for '
+        'this workspace session and never saved.',
+      ),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('credential prompt does not claim a single connection', (
     tester,
   ) async {
