@@ -138,6 +138,13 @@ class FakeTreeFileSystem implements RemoteFileSystem {
   /// remote-trash 0700 rule must refuse rather than absorb.
   Object? Function(String path)? setModeFailure;
 
+  /// The server's clock, stamped on every upload when set; null leaves a
+  /// landed upload without a modification time.
+  DateTime Function()? clock;
+
+  /// `setTimes` refusals: a server that allows writes but denies SETSTAT.
+  Object? Function(String path)? setTimesFailure;
+
   /// Gates — return a completer to stall the operation until it completes.
   Completer<void>? Function(String path)? statGate;
   Completer<void>? Function(String path)? listGate;
@@ -599,7 +606,7 @@ class FakeTreeFileSystem implements RemoteFileSystem {
         final failure = uploadModeFailure?.call(path, mode);
         if (failure != null) throw failure;
       }
-      addFile(path, collected.toBytes(), mode: mode);
+      addFile(path, collected.toBytes(), modifiedAt: clock?.call(), mode: mode);
       if (mode != null) modes[path] = mode;
       return entryAt(path)!;
     } finally {
@@ -864,6 +871,8 @@ class FakeTreeFileSystem implements RemoteFileSystem {
     DateTime? modifiedAt,
   }) async {
     setTimesCalls++;
+    final failure = setTimesFailure?.call(path);
+    if (failure != null) throw failure;
     final existing = entryAt(path);
     if (existing == null) throw _notFound('setTimes', path);
     if (modifiedAt != null) {

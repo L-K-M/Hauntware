@@ -8,6 +8,8 @@ import 'package:poltergeist_app/services/application_error_reporter.dart';
 import 'package:poltergeist_app/services/atomic_file.dart';
 import 'package:poltergeist_app/services/identity_file_reader.dart';
 import 'package:poltergeist_app/services/prompt_coordinator.dart';
+import 'package:poltergeist_app/services/secure_master_key.dart'
+    show MasterKeyUnavailableException;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 class FakePromptBridge implements PromptBridge {
@@ -559,6 +561,34 @@ void main() {
     await tester.pumpAndSettle();
 
     expect((bridge.replies.single.$3 as CredentialPromptReply).password, 'pw');
+  });
+
+  testWidgets('a vault whose key the keystore lost says so, not "retry"', (
+    tester,
+  ) async {
+    await _pumpHost(tester, navigatorKey, messengerKey);
+    coordinator.start();
+    vault.readFailure = const MasterKeyUnavailableException();
+
+    bridge.emit(
+      _event(
+        'p7',
+        EnginePromptKind.credentialNeeded,
+        _credential.copyWithSecretRef('secret-7'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('no longer holds the key'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Unlock or restore'), findsNothing);
+    expect(
+      find.textContaining('keychain backup'),
+      findsNothing,
+      reason: 'the raw port exception never renders (D20)',
+    );
   });
 
   testWidgets('a private-key prompt reads the identity file through the '

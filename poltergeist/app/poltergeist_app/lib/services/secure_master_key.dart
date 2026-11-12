@@ -2,11 +2,18 @@
 // MasterKeyManager, KeystoreException and KeystoreStatus live in
 // planchette/packages/ghost_keystore since F3c; this file binds them to
 // Poltergeist's keystore entries.
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ghost_keystore/ghost_keystore.dart';
 
 export 'package:ghost_keystore/ghost_keystore.dart'
-    show KeystoreException, KeystoreStatus, MasterKeyManager;
+    show
+        KeystoreException,
+        KeystoreStatus,
+        MasterKeyManager,
+        MasterKeyUnavailableException;
 
 /// The keystore entry holding Poltergeist's vault master key (07 §3.3), so
 /// the app never shares Séance's entry. A persisted identity: renaming it
@@ -26,6 +33,32 @@ MasterKeyManager poltergeistMasterKeyManager([FlutterSecureStorage? storage]) =>
       apiKeyPrefix: _apiKeyPrefix,
       storage: storage,
     );
+
+/// Whether [vaultFile] holds sealed secrets that a newly minted master key
+/// would strand: the tiebreaker [MasterKeyManager.probeKeystore] needs to
+/// tell a first run from a keystore that lost its entry. Séance's
+/// `_holdsSecrets` rule: no file or an empty object holds nothing; any
+/// entry counts; a file that does not decode to an object counts too,
+/// because minting over a foreign or corrupt state is the one guess that
+/// cannot be taken back. Poltergeist stores no reserved app entries in
+/// its vault, so unlike Séance it excludes none.
+Future<bool> vaultHoldsSecrets(File vaultFile) async {
+  if (!await vaultFile.exists()) return false;
+  try {
+    final decoded = jsonDecode(await vaultFile.readAsString());
+    return decoded is! Map || decoded.isNotEmpty;
+  } catch (_) {
+    return true;
+  }
+}
+
+/// [keys]'s vault master key for the vault stored in [vaultFile]. A key is
+/// minted only when that vault holds no secrets; when it does and the
+/// keystore answers with no entry, this throws
+/// [MasterKeyUnavailableException] instead, and null still means the
+/// keystore could not be read.
+Future<List<int>?> probeVaultKey(MasterKeyManager keys, File vaultFile) async =>
+    keys.probeKeystore(hasExistingVault: await vaultHoldsSecrets(vaultFile));
 
 /// The vault has no key this session because the OS keystore is unavailable,
 /// so secrets can neither be read nor stored until it comes back.
