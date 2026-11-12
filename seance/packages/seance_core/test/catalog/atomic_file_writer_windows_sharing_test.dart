@@ -11,7 +11,7 @@ void main() {
         'atomic-sharing-',
       );
       addTearDown(() => directory.delete(recursive: true));
-      final path = '${directory.path}/store.json';
+      final path = File.fromUri(directory.uri.resolve('store.json')).path;
       await File(path).writeAsString('old');
       final native = IOOverrides.current ?? _NativeIo();
       final readers = _CanonicalReaders();

@@ -112,6 +112,9 @@ final class _Engine {
       syncTransport: server.transport,
       endpointPinStore: pins,
       prober: prober ?? const TcpBannerProber(),
+      // This isolate cannot shut the engine down (Shutdown exits it), so
+      // drain the stores' queued writes before the support directory goes.
+      onSupportWrites: (drain) => addTearDown(drain),
     );
     expect(await messages.moveNext().timeout(_engineEventWait), isTrue);
     final engine = _Engine._(messages.current as SendPort, messages)
