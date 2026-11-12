@@ -474,5 +474,65 @@ void main() {
       await tester.pumpAndSettle();
       expect(await accepted, isTrue);
     });
+
+    testWidgets('an open shell is named, Cancel vetoes and Quit accepts', (
+      tester,
+    ) async {
+      final harness = await pumpApp(tester, operations: true);
+      final shell = harness.monitoring.terminals.open(
+        serverId: 'srv-1',
+        containerId: 'b7e9d0c1a2f3',
+        containerName: 'web-db',
+        columns: 80,
+        rows: 24,
+      );
+      harness.engine.emit(TerminalOpened(shell.id, ['/bin/bash']));
+      await tester.pumpAndSettle();
+
+      final vetoed = confirmQuitWhileRunning(
+        harness.operations!,
+        () => appNavigatorKey.currentContext,
+        shells: [shell],
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Quit and end 1 shell?'), findsOneWidget);
+      expect(
+        find.text('The shell in web-db is open. Quitting ends it.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(await vetoed, isFalse);
+
+      final accepted = confirmQuitWhileRunning(
+        harness.operations!,
+        () => appNavigatorKey.currentContext,
+        shells: [shell],
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Quit'));
+      await tester.pumpAndSettle();
+      expect(await accepted, isTrue);
+    });
+
+    testWidgets('application exit names an open shell', (tester) async {
+      final harness = await pumpApp(tester, operations: true);
+      final shell = harness.monitoring.terminals.open(
+        serverId: 'srv-1',
+        containerId: 'b7e9d0c1a2f3',
+        containerName: 'web-db',
+        columns: 80,
+        rows: 24,
+      );
+      harness.engine.emit(TerminalOpened(shell.id, ['/bin/bash']));
+      await tester.pumpAndSettle();
+
+      final exiting = tester.binding.handleRequestAppExit();
+      await tester.pumpAndSettle();
+      expect(find.text('Quit and end 1 shell?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(await exiting, AppExitResponse.cancel);
+    });
   });
 }

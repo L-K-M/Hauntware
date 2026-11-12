@@ -599,6 +599,68 @@ void main() {
       expect(lines(tester), isNot(contains('  web-1')), reason: 'still folded');
     });
 
+    testWidgets('the filter, folds and triage toggles live on the '
+        'controller and reach the list', (tester) async {
+      tester.view.physicalSize = const Size(260, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final engine = FakeEngineClient();
+      final fleetController = FleetController(engine, servers: fleet);
+      final monitoring = MonitoringController(engine);
+      addTearDown(() async {
+        fleetController.dispose();
+        monitoring.dispose();
+        await engine.close();
+      });
+
+      fleetController.toggleSection('production');
+      fleetController.filterQuery = 'db';
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => SidebarKitScope(
+                strings: klabautermannSidebarStrings(
+                  AppLocalizations.of(context),
+                ),
+                child: FleetServerList(
+                  fleet: fleetController,
+                  monitoring: monitoring,
+                  onOpen: (_) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('db-1'), findsOneWidget);
+      expect(find.text('web-1'), findsNothing);
+
+      fleetController.filterQuery = '';
+      await tester.pump();
+      expect(find.text('web-1'), findsNothing, reason: 'still folded');
+      expect(find.text('db-1'), findsNothing, reason: 'still folded');
+
+      fleetController.attentionFirst = true;
+      await tester.pump();
+      expect(find.byType(FilterChip), findsNWidgets(2));
+
+      fleetController.faultsOnly = true;
+      await tester.pump();
+      expect(find.text('Nothing needs attention.'), findsOneWidget);
+
+      fleetController.faultsOnly = false;
+      await tester.pump();
+      expect(find.text('loose'), findsOneWidget);
+      expect(fleetController.filterQuery, '');
+      expect(fleetController.collapsedSections, contains('production'));
+      expect(fleetController.attentionFirst, isTrue);
+    });
+
     testWidgets('Enter opens the first match as the list orders it', (
       tester,
     ) async {

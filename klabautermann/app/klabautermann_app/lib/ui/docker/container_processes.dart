@@ -46,7 +46,8 @@ class ContainerProcessesSection extends StatefulWidget {
       _ContainerProcessesSectionState();
 }
 
-class _ContainerProcessesSectionState extends State<ContainerProcessesSection> {
+class _ContainerProcessesSectionState extends State<ContainerProcessesSection>
+    with AutomaticKeepAliveClientMixin {
   late final AppLifecycleListener _lifecycle;
 
   /// The engine's answer; null while it is read or the container is
@@ -59,6 +60,11 @@ class _ContainerProcessesSectionState extends State<ContainerProcessesSection> {
   /// Masks the revealed values when their time is up; null while
   /// masked.
   Timer? _reveal;
+
+  /// Kept while scrolled out of a lazy list: coming back shows the answer
+  /// held rather than asking the server again.
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -127,6 +133,7 @@ class _ContainerProcessesSectionState extends State<ContainerProcessesSection> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     return Column(
