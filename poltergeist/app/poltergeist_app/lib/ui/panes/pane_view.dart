@@ -81,7 +81,7 @@ String? _typeAheadCharacter(KeyEvent event) {
 /// arithmetic.
 double scaledPaneRowExtent(BuildContext context) => MediaQuery.textScalerOf(
   context,
-).scale(PoltergeistChrome.of(context).rowExtent);
+).scale(PoltergeistChrome.of(context, poltergeistThemeStyle).rowExtent);
 
 /// Whether rows take touch gestures (D32 §9: a tap opens, a long-press
 /// selects and opens the action sheet) rather than desktop pointer
@@ -1632,7 +1632,7 @@ class _PaneSurface extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final loadingVisible = graceVisible && !controller.connectionLost;
     return ColoredBox(
-      color: PoltergeistChrome.of(context).paneBackground,
+      color: PoltergeistChrome.of(context, poltergeistThemeStyle).paneBackground,
       // One width measure for the column header and every row, so the
       // two can never disagree about which columns fit.
       child: LayoutBuilder(
@@ -2025,7 +2025,7 @@ class _PaneSurface extends StatelessWidget {
                             ? l10n.paneDropHintRemote
                             : l10n.paneDropHintLocal,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: PoltergeistChrome.of(context).secondaryText,
+                          color: PoltergeistChrome.of(context, poltergeistThemeStyle).secondaryText,
                         ),
                       ),
                     ),
@@ -2610,7 +2610,7 @@ class _LocationHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final l10n = AppLocalizations.of(context);
     final loading = controller.loading && loadingVisible;
     return Container(
@@ -2722,7 +2722,7 @@ class _LocationTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final theme = Theme.of(context);
     final location = controller.location;
     final path = location?.path;
@@ -2819,7 +2819,7 @@ class _AncestorMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final palette = FamilyPalette.of(context);
     return MenuAnchor(
       menuChildren: [

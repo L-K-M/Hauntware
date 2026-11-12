@@ -221,7 +221,7 @@ void main() {
       await pumpDialog(tester, 2);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
-      final chrome = PoltergeistChrome.of(tester.element(dialog));
+      final chrome = PoltergeistChrome.of(tester.element(dialog), poltergeistThemeStyle);
       final detail = tester.widget<Text>(find.text('me@s0.example.com'));
       final painted = Color.alphaBlend(
         detail.style!.color!,

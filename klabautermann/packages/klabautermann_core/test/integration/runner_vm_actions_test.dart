@@ -26,6 +26,14 @@ import 'support/runner_vm.dart';
 /// Covers journald writing a unit's output before a read finds it.
 const _journalWait = Duration(seconds: 20);
 
+/// The job's records a follow reads back from before its start: a
+/// oneshot writes about five, so this covers them with room to spare.
+const _jobWindow = 50;
+
+/// How far before the run the job's follow starts, for the gap between
+/// this clock's reading and journald's own timestamps.
+const _clockMargin = Duration(seconds: 1);
+
 /// Covers the supervisor seeing the link drop after its sshd processes
 /// were killed.
 const _dropWait = Duration(seconds: 60);
@@ -264,15 +272,22 @@ void main() {
     expect(step.elevated, isTrue);
 
     // Followed as the account in systemd-journal: the sudo account reads
-    // no system unit's journal.
+    // no system unit's journal. LogStreamRunning says only that the
+    // engine started journalctl, not that journalctl has reached the
+    // journal's tail, and the run over the other link can end first. So
+    // the follow reads back from before the run, as the app's run output
+    // does (its last quarter hour), instead of from the tail alone;
+    // `since` keeps any earlier run out. The runner VM is this machine,
+    // so its journal and this clock agree.
+    final runStarted = DateTime.now().toUtc().subtract(_clockMargin);
     const streamId = 'job';
     engine.send(
       OpenLogStream(
         streamId: streamId,
         spec: LogStreamSpec(
           serverId: journalServer,
-          source: JournalLogSource(unit: vm.jobService),
-          window: 0,
+          source: JournalLogSource(unit: vm.jobService, since: runStarted),
+          window: _jobWindow,
           follow: true,
         ),
       ),

@@ -56,7 +56,7 @@ class _ActivityHistoryViewState extends State<ActivityHistoryView> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     // The header filter's capsule (D32 §4), at the size Clear History's
     // label reads at (labelLarge and bodyMedium are both 13 px on desktop).
     final fieldText = theme.textTheme.bodyMedium;

@@ -303,7 +303,7 @@ class _CompactListingState extends State<CompactListing> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final controller = _controller;
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final loadingVisible =
         _pastGrace && controller.loading && !controller.connectionLost;
     return ColoredBox(
@@ -863,7 +863,7 @@ class _EmptyFolder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     return Center(
       key: const ValueKey(CompactKey.emptyFolder),
       child: Column(

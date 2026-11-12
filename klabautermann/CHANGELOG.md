@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Settings > Sync shows a synced host key that conflicts with the one
+  this device trusts, with both fingerprints, and resolves it by keeping
+  this device's key or trusting the new one, in the settings route and
+  the desktop settings window.
 - Settings files use the shared atomic writer and write through
   symbolic links.
 - On Android 13 and later, the system back gesture runs the app's own back
@@ -20,6 +24,10 @@
   container, as quitting with unsaved edits or running operations does.
 - Activity shows the commands an action ran in the code font, as the
   preview before it runs does.
+- Saved log and diagnostic exports, and the staged copy a share hands on,
+  now carry a Windows Mark-of-the-Web stream or a macOS quarantine
+  attribute, and are owner-only (0600) on macOS and Linux, as Séance's
+  downloads are. Marking is best effort and only logged on failure.
 - On the desktop, drag the edge of the fleet rail or the inspector, or
   focus it and use the arrow keys, to make the pane wider, as in Séance
   and Poltergeist. Each width is kept on this device across restarts,

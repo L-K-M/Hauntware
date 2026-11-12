@@ -180,7 +180,7 @@ class _SaveFavoriteBarState extends State<SaveFavoriteBar> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     // Desktop keeps the line at 30 px; touch keeps Material's targets.
     final desktop = isDesktopPlatform(theme.platform);
     final compact = ButtonStyle(

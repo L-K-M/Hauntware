@@ -230,6 +230,7 @@ final class GhostAppearanceSection extends StatefulWidget {
     this.terminalSection,
     this.terminalColoursLead,
     this.hexStyle,
+    this.colorPickerStrings,
   });
 
   final GhostThemeStyle style;
@@ -266,6 +267,9 @@ final class GhostAppearanceSection extends StatefulWidget {
 
   /// The colour picker's hex box style: the host's monospace stack.
   final TextStyle? hexStyle;
+
+  /// The colour picker's words; defaults to the picker's built-in strings.
+  final ColorPickerStrings? colorPickerStrings;
 
   @override
   State<GhostAppearanceSection> createState() => _GhostAppearanceSectionState();
@@ -395,6 +399,7 @@ class _GhostAppearanceSectionState extends State<GhostAppearanceSection> {
     title: label,
     allowAlpha: allowAlpha,
     hexStyle: widget.hexStyle,
+    strings: widget.colorPickerStrings ?? const ColorPickerStrings(),
   );
 
   Future<void> _pickSlot(ThemeSlot slot, Color current) async {
@@ -731,6 +736,7 @@ class _GhostAppearanceSectionState extends State<GhostAppearanceSection> {
         : _s.cornersPercent((scale * 100).round());
     return [
       TextField(
+        key: const ValueKey('appearance.fontFamily'),
         controller: _font,
         decoration: InputDecoration(
           labelText: _s.interfaceFont,

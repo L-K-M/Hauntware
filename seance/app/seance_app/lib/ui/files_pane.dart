@@ -14,7 +14,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../app_state.dart';
 import '../main.dart';
-import '../services/download_provenance.dart';
 import '../services/external_file_opener.dart';
 import '../services/file_export_service.dart';
 import '../services/managed_remote_file.dart';
@@ -141,7 +140,7 @@ class _RemoteBrowser extends StatefulWidget {
 class _RemoteBrowserState extends State<_RemoteBrowser> {
   bool _dragging = false;
   final ExternalFileOpener _fileOpener = const ExternalFileOpener();
-  final DownloadProvenance _provenance = DownloadProvenance();
+  final DownloadProvenance _provenance = DownloadProvenance(agent: 'Seance');
   final TextEditingController _filter = TextEditingController();
   final Set<String> _promptedDirtyCopies = {};
 

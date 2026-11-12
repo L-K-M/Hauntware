@@ -13,6 +13,8 @@ import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/theme.dart';
 import 'package:seance_app/ui/app_menus.dart';
+import 'package:seance_app/ui/built_in_text_editor.dart';
+import 'package:seance_app/ui/server_actions.dart';
 import 'package:seance_app/ui/server_grouping.dart';
 import 'package:seance_app/ui/server_list_density.dart';
 import 'package:seance_app/ui/server_list_pane.dart';
@@ -1000,6 +1002,78 @@ void main() {
       }
       expect(find.text(message), findsOneWidget);
       await tester.pumpAndSettle(const Duration(seconds: 10));
+    });
+
+    testWidgets('deleting a server asks its dirty editor first', (
+      tester,
+    ) async {
+      await boot(tester, [server('alpha')]);
+      final editor = EditorTab(
+        id: 'edit',
+        serverId: 'alpha',
+        config: server('alpha'),
+        remotePath: '/etc/motd',
+        localPath: 'motd',
+        ownerEditSessionId: 'owner',
+      );
+      state!.tabs.add(editor);
+      addTearDown(editor.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BuiltInTextEditorScreen(
+            key: editor.editorKey,
+            file: File('${directory!.path}/motd'),
+            remotePath: '/etc/motd',
+            initialText: 'hello\n',
+            dirtyNotifier: editor.dirty,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.enterText(find.byType(TextField), 'changed\n');
+      await tester.pump();
+      expect(editor.dirty.value, isTrue);
+
+      final deleting = confirmDeleteServer(
+        tester.element(find.byType(BuiltInTextEditorScreen)),
+        state!,
+        server('alpha'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Save changes to “motd”?'), findsOneWidget);
+      expect(find.text('Don’t save'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await deleting;
+      expect(state!.configFor('alpha'), isNotNull);
+      expect(state!.tabById('edit'), isNotNull);
+
+      // Don't save authorizes a later close; it does not discard or close
+      // anything when the following server deletion is cancelled.
+      final declinedDelete = confirmDeleteServer(
+        tester.element(find.byType(BuiltInTextEditorScreen)),
+        state!,
+        server('alpha'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Don’t save'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await declinedDelete;
+
+      expect(state!.configFor('alpha'), isNotNull);
+      expect(state!.tabById('edit'), same(editor));
+      expect(editor.dirty.value, isTrue);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'changed\n',
+      );
     });
   });
 }

@@ -102,7 +102,7 @@ void main() {
   }
 
   for (final (button, choice) in [
-    ('Don’t Save', BulkCloseChoice.discardAll),
+    ('Don’t save', BulkCloseChoice.discardAll),
     ('Cancel', BulkCloseChoice.cancel),
     ('Save All', BulkCloseChoice.saveAll),
   ]) {

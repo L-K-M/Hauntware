@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:seance_core/seance_core.dart';
 
-import 'download_provenance.dart';
 import 'managed_remote_file.dart';
 import 'managed_remote_file_store.dart';
 import 'shell_location.dart';
@@ -74,7 +73,7 @@ class RemoteFilesController extends ChangeNotifier {
     DownloadProvenance? provenance,
   }) : terminalTitle = terminalTitle ?? const _EmptyStringListenable(),
        activeCommand = activeCommand ?? const _EmptyStringListenable(),
-       _provenance = provenance ?? DownloadProvenance() {
+       _provenance = provenance ?? DownloadProvenance(agent: 'Seance') {
     if (initialLocalCopies != null) localCopies.addAll(initialLocalCopies);
     showHidden = initialShowHidden;
     bookmarks.addAll(initialBookmarks.where(_isAbsolutePath));

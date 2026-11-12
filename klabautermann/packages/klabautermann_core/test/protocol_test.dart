@@ -81,6 +81,13 @@ void main() {
           encryptionPassphrase: 'pp',
         ),
         const RunSyncRound(),
+        const ReadPinConflicts(),
+        const ResolvePinConflict(
+          'alpha.example.com:22',
+          keepLocal: true,
+          localFingerprintSha256: 'SHA256:local',
+          pulledFingerprintSha256: 'SHA256:pulled',
+        ),
         AnswerKeystore(3, KeystoreMasterKey(Uint8List.fromList([1, 2]))),
         const ConfirmEndpoints(['a', 'b']),
         const SetMonitorSet(['a']),
@@ -365,6 +372,13 @@ void main() {
           ),
           failure: SyncFailure.credentialsRejected,
         ),
+        PinConflictsChanged([
+          SyncPinConflict(
+            locator: 'alpha.example.com:22',
+            localFingerprintSha256: 'SHA256:local',
+            pulledFingerprintSha256: 'SHA256:pulled',
+          ),
+        ]),
         const KeystoreRequest(4, KeystorePutApiKey('sync.token', 't')),
         const EndpointChanged('srv-1'),
         const LinkState('srv-1', LinkReady()),

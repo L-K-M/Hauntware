@@ -1,5 +1,20 @@
 # Séance ports and pin audits
 
+## Download provenance via seance_core (2026-11-10)
+
+Download provenance (Mark-of-the-Web, macOS quarantine) is not a port.
+`DownloadProvenance` lives in `seance_core`
+(`seance/packages/seance_core/lib/src/store/download_provenance.dart`),
+where Séance's own download marking already lived. Poltergeist reaches it
+through the `poltergeist_core` barrel, and `TransferQueue` and
+`SyncExecutor` mark the files they write from a server: Download To,
+remote-to-local moves, managed checkouts, produce and drag-out hops, and
+sync downloads. No Poltergeist source moves, so this is a consumer
+change, not an entry in the port lineage.
+
+- Pin audit: `seance/` changed, so the `SEANCE_PIN_AUDIT_V3` record is
+  re-recorded by the integrator once, not here.
+
 ## Multi-window host shared with Planchette (2026-11-11)
 
 Poltergeist's workspace windows and Planchette's document windows are one
@@ -2449,6 +2464,10 @@ behaviour, and is not repeated below.
 - Ported: 2026-09-25
 - Divergences: none.
 - Port-back candidates: none.
+- Moved (2026-11-10): `AppAppearance`, `ThemeModePreference` and the
+  brightness helpers now live in `planchette/packages/ghost_theme`
+  ([design](../../docs/design/ghost-theme.md)); this file keeps
+  Poltergeist's import path and its `poltergeistInitialAppearance`.
 
 ### app/poltergeist_app/lib/theme/theme_palette.dart
 
@@ -2467,6 +2486,12 @@ behaviour, and is not repeated below.
   paints here. `fontFamily` is written with a null-aware map element,
   which this app's lints ask for.
 - Port-back candidates: none.
+- Moved (2026-11-10): the palette model, its JSON keys, hex forms and
+  lenient decode now live in `planchette/packages/ghost_theme`; this
+  file keeps Poltergeist's import path and re-exports the shared names.
+  The terminal block stays dropped, as Poltergeist's style sets
+  `hasTerminal: false`, so a Séance theme still pastes whole except for
+  its terminal colours.
 
 ### app/poltergeist_app/lib/theme/theme_presets.dart
 
@@ -2481,6 +2506,10 @@ behaviour, and is not repeated below.
   keep Séance's values, Bubblegum's deeper `#E63A91` accent included, so
   a shared preset looks the same and matches itself in both apps.
 - Port-back candidates: none.
+- Moved (2026-11-10): the preset tables and codec now live in
+  `planchette/packages/ghost_theme`, bound to `poltergeistThemeStyle`
+  here; `ThemePresets` keeps Poltergeist's names as facades over the
+  shared presets, so the stored names and values are unchanged.
 
 ### app/poltergeist_app/lib/theme/app_theme.dart (applied, not copied)
 
@@ -2512,6 +2541,11 @@ behaviour, and is not repeated below.
     `forAppearance` and `resolvedSlots`; `buildPoltergeistTheme` is the
     default palette, as `SeanceTheme.light()`/`dark()` are.
 - Port-back candidates: none.
+- Moved (2026-11-10): the builder is `ghost_theme`'s `GhostTheme` bound
+  to `poltergeistThemeStyle`; this file keeps Poltergeist's builder
+  names as facades and appends the app-side `CompareDiffColors`, with
+  the dark elevation overlay restored so the whole-`ThemeData` legacy
+  gate is unchanged.
 
 ### app/poltergeist_app/lib/ui/color_picker.dart
 
@@ -2548,6 +2582,12 @@ behaviour, and is not repeated below.
   coalescing, the set-aside Automatic colours, the presets' tiles, the
   mode, Share and Start over are upstream's.
 - Port-back candidates: none.
+- Moved (2026-11-10): the editor is `ghost_theme`'s
+  `GhostAppearanceSection`; this file is the wrapper binding
+  Poltergeist's style, `AppearanceSettingsModel`, ARB words and layout,
+  and keeps its own `_Heading`. The colour picker's strings come from
+  the app's existing `PoltergeistColorPickerStrings`. The shared
+  section's controls and writes are tested in `ghost_theme`.
 
 ### Tests
 
@@ -2555,12 +2595,16 @@ behaviour, and is not repeated below.
   the terminal-block cases become the cross-app cases (Séance's own
   Copy output for its Solarized, verbatim, terminal block and all,
   pastes as this Solarized; a terminal block alone is not a theme).
+  Since 2026-11-10 the model's mechanics are tested in `ghost_theme`; this
+  copy covers Poltergeist's codec.
 - `test/theme/theme_presets_test.dart` from `test/theme_presets_test.dart`:
   no terminal colours; the selection's label is measured over the
   listing; adds the contrast matrix's sidebar row states for every
   preset's dots, with one recorded exception (Solarized's red on its own
   selected pill, 2.80:1; STATUS "Device themes"), and shows a preset
   with its own surface drawing the same at either system brightness.
+  Since 2026-11-10 the preset tables' mechanics are tested in
+  `ghost_theme`; this copy covers Poltergeist's style.
 - `test/theme/theme_build_test.dart` from `test/theme_build_test.dart`:
   the default is compared with the whole pre-theme `ThemeData` and its
   chrome, frozen in `test/theme/legacy_theme.dart` (Poltergeist's own
@@ -2576,7 +2620,9 @@ behaviour, and is not repeated below.
   Appearance group of `test/settings_screen_test.dart` over a fake
   `AppearanceSettingsModel`, plus Poltergeist's own cases (a Séance
   theme with a terminal block, coalesced writes, localized preset names,
-  the font field, the phone-sized Settings dialog).
+  the font field, the phone-sized Settings dialog). Since 2026-11-10 it
+  keeps the adapter and wrapper cases; the shared section's controls
+  and writes are tested in `ghost_theme`.
 - Port-back candidates: the frozen whole-`ThemeData` comparison, which
   would catch a component theme Séance's key-colour list does not name.
 
