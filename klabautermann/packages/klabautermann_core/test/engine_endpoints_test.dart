@@ -297,6 +297,45 @@ void main() {
     expect(dials.last.host, 'moved.example.com');
   });
 
+  test('a confirmation pins only an endpoint that still matches the one '
+      'shown', () async {
+    final engine = await start();
+    final enrolled = await engine.enroll();
+    final listed = enrolled
+        .whereType<CatalogReplaced>()
+        .last
+        .entries
+        .singleWhere((entry) => entry.serverId == _srv);
+    final shown = ShownEndpoint.of(listed);
+    expect(shown.host, 'alpha.example.com');
+
+    // Another device moves the server while the list is open.
+    await server.seedServer(
+      fakeServer(_srv, 'alpha').copyWith(host: '203.0.113.9'),
+      updatedAt: 2,
+    );
+    engine.send(const RunSyncRound());
+    await engine.untilSyncEnds();
+
+    engine.send(ConfirmEndpoints(const [_srv], shown: {_srv: shown}));
+    final answer = await engine.until<CatalogReplaced>();
+    expect(_endpointIn([answer]), EndpointConfirmation.unconfirmed);
+    engine.send(const Connect(_srv));
+    final rejected = await engine.until<ConnectRejected>();
+    expect(rejected.reason, ConnectRejectedReason.endpointNotConfirmed);
+    expect(dials, isEmpty, reason: 'the unseen host is never dialed');
+
+    // Confirmed as it now shows, it is pinned.
+    final now = answer.entries.singleWhere((entry) => entry.serverId == _srv);
+    engine.send(
+      ConfirmEndpoints(const [_srv], shown: {_srv: ShownEndpoint.of(now)}),
+    );
+    expect(
+      _endpointIn([await engine.until<CatalogReplaced>()]),
+      EndpointConfirmation.confirmed,
+    );
+  });
+
   // FL-04, 03 §5.12: a probe is a TCP connect, so it would hand the
   // user's address to whoever rewrote an unconfirmed endpoint.
   test('probes reach only confirmed endpoints, stop when a sync moves one '

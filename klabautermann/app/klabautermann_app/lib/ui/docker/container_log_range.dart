@@ -116,36 +116,38 @@ class _RangeDialogState extends State<_RangeDialog> {
     final l10n = AppLocalizations.of(context);
     return AlertDialog(
       title: Text(l10n.dockerLogsRangeTitle),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.dockerLogsRangeFrom),
-            subtitle: Text(_format(l10n, _since)),
-            trailing: const Icon(Icons.edit_calendar),
-            onTap: () async {
-              final picked = await _pick(_since);
-              if (picked != null) setState(() => _since = picked);
-            },
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.dockerLogsRangeTo),
-            subtitle: Text(_format(l10n, _until)),
-            trailing: const Icon(Icons.edit_calendar),
-            onTap: () async {
-              final picked = await _pick(_until);
-              if (picked != null) setState(() => _until = picked);
-            },
-          ),
-          if (!_ordered)
-            Text(
-              l10n.dockerLogsRangeOrder,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.dockerLogsRangeFrom),
+              subtitle: Text(_format(l10n, _since)),
+              trailing: const Icon(Icons.edit_calendar),
+              onTap: () async {
+                final picked = await _pick(_since);
+                if (picked != null) setState(() => _since = picked);
+              },
             ),
-        ],
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.dockerLogsRangeTo),
+              subtitle: Text(_format(l10n, _until)),
+              trailing: const Icon(Icons.edit_calendar),
+              onTap: () async {
+                final picked = await _pick(_until);
+                if (picked != null) setState(() => _until = picked);
+              },
+            ),
+            if (!_ordered)
+              Text(
+                l10n.dockerLogsRangeOrder,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
