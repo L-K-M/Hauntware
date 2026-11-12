@@ -28,7 +28,7 @@ import 'container_command.dart';
 import 'container_logs.dart';
 import 'container_processes.dart';
 import 'container_terminal.dart';
-import 'containers_panel.dart' show ContainerHealthBadge;
+import 'containers_panel.dart' show ContainerHealthBadge, DockerNotice;
 import 'container_usage_charts.dart';
 import 'containers_view.dart';
 import 'images_view.dart' show shortImageId;
@@ -530,9 +530,12 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
     final failure = read.failure;
     final children = <Widget>[
       if (read.removed)
-        _Notice(icon: Icons.delete_outline, text: l10n.dockerDetailsRemoved)
+        DockerNotice(
+          icon: Icons.delete_outline,
+          text: l10n.dockerDetailsRemoved,
+        )
       else if (failure != null)
-        _Notice(
+        DockerNotice(
           icon: Icons.error_outline,
           text: l10n.dockerDetailsFailed(failure.failure.name),
           detail: failure.detail,
@@ -543,9 +546,12 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
           ),
         ),
       if (container == null && !read.removed && failure == null)
-        _Notice(icon: Icons.hourglass_empty, text: l10n.dockerDetailsReading),
+        DockerNotice(
+          icon: Icons.hourglass_empty,
+          text: l10n.dockerDetailsReading,
+        ),
       if (container != null && (read.removed || failure != null))
-        _Notice(icon: Icons.history, text: l10n.dockerDetailsKept),
+        DockerNotice(icon: Icons.history, text: l10n.dockerDetailsKept),
       if (container != null)
         ..._withUsage(
           _sections(
@@ -767,9 +773,9 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
         health: health,
       ),
       if (state?.oomKilled ?? false)
-        _Notice(icon: Icons.memory, text: l10n.dockerDetailsOomKilled),
+        DockerNotice(icon: Icons.memory, text: l10n.dockerDetailsOomKilled),
       if (error != null && error.isNotEmpty)
-        _Notice(
+        DockerNotice(
           icon: Icons.error_outline,
           text: l10n.dockerDetailsStateError,
           detail: error,
@@ -1414,62 +1420,6 @@ class _RawJson extends StatelessWidget {
             );
           },
         ),
-      ],
-    );
-  }
-}
-
-/// A state in words beside an icon, read as one node, with the engine's
-/// own [detail] under it, never translated, and an optional [action].
-class _Notice extends StatelessWidget {
-  const _Notice({
-    required this.icon,
-    required this.text,
-    this.detail,
-    this.action,
-  });
-
-  final IconData icon;
-  final String text;
-  final String? detail;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    final detail = this.detail;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        MergeSemantics(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 8,
-            children: [
-              Icon(icon, size: 18, color: muted),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  spacing: 4,
-                  children: [
-                    Text(text, style: theme.textTheme.bodyMedium),
-                    if (detail != null && detail.isNotEmpty)
-                      Text(
-                        detail,
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: muted,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        ?action,
       ],
     );
   }

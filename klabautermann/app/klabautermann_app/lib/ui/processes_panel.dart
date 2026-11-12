@@ -14,6 +14,7 @@ import 'freshness.dart';
 import 'process_detail_view.dart';
 import 'processes_view.dart';
 import 'sortable_table.dart';
+import 'state_notice.dart';
 import 'time_display.dart';
 import 'timed_reveal.dart';
 
@@ -161,14 +162,14 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                 listenable: clock,
                 builder: (context, _) {
                   final now = _freshness(reading, sampling);
-                  return _Notice(
+                  return StateNotice(
                     icon: now.stale ? Icons.history : Icons.schedule,
                     text: freshnessText(l10n, now),
                   );
                 },
               ),
             if (unavailable != null)
-              _Notice(
+              StateNotice(
                 icon: unavailable.reason == CollectorUnavailableReason.timeout
                     ? Icons.timer_off_outlined
                     : Icons.error_outline,
@@ -176,9 +177,12 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                 detail: unavailable.detail,
               )
             else if (result == null)
-              _Notice(icon: Icons.hourglass_empty, text: l10n.processesWaiting),
+              StateNotice(
+                icon: Icons.hourglass_empty,
+                text: l10n.processesWaiting,
+              ),
             if (leftOut != null)
-              _Notice(
+              StateNotice(
                 icon: Icons.filter_alt_outlined,
                 text: switch (leftOut.total) {
                   final total? => l10n.processesShownOf(leftOut.shown, total),
@@ -186,7 +190,7 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                 },
               ),
             if (flagCounts.isNotEmpty)
-              _Notice(
+              StateNotice(
                 icon: Icons.warning_amber,
                 text: [
                   for (final MapEntry(:key, :value) in flagCounts.entries)
@@ -836,7 +840,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             spacing: 12,
             children: [
-              _Notice(
+              StateNotice(
                 icon: freshness.stale ? Icons.history : Icons.schedule,
                 text: freshnessText(l10n, freshness),
               ),
@@ -855,7 +859,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
         ),
       ),
       if (arguments.isEmpty)
-        _Notice(
+        StateNotice(
           icon: Icons.info_outline,
           text: l10n.processesCommandUnavailable,
         )
@@ -879,12 +883,15 @@ class _ProcessSheetState extends State<_ProcessSheet> {
           ),
         ),
         if (detail.environmentDenied)
-          _Notice(
+          StateNotice(
             icon: Icons.lock_outline,
             text: l10n.processesEnvironmentDenied,
           )
         else if (environment == null || environment.isEmpty)
-          _Notice(icon: Icons.info_outline, text: l10n.processesEnvironmentNone)
+          StateNotice(
+            icon: Icons.info_outline,
+            text: l10n.processesEnvironmentNone,
+          )
         else if (environment.length >= kProcessEnvironLimit)
           Text(
             l10n.processesEnvironmentCapped(kProcessEnvironLimit),
@@ -925,11 +932,11 @@ class _ProcessSheetState extends State<_ProcessSheet> {
     final theme = Theme.of(context);
     final canRead = widget.row.startTicks != null;
     final status = switch (_detail) {
-      _ when !canRead => _Notice(
+      _ when !canRead => StateNotice(
         icon: Icons.info_outline,
         text: l10n.processesDetailNoStart,
       ),
-      null => _Notice(
+      null => StateNotice(
         icon: Icons.hourglass_empty,
         text: l10n.processesDetailReading,
       ),
@@ -940,16 +947,16 @@ class _ProcessSheetState extends State<_ProcessSheet> {
           unknown: l10n.chartUnknownValue,
         ),
       ),
-      ProcessEnded(:final end) => _Notice(
+      ProcessEnded(:final end) => StateNotice(
         icon: Icons.history,
         text: l10n.processesDetailEnded(end.name),
       ),
-      HostQueryFailed(:final failure, :final detail) => _Notice(
+      HostQueryFailed(:final failure, :final detail) => StateNotice(
         icon: Icons.error_outline,
         text: l10n.processesDetailFailed(failure.name),
         detail: detail,
       ),
-      _ => _Notice(
+      _ => StateNotice(
         icon: Icons.error_outline,
         text: l10n.processesDetailFailed(HostQueryFailure.failed.name),
       ),
@@ -1101,49 +1108,6 @@ class _Facts extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-/// A state in words beside an icon, read as one node; the icon adds a
-/// shape, the text carries the meaning (A11Y-01). [detail] is the host's
-/// error output, never translated.
-class _Notice extends StatelessWidget {
-  const _Notice({required this.icon, required this.text, this.detail});
-
-  final IconData icon;
-  final String text;
-  final String? detail;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    final detail = this.detail;
-    return MergeSemantics(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 8,
-        children: [
-          Icon(icon, size: 18, color: muted),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 4,
-              children: [
-                Text(text, style: theme.textTheme.bodyMedium),
-                if (detail != null && detail.isNotEmpty)
-                  Text(
-                    detail,
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
