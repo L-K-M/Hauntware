@@ -92,6 +92,10 @@ class MasterKeyManager {
             // the first read (entitlement absent) or refuses to launch at
             // all (entitlement present but unvalidated).
             mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+            // Android: the plugin's default deletes the entry on any read
+            // error, so one transient Keystore failure would erase the
+            // master key. Report the failure and let the caller retry.
+            aOptions: AndroidOptions(resetOnError: false),
           );
 
   /// Installed by the app host. Auth errors stay outside tolerant OS reads.

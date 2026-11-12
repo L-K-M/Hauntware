@@ -11262,6 +11262,30 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get paletteQueryHint => 'Type a command';
+
+  @override
+  String get paletteNoMatches => 'No matching commands';
+
+  @override
+  String paletteKeywordMatch(String keyword) {
+    return 'matches \"$keyword\"';
+  }
+
+  @override
+  String paletteKeywordMatchWithDescription(
+    String keyword,
+    String description,
+  ) {
+    return 'matches \"$keyword\": $description';
+  }
+
+  @override
+  String paletteUnavailable(String label) {
+    return '$label, unavailable';
+  }
+
+  @override
   String paletteContainerDescription(String state, String image) {
     return '$state · $image';
   }

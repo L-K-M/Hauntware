@@ -88,4 +88,76 @@ void main() {
 
     expect(await LicenseRegistry.licenses.toList(), isEmpty);
   });
+
+  test('skips a malformed library and keeps the rest', () {
+    final definitions = jsonEncode({
+      'libraries': [
+        {'uniqueId': 'no-licenses'},
+        {
+          'uniqueId': 'bad-key',
+          'licenses': [7],
+        },
+        'not an object',
+        {
+          'uniqueId': 'androidx.core:core',
+          'artifactVersion': '1.17.0',
+          'licenses': ['Apache-2.0'],
+        },
+      ],
+      'licenses': {
+        'Apache-2.0': {'name': 'Apache License 2.0', 'content': 'Apache'},
+      },
+    });
+
+    expect(
+      libraryLicenses(definitions).map((entry) => entry.packages.toList()),
+      [
+        ['androidx.core:core 1.17.0'],
+      ],
+    );
+  });
+
+  group('a failing Android source', () {
+    late List<FlutterErrorDetails> reported;
+    late FlutterExceptionHandler? previousOnError;
+
+    setUp(() {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      reported = [];
+      previousOnError = FlutterError.onError;
+      FlutterError.onError = reported.add;
+      // Flutter's own notices, which must survive the failure.
+      LicenseRegistry.addLicense(
+        () => Stream.value(
+          const LicenseEntryWithLineBreaks(['flutter'], 'Flutter notice'),
+        ),
+      );
+    });
+    tearDown(() => FlutterError.onError = previousOnError);
+
+    for (final (name, reply) in <(String, Future<Object?> Function())>[
+      ('a missing plugin', () async => throw MissingPluginException()),
+      ('a null reply', () async => null),
+      ('unreadable definitions', () async => '{"libraries": 5}'),
+    ]) {
+      test('leaves the other notices on $name', () async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (call) => reply());
+
+        registerPlatformLicenses();
+        final entries = await LicenseRegistry.licenses.toList();
+
+        expect(entries.expand((entry) => entry.packages), [
+          'flutter',
+          'Android libraries',
+        ]);
+        expect(
+          entries.last.paragraphs.single.text,
+          contains('could not be read'),
+        );
+        expect(reported, hasLength(1));
+        expect(reported.single.library, 'ghost_licenses');
+      });
+    }
+  });
 }
