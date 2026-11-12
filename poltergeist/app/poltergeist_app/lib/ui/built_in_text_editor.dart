@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:planchette_editor/planchette_editor.dart' as pe;
 
@@ -212,32 +213,16 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
   Future<bool> _confirmDiscard() async {
     if (!mounted) return false;
     final l10n = AppLocalizations.of(context);
-    final choice = await showDialog<_CloseChoice>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          l10n.editorSaveChangesTitle(widget.basenameOf(_displayPath)),
-        ),
-        content: Text(l10n.editorDiscardBody),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, _CloseChoice.dontSave),
-            child: Text(l10n.editorDiscardDontSave),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, _CloseChoice.keepEditing),
-            child: Text(l10n.editorDialogCancel),
-          ),
-          FilledButton(
-            autofocus: true,
-            onPressed: () => Navigator.pop(context, _CloseChoice.save),
-            child: Text(l10n.editorDialogSave),
-          ),
-        ],
-      ),
+    final choice = await showGhostCloseDialog(
+      context,
+      title: l10n.editorSaveChangesTitle(widget.basenameOf(_displayPath)),
+      body: l10n.editorDiscardBody,
+      saveLabel: l10n.editorDialogSave,
+      dontSaveLabel: l10n.editorDiscardDontSave,
+      cancelLabel: l10n.editorDialogCancel,
     );
     switch (choice) {
-      case _CloseChoice.save:
+      case GhostCloseChoice.save:
         final result = await _save(
           upload: widget.onUpload != null,
           access: pe.EditorSaveAccess.confirmedClose,
@@ -248,9 +233,9 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
             !result.hasUnsavedChanges &&
             !_editor.isBusy &&
             !_editor.isDirty;
-      case _CloseChoice.dontSave:
+      case GhostCloseChoice.dontSave:
         return true;
-      case _CloseChoice.keepEditing || null:
+      case GhostCloseChoice.cancel || null:
         return false;
     }
   }
@@ -612,6 +597,3 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
     shift: shift,
   );
 }
-
-/// The three ways a dirty buffer's close can go ([_confirmDiscard]).
-enum _CloseChoice { save, dontSave, keepEditing }

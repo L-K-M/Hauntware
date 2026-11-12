@@ -43,7 +43,8 @@ void main() {
           QuitDirtyEditor(server: 'server', path: '/unsaved'),
         ],
       ),
-      presentDialog: (_, _) async => allow,
+      presentDialog: (_, _) async =>
+          allow ? QuitChoice.quit : QuitChoice.cancel,
     );
     await tester.pumpWidget(
       SeanceApp(initOverride: () => never.future, quitGuard: guard),

@@ -12,6 +12,7 @@ import 'package:seance_core/seance_core.dart';
 import '../app_state.dart';
 import '../theme.dart';
 import 'server_editor.dart';
+import 'tab_close.dart';
 import 'top_toast.dart';
 
 // The server list's verbs: the row menu's, and the "+" menu's import.
@@ -137,6 +138,15 @@ Future<void> confirmDeleteServer(
   AppState state,
   ServerConfig server,
 ) async {
+  // Deleting a server closes its editor tabs without the tab strip's own
+  // close path, so an unsaved buffer would be lost silently. Ask each dirty
+  // editor first; a declined editor cancels the delete.
+  for (final tab in state.tabsForServer(server.id)) {
+    if (tab is EditorTab && tab.dirty.value) {
+      if (!await confirmEditorClose(context, tab)) return;
+    }
+  }
+  if (!context.mounted) return;
   final localCopyCount = state
       .tabsForServer(server.id)
       .whereType<TerminalSession>()
