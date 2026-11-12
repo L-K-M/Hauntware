@@ -408,7 +408,17 @@ void main() {
     testWidgets('a clean multi-line paste goes in line by line, and Cancel '
         'on a flagged one pastes nothing', (tester) async {
       await pumpPane(tester);
-      await start(tester);
+      final open = await start(tester);
+      // Bash turns bracketed paste on at its prompt; without it every line
+      // would run as it arrives, so even a clean paste would ask.
+      await _emit(
+        tester,
+        engine,
+        TerminalBytes(open.terminalId, _bytes('\x1b[?2004h')),
+      );
+      // setUp made the fake engine outside the test's fake-async zone, so
+      // its events reach the terminal only once real async work runs.
+      await tester.runAsync(pumpEventQueue);
 
       clipboard = 'cd /tmp\nls';
       await tester.tap(find.byTooltip('Paste'));

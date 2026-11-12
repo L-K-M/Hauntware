@@ -127,7 +127,9 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('build-server.internal.example.com:2222'), findsOneWidget);
-    expect(find.textContaining('ssh-ed25519'), findsNWidgets(changed ? 2 : 1));
+    // The engine payload names no pinned key type, so only the presented
+    // key carries one.
+    expect(find.textContaining('ssh-ed25519'), findsOneWidget);
 
     if (_captureOn) {
       final boundary = tester.renderObject<RenderRepaintBoundary>(

@@ -25,6 +25,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+  - package-ecosystem: gradle
+    directory: /planchette/app/planchette_app/android
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
   # Planchette's pub workspace, editor and app, as in its standalone repo.
   - package-ecosystem: pub
     directory: /planchette
@@ -38,6 +43,35 @@ updates:
     open-pull-requests-limit: 5
   - package-ecosystem: pub
     directory: /planchette/app/planchette_app
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  # Every other directory with its own pubspec.lock: the root release
+  # tooling, the other three workspaces, their apps and the separately
+  # resolved shared packages. One grouped PR per directory keeps the
+  # count down. The M0 bench packages are left out: they reproduce the
+  # M0 measurements against an exact dartssh2 pin.
+  - package-ecosystem: pub
+    directories:
+      - /
+      - /tool/l10n_contract
+      - /seance
+      - /seance/app/seance_app
+      - /seance/packages/seance_terminal
+      - /poltergeist
+      - /poltergeist/app/poltergeist_app
+      - /klabautermann
+      - /klabautermann/app/klabautermann_app
+      - /planchette/packages/ghost_*
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      pub:
+        patterns: ['*']
+  # The sync server's digest-pinned base images.
+  - package-ecosystem: docker
+    directory: /seance/packages/seance_sync_server
     schedule:
       interval: weekly
     open-pull-requests-limit: 5

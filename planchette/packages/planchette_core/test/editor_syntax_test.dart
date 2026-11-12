@@ -15,6 +15,7 @@ void main() {
       expect(syntaxLanguageFor('/tmp/data.json')?.id, 'json');
       expect(syntaxLanguageFor('compose.yaml')?.id, 'yaml');
       expect(syntaxLanguageFor('main.go')?.id, 'go');
+      expect(syntaxLanguageFor('main.c')?.id, 'c-family');
       expect(syntaxLanguageFor('lib.rs')?.id, 'rust');
       expect(syntaxLanguageFor('fix.patch')?.id, 'diff');
       expect(syntaxLanguageFor('changes.diff')?.id, 'diff');
@@ -51,6 +52,16 @@ void main() {
         syntaxLanguageFor('/usr/local/bin/x', firstLine: 'not a shebang'),
         isNull,
       );
+    });
+
+    test('takes the basename after a backslash as well as a slash', () {
+      expect(syntaxLanguageFor(r'C:\Users\me\.bashrc')?.id, 'shell');
+      expect(syntaxLanguageFor(r'C:\srv\app\Dockerfile')?.id, 'dockerfile');
+      expect(syntaxLanguageFor(r'C:\srv\app\Makefile')?.id, 'shell');
+      expect(syntaxLanguageFor(r'C:\ProgramData\ssh\sshd_config')?.id, 'ini');
+      expect(syntaxLanguageFor(r'/srv/mixed\dir/.htaccess')?.id, 'ini');
+      // A dot in a directory name is not the file's extension.
+      expect(syntaxLanguageFor(r'C:\site.py\README'), isNull);
     });
 
     // 06 §7's additions — detection coverage for the new families.
@@ -389,6 +400,14 @@ void main() {
         final tokens = tokenizeSyntax('$line\n', SyntaxLanguages.perl);
         expect(_ofType(tokens, SyntaxTokenType.comment), isEmpty, reason: line);
       }
+      const index = r'for my $i (0..$#list) { print $i }';
+      expect(
+        _ofType(
+          tokenizeSyntax(index, SyntaxLanguages.perl),
+          SyntaxTokenType.keyword,
+        ).map((t) => _slice(index, t)),
+        ['for', 'my', 'print'],
+      );
     });
 
     test('§7 perl: hash comments after whitespace, keywords, strings', () {
@@ -428,6 +447,20 @@ void main() {
       expect(
         _ofType(tokens, SyntaxTokenType.keyword).map((t) => _slice(text, t)),
         contains('local'),
+      );
+    });
+
+    test('an optional meta group that does not match adds no token', () {
+      final language = SyntaxLanguage(
+        id: 'test',
+        metaPattern: RegExp(r'key(=\w+)?'),
+        metaGroup: 1,
+      );
+      const text = 'key key=value';
+      final tokens = tokenizeSyntax(text, language);
+      expect(
+        _ofType(tokens, SyntaxTokenType.meta).map((t) => _slice(text, t)),
+        ['=value'],
       );
     });
 

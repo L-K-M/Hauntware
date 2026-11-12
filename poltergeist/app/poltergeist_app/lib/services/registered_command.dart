@@ -119,6 +119,7 @@ class RegisteredCommand {
     this.disabledReason,
     required this.run,
     this.activators,
+    this.repeatable = false,
     this.menuPlacement,
     this.submenuItems,
     this.toolbarPlacement,
@@ -163,6 +164,12 @@ class RegisteredCommand {
   /// The returned list is freshly built (or const) per call and must be
   /// treated as immutable — callers copy before mutating.
   final List<ShortcutActivator> Function(TargetPlatform)? activators;
+
+  /// Whether a held chord re-runs the command on OS key repeat. Only
+  /// stepping verbs (history back/forward, tab cycling) opt in; a held
+  /// Delete or Duplicate would otherwise enqueue the same task again
+  /// for every repeat before the first one settles.
+  final bool repeatable;
 
   /// Where this command appears in the app menus (02 §9). Null leaves it
   /// shortcut/palette-only — allowed only while §8.1's menu-or-shortcut

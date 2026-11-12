@@ -262,8 +262,18 @@ void main() {
   test('the scripts exit with the EditExit codes', () {
     expect(
       EditCommands.replaceIfHash(_target, _temp, _hash)[2],
-      allOf(contains('exit ${EditExit.hashMismatch};')),
+      allOf(
+        contains('exit ${EditExit.hashMismatch};'),
+        contains('exit ${EditExit.symlink};'),
+      ),
     );
+    expect(
+      EditCommands.readFile(_target)[2],
+      contains('exit ${EditExit.symlink} ;;'),
+    );
+    final directory = EditCommands.rootOnlyDirectory(_target)[2];
+    expect(directory, contains('exit ${EditExit.userWritableDirectory}\n'));
+    expect(directory, contains('exit ${EditExit.userWritableDirectory} ;'));
     final attributes = EditCommands.copyAttributes(_target, _temp)[2];
     expect(attributes, contains('exit ${EditExit.aclNotCarried}\n'));
     expect(attributes, contains('exit ${EditExit.xattrNotCarried}\n'));
@@ -280,7 +290,13 @@ void main() {
       gid: 4,
       mode: 416,
       sha256: _hash,
+      path: null,
     ));
+    expect(
+      parseReadHeader('120 0 4 640 $_hash /etc/real dir/app.conf')?.path,
+      '/etc/real dir/app.conf',
+    );
+    expect(parseReadHeader('120 0 4 640 $_hash relative'), isNull);
     expect(parseReadHeader('120 0 4 640 xyz'), isNull);
     expect(parseReadHeader('120 0 4 999 $_hash'), isNull);
     // `stat -c %a` drops leading zeros.

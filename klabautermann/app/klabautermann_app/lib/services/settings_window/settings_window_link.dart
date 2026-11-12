@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
     show SyncPinConflict;
+import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 
 import '../../controllers/account_size.dart';
 import '../../controllers/admin_memory.dart' show AdminMemoryNotSavedException;
@@ -30,6 +31,8 @@ import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart'
     show AppearanceNotSavedException;
 import '../../controllers/device_name.dart' show DeviceNameNotSavedException;
+import '../../controllers/editor_display.dart'
+    show EditorDisplay, EditorDisplayNotSavedException;
 import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart' show PinPublication;
 import '../../controllers/safety_controller.dart' show SafetyNotSavedException;
@@ -71,6 +74,10 @@ enum SettingsLinkMethod {
   /// The Appearance tab's editor (M4 E25); the argument is an appearance
   /// as [encodeAppearance] writes it.
   setAppearance,
+
+  /// The Appearance tab's file editor display (03 §8.5); the argument is as
+  /// [encodeEditorDisplay] writes it.
+  setEditorDisplay,
 
   /// The General tab's A11Y-15 switch; the argument is a bool (D60).
   setAnnounceThresholdBands,
@@ -162,6 +169,10 @@ enum SettingsLinkKey {
   /// The log display as [encodeLogDisplay] writes it, or null when the app
   /// offers none.
   logDisplay,
+
+  /// The file editors' font and text size (03 §8.5) as
+  /// [encodeEditorDisplay] writes it, or null when the app offers none.
+  editorDisplay,
 
   /// The [TimeDisplay] name, or null when the app offers none.
   timeDisplay,
@@ -256,8 +267,7 @@ PinPublication decodePinPublication(Map<Object?, Object?>? json) => json == null
 /// One host-key conflict as the snapshot carries it.
 Map<String, Object?> encodePinConflict(SyncPinConflict conflict) => {
   SettingsLinkKey.locator.name: conflict.locator,
-  SettingsLinkKey.localFingerprintSha256.name:
-      conflict.localFingerprintSha256,
+  SettingsLinkKey.localFingerprintSha256.name: conflict.localFingerprintSha256,
   SettingsLinkKey.pulledFingerprintSha256.name:
       conflict.pulledFingerprintSha256,
 };
@@ -349,6 +359,10 @@ enum SettingsLinkError {
   /// [LogDisplayNotSavedException].
   logDisplayNotSaved,
 
+  /// As [notSaved], for the file editor display: the window rebuilds the
+  /// [EditorDisplayNotSavedException].
+  editorDisplayNotSaved,
+
   /// As [notSaved], for the time display: the window rebuilds the
   /// [TimeDisplayNotSavedException].
   timeDisplayNotSaved,
@@ -393,6 +407,8 @@ PlatformException encodeLinkError(Object error) => PlatformException(
     AdminMemoryNotSavedException() =>
       SettingsLinkError.adminMemoryNotSaved.name,
     LogDisplayNotSavedException() => SettingsLinkError.logDisplayNotSaved.name,
+    EditorDisplayNotSavedException() =>
+      SettingsLinkError.editorDisplayNotSaved.name,
     TimeDisplayNotSavedException() =>
       SettingsLinkError.timeDisplayNotSaved.name,
     MonitorSetFullException() => SettingsLinkError.monitorSetFull.name,
@@ -421,6 +437,26 @@ LogDisplay decodeLogDisplay(Object? value) => switch (value) {
     wrap: LogWrap.values.asNameMap()[wrap] ?? LogWrap.off,
   ),
   _ => LogDisplay(),
+};
+
+/// [display] for the link: its family, its [EditorLigatures] name and its
+/// text size.
+List<Object> encodeEditorDisplay(EditorDisplay display) => [
+  display.family,
+  display.ligatures.name,
+  display.textSize,
+];
+
+/// The inverse of [encodeEditorDisplay]; a value it did not write reads as
+/// the standard display.
+EditorDisplay decodeEditorDisplay(Object? value) => switch (value) {
+  [final String family, final String ligatures, final int textSize] =>
+    EditorDisplay(
+      family: family,
+      ligatures: EditorLigatures.named(ligatures),
+      textSize: textSize,
+    ),
+  _ => EditorDisplay.standard,
 };
 
 /// The [TimeDisplay] [value] names; a value that names none reads as
@@ -488,6 +524,9 @@ Exception decodeLinkError(PlatformException error) {
       message,
     ),
     SettingsLinkError.logDisplayNotSaved => LogDisplayNotSavedException(
+      message,
+    ),
+    SettingsLinkError.editorDisplayNotSaved => EditorDisplayNotSavedException(
       message,
     ),
     SettingsLinkError.timeDisplayNotSaved => TimeDisplayNotSavedException(

@@ -10,7 +10,12 @@ import 'dart:async';
 
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:seance_core/seance_core.dart'
-    show RemoteCommandException, RemoteCommandResult, SshLink, quoteShellWord;
+    show
+        ChannelOpenException,
+        RemoteCommandException,
+        RemoteCommandResult,
+        SshLink,
+        quoteShellWord;
 
 import '../admin/admin_mode.dart' show AdminSession;
 import '../audit/audit_log.dart';
@@ -45,6 +50,12 @@ final class _Server {
   AdminSession? rootPrunedIn;
 
   Timer? reread;
+
+  /// The running records whose wrapper the latest listing found gone. A
+  /// wrapper that ended between the `ops` read and its check left a done
+  /// record the listing missed, so it is lost only when the next listing
+  /// still says running.
+  Set<String> wrapperGone = const {};
 
   /// The operations this device launched that no listing has shown yet,
   /// with when each launched.
@@ -110,32 +121,55 @@ final class OperationTracker {
     final link = _linkFor(serverId);
     if (link == null) return;
 
-    final operations = <String, DetachedOperation>{};
-    for (final record in listing.records) {
-      operations[record.id] = await _operation(link, record);
-    }
-    server.listing = listing;
-    server.operations = operations;
-    final launchedSince = _now().subtract(kLaunchListingGrace);
-    server.unlisted.removeWhere(
-      (id, at) =>
-          operations.containsKey(id) ||
-          listing.rejected.any((r) => r.id == id) ||
-          !at.isAfter(launchedSince),
-    );
-    await _forgetCleaned(serverId, listing);
-    await _cleanUp(serverId, link);
-    await _pruneUser(server, link, listing);
-    _report(serverId);
-
-    if (server.unlisted.isNotEmpty ||
-        operations.values.any(
-          (o) => o.state == DetachedOperationState.running,
-        )) {
-      server.reread = _startTimer(
-        kRunningOperationsReread,
-        () => _readOps(serverId),
+    // A listing cut short by a failure is read again, as is one that
+    // leaves an operation running or not yet settled.
+    var rereadDue = true;
+    try {
+      final operations = <String, DetachedOperation>{};
+      final gone = <String>{};
+      for (final record in listing.records) {
+        final (:operation, :wrapperGone) = await _operation(
+          link,
+          record,
+          goneBefore: server.wrapperGone.contains(record.id),
+        );
+        if (wrapperGone) gone.add(record.id);
+        operations[record.id] = operation;
+      }
+      server.wrapperGone = gone;
+      server.listing = listing;
+      server.operations = operations;
+      final launchedSince = _now().subtract(kLaunchListingGrace);
+      server.unlisted.removeWhere(
+        (id, at) =>
+            operations.containsKey(id) ||
+            listing.rejected.any((r) => r.id == id) ||
+            !at.isAfter(launchedSince),
       );
+      await _forgetCleaned(serverId, listing);
+      await _cleanUp(serverId, link);
+      await _pruneUser(server, link, listing);
+      _report(serverId);
+
+      rereadDue =
+          server.unlisted.isNotEmpty ||
+          operations.values.any(
+            (o) =>
+                o.state == DetachedOperationState.running ||
+                o.state == DetachedOperationState.unknown,
+          );
+    } finally {
+      // [retain] or [close] may have dropped the server meanwhile, and a
+      // link that ended is read again once the next one is ready.
+      if (rereadDue &&
+          identical(_servers[serverId], server) &&
+          identical(_linkFor(serverId), link)) {
+        server.reread?.cancel();
+        server.reread = _startTimer(
+          kRunningOperationsReread,
+          () => _readOps(serverId),
+        );
+      }
     }
   }
 
@@ -304,12 +338,20 @@ final class OperationTracker {
   /// [record] as an operation: a running one is checked against its
   /// wrapper, which lives exactly while its PID shows the record's start
   /// ticks. A record without start ticks (the wrapper could not read
-  /// them) reads as running while the PID exists.
-  Future<DetachedOperation> _operation(SshLink link, OpRecord record) async {
+  /// them) reads as running while the PID exists. A gone wrapper reads
+  /// as lost only when [goneBefore], the previous listing having found
+  /// it gone too; otherwise as unknown. [wrapperGone] says the check
+  /// found it gone.
+  Future<({DetachedOperation operation, bool wrapperGone})> _operation(
+    SshLink link,
+    OpRecord record, {
+    required bool goneBefore,
+  }) async {
     var state = switch (record.state) {
       OpState.done => DetachedOperationState.done,
       OpState.running => DetachedOperationState.unknown,
     };
+    var wrapperGone = false;
     if (record.state == OpState.running) {
       try {
         final result = await link.run(
@@ -324,18 +366,25 @@ final class OperationTracker {
           0 || _kProcessGone => DetachedOperationState.lost,
           _ => DetachedOperationState.unknown,
         };
+        wrapperGone = state == DetachedOperationState.lost;
+        if (wrapperGone && !goneBefore) state = DetachedOperationState.unknown;
       } on RemoteCommandException {
         // Unknown until the next read.
+      } on ChannelOpenException {
+        // A busy link refused the check: unknown until the next read.
       }
     }
-    return DetachedOperation(
-      id: record.id,
-      directory: record.directory,
-      state: state,
-      unit: record.unit,
-      startedAt: record.startedAt,
-      endedAt: record.endedAt,
-      exitCode: record.exitCode,
+    return (
+      operation: DetachedOperation(
+        id: record.id,
+        directory: record.directory,
+        state: state,
+        unit: record.unit,
+        startedAt: record.startedAt,
+        endedAt: record.endedAt,
+        exitCode: record.exitCode,
+      ),
+      wrapperGone: wrapperGone,
     );
   }
 

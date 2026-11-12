@@ -409,6 +409,37 @@ dependency_overrides: {"dartssh2": any}
     await fixture.expectExit(1, 'invalid package URI');
   });
 
+  for (final (name, uri) in [
+    ('into another package', '../../../app/poltergeist_app/lib/main.dart'),
+    ('out of the product', '../../../../seance/packages/x/lib/src/a.dart'),
+    (
+      'through a conditional branch',
+      'stub.dart\' if (dart.io) \'../../../app/poltergeist_app/lib/main.dart',
+    ),
+  ]) {
+    test('rejects a relative URI $name', () async {
+      await fixture.write('$_app/lib/main.dart', '');
+      await fixture.write('$_core/lib/stub.dart', '');
+      await fixture.write('$_core/lib/core.dart', "import '$uri';");
+      await fixture.expectExit(1, 'relative import/export leaves');
+    });
+  }
+
+  test('allows relative URIs within the package and the product', () async {
+    await fixture.write('$_core/lib/src/a.dart', '');
+    await fixture.write('$_core/lib/core.dart', "export 'src/a.dart';");
+    await fixture.write(
+      '$_core/test/a_test.dart',
+      "import '../lib/core.dart';",
+    );
+    // Product-level fixtures outside every package (test/integration).
+    await fixture.write(
+      '$_core/test/fixture_test.dart',
+      "import '../../../test/integration/fixture_process.dart';",
+    );
+    await fixture.expectExit(0);
+  });
+
   test('identifies a missing package name', () async {
     await fixture.write('$_core/pubspec.yaml', 'description: unnamed');
     await fixture.expectExit(2, _core);
