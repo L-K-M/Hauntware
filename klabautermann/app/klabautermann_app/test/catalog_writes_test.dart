@@ -83,11 +83,12 @@ void main() {
     await signInThroughTheSheet(tester, harness.engine);
     await tester.tap(find.text('Synchronize'));
     await tester.pump();
-    expect(harness.engine.sentOfType<RunSyncRound>(), hasLength(1));
+    final round = harness.engine.sentOfType<RunSyncRound>().single;
     harness.engine.emit(
-      const SyncStatus(
+      SyncStatus(
         SyncPhase.succeeded,
         operation: SyncOperation.round,
+        requestId: (round as RunSyncRound).requestId,
         account: testSyncAccount,
       ),
     );

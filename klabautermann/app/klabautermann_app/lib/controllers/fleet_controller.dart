@@ -137,6 +137,10 @@ enum EndpointConfirmResult {
   /// and needs its own confirmation (D64).
   stillPending,
 
+  /// Some are still waiting because a sync changed their endpoint after
+  /// the user looked, so the engine pinned none of those.
+  changed,
+
   /// The engine could not save a pin, or stopped before it answered;
   /// those servers stay unconfirmed.
   failed,
@@ -226,9 +230,9 @@ final class FleetController extends ChangeNotifier {
   /// time, so the next answer always belongs to this completer.
   Completer<SshConfigImportOutcome>? _importAnswer;
 
-  /// The servers the [ConfirmEndpoints] in flight names, and its answer.
-  /// The dialog sends one at a time.
-  Set<String> _confirming = const {};
+  /// The servers the [ConfirmEndpoints] in flight names with the
+  /// endpoints it showed, and its answer. The dialog sends one at a time.
+  Map<String, ShownEndpoint> _confirming = const {};
   Completer<EndpointConfirmResult>? _confirmAnswer;
 
   bool _engineStopped = false;
@@ -426,22 +430,25 @@ final class FleetController extends ChangeNotifier {
     }
   }
 
-  /// Confirms the endpoints of [serverIds] as listed (03 §4.3 step 3,
-  /// SAF-09) and completes once the engine answered. A call while one
-  /// runs joins it.
-  Future<EndpointConfirmResult> confirmEndpoints(Iterable<String> serverIds) {
+  /// Confirms the endpoints of [entries] as the list showed them (03
+  /// §4.3 step 3, SAF-09) and completes once the engine answered. The
+  /// engine pins none that a sync changed since. A call while one runs
+  /// joins it.
+  Future<EndpointConfirmResult> confirmEndpoints(Iterable<FleetEntry> entries) {
     if (_confirmAnswer case final running?) return running.future;
     if (_disposed || _engineStopped) {
       return Future.value(EndpointConfirmResult.failed);
     }
 
-    final ids = serverIds.toList();
+    final shown = {
+      for (final entry in entries) entry.serverId: ShownEndpoint.of(entry),
+    };
     try {
-      _engine.send(ConfirmEndpoints(ids));
+      _engine.send(ConfirmEndpoints(shown.keys.toList(), shown: shown));
     } on StateError {
       return Future.value(EndpointConfirmResult.failed);
     }
-    _confirming = ids.toSet();
+    _confirming = shown;
     return (_confirmAnswer = Completer()).future;
   }
 
@@ -476,11 +483,16 @@ final class FleetController extends ChangeNotifier {
         // round or an import sent ahead of this confirm's answer: it can
         // only miss the pins just saved, so a wrong verdict is at worst
         // the conservative stillPending, never a false confirmed.
-        final pending = {for (final entry in _pendingEndpoints) entry.serverId};
+        final waiting = [
+          for (final entry in _pendingEndpoints)
+            if (_confirming[entry.serverId] case final shown?) (entry, shown),
+        ];
         _completeConfirm(
-          _confirming.any(pending.contains)
-              ? EndpointConfirmResult.stillPending
-              : EndpointConfirmResult.confirmed,
+          waiting.isEmpty
+              ? EndpointConfirmResult.confirmed
+              : waiting.any((pair) => ShownEndpoint.of(pair.$1) != pair.$2)
+              ? EndpointConfirmResult.changed
+              : EndpointConfirmResult.stillPending,
         );
       case SshConfigImported(
         :final importedCount,
