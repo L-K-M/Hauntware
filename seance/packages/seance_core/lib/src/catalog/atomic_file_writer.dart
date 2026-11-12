@@ -91,8 +91,9 @@ final class AtomicFileWriter {
       tail = write
           .then<void>((_) {}, onError: (Object _, StackTrace __) {})
           .whenComplete(() {
-            if (identical(_pendingWrites[key], tail))
+            if (identical(_pendingWrites[key], tail)) {
               _pendingWrites.remove(key);
+            }
           });
       _pendingWrites[key] = tail;
       result.complete(write);
