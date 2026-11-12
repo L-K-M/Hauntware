@@ -501,7 +501,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'Window state: $error'",
   },
   // The brand preset's stored name, English across the family like the
-  // siblings' preset names; no surface shows it yet.
+  // siblings' preset names; the Appearance editor maps it to ARB.
   'lib/theme/app_theme.dart': {"'Klabautermann'"},
   // The Access tab's copied fix command: the pattern of a shell word that
   // needs no quoting, and the space between the command's words.

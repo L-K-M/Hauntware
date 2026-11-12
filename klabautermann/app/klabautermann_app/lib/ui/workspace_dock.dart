@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -159,6 +160,7 @@ class _WorkspaceDockPaneState extends State<WorkspaceDockPane> {
               const Divider(height: 1),
             _DockTabs(
               dock: dock,
+              monitoring: widget.monitoring,
               serverId: serverId,
               items: mine,
               selected: selected,
@@ -237,15 +239,28 @@ class _ResizeEdge extends StatelessWidget {
 class _DockTabs extends StatelessWidget {
   const _DockTabs({
     required this.dock,
+    required this.monitoring,
     required this.serverId,
     required this.items,
     required this.selected,
   });
 
   final WorkspaceDock dock;
+  final MonitoringController monitoring;
   final String serverId;
   final List<DockItem> items;
   final DockItem? selected;
+
+  /// Closes [item], asking first when it holds a shell that still runs.
+  Future<void> _closeTab(BuildContext context, DockItem item) async {
+    if (item case DockedShell(:final container)) {
+      final shell = monitoring.terminals.shellFor(container.id);
+      if (shell != null && !await confirmEndRunningShell(context, shell)) {
+        return;
+      }
+    }
+    dock.close(item);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -271,7 +286,7 @@ class _DockTabs extends StatelessWidget {
                       deleteButtonTooltipMessage: l10n.dockClose(
                         dockItemTitle(l10n, item),
                       ),
-                      onDeleted: () => dock.close(item),
+                      onDeleted: () => unawaited(_closeTab(context, item)),
                     ),
                 ],
               ),

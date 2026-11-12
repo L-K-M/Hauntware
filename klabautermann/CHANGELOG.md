@@ -7,6 +7,20 @@
   page, and on Android the banner downloads and installs the release APK
   once you choose Update. Turn the check off in Settings > General, or
   pick Help > Check for Updates… to ask again.
+- On Android 13 and later, the system back gesture runs the app's own back
+  steps, as in Séance and Poltergeist: the disk explorer steps up a folder
+  and an editor with unsaved changes asks first.
+- The Appearance tab's theme presets are named in the app's words, as
+  Poltergeist's are: Klabautermann, Graphite, Paper, Newsprint, Solarized,
+  Midnight, Terminal, Vapor, Bubblegum and High contrast. The name stored
+  in a copied theme stays English.
+- The fleet rail keeps its search text, its folded sections and the
+  needs-attention filters when you hide it and show it again, as Séance's
+  and Poltergeist's rails do.
+- Closing a container shell's dock tab or leaving its page while it runs
+  asks first and names the container, as closing a Séance tab does.
+- Quitting while a container shell is open asks first and names the
+  container, as quitting with unsaved edits or running operations does.
 - Activity shows the commands an action ran in the code font, as the
   preview before it runs does.
 - On the desktop, drag the edge of the fleet rail or the inspector, or

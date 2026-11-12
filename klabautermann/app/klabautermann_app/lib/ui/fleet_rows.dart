@@ -141,37 +141,35 @@ class FleetServerList extends StatefulWidget {
 }
 
 class _FleetServerListState extends State<FleetServerList> {
-  String _query = '';
   final _filterFocus = FocusNode(debugLabel: 'Fleet filter');
-
-  /// The folded sections and groups, by key.
-  final Set<String> _collapsed = {};
-
-  /// FL-10's toggles, for this list's life: only the servers with an open
-  /// problem, and those first, most first.
-  var _faultsOnly = false;
-  var _attentionFirst = false;
 
   /// The attention queue's open problems by server, as the last build saw
   /// them.
   Map<String, int> _open = const {};
 
   @override
+  void initState() {
+    super.initState();
+    // The filter, folds and triage toggles live on the controller, so the
+    // list rebuilds when they change.
+    widget.fleet.addListener(_onFleetChanged);
+  }
+
+  @override
   void dispose() {
+    widget.fleet.removeListener(_onFleetChanged);
     _filterFocus.dispose();
     super.dispose();
   }
 
-  void _setQuery(String query) => setState(() => _query = query);
-
-  /// Folds or unfolds [key]. A search draws every header open, so a tap
-  /// during one changes nothing rather than a fold the user cannot see.
-  void _toggle(String key) {
-    if (_query.isNotEmpty) return;
-    setState(() {
-      if (!_collapsed.remove(key)) _collapsed.add(key);
-    });
+  void _onFleetChanged() {
+    if (mounted) setState(() {});
   }
+
+  void _setQuery(String query) => widget.fleet.filterQuery = query;
+
+  /// Folds or unfolds [key]; the controller keeps the search rule.
+  void _toggle(String key) => widget.fleet.toggleSection(key);
 
   /// The lines drawn for [servers]: `ghost_servers`' sections of the
   /// synced ones, then the imports' section. One definition, so "the first
@@ -271,7 +269,7 @@ class _FleetServerListState extends State<FleetServerList> {
   };
 
   void _dismissFilter() {
-    if (_query.isNotEmpty) {
+    if (widget.fleet.filterQuery.isNotEmpty) {
       _setQuery('');
       return;
     }
@@ -283,17 +281,19 @@ class _FleetServerListState extends State<FleetServerList> {
   List<FleetServer> _shown(List<FleetServer> servers) {
     final kept = [
       for (final server in servers)
-        if (fleetServerMatches(server, _query) &&
-            (!_faultsOnly || (_open[server.id] ?? 0) > 0))
+        if (fleetServerMatches(server, widget.fleet.filterQuery) &&
+            (!widget.fleet.faultsOnly || (_open[server.id] ?? 0) > 0))
           server,
     ];
-    return _attentionFirst ? attentionFirst(kept, _open) : kept;
+    return widget.fleet.attentionFirst
+        ? attentionFirst(kept, _open)
+        : kept;
   }
 
   /// Matches are recomputed here rather than captured from the last build:
   /// typing and submitting within one frame would act on a stale list.
   void _openFirstMatch() {
-    if (_query.isEmpty) return;
+    if (widget.fleet.filterQuery.isEmpty) return;
     final matches = _shown(widget.fleet.servers);
     final first = _rows(
       AppLocalizations.of(context),
@@ -367,7 +367,9 @@ class _FleetServerListState extends State<FleetServerList> {
           // room.
           final chipLabel = Theme.of(context).textTheme.labelMedium;
           const chipPadding = EdgeInsets.symmetric(horizontal: 4);
-          final triage = faulted > 0 || _faultsOnly || _attentionFirst
+          final triage = faulted > 0 ||
+                  widget.fleet.faultsOnly ||
+                  widget.fleet.attentionFirst
               ? Padding(
                   padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 4),
                   child: Wrap(
@@ -382,8 +384,8 @@ class _FleetServerListState extends State<FleetServerList> {
                         showCheckmark: false,
                         labelStyle: chipLabel,
                         labelPadding: chipPadding,
-                        selected: _faultsOnly,
-                        onSelected: (on) => setState(() => _faultsOnly = on),
+                        selected: widget.fleet.faultsOnly,
+                        onSelected: (on) => widget.fleet.faultsOnly = on,
                       ),
                       FilterChip(
                         label: Text(l10n.fleetAttentionFirst),
@@ -391,9 +393,8 @@ class _FleetServerListState extends State<FleetServerList> {
                         showCheckmark: false,
                         labelStyle: chipLabel,
                         labelPadding: chipPadding,
-                        selected: _attentionFirst,
-                        onSelected: (on) =>
-                            setState(() => _attentionFirst = on),
+                        selected: widget.fleet.attentionFirst,
+                        onSelected: (on) => widget.fleet.attentionFirst = on,
                       ),
                     ],
                   ),
@@ -403,7 +404,7 @@ class _FleetServerListState extends State<FleetServerList> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SidebarFilterField(
-                query: _query,
+                query: widget.fleet.filterQuery,
                 focusNode: _filterFocus,
                 onChanged: _setQuery,
                 onDismiss: _dismissFilter,
@@ -417,12 +418,12 @@ class _FleetServerListState extends State<FleetServerList> {
               ),
               Expanded(
                 child: matches.isEmpty
-                    ? _faultsOnly && _query.isEmpty
+                    ? widget.fleet.faultsOnly &&
+                          widget.fleet.filterQuery.isEmpty
                           ? _NoMatches(
                               message: l10n.fleetNoFaults,
                               action: l10n.fleetShowAll,
-                              onClear: () =>
-                                  setState(() => _faultsOnly = false),
+                              onClear: () => widget.fleet.faultsOnly = false,
                             )
                           : _NoMatches(
                               message: l10n.fleetFilterNoMatches,
@@ -444,7 +445,9 @@ class _FleetServerListState extends State<FleetServerList> {
                           for (final row in _rows(
                             l10n,
                             matches,
-                            _query.isEmpty ? _collapsed : const {},
+                            widget.fleet.filterQuery.isEmpty
+                                ? widget.fleet.collapsedSections
+                                : const {},
                           ))
                             _line(row),
                         ],
