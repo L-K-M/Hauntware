@@ -19,11 +19,14 @@ const _password = 'correct-horse-staple';
 
 /// A sudo 1.9 host whose prelude accepts [_password]; with [cachesNothing]
 /// it validates but finds no record (`timestamp_timeout=0`), so only the
-/// rung-4 `sudo -S` runs the command.
+/// rung-4 `sudo -S` runs the command. With [globalRecord], another session
+/// left a record under `timestamp_type=global`, which lets the prelude's
+/// `sudo -v` pass any password; `sudo -k -v` ignores it (03 D65).
 final class _SudoLink extends TestLinkBase {
-  _SudoLink({this.cachesNothing = false});
+  _SudoLink({this.cachesNothing = false, this.globalRecord = false});
 
   final bool cachesNothing;
+  final bool globalRecord;
   final commands = <String>[];
 
   /// Refuses every channel, as a link at its session limit does.
@@ -47,8 +50,16 @@ final class _SudoLink extends TestLinkBase {
     if (command.contains('sudo -n -- ') && !command.contains(' elevate ')) {
       return const RemoteCommandResult(exitCode: 0);
     }
+    if (command.contains("sudo -k -S -p '' -v")) {
+      return line == _password
+          ? const RemoteCommandResult(exitCode: 0)
+          : const RemoteCommandResult(
+              exitCode: 1,
+              stderr: 'Sorry, try again.\nsudo: 1 incorrect password attempt\n',
+            );
+    }
     if (command.contains(' elevate ')) {
-      if (line != _password) {
+      if (line != _password && !globalRecord) {
         return const RemoteCommandResult(
           exitCode: 125,
           stderr: 'Sorry, try again.\nsudo: 1 incorrect password attempt\n',
@@ -186,10 +197,31 @@ void main() {
     unawaited(admin.enable(_server));
     await pumpEventQueue();
     await answer(_password);
-
     expect(states().last.phase, AdminModePhase.on);
-    expect(link.commands, hasLength(2));
+
+    final session = admin.session(_server)!;
+    final ran = await session.executor.run(const [
+      'true',
+    ], password: session.password);
+    expect(ran.exitCode, 0);
     expect(link.commands.last, contains("sudo -S -p ''"));
+  });
+
+  test('validates with sudo -k, so a cached record never lets a wrong '
+      'password through (D65)', () async {
+    final admin = controller(over: _SudoLink(globalRecord: true))
+      ..probed(_server, _profile());
+    unawaited(admin.enable(_server));
+    await pumpEventQueue();
+
+    await answer('wrong-guess');
+    expect(states().last.phase, AdminModePhase.awaitingPassword);
+    expect(states().last.retry, isTrue);
+    expect(admin.session(_server), isNull);
+
+    await answer(_password);
+    expect(states().last.phase, AdminModePhase.on);
+    expect(link.commands, everyElement(isNot(contains(' elevate '))));
   });
 
   test('turns on without a prompt under a blanket NOPASSWD rule', () async {

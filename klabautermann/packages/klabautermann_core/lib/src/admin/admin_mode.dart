@@ -34,10 +34,11 @@ const kAdminPasswordAttempts = 3;
 /// Checks that [password] (null when no rung needs one) elevates on
 /// [link], and throws [ElevationException] when it does not.
 ///
-/// The default runs `true` through the executor. Under sudo's
-/// `timestamp_type=global` a cached record lets a wrong password through
-/// that check (03 D65); E04's executor validation ignores cached records,
-/// and replaces this default when it lands.
+/// The default checks the prelude rung's password with the executor's
+/// `sudo -k -S -p '' -v`, which ignores cached records: under sudo's
+/// `timestamp_type=global` a record another session left lets the
+/// prelude's own `sudo -v` pass a wrong password (03 D65). The other
+/// rungs read no password and run `true` through the executor.
 typedef AdminValidator =
     Future<void> Function(SshLink link, ElevationProbe probe, String? password);
 
@@ -107,7 +108,7 @@ final class AdminModeController {
     AdminValidator? validate,
     DateTime Function()? now,
     Timer Function(Duration duration, void Function() callback)? startTimer,
-  }) : _validate = validate ?? _validateWithTrue,
+  }) : _validate = validate ?? _validateIgnoringCache,
        _now = now ?? DateTime.now,
        _startTimer = startTimer ?? Timer.new;
 
@@ -313,6 +314,17 @@ final class AdminModeController {
       ended: ended,
     ),
   );
+
+  static Future<void> _validateIgnoringCache(
+    SshLink link,
+    ElevationProbe probe,
+    String? password,
+  ) async {
+    if (password == null || !needsPassword(probe)) {
+      return _validateWithTrue(link, probe, password);
+    }
+    await ElevatedExecutor(link, probe).validatePassword(password);
+  }
 
   static Future<void> _validateWithTrue(
     SshLink link,
