@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_fonts/ghost_fonts.dart' show ghostMonoFontFamily;
+import 'package:planchette_app/l10n/app_localizations.dart';
 import 'package:planchette_app/ui/workspace_connection_prompts.dart';
 import 'package:planchette_app/ui/workspace_remote_folder_dialog.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -45,7 +46,11 @@ void main() {
     (tester) async {
       final key = GlobalKey<NavigatorState>();
       await tester.pumpWidget(
-        MaterialApp(navigatorKey: key, home: const Scaffold()),
+        MaterialApp(
+          navigatorKey: key,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          home: const Scaffold(),
+        ),
       );
       final prompts = AppWorkspaceConnectionPrompts(
         () => (context: key.currentContext!, workspace: workspace),
@@ -79,7 +84,11 @@ void main() {
   ) async {
     final key = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
-      MaterialApp(navigatorKey: key, home: const Scaffold()),
+      MaterialApp(
+        navigatorKey: key,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: const Scaffold(),
+      ),
     );
     final prompts = AppWorkspaceConnectionPrompts(
       () => (context: key.currentContext!, workspace: workspace),
@@ -103,7 +112,11 @@ void main() {
   ) async {
     final key = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
-      MaterialApp(navigatorKey: key, home: const Scaffold()),
+      MaterialApp(
+        navigatorKey: key,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: const Scaffold(),
+      ),
     );
     final prompts = AppWorkspaceConnectionPrompts(
       () => (context: key.currentContext!, workspace: workspace),
@@ -132,7 +145,11 @@ void main() {
   ) async {
     final key = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
-      MaterialApp(navigatorKey: key, home: const Scaffold()),
+      MaterialApp(
+        navigatorKey: key,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: const Scaffold(),
+      ),
     );
     final prompts = AppWorkspaceConnectionPrompts(
       () => (context: key.currentContext!, workspace: workspace),
@@ -158,7 +175,11 @@ void main() {
     (tester) async {
       final key = GlobalKey<NavigatorState>();
       await tester.pumpWidget(
-        MaterialApp(navigatorKey: key, home: const Scaffold()),
+        MaterialApp(
+          navigatorKey: key,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          home: const Scaffold(),
+        ),
       );
       final root = showRemoteWorkspaceRoot(key.currentContext!, server);
       await tester.pumpAndSettle();
@@ -200,7 +221,11 @@ void main() {
   ) async {
     final key = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
-      MaterialApp(navigatorKey: key, home: const Scaffold()),
+      MaterialApp(
+        navigatorKey: key,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: const Scaffold(),
+      ),
     );
     unawaited(showRemoteWorkspaceRoot(key.currentContext!, server));
     await tester.pumpAndSettle();
@@ -213,7 +238,11 @@ void main() {
   testWidgets('a retry prompt explains the failed passphrase', (tester) async {
     final key = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
-      MaterialApp(navigatorKey: key, home: const Scaffold()),
+      MaterialApp(
+        navigatorKey: key,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: const Scaffold(),
+      ),
     );
     final prompts = AppWorkspaceConnectionPrompts(
       () => (context: key.currentContext!, workspace: workspace),
@@ -240,7 +269,11 @@ void main() {
   ) async {
     final key = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
-      MaterialApp(navigatorKey: key, home: const Scaffold()),
+      MaterialApp(
+        navigatorKey: key,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: const Scaffold(),
+      ),
     );
     final prompts = AppWorkspaceConnectionPrompts(
       () => (context: key.currentContext!, workspace: workspace),
@@ -261,7 +294,11 @@ void main() {
   ) async {
     final key = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
-      MaterialApp(navigatorKey: key, home: const Scaffold()),
+      MaterialApp(
+        navigatorKey: key,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: const Scaffold(),
+      ),
     );
     final root = showRemoteWorkspaceRoot(key.currentContext!, server);
     await tester.pumpAndSettle();
@@ -278,7 +315,11 @@ void main() {
   ) async {
     final key = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
-      MaterialApp(navigatorKey: key, home: const Scaffold()),
+      MaterialApp(
+        navigatorKey: key,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: const Scaffold(),
+      ),
     );
     final prompts = AppWorkspaceConnectionPrompts(
       () => (context: key.currentContext!, workspace: workspace),
@@ -313,7 +354,11 @@ void main() {
     addTearDown(initiating.dispose);
     final key = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
-      MaterialApp(navigatorKey: key, home: const Scaffold()),
+      MaterialApp(
+        navigatorKey: key,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: const Scaffold(),
+      ),
     );
     final prompts = AppWorkspaceConnectionPrompts(
       () => (context: key.currentContext!, workspace: workspace),

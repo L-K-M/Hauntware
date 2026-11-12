@@ -28,6 +28,7 @@ import 'package:ghost_ui/ghost_ui.dart'
 import 'package:planchette_editor/planchette_editor.dart'
     hide GhostMenuDivider, GhostMenuItem;
 
+import 'l10n/app_localizations.dart';
 import 'services/app_settings.dart';
 import 'services/document_windows.dart';
 import 'services/document_workspace.dart';
@@ -109,6 +110,8 @@ class PlanchetteApp extends StatelessWidget {
     listenable: settings,
     builder: (context, _) => MaterialApp(
       title: 'Planchette',
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       navigatorKey: navigatorKey ?? window?.navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: planchetteTheme(Brightness.light),
