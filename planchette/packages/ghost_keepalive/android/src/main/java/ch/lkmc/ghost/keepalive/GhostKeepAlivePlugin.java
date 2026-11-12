@@ -43,6 +43,11 @@ public final class GhostKeepAlivePlugin
     public void onDetachedFromEngine(FlutterPlugin.FlutterPluginBinding binding) {
         if (channel != null) channel.setMethodCallHandler(null);
         channel = null;
+        // Config detach can precede engine destruction without the normal
+        // activity-detach callback. Dead Dart cannot release the anchor.
+        if (applicationContext != null) {
+            KeepAliveService.stop(applicationContext);
+        }
         applicationContext = null;
     }
 

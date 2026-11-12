@@ -1500,6 +1500,7 @@ jobs:
         run: |
           flutter analyze --no-pub
           flutter test --no-pub
+          python3 tool/test_android_lifecycle.py
       - name: Shared platform license notices
         working-directory: planchette/packages/ghost_licenses
         run: |
