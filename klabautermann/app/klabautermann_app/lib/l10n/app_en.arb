@@ -7574,6 +7574,10 @@
   "@activityEmpty": {
     "description": "Shown when the activity log is empty."
   },
+  "activityUnreadable": "The log file could not be read, so records are missing.",
+  "@activityUnreadable": {
+    "description": "Shown on the activity page when this device could not read the server's audit log file."
+  },
   "activityOlder": "Show older",
   "@activityOlder": {
     "description": "Button that reads the next page of older activity records."
@@ -13579,6 +13583,44 @@
     "description": "Command palette: the path of the selected server's compose stacks.",
     "placeholders": {
       "server": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteQueryHint": "Type a command",
+  "@paletteQueryHint": {
+    "description": "Command palette: the filter field's hint."
+  },
+  "paletteNoMatches": "No matching commands",
+  "@paletteNoMatches": {
+    "description": "Command palette: shown when no command matches the filter."
+  },
+  "paletteKeywordMatch": "matches \"{keyword}\"",
+  "@paletteKeywordMatch": {
+    "description": "Command palette: a row's second line when one of its search words, not its name, matched the filter.",
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteKeywordMatchWithDescription": "matches \"{keyword}\": {description}",
+  "@paletteKeywordMatchWithDescription": {
+    "description": "Command palette: the same line for a row that also describes what it does.",
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      },
+      "description": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteUnavailable": "{label}, unavailable",
+  "@paletteUnavailable": {
+    "description": "Command palette: what a screen reader hears when the highlight reaches a row that cannot run right now.",
+    "placeholders": {
+      "label": {
         "type": "String"
       }
     }

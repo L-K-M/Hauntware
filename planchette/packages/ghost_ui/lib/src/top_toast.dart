@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 
 /// How a top toast leaves the screen.
 ///
@@ -26,6 +27,13 @@ enum TopToastDismissal { automatic, persistent }
 /// Identical actionless notices coalesce automatically. Supply a stable
 /// [coalesceKey] to coalesce actionable notices intentionally; callbacks are
 /// otherwise always kept distinct.
+///
+/// Screen readers: a shown toast is a live region. A notice that goes
+/// straight to the overflow history, or repeats one already shown, is
+/// announced instead, since neither inserts a new live region. While
+/// accessible navigation is on, an automatic toast with an action does not
+/// time out and gets a close button, because moving the screen reader's
+/// focus to the action neither hovers nor focuses it.
 void showTopToast(
   OverlayState overlay, {
   required String message,
@@ -187,6 +195,9 @@ class _ToastStack {
     if (existing != null) {
       existing.coalesce(toast);
       _updateHistory(existing);
+      // Only the hidden repeat count changes, so the live region stays
+      // silent. A pending record is spoken once it is shown.
+      if (_visible.contains(existing)) _announce(toast.message);
       _entry?.markNeedsBuild();
       return;
     }
@@ -195,6 +206,7 @@ class _ToastStack {
     if (historyOnly != null) {
       final index = _history.indexOf(historyOnly);
       _history[index] = historyOnly.incremented(toast);
+      _announce(toast.message);
       _entry?.markNeedsBuild();
       return;
     }
@@ -214,9 +226,11 @@ class _ToastStack {
         _remember(record);
       } else {
         _remember(record);
+        _announce(toast.message);
       }
     } else {
       _remember(record);
+      _announce(toast.message);
     }
 
     if (_entry == null) {
@@ -263,6 +277,20 @@ class _ToastStack {
       }
     }
     return null;
+  }
+
+  /// Speaks [message] for a notice that adds no live region to the tree.
+  void _announce(String message) {
+    final context = overlay.context;
+    final view = View.maybeOf(context);
+    if (view == null) return;
+    unawaited(
+      SemanticsService.sendAnnouncement(
+        view,
+        message,
+        Directionality.maybeOf(context) ?? TextDirection.ltr,
+      ),
+    );
   }
 
   static bool _requiresDelivery(_ToastData toast) =>
@@ -515,20 +543,38 @@ class _TopToastState extends State<_TopToast>
   bool _dismissing = false;
   bool _hovered = false;
   bool _focused = false;
+  bool _heldForScreenReader = false;
+  bool _lifetimeStarted = false;
 
   @override
-  void initState() {
-    super.initState();
-    _resetLifetime();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The first lifetime starts here rather than in initState because the
+    // screen-reader hold reads MediaQuery.
+    if (!_lifetimeStarted) {
+      _lifetimeStarted = true;
+      _heldForScreenReader = _wantsScreenReaderHold;
+      _resetLifetime();
+      return;
+    }
+    _setHeldForScreenReader(_wantsScreenReaderHold);
   }
 
   @override
   void didUpdateWidget(_TopToast oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _setHeldForScreenReader(_wantsScreenReaderHold);
     if (widget.toast.revision != oldWidget.toast.revision) _resetLifetime();
   }
 
-  bool get _paused => _hovered || _focused;
+  bool get _paused => _hovered || _focused || _heldForScreenReader;
+
+  /// A screen-reader user reaches the action by moving accessibility focus,
+  /// which neither hovers nor focuses the toast, so the timer would remove
+  /// the action first. Material's SnackBar keeps an action the same way.
+  bool get _wantsScreenReaderHold =>
+      widget.toast.data.actionLabel != null &&
+      (MediaQuery.maybeAccessibleNavigationOf(context) ?? false);
 
   void _resetLifetime() {
     _dismissTimer?.cancel();
@@ -571,6 +617,13 @@ class _TopToastState extends State<_TopToast>
     if (_focused == value) return;
     if (!_paused) _pauseLifetime();
     _focused = value;
+    if (!_paused) _resumeLifetime();
+  }
+
+  void _setHeldForScreenReader(bool value) {
+    if (_heldForScreenReader == value) return;
+    if (!_paused) _pauseLifetime();
+    _heldForScreenReader = value;
     if (!_paused) _resumeLifetime();
   }
 
@@ -637,7 +690,8 @@ class _TopToastState extends State<_TopToast>
           },
           child: Text(toast.actionLabel!),
         ),
-      if (toast.dismissal == TopToastDismissal.persistent)
+      if (toast.dismissal == TopToastDismissal.persistent ||
+          _heldForScreenReader)
         IconButton(
           tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
           color: accent,

@@ -152,7 +152,7 @@ enum RulePhase {
 /// the instant the pending or resolving stretch started.
 @immutable
 final class ThresholdState {
-  const ThresholdState(this.phase, [this.since]);
+  const ThresholdState(this.phase, [this.since, this.firedSince]);
 
   /// The current phase.
   final RulePhase phase;
@@ -161,6 +161,10 @@ final class ThresholdState {
   /// observation for `pending`/`firing`, the first clearing one for
   /// `resolving`; null in `ok`.
   final DateTime? since;
+
+  /// In `resolving`, the [since] of the `firing` stretch it came from, which
+  /// a return to `firing` keeps; null in the other phases.
+  final DateTime? firedSince;
 
   /// The initial state: `ok`, no stretch open.
   static const idle = ThresholdState(RulePhase.ok);
@@ -171,6 +175,7 @@ final class ThresholdState {
   Map<String, Object?> toJson() => {
     'phase': phase.name,
     'since': since?.toIso8601String(),
+    'firedSince': firedSince?.toIso8601String(),
   };
 }
 
@@ -191,9 +196,11 @@ bool thresholdHolds(ThresholdOp op, double value, double threshold) =>
 /// `firing` once it has held for `raise.duration`. `resolving` is the
 /// mirror on the clear side: it opens when the value stops satisfying
 /// `clear` under the rule's operator (for `greaterThan`, recovering
-/// below `clear.value`) and flips to `ok` after `clear.duration`.
-/// A breach during `resolving` refires immediately; a value inside the
-/// hysteresis band holds the current phase.
+/// below `clear.value`) and flips to `ok` once that has held for
+/// `clear.duration`. A value that satisfies `clear` again during
+/// `resolving`, a breach or one inside the hysteresis band, returns to
+/// `firing` with the alert's original start; elsewhere a value inside
+/// the band holds the current phase.
 ThresholdState evaluateThreshold(
   ThresholdRule rule,
   ThresholdState previous, {
@@ -220,9 +227,11 @@ ThresholdState evaluateThreshold(
       if (!cleared) return previous;
       return rule.clear.duration <= Duration.zero
           ? ThresholdState.idle
-          : ThresholdState(RulePhase.resolving, at);
+          : ThresholdState(RulePhase.resolving, at, previous.since);
     case RulePhase.resolving:
-      if (breach) return ThresholdState(RulePhase.firing, at);
+      if (breach || !cleared) {
+        return ThresholdState(RulePhase.firing, previous.firedSince ?? at);
+      }
       final held = at.difference(previous.since ?? at);
       return held >= rule.clear.duration ? ThresholdState.idle : previous;
   }

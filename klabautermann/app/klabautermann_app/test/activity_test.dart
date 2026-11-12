@@ -43,11 +43,12 @@ void main() {
     final engine = FakeEngineClient();
     final operations = OperationsController(engine);
     addTearDown(operations.dispose);
+    final cursor = AuditCursor(_ended, seen: 1);
     final first = operations.readAudit(_server);
-    final second = operations.readAudit(_server, before: _ended);
+    final second = operations.readAudit(_server, after: cursor);
     expect(
-      engine.sentOfType<AuditQuery>().cast<AuditQuery>().last.before,
-      _ended,
+      engine.sentOfType<AuditQuery>().cast<AuditQuery>().last.after,
+      cursor,
     );
     engine.emit(AuditRecords(_server, [_record(1)]));
     expect((await first).records, hasLength(1));
@@ -88,11 +89,17 @@ void main() {
       await open(tester);
       expect(find.text('Activity on web-1'), findsOneWidget);
       expect(find.text('Reading the log.'), findsOneWidget);
+      // The engine's cursor, not the last record's time, says where the
+      // next page starts: records are not appended in end order.
+      final next = AuditCursor(
+        _ended.subtract(const Duration(minutes: 5)),
+        seen: 1,
+      );
       engine.emit(
         AuditRecords(_server, [
           _record(1),
           _record(5, outcome: ActionOutcome.failed),
-        ], more: true),
+        ], next: next),
       );
       await tester.pumpAndSettle();
 
@@ -126,7 +133,22 @@ void main() {
       await tester.tap(find.text('Show older'));
       await tester.pump();
       final older = engine.sentOfType<AuditQuery>().cast<AuditQuery>().last;
-      expect(older.before, _ended.subtract(const Duration(minutes: 5)));
+      expect(older.after, same(next));
+    });
+
+    testWidgets('says when the log file could not be read', (tester) async {
+      await open(tester);
+      engine.emit(AuditRecords(_server, const [], unreadable: true));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('The log file could not be read, so records are missing.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Nothing has run on this server from this device.'),
+        findsNothing,
+      );
     });
 
     testWidgets('copies the stored records, secrets already removed', (

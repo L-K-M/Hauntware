@@ -598,10 +598,13 @@ class KlabautermannApp extends StatelessWidget {
                           ? null
                           : (context) =>
                                 _openOnce(_DialogKind.palette, () {
+                                  final l10n = AppLocalizations.of(
+                                    context,
+                                  );
                                   return showCommandPalette(
                                     context,
                                     paletteCommands(
-                                      l10n: AppLocalizations.of(context),
+                                      l10n: l10n,
                                       platform: platform,
                                       context: context,
                                       actions: commands,
@@ -609,6 +612,7 @@ class KlabautermannApp extends StatelessWidget {
                                       monitoring: monitoring,
                                       navigation: navigation,
                                     ),
+                                    strings: paletteStrings(l10n),
                                   );
                                 }),
                       onOpenPanel: navigation == null

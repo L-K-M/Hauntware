@@ -314,7 +314,11 @@ void main() {
           ),
         ),
         const SetAdminMode('srv-1', enabled: true),
-        AuditQuery('srv-1', before: DateTime.utc(2026, 10, 18), limit: 20),
+        AuditQuery(
+          'srv-1',
+          after: AuditCursor(DateTime.utc(2026, 10, 18), seen: 2),
+          limit: 20,
+        ),
         const ReadUserCrontabs('srv-1', requestId: 'r-1'),
         const ReadSmart('srv-1', requestId: 'r-1'),
         const ReadPackages('srv-1', requestId: 'r-1', fresh: true),
@@ -763,7 +767,7 @@ void main() {
             failedStep: 0,
             exitCode: 5,
           ),
-        ], more: true),
+        ], next: AuditCursor(DateTime.utc(2026, 10, 18, 12, 0, 2), seen: 1)),
         UserCrontabs(
           serverId: 'srv-1',
           requestId: 'r-1',

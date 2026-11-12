@@ -6,6 +6,7 @@
 // otherwise the log lives in memory for this run. Not synced (D28).
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' show min;
 
 import 'package:seance_core/seance_core.dart' show SecretRedactor;
 
@@ -23,6 +24,13 @@ const auditDirectoryName = 'audit';
 
 /// The record format's version, bumped when a field changes meaning.
 const _auditVersion = 1;
+
+const _newline = 0x0A;
+
+/// One line of a log file as read: [text] without its newline, and its
+/// [record], which is null for a line a newer record version wrote. Such
+/// a line is kept as it is and never answered.
+typedef _Line = ({String text, AuditRecord? record});
 
 /// Where the log keeps its records.
 enum AuditStorage {
@@ -98,26 +106,64 @@ final class AuditLog {
     });
   }
 
-  /// [serverId]'s records that ended before [before], newest first, at
-  /// most [limit], and whether older ones remain.
-  Future<({List<AuditRecord> records, bool more})> query(
-    String serverId, {
-    DateTime? before,
-    int limit = 100,
-  }) async {
+  /// A page of [serverId]'s records: at most [limit] from [after] on, in
+  /// end order, newest first, and records that ended together newest
+  /// append first; and the cursor of the next page, null when none
+  /// remain. A file that cannot be read is [unreadable]: the answer then
+  /// holds only this run's memory.
+  Future<({List<AuditRecord> records, AuditCursor? next, bool unreadable})>
+  query(String serverId, {AuditCursor? after, int limit = 100}) async {
     final file = _fileOf(serverId);
-    final all = [
-      if (storage == AuditStorage.files && file != null)
-        ...await _inTurn(() => _read(file)),
-      ...?_memory[serverId],
-    ];
-    final matching = [
-      for (final record in all.reversed)
-        if (before == null || record.endedAt.isBefore(before)) record,
-    ];
+    var unreadable = false;
+    final stored = <AuditRecord>[];
+    if (storage == AuditStorage.files && file != null) {
+      try {
+        stored.addAll(_recordsOf(await _inTurn(() => _read(file))));
+      } on FileSystemException {
+        unreadable = true;
+      }
+    }
+    final all = [...stored, ...?_memory[serverId]];
+    // Appends are not in end order (see AuditCursor), so the log is
+    // sorted; records that ended together keep their append order, so a
+    // record appended between two pages joins the end of its tie group,
+    // past the ones a cursor already counted.
+    final ordered =
+        [for (var i = 0; i < all.length; i++) (index: i, record: all[i])]
+          ..sort((a, b) {
+            final byEnd = b.record.endedAt.compareTo(a.record.endedAt);
+            return byEnd != 0 ? byEnd : a.index.compareTo(b.index);
+          });
+    bool endsAt(int i, DateTime at) =>
+        ordered[i].record.endedAt.isAtSameMomentAs(at);
+
+    var start = 0;
+    if (after != null) {
+      while (start < ordered.length &&
+          ordered[start].record.endedAt.isAfter(after.endedAt)) {
+        start++;
+      }
+      for (var tied = 0; tied < after.seen; tied++) {
+        if (start == ordered.length || !endsAt(start, after.endedAt)) break;
+        start++;
+      }
+    }
+    final end = min(start + limit, ordered.length);
+    AuditCursor? next;
+    if (end < ordered.length) {
+      // Counted from the first record that ended with the page's last,
+      // which may be on an earlier page.
+      final last = ordered[end - 1].record.endedAt;
+      var seen = 0;
+      while (seen < end && endsAt(end - 1 - seen, last)) {
+        seen++;
+      }
+      next = AuditCursor(last, seen: seen);
+    }
     return (
-      records: matching.take(limit).toList(),
-      more: matching.length > limit,
+      records: [for (var i = start; i < end; i++) ordered[i].record],
+      next: next,
+      unreadable: unreadable,
     );
   }
 
@@ -133,12 +179,13 @@ final class AuditLog {
     final cutoff = _now().subtract(kAuditRetention);
     await for (final entity in _directory.list()) {
       if (entity is! File || !entity.path.endsWith('.jsonl')) continue;
-      final records = await _read(entity);
+      final lines = await _read(entity);
+      // A newer build's line is its own to prune.
       final kept = [
-        for (final record in records)
-          if (!record.endedAt.isBefore(cutoff)) record,
+        for (final line in lines)
+          if (line.record?.endedAt.isBefore(cutoff) != true) line,
       ];
-      if (kept.length == records.length) continue;
+      if (kept.length == lines.length) continue;
       await _rewrite(entity, kept);
     }
   }
@@ -161,36 +208,76 @@ final class AuditLog {
     null => null,
   };
 
-  /// The records of [file]. A line that does not decode marks the file
-  /// damaged: it is copied aside (`.corrupt-<time>`) and rewritten with
-  /// the lines that do, so one bad write never hides the rest.
-  Future<List<AuditRecord>> _read(File file) async {
-    if (!await file.exists()) return [];
-    final records = <AuditRecord>[];
+  /// The lines of [file]. A line that does not decode, whether its bytes
+  /// are not UTF-8 (an append torn inside a character) or its text is not
+  /// a record, marks the file damaged: it is copied aside
+  /// (`.corrupt-<time>`) and rewritten with the lines that do, so one bad
+  /// write never hides the rest. A failure to read the file propagates.
+  Future<List<_Line>> _read(File file) async {
+    final List<int> bytes;
+    try {
+      bytes = await file.readAsBytes();
+    } on PathNotFoundException {
+      return [];
+    }
+    final lines = <_Line>[];
     var damaged = false;
-    for (final line in const LineSplitter().convert(
-      await file.readAsString(),
-    )) {
+    var start = 0;
+    while (start < bytes.length) {
+      var end = bytes.indexOf(_newline, start);
+      if (end < 0) end = bytes.length;
+      final line = bytes.sublist(start, end);
+      start = end + 1;
       if (line.isEmpty) continue;
-      final record = _decode(line);
-      if (record == null) {
-        damaged = true;
-      } else {
-        records.add(record);
+      switch (_lineOf(line)) {
+        case final read?:
+          lines.add(read);
+        case null:
+          damaged = true;
       }
     }
     if (damaged) {
-      await file.copy(await unusedCorruptCopyPath(file, _now()));
-      await _rewrite(file, records);
+      // The lines read are answered even when the file cannot be healed
+      // now, say on a full disk; the next read tries again.
+      try {
+        await file.copy(await unusedCorruptCopyPath(file, _now()));
+        await _rewrite(file, lines);
+      } on FileSystemException {
+        // Healed by a later read.
+      }
     }
-    return records;
+    return lines;
   }
 
-  Future<void> _rewrite(File file, List<AuditRecord> records) =>
-      writeFileAtomically(
-        file,
-        utf8.encode(records.map((r) => '${jsonEncode(_encode(r))}\n').join()),
-      );
+  static List<AuditRecord> _recordsOf(List<_Line> lines) => [
+    for (final line in lines) ?line.record,
+  ];
+
+  /// Rewrites [file] with [lines] as they were read, so a newer build's
+  /// lines survive byte for byte.
+  Future<void> _rewrite(File file, List<_Line> lines) => writeFileAtomically(
+    file,
+    utf8.encode(lines.map((line) => '${line.text}\n').join()),
+  );
+
+  /// The line [bytes] hold, or null when they are damaged.
+  static _Line? _lineOf(List<int> bytes) {
+    final String text;
+    final Object? json;
+    try {
+      text = utf8.decode(bytes);
+      json = jsonDecode(text);
+    } on FormatException {
+      return null;
+    }
+    if (json case {'v': final int v} when v > _auditVersion) {
+      return (text: text, record: null);
+    }
+    return switch (_decode(json)) {
+      final record? => (text: text, record: record),
+      null => null,
+    };
+  }
 
   static Map<String, Object?> _encode(AuditRecord r) => {
     'v': _auditVersion,
@@ -210,9 +297,8 @@ final class AuditLog {
     if (r.skippedSteps.isNotEmpty) 'skipped': r.skippedSteps,
   };
 
-  static AuditRecord? _decode(String line) {
+  static AuditRecord? _decode(Object? json) {
     try {
-      final json = jsonDecode(line);
       if (json is! Map<String, Object?> || json['v'] != _auditVersion) {
         return null;
       }

@@ -7923,6 +7923,12 @@ abstract class AppLocalizations {
   /// **'Nothing has run on this server from this device.'**
   String get activityEmpty;
 
+  /// Shown on the activity page when this device could not read the server's audit log file.
+  ///
+  /// In en, this message translates to:
+  /// **'The log file could not be read, so records are missing.'**
+  String get activityUnreadable;
+
   /// Button that reads the next page of older activity records.
   ///
   /// In en, this message translates to:
@@ -14390,6 +14396,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{server} stacks'**
   String paletteStacks(String server);
+
+  /// Command palette: the filter field's hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Type a command'**
+  String get paletteQueryHint;
+
+  /// Command palette: shown when no command matches the filter.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching commands'**
+  String get paletteNoMatches;
+
+  /// Command palette: a row's second line when one of its search words, not its name, matched the filter.
+  ///
+  /// In en, this message translates to:
+  /// **'matches \"{keyword}\"'**
+  String paletteKeywordMatch(String keyword);
+
+  /// Command palette: the same line for a row that also describes what it does.
+  ///
+  /// In en, this message translates to:
+  /// **'matches \"{keyword}\": {description}'**
+  String paletteKeywordMatchWithDescription(String keyword, String description);
+
+  /// Command palette: what a screen reader hears when the highlight reaches a row that cannot run right now.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}, unavailable'**
+  String paletteUnavailable(String label);
 
   /// Command palette: a container row's second line, its state and image.
   ///

@@ -106,6 +106,45 @@ void main() {
     expect(s.phase, RulePhase.firing);
   });
 
+  test('clear must hold for its whole duration; the band refires', () {
+    // A one-sample dip below clear, then 5 minutes at 85: above clear
+    // (80), so the alert stays up, and keeps its original start.
+    final rule = _rule(clearFor: const Duration(minutes: 5));
+    var s = evaluateThreshold(rule, ThresholdState.idle, value: 95, at: _t0);
+    s = evaluateThreshold(
+      rule,
+      s,
+      value: 75,
+      at: _t0.add(const Duration(minutes: 1)),
+    );
+    expect(s.phase, RulePhase.resolving);
+    for (final minute in [2, 6, 7]) {
+      s = evaluateThreshold(
+        rule,
+        s,
+        value: 85,
+        at: _t0.add(Duration(minutes: minute)),
+      );
+      expect(s.phase, RulePhase.firing, reason: 'minute $minute');
+      expect(s.since, _t0, reason: 'minute $minute');
+    }
+
+    s = evaluateThreshold(
+      rule,
+      s,
+      value: 75,
+      at: _t0.add(const Duration(minutes: 8)),
+    );
+    s = evaluateThreshold(
+      rule,
+      s,
+      value: 95,
+      at: _t0.add(const Duration(minutes: 9)),
+    );
+    expect(s.phase, RulePhase.firing);
+    expect(s.since, _t0);
+  });
+
   test('a drop to normal during pending returns to ok', () {
     final rule = _rule(raiseFor: const Duration(minutes: 5));
     var s = evaluateThreshold(rule, ThresholdState.idle, value: 95, at: _t0);

@@ -10,8 +10,18 @@ import 'package:meta/meta.dart';
 /// Returns the block name to its lines, the number of lines seen before
 /// the first header (dropped preamble), and whether the
 /// `hw_timeout=absent` marker was present.
+///
+/// A block named in [verbatimBlocks] holds text a host user controls, such
+/// as process command lines. Once it has its first line, every later line
+/// is its content: a header or marker there is that user's text and must
+/// not open or reopen a block. Until then headers and the marker still
+/// count, so a fallback block can follow an empty one.
 ({Map<String, List<String>> blocks, int preambleLines, bool timeoutAbsent})
-splitBlocks(String payload, String timeoutAbsentMarker) {
+splitBlocks(
+  String payload,
+  String timeoutAbsentMarker, {
+  Set<String> verbatimBlocks = const {},
+}) {
   final blocks = <String, List<String>>{};
   var preamble = 0;
   var absent = false;
@@ -19,6 +29,10 @@ splitBlocks(String payload, String timeoutAbsentMarker) {
   // Hyphens are allowed so the `os-release` block parses (03 §6.4).
   final header = RegExp(r'^== ([a-z0-9_-]+) ==$');
   for (final line in payload.split('\n')) {
+    if (verbatimBlocks.contains(current) && blocks[current]!.isNotEmpty) {
+      blocks[current]!.add(line);
+      continue;
+    }
     if (line == timeoutAbsentMarker) {
       absent = true;
       continue;

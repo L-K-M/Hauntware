@@ -6309,6 +6309,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Nothing has run on this server from this device.';
 
   @override
+  String get activityUnreadable =>
+      'The log file could not be read, so records are missing.';
+
+  @override
   String get activityOlder => 'Show older';
 
   @override
@@ -11254,6 +11258,30 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String paletteStacks(String server) {
     return '$server stacks';
+  }
+
+  @override
+  String get paletteQueryHint => 'Type a command';
+
+  @override
+  String get paletteNoMatches => 'No matching commands';
+
+  @override
+  String paletteKeywordMatch(String keyword) {
+    return 'matches \"$keyword\"';
+  }
+
+  @override
+  String paletteKeywordMatchWithDescription(
+    String keyword,
+    String description,
+  ) {
+    return 'matches \"$keyword\": $description';
+  }
+
+  @override
+  String paletteUnavailable(String label) {
+    return '$label, unavailable';
   }
 
   @override

@@ -15,7 +15,9 @@
 #            app target first when no dist/ .deb exists yet)
 #
 # Usage:
-#   scripts/build.sh                 # every target this host can build
+#   scripts/build.sh                 # the app and the APK, where this host
+#                                    # can build them
+#   scripts/build.sh all             # the Flatpak too
 #   scripts/build.sh app             # just this one (naming a target turns an
 #                                    # infeasible target into an error, not a skip)
 #   scripts/build.sh --debug app     # debug-mode Flutter builds

@@ -225,4 +225,18 @@ E: Could not open lock file /var/lib/dpkg/lock-frontend
     );
     expect(cut.failure, PackageCheckFailure.failed);
   });
+
+  test('a cache time past the DateTime range reads as unknown', () {
+    // A file system with 64-bit timestamps can hold any mtime.
+    for (final seconds in [
+      '99999999999999',
+      '-99999999999999',
+      '-9223372036854775808',
+    ]) {
+      final check = parsePackageCheck(
+        '== manager none\n== cache $seconds\n== reboot no\n',
+      );
+      expect(check.cachedAt, isNull, reason: seconds);
+    }
+  });
 }

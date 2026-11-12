@@ -1508,15 +1508,35 @@ final class SetAdminMode extends EngineRequest {
 }
 
 /// Reads [serverId]'s device audit log (03 §8.10, SAF-11): up to [limit]
-/// records ended before [before] (newest first; all when null), answered
-/// by [AuditRecords].
+/// records, newest end first, from [after] on (from the newest when
+/// null), answered by [AuditRecords].
 final class AuditQuery extends EngineRequest {
-  const AuditQuery(this.serverId, {this.before, this.limit = 100})
+  const AuditQuery(this.serverId, {this.after, this.limit = 100})
     : assert(limit > 0, 'limit must be positive');
 
   final String serverId;
-  final DateTime? before;
+
+  /// The previous page's [AuditRecords.next].
+  final AuditCursor? after;
   final int limit;
+}
+
+/// Where the next page of an audit log starts (SAF-11): past the records
+/// that ended after [endedAt], and past the first [seen] of those that
+/// ended at it. The log is in end order, newest first, and records that
+/// ended together in append order, so one appended between two pages
+/// lands after those [seen] counted. Records are not appended in end
+/// order, since a detached operation's is appended when its result is
+/// acknowledged, so a page boundary is not a time alone. A prune between
+/// two pages can shorten a tie group; the next page then starts at its
+/// remaining records, which may repeat ones already shown.
+@immutable
+final class AuditCursor {
+  const AuditCursor(this.endedAt, {required this.seen})
+    : assert(seen > 0, 'a page ends on a record');
+
+  final DateTime endedAt;
+  final int seen;
 }
 
 /// Says the app has shown the result of [serverId]'s finished detached
@@ -3720,18 +3740,28 @@ final class OperationsChanged extends EngineEvent {
   final CollectorUnavailable? unavailable;
 }
 
-/// The answer to an [AuditQuery]: [records] newest first, and whether
-/// older ones remain.
+/// The answer to an [AuditQuery]: [records] newest end first, and where
+/// the next page starts.
 final class AuditRecords extends EngineEvent {
   AuditRecords(
     this.serverId,
     Iterable<AuditRecord> records, {
-    this.more = false,
+    this.next,
+    this.unreadable = false,
   }) : records = List.unmodifiable(records);
 
   final String serverId;
   final List<AuditRecord> records;
-  final bool more;
+
+  /// The next page's [AuditQuery.after], or null when no records remain.
+  final AuditCursor? next;
+
+  /// Whether older records remain.
+  bool get more => next != null;
+
+  /// The server's log file could not be read, so [records] lacks what it
+  /// holds; the file is left as it is for a later read.
+  final bool unreadable;
 }
 
 /// One finished or refused run in the device audit log (03 §8.10): the
