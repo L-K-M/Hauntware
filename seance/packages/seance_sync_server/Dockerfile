@@ -70,4 +70,15 @@ EXPOSE 8787
 RUN useradd --system --uid 10001 seance && chown -R seance /data
 USER seance
 
+# Storage-aware readiness, the same probe docker-compose.yml runs, so a
+# container started straight from the published image (docker run, Portainer,
+# a hand-written compose file) also turns unhealthy when the server is up but
+# its storage is not. The image has no curl or wget; bash is an essential
+# package in debian:*-slim, and its /dev/tcp opens the connection. Only the
+# status line is matched, so a body or header can never pass for a 200. The
+# port follows SEANCE_PORT; a server bound to an address other than 0.0.0.0
+# or 127.0.0.1 needs its own probe.
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD ["bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/${SEANCE_PORT:-8787} && printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
+
 ENTRYPOINT ["/usr/local/bin/seance-sync"]
