@@ -107,11 +107,28 @@ kotlin {
 }
 
 // Third-party notices for the Maven libraries the APK compiles in (AndroidX,
-// Kotlin, Tink and the rest): res/raw/aboutlibraries.json, from the resolved
-// release graph plus config/, offline and reproducible. ghost_licenses shows
+// Kotlin, Tink and the rest): res/raw/aboutlibraries.json, from the variant's
+// resolved graph plus config/, offline and reproducible. ghost_licenses shows
 // them on the licenses page; Flutter's NOTICES covers the engine and the pub
 // packages. The build fails on a library without a license or with one
 // outside the allow-list; give a new license its text in config/licenses/.
+//
+// Flutter adds dev-dependency plugins to debug and profile builds only, and
+// integration_test brings JUnit and Guava's Checker and Animal Sniffer
+// annotations under licenses outside the allow-list. Those builds are never
+// distributed, so they only warn. The plugin keeps one strict mode for every
+// variant's task, so it follows the requested tasks: only a request made
+// entirely of debug or profile tasks (assembleDebug, installProfile) warns,
+// and any other, release included, fails.
+val unshippedVariantTask = Regex(".+(Debug|Profile)")
+val requestedTasks = gradle.startParameter.taskNames
+val licenseStrictMode =
+    if (requestedTasks.isNotEmpty() && requestedTasks.all(unshippedVariantTask::matches)) {
+        com.mikepenz.aboutlibraries.plugin.StrictMode.WARN
+    } else {
+        com.mikepenz.aboutlibraries.plugin.StrictMode.FAIL
+    }
+
 aboutLibraries {
     offlineMode.set(true)
     collect {
@@ -126,7 +143,7 @@ aboutLibraries {
         exclusionPatterns.add(Regex("io\\.flutter:.*").toPattern())
     }
     license {
-        strictMode.set(com.mikepenz.aboutlibraries.plugin.StrictMode.FAIL)
+        strictMode.set(licenseStrictMode)
         // BSD-3-Clause: the Protocol Buffers runtime tink-android shades,
         // a bundled entry in config/libraries/.
         allowedLicenses.addAll("Apache-2.0", "BSD-3-Clause", "GPL-2.0-only WITH Classpath-exception-2.0")
