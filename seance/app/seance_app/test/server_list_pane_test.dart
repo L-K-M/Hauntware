@@ -1010,6 +1010,29 @@ void main() {
       await deleting;
       expect(state!.configFor('alpha'), isNotNull);
       expect(state!.tabById('edit'), isNotNull);
+
+      // Don't save authorizes a later close; it does not discard or close
+      // anything when the following server deletion is cancelled.
+      final declinedDelete = confirmDeleteServer(
+        tester.element(find.byType(BuiltInTextEditorScreen)),
+        state!,
+        server('alpha'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Don’t save'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await declinedDelete;
+
+      expect(state!.configFor('alpha'), isNotNull);
+      expect(state!.tabById('edit'), same(editor));
+      expect(editor.dirty.value, isTrue);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'changed\n',
+      );
     });
   });
 }
