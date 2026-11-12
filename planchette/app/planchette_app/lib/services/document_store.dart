@@ -40,9 +40,12 @@ abstract interface class RecoveryCopies {
 
 /// The shell's filesystem boundary. Tests substitute an in-memory store.
 abstract interface class DocumentStore {
+  /// Reads [path] as [encoding], or detects UTF-8 or marked UTF-16 when it
+  /// is null; see [loadTextDocument].
   Future<TextDocument> load(
     String path, {
     SymlinkPolicy symlinkPolicy = SymlinkPolicy.resolveOnce,
+    TextEncoding? encoding,
   });
 
   /// Null when no regular file exists at [path], as when a directory has
@@ -69,7 +72,12 @@ final class LocalDocumentStore implements DocumentStore {
   Future<TextDocument> load(
     String path, {
     SymlinkPolicy symlinkPolicy = SymlinkPolicy.resolveOnce,
-  }) => loadTextDocument(File(path), symlinkPolicy: symlinkPolicy);
+    TextEncoding? encoding,
+  }) => loadTextDocument(
+    File(path),
+    symlinkPolicy: symlinkPolicy,
+    encoding: encoding,
+  );
 
   @override
   Future<FileStamp?> stamp(String path) async {
@@ -194,6 +202,7 @@ final class LocalDocumentStore implements DocumentStore {
     final format = metadata ?? source?.metadata ?? const TextDocumentMetadata();
     final bom = format.utf8Bom == Utf8Bom.present;
     final ending = format.lineEnding;
+    final encoding = format.encoding;
     // Managed siblings must retain the checkout store's crash-recovery names.
     final digest = target == DocumentWriteTarget.managedRemote
         ? await saveBuiltInTextDocument(
@@ -201,6 +210,7 @@ final class LocalDocumentStore implements DocumentStore {
             text,
             hasUtf8Bom: bom,
             lineEnding: ending,
+            encoding: encoding,
             expectedSha256: expectedSha256,
           )
         : expectedSha256 == null
@@ -209,6 +219,7 @@ final class LocalDocumentStore implements DocumentStore {
             text,
             hasUtf8Bom: bom,
             lineEnding: ending,
+            encoding: encoding,
           )
         : await saveTextDocument(
             file,
@@ -216,6 +227,7 @@ final class LocalDocumentStore implements DocumentStore {
             expectedSha256: expectedSha256,
             hasUtf8Bom: bom,
             lineEnding: ending,
+            encoding: encoding,
           );
     return TextDocument(
       file: file,
@@ -223,6 +235,7 @@ final class LocalDocumentStore implements DocumentStore {
       hasUtf8Bom: bom,
       lineEnding: ending,
       sha256: digest,
+      encoding: encoding,
     );
   }
 }

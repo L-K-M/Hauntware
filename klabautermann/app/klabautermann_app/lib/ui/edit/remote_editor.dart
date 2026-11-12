@@ -7,7 +7,6 @@ import 'package:planchette_core/planchette_core.dart'
     show
         TextProblem,
         TextProblemSeverity,
-        Utf8Bom,
         UnifiedDiffResult,
         UnifiedDiffStatus,
         boundedUnifiedDiff,
@@ -555,7 +554,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
         strings.selectionSummary(selected.characters, selected.lines),
       if (_dirty) strings.unsaved,
       editor.metadata.lineEnding.label,
-      editor.metadata.utf8Bom == Utf8Bom.present ? 'UTF-8 BOM' : 'UTF-8',
+      editor.metadata.encodingLabel,
       strings.indentation(editor.indentation),
       strings.languageName(editor.text.language),
       if (!editor.highlightingEnabled) strings.largeFile,

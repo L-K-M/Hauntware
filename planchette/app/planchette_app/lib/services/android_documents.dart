@@ -89,6 +89,7 @@ final class AndroidDocuments implements DocumentStore, RecoveryCopies {
   Future<TextDocument> load(
     String path, {
     SymlinkPolicy symlinkPolicy = SymlinkPolicy.resolveOnce,
+    TextEncoding? encoding,
   }) async {
     final bytes = (await _invoke<Uint8List>('read', {'path': path}))!;
     return _staged((file) async {
@@ -96,6 +97,7 @@ final class AndroidDocuments implements DocumentStore, RecoveryCopies {
       final document = await loadTextDocument(
         file,
         symlinkPolicy: symlinkPolicy,
+        encoding: encoding,
       );
       return document.copyWith(file: File(path));
     });
@@ -124,6 +126,7 @@ final class AndroidDocuments implements DocumentStore, RecoveryCopies {
         text,
         hasUtf8Bom: format.utf8Bom == Utf8Bom.present,
         lineEnding: format.lineEnding,
+        encoding: format.encoding,
       );
       await _invoke<void>('write', {
         'path': path,
@@ -142,6 +145,7 @@ final class AndroidDocuments implements DocumentStore, RecoveryCopies {
         hasUtf8Bom: format.utf8Bom == Utf8Bom.present,
         lineEnding: format.lineEnding,
         sha256: digest,
+        encoding: format.encoding,
       );
     });
   }

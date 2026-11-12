@@ -307,4 +307,38 @@ void main() {
     expect(c.isDirty, isFalse);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  test('a document in another encoding counts and keeps its bytes', () async {
+    TextDocument loaded(TextEncoding encoding) => TextDocument(
+      file: File('/tmp/metadata.txt'),
+      text: 'caf\u00e9\n',
+      hasUtf8Bom: false,
+      lineEnding: LineEnding.crlf,
+      sha256: 'loaded',
+      encoding: encoding,
+    );
+    Future<EditorController> open(TextEncoding encoding) async {
+      final c = EditorController(
+        displayPath: 'test',
+        loadDocument: () async => loaded(encoding),
+      );
+      addTearDown(c.dispose);
+      await c.initialize();
+      return c;
+    }
+
+    // 'café' plus CRLF: six UTF-16 units.
+    final utf16 = await open(TextEncoding.utf16be);
+    expect(utf16.metadata.encoding, TextEncoding.utf16be);
+    expect(utf16.isDirty, isFalse);
+    expect(utf16.fileByteCount, 2 + 2 * 6);
+    final latin1 = await open(TextEncoding.latin1);
+    expect(latin1.fileByteCount, 6);
+
+    // Converting is a pending format change like a line ending.
+    latin1.setMetadata(const TextDocumentMetadata(lineEnding: LineEnding.crlf));
+    expect(latin1.isDirty, isTrue);
+    expect(latin1.document!.encoding, TextEncoding.utf8);
+    expect(latin1.fileByteCount, 7);
+  });
 }

@@ -436,6 +436,7 @@ class EditorController extends ChangeNotifier {
     _document = _document?.copyWith(
       lineEnding: value.lineEnding,
       hasUtf8Bom: value.utf8Bom == Utf8Bom.present,
+      encoding: value.encoding,
     );
     _revision++;
     _notify();
@@ -673,16 +674,21 @@ class EditorController extends ChangeNotifier {
   /// the size is [byteCount] plus the selected byte-order mark instead.
   int get fileByteCount {
     _updateMetrics();
-    final bomBytes = _metadata.utf8Bom.byteLength;
-    if (_saveNormalization == TextNormalization.preserve) {
-      return byteCount + bomBytes;
-    }
+    final preserve = _saveNormalization == TextNormalization.preserve;
     // Folding to LF drops the CR of each CRLF and turns a lone CR into LF.
     final breaks = lineStarts.length - 1 + _returns - _returnNewlines;
-    return byteCount -
-        _returnNewlines +
-        (_metadata.lineEnding == LineEnding.crlf ? breaks : 0) +
-        bomBytes;
+    final addedReturns = _metadata.lineEnding == LineEnding.crlf ? breaks : 0;
+    final encoding = _metadata.encoding;
+    if (encoding.bytesPerCodeUnit case final width?) {
+      // A fixed width per UTF-16 unit: the size follows from the length.
+      final units = preserve
+          ? text.text.length
+          : text.text.length - _returnNewlines + addedReturns;
+      return encoding.markLength + units * width;
+    }
+    final bomBytes = _metadata.utf8Bom.byteLength;
+    if (preserve) return byteCount + bomBytes;
+    return byteCount - _returnNewlines + addedReturns + bomBytes;
   }
 
   (int, int) get caretLineColumn {

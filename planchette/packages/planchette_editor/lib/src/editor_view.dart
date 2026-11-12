@@ -1129,7 +1129,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       if (c.isSaving) widget.strings.saving,
       if (c.isDirty) widget.strings.unsaved,
       c.metadata.lineEnding.label,
-      c.metadata.utf8Bom == Utf8Bom.present ? 'UTF-8 BOM' : 'UTF-8',
+      c.metadata.encodingLabel,
       widget.strings.indentation(c.indentation),
       widget.strings.languageName(c.text.language),
       if (!c.highlightingEnabled) widget.strings.largeFile,

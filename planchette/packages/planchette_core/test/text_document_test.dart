@@ -247,7 +247,7 @@ void main() {
         isA<TextDocumentException>().having(
           (error) => error.message,
           'message',
-          'This file is not valid UTF-8 text.',
+          'This file is not valid UTF-8 text: the byte 0xFF at offset 0 does not begin a valid UTF-8 sequence.',
         ),
       ),
     );
@@ -308,7 +308,10 @@ void main() {
       fail('expected the load to refuse');
     } on TextDocumentException catch (error) {
       // §2.4's toast contract: error.toString() IS the message.
-      expect(error.toString(), 'This file is not valid UTF-8 text.');
+      expect(
+        error.toString(),
+        'This file is not valid UTF-8 text: the byte 0xFF at offset 0 does not begin a valid UTF-8 sequence.',
+      );
     }
   });
 

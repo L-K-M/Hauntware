@@ -6,7 +6,9 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:uuid/uuid.dart';
 
 import 'native_file_operations.dart';
-import 'text_metrics.dart';
+import 'text_encoding.dart';
+
+export 'text_encoding.dart' show TextEncoding;
 
 const int textDocumentMaximumBytes = 4 * 1024 * 1024;
 const int defaultTextDocumentMaximumBytes = textDocumentMaximumBytes;
@@ -36,27 +38,38 @@ enum Utf8Bom {
   absent,
   present;
 
-  int get byteLength => this == present ? _utf8Bom.length : 0;
+  int get byteLength => this == present ? utf8BomLength : 0;
 }
 
 /// File-format choices, including for a buffer without a save destination yet.
+/// [utf8Bom] applies to UTF-8 only; UTF-16 always writes its own mark.
 final class TextDocumentMetadata {
   const TextDocumentMetadata({
     this.lineEnding = LineEnding.lf,
     this.utf8Bom = Utf8Bom.absent,
-  });
+    this.encoding = TextEncoding.utf8,
+  }) : assert(
+         utf8Bom == Utf8Bom.absent || encoding == TextEncoding.utf8,
+         'Only UTF-8 takes an optional byte order mark.',
+       );
 
   final LineEnding lineEnding;
   final Utf8Bom utf8Bom;
+  final TextEncoding encoding;
+
+  /// The encoding as status bars name it, with "BOM" for a marked UTF-8 file.
+  String get encodingLabel =>
+      utf8Bom == Utf8Bom.present ? '${encoding.label} BOM' : encoding.label;
 
   @override
   bool operator ==(Object other) =>
       other is TextDocumentMetadata &&
       other.lineEnding == lineEnding &&
-      other.utf8Bom == utf8Bom;
+      other.utf8Bom == utf8Bom &&
+      other.encoding == encoding;
 
   @override
-  int get hashCode => Object.hash(lineEnding, utf8Bom);
+  int get hashCode => Object.hash(lineEnding, utf8Bom, encoding);
 }
 
 /// Hosts may preserve raw line endings for compatibility with existing APIs.
@@ -74,6 +87,7 @@ final class TextDocument {
     required this.hasUtf8Bom,
     required this.lineEnding,
     required this.sha256,
+    this.encoding = TextEncoding.utf8,
   });
 
   final File file;
@@ -82,9 +96,14 @@ final class TextDocument {
   final LineEnding lineEnding;
   final String sha256;
 
+  /// What the file was read in, and what a save writes unless the user
+  /// chooses another encoding.
+  final TextEncoding encoding;
+
   TextDocumentMetadata get metadata => TextDocumentMetadata(
     lineEnding: lineEnding,
     utf8Bom: hasUtf8Bom ? Utf8Bom.present : Utf8Bom.absent,
+    encoding: encoding,
   );
 
   TextDocument copyWith({
@@ -93,12 +112,14 @@ final class TextDocument {
     bool? hasUtf8Bom,
     LineEnding? lineEnding,
     String? sha256,
+    TextEncoding? encoding,
   }) => TextDocument(
     file: file ?? this.file,
     text: text ?? this.text,
     hasUtf8Bom: hasUtf8Bom ?? this.hasUtf8Bom,
     lineEnding: lineEnding ?? this.lineEnding,
     sha256: sha256 ?? this.sha256,
+    encoding: encoding ?? this.encoding,
   );
 }
 
@@ -110,6 +131,14 @@ final class TextDocumentException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// The file's bytes are not text in the encoding it was read in: not UTF-8
+/// or marked UTF-16 when detected, or not the encoding the user chose.
+/// Hosts can offer to reopen it in another encoding (see
+/// [TextEncoding.reopenChoices]); the message names the offending byte.
+final class UnsupportedTextEncodingException extends TextDocumentException {
+  const UnsupportedTextEncodingException(super.message);
 }
 
 Future<String> textDocumentSha256(File file) async {
@@ -159,14 +188,18 @@ Future<bool> isTextDocumentWriteProtected(File file) async {
 /// POSIX write permission for owner, group and others: 0222.
 const _writePermissionBits = 0x92;
 
-/// Reads bounded, strict UTF-8, retaining one leading BOM as metadata and
-/// every additional U+FEFF as content. Digest checks reject changing snapshots.
+/// Reads a bounded file as [encoding], or, when it is null, as UTF-16 if it
+/// starts with a UTF-16 byte order mark and as strict UTF-8 otherwise. One
+/// leading mark is metadata and every additional U+FEFF is content.
+/// [maximumBytes] limits the file's size in bytes, whatever its encoding.
+/// Digest checks reject changing snapshots.
 Future<TextDocument> loadTextDocument(
   File file, {
   int maximumBytes = textDocumentMaximumBytes,
   TextNormalization normalization = TextNormalization.normalize,
   SymlinkPolicy symlinkPolicy = SymlinkPolicy.reject,
   Future<String> Function(File file)? sha256Of,
+  TextEncoding? encoding,
 }) async {
   _validateMaximumBytes(maximumBytes);
   file = await resolveTextDocumentTarget(file, symlinkPolicy: symlinkPolicy);
@@ -193,21 +226,8 @@ Future<TextDocument> loadTextDocument(
     );
   }
 
-  var leadingBoms = 0;
-  while (_utf8BomAt(bytes, leadingBoms * _utf8Bom.length)) {
-    leadingBoms++;
-  }
-  late final String raw;
-  try {
-    // Utf8Decoder itself drops a leading BOM. Decode only after all leading
-    // BOMs, then put back the ones that are document content.
-    final content = const Utf8Decoder(
-      allowMalformed: false,
-    ).convert(bytes, leadingBoms * _utf8Bom.length);
-    raw = leadingBoms > 1 ? '\uFEFF' * (leadingBoms - 1) + content : content;
-  } on FormatException {
-    throw const TextDocumentException('This file is not valid UTF-8 text.');
-  }
+  final decoded = decodeTextBytes(bytes, encoding);
+  final raw = decoded.text;
   if (_firstNulIndex(raw) >= 0) {
     throw const TextDocumentException(
       'This file appears to be binary, not editable text.',
@@ -216,9 +236,10 @@ Future<TextDocument> loadTextDocument(
   return TextDocument(
     file: file,
     text: normalization == TextNormalization.preserve ? raw : _foldToLf(raw),
-    hasUtf8Bom: leadingBoms > 0,
+    hasUtf8Bom: decoded.utf8Bom,
     lineEnding: _dominantLineEnding(raw),
     sha256: after,
+    encoding: decoded.encoding,
   );
 }
 
@@ -261,6 +282,7 @@ Future<String> saveTextDocument(
   required String expectedSha256,
   bool hasUtf8Bom = false,
   LineEnding lineEnding = LineEnding.lf,
+  TextEncoding encoding = TextEncoding.utf8,
   TextNormalization normalization = TextNormalization.normalize,
   String temporaryPrefix = '.planchette',
   int maximumBytes = textDocumentMaximumBytes,
@@ -272,6 +294,7 @@ Future<String> saveTextDocument(
   expectedSha256: expectedSha256,
   hasUtf8Bom: hasUtf8Bom,
   lineEnding: lineEnding,
+  encoding: encoding,
   normalization: normalization,
   temporaryPrefix: temporaryPrefix,
   maximumBytes: maximumBytes,
@@ -286,6 +309,7 @@ Future<String> createTextDocument(
   String text, {
   bool hasUtf8Bom = false,
   LineEnding lineEnding = LineEnding.lf,
+  TextEncoding encoding = TextEncoding.utf8,
   TextNormalization normalization = TextNormalization.normalize,
   String temporaryPrefix = '.planchette',
   int maximumBytes = textDocumentMaximumBytes,
@@ -295,6 +319,7 @@ Future<String> createTextDocument(
   text,
   hasUtf8Bom: hasUtf8Bom,
   lineEnding: lineEnding,
+  encoding: encoding,
   normalization: normalization,
   temporaryPrefix: temporaryPrefix,
   maximumBytes: maximumBytes,
@@ -307,6 +332,7 @@ Future<String> _writeTextDocument(
   String? expectedSha256,
   required bool hasUtf8Bom,
   required LineEnding lineEnding,
+  required TextEncoding encoding,
   required TextNormalization normalization,
   required String temporaryPrefix,
   required int maximumBytes,
@@ -316,6 +342,13 @@ Future<String> _writeTextDocument(
   _validateMaximumBytes(maximumBytes);
   if (!RegExp(r'^\.[a-zA-Z0-9_-]+$').hasMatch(temporaryPrefix)) {
     throw ArgumentError.value(temporaryPrefix, 'temporaryPrefix');
+  }
+  if (hasUtf8Bom && encoding != TextEncoding.utf8) {
+    throw ArgumentError.value(
+      hasUtf8Bom,
+      'hasUtf8Bom',
+      'Only UTF-8 takes an optional byte order mark.',
+    );
   }
   // Loading rejects NUL as binary; writing it would produce a file this
   // editor can never reopen. Reject before publication, while the original
@@ -333,12 +366,8 @@ Future<String> _writeTextDocument(
   final normalized = normalization == TextNormalization.preserve
       ? text
       : _normalizeLineEndings(text, lineEnding);
-  final encoded = utf8.encode(normalized);
-  final bytes = hasUtf8Bom
-      ? (Uint8List(_utf8Bom.length + encoded.length)
-          ..setAll(0, _utf8Bom)
-          ..setAll(_utf8Bom.length, encoded))
-      : encoded;
+  // An unrepresentable character throws here, before anything is written.
+  final bytes = encodeText(normalized, encoding, utf8Bom: hasUtf8Bom);
   if (bytes.length > maximumBytes) {
     throw TextDocumentException(
       'The edited file exceeds the '
@@ -525,8 +554,6 @@ String _tooLargeMessage(int maximumBytes) =>
     'The built-in editor supports text files up to '
     '${(maximumBytes / (1024 * 1024)).toStringAsFixed(0)} MB.';
 
-const _utf8Bom = [0xef, 0xbb, 0xbf];
-
 /// Native operations name the call, not the cause; keep the OS error code so
 /// a sharing violation or EPERM stays diagnosable.
 String _osDetail(FileSystemException error) {
@@ -542,12 +569,6 @@ const int _ownerReadWriteMode = 0x180;
 /// chmod 0777 mask: only the portable permission bits survive a save.
 const int _posixPermissionMask = 0x1ff;
 
-bool _utf8BomAt(List<int> bytes, int offset) =>
-    bytes.length >= offset + _utf8Bom.length &&
-    bytes[offset] == _utf8Bom[0] &&
-    bytes[offset + 1] == _utf8Bom[1] &&
-    bytes[offset + 2] == _utf8Bom[2];
-
 /// The load- and write-side binary rule, shared so a save can never emit a
 /// file the loader would then reject. Broadening the binary heuristic must
 /// update this one place.
@@ -556,19 +577,20 @@ int _firstNulIndex(String text) => text.indexOf('\u0000');
 String _foldToLf(String text) =>
     text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 
-/// The encoded size of [text], including EOL conversion and the optional BOM.
-/// Save cleanup is separate; guarded writes recheck the cleaned buffer's size.
+/// The encoded size of [text] in the metadata's encoding, including EOL
+/// conversion and any byte order mark. Save cleanup is separate; guarded
+/// writes recheck the cleaned buffer's size.
 int textDocumentByteCount(
   String text,
   TextDocumentMetadata metadata, {
   TextNormalization normalization = TextNormalization.normalize,
-}) =>
-    utf8EncodedLength(
-      normalization == TextNormalization.preserve
-          ? text
-          : _normalizeLineEndings(text, metadata.lineEnding),
-    ) +
-    metadata.utf8Bom.byteLength;
+}) => encodedTextLength(
+  normalization == TextNormalization.preserve
+      ? text
+      : _normalizeLineEndings(text, metadata.lineEnding),
+  metadata.encoding,
+  utf8Bom: metadata.utf8Bom == Utf8Bom.present,
+);
 
 String _normalizeLineEndings(String text, LineEnding lineEnding) {
   final folded = _foldToLf(text);
