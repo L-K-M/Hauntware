@@ -14,6 +14,7 @@ import 'package:seance_app/main.dart';
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/editor_document.dart';
 import 'package:seance_app/services/external_file_opener.dart';
+import 'package:seance_app/services/managed_remote_file.dart';
 import 'package:seance_app/services/remote_files_controller.dart';
 import 'package:seance_app/services/shell_location.dart';
 import 'package:seance_app/services/xterm_engine.dart';
@@ -25,6 +26,33 @@ import 'support/system_open_recorder.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 const _home = '/home/test';
+
+// UI checkout callbacks must start their file I/O in the real zone captured
+// during fixture boot, not leave a fake-zone catalog write ahead of cleanup.
+class _IoRemoteFilesController extends RemoteFilesController {
+  _IoRemoteFilesController(
+    super.openRemoteFileSystem, {
+    required super.shellDirectory,
+    required super.managedFileStore,
+    required super.serverId,
+    required super.editSessionId,
+  });
+
+  final Zone _ioZone = Zone.current;
+
+  @override
+  Future<ManagedRemoteFile> checkoutRemoteFile(
+    RemoteFileEntry entry, {
+    int? maximumBytes,
+    ConfirmCheckoutDownload? confirmDownload,
+  }) => _ioZone.run(
+    () => super.checkoutRemoteFile(
+      entry,
+      maximumBytes: maximumBytes,
+      confirmDownload: confirmDownload,
+    ),
+  );
+}
 
 /// The files pane's desktop posture renders the shared dense rows
 /// (D32 §6): a column header over fixed-extent [GhostFileRow]s with
@@ -108,7 +136,7 @@ void main() {
       services = await AppServices.initialize();
       state = AppState(services!);
       await state!.saveServer(server);
-      files = RemoteFilesController(
+      files = _IoRemoteFilesController(
         () async => remote,
         shellDirectory: ShellLocation(
           reported: session.engine.workingDirectory,
