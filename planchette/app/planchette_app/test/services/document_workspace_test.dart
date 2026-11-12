@@ -1628,7 +1628,7 @@ void main() {
     },
   );
   test(
-    'Save As continues to refuse a final symbolic-link destination',
+    'Save As onto a symbolic link writes the target and keeps the link',
     () async {
       if (Platform.isWindows) {
         markTestSkipped(
@@ -1640,11 +1640,12 @@ void main() {
         'planchette-final-link-',
       );
       addTearDown(() => directory.delete(recursive: true));
+      final real = Directory(await directory.resolveSymbolicLinks());
       final target = await File(
-        paths.join(directory.path, 'target.txt'),
+        paths.join(real.path, 'target.txt'),
       ).writeAsString('target');
       final link = await Link(
-        paths.join(directory.path, 'link.txt'),
+        paths.join(real.path, 'link.txt'),
       ).create(target.path);
       final local = DocumentWorkspace(
         store: LocalDocumentStore(),
@@ -1653,8 +1654,45 @@ void main() {
       addTearDown(local.dispose);
       final tab = local.newDocument()!..editor.text.text = 'replacement';
       dialogs.savePath = link.path;
+      expect(await local.save(tab, saveAs: true), isTrue);
+      expect(await target.readAsString(), 'replacement');
+      expect(
+        await FileSystemEntity.type(link.path, followLinks: false),
+        FileSystemEntityType.link,
+      );
+      expect(await link.target(), target.path);
+      // The tab saves to the file it wrote, as an opened link does.
+      expect(tab.path, target.path);
+      expect(dialogs.replaceAsked, [target.path]);
+    },
+  );
+
+  test(
+    'Save As onto a dangling symbolic link names the missing target',
+    () async {
+      if (Platform.isWindows) {
+        markTestSkipped(
+          'Creating Windows links requires developer privileges.',
+        );
+        return;
+      }
+      final directory = await Directory.systemTemp.createTemp(
+        'planchette-dangling-link-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final link = await Link(
+        paths.join(directory.path, 'link.txt'),
+      ).create(paths.join(directory.path, 'gone.txt'));
+      final local = DocumentWorkspace(
+        store: LocalDocumentStore(),
+        dialogs: dialogs,
+      );
+      addTearDown(local.dispose);
+      final tab = local.newDocument()!..editor.text.text = 'replacement';
+      dialogs.savePath = link.path;
       expect(await local.save(tab, saveAs: true), isFalse);
-      expect(await target.readAsString(), 'target');
+      expect(local.error, contains('points to a file that does not exist'));
+      expect(await File(link.path).exists(), isFalse);
       expect(
         await FileSystemEntity.type(link.path, followLinks: false),
         FileSystemEntityType.link,

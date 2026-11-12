@@ -111,7 +111,11 @@ once, takes the most frequent kind, and breaks a tie toward LF, then CRLF,
 then CR, so a file without breaks is LF and CR needs a strict majority. A
 normalized save writes every break as that one ending.
 
-User-selected local symlinks may be resolved once at open. Managed copies
+User-selected local symlinks may be resolved once at open. Save As onto a
+link resolves it the same way: the regular file it names becomes the
+destination, with the same digest guard and replace question as any
+existing file, and the link stays a link. A dangling link, a link to a
+folder and a link loop are refused with that reason. Managed copies
 must be regular files and reject symlinks. Saves use the resolved identity,
 guard the expected on-disk digest, and preserve original permission bits.
 Temporary plaintext is owner-only before writing on POSIX. Each host retains
