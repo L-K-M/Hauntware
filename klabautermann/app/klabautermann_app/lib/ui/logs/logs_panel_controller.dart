@@ -55,7 +55,7 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
   /// by [query].
   final String? containerId;
 
-  final LogViewController logs = LogViewController();
+  late final LogViewController logs = LogViewController(serverId: serverId);
   late final LogSearch search = LogSearch(logs);
 
   LogQuery _query = const LogQuery();

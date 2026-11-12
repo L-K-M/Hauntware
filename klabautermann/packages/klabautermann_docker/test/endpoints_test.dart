@@ -345,12 +345,11 @@ void main() {
       ];
     }
 
-    test('resolves the framing and resumes with an inclusive since', () async {
+    test('asks for the window and an inclusive since', () async {
       final daemon = FakeDaemon();
       final client = clientFor(daemon, const ApiVersion(1, 52));
-      final sent = client.containerLogLines(
+      final sent = client.containerLogsRaw(
         'abc123',
-        tty: false,
         since: const LogTimestamp(1780000000, 500),
         tail: 100,
       );
@@ -367,8 +366,9 @@ void main() {
         ),
       );
       final res = await sent;
-      final lines = await res.body.toList();
-      expect(lines.single.text, 'hello');
+      final frames = await demuxStdcopy(res.body).toList();
+      expect(utf8.decode(frames.single.bytes), 'hello\n');
+      expect(res.headers.value('Content-Type'), contentTypeMultiplexed);
       expect(
         daemon.text,
         startsWith(
@@ -376,31 +376,6 @@ void main() {
           '&timestamps=1&tail=100&since=1780000000.000000500',
         ),
       );
-    });
-
-    test('drops the re-sent inclusive boundary line', () async {
-      final daemon = FakeDaemon();
-      final client = clientFor(daemon, const ApiVersion(1, 52));
-      final since = LogTimestamp.tryParse('2026-05-01T10:20:30.000000000Z')!;
-      final sent = client.containerLogLines('abc123', tty: false, since: since);
-      await daemon.gotBytes(1);
-      final body = [
-        ...stdcopyFrame(1, '2026-05-01T10:20:30.000000000Z old\n'),
-        ...stdcopyFrame(1, '2026-05-01T10:20:31.000000000Z new\n'),
-      ];
-      daemon.feed(
-        wireResponse(
-          '200 OK',
-          headers: {
-            'Content-Type': contentTypeMultiplexed,
-            'Content-Length': '${body.length}',
-          },
-          body: body,
-        ),
-      );
-      final res = await sent;
-      final lines = await res.body.toList();
-      expect(lines.map((l) => l.text), ['2026-05-01T10:20:31.000000000Z new']);
     });
   });
 

@@ -2,10 +2,19 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:meta/meta.dart';
+
 import 'errors.dart';
 
 /// Record separator used by `application/json-seq` (RFC 7464).
 const int _rs = 0x1E;
+
+/// The most bytes one line or JSON value of a streamed body may take.
+/// An event, a stats sample or a pull progress record is a few KiB at
+/// most; a peer that never ends one, such as a relay printing a banner
+/// without a newline, fails the stream instead of growing memory.
+@visibleForTesting
+const int maxJsonStreamItemBytes = 1024 * 1024;
 
 /// Pipes a byte stream through a transform with pause, resume and cancel
 /// propagation so backpressure reaches the duplex subscription (03 §5.5).
@@ -22,7 +31,17 @@ Stream<R> _pipe<I, R>(
       if (started) return;
       started = true;
       sub = source.listen(
-        (d) => onData(d, out),
+        (d) {
+          try {
+            onData(d, out);
+          } on DockerProtocolException catch (e, st) {
+            // The peer broke the format: end the stream with the error
+            // and stop reading the body.
+            out.addError(e, st);
+            unawaited(sub.cancel());
+            unawaited(out.close());
+          }
+        },
         onError: out.addError,
         onDone: () {
           onDone?.call(out);
@@ -47,19 +66,27 @@ Stream<R> _pipe<I, R>(
 /// formats (03 §5.5 `lines`): NDJSON, `application/json-seq` (leading RS
 /// stripped) and `application/jsonl`. Splitting happens at the byte
 /// level, which is UTF-8 safe; each line is then decoded with malformed
-/// bytes replaced. Empty lines are skipped.
+/// bytes replaced. Empty lines are skipped. A line over
+/// [maxJsonStreamItemBytes] ends the stream with a
+/// [DockerProtocolException].
 Stream<String> byteStreamToLines(Stream<List<int>> body) {
   final pending = <int>[];
+  // How far [pending] is known to hold no newline, so a long line that
+  // arrives in many chunks is scanned once.
+  var scanned = 0;
 
   void emitLines(StreamSink<String> out, {required bool flush}) {
     var start = 0;
-    for (var i = 0; i < pending.length; i++) {
+    for (var i = scanned; i < pending.length; i++) {
       if (pending[i] != 0x0A) continue;
+      if (i - start > maxJsonStreamItemBytes) throw _tooLong('line');
       final line = _decodeLine(pending, start, i);
       if (line.isNotEmpty) out.add(line);
       start = i + 1;
     }
     if (start > 0) pending.removeRange(0, start);
+    scanned = pending.length;
+    if (pending.length > maxJsonStreamItemBytes) throw _tooLong('line');
     if (flush && pending.isNotEmpty) {
       final line = _decodeLine(pending, 0, pending.length);
       if (line.isNotEmpty) out.add(line);
@@ -77,6 +104,10 @@ Stream<String> byteStreamToLines(Stream<List<int>> body) {
   );
 }
 
+DockerProtocolException _tooLong(String what) => DockerProtocolException(
+  'a streamed $what exceeds $maxJsonStreamItemBytes bytes',
+);
+
 /// Decodes one raw line: leading RS bytes and a trailing CR are dropped
 /// before UTF-8 decoding.
 String _decodeLine(List<int> bytes, int start, int end) {
@@ -89,7 +120,9 @@ String _decodeLine(List<int> bytes, int start, int end) {
 
 /// Scans a byte stream for concatenated JSON values without separators
 /// (03 §5.5 `jsonValues`; pull progress in §5.6). Structure tracking is
-/// byte-level and UTF-8 safe; each completed value is decoded.
+/// byte-level and UTF-8 safe; each completed value is decoded. A value
+/// over [maxJsonStreamItemBytes] ends the stream with a
+/// [DockerProtocolException].
 Stream<Object?> byteStreamToJsonValues(Stream<List<int>> body) {
   final scanner = _JsonValueScanner();
 
@@ -156,10 +189,10 @@ final class _JsonValueScanner {
           _begin(b);
           continue;
         }
-        _value.addByte(b);
+        _add(b);
         continue;
       }
-      _value.addByte(b);
+      _add(b);
       if (_inString) {
         if (_escape) {
           _escape = false;
@@ -182,6 +215,11 @@ final class _JsonValueScanner {
       }
     }
     return out;
+  }
+
+  void _add(int b) {
+    if (_value.length >= maxJsonStreamItemBytes) throw _tooLong('JSON value');
+    _value.addByte(b);
   }
 
   void _begin(int b) {
