@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ghost_ui/ghost_ui.dart' show GhostUndoableChange;
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostUndoableChange, commandPaletteQueryKey;
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart' show AppScope, navigatorKey;
 import 'package:seance_app/services/app_services.dart';
@@ -207,26 +208,24 @@ void main() {
     expect(
       sent,
       contains(
-        isMethodCall('setUndoItem', arguments: {
-          'title': 'Undo Pin to top',
-          'enabled': true,
-        }),
+        isMethodCall(
+          'setUndoItem',
+          arguments: {'title': 'Undo Pin to top', 'enabled': true},
+        ),
       ),
     );
     expect(
       sent,
       contains(
-        isMethodCall('setRedoItem', arguments: {
-          'title': 'Redo',
-          'enabled': false,
-        }),
+        isMethodCall(
+          'setRedoItem',
+          arguments: {'title': 'Redo', 'enabled': false},
+        ),
       ),
     );
   });
 
-  testWidgets('editSave and editFind reach the mounted editor', (
-    tester,
-  ) async {
+  testWidgets('editSave and editFind reach the mounted editor', (tester) async {
     await boot(tester);
     messenger.setMockMethodCallHandler(macMenuChannel, (call) async => null);
     installMacMenu(state!);
@@ -321,10 +320,7 @@ void main() {
 
     await fromNative(tester, 'commandPalette');
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('planchette.palette.query')),
-      findsOneWidget,
-    );
+    expect(find.byKey(commandPaletteQueryKey), findsOneWidget);
     // The native handler's context is the root navigator, above the layout;
     // the palette must still follow the shell's narrow posture.
     expect(find.text('Hide Sidebar'), findsNothing);
