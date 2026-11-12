@@ -95,6 +95,31 @@ final class KlabautermannAppearanceStrings extends GhostAppearanceStrings {
   @override
   String presetTooltip(String name) => _l10n.appearancePresetTooltip(name);
 
+  // Preset names are stored data, so the map keys are the presets' own
+  // stored names rather than literals; anything else, such as Custom, is
+  // passed through.
+  static final Map<String, String Function(AppLocalizations)> _presetLabels = {
+    klabautermannThemePresets.brand.name: (l10n) =>
+        l10n.themePresetKlabautermann,
+    klabautermannThemePresets.graphite.name: (l10n) => l10n.themePresetGraphite,
+    klabautermannThemePresets.paper.name: (l10n) => l10n.themePresetPaper,
+    klabautermannThemePresets.newsprint.name: (l10n) =>
+        l10n.themePresetNewsprint,
+    klabautermannThemePresets.solarized.name: (l10n) =>
+        l10n.themePresetSolarized,
+    klabautermannThemePresets.midnight.name: (l10n) => l10n.themePresetMidnight,
+    klabautermannThemePresets.terminal.name: (l10n) => l10n.themePresetTerminal,
+    klabautermannThemePresets.vapor.name: (l10n) => l10n.themePresetVapor,
+    klabautermannThemePresets.bubblegum.name: (l10n) =>
+        l10n.themePresetBubblegum,
+    klabautermannThemePresets.highContrast.name: (l10n) =>
+        l10n.themePresetHighContrast,
+  };
+
+  @override
+  String presetLabel(String storedName) =>
+      _presetLabels[storedName]?.call(_l10n) ?? storedName;
+
   @override
   String get modeTitle => _l10n.appearanceModeTitle;
   @override

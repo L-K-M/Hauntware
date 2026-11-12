@@ -33,6 +33,40 @@ void main() {
     },
   );
 
+  test('disposing during resolution preserves the typed refusal', () async {
+    final engine = FakeEngineClient();
+    final sync = SyncController(engine);
+    final pending = sync.resolvePinConflict(_conflict, keepLocal: false);
+    final refused = expectLater(
+      pending,
+      throwsA(isA<PinConflictNotResolvedException>()),
+    );
+
+    sync.dispose();
+
+    await refused;
+    await engine.close();
+  });
+
+  test('an engine stop still notifies that resolution ended', () async {
+    final engine = FakeEngineClient();
+    final sync = SyncController(engine);
+    final observed = <bool>[];
+    sync.addListener(() => observed.add(sync.resolving));
+    final pending = sync.resolvePinConflict(_conflict, keepLocal: true);
+    final refused = expectLater(
+      pending,
+      throwsA(isA<PinConflictNotResolvedException>()),
+    );
+
+    await engine.close();
+    await refused;
+
+    expect(sync.resolving, isFalse);
+    expect(observed.last, isFalse);
+    sync.dispose();
+  });
+
   test('a sync status and a PinConflictsChanged update the conflicts',
       () async {
     final engine = FakeEngineClient();

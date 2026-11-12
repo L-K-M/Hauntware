@@ -558,6 +558,7 @@ final class RemotePinConflicts extends ChangeNotifier
 
   List<SyncPinConflict> _value = const [];
   bool _resolving = false;
+  bool _disposed = false;
 
   void _apply(List<SyncPinConflict> conflicts) {
     if (listEquals(conflicts, _value)) return;
@@ -587,8 +588,14 @@ final class RemotePinConflicts extends ChangeNotifier
       );
     } finally {
       _resolving = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }
 

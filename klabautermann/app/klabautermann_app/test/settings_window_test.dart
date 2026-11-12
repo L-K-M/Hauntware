@@ -111,6 +111,7 @@ final class _PinConflicts extends ChangeNotifier
   bool resolving = false;
 
   final List<(String, bool)> asked = [];
+  Future<void> Function()? beforeResolve;
 
   @override
   Future<void> resolvePinConflict(
@@ -120,6 +121,7 @@ final class _PinConflicts extends ChangeNotifier
     resolving = true;
     notifyListeners();
     asked.add((conflict.locator, keepLocal));
+    await beforeResolve?.call();
     conflicts = const [];
     resolving = false;
     notifyListeners();
@@ -1008,6 +1010,38 @@ void main() {
       expect(remote.pinConflicts.conflicts, isEmpty);
       expect(inWindow(find.text('This device trusts')), findsNothing);
     });
+
+    testWidgets(
+      'disposing a window during pin resolution preserves its result',
+      (tester) async {
+        final started = Completer<void>();
+        final release = Completer<void>();
+        pinConflicts.beforeResolve = () async {
+          started.complete();
+          await release.future;
+        };
+        final remote = (await tester.runAsync(() async {
+          expect(await host.open(SettingsTab.sync), isTrue);
+          return RemoteSettings.connect(link: _windowLink);
+        }))!;
+        var disposed = false;
+        addTearDown(() {
+          if (!disposed) remote.dispose();
+        });
+
+        await tester.runAsync(() async {
+          final pending = remote.pinConflicts.resolvePinConflict(
+            _pinConflict,
+            keepLocal: true,
+          );
+          await started.future.timeout(const Duration(seconds: 5));
+          remote.dispose();
+          disposed = true;
+          release.complete();
+          await pending;
+        });
+      },
+    );
 
     testWidgets('the Sync tab shows the account size the app last heard '
         '(SYN-09)', (tester) async {
