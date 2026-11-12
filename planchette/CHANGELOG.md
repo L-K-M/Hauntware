@@ -30,6 +30,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Shift+F8, or Find › Next Problem and Previous Problem, move between
   them.
 
+### Changed
+- The Linux package build uses the suite's shared packager and fails early
+  with a clear message when `objdump` is missing, instead of partway through.
+  The built `.deb` and AppImage are unchanged.
+
 ### Fixed
 - Windows bounds the wait when handing a file to the running app and
   requires its acknowledgement. Failed or blocked delivery shows a retryable
