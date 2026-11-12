@@ -289,12 +289,18 @@ final class HostKeyPromptData extends EnginePromptData {
   /// The previously pinned fingerprint when a change was detected.
   final String? pinnedFingerprintSha256;
 
+  /// The previously pinned key's algorithm when a change was detected.
+  /// It can differ from [keyType] (a server rebuilt with a new key type),
+  /// so the review must not label the old fingerprint with the new type.
+  final String? pinnedKeyType;
+
   const HostKeyPromptData({
     required this.host,
     required this.port,
     required this.keyType,
     required this.fingerprintSha256,
     this.pinnedFingerprintSha256,
+    this.pinnedKeyType,
   });
 }
 
