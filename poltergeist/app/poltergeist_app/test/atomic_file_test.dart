@@ -51,6 +51,25 @@ void main() {
 
     expect(await _entryNames(temporaryDirectory), ['data.json']);
   });
+
+  test(
+    'writes through a symbolic link and keeps the link',
+    () async {
+      final target = File(p.join(temporaryDirectory.path, 'target.json'));
+      await target.writeAsString('old');
+      final link = Link(p.join(temporaryDirectory.path, 'link.json'));
+      await link.create(target.path);
+
+      await writeStringAtomically(File(link.path), 'new');
+
+      expect(await target.readAsString(), 'new');
+      expect(
+        await FileSystemEntity.type(link.path, followLinks: false),
+        FileSystemEntityType.link,
+      );
+    },
+    skip: Platform.isWindows ? 'symbolic links need extra rights on Windows' : null,
+  );
 }
 
 Future<List<String>> _entryNames(Directory directory) async {

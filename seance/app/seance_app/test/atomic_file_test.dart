@@ -6,6 +6,8 @@ import 'package:seance_app/services/file_stores.dart';
 import 'package:seance_core/catalog.dart' show PersistentLocalRecordStore;
 import 'package:seance_core/seance_core.dart';
 
+import 'support/atomic_write_blocker.dart';
+
 class _AcceptingSyncApi implements SyncApi {
   final Map<String, EncryptedRecord> records = {};
   int _latestSeq = 0;
@@ -53,7 +55,7 @@ void main() {
       await writeStringAtomically(file, 'first');
       await writeStringAtomically(file, 'second');
       expect(await file.readAsString(), 'second');
-      expect(await File('${file.path}.tmp').exists(), isFalse);
+      expect(await dir.list().toList(), hasLength(1));
     });
 
     test('overlapping writes preserve the last requested complete snapshot',
@@ -72,8 +74,7 @@ void main() {
 
     test('a failed write does not block later saves to the same path', () async {
       final file = File('${dir.path}/data.json');
-      final blocked = Directory('${file.path}.tmp');
-      await blocked.create();
+      final blocked = await AtomicWriteBlocker(file).create();
       await expectLater(writeStringAtomically(file, 'first'),
           throwsA(isA<FileSystemException>()));
       await blocked.delete();
@@ -255,8 +256,7 @@ void main() {
 
   test('a failed host-key write cannot leak into a later snapshot', () async {
     final file = File('${dir.path}/known_hosts.json');
-    // Block the staging path used by writeStringAtomically().
-    final blocked = Directory('${file.path}.tmp')..createSync();
+    final blocked = await AtomicWriteBlocker(file).create();
     final store = FileHostKeyStore(file);
     const failed = HostKey(
       host: 'failed.example.com',

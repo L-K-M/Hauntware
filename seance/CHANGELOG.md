@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Settings and sync data files use the shared atomic writer and write
+  through symbolic links, and local store operations share one queue so
+  a failed save does not poison the next one.
+
 - The Linux package build uses the suite's shared packager and fails early
   with a clear message when `objdump` is missing, instead of partway through.
   The built `.deb` and AppImage are unchanged.
