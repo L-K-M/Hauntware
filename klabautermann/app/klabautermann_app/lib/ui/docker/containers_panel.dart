@@ -22,6 +22,7 @@ import '../actions/docker_actions.dart'
         containerIntent,
         containerOffers;
 import '../sortable_table.dart';
+import '../state_notice.dart';
 import '../workspace_dock.dart' show DockedShell, WorkspaceDockScope;
 import 'container_details.dart';
 import 'container_logs.dart';
@@ -1750,7 +1751,7 @@ class _BuiltRowState extends State<_BuiltRow> {
 
 /// A state in words beside an icon, read as one node, with the engine's
 /// own [detail] under it, never translated, and an optional [action];
-/// the Containers and Images sub-tabs share it.
+/// the Docker tab's views share it.
 class DockerNotice extends StatelessWidget {
   const DockerNotice({
     super.key,
@@ -1766,43 +1767,11 @@ class DockerNotice extends StatelessWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    final detail = this.detail;
-    final action = this.action;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        MergeSemantics(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 8,
-            children: [
-              Icon(icon, size: 18, color: muted),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  spacing: 4,
-                  children: [
-                    Text(text, style: theme.textTheme.bodyMedium),
-                    if (detail != null && detail.isNotEmpty)
-                      Text(
-                        detail,
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: muted,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        ?action,
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      StateNotice(icon: icon, text: text, detail: detail),
+      ?action,
+    ],
+  );
 }

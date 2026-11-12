@@ -5,6 +5,7 @@ import 'package:seance_core/catalog.dart' show SyncAccountScope;
 import 'package:seance_core/seance_core.dart';
 
 import 'atomic_file.dart';
+import 'serialized_operations.dart';
 
 const String _keySecretPrefix = 'inbox-key:';
 
@@ -23,28 +24,18 @@ const String _keySecretPrefix = 'inbox-key:';
 /// Single writer by construction: every write comes from `AppState` inside
 /// its mutation queue, the sync round included, so flushes never interleave
 /// and the file needs no lock of its own.
-class FileInboxAppStore implements InboxAppStore {
+class FileInboxAppStore with SerializedOperations implements InboxAppStore {
   final File file;
   final SecretVault Function() vault;
   final Map<String, Map<String, dynamic>> _meta = {};
   bool _loaded = false;
-  Future<void> _operationTail = Future<void>.value();
 
   FileInboxAppStore(this.file, this.vault);
 
   /// One save at a time: each builds its candidate from the metadata the
   /// previous one committed, so overlapping saves cannot drop each other.
-  Future<T> _serialize<T>(Future<T> Function() operation) {
-    final result = _operationTail.then((_) async {
-      await _load();
-      return operation();
-    });
-    _operationTail = result.then<void>(
-      (_) {},
-      onError: (Object _, StackTrace __) {},
-    );
-    return result;
-  }
+  Future<T> _serialize<T>(Future<T> Function() operation) =>
+      serialize(_load, operation);
 
   Future<void> _load() async {
     if (_loaded) return;
@@ -119,12 +110,12 @@ class FileInboxAppStore implements InboxAppStore {
 }
 
 /// JSON-file [InboxStatusStore].
-class FileInboxStatusStore implements InboxStatusStore, SyncCollectionHealth {
+class FileInboxStatusStore with SerializedOperations
+    implements InboxStatusStore, SyncCollectionHealth {
   final File file;
   final Map<String, InboxStatus> _cache = {};
   bool _loaded = false;
   bool _syncCollectionFailed = false;
-  Future<void> _operationTail = Future<void>.value();
 
   FileInboxStatusStore(this.file);
 
@@ -158,17 +149,8 @@ class FileInboxStatusStore implements InboxStatusStore, SyncCollectionHealth {
 
   // FileConfigStore's rule (#661): one operation at a time, and memory takes
   // a status only once its write succeeded.
-  Future<T> _serialize<T>(Future<T> Function() operation) {
-    final result = _operationTail.then((_) async {
-      await _load();
-      return operation();
-    });
-    _operationTail = result.then<void>(
-      (_) {},
-      onError: (Object _, StackTrace __) {},
-    );
-    return result;
-  }
+  Future<T> _serialize<T>(Future<T> Function() operation) =>
+      serialize(_load, operation);
 
   /// Writes the candidate [update] makes when it reports a change, then
   /// commits it to memory.
@@ -218,14 +200,13 @@ class FileInboxStatusStore implements InboxStatusStore, SyncCollectionHealth {
 
 /// JSON-file [InboxCacheStore], owner-only: the scripts are commands for the
 /// user's servers, the same class of content as their shell history.
-class FileInboxCacheStore implements InboxCacheStore {
+class FileInboxCacheStore with SerializedOperations implements InboxCacheStore {
   final File file;
   final SyncAccountScope scope;
   final bool resetExisting;
 
   InboxCache? _cache;
   bool _loaded = false;
-  Future<void> _operationTail = Future<void>.value();
 
   FileInboxCacheStore(
     this.file, {
@@ -240,17 +221,8 @@ class FileInboxCacheStore implements InboxCacheStore {
 
   /// One load or save at a time, so the file and memory end on the same
   /// cache whatever order overlapping saves finish their writes in.
-  Future<T> _serialize<T>(Future<T> Function() operation) {
-    final result = _operationTail.then((_) async {
-      await _load();
-      return operation();
-    });
-    _operationTail = result.then<void>(
-      (_) {},
-      onError: (Object _, StackTrace __) {},
-    );
-    return result;
-  }
+  Future<T> _serialize<T>(Future<T> Function() operation) =>
+      serialize(_load, operation);
 
   Future<void> _load() async {
     if (_loaded) return;

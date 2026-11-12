@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:planchette_editor/planchette_editor.dart'
     show EditorLigatures, EditorTextSize;
 
+import 'persisted_setting.dart';
+
 /// The file editors' font on this device: a family as Settings →
 /// Appearance stores it (empty for the editor's default), whether its
 /// ligatures draw, and the text size in logical pixels. Device-local like
@@ -78,47 +80,27 @@ final class EditorDisplayNotSavedException implements Exception {
 /// `settings.json` and saves every change there; without a save callback,
 /// as in most tests, it is held in memory only. A change applies before it
 /// is saved, as the log display does.
-final class EditorDisplayController extends ChangeNotifier
+final class EditorDisplayController extends PersistedSetting<EditorDisplay>
     implements EditorDisplaySettings {
   EditorDisplayController({EditorDisplay? display, this._save})
-    : _value = display ?? EditorDisplay(),
-      _saved = display ?? EditorDisplay();
+    : super(display ?? EditorDisplay());
 
-  EditorDisplay _value;
-
-  /// The display last known to be in `settings.json`: after a failed save,
-  /// picking the same display again tries the save again.
-  EditorDisplay _saved;
   final Future<void> Function(
     String? family,
     EditorLigatures ligatures,
     int textSize,
-  )? _save;
+  )?
+  _save;
 
   @override
-  EditorDisplay get value => _value;
+  Future<void> setEditorDisplay(EditorDisplay display) => change(display);
 
   @override
-  Future<void> setEditorDisplay(EditorDisplay display) async {
-    if (display == _value && display == _saved) return;
-    if (display != _value) {
-      _value = display;
-      notifyListeners();
-    }
-    try {
-      await _save?.call(
-        display.chosenFamily,
-        display.ligatures,
-        display.textSize,
-      );
-      _saved = display;
-    } on Exception catch (error, stackTrace) {
-      Error.throwWithStackTrace(
-        EditorDisplayNotSavedException(
-          'The editor display was not saved: $error',
-        ),
-        stackTrace,
-      );
-    }
-  }
+  Future<void>? save(EditorDisplay display) =>
+      _save?.call(display.chosenFamily, display.ligatures, display.textSize);
+
+  @override
+  Exception notSaved(Object error) => EditorDisplayNotSavedException(
+    'The editor display was not saved: $error',
+  );
 }

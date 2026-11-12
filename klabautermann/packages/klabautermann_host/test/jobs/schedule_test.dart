@@ -17,7 +17,9 @@ void main() {
       expect(_items(s.fields!.hour), ['0']);
       expect(_items(s.fields!.dayOfMonth), ['*']);
       expect(s.dayMatch, CronDayMatch.both);
-      expect(CronSchedule.parse('@ANNUALLY')!.macro, CronMacro.annually);
+      expect(CronSchedule.parse('@annually')!.macro, CronMacro.annually);
+      // cron skips a macro spelled in any other case.
+      expect(CronSchedule.parse('@ANNUALLY'), isNull);
     });
 
     test('every clock macro maps to its name and crontab(5) fields', () {

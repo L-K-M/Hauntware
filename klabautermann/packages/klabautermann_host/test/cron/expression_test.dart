@@ -76,8 +76,26 @@ void main() {
       expect(wildcard('@reboot'), isFalse);
     });
 
+    test('a weekday range may end on sunday written as 0', () {
+      // cronie reads a weekday range whose end is 0 below its start as
+      // ending on 7 [R: cronie `entry.c` `get_range`].
+      expect(CronExpression.parse('0 0 * * fri-sun')!.weekDays, {5, 6, 0});
+      expect(CronExpression.parse('0 0 * * 6-0/1')!.weekDays, {6, 0});
+      // Only the weekday field, and only an end of 0.
+      expect(CronExpression.parse('0 0 * * 5-1'), isNull);
+      expect(CronExpression.parse('0 5-0 * * *'), isNull);
+    });
+
+    test('macros are lower case, as cron compares them', () {
+      // cronie matches the word after `@` with strcmp and skips a line
+      // with any other spelling [R: cronie `entry.c` `load_entry`].
+      for (final text in const ['@REBOOT', '@Daily', '@HOURLY']) {
+        expect(CronExpression.parse(text), isNull, reason: text);
+      }
+    });
+
     test('@reboot parses to a reboot expression with no clock', () {
-      final e = CronExpression.parse('@REBOOT')!;
+      final e = CronExpression.parse('@reboot')!;
       expect(e.isReboot, isTrue);
       expect(e.minutes, isEmpty);
       expect(e.matches(DateTime.utc(2026, 1, 1)), isFalse);
@@ -108,6 +126,11 @@ void main() {
         'a b c d e',
         '@nope',
         ', * * * *',
+        // cron reads decimal digits only [R: cronie `get_number`].
+        '+5 * * * *',
+        '*/+5 * * * *',
+        '0x1 * * * *',
+        '*/0x2 * * * *',
       ]) {
         expect(
           CronExpression.parse(bad),

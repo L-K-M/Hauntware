@@ -491,12 +491,17 @@ void main() {
       final file = File('${directory.path}/settings.json');
       final store = LocalSettingsStore(file);
       await store.save(const AppSettings(fontSize: 16));
-      await Directory('${file.path}.tmp').create();
-
-      await expectLater(
-        store.save(const AppSettings(fontSize: 18)),
-        throwsA(isA<FileSystemException>()),
-      );
+      final original = await file.rename('${file.path}.before-test-write');
+      final blocker = await Directory(file.path).create();
+      try {
+        await expectLater(
+          store.save(const AppSettings(fontSize: 18)),
+          throwsA(isA<FileSystemException>()),
+        );
+      } finally {
+        await blocker.delete();
+        await original.rename(file.path);
+      }
       expect((await store.load())?.fontSize, 16);
     });
 

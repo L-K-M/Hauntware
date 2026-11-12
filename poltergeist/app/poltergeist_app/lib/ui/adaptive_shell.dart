@@ -1,14 +1,14 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
-import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostPaneEdge, GhostResizeHandle;
 
 import 'layout/pane_allocation.dart';
 import 'shell/shell_splitter.dart';
 
 const _defaultPaneRatio = 0.5;
-const _keyboardResizeStep = 16.0;
 
 typedef PaneRatioSaver = FutureOr<void> Function(double ratio);
 typedef PaneRatioFormatter = String Function(double ratio);
@@ -58,7 +58,6 @@ class AdaptiveShell extends StatefulWidget {
 }
 
 class _AdaptiveShellState extends State<AdaptiveShell> {
-  final _splitterFocusNode = FocusNode();
   late double _paneRatio;
   late double _lastSavedPaneRatio;
   double _contentWidth = 0;
@@ -77,7 +76,6 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
   @override
   void dispose() {
     _commitPaneRatio();
-    _splitterFocusNode.dispose();
     super.dispose();
   }
 
@@ -114,15 +112,6 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
   }
 
   Widget _buildPanes(BuildContext context, PaneAllocation allocation) {
-    final displayedRatio = _displayedRatio(allocation, _paneRatio);
-    final increasedRatio = _displayedRatio(
-      allocation,
-      _ratioAfterLogicalDelta(allocation, _keyboardResizeStep),
-    );
-    final decreasedRatio = _displayedRatio(
-      allocation,
-      _ratioAfterLogicalDelta(allocation, -_keyboardResizeStep),
-    );
     final primary = SizedBox(
       key: AdaptiveShell.primaryPaneKey,
       width: allocation.primaryWidth,
@@ -150,20 +139,41 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
       ),
       start: allocation.primaryWidth,
       extent: allocation.splitterWidth,
-      handle: _PaneSplitter(
+      handle: GhostResizeHandle(
         key: AdaptiveShell.splitterKey,
-        focusNode: _splitterFocusNode,
         label: widget.resizeLabel,
-        value: widget.formatRatio(displayedRatio),
-        increasedValue: widget.formatRatio(increasedRatio),
-        decreasedValue: widget.formatRatio(decreasedRatio),
-        onResize: (delta) => _resize(context, delta),
-        onResizeEnd: _commitPaneRatio,
+        width: allocation.primaryWidth,
+        minimumWidth: _displayedPrimaryWidth(allocation, 0),
+        maximumWidth: _displayedPrimaryWidth(allocation, 1),
+        edge: GhostPaneEdge.leading,
+        widthAfterStep: (delta) =>
+            _displayedPrimaryWidth(
+              allocation,
+              _ratioAfterLogicalDelta(allocation, delta),
+            ),
+        onStep: _stepPaneRatio,
+        // The shell tracks no drag state of its own.
+        onStart: () {},
+        onDelta: _resize,
+        onEnd: _commitPaneRatio,
+        dragStartBehavior: DragStartBehavior.down,
+        handleWidth: allocation.splitterWidth,
+        valueText: (width) =>
+            widget.formatRatio(_ratioForWidth(allocation, width)),
       ),
     );
   }
 
-  void _resize(BuildContext context, double physicalDelta) {
+  /// One arrow key or assistive adjustment is a complete interaction:
+  /// move, then commit once, like the region splitters.
+  void _stepPaneRatio(double logicalDelta) {
+    _resize(logicalDelta);
+    _commitPaneRatio();
+  }
+
+  void _resize(double logicalDelta) {
+    // Several pointer updates can arrive before a frame. Resolve against
+    // the latest ratio, not the allocation captured by the previous build.
     final allocation = allocatePanes(
       width: _contentWidth,
       ratio: _paneRatio,
@@ -172,10 +182,6 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
     final usableWidth = allocation.primaryWidth + allocation.secondaryWidth;
     if (usableWidth <= 0) return;
 
-    final direction = Directionality.of(context);
-    final logicalDelta = direction == TextDirection.ltr
-        ? physicalDelta
-        : -physicalDelta;
     final ratio = _ratioAfterLogicalDelta(allocation, logicalDelta);
 
     if (ratio == _paneRatio) return;
@@ -183,6 +189,24 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
     setState(() => _paneRatio = ratio);
     _saveRevision++;
     _hasPendingSave = true;
+  }
+
+  /// The primary pane's rendered width at [logicalRatio]: the current
+  /// allocation's own at the current ratio, a clamped edge's when a step
+  /// or drag lands on one. The shared handle announces and bounds with it.
+  double _displayedPrimaryWidth(
+    PaneAllocation allocation,
+    double logicalRatio,
+  ) {
+    final usableWidth = allocation.primaryWidth + allocation.secondaryWidth;
+    if (usableWidth <= 0) return allocation.primaryWidth;
+    return _displayedRatio(allocation, logicalRatio) * usableWidth;
+  }
+
+  /// The reading-direction ratio a primary width of [width] represents.
+  double _ratioForWidth(PaneAllocation allocation, double width) {
+    final usableWidth = allocation.primaryWidth + allocation.secondaryWidth;
+    return usableWidth <= 0 ? 0 : width / usableWidth;
   }
 
   double _ratioAfterLogicalDelta(
@@ -236,7 +260,7 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
   void _commitPaneRatio() {
     if (!_hasPendingSave) return;
 
-    // Persist once at the interaction boundary, not per drag or key repeat.
+    // Persist at the drag boundary, or once per keyboard/assistive step.
     _hasPendingSave = false;
     _savePaneRatio(_paneRatio, _saveRevision);
   }
@@ -264,115 +288,5 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
         setState(() => _paneRatio = _lastSavedPaneRatio);
       }
     });
-  }
-}
-
-class _PaneSplitter extends StatelessWidget {
-  const _PaneSplitter({
-    super.key,
-    required this.focusNode,
-    required this.label,
-    required this.value,
-    required this.increasedValue,
-    required this.decreasedValue,
-    required this.onResize,
-    required this.onResizeEnd,
-  });
-
-  final FocusNode focusNode;
-  final String label;
-  final String value;
-  final String increasedValue;
-  final String decreasedValue;
-  final ValueChanged<double> onResize;
-  final VoidCallback onResizeEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    return Focus(
-      focusNode: focusNode,
-      onFocusChange: (hasFocus) {
-        if (hasFocus) return;
-
-        onResizeEnd();
-      },
-      onKeyEvent: (_, event) {
-        final delta = switch (event.logicalKey) {
-          LogicalKeyboardKey.arrowLeft => -_keyboardResizeStep,
-          LogicalKeyboardKey.arrowRight => _keyboardResizeStep,
-          _ => null,
-        };
-        if (delta == null) return KeyEventResult.ignored;
-
-        if (event is KeyUpEvent) {
-          onResizeEnd();
-          return KeyEventResult.handled;
-        }
-        if (event is KeyDownEvent || event is KeyRepeatEvent) {
-          onResize(delta);
-          return KeyEventResult.handled;
-        }
-
-        return KeyEventResult.ignored;
-      },
-      child: AnimatedBuilder(
-        animation: focusNode,
-        builder: (context, child) {
-          final border = focusNode.hasFocus
-              ? Border.all(
-                  color: Theme.of(context).colorScheme.primary,
-                  width: 2,
-                )
-              : null;
-
-          return DecoratedBox(
-            decoration: BoxDecoration(border: border),
-            child: child,
-          );
-        },
-        child: Semantics(
-          label: label,
-          value: value,
-          increasedValue: increasedValue,
-          decreasedValue: decreasedValue,
-          onIncrease: () {
-            final direction = Directionality.of(context);
-            onResize(
-              direction == TextDirection.ltr
-                  ? _keyboardResizeStep
-                  : -_keyboardResizeStep,
-            );
-            onResizeEnd();
-          },
-          onDecrease: () {
-            final direction = Directionality.of(context);
-            onResize(
-              direction == TextDirection.ltr
-                  ? -_keyboardResizeStep
-                  : _keyboardResizeStep,
-            );
-            onResizeEnd();
-          },
-          child: MouseRegion(
-            cursor: SystemMouseCursors.resizeColumn,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              dragStartBehavior: DragStartBehavior.down,
-              onTap: focusNode.requestFocus,
-              onHorizontalDragUpdate: (details) => onResize(details.delta.dx),
-              onHorizontalDragEnd: (_) => onResizeEnd(),
-              onHorizontalDragCancel: onResizeEnd,
-              child: Center(
-                child: VerticalDivider(
-                  width: 1,
-                  thickness: 1,
-                  color: Theme.of(context).dividerColor,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

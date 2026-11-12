@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -15,10 +16,24 @@ import 'package:seance_app/services/remote_git_controller.dart';
 import 'package:seance_app/services/shell_location.dart';
 import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/theme.dart';
+import 'package:seance_app/ui/inspector_page.dart';
 import 'package:seance_app/ui/sidebar_panel.dart';
 import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+
+// Inspector selection persists from a widget callback. Capture the real
+// bootstrap zone so the next scene cannot wait behind a fake-zone write.
+class _SettingsSaveAppState extends AppState {
+  _SettingsSaveAppState(super.services);
+
+  final Zone _ioZone = Zone.current;
+  Future<void>? _settingsSave;
+
+  @override
+  Future<void> setInspectorPage(InspectorPage page) => _settingsSave = _ioZone
+      .run<Future<void>>(() => super.setInspectorPage(page));
+}
 
 /// Real-font captures of the side panel for the colour vocabulary the
 /// sibling apps share (Poltergeist's D34): the tabs in their hues with
@@ -163,12 +178,13 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   Directory? directory;
   AppServices? services;
-  AppState? state;
+  _SettingsSaveAppState? state;
   final notifiers = <ValueNotifier<String?>>[];
 
   setUpAll(_loadRealFonts);
 
   tearDown(() async {
+    await state?._settingsSave;
     state?.dispose();
     await services?.probe.dispose();
     for (final notifier in notifiers) {
@@ -196,7 +212,7 @@ void main() {
           .setMockMethodCallHandler(_pathChannel, (_) async => directory!.path);
       FlutterSecureStorage.setMockInitialValues({});
       services = await AppServices.initialize();
-      state = AppState(services!);
+      state = _SettingsSaveAppState(services!);
       await state!.saveServer(
         ServerConfig(
           id: 'web',
@@ -279,6 +295,7 @@ void main() {
     String label, {
     required Finder loaded,
   }) async {
+    state!._settingsSave = null;
     await tester.tap(find.byTooltip(label));
     for (var i = 0; i < 50 && loaded.evaluate().isEmpty; i++) {
       await tester.runAsync(
@@ -286,6 +303,11 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 200));
     }
+    await tester.runAsync(() async {
+      await state!._settingsSave;
+      final saved = await services!.settingsStore.load();
+      expect(saved.inspectorPage, services!.settings.inspectorPage);
+    });
   }
 
   Future<void> capture(

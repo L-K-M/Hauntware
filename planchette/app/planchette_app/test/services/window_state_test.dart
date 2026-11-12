@@ -116,12 +116,19 @@ void main() {
       await stateFile.readAsString(),
       '${const JsonEncoder.withIndent('  ').convert(first.toJson())}\n',
     );
-    await Directory('${stateFile.path}.tmp').create();
-
-    await expectLater(
-      store.save(const GhostWindowSnapshot(isMaximized: true)),
-      throwsA(isA<FileSystemException>()),
+    final original = await stateFile.rename(
+      '${stateFile.path}.before-test-write',
     );
+    final blocker = await Directory(stateFile.path).create();
+    try {
+      await expectLater(
+        store.save(const GhostWindowSnapshot(isMaximized: true)),
+        throwsA(isA<FileSystemException>()),
+      );
+    } finally {
+      await blocker.delete();
+      await original.rename(stateFile.path);
+    }
     expect(await store.load(), first);
   });
 }

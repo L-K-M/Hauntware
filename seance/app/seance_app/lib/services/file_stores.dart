@@ -9,16 +9,17 @@ import 'package:seance_core/catalog.dart'
 import 'package:seance_core/seance_core.dart';
 
 import 'atomic_file.dart';
+import 'serialized_operations.dart';
 
 /// Simple JSON-file [ConfigStore]. For a single-user personal tool this is
 /// plenty; the proposal's SQLite/drift backend is a drop-in future swap behind
 /// the same interface. Secret material never lands here — only references.
-class FileConfigStore implements ConfigStore, SyncCollectionHealth {
+class FileConfigStore with SerializedOperations
+    implements ConfigStore, SyncCollectionHealth {
   final File file;
   final Map<String, ServerConfig> _cache = {};
   bool _loaded = false;
   bool _syncCollectionFailed = false;
-  Future<void> _operationTail = Future<void>.value();
 
   FileConfigStore(this.file);
 
@@ -48,17 +49,8 @@ class FileConfigStore implements ConfigStore, SyncCollectionHealth {
         file, jsonEncode(snapshot.values.map((c) => c.toJson()).toList()));
   }
 
-  Future<T> _serialize<T>(Future<T> Function() operation) {
-    final result = _operationTail.then((_) async {
-      await _load();
-      return operation();
-    });
-    _operationTail = result.then<void>(
-      (_) {},
-      onError: (Object _, StackTrace __) {},
-    );
-    return result;
-  }
+  Future<T> _serialize<T>(Future<T> Function() operation) =>
+      serialize(_load, operation);
 
   Future<void> _mutate(void Function(Map<String, ServerConfig>) update) =>
       _serialize(() async {
@@ -106,12 +98,12 @@ class FileConfigStore implements ConfigStore, SyncCollectionHealth {
 }
 
 /// Simple JSON-file [SnippetStore]. Non-secret; synced like server configs.
-class FileSnippetStore implements SnippetStore, SyncCollectionHealth {
+class FileSnippetStore with SerializedOperations
+    implements SnippetStore, SyncCollectionHealth {
   final File file;
   final Map<String, Snippet> _cache = {};
   bool _loaded = false;
   bool _syncCollectionFailed = false;
-  Future<void> _operationTail = Future<void>.value();
 
   FileSnippetStore(this.file);
 
@@ -143,17 +135,8 @@ class FileSnippetStore implements SnippetStore, SyncCollectionHealth {
   // FileConfigStore's rule (#661): operations run one at a time, and a
   // change reaches memory only once its write succeeded, so a rejected
   // change cannot ride a later, unrelated save.
-  Future<T> _serialize<T>(Future<T> Function() operation) {
-    final result = _operationTail.then((_) async {
-      await _load();
-      return operation();
-    });
-    _operationTail = result.then<void>(
-      (_) {},
-      onError: (Object _, StackTrace __) {},
-    );
-    return result;
-  }
+  Future<T> _serialize<T>(Future<T> Function() operation) =>
+      serialize(_load, operation);
 
   Future<void> _mutate(void Function(Map<String, Snippet>) update) =>
       _serialize(() async {
@@ -207,11 +190,10 @@ class FileSnippetStore implements SnippetStore, SyncCollectionHealth {
 /// already stores in the clear, and it also travels to the sync server as the
 /// tombstone record. Server and snippet ids are random `uuidV4`s, so an id
 /// reveals only that *something* was deleted and when, not what.
-class FileTombstoneStore implements TombstoneStore {
+class FileTombstoneStore with SerializedOperations implements TombstoneStore {
   final File file;
   final Map<String, EncryptedRecord> _cache = {};
   bool _loaded = false;
-  Future<void> _operationTail = Future<void>.value();
 
   FileTombstoneStore(this.file);
 
@@ -252,17 +234,8 @@ class FileTombstoneStore implements TombstoneStore {
   // FileConfigStore's rule (#661): one operation at a time, and memory
   // takes a change only once its write succeeded. A failed add must not
   // ride a later one, and a failed removal keeps the deletion pending.
-  Future<T> _serialize<T>(Future<T> Function() operation) {
-    final result = _operationTail.then((_) async {
-      await _load();
-      return operation();
-    });
-    _operationTail = result.then<void>(
-      (_) {},
-      onError: (Object _, StackTrace __) {},
-    );
-    return result;
-  }
+  Future<T> _serialize<T>(Future<T> Function() operation) =>
+      serialize(_load, operation);
 
   /// Writes the candidate [update] makes when it reports a change, then
   /// commits it to memory.

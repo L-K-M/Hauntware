@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Settings, window state and other app data files are written
+  through a shared atomic writer that fsyncs the file and its
+  directory and writes through symbolic links, so a power loss is less
+  likely to leave a truncated file.
+
 ### Changed
 
 - Séance's window has one layout on every platform: a header with

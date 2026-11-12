@@ -1,4 +1,4 @@
-import 'dart:async' show Timer, unawaited;
+import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart' show ghostFormatBinarySize;
@@ -13,7 +13,7 @@ import '../admin_mode_chip.dart';
 import '../edit/editor_display_scope.dart';
 import '../edit/remote_editor.dart';
 import '../editor_strings.dart' show KlabautermannEditorStrings;
-import '../processes_panel.dart' show kRevealDuration;
+import '../timed_reveal.dart';
 import 'container_details.dart' show ContainerInspectionScope;
 import 'containers_panel.dart' show DockerNotice;
 import 'stacks_view.dart';
@@ -149,7 +149,6 @@ class StackFileView extends StatefulWidget {
 
 class _StackFileViewState extends State<StackFileView> {
   late final List<StackFile> _files = stackFilesOf(widget.project);
-  late final AppLifecycleListener _lifecycle;
 
   /// The file picked, by path.
   String? _path;
@@ -163,21 +162,22 @@ class _StackFileViewState extends State<StackFileView> {
   /// The editor showing [_answer]'s text, masked or revealed.
   EditorController? _editor;
 
-  /// Masks the revealed values when their time is up; null while
-  /// masked.
-  Timer? _reveal;
+  /// Whether the masked values show, and for how long.
+  late final TimedReveals<RevealScope> _reveal;
 
   @override
   void initState() {
     super.initState();
-    _lifecycle = AppLifecycleListener(onInactive: _mask);
+    _reveal = TimedReveals(
+      onChanged: () =>
+          setState(() => _showText(_text(revealed: !_reveal.isEmpty))),
+    );
     if (_files.isNotEmpty) unawaited(_open(_files.first.path));
   }
 
   @override
   void dispose() {
-    _lifecycle.dispose();
-    _reveal?.cancel();
+    _reveal.dispose();
     _editor?.dispose();
     super.dispose();
   }
@@ -185,8 +185,7 @@ class _StackFileViewState extends State<StackFileView> {
   /// Reads [path], dropping the file shown before and anything revealed.
   Future<void> _open(String path) async {
     final read = ++_reads;
-    _reveal?.cancel();
-    _reveal = null;
+    _reveal.discard();
     _showText(null);
     setState(() {
       _path = path;
@@ -228,29 +227,6 @@ class _StackFileViewState extends State<StackFileView> {
     if (before != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => before.dispose());
     }
-  }
-
-  void _toggleReveal() {
-    if (_reveal != null) {
-      _mask();
-      return;
-    }
-
-    setState(() {
-      _reveal = Timer(kRevealDuration, _mask);
-      _showText(_text(revealed: true));
-    });
-  }
-
-  void _mask() {
-    final timer = _reveal;
-    if (timer == null || !mounted) return;
-
-    timer.cancel();
-    setState(() {
-      _reveal = null;
-      _showText(_text(revealed: false));
-    });
   }
 
   void _retry() {
@@ -376,7 +352,7 @@ class _StackFileViewState extends State<StackFileView> {
         ];
       case DockerStackFilePayload(:final text, :final size, :final truncated):
         final masked = text.where((span) => span.isMasked).length;
-        final revealed = _reveal != null;
+        final revealed = _reveal.isRevealed(RevealScope.all);
         final editor = _editor;
         return [
           if (truncated)
@@ -398,7 +374,7 @@ class _StackFileViewState extends State<StackFileView> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 TextButton.icon(
-                  onPressed: _toggleReveal,
+                  onPressed: () => _reveal.toggle(RevealScope.all),
                   icon: Icon(
                     revealed
                         ? Icons.visibility_off_outlined

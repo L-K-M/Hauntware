@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_fonts/testing.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart';
@@ -17,7 +18,6 @@ import 'package:seance_app/theme.dart';
 import 'package:seance_app/ui/adaptive_shell.dart';
 import 'package:seance_app/ui/app_menus.dart';
 import 'package:seance_app/ui/header_toolbar.dart';
-import 'package:seance_app/ui/macos_toolbar_band.dart';
 import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');

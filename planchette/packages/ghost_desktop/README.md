@@ -25,6 +25,13 @@ format, close guards, and native hooks kept in its own thin adapter.
 - `MacosToolbarBandChannel` — whether macOS shows the unified toolbar band a
   host's header draws under, from the runner's reports on the host's window
   channel (`seance/window`, `poltergeist/window`).
+- `macosToolbarBandHeight`, `MacosToolbarBandScope`,
+  `ReserveMacosToolbarBand` / `ClaimMacosToolbarBand` and
+  `withMacosToolbarBand` — the same band as layout: the scope publishes the
+  channel's state, the reservation insets every other surface below the
+  band through `MediaQuery`, and the claim gives it back to the shell whose
+  header draws under it. `windowedWithoutScope` keeps a host's windowed
+  layout banded when it has no runner report (Poltergeist).
 - `GhostSettingsWindowHost` / `GhostSettingsWindowClient` — the desktop
   Settings window's link between the app's engine and the window's second
   engine: the `hello` handshake, coalesced and deduplicated snapshots,
