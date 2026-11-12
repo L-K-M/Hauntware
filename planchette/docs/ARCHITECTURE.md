@@ -46,6 +46,18 @@ with shared columns, kind glyphs and formatting. Hosts project filesystem
 entries into `GhostFileItem`, provide `GhostFileTheme` tokens and localized
 strings, and retain selection, gestures, drag payloads and file operations.
 
+## Multi-window host provenance
+
+The app's multi-window host (`lib/services/window_host.dart`,
+`document_windows.dart`, `semantics_view_routing.dart` and the native
+`document_windows.*`, `DocumentWindows.swift` and `PlanchetteMultiView.*`
+runner files) follows Poltergeist's workspace windows, which came first
+(`7ee26f551`, 2026-09-25; Planchette's `fc37e762c`, 2026-10-02). The file
+correspondence and the differences are in
+[`poltergeist/docs/PORTS.md`](../../poltergeist/docs/PORTS.md), "Multi-window
+host shared with Planchette". A shared home is deferred; the copies are not
+kept in step automatically.
+
 ## Optional app workspaces
 
 `FolderWorkspace` owns one local or remote browser root per window. It uses
