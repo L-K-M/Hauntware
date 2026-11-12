@@ -609,6 +609,35 @@ void main() {
       expect(link.peer.channels, hasLength(1));
     });
 
+    test('validatePassword ignores cached credentials and classifies a '
+        'refusal (D65)', () async {
+      final link = await openTestLink();
+      addTearDown(link.link.close);
+      link.peer.onExec = _answers([
+        _reply(),
+        _reply(exit: 1, stderr: _e8WrongPassword),
+      ]);
+      final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+      await executor.validatePassword(_password);
+      final channel = link.peer.channels.single;
+      expect(channel.execCommand, "env LC_ALL=C sudo -k -S -p '' -v");
+      expect(utf8.decode(channel.stdinBytes), '$_password\n');
+      expect(channel.eofFromClient, isTrue);
+
+      await expectLater(
+        executor.validatePassword('wrong'),
+        throwsA(
+          isA<ElevationException>().having(
+            (e) => e.kind,
+            'kind',
+            ElevationFailureKind.wrongPassword,
+          ),
+        ),
+      );
+      expect(() => executor.validatePassword('a\nb'), throwsArgumentError);
+    });
+
     test('exit 125 without a sudo text is the command\'s own status', () async {
       final link = await openTestLink();
       addTearDown(link.link.close);

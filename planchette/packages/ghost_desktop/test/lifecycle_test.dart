@@ -73,6 +73,7 @@ void main() {
       window.failEnsureInitialized = false;
       await lifecycle.prepare();
 
+      expect(window.ensureInitializedCalls, 2);
       expect(window.listenerRegistered, isTrue);
     });
 
@@ -116,11 +117,14 @@ void main() {
       final closing = lifecycle.close();
       await pumpEventQueue();
 
+      expect(window.getBoundsStarted.isCompleted, isFalse);
       expect(window.events, isNot(contains('destroy')));
 
       window.releaseEnsureInitialized();
       expect(await closing, isTrue);
       expect(window.events.last, 'destroy');
+      expect(window.listenerRegistered, isFalse);
+      expect(window.callsAfterDestroy, isEmpty);
     });
 
     test('close tears down after in-flight prepare fails', () async {
@@ -129,14 +133,22 @@ void main() {
         ..failEnsureInitialized = true;
       final lifecycle = _lifecycle(window: window);
 
-      lifecycle.prepare().ignore();
+      final preparing = lifecycle.prepare();
+      final prepareFailure = expectLater(preparing, throwsA(isA<StateError>()));
       await window.ensureInitializedStarted.future;
       final closing = lifecycle.close();
       await pumpEventQueue();
+
+      expect(window.getBoundsStarted.isCompleted, isFalse);
+      expect(window.events, isNot(contains('destroy')));
+
       window.releaseEnsureInitialized();
+      await prepareFailure;
 
       expect(await closing, isTrue);
       expect(window.events.last, 'destroy');
+      expect(window.listenerRegistered, isFalse);
+      expect(window.callsAfterDestroy, isEmpty);
     });
 
     test('prepare stays idle after close has started', () async {
@@ -148,6 +160,17 @@ void main() {
       await lifecycle.prepare();
 
       expect(window.callsAfterDestroy, isEmpty);
+    });
+
+    test('prepare stays idle when close came first', () async {
+      final window = FakeWindowAdapter();
+      final lifecycle = _lifecycle(window: window);
+
+      await lifecycle.close();
+      await lifecycle.prepare();
+
+      expect(window.ensureInitializedCalls, 0);
+      expect(window.listenerRegistered, isFalse);
     });
   });
 
@@ -510,6 +533,7 @@ void main() {
       await pumpEventQueue();
 
       expect(window.getBoundsStarted.isCompleted, isFalse);
+      expect(window.minimumSizes, isEmpty);
 
       window.releaseReadyToShow();
       await calibrating;
@@ -546,11 +570,16 @@ void main() {
         await window.readyToShowStarted.future;
         lifecycle.calibrateMinimumSize(const Size(1000, 600)).ignore();
         final closing = lifecycle.close();
+        await pumpEventQueue();
+
+        expect(window.events, isNot(contains('destroy')));
+
         window.releaseReadyToShow();
         await closing;
 
         expect(window.events.last, 'destroy');
         expect(window.minimumSizes, isEmpty);
+        expect(window.callsAfterDestroy, isEmpty);
       },
     );
 
@@ -568,7 +597,9 @@ void main() {
 
       window.releaseGetBounds();
       await closing;
+      expect(window.minimumSizes, isEmpty);
       expect(window.events.last, 'destroy');
+      expect(window.callsAfterDestroy, isEmpty);
     });
 
     test('calibration failures are reported without escaping', () async {

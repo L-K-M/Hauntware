@@ -51,6 +51,7 @@ if [[ "$scope" != flutter ]]; then
   # inside its own working directory, not a workspace member.
   (
     run dart pub get
+    run dart analyze tool/release_version
     run dart test tool/release_version/test
     run dart run tool/release_version/bin/release_version.dart check
   )

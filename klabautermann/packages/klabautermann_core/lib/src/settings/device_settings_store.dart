@@ -40,6 +40,9 @@ const String _appLockKey = 'klabautermann.appLock';
 const String _logTextSizeKey = 'klabautermann.logs.textSize';
 const String _logWrapKey = 'klabautermann.logs.wrap';
 const String _serverTimesKey = 'klabautermann.display.serverTimes';
+const String _editorFontFamilyKey = 'klabautermann.editor.fontFamily';
+const String _editorLigaturesKey = 'klabautermann.editor.ligatures';
+const String _editorTextSizeKey = 'klabautermann.editor.textSize';
 
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
 const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
@@ -588,6 +591,45 @@ final class DeviceSettingsStore {
   /// [setCadence] does.
   Future<void> setServerTimes(bool serverTimes) async {
     _values[_serverTimesKey] = serverTimes;
+    await _save();
+  }
+
+  /// The file editors' font family (03 §8.5),
+  /// `klabautermann.editor.fontFamily`: the family's display name, or null
+  /// when there is none or it is not a non-blank string; the app reads an
+  /// empty one as the editor's default.
+  String? get editorFontFamily => switch (_values[_editorFontFamilyKey]) {
+    final String family when family.trim().isNotEmpty => family,
+    _ => null,
+  };
+
+  /// Whether the editors' font draws ligatures (03 §8.5),
+  /// `klabautermann.editor.ligatures`; anything but `false` reads as on.
+  bool get editorLigatures => _values[_editorLigaturesKey] != false;
+
+  /// The editors' text size (03 §8.5), `klabautermann.editor.textSize`, in
+  /// logical pixels, or null when there is none or it is not a whole
+  /// number; the app clamps it to the sizes it offers.
+  int? get editorTextSize => switch (_values[_editorTextSizeKey]) {
+    final int size => size,
+    _ => null,
+  };
+
+  /// Stores the editors' [family], [ligatures] and [textSize] and writes
+  /// the document; throws as [setCadence] does. A null [family] removes it,
+  /// which reads as the editor's default.
+  Future<void> setEditorDisplay(
+    String? family,
+    bool ligatures,
+    int textSize,
+  ) async {
+    if (family == null) {
+      _values.remove(_editorFontFamilyKey);
+    } else {
+      _values[_editorFontFamilyKey] = family;
+    }
+    _values[_editorLigaturesKey] = ligatures;
+    _values[_editorTextSizeKey] = textSize;
     await _save();
   }
 

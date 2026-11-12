@@ -48,19 +48,20 @@ enum TerminalPasteChoice { pasteAll, firstLineOnly, cancel }
 ///
 /// Text without a line break is cleaned of control characters and pasted:
 /// it runs only on the user's own Enter, so it is not inspected. Text
-/// with line breaks goes to [inspect] first; with no findings it is
-/// pasted line by line, cleaned, joined with `\n`. Findings, or an
-/// [inspect] that fails, ask [confirm], whose answer pastes everything,
-/// the first line only, or nothing. Cleaning each line removes ESC, so a
-/// paste cannot end bracketed paste early.
+/// with line breaks goes to [inspect] first; with no findings, while the
+/// remote has bracketed paste on, it is pasted line by line, cleaned,
+/// joined with `\n`. Findings, an [inspect] that fails, or bracketed paste
+/// off (every line then runs as it arrives) ask [confirm], whose answer
+/// pastes everything, the first line only, or nothing. Cleaning each line
+/// removes ESC, so a paste cannot end bracketed paste early.
 final class TerminalPastePolicy {
   const TerminalPastePolicy({required this.inspect, required this.confirm});
 
   /// Lints multi-line text; the host fills it.
   final Future<List<TerminalPasteFinding>> Function(String text) inspect;
 
-  /// Asks the user; called only for a multi-line paste with findings, or
-  /// when [inspect] failed.
+  /// Asks the user; called only for a multi-line paste with findings, when
+  /// [inspect] failed, or when the remote has bracketed paste off.
   final Future<TerminalPasteChoice> Function(TerminalPasteReview review)
   confirm;
 
@@ -83,7 +84,9 @@ final class TerminalPastePolicy {
     }
 
     var choice = TerminalPasteChoice.pasteAll;
-    if (findings == null || findings.isNotEmpty) {
+    if (findings == null ||
+        findings.isNotEmpty ||
+        !engine.terminal.bracketedPasteMode) {
       choice = await confirm(
         TerminalPasteReview(
           text: text,

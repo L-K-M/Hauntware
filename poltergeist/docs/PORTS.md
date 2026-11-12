@@ -15,6 +15,45 @@ change, not an entry in the port lineage.
 - Pin audit: `seance/` changed, so the `SEANCE_PIN_AUDIT_V3` record is
   re-recorded by the integrator once, not here.
 
+## Multi-window host shared with Planchette (2026-11-11)
+
+Poltergeist's workspace windows and Planchette's document windows are one
+design written twice. Poltergeist is the origin: `7ee26f551` ("Open more
+than one workspace window", 2026-09-25) introduced the host on the app's
+one engine, and Planchette's `fc37e762c` ("Add native multi-window
+support to the desktop app", 2026-10-02) followed it with the same wire
+and the same native structure under its own names. Nothing recorded the
+copy until this entry. No Séance source is involved.
+
+| Poltergeist (`app/poltergeist_app/`) | Planchette (`planchette/app/planchette_app/`) |
+|---|---|
+| `lib/services/workspace_windows/window_host.dart` | `lib/services/window_host.dart` |
+| `lib/services/workspace_windows/workspace_windows.dart` | `lib/services/document_windows.dart` |
+| `lib/services/semantics_view_routing.dart` | `lib/services/semantics_view_routing.dart` |
+| `windows/runner/workspace_windows.{h,cpp}` | `windows/runner/document_windows.{h,cpp}` |
+| `linux/runner/workspace_windows.{h,cc}` | `linux/runner/document_windows.{h,cc}` |
+| `macos/Runner/WorkspaceWindows.swift` | `macos/Runner/DocumentWindows.swift` |
+| `macos/Runner/PoltergeistMultiView.{h,m}` | `macos/Runner/PlanchetteMultiView.{h,m}` |
+
+- Same: the method channel protocol (create, destroy, activate, hide,
+  fullscreen, titles, window-owned file pickers), the per-OS runner
+  structure and the macOS engine multi-view switch. `PlanchetteMultiView.m`
+  equals `PoltergeistMultiView.m` after the product rename, and the two
+  headers differ in one doc comment. The two `semantics_view_routing.dart`
+  files differ only in how they reuse the binding.
+- Different: the Dart halves keep their own models (Poltergeist's
+  workspace seeds, scope and titlebar files; Planchette's document
+  deduplication, quit review and Save As rules), and the channel and
+  class names carry each product's word. Each runner file is a copy that
+  has since diverged, so a change to one is not a change to the other.
+- A shared home is deferred: the Dart host and binding would fit
+  `ghost_desktop`, and the native files a desktop plugin together with the
+  macOS controller review in `klabautermann/docs/SHARED.md` (D32). Window
+  lifecycle on three operating systems only gets device checks by hand,
+  so the extraction is its own change. Until then, fix a defect in one
+  copy and look at the other.
+- Port-back candidates: either side, per defect.
+
 ## Suite links, F5d (2026-10-21)
 
 The link grammar Poltergeist owned since "Cross-app deep links"
@@ -34,6 +73,10 @@ sections 4 to 8).
   link test files ran unchanged. Making `maxFileNameBytes` and
   `utf8ByteLength` public is the one API widening; the alternative was
   a private copy in each package.
+  The parser and display groups of `deep_links_test.dart` were removed
+  on 2026-11-11, once `seance_core/test/links/suite_links_test.dart`
+  held identical cases; the coordinator group and a re-export check
+  stay.
 - F5d-2 adds `parseSeanceConnect`, `buildSeanceConnect`,
   `buildPoltergeistBrowse`, the reserved `klabautermann` constants and
   the link contract corpus (`seance_core/test/fixtures/suite_link_corpus.json`),
@@ -54,6 +97,17 @@ sections 4 to 8).
   Klabautermann the third, with an entry in
   `klabautermann/docs/SHARED.md`; a fourth copy needs the shared-plugin
   review D32 calls for first.
+- Planchette's single instance (`planchette/ANALYSIS.md` I1) copies the
+  claim, wait and present logic of
+  `seance_app/windows/runner/deep_link_scheme.cpp` into
+  `planchette_app/windows/runner/single_instance.{h,cpp}` with
+  Planchette's names (the mutex and window property
+  `ch.lkmc.planchette.single-instance-v1`). It registers no scheme: a
+  second launch sends its document arguments over `WM_COPYDATA`. Its
+  Linux runner follows the same unique GApplication in its own file.
+  That makes Planchette the third app with this runner code, so
+  Klabautermann's X-06 copy would be the fourth and needs D32's
+  shared-plugin review first.
 - Pin audit: `scripts/audit-seance-pin.sh` matched this record after
   each F5d branch; no contributor, licence text, vendored path or
   gitlink changed, so the record itself stays as it is.
@@ -1960,6 +2014,14 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
   save that never uploads, and overwrite — and
   `test/ui/built_in_editor_capture_test.dart` produces the §-required
   PNGs (find bar, conflict dialog) under `POLTERGEIST_CAPTURE=1`.
+- Pruned (2026-11-11): the document-mechanics cases that
+  `built_in_text_document_test.dart` kept from the port are now
+  `planchette_core/test/text_document_test.dart`'s, and
+  `test/ui/editor_syntax_test.dart` no longer re-runs the syntax,
+  search and detection cases through the re-export; they live in
+  `planchette_core/test/editor_syntax_test.dart` and
+  `planchette_editor/test/editor_highlight_test.dart`. Each file keeps
+  the cases of what the app wires itself.
 - Port-back candidates: none.
 
 ## External editors (M7)
@@ -2554,7 +2616,7 @@ the commit-level detail, without adding names to docs.
 - Lineage: `75b1e84bf231d149d64c295430a9dda9dc7f4ffb`, `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`
 - Identity: 37 lines; `sha256:5122581cf8870034edd47e849b77c24c1baaaa97f136945a79684883c2ba203b`
 - Unmatched attributions: 1 lines; `sha256:41240f7bf814a29257ba1dcf6ca3af20d744a98f374fdd6781eef8d4950b4bab`
-- License scan: 539 lines; `sha256:c56eede39f2e28a0aed5100158183196082e3080bfebd854a9bb034c22d55fe5`
+- License scan: 519 lines; `sha256:26c431ac681d1ce2a363e46bb8bdabdcb10c1ec40ea8f5f1c7c6ba3962f30302`
 - Vendored paths: 156 lines; `sha256:eba91dd50f0d2540da08a8284a3390dbba09c014ad784ab8dad3ab65e44614c8`
 - Gitlinks: 0 lines; `sha256:8c9771035e10619d9c2e084cc0f914772bfff45bd0b0a37c831f98bdf4a94839`
 <!-- SEANCE_PIN_AUDIT_V3:END -->

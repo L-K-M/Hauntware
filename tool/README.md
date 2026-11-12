@@ -27,8 +27,9 @@ missing required keys, and unknown product names. Per product it declares:
   the package names or globs it must not depend on directly or transitively;
   the lists of every matching key apply
 - `seance_core_implementation_imports`: directories allowed to import
-  `package:seance_core/src/...`; every other file in the product that does is
-  a violation
+  `package:seance_core/src/...`; every other scanned file in the product that
+  does is a violation (sources outside `scan`, such as product-level `test/`
+  and `tool/` directories and `third_party/`, are not checked)
 - `standalone_resolutions`: packages resolving through their own
   `.dart_tool/package_config.json` outside the product workspace lock
 - `engine_protocol`: the engine protocol directory (`null` when the product

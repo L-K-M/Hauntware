@@ -79,6 +79,7 @@ Future<List<String>> checkImports(
       violations.addAll(
         await _checkSource(
           file,
+          productRoot,
           relative,
           product,
           _containingPackage(relative, packages),
@@ -311,6 +312,7 @@ String _dartssh2DependentName(ProductGuard product) =>
 
 Future<List<String>> _checkSource(
   File file,
+  String productRoot,
   String relative,
   ProductGuard product,
   _ScannedPackage? package,
@@ -337,6 +339,18 @@ Future<List<String>> _checkSource(
         continue;
       }
       final uri = Uri.parse(text);
+      // A relative URI names no package, so the package rules below cannot
+      // see it; reaching another package that way would bypass them all.
+      if (!uri.hasScheme) {
+        final left = _relativeEscape(file, uri, productRoot, product, package);
+        if (left != null) {
+          violations.add(
+            '${_reported(product, relative)}: relative import/export leaves '
+            '$left: $text',
+          );
+        }
+        continue;
+      }
       if (uri.scheme == 'package' && uri.pathSegments.isEmpty) {
         violations.add(
           '${_reported(product, relative)}: invalid package URI $uri',
@@ -412,6 +426,27 @@ Future<List<String>> _checkSource(
     }
   }
   return violations;
+}
+
+/// What a relative [uri] in [file] leaves, if anything: the product, or the
+/// scanned package that holds [file]. Product-level directories outside
+/// every package (`test/integration`) stay reachable.
+String? _relativeEscape(
+  File file,
+  Uri uri,
+  String productRoot,
+  ProductGuard product,
+  _ScannedPackage? package,
+) {
+  final target = p.fromUri(p.toUri(file.path).resolveUri(uri));
+  if (!p.isWithin(productRoot, target)) return 'its product';
+
+  final segments = p.posix.split(relativeSourcePath(target, productRoot));
+  if (segments.length < 3 || !product.scan.contains(segments.first)) {
+    return null;
+  }
+  final owner = p.posix.join(segments[0], segments[1]);
+  return owner == package?.relative ? null : 'its package';
 }
 
 String _dartssh2ImportArea(ProductGuard product) =>

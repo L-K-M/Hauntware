@@ -339,6 +339,38 @@ void main() {
       expect(device.store.prefs(), isEmpty);
     });
 
+    test('a newer version that replaces an applied record leaves this '
+        "build reading the one it applied, across a restart", () async {
+      await device.pull(prefId, encodeServerPrefs('srv-a', _prefs));
+      await device.pull(ruleId, encodeSyncedRule(_rule));
+
+      // Shapes this build would decode, with other meanings in v2.
+      final newerPref = {
+        ...encodeServerPrefs(
+          'srv-a',
+          const ServerPrefs(readOnly: false, cadence: CadenceProfile.phone),
+        ),
+        'v': 2,
+      };
+      final newerRule = {...encodeSyncedRule(_rule), 'v': 2, 'target': 'x'};
+      await device.pull(prefId, newerPref, updatedAt: 20);
+      await device.pull(ruleId, newerRule, updatedAt: 20);
+
+      expect(device.store.sealable(prefId)?.data, newerPref);
+      expect(device.store.sealable(ruleId)?.data, newerRule);
+      expect(device.store.prefs()['srv-a']?.readOnly, isTrue);
+      expect(device.store.prefs()['srv-a']?.marks, _prefs.marks);
+      expect([for (final r in device.store.rules()) r.target], ['srv-a']);
+
+      final reopened = await KlabautermannRecordStore.open(
+        dir,
+        access: SupportDirectoryAccess.exclusive,
+      );
+      expect(reopened.prefs()['srv-a']?.readOnly, isTrue);
+      expect([for (final r in reopened.rules()) r.target], ['srv-a']);
+      expect(reopened.sealable(prefId)?.data, newerPref);
+    });
+
     test('a pref of an excluded server is skipped, and one whose server '
         'is absent stays pending', () async {
       await device.pullServer(_server('srv-x', excluded: true));

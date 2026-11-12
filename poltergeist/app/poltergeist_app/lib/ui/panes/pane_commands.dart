@@ -165,6 +165,7 @@ List<RegisteredCommand> buildPaneCommands({
       // (02 §8.3's table). The bracket chord stays first so menus show
       // and bind it. Text fields keep ⌘← as line start: the chord layer
       // stands down while an EditableText holds focus.
+      repeatable: true,
       activators: _perPlatform(
         macOS: const [
           SingleActivator(LogicalKeyboardKey.bracketLeft, meta: true),
@@ -194,6 +195,7 @@ List<RegisteredCommand> buildPaneCommands({
       icon: Icons.arrow_forward_outlined,
       // ⌘] (menu key) plus ⌘→ on macOS, Alt+Right elsewhere (02 §8.3's
       // table). Order and field-first reasons as go.back above.
+      repeatable: true,
       activators: _perPlatform(
         macOS: const [
           SingleActivator(LogicalKeyboardKey.bracketRight, meta: true),
@@ -220,6 +222,7 @@ List<RegisteredCommand> buildPaneCommands({
       scope: CommandScope.pane,
       label: (l10n) => l10n.goEnclosingLabel,
       icon: Icons.arrow_upward_outlined,
+      repeatable: true,
       activators: _perPlatform(
         macOS: const [SingleActivator(LogicalKeyboardKey.arrowUp, meta: true)],
         other: const [SingleActivator(LogicalKeyboardKey.arrowUp, alt: true)],
@@ -728,6 +731,7 @@ List<RegisteredCommand> buildPaneCommands({
       scope: CommandScope.app,
       label: (l10n) => l10n.paneFocusLeftLabel,
       icon: Icons.west_outlined,
+      repeatable: true,
       activators: _perPlatform(
         macOS: const [
           SingleActivator(LogicalKeyboardKey.arrowLeft, meta: true, alt: true),
@@ -762,6 +766,7 @@ List<RegisteredCommand> buildPaneCommands({
       scope: CommandScope.app,
       label: (l10n) => l10n.paneFocusRightLabel,
       icon: Icons.east_outlined,
+      repeatable: true,
       activators: _perPlatform(
         macOS: const [
           SingleActivator(LogicalKeyboardKey.arrowRight, meta: true, alt: true),
@@ -802,6 +807,7 @@ List<RegisteredCommand> buildPaneCommands({
       scope: CommandScope.pane,
       label: (l10n) => l10n.editUndoSelectionLabel,
       icon: Icons.undo,
+      repeatable: true,
       activators: _perPlatform(
         macOS: const [
           SingleActivator(LogicalKeyboardKey.keyZ, meta: true, alt: true),
@@ -826,6 +832,7 @@ List<RegisteredCommand> buildPaneCommands({
       scope: CommandScope.pane,
       label: (l10n) => l10n.editRedoSelectionLabel,
       icon: Icons.redo,
+      repeatable: true,
       activators: _perPlatform(
         macOS: const [
           SingleActivator(
@@ -1027,6 +1034,7 @@ List<RegisteredCommand> buildPaneCommands({
       // ⌃⇥ on every platform; ⇧⌘] is the additional macOS binding (02
       // §8.3). Cycling is pane-scoped: it never crosses into the other
       // pane's strip.
+      repeatable: true,
       activators: _perPlatform(
         macOS: const [
           SingleActivator(LogicalKeyboardKey.tab, control: true),
@@ -1058,6 +1066,7 @@ List<RegisteredCommand> buildPaneCommands({
       label: (l10n) => l10n.tabPreviousLabel,
       icon: Icons.tab_outlined,
       // ⌃⇧⇥ on every platform; ⇧⌘[ is the additional macOS binding.
+      repeatable: true,
       activators: _perPlatform(
         macOS: const [
           SingleActivator(LogicalKeyboardKey.tab, control: true, shift: true),
@@ -1310,6 +1319,7 @@ class CommandChordScope extends StatelessWidget {
                   const <ShortcutActivator>[])
             GhostChordBinding(
               activator: activator,
+              repeats: command.repeatable,
               leftAltOnly: !apple &&
                   switch (activator) {
                     SingleActivator a => a.alt,
