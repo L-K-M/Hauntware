@@ -11,6 +11,10 @@ abstract interface class SystemNotifications {
   /// all; true when it may.
   Future<bool> requestPermission();
 
+  /// Whether the system lets the app post notifications now, without
+  /// asking; true where it never asks.
+  Future<bool> permitted();
+
   /// Posts (or replaces) the notification [id].
   Future<void> show(int id, {required String title, required String body});
 
@@ -161,6 +165,37 @@ final class LocalSystemNotifications implements SystemNotifications {
               >()
               ?.requestPermissions(alert: true) ??
           false;
+    }
+    // Linux and Windows ask nothing of the app.
+    return true;
+  }
+
+  @override
+  Future<bool> permitted() async {
+    if (kIsWeb) return false;
+    if (Platform.isAndroid) {
+      return await _plugin
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >()
+              ?.areNotificationsEnabled() ??
+          false;
+    }
+    if (Platform.isIOS) {
+      final options = await _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >()
+          ?.checkPermissions();
+      return options?.isEnabled ?? false;
+    }
+    if (Platform.isMacOS) {
+      final options = await _plugin
+          .resolvePlatformSpecificImplementation<
+            MacOSFlutterLocalNotificationsPlugin
+          >()
+          ?.checkPermissions();
+      return options?.isEnabled ?? false;
     }
     // Linux and Windows ask nothing of the app.
     return true;

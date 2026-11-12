@@ -50,6 +50,10 @@ List<DockerTimelineEntry> timelineRows(
       entry,
 ];
 
+/// The share of its height the header takes before it scrolls, so large
+/// text never pushes the list out of sight.
+const double _headerShare = 0.4;
+
 /// The Events sub-tab (03 §7.12 DKE-03): the engine's container, image,
 /// volume and network events while the app follows them, newest first,
 /// filterable by type and searchable, with a marker wherever the stream
@@ -152,78 +156,92 @@ class _EventsPanelState extends State<EventsPanel> {
     DateTime shown(DateTime at) => displayTime(context, widget.serverId, at);
     final format = _TimeFormat(l10n.localeName, shown(widget.now()), shown);
 
+    final header = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 12,
+      children: [
+        DockerNotice(icon: Icons.info_outline, text: l10n.dockerEventsBuffer),
+        if (failure != null)
+          DockerNotice(
+            icon: Icons.error_outline,
+            text: l10n.dockerEventsFailed(failure.failure.name),
+            detail: failure.detail,
+            action: TextButton(
+              onPressed: () => _docker.retryEvents(widget.serverId),
+              child: Text(l10n.dockerRetry),
+            ),
+          )
+        else if (entries == null)
+          DockerNotice(
+            icon: Icons.hourglass_empty,
+            text: l10n.dockerEventsWaiting,
+          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              label: Text(l10n.dockerEventsAll),
+              selected: _kind == null,
+              onSelected: (_) => setState(() => _kind = null),
+            ),
+            for (final kind in DockerEventKind.values)
+              ChoiceChip(
+                label: Text(l10n.dockerEventsKind(kind.name)),
+                selected: _kind == kind,
+                onSelected: (_) => setState(() => _kind = kind),
+              ),
+          ],
+        ),
+        TextField(
+          controller: _search,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.search),
+            hintText: l10n.dockerEventsSearch,
+            border: const OutlineInputBorder(),
+            isDense: true,
+          ),
+        ),
+      ],
+    );
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 12,
-        children: [
-          DockerNotice(icon: Icons.info_outline, text: l10n.dockerEventsBuffer),
-          if (failure != null)
-            DockerNotice(
-              icon: Icons.error_outline,
-              text: l10n.dockerEventsFailed(failure.failure.name),
-              detail: failure.detail,
-              action: TextButton(
-                onPressed: () => _docker.retryEvents(widget.serverId),
-                child: Text(l10n.dockerRetry),
+      child: LayoutBuilder(
+        builder: (context, constraints) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: constraints.maxHeight * _headerShare,
               ),
-            )
-          else if (entries == null)
-            DockerNotice(
-              icon: Icons.hourglass_empty,
-              text: l10n.dockerEventsWaiting,
+              child: SingleChildScrollView(child: header),
             ),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ChoiceChip(
-                label: Text(l10n.dockerEventsAll),
-                selected: _kind == null,
-                onSelected: (_) => setState(() => _kind = null),
-              ),
-              for (final kind in DockerEventKind.values)
-                ChoiceChip(
-                  label: Text(l10n.dockerEventsKind(kind.name)),
-                  selected: _kind == kind,
-                  onSelected: (_) => setState(() => _kind = kind),
-                ),
-            ],
-          ),
-          TextField(
-            controller: _search,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search),
-              hintText: l10n.dockerEventsSearch,
-              border: const OutlineInputBorder(),
-              isDense: true,
+            const SizedBox(height: 12),
+            Expanded(
+              child: entries != null && rows.isEmpty
+                  ? Text(
+                      entries.isEmpty
+                          ? l10n.dockerEventsNone
+                          : l10n.dockerEventsNoMatch,
+                    )
+                  : ListView.separated(
+                      itemCount: rows.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, i) => switch (rows[i]) {
+                        final DockerTimelineEvent event => _EventRow(
+                          event: event,
+                          format: format,
+                        ),
+                        final DockerTimelineGap gap => _GapRow(
+                          gap: gap,
+                          format: format,
+                        ),
+                      },
+                    ),
             ),
-          ),
-          Expanded(
-            child: entries != null && rows.isEmpty
-                ? Text(
-                    entries.isEmpty
-                        ? l10n.dockerEventsNone
-                        : l10n.dockerEventsNoMatch,
-                  )
-                : ListView.separated(
-                    itemCount: rows.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (context, i) => switch (rows[i]) {
-                      final DockerTimelineEvent event => _EventRow(
-                        event: event,
-                        format: format,
-                      ),
-                      final DockerTimelineGap gap => _GapRow(
-                        gap: gap,
-                        format: format,
-                      ),
-                    },
-                  ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

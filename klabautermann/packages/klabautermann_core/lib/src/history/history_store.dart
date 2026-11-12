@@ -339,6 +339,11 @@ final class HistoryStore {
     return _tail;
   }
 
+  /// Awaits every queued write, flush and purge, so a caller about to
+  /// delete or reuse the support directory can wait for the store to
+  /// finish with it.
+  Future<void> get idle => _tail;
+
   /// [serverId]'s buckets and gaps in [tier], oldest first: those within
   /// the tier's span up to [now], the filling bucket included. Times
   /// after [now] were written under a clock since stepped back, and are

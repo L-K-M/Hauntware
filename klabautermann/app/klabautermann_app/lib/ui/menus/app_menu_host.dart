@@ -30,6 +30,7 @@ class AppMenuHost extends StatefulWidget {
     required this.commands,
     required this.child,
     this.listenable,
+    this.locked,
   });
 
   /// The registry snapshot. Activation looks a command up here by id, so a
@@ -39,6 +40,13 @@ class AppMenuHost extends StatefulWidget {
   /// What can flip a command's enablement (the fleet, while an import
   /// runs); the menus are rebuilt whenever it notifies.
   final Listenable? listenable;
+
+  /// Whether the app lock covers the app (03 §8.13). The lock gate keeps
+  /// pointer and focus from the Flutter tree, but macOS menu items and
+  /// their key equivalents are native and reach this host regardless, so
+  /// while it answers true only [kCommandsWhileLocked] are enabled and
+  /// run. Pass the lock in [listenable] too, so the menus follow it.
+  final bool Function()? locked;
 
   final Widget child;
 
@@ -99,8 +107,18 @@ class _AppMenuHostState extends State<AppMenuHost> {
     ], event);
   }
 
+  /// [AppMenuHost.commands], with those the lock holds back disabled.
+  List<AppCommand> get _commands {
+    final locked = widget.locked;
+    if (locked == null || !locked()) return widget.commands;
+    return [
+      for (final command in widget.commands)
+        kCommandsWhileLocked.contains(command.id) ? command : command.disabled,
+    ];
+  }
+
   void _run(String? id) {
-    for (final command in widget.commands) {
+    for (final command in _commands) {
       if (command.id != id) continue;
       if (!command.enabled()) return;
       unawaited(
@@ -159,7 +177,7 @@ class _AppMenuHostState extends State<AppMenuHost> {
   Widget _menus(BuildContext context, _MenuBackend backend, Widget content) {
     final platform = Theme.of(context).platform;
     final menus = buildAppMenus(
-      commands: widget.commands,
+      commands: _commands,
       l10n: AppLocalizations.of(context),
       platform: platform,
     );

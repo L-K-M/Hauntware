@@ -6,6 +6,7 @@ import 'package:klabautermann_app/controllers/history_reads.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart';
 import 'package:klabautermann_app/ui/history_card.dart';
+import 'package:klabautermann_app/ui/threshold_scope.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/fake_engine.dart';
@@ -148,6 +149,33 @@ void main() {
       await tester.tap(find.byTooltip('Refresh'));
       await tester.pumpAndSettle();
       expect(engine.sentOfType<ReadHistory>(), hasLength(3));
+    });
+
+    testWidgets('the chart draws the levels of the metric it charts', (
+      tester,
+    ) async {
+      await pumpCard(tester);
+      await answer(tester, historySample());
+      ChartThresholds? levels() => tester
+          .widget<TimeSeriesChart>(find.byType(TimeSeriesChart))
+          .thresholds;
+      // Without a threshold scope every metric takes the defaults.
+      expect(levels(), kDefaultThresholds);
+      for (final metric in [
+        AlertMetric.cpuBusy,
+        AlertMetric.memoryUsed,
+        AlertMetric.diskUsed,
+        AlertMetric.diskInodes,
+      ]) {
+        expect(historyThresholdMetric(metric), isNotNull, reason: '$metric');
+      }
+      expect(
+        historyThresholdMetric(AlertMetric.diskInodes),
+        ThresholdMetric.disk,
+      );
+      expect(historyThresholdMetric(AlertMetric.loadPerCore), isNull);
+      expect(find.text('warning 80%'), findsOneWidget);
+      expect(find.text('critical 90%'), findsOneWidget);
     });
 
     testWidgets('a slow answer for an earlier read never replaces a later '

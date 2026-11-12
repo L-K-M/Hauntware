@@ -2,6 +2,7 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/alert_center.dart';
@@ -311,7 +312,8 @@ class AttentionView extends StatelessWidget {
                     server: serverOf(item),
                     ack: ack,
                     onOpenServer: onOpenServer,
-                    onReopen: () => unawaited(acks.reopen(item)),
+                    onReopen: () =>
+                        unawaited(_saved(context, () => acks.reopen(item))),
                   ),
               ],
               Align(
@@ -338,8 +340,25 @@ class AttentionView extends StatelessWidget {
       context: context,
       builder: (_) => const _NoteDialog(),
     );
-    if (note == null) return;
-    await acks.acknowledge(item, note: note);
+    if (note == null || !context.mounted) return;
+    await _saved(context, () => acks.acknowledge(item, note: note));
+  }
+
+  /// Runs [change], which applies at once and then saves; a save that
+  /// fails says so, since the change is then lost at the next start.
+  static Future<void> _saved(
+    BuildContext context,
+    Future<void> Function() change,
+  ) async {
+    // Captured first: the queue may close while the save runs.
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final notSaved = AppLocalizations.of(context).attentionNotSaved;
+    try {
+      await change();
+    } on Exception catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) showTopToast(overlay, message: notSaved);
+    }
   }
 }
 

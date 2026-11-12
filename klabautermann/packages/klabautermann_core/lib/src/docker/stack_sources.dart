@@ -168,20 +168,28 @@ final class StackSources {
     if (_known(project) case final known?) return Future.value(known);
     final key = _keyOf(project);
     final generation = _generation;
-    return _checking[key] ??= _checkOrWait(project).then((verdict) {
-      if (generation == _generation) {
-        _checking.remove(key);
-        // A check that waited for a channel decided nothing: the next
-        // stacks list checks again.
-        if (verdict is StackVerifying) {
-          _waiting.add(key);
-        } else {
-          _waiting.remove(key);
-          _verdicts[project.name] = (key: key, verdict: verdict);
+    return _checking[key] ??= _checkOrWait(project).then(
+      (verdict) {
+        if (generation == _generation) {
+          _checking.remove(key);
+          // A check that waited for a channel decided nothing: the next
+          // stacks list checks again.
+          if (verdict is StackVerifying) {
+            _waiting.add(key);
+          } else {
+            _waiting.remove(key);
+            _verdicts[project.name] = (key: key, verdict: verdict);
+          }
         }
-      }
-      return verdict;
-    });
+        return verdict;
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        // A check that broke decided nothing: the next asks again rather
+        // than receive the same error forever.
+        if (generation == _generation) _checking.remove(key);
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
   }
 
   StackVerdict? _known(ComposeProject project) {
@@ -406,6 +414,11 @@ final class StackSources {
         projectDirectory: project.workingDir,
         configFiles: project.configFiles,
         envFiles: project.environmentFiles,
+        // Every profile, so a service only a profile enables prints its
+        // hash too: a stack whose running services all come from
+        // profiles is otherwise left with nothing to compare. A service
+        // hash does not depend on the active profiles.
+        profiles: const ['*'],
         hash: '*',
       );
     } on ArgumentError {
@@ -503,10 +516,10 @@ final class StackSources {
     );
   }
 
-  /// Runs `config --hash '*'` and compares each service's hash with its
-  /// containers' labels. A service it does not print is one the files no
-  /// longer name, or one only a profile enables: STK-06 lists it, and it
-  /// says nothing about the files. Its error text is read only to tell a
+  /// Runs `--profile '*' config --hash '*'` and compares each service's
+  /// hash with its containers' labels. A service it does not print is one
+  /// the files no longer name: STK-06 lists it, and it says nothing about
+  /// the files. Its error text is read only to tell a
   /// CLI without the flag form from a config that fails.
   Future<StackVerdict> _compareHashes(
     ComposeInvocation invocation,
