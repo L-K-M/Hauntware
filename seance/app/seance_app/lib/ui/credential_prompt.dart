@@ -30,3 +30,35 @@ Future<MissingCredential?> showMissingCredentialDialog(
   );
   return reply == null ? null : missingCredentialOf(reply);
 }
+
+/// Asks only for a known key's passphrase. No PEM or key file is copied
+/// into the dialog; the existing key source stays under the app services.
+Future<KeyPassphraseAnswer?> showKeyPassphraseDialog(
+  BuildContext context, {
+  required ServerConfig server,
+  bool retry = false,
+}) async {
+  final reply = await showGhostCredentialDialog(
+    context,
+    ghostKeyPassphraseRequestOf(server),
+    strings: GhostCredentialStrings(
+      passwordTitle: (label) => 'Key passphrase for $label',
+      explanation: retry
+          ? 'That passphrase did not open the key. Try again.'
+          : 'Used for this connection only, unless you choose Save in vault.',
+      passwordField: 'Passphrase',
+      connect: 'Connect',
+    ),
+    monoStyle: SeanceTheme.mono,
+    barrierDismissible: true,
+  );
+  return switch (reply) {
+    null => null,
+    GhostKeyPassphraseReply(:final keyPassphrase, :final saveToVault) =>
+      KeyPassphraseAnswer(keyPassphrase, saveToVault: saveToVault),
+    GhostPasswordReply(:final password, :final saveToVault) =>
+      KeyPassphraseAnswer(password, saveToVault: saveToVault),
+    GhostPrivateKeyReply() =>
+      throw StateError('The passphrase prompt cannot replace a private key'),
+  };
+}
