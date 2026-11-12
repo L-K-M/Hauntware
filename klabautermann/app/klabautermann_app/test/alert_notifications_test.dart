@@ -17,6 +17,10 @@ const _coverage = 'Evaluated on this device while Klabautermann is open.';
 
 final class _FakeNotifications implements SystemNotifications {
   bool allow = true;
+
+  /// What the system says without asking: false once the user revoked
+  /// the permission in the system's settings.
+  bool permittedNow = true;
   int permissionRequests = 0;
   final shown = <int, ({String title, String body})>{};
   final cancelled = <int>[];
@@ -26,6 +30,9 @@ final class _FakeNotifications implements SystemNotifications {
     permissionRequests++;
     return allow;
   }
+
+  @override
+  Future<bool> permitted() async => permittedNow;
 
   @override
   Future<void> show(
@@ -113,6 +120,39 @@ void main() {
         ..emit(_change('r2', raised: false));
       await pumpEventQueue();
       expect(fake.cancelled, [fake.shown.keys.single]);
+    });
+
+    test('a stored "on" whose permission the system revoked since shows '
+        'off, without changing what is stored', () async {
+      fake.permittedNow = false;
+      final notifications = controller(notifications: fake, enabled: true);
+      await pumpEventQueue();
+
+      expect(notifications.enabled, isFalse);
+      expect(fake.permissionRequests, 0, reason: 'nothing asks at launch');
+      expect(saved, isEmpty);
+      engine.emit(_change('r1', raised: true));
+      await pumpEventQueue();
+      expect(fake.shown, isEmpty);
+    });
+
+    test('a launch check that answers after dispose changes nothing', () async {
+      fake.permittedNow = false;
+      final notifications = AlertNotificationsController(
+        engine,
+        notifications: fake,
+        textOf: (_) => throw UnimplementedError(),
+        enabled: true,
+      );
+      notifications.dispose();
+      // A notify on a disposed notifier fails its debug assertion here.
+      await pumpEventQueue();
+    });
+
+    test('a stored "on" the system still allows stays on', () async {
+      final notifications = controller(notifications: fake, enabled: true);
+      await pumpEventQueue();
+      expect(notifications.enabled, isTrue);
     });
 
     test('a refusal leaves them off and unsaved, and a device without '

@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/l10n/app_localizations_en.dart';
 import 'package:klabautermann_app/services/stored_appearance.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/appearance_tab.dart';
@@ -94,6 +95,26 @@ void main() {
       find.textContaining('paste it into Klabautermann on the other device'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('preset tiles show the localized preset names', (tester) async {
+    await _pumpTab(tester, AppearanceController());
+    expect(find.text('Klabautermann'), findsOneWidget);
+    expect(find.text('High contrast'), findsOneWidget);
+  });
+
+  test('presetLabel maps stored names and passes Custom through', () {
+    final l10n = AppLocalizationsEn();
+    final strings = KlabautermannAppearanceStrings(l10n);
+    expect(
+      strings.presetLabel(klabautermannThemePresets.brand.name),
+      l10n.themePresetKlabautermann,
+    );
+    expect(
+      strings.presetLabel(klabautermannThemePresets.highContrast.name),
+      l10n.themePresetHighContrast,
+    );
+    expect(strings.presetLabel('Custom'), 'Custom');
   });
 
   testWidgets('the accent contrast notice uses the localized words', (

@@ -51,6 +51,11 @@ final class FakeEngineClient implements EngineClient {
   List<EngineRequest> sentOfType<T extends EngineRequest>() =>
       sent.whereType<T>().toList();
 
+  /// Closes [events] while [send] still takes requests: an engine that
+  /// ended by itself, as its controllers see it before anything tells
+  /// them, unlike [close], after which [send] throws.
+  Future<void> endEvents() => _events.close();
+
   /// Closes [events], as an engine that stops does. Closing again does
   /// nothing: a test that stopped the engine inside `testWidgets` leaves
   /// its done future in the test's fake zone, which a second close from

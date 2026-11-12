@@ -11,6 +11,7 @@ import '../../l10n/app_localizations.dart';
 import '../../services/hand_off.dart';
 import '../hand_off_actions.dart' show HandOffScope;
 import 'container_links.dart';
+import 'containers_view.dart' show containerNameOf;
 
 /// The server's own loopback address, where a published port and a
 /// host-network container's ports answer, and the device's, where a
@@ -63,7 +64,8 @@ typedef ContainerApps = ({
   List<AppPort> ports,
 });
 
-/// The ways in to [containers] (DKE-08), running ones only, each with at
+/// The ways in to [containers] (DKE-08), running ones only (a paused or
+/// restarting container accepts no connection), each with at
 /// least one: label links, then TCP ports in order. Docker lists a port
 /// published on both address families twice, which shows once; a UDP
 /// port cannot be forwarded over SSH and is left out.
@@ -328,7 +330,7 @@ class _ContainerAppsTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final name = app.container.name ?? app.container.id;
+    final name = containerNameOf(app.container);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -361,10 +363,18 @@ class _ContainerAppsTile extends StatelessWidget {
     );
   }
 
+  /// The bound address as it joins a port: IPv6 in brackets, as the
+  /// forwards' targets show it, and `*` for every interface.
+  static String _hostText(String? ip) => switch (ip) {
+    null => '*',
+    _ when ip.contains(':') => '[$ip]',
+    _ => ip,
+  };
+
   static String _portText(AppLocalizations l10n, AppPort port) =>
       switch (port.publicPort) {
         final public? => l10n.appsPortPublished(
-          '${port.hostIp ?? '*'}:$public',
+          '${_hostText(port.hostIp)}:$public',
           port.privatePort.toString(),
         ),
         null => l10n.appsPortUnpublished(port.privatePort.toString()),
