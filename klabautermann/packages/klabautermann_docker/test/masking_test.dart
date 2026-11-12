@@ -78,16 +78,75 @@ void main() {
       expect(maskUrlCredentials('no url here'), 'no url here');
     });
 
+    test('maskUrlCredentials masks a password with an empty user', () {
+      expect(
+        maskUrlCredentials('redis://:Hunter2@redis:6379/0'),
+        'redis://:${MaskedValue.maskToken}@redis:6379/0',
+      );
+      final env = maskedEnvEntry('CACHE_URL=redis://:Hunter2@redis:6379/0');
+      expect(env.display, 'redis://:${MaskedValue.maskToken}@redis:6379/0');
+      expect(env.reveal(), 'redis://:Hunter2@redis:6379/0');
+    });
+
+    test('maskUrlCredentials masks a password holding an @ whole', () {
+      expect(
+        maskUrlCredentials('postgres://app:p@ss@db/x'),
+        'postgres://app:${MaskedValue.maskToken}@db/x',
+      );
+      expect(
+        maskUrlCredentials('amqp://u:a@b@mq?x=1 redis://:c@d@r#f'),
+        'amqp://u:${MaskedValue.maskToken}@mq?x=1 '
+        'redis://:${MaskedValue.maskToken}@r#f',
+      );
+    });
+
+    test('maskUrlCredentials masks a password holding a ? or # whole', () {
+      expect(
+        maskUrlCredentials('amqp://user:Ab?c123@rabbit'),
+        'amqp://user:${MaskedValue.maskToken}@rabbit',
+      );
+      expect(
+        maskUrlCredentials('redis://:p#ss@host/0'),
+        'redis://:${MaskedValue.maskToken}@host/0',
+      );
+    });
+
+    test('maskUrlCredentials over-masks an @ in the query of a URL '
+        'without a path', () {
+      expect(
+        maskUrlCredentials('http://example.com:8080?to=a@b'),
+        'http://example.com:${MaskedValue.maskToken}@b',
+      );
+      expect(
+        maskUrlCredentials('http://example.com:8080#a@b'),
+        'http://example.com:${MaskedValue.maskToken}@b',
+      );
+    });
+
+    test('maskUrlCredentials leaves URLs without credentials alone', () {
+      for (final text in [
+        'https://example.com:8443/path',
+        'tcp://:2375',
+        'http://example.com:8080/a@b',
+        'ssh://git@example.com:22/repo',
+        'docker://registry:5000/app@sha256:abc',
+      ]) {
+        expect(maskUrlCredentials(text), text, reason: text);
+      }
+    });
+
     test('maskUrlCredentials masks what the rule as one regular '
         'expression masks', () {
       // The rule as it reads in 03 §8.9, which backtracks over each start
       // in a run of scheme characters.
       final rule = RegExp(
-        r'([A-Za-z][A-Za-z0-9+.\-]*://)([^/@\s:]+):([^/@\s]+)@',
+        r'([A-Za-z][A-Za-z0-9+.\-]*://)([^/@\s:]*):([^/\s]+)@',
       );
       final random = Random(89);
-      const pieces = ['a', 'Z', '1', '+', '-', '.', ':', '/', '@', ' '];
-      const urls = ['://', 'u:p@', 'ab://u:p@h/', '\t'];
+      const pieces = [
+        'a', 'Z', '1', '+', '-', '.', ':', '/', '@', ' ', '?', '#', //
+      ];
+      const urls = ['://', 'u:p@', ':p@', 'ab://u:p@h/', '\t'];
       for (var i = 0; i < 20000; i++) {
         final text = [
           for (var n = random.nextInt(12); n > 0; n--)

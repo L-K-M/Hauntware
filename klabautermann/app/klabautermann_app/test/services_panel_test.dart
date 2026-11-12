@@ -377,6 +377,25 @@ void main() {
     expect(find.text('systemctl: not found'), findsOneWidget);
   });
 
+  testWidgets('cuts the server\'s error text in an unavailable notice to '
+      'four lines', (tester) async {
+    final panel = await _pump(tester, size: const Size(390, 300));
+    await panel.sample(
+      tester,
+      CollectorUnavailable(
+        CollectorUnavailableReason.error,
+        detail: List.generate(40, (i) => 'systemctl: error line $i').join('\n'),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    // Four lines of small text, not the forty sent.
+    expect(
+      tester.getSize(find.textContaining('error line 0')).height,
+      lessThan(100),
+    );
+  });
+
   testWidgets('a failed unit opens its page, which reads 50 journal lines', (
     tester,
   ) async {

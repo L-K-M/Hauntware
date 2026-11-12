@@ -79,23 +79,6 @@ LogTimestamp? lastDeliveredTimestamp(Iterable<TimestampedLogLine> lines) {
   return last;
 }
 
-/// [dropInclusiveSince] over raw [LogLine]s whose text still carries the
-/// RFC3339Nano timestamp, for callers that want the original lines back.
-Stream<LogLine> dropInclusiveSinceLines(
-  Stream<LogLine> lines,
-  LogTimestamp since,
-) async* {
-  var dropping = true;
-  await for (final line in lines) {
-    if (dropping) {
-      final ts = parseTimestampedLogLine(line).value.timestamp;
-      if (ts != null && ts <= since) continue;
-      dropping = false;
-    }
-    yield line;
-  }
-}
-
 /// Joins the demultiplexed frames of a `timestamps=1` logs response into
 /// timestamped lines (03 §5.6), each cut to [maxLineBytes] (the rest of
 /// an overlong line is discarded), without its `\n` or `\r\n`.

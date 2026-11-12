@@ -157,6 +157,83 @@ void main() {
     },
   );
 
+  HostKeyConflict pinConflict({
+    String local = 'local-fingerprint',
+    String pulled = 'remote-fingerprint',
+  }) => HostKeyConflict(
+    locator: 'alpha.example:22',
+    local: HostKey(
+      host: 'alpha.example',
+      port: 22,
+      type: 'ssh-ed25519',
+      fingerprintSha256: local,
+      pinnedAt: 1,
+    ),
+    pulled: HostKey(
+      host: 'alpha.example',
+      port: 22,
+      type: 'ssh-ed25519',
+      fingerprintSha256: pulled,
+      pinnedAt: 2,
+    ),
+  );
+
+  testWidgets('a pin conflict shows both keys and keeps the local one', (
+    tester,
+  ) async {
+    final catalog = _Catalog(enrolled: true)..conflictList = [pinConflict()];
+    addTearDown(catalog.dispose);
+    await open(tester, catalog);
+    expect(find.text('This device trusts'), findsOneWidget);
+    expect(find.text('local-fingerprint'), findsOneWidget);
+    expect(find.text('The other device synced'), findsOneWidget);
+    expect(find.text('remote-fingerprint'), findsOneWidget);
+
+    await tester.tap(find.text("Keep this device's key"));
+    await tester.pumpAndSettle();
+    expect(catalog.resolutions, 1);
+    expect(catalog.resolvedConflict?.$2, isTrue);
+    expect(catalog.hostKeyConflicts, isEmpty);
+  });
+
+  testWidgets('a pin conflict can trust the new key', (tester) async {
+    final catalog = _Catalog(enrolled: true)..conflictList = [pinConflict()];
+    addTearDown(catalog.dispose);
+    await open(tester, catalog);
+
+    await tester.tap(find.text('Trust the new key'));
+    await tester.pumpAndSettle();
+    expect(catalog.resolutions, 1);
+    expect(catalog.resolvedConflict?.$2, isFalse);
+    expect(catalog.hostKeyConflicts, isEmpty);
+  });
+
+  testWidgets('pin conflict buttons disable while a resolution is in flight', (
+    tester,
+  ) async {
+    final catalog = _Catalog(enrolled: true)..conflictList = [pinConflict()];
+    addTearDown(catalog.dispose);
+    await open(tester, catalog);
+    catalog.setBusy();
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, "Keep this device's key"),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<TextButton>(
+            find.widgetWithText(TextButton, 'Trust the new key'),
+          )
+          .onPressed,
+      isNull,
+    );
+  });
+
   testWidgets('Sign In stays disabled until the form is filled', (
     tester,
   ) async {
@@ -241,6 +318,9 @@ final class _Catalog extends WorkspaceCatalog {
   String? signInError;
   List<String> noticeList = [];
   (String, String, String, String, WorkspaceCredentialSync)? enrollment;
+  List<HostKeyConflict> conflictList = [];
+  (HostKeyConflict, bool)? resolvedConflict;
+  int resolutions = 0;
 
   @override
   SyncAccount? get account => _account;
@@ -273,6 +353,8 @@ final class _Catalog extends WorkspaceCatalog {
         ];
   @override
   List<String> get notices => noticeList;
+  @override
+  List<HostKeyConflict> get hostKeyConflicts => conflictList;
   @override
   String? get error => _error;
   @override
@@ -317,5 +399,16 @@ final class _Catalog extends WorkspaceCatalog {
     _error = refreshError;
     notifyListeners();
     if (_error != null) throw StateError(_error!);
+  }
+
+  @override
+  Future<void> resolvePinConflict(
+    HostKeyConflict conflict, {
+    required bool keepLocal,
+  }) async {
+    resolutions++;
+    resolvedConflict = (conflict, keepLocal);
+    conflictList = [];
+    notifyListeners();
   }
 }

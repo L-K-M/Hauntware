@@ -49,6 +49,19 @@ List<ContainerSummary> _containers() => [
       ContainerPort(ip: '127.0.0.1', privatePort: 80, publicPort: 8081),
     ],
   ),
+  // No name, and published on an IPv6 address.
+  const ContainerSummary(
+    id: 'f00dfacecafe0123456789abcdef',
+    state: 'running',
+    ports: [
+      ContainerPort(
+        ip: '::1',
+        privatePort: 3000,
+        publicPort: 9090,
+        type: 'tcp',
+      ),
+    ],
+  ),
 ];
 
 final class _Launcher implements HandOffLauncher {
@@ -80,7 +93,7 @@ void main() {
   group('containerApps', () {
     test('lists running containers with their links and TCP ports once, '
         'each with the target a forward takes', () {
-      final [web] = containerApps(_containers());
+      final [web, anonymous] = containerApps(_containers());
 
       expect(web.container.id, 'c-web');
       expect(web.links.single.uri.host, 'web.example.com');
@@ -94,6 +107,7 @@ void main() {
       ]);
       expect(web.ports.first.forwardPort, 8080);
       expect(web.ports.last.forwardPort, 9000);
+      expect(anonymous.ports.single.hostIp, '::1');
     });
 
     test('a port bound to one address forwards there; host networking '
@@ -236,6 +250,12 @@ void main() {
     expect(find.text('*:8080 → 80/tcp'), findsOneWidget);
     expect(find.text('9000/tcp, not published'), findsOneWidget);
     expect(find.text('old'), findsNothing, reason: 'not running');
+    expect(
+      find.text('f00dfacecafe'),
+      findsOneWidget,
+      reason: 'a nameless container shows its short id',
+    );
+    expect(find.text('[::1]:9090 → 3000/tcp'), findsOneWidget);
 
     await tester.tap(find.bySemanticsLabel('Forward 9000/tcp, not published'));
     await tester.pumpAndSettle();
