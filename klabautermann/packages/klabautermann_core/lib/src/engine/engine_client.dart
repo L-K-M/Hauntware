@@ -40,6 +40,7 @@ final class IsolateEngineClient implements EngineClient {
     this._isolate,
     this._fromEngine,
     this._exitPort,
+    this._errorPort,
     this._exited,
     this._events,
   );
@@ -53,6 +54,7 @@ final class IsolateEngineClient implements EngineClient {
   final Isolate _isolate;
   final ReceivePort _fromEngine;
   final ReceivePort _exitPort;
+  final ReceivePort _errorPort;
   final Future<void> _exited;
   final StreamController<EngineEvent> _events;
   Future<void>? _shutdown;
@@ -72,7 +74,9 @@ final class IsolateEngineClient implements EngineClient {
   /// install's sync authorship id ([EngineStart.deviceId]).
   ///
   /// Throws [StateError] when the engine exits or refuses [Hello] before
-  /// it is ready. [entryPoint] lets tests substitute a misbehaving engine.
+  /// it is ready, naming the unhandled error it exited on, such as a
+  /// store it could not open while starting. [entryPoint] lets tests
+  /// substitute a misbehaving engine.
   static Future<IsolateEngineClient> spawn({
     required String supportDirectory,
     bool linksEnabled = false,
@@ -84,6 +88,7 @@ final class IsolateEngineClient implements EngineClient {
   }) async {
     final fromEngine = ReceivePort('klabautermann engine events');
     final exitPort = ReceivePort('klabautermann engine exit');
+    final errorPort = ReceivePort('klabautermann engine errors');
     final isolate = await Isolate.spawn(
       entryPoint,
       EngineStart(
@@ -95,6 +100,7 @@ final class IsolateEngineClient implements EngineClient {
         deviceId: deviceId,
       ),
       onExit: exitPort.sendPort,
+      onError: errorPort.sendPort,
     );
 
     // One receive port carries the isolate's whole life: first the
@@ -107,6 +113,10 @@ final class IsolateEngineClient implements EngineClient {
     // Set once the handshake succeeds, so an engine that exits by itself
     // afterwards makes [send] throw rather than drop requests unanswered.
     IsolateEngineClient? client;
+    // The first unhandled error the engine reported, which ends it
+    // (errors are fatal in a spawned isolate). The VM sends it before the
+    // exit message, so a startup that fails names its cause.
+    String? fatalError;
 
     // The engine sends its startup fleet right after EngineReady, before
     // spawn's caller can have listened; a broadcast stream would drop it.
@@ -154,8 +164,14 @@ final class IsolateEngineClient implements EngineClient {
           events.add(message);
         }
       }),
+      errorPort.listen((message) {
+        if (message case [final String error, _]) fatalError ??= error;
+      }),
       exitPort.listen((_) {
-        const reason = 'engine isolate exited before answering Hello';
+        final reason = switch (fatalError) {
+          null => 'engine isolate exited before answering Hello',
+          final error => 'engine isolate failed before answering Hello: $error',
+        };
         if (!handshake.isCompleted) {
           handshake.completeError(StateError(reason));
         }
@@ -180,6 +196,7 @@ final class IsolateEngineClient implements EngineClient {
         isolate,
         fromEngine,
         exitPort,
+        errorPort,
         exited.future,
         events,
       );
@@ -193,6 +210,7 @@ final class IsolateEngineClient implements EngineClient {
       }
       fromEngine.close();
       exitPort.close();
+      errorPort.close();
       unawaited(events.close());
       rethrow;
     }
@@ -225,6 +243,7 @@ final class IsolateEngineClient implements EngineClient {
       }
       _fromEngine.close();
       _exitPort.close();
+      _errorPort.close();
       await _events.close();
     }();
   }
