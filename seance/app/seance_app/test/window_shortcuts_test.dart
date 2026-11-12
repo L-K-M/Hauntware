@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart'
-    show GhostUndoDeclined, GhostUndoableChange;
+    show GhostUndoDeclined, GhostUndoableChange, commandPaletteQueryKey;
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart';
 import 'package:seance_app/services/app_services.dart';
@@ -303,13 +303,10 @@ void main() {
       await boot(tester, TargetPlatform.linux);
 
       await press(tester, LogicalKeyboardKey.keyP, [ctrl, shift]);
-      expect(
-        find.byKey(const ValueKey('planchette.palette.query')),
-        findsOneWidget,
-      );
+      expect(find.byKey(commandPaletteQueryKey), findsOneWidget);
 
       await tester.enterText(
-        find.byKey(const ValueKey('planchette.palette.query')),
+        find.byKey(commandPaletteQueryKey),
         'Hide Sidebar',
       );
       await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -335,10 +332,7 @@ void main() {
       await settle(tester);
 
       await press(tester, LogicalKeyboardKey.keyP, [ctrl, shift]);
-      expect(
-        find.byKey(const ValueKey('planchette.palette.query')),
-        findsOneWidget,
-      );
+      expect(find.byKey(commandPaletteQueryKey), findsOneWidget);
       // The chord's context is above the layout, where an inherited posture
       // lookup answers wide; the palette must still follow the shell.
       expect(find.text('Hide Sidebar'), findsNothing);
@@ -374,17 +368,11 @@ void main() {
       await boot(tester, TargetPlatform.linux);
 
       await press(tester, LogicalKeyboardKey.keyP, [ctrl, shift]);
-      await tester.enterText(
-        find.byKey(const ValueKey('planchette.palette.query')),
-        'Undo',
-      );
+      await tester.enterText(find.byKey(commandPaletteQueryKey), 'Undo');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await settle(tester);
 
-      expect(
-        find.byKey(const ValueKey('planchette.palette.query')),
-        findsOneWidget,
-      );
+      expect(find.byKey(commandPaletteQueryKey), findsOneWidget);
       expect(find.text('Undo undone'), findsNothing);
     });
   });
@@ -415,14 +403,8 @@ void main() {
     await boot(tester, TargetPlatform.macOS);
 
     await press(tester, LogicalKeyboardKey.keyP, [meta, shift]);
-    expect(
-      find.byKey(const ValueKey('planchette.palette.query')),
-      findsOneWidget,
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('planchette.palette.query')),
-      'Hide Sidebar',
-    );
+    expect(find.byKey(commandPaletteQueryKey), findsOneWidget);
+    await tester.enterText(find.byKey(commandPaletteQueryKey), 'Hide Sidebar');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await settle(tester);
     expect(state!.sidebarVisible, isFalse);
