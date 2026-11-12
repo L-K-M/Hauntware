@@ -130,6 +130,20 @@ void main() {
     );
   });
 
+  test('each status of a requested operation echoes its request id', () async {
+    final (client, events) = await spawn(
+      access: SupportDirectoryAccess.unguarded,
+    );
+
+    client.send(const RunSyncRound(requestId: 'round-1'));
+
+    final seen = await untilSyncEnds(client, events, MemoryKeystore());
+    expect(
+      [for (final event in seen.cast<SyncStatus>()) event.requestId],
+      ['round-1', 'round-1'],
+    );
+  });
+
   test('a round asks the app for the keystore and reads its answers', () async {
     File('${support.path}/sync_enrollment.json').writeAsStringSync(
       '{"version":1,"passphraseUnverified":false,"notices":[],'

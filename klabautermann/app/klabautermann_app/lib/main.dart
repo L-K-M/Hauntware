@@ -178,13 +178,29 @@ Future<void> main(List<String> args) async {
   // enrollment never reads an id another process may have minted.
   // Probes are on too (FL-04): the engine probes confirmed endpoints and
   // the fleet rows show the answers.
-  final engine = await IsolateEngineClient.spawn(
-    supportDirectory: supportDirectory.path,
-    linksEnabled: true,
-    probesEnabled: true,
-    supportDirectoryAccess: supportDirectoryAccessFor(instanceLock),
-    deviceId: settings.deviceId,
-  );
+  // The window is already shown, so an engine that cannot start is told
+  // there rather than leaving it blank.
+  final IsolateEngineClient engine;
+  try {
+    engine = await IsolateEngineClient.spawn(
+      supportDirectory: supportDirectory.path,
+      linksEnabled: true,
+      probesEnabled: true,
+      supportDirectoryAccess: supportDirectoryAccessFor(instanceLock),
+      deviceId: settings.deviceId,
+    );
+  } on Object catch (error) {
+    debugPrint('The engine did not start: $error');
+    runApp(
+      EngineFailedApp(
+        detail: error.toString(),
+        onQuit: () => unawaited(
+          ServicesBinding.instance.exitApplication(AppExitType.required),
+        ),
+      ),
+    );
+    return;
+  }
   final importStoreIssue = engine.ready.importStoreIssue;
   if (importStoreIssue != null) {
     debugPrint(

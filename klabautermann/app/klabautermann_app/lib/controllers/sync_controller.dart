@@ -60,10 +60,16 @@ final class SyncController extends ChangeNotifier
   SyncFailure? _lastFailure;
   bool _engineStopped = false;
 
-  /// The answers still to come, oldest first. The engine runs sync
-  /// operations one at a time in request order and ends each with one
-  /// final [SyncStatus], so the next one always answers the oldest.
-  final List<(SyncOperation, Completer<SyncStatus>)> _waiting = [];
+  /// The answers still to come, by request id. The engine ends each
+  /// operation with one final [SyncStatus] that echoes its request's id;
+  /// the rounds it starts itself after a catalog write carry none, so
+  /// they answer nobody here.
+  final Map<String, (SyncOperation, Completer<SyncStatus>)> _waiting = {};
+  var _count = 0;
+
+  /// Whether an operation is running, whether or not it was asked for
+  /// here.
+  bool _running = false;
 
   /// The pin-conflict reads and resolutions still to come, oldest first.
   /// A null locator is a read, and every one is answered by the engine's
@@ -91,8 +97,9 @@ final class SyncController extends ChangeNotifier
   ValueListenable<AccountSize?> get accountSize => _accountSize;
   final _accountSize = ValueNotifier<AccountSize?>(null);
 
-  /// Whether a sign-in or round is under way.
-  bool get busy => _waiting.isNotEmpty;
+  /// Whether a sign-in or round is under way, including one the engine
+  /// started itself.
+  bool get busy => _waiting.isNotEmpty || _running;
 
   /// Whether the next sync action should be a sign-in rather than a round:
   /// no account yet, no record has confirmed the encryption passphrase
@@ -111,17 +118,20 @@ final class SyncController extends ChangeNotifier
     required String encryptionPassphrase,
   }) => _send(
     SyncOperation.enroll,
-    EnrollSync(
+    (requestId) => EnrollSync(
       baseUrl: baseUrl,
       username: username,
       password: password,
       encryptionPassphrase: encryptionPassphrase,
+      requestId: requestId,
     ),
   );
 
   /// Runs one round and completes with the engine's answer.
-  Future<SyncStatus> syncNow() =>
-      _send(SyncOperation.round, const RunSyncRound());
+  Future<SyncStatus> syncNow() => _send(
+    SyncOperation.round,
+    (requestId) => RunSyncRound(requestId: requestId),
+  );
 
   /// Asks the engine for the quarantine diff as it stands and updates
   /// [conflicts] with its answer. A read the engine refuses leaves the
@@ -183,17 +193,21 @@ final class SyncController extends ChangeNotifier
     }
   }
 
-  Future<SyncStatus> _send(SyncOperation operation, EngineRequest request) {
+  Future<SyncStatus> _send(
+    SyncOperation operation,
+    EngineRequest Function(String requestId) request,
+  ) {
     if (_engineStopped) {
       return Future.value(_stopped(operation));
     }
+    final requestId = 'sync-${_count++}';
     final answer = Completer<SyncStatus>();
     try {
-      _engine.send(request);
+      _engine.send(request(requestId));
     } on StateError {
       return Future.value(_stopped(operation));
     }
-    _waiting.add((operation, answer));
+    _waiting[requestId] = (operation, answer);
     notifyListeners();
     return answer.future;
   }
@@ -229,7 +243,8 @@ final class SyncController extends ChangeNotifier
     if (event.pinConflicts case final conflicts?) {
       _setConflicts(conflicts);
     }
-    if (event.phase == SyncPhase.running) {
+    _running = event.phase == SyncPhase.running;
+    if (_running) {
       notifyListeners();
       return;
     }
@@ -237,7 +252,7 @@ final class SyncController extends ChangeNotifier
     if (event.phase == SyncPhase.succeeded) {
       _passphraseUnverified = event.passphraseUnverified;
     }
-    if (_waiting.isNotEmpty) _waiting.removeAt(0).$2.complete(event);
+    if (event.requestId case final id?) _waiting.remove(id)?.$2.complete(event);
     notifyListeners();
   }
 
@@ -249,7 +264,8 @@ final class SyncController extends ChangeNotifier
 
   void _onEngineDone() {
     _engineStopped = true;
-    for (final (operation, answer) in _waiting) {
+    _running = false;
+    for (final (operation, answer) in _waiting.values) {
       answer.complete(_stopped(operation));
     }
     _waiting.clear();
@@ -275,7 +291,8 @@ final class SyncController extends ChangeNotifier
   @override
   void dispose() {
     _engineStopped = true;
-    for (final (operation, answer) in _waiting) {
+    _running = false;
+    for (final (operation, answer) in _waiting.values) {
       answer.complete(_stopped(operation));
     }
     _waiting.clear();

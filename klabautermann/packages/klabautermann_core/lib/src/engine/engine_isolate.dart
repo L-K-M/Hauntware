@@ -1006,12 +1006,19 @@ void engineMain(
     );
   }
 
-  void runSync(SyncOperation operation, Future<SyncStatus> Function() body) {
+  // [requestId] is the request's own, echoed on each status; null for a
+  // round the engine starts itself.
+  void runSync(
+    SyncOperation operation,
+    Future<SyncStatus> Function() body, {
+    String? requestId,
+  }) {
     syncTail = syncTail.then((_) async {
       uiPort.send(
         SyncStatus(
           SyncPhase.running,
           operation: operation,
+          requestId: requestId,
           account: sync.account,
         ),
       );
@@ -1031,6 +1038,7 @@ void engineMain(
           SyncStatus(
             SyncPhase.failed,
             operation: operation,
+            requestId: requestId,
             account: sync.account,
             failure: SyncFailure.other,
             detail: '$error',
@@ -1042,7 +1050,7 @@ void engineMain(
         uiPort.send(CatalogReplaced(fleetEntries()));
         await sendServerPrefs();
       }
-      uiPort.send(status);
+      uiPort.send(status.answering(requestId));
     });
   }
 
@@ -1368,13 +1376,24 @@ void engineMain(
             saved: saved,
           ),
         );
-      case ConfirmEndpoints(:final serverIds):
+      case ConfirmEndpoints(:final serverIds, :final shown):
+        // A server whose endpoint a sync changed since the user looked
+        // is left unconfirmed, so nothing pins what nobody saw; the fleet
+        // that answers lists it as waiting again.
+        final seen = shown == null
+            ? serverIds
+            : [
+                for (final entry in synced.entries)
+                  if (serverIds.contains(entry.serverId) &&
+                      shown[entry.serverId] == ShownEndpoint.of(entry))
+                    entry.serverId,
+              ];
         // Each pin is saved before it counts. One that cannot be saved
         // leaves its server unconfirmed, and the app is told before the
         // fleet, so the fleet's answer ends the request either way; the
         // others still count.
         Object? failure;
-        for (final pin in synced.pinsFor(serverIds, DateTime.now())) {
+        for (final pin in synced.pinsFor(seen, DateTime.now())) {
           try {
             await endpointPins.confirm(pin);
           } on Object catch (error) {
@@ -1401,10 +1420,14 @@ void engineMain(
         if (skipped.isNotEmpty) {
           reject(message, 'not eligible fleet servers: ${skipped.join(', ')}');
         }
-      case EnrollSync():
-        runSync(SyncOperation.enroll, () => sync.enroll(message));
-      case RunSyncRound():
-        runSync(SyncOperation.round, sync.runRound);
+      case EnrollSync(:final requestId):
+        runSync(
+          SyncOperation.enroll,
+          () => sync.enroll(message),
+          requestId: requestId,
+        );
+      case RunSyncRound(:final requestId):
+        runSync(SyncOperation.round, sync.runRound, requestId: requestId);
       case ReadPinConflicts():
         // Behind any round already queued, so a read never races the diff
         // that round is about to change.

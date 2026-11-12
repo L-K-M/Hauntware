@@ -595,12 +595,18 @@ class KlabautermannApp extends StatelessWidget {
                     );
                     return AppMenuHost(
                       // Pane checks and undo labels follow their
-                      // listenables beside the fleet's command state.
+                      // listenables beside the fleet's command state,
+                      // and the commands the lock holds back follow it.
                       listenable: Listenable.merge([
                         fleet,
                         windowPanes,
                         undoHistory,
+                        ?appLock,
                       ]),
+                      locked: switch (appLock) {
+                        final appLock? => () => appLock.locked,
+                        null => null,
+                      },
                       commands: commands,
                       // The add verbs follow the enrollment (P16).
                       child: KeyboardMapScope(
