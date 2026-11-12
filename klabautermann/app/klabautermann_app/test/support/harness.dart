@@ -221,6 +221,7 @@ Future<AppHarness> pumpApp(
     final operations? => AppQuitGuard(
       operations: operations,
       contextOf: () => appNavigatorKey.currentContext,
+      shells: () => harness.monitoring.terminals.shells,
       lock: appLock,
     ),
     null => null,

@@ -1,7 +1,7 @@
 import 'dart:async' show unawaited;
 
 import 'package:flutter/widgets.dart'
-    show BuildContext, SingleActivator, TargetPlatform;
+    show BuildContext, MediaQuery, SingleActivator, TargetPlatform;
 import 'package:ghost_ui/ghost_ui.dart' show PaletteCommand;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show SampleStream, UnitsResult;
@@ -13,6 +13,7 @@ import 'adaptive_shell.dart' show showsDesktopShell;
 import 'docker/containers_panel.dart' show containerStateText;
 import 'docker/containers_view.dart' show containerNameOf;
 import 'menus/app_commands.dart';
+import 'phone_shell.dart' show kTabletSplitMinShortestSide;
 import 'server_surfaces.dart' show ServerPanel;
 import 'services_view.dart' show unitDescriptionOf, unitStatesOf;
 import 'workspace_navigation.dart';
@@ -36,6 +37,11 @@ List<PaletteCommand> paletteCommands({
   // A narrow window's phone shell has no workspace tabs or inspector to
   // send rows to.
   final selected = showsDesktopShell(context) ? fleet.selectedServer : null;
+  // The stacked phone layout opens a server only from its own list, so a
+  // server row would close the palette and show nothing.
+  final stacked =
+      !showsDesktopShell(context) &&
+      MediaQuery.sizeOf(context).shortestSide < kTabletSplitMinShortestSide;
   final containers = selected == null
       ? null
       : monitoring.docker.containersFor(selected.id).value.containers;
@@ -68,22 +74,23 @@ List<PaletteCommand> paletteCommands({
           enabled: action.enabled(),
           run: () => unawaited(action.run(context)),
         ),
-    for (final server in fleet.servers)
-      switch (server.address) {
-        final address? => PaletteCommand(
-          label: server.displayName,
-          path: l10n.paletteServers,
-          description: address,
-          keywords: [?server.group, address],
-          run: () => fleet.select(server.id),
-        ),
-        null => PaletteCommand(
-          label: server.displayName,
-          path: l10n.paletteServers,
-          keywords: [?server.group],
-          run: () => fleet.select(server.id),
-        ),
-      },
+    if (!stacked)
+      for (final server in fleet.servers)
+        switch (server.address) {
+          final address? => PaletteCommand(
+            label: server.displayName,
+            path: l10n.paletteServers,
+            description: address,
+            keywords: [?server.group, address],
+            run: () => fleet.select(server.id),
+          ),
+          null => PaletteCommand(
+            label: server.displayName,
+            path: l10n.paletteServers,
+            keywords: [?server.group],
+            run: () => fleet.select(server.id),
+          ),
+        },
     if (selected != null)
       for (final panel in ServerPanel.values)
         PaletteCommand(

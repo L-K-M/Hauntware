@@ -374,19 +374,21 @@ void main() {
     await tester.tap(find.byTooltip('Regular expression'));
     await tester.enterText(find.byType(TextField).last, 'timed (out');
     await tester.pumpAndSettle(const Duration(milliseconds: 300));
-    expect(find.text('Not a valid regular expression'), findsOneWidget);
+    // The journal's PCRE2 may read what Dart's engine cannot, so the server
+    // search stays available and the note says only that nothing is shown.
+    expect(find.textContaining('Not shown here'), findsOneWidget);
     expect(
       tester
           .widget<IconButton>(
             find.widgetWithIcon(IconButton, Icons.travel_explore),
           )
           .onPressed,
-      isNull,
+      isNotNull,
     );
 
     await tester.enterText(find.byType(TextField).last, r'(timed|unexp\w+) ');
     await tester.pumpAndSettle(const Duration(milliseconds: 300));
-    expect(find.text('Not a valid regular expression'), findsNothing);
+    expect(find.textContaining('Not shown here'), findsNothing);
     expect(find.text('2 matches'), findsOneWidget);
   });
 

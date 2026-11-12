@@ -44,6 +44,7 @@ void openContainerShellPage(
               monitoring: monitoring,
               serverId: serverId,
               container: container,
+              guardPop: true,
             ),
           ),
         ),
@@ -51,6 +52,36 @@ void openContainerShellPage(
     ),
   ),
 );
+
+/// Asks before a close ends [shell] while it runs, naming its container
+/// (03 §7.13, CTX-07). An ended shell closes without asking.
+Future<bool> confirmEndRunningShell(
+  BuildContext context,
+  ContainerShell shell,
+) async {
+  if (!shell.isRunning) return true;
+  final l10n = AppLocalizations.of(context);
+  final materialL10n = MaterialLocalizations.of(context);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(l10n.shellEndRunningTitle),
+      content: Text(l10n.shellEndRunningBody(shell.containerName)),
+      actions: [
+        TextButton(
+          autofocus: true,
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: Text(materialL10n.cancelButtonLabel),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: Text(l10n.shellEndRunningConfirm),
+        ),
+      ],
+    ),
+  );
+  return confirmed ?? false;
+}
 
 /// A shell in [container] on [serverId] (03 §7.13, CTX-07): first the
 /// shell and user to run it with, then Séance's terminal over the
@@ -64,11 +95,16 @@ class ContainerShellPane extends StatefulWidget {
     required this.monitoring,
     required this.serverId,
     required this.container,
+    this.guardPop = false,
   });
 
   final MonitoringController monitoring;
   final String serverId;
   final ContainerSummary container;
+
+  /// Whether a system back that would take the pane asks before ending a
+  /// running shell; the phone's full-screen page sets it.
+  final bool guardPop;
 
   @override
   State<ContainerShellPane> createState() => _ContainerShellPaneState();
@@ -85,10 +121,16 @@ class _ContainerShellPaneState extends State<ContainerShellPane> {
 
   @override
   void dispose() {
+    _run?.shell.state.removeListener(_onShellState);
     _run?.dispose();
     _shellField.dispose();
     _userField.dispose();
     super.dispose();
+  }
+
+  /// The back guard reads the shell's state, so the pane rebuilds with it.
+  void _onShellState() {
+    if (mounted) setState(() {});
   }
 
   void _start() {
@@ -97,6 +139,7 @@ class _ContainerShellPaneState extends State<ContainerShellPane> {
       widget.monitoring.terminals.open(
         serverId: widget.serverId,
         containerId: widget.container.id,
+        containerName: containerNameOf(widget.container),
         shell: _shellField.text,
         user: _userField.text,
         columns: 80,
@@ -104,25 +147,51 @@ class _ContainerShellPaneState extends State<ContainerShellPane> {
       ),
     );
     setState(() => _run = run);
-    previous?.dispose();
+    run.shell.state.addListener(_onShellState);
+    if (previous != null) {
+      previous.shell.state.removeListener(_onShellState);
+      previous.dispose();
+    }
   }
 
   void _back() {
     final previous = _run;
     setState(() => _run = null);
-    previous?.dispose();
+    if (previous != null) {
+      previous.shell.state.removeListener(_onShellState);
+      previous.dispose();
+    }
+  }
+
+  Future<void> _popAsked() async {
+    final run = _run;
+    if (run == null) return;
+    if (!await confirmEndRunningShell(context, run.shell)) return;
+    if (!mounted) return;
+    Navigator.of(context).pop();
   }
 
   @override
-  Widget build(BuildContext context) => switch (_run) {
-    null => _form(context),
-    final run => _ShellView(
-      key: ObjectKey(run),
-      run: run,
-      onReopen: _start,
-      onBack: _back,
-    ),
-  };
+  Widget build(BuildContext context) {
+    final body = switch (_run) {
+      null => _form(context),
+      final run => _ShellView(
+        key: ObjectKey(run),
+        run: run,
+        onReopen: _start,
+        onBack: _back,
+      ),
+    };
+    if (!widget.guardPop) return body;
+    return PopScope(
+      // Back asks before it ends a running shell; the pop then closes it.
+      canPop: _run?.shell.isRunning != true,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(_popAsked());
+      },
+      child: body,
+    );
+  }
 
   Widget _form(BuildContext context) {
     final l10n = AppLocalizations.of(context);

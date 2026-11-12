@@ -17,6 +17,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/log_display.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
+import '../time_display.dart' show TimeDisplayScope;
 import 'log_level.dart';
 import 'log_search.dart';
 import 'log_text.dart';
@@ -62,6 +63,10 @@ const int _fieldIndent = 2;
 /// The rows kept above a search match the view scrolls to.
 const int _revealContext = 2;
 
+/// How far past the row's width a match's glyphs may end and still count
+/// as shown, for the engine's rounding, in logical pixels.
+const double _shownTolerance = 0.01;
+
 /// Line and paragraph separators, which would break a field's row.
 final _rowBreaks = RegExp('[\u2028\u2029]');
 
@@ -87,12 +92,17 @@ final _rowBreaks = RegExp('[\u2028\u2029]');
 /// above the top edge move no line in sight, and a row in sight keeps its
 /// place while its fields open. With a [search], its matches are
 /// highlighted, and each step to a match pauses following and scrolls the
-/// match's row into sight (LOG-05). Without wrap a match after the row's
-/// first line or past its ellipsis stays out of sight.
+/// match's row into sight (LOG-05). Without wrap, a current match the row
+/// would not show, past its ellipsis or on a later line of a journal
+/// MESSAGE, shows in a window of the row that starts with an ellipsis
+/// ([logMatchWindowStart]); the row stays one line high, so stepping
+/// moves no row, and other matches past the ellipsis stay out of sight.
 ///
-/// A container line's row (CTX-01) starts with its time and its stream,
-/// `stdout` or `stderr` ([LogViewController.containerOf]), the latter in
-/// the error colour; a screen reader hears the stream's name.
+/// A journal line's row starts with its time when the entry has one, and
+/// a container line's row (CTX-01) with its time and its stream, `stdout`
+/// or `stderr` ([LogViewController.containerOf]), the latter in the error
+/// colour; a screen reader hears the stream's name. Times show in the zone
+/// the time display chooses for [LogViewController.serverId] (A11Y-07).
 class LogView extends StatefulWidget {
   const LogView({
     super.key,
@@ -451,10 +461,8 @@ class _LogViewState extends State<LogView> {
       return bound <= width;
     }
 
-    final container = widget.controller.containerOf(entry);
     var rows =
-        _note(entry) == null &&
-            fits(logRowText(entry, container: container), width)
+        _note(entry) == null && fits(widget.controller.rowText(entry), width)
         ? 1
         : _layoutRows(_lineSpan(entry, text), width, text);
     final fieldWidth = width - text.fieldIndent;
@@ -503,12 +511,13 @@ class _LogViewState extends State<LogView> {
     final units =
         entry.text.length +
         (entry.journal?.source?.length ?? 0) +
+        logJournalTimeLength(entry) +
         (container == null ? 0 : logContainerSourceLength(container));
     if (width <= 0 || units == 0) return 1 + fields;
     return (units * text.advance / width).ceil().clamp(1, units) + fields;
   }
 
-  TextSpan _lineSpan(LogLine line, _TextLayout text) {
+  TextSpan _lineSpan(LogLine line, _TextLayout text, {int windowStart = 0}) {
     final search = widget.search;
     final container = widget.controller.containerOf(line);
     return logLineSpan(
@@ -523,7 +532,69 @@ class _LogViewState extends State<LogView> {
           : _l10n.logContainerStream(container.stream.name),
       matches: search?.matchesIn(line) ?? const [],
       currentMatch: search?.currentIndexIn(line),
+      zoneOffset: widget.controller.zoneOffset,
+      windowStart: windowStart,
     );
+  }
+
+  /// Where [line]'s row starts without wrap in a row [width] wide, so that
+  /// it shows its current match: 0 when the row shows the match from its
+  /// start, as it does when the match's glyphs lie on its first line and
+  /// end before the row's width, less the ellipsis when the line is wider.
+  /// Laid out as drawn, so any glyph's width counts.
+  int _windowStart(LogLine line, _TextLayout text, double width) {
+    final search = widget.search!;
+    final matches = search.matchesIn(line);
+    final index = search.currentIndexIn(line);
+    if (index == null || index >= matches.length) return 0;
+
+    final match = matches[index];
+    final painter = TextPainter(
+      text: _lineSpan(line, text),
+      textDirection: TextDirection.ltr,
+      strutStyle: text.strut,
+      textScaler: text.scaler,
+    )..layout();
+    final firstLine = painter.computeLineMetrics().first.width;
+    final limit =
+        (firstLine <= width + _shownTolerance ? width : width - text.ellipsis) +
+        _shownTolerance;
+    final boxes = painter.getBoxesForSelection(
+      TextSelection(baseOffset: match.start, extentOffset: match.end),
+    );
+    painter.dispose();
+    final shown =
+        boxes.isNotEmpty &&
+        boxes.every(
+          (box) => box.top < text.lineHeight / 2 && box.right <= limit,
+        );
+    if (shown) return 0;
+
+    return logMatchWindowStart(
+      widget.controller.rowText(line),
+      match,
+      cells: (width / text.advance).floor(),
+    );
+  }
+
+  /// Hands the controller the zone offset the time display chooses for its
+  /// server, after this frame: the controller notifies a search over it,
+  /// whose field may not rebuild during this build. Until then the rows
+  /// keep the offset they were searched at, so what the view draws and
+  /// what the search matched never differ.
+  void _syncZone() {
+    final controller = widget.controller;
+    final serverId = controller.serverId;
+    final offset = serverId == null
+        ? null
+        : TimeDisplayScope.serverOffsetOf(context, serverId);
+    if (offset == controller.zoneOffset) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.controller == controller) {
+        controller.setZoneOffset(offset);
+      }
+    });
   }
 
   void _scroll(_LogScroll scroll) {
@@ -560,6 +631,7 @@ class _LogViewState extends State<LogView> {
 
   @override
   Widget build(BuildContext context) {
+    _syncZone();
     final text = _text!;
     final following = widget.controller.following.value;
     final colors = Theme.of(context).colorScheme;
@@ -662,7 +734,7 @@ class _LogViewState extends State<LogView> {
       LogLine() when fields != null => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _richText(_lineSpan(entry, text), text),
+          _line(entry, text),
           for (final field in _fieldLines(entry, fields))
             Padding(
               padding: EdgeInsetsDirectional.only(start: text.fieldIndent),
@@ -676,7 +748,7 @@ class _LogViewState extends State<LogView> {
             ),
         ],
       ),
-      LogLine() => _richText(_lineSpan(entry, text), text),
+      LogLine() => _line(entry, text),
       LogDroppedLines(:final count) => Row(
         children: [
           Icon(
@@ -731,6 +803,26 @@ class _LogViewState extends State<LogView> {
     );
   }
 
+  /// [line]'s own row, without its fields. Without wrap, the row of the
+  /// current match lays out for its width, to window the row around the
+  /// match when it would not show ([_windowStart]); it stays one line.
+  Widget _line(LogLine line, _TextLayout text) {
+    if (_wrap == LogWrap.on || widget.search?.currentIndexIn(line) == null) {
+      return _richText(_lineSpan(line, text), text);
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) => _richText(
+        _lineSpan(
+          line,
+          text,
+          windowStart: _windowStart(line, text, constraints.maxWidth),
+        ),
+        text,
+      ),
+    );
+  }
+
   Widget? _levelIcon(LogLevel? level, _TextLayout text) {
     final (icon, label) = switch (level) {
       LogLevel.error => (Icons.error_outline, _l10n.logLevelError),
@@ -763,6 +855,7 @@ final class _TextLayout {
     required this.strut,
     required this.lineHeight,
     required this.advance,
+    required this.ellipsis,
   }) : palette = LogPalette.fromTheme(theme);
 
   /// The layout for [context], or [previous] when nothing it depends on
@@ -818,6 +911,7 @@ final class _TextLayout {
         measure('W'),
         measure('W', style: base.copyWith(fontWeight: FontWeight.bold)),
       ),
+      ellipsis: measure('\u2026'),
     );
   }
 
@@ -832,6 +926,9 @@ final class _TextLayout {
   final StrutStyle strut;
   final double lineHeight;
   final double advance;
+
+  /// The width of the ellipsis that ends a row too wide for the view.
+  final double ellipsis;
 
   double get iconSize => scaler.scale(fontSize);
 

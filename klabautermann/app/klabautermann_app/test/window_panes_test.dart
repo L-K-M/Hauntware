@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show macosTrafficLightsInset;
+import 'package:ghost_servers/ghost_servers.dart' show kServersKey;
 import 'package:ghost_ui/ghost_ui.dart' show GhostUndoHistory;
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/window_panes.dart';
 import 'package:klabautermann_app/ui/desktop_shell.dart';
 import 'package:klabautermann_app/ui/docker/container_details.dart';
 import 'package:klabautermann_app/ui/fleet_rail.dart';
+import 'package:klabautermann_app/ui/fleet_rows.dart' show fleetSectionHeaderKey;
 import 'package:klabautermann_app/ui/inspector_pane.dart';
 import 'package:klabautermann_app/ui/menus/app_commands.dart';
 import 'package:klabautermann_app/ui/server_workspace.dart';
@@ -88,6 +90,38 @@ void main() {
       await tester.tap(find.byKey(DesktopShell.inspectorToggleKey));
       await tester.pumpAndSettle();
       expect(find.byType(InspectorPane), findsOneWidget);
+    });
+
+    testWidgets('hiding and showing the rail keeps its filter and folds', (
+      tester,
+    ) async {
+      final harness = await pumpApp(tester, servers: twoServers);
+      final filter = find.descendant(
+        of: find.byType(FleetRail),
+        matching: find.byType(TextField),
+      );
+
+      // Folded before the search: a search draws every header open, so
+      // a tap during one changes no fold.
+      await tester.tap(find.byKey(fleetSectionHeaderKey(kServersKey)));
+      await tester.pumpAndSettle();
+      expect(harness.fleet.collapsedSections, contains(kServersKey));
+
+      await tester.enterText(filter, 'db');
+      await tester.pumpAndSettle();
+      expect(harness.fleet.filterQuery, 'db');
+
+      await harness.windowPanes.setShown(WindowPane.sidebar, false);
+      await tester.pumpAndSettle();
+      expect(find.byType(FleetRail), findsNothing);
+
+      await harness.windowPanes.setShown(WindowPane.sidebar, true);
+      await tester.pumpAndSettle();
+      expect(find.byType(FleetRail), findsOneWidget);
+      expect(harness.fleet.filterQuery, 'db');
+      expect(harness.fleet.collapsedSections, contains(kServersKey));
+      expect(find.text('db-1'), findsOneWidget);
+      expect(find.text('web-1'), findsNothing);
     });
 
     testWidgets('Ctrl+Alt+S and Ctrl+Alt+I toggle the panes', (tester) async {

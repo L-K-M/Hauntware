@@ -222,6 +222,10 @@ final class CapabilityCache {
     );
   }
 
+  /// Awaits every queued write and purge, so a caller about to delete or
+  /// reuse the support directory can wait for the cache to finish with it.
+  Future<void> get idle => _tail;
+
   /// Records a probe answer for [serverId]: its cached profile is no
   /// longer sent, and its file holds [profile] without the clock and
   /// session fields, probed now.
