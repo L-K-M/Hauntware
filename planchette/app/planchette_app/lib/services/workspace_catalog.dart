@@ -242,6 +242,25 @@ class WorkspaceCatalog extends ChangeNotifier {
     }
   });
 
+  /// Resolve a host-key conflict by keeping this device's pin or accepting
+  /// the pulled one. Pull-only: the local pin store and verdicts are
+  /// written, never pushed records.
+  Future<void> resolvePinConflict(
+    HostKeyConflict conflict, {
+    required bool keepLocal,
+  }) => _run(() async {
+    await _load();
+    await _unlockVault();
+    final coordinator = await _coordinator();
+    if (keepLocal) {
+      await coordinator.keepLocalPin(conflict);
+    } else {
+      await coordinator.acceptPulledPin(conflict);
+    }
+    _hostKeyConflicts = List.unmodifiable(await coordinator.pinConflicts());
+    await _state.setNotice(_hostKeyNotice, _hostKeyConflicts.isNotEmpty);
+  });
+
   MasterKeyManager get _keys => _masterKeys ??= MasterKeyManager(
     masterKeyEntry: 'planchette.vault.masterKey.v1',
     apiKeyPrefix: 'planchette.apikey.',

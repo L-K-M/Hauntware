@@ -14,18 +14,24 @@ import 'app_settings.dart';
 /// a click outside the dialog does nothing, so a preview is never kept or
 /// dropped by accident.
 class SettingsDialog extends StatefulWidget {
-  const SettingsDialog({super.key, required this.settings});
+  const SettingsDialog({super.key, required this.settings, this.appVersion});
 
   final SettingsController settings;
+
+  /// The running build, as `readAppVersion` reported it; null when the
+  /// platform could not tell.
+  final String? appVersion;
 
   /// Show the dialog and resolve once the user is done.
   static Future<void> show(
     BuildContext context, {
     required SettingsController settings,
+    String? appVersion,
   }) => showDialog<void>(
     context: context,
     barrierDismissible: false,
-    builder: (context) => SettingsDialog(settings: settings),
+    builder: (context) =>
+        SettingsDialog(settings: settings, appVersion: appVersion),
   );
 
   @override
@@ -191,6 +197,14 @@ class _SettingsDialogState extends State<SettingsDialog> {
               ),
               const SizedBox(height: 16),
               _section(theme, 'About'),
+              // The running build, so a bug report can name it; the licenses
+              // page repeats it under the app name.
+              Text(
+                widget.appVersion == null
+                    ? 'Version unknown'
+                    : 'Version ${widget.appVersion}',
+              ),
+              const SizedBox(height: 8),
               // The notices of everything Planchette includes: Flutter's
               // NOTICES, plus the APK's Maven libraries on Android
               // (ghost_licenses).
@@ -205,6 +219,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 onTap: () => showLicensePage(
                   context: context,
                   applicationName: 'Planchette',
+                  applicationVersion: widget.appVersion,
                   applicationLegalese:
                       "Planchette's own code is public domain (Unlicense). It "
                       'includes third-party components that keep their own '

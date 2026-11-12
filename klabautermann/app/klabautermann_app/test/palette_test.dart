@@ -260,4 +260,29 @@ void main() {
     },
     variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
+
+  testWidgets(
+    'a stacked phone layout offers no server rows, whose choice would open '
+    'nothing there',
+    (tester) async {
+      final harness = await pumpApp(
+        tester,
+        size: const Size(500, 900),
+        servers: twoServers,
+        palette: true,
+      );
+      harness.fleet.select('srv-1');
+      await tester.pumpAndSettle();
+
+      await _openPalette(tester);
+      expect(find.byKey(_query), findsOne);
+      await tester.enterText(find.byKey(_query), ':servers');
+      await tester.pump();
+      expect(
+        find.descendant(of: find.byType(Dialog), matching: find.text('db-1')),
+        findsNothing,
+      );
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
 }

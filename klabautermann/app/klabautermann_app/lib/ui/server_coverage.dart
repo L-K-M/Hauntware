@@ -8,6 +8,7 @@ import 'charts/charts.dart';
 import 'coverage.dart' show CoverageItem, CoverageTierBadge, pausesInBackground;
 import 'fleet_row_state.dart' show kFleetRowStaleAfter;
 import 'freshness.dart';
+import 'threshold_scope.dart';
 import 'time_display.dart';
 import 'server_surfaces.dart' show SampledSurface;
 import 'system_panel.dart' show PanelNotice, PanelSection;
@@ -432,6 +433,7 @@ class _SessionChart extends StatelessWidget {
             span: _sessionSpan,
             max: 100,
             zoneOffset: TimeDisplayScope.serverOffsetOf(context, serverId),
+            thresholds: ThresholdScope.of(context, ThresholdMetric.cpu),
           ),
         ),
       ],

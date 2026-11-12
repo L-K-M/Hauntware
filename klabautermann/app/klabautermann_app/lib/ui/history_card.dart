@@ -7,6 +7,7 @@ import '../controllers/history_reads.dart';
 import '../l10n/app_localizations.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart';
+import 'threshold_scope.dart';
 import 'time_display.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 
@@ -214,12 +215,26 @@ class _HistoryCardState extends State<HistoryCard> {
                 context,
                 widget.serverId,
               ),
+              thresholds: switch (historyThresholdMetric(_metric)) {
+                final metric? => ThresholdScope.of(context, metric),
+                null => null,
+              },
             ),
           ),
       ],
     );
   }
 }
+
+/// The user's levels (OV-11) that [metric] is judged against, as the
+/// Overview judges it: inodes take the disk's, as the threshold announcer
+/// does. Load per core has no percentage levels.
+ThresholdMetric? historyThresholdMetric(AlertMetric metric) => switch (metric) {
+  AlertMetric.loadPerCore => null,
+  AlertMetric.cpuBusy => ThresholdMetric.cpu,
+  AlertMetric.memoryUsed => ThresholdMetric.memory,
+  AlertMetric.diskUsed || AlertMetric.diskInodes => ThresholdMetric.disk,
+};
 
 /// The words for a History metric.
 String historyMetricName(AppLocalizations l10n, AlertMetric metric) =>
