@@ -9,7 +9,7 @@ import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/logs/log_view.dart';
-import 'package:klabautermann_app/ui/processes_panel.dart' show kRevealDuration;
+import 'package:klabautermann_app/ui/timed_reveal.dart' show kRevealDuration;
 import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_app/ui/services_panel.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';

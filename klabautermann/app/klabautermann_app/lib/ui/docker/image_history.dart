@@ -1,4 +1,4 @@
-import 'dart:async' show Timer, unawaited;
+import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart' show ghostFormatBinarySize;
@@ -8,9 +8,9 @@ import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
-import '../processes_panel.dart' show kRevealDuration;
 import 'containers_panel.dart' show DockerNotice;
 import '../time_display.dart';
+import '../timed_reveal.dart';
 import 'images_view.dart';
 
 /// Opens [image]'s history (03 §7.14 IMG-04) in a sheet over the Images
@@ -75,29 +75,25 @@ class ImageHistorySheet extends StatefulWidget {
 }
 
 class _ImageHistorySheetState extends State<ImageHistorySheet> {
-  late final AppLifecycleListener _lifecycle;
-
   /// The engine's answer; null while it is read.
   DockerPayload? _answer;
 
   /// Counts reads, so only the latest answer shows.
   int _reads = 0;
 
-  /// Masks the revealed values when their time is up; null while
-  /// masked.
-  Timer? _reveal;
+  /// Whether the masked values show, and for how long.
+  late final TimedReveals<RevealScope> _reveal;
 
   @override
   void initState() {
     super.initState();
-    _lifecycle = AppLifecycleListener(onInactive: _mask);
+    _reveal = TimedReveals(onChanged: () => setState(() {}));
     unawaited(_read());
   }
 
   @override
   void dispose() {
-    _lifecycle.dispose();
-    _reveal?.cancel();
+    _reveal.dispose();
     super.dispose();
   }
 
@@ -113,23 +109,6 @@ class _ImageHistorySheetState extends State<ImageHistorySheet> {
     if (!mounted || read != _reads) return;
 
     setState(() => _answer = answer);
-  }
-
-  void _toggleReveal() {
-    if (_reveal != null) {
-      _mask();
-      return;
-    }
-
-    setState(() => _reveal = Timer(kRevealDuration, _mask));
-  }
-
-  void _mask() {
-    final timer = _reveal;
-    if (timer == null || !mounted) return;
-
-    timer.cancel();
-    setState(() => _reveal = null);
   }
 
   @override
@@ -185,7 +164,7 @@ class _ImageHistorySheetState extends State<ImageHistorySheet> {
         ];
       case DockerImageHistoryPayload(:final layers):
         final masked = layers.where((layer) => layer.createdBy.isMasked);
-        final revealed = _reveal != null;
+        final revealed = _reveal.isRevealed(RevealScope.all);
         return [
           if (masked.isNotEmpty) ...[
             Wrap(
@@ -201,7 +180,7 @@ class _ImageHistorySheetState extends State<ImageHistorySheet> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 TextButton.icon(
-                  onPressed: _toggleReveal,
+                  onPressed: () => _reveal.toggle(RevealScope.all),
                   icon: Icon(
                     revealed
                         ? Icons.visibility_off_outlined

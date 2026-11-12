@@ -1,4 +1,4 @@
-import 'dart:async' show Timer, unawaited;
+import 'dart:async' show unawaited;
 import 'dart:convert' show LineSplitter;
 
 import 'package:flutter/foundation.dart';
@@ -17,9 +17,9 @@ import '../actions/action_entry.dart';
 import '../logs/log_export.dart' show showExportSheet;
 import '../actions/docker_actions.dart'
     show ContainerActionButtons, containerActionsShown;
-import '../processes_panel.dart' show kRevealDuration;
 import '../processes_view.dart' show argumentText, clipProcessText;
 import '../time_display.dart';
+import '../timed_reveal.dart';
 import '../workspace_dock.dart';
 import 'container_details_view.dart';
 import 'container_diagnosis.dart';
@@ -447,10 +447,8 @@ class ContainerDetailsView extends StatefulWidget {
 }
 
 class _ContainerDetailsViewState extends State<ContainerDetailsView> {
-  /// The revealed values by where they show, each with the timer that
-  /// masks it.
-  final Map<_Shown, Timer> _revealed = {};
-  late final AppLifecycleListener _lifecycle;
+  /// The revealed values by where they show.
+  late final TimedReveals<_Shown> _revealed;
   late ValueListenable<DockerContainerDetails> _details;
 
   DockerController get _docker => widget.monitoring.docker;
@@ -458,7 +456,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
   @override
   void initState() {
     super.initState();
-    _lifecycle = AppLifecycleListener(onInactive: _maskAll);
+    _revealed = TimedReveals(onChanged: () => setState(() {}));
     _details = _docker.openContainer(widget.serverId, widget.container.id);
     _docker.pinStats(widget.serverId, widget.container.id);
   }
@@ -472,7 +470,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
     }
 
     // Another container: nothing revealed carries over.
-    _maskAll();
+    _revealed.maskAll();
     _docker.closeContainer(oldWidget.serverId, oldWidget.container.id);
     _docker.unpinStats(oldWidget.serverId, oldWidget.container.id);
     _details = _docker.openContainer(widget.serverId, widget.container.id);
@@ -481,37 +479,10 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
 
   @override
   void dispose() {
-    _lifecycle.dispose();
-    for (final timer in _revealed.values) {
-      timer.cancel();
-    }
+    _revealed.dispose();
     _docker.closeContainer(widget.serverId, widget.container.id);
     _docker.unpinStats(widget.serverId, widget.container.id);
     super.dispose();
-  }
-
-  void _toggle(_Shown key) {
-    final timer = _revealed.remove(key);
-    setState(() {
-      if (timer != null) {
-        timer.cancel();
-        return;
-      }
-      _revealed[key] = Timer(kRevealDuration, () {
-        if (mounted) setState(() => _revealed.remove(key));
-      });
-    });
-  }
-
-  void _maskAll() {
-    if (_revealed.isEmpty) return;
-
-    setState(() {
-      for (final timer in _revealed.values) {
-        timer.cancel();
-      }
-      _revealed.clear();
-    });
   }
 
   @override
@@ -932,7 +903,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
       );
     }
 
-    final revealed = _revealed.containsKey(key);
+    final revealed = _revealed.isRevealed(key);
     final shown = clipProcessText(revealed ? value.reveal()! : value.display);
     // A masked value is read as masked, never as eight asterisks.
     final spoken = revealed
@@ -949,9 +920,9 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
           ? l10n.dockerDetailsHideHint
           : l10n.dockerDetailsRevealHint,
       excludeSemantics: true,
-      onTap: () => _toggle(key),
+      onTap: () => _revealed.toggle(key),
       child: InkWell(
-        onTap: () => _toggle(key),
+        onTap: () => _revealed.toggle(key),
         child: ConstrainedBox(
           // A touch needs a 48 dp target (A11Y-01); a pointer, the line.
           constraints: BoxConstraints(

@@ -17,7 +17,7 @@ import 'package:klabautermann_app/ui/docker/containers_panel.dart';
 import 'package:klabautermann_app/ui/actions/action_entry.dart'
     show OperationsScope;
 import 'package:klabautermann_app/ui/hand_off_actions.dart' show HandOffScope;
-import 'package:klabautermann_app/ui/processes_panel.dart' show kRevealDuration;
+import 'package:klabautermann_app/ui/timed_reveal.dart' show kRevealDuration;
 import 'package:klabautermann_app/ui/server_safety.dart' show SafetyScope;
 import 'package:klabautermann_core/klabautermann_core.dart';
 

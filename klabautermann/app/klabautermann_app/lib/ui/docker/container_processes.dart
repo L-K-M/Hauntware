@@ -1,4 +1,4 @@
-import 'dart:async' show Timer, unawaited;
+import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart' show ghostFormatBinarySize;
@@ -7,7 +7,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/docker_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
-import '../processes_panel.dart' show kRevealDuration;
+import '../timed_reveal.dart';
 import 'containers_panel.dart' show DockerNotice;
 
 /// The `ps` column whose value is resident memory in KiB, which the
@@ -48,8 +48,6 @@ class ContainerProcessesSection extends StatefulWidget {
 
 class _ContainerProcessesSectionState extends State<ContainerProcessesSection>
     with AutomaticKeepAliveClientMixin {
-  late final AppLifecycleListener _lifecycle;
-
   /// The engine's answer; null while it is read or the container is
   /// stopped.
   DockerPayload? _answer;
@@ -57,9 +55,8 @@ class _ContainerProcessesSectionState extends State<ContainerProcessesSection>
   /// Counts reads, so only the latest answer shows.
   int _reads = 0;
 
-  /// Masks the revealed values when their time is up; null while
-  /// masked.
-  Timer? _reveal;
+  /// Whether the masked values show, and for how long.
+  late final TimedReveals<RevealScope> _reveal;
 
   /// Kept while scrolled out of a lazy list: coming back shows the answer
   /// held rather than asking the server again.
@@ -69,7 +66,7 @@ class _ContainerProcessesSectionState extends State<ContainerProcessesSection>
   @override
   void initState() {
     super.initState();
-    _lifecycle = AppLifecycleListener(onInactive: _mask);
+    _reveal = TimedReveals(onChanged: () => setState(() {}));
     if (widget.up) unawaited(_read());
   }
 
@@ -84,8 +81,7 @@ class _ContainerProcessesSectionState extends State<ContainerProcessesSection>
 
     // Another container, or this one started or stopped: what showed no
     // longer holds, and nothing revealed carries over.
-    _reveal?.cancel();
-    _reveal = null;
+    _reveal.discard();
     _reads++;
     _answer = null;
     if (widget.up) unawaited(_read());
@@ -93,16 +89,14 @@ class _ContainerProcessesSectionState extends State<ContainerProcessesSection>
 
   @override
   void dispose() {
-    _lifecycle.dispose();
-    _reveal?.cancel();
+    _reveal.dispose();
     super.dispose();
   }
 
   Future<void> _read() async {
     final read = ++_reads;
     // A fresh read starts masked: nothing revealed carries over to it.
-    _reveal?.cancel();
-    _reveal = null;
+    _reveal.discard();
     if (_answer != null) setState(() => _answer = null);
 
     final answer = await widget.docker.readContainerTop(
@@ -112,23 +106,6 @@ class _ContainerProcessesSectionState extends State<ContainerProcessesSection>
     if (!mounted || read != _reads) return;
 
     setState(() => _answer = answer);
-  }
-
-  void _toggleReveal() {
-    if (_reveal != null) {
-      _mask();
-      return;
-    }
-
-    setState(() => _reveal = Timer(kRevealDuration, _mask));
-  }
-
-  void _mask() {
-    final timer = _reveal;
-    if (timer == null || !mounted) return;
-
-    timer.cancel();
-    setState(() => _reveal = null);
   }
 
   @override
@@ -200,7 +177,7 @@ class _ContainerProcessesSectionState extends State<ContainerProcessesSection>
         final masked = processes.where(
           (row) => row.any((cell) => cell.isMasked),
         );
-        final revealed = _reveal != null;
+        final revealed = _reveal.isRevealed(RevealScope.all);
         return [
           Wrap(
             spacing: 12,
@@ -213,7 +190,7 @@ class _ContainerProcessesSectionState extends State<ContainerProcessesSection>
               ),
               if (masked.isNotEmpty)
                 TextButton.icon(
-                  onPressed: _toggleReveal,
+                  onPressed: () => _reveal.toggle(RevealScope.all),
                   icon: Icon(
                     revealed
                         ? Icons.visibility_off_outlined
