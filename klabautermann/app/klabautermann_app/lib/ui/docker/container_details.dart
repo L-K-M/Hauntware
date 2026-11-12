@@ -1033,14 +1033,13 @@ String _restartText(AppLocalizations l10n, ContainerRestartPolicy policy) {
   return l10n.dockerDetailsRestartPolicyRetries(words, retries);
 }
 
-/// A heading over its [children], read as a heading.
 /// How many of a container's newest log lines its diagnosis shows.
 const _logTailLines = 20;
 
 /// [child], the diagnosis (TRI-04), over [containerId]'s newest log
 /// lines when [read]: one bounded read while it shows, oldest first as
-/// Docker sends them. No lines show while it reads or when the read
-/// fails; the Logs view says why there.
+/// Docker sends them. Lines show as they arrive; none show when the
+/// read fails, and the Logs view says why there.
 class _LogTail extends StatefulWidget {
   const _LogTail({
     required this.monitoring,
@@ -1161,6 +1160,7 @@ class _LogTailState extends State<_LogTail> {
   }
 }
 
+/// A heading over its [children], read as a heading.
 class _Section extends StatelessWidget {
   const _Section({required this.title, required this.children});
 
