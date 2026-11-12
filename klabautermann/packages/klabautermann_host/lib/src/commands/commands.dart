@@ -1598,20 +1598,6 @@ exit 0''';
     return ['crontab', '-l', '-u', user];
   }
 
-  /// `df -PT -B1 [<path>]` for one mount's numbers, or `df -Pi` for inode
-  /// pressure (03 §7.3). The path is validated but `df` flags are fixed.
-  static List<String> df({String? path, bool inodes = false}) {
-    if (path != null) _check(ArgValidators.absolutePath, path);
-    return [
-      'df',
-      if (inodes) '-Pi' else ...['-PT', '-B1'],
-      if (path != null) path,
-    ];
-  }
-
-  /// `ss -tulpn` for the listening-ports list (03 §7.4).
-  static List<String> ss() => const ['ss', '-tulpn'];
-
   /// `(unset TZ; systemd-analyze calendar --iterations=N -- '<expr>')`
   /// for the OnCalendar preview (03 §7.7): the subshell clears a session
   /// TZ so the expression resolves in the server zone, and `--` keeps an

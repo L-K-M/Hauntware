@@ -6465,6 +6465,36 @@ abstract class AppLocalizations {
   /// **'The host key setting could not be changed.'**
   String get settingsPinPublicationNotChanged;
 
+  /// Settings, Sync: warning over one quarantined host key, naming the host:port whose synced key differs from the trusted pin (03 §4.9).
+  ///
+  /// In en, this message translates to:
+  /// **'A synced host key for {locator} conflicts with the key this device trusts. This can mean a man-in-the-middle attack.'**
+  String settingsPinConflictWarning(String locator);
+
+  /// Label over the fingerprint of the host key this device trusts, in a pin conflict.
+  ///
+  /// In en, this message translates to:
+  /// **'This device trusts'**
+  String get settingsPinLocalKey;
+
+  /// Label over the fingerprint of the host key another device synced, in a pin conflict on this account.
+  ///
+  /// In en, this message translates to:
+  /// **'The other device synced'**
+  String get settingsPinPulledKey;
+
+  /// Resolves a pin conflict by re-pushing the trusted key (03 §4.9).
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this device\'s key'**
+  String get settingsPinKeepLocal;
+
+  /// Toast when the engine did not take a host key conflict resolution.
+  ///
+  /// In en, this message translates to:
+  /// **'The host key conflict could not be resolved.'**
+  String get settingsPinConflictNotResolved;
+
   /// Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog.
   ///
   /// In en, this message translates to:
@@ -7922,6 +7952,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Nothing has run on this server from this device.'**
   String get activityEmpty;
+
+  /// Shown on the activity page when this device could not read the server's audit log file.
+  ///
+  /// In en, this message translates to:
+  /// **'The log file could not be read, so records are missing.'**
+  String get activityUnreadable;
 
   /// Button that reads the next page of older activity records.
   ///

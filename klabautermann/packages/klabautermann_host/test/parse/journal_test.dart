@@ -52,6 +52,17 @@ void main() {
     expect(e.message, 'hi\uFFFD!');
   });
 
+  test('a repeated field joins its values, text or bytes, by newlines', () {
+    // journalctl prints a field an entry holds more than once as an array
+    // of its values, each a string or a byte array.
+    final line =
+        '{"__CURSOR":"s=1","MESSAGE":["first",[115,101,99,255]],'
+        '"SYSLOG_IDENTIFIER":["app","app"]}';
+    final e = parseJournalLine(line)!;
+    expect(e.message, 'first\nsec�');
+    expect(e.identifier, 'app\napp');
+  });
+
   test('kernel rows fall back to UNIT and a null field stays null', () {
     final line =
         '{"UNIT":"kernel","PRIORITY":null,"MESSAGE":"boot","_BOOT_ID":"b"}';
@@ -120,6 +131,12 @@ void main() {
       expect(e.message, isNull);
       expect(e.realtimeUs, isNull);
       expect(e.fields['X'], ',\uFFFD\x00');
+    });
+
+    test('a repeated field with no decodable value reads as null', () {
+      final e = parseJournalLine('{"MESSAGE":[[[1]],[[2]]],"X":[[["a"]]]}')!;
+      expect(e.message, isNull);
+      expect(e.fields['X'], isNull);
     });
 
     test('an object value reads as null, however deep it nests', () {

@@ -11,6 +11,8 @@
 // the quit question; what is here is Klabautermann's own.
 import 'package:flutter/services.dart';
 import 'package:ghost_theme/ghost_theme.dart';
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show SyncPinConflict;
 import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 
 import '../../controllers/account_size.dart';
@@ -120,6 +122,13 @@ enum SettingsLinkMethod {
   /// a bool.
   setPinPublication,
 
+  /// The Sync tab's host-key conflict resolution (03 §4.9); the argument is
+  /// an object of [SettingsLinkKey.locator],
+  /// [SettingsLinkKey.localFingerprintSha256],
+  /// [SettingsLinkKey.pulledFingerprintSha256] and
+  /// [SettingsLinkKey.keepLocal].
+  resolvePinConflict,
+
   /// A Servers tab toggle of FL-21's monitor set; the argument is an
   /// object of [SettingsLinkKey.serverId] and [SettingsLinkKey.monitored].
   setMonitored,
@@ -196,6 +205,20 @@ enum SettingsLinkKey {
   release,
   asserted,
 
+  /// The host-key quarantine diff as [encodePinConflicts] writes it, or
+  /// null when the app offers none (03 §4.9).
+  pinConflicts,
+
+  /// One conflict's `host:port` locator, and the fingerprints of the key
+  /// this device trusts and the one the other device synced.
+  locator,
+  localFingerprintSha256,
+  pulledFingerprintSha256,
+
+  /// Whether a resolution keeps this device's key rather than trusts the
+  /// pulled one.
+  keepLocal,
+
   /// The running build's version for the about row, a string or null:
   /// the window's engine registers no plugins to read it itself.
   appVersion,
@@ -248,6 +271,42 @@ PinPublication decodePinPublication(Map<Object?, Object?>? json) => json == null
         release: json[SettingsLinkKey.release.name] as String?,
         asserted: json[SettingsLinkKey.asserted.name]! as bool,
       );
+
+/// One host-key conflict as the snapshot carries it.
+Map<String, Object?> encodePinConflict(SyncPinConflict conflict) => {
+  SettingsLinkKey.locator.name: conflict.locator,
+  SettingsLinkKey.localFingerprintSha256.name: conflict.localFingerprintSha256,
+  SettingsLinkKey.pulledFingerprintSha256.name:
+      conflict.pulledFingerprintSha256,
+};
+
+/// The inverse of [encodePinConflict]; a value it did not write reads as
+/// null.
+SyncPinConflict? decodePinConflict(Object? value) {
+  if (value is! Map<Object?, Object?>) return null;
+  final locator = value[SettingsLinkKey.locator.name];
+  final local = value[SettingsLinkKey.localFingerprintSha256.name];
+  final pulled = value[SettingsLinkKey.pulledFingerprintSha256.name];
+  if (locator is! String || local is! String || pulled is! String) return null;
+  return SyncPinConflict(
+    locator: locator,
+    localFingerprintSha256: local,
+    pulledFingerprintSha256: pulled,
+  );
+}
+
+/// The host-key quarantine diff as the snapshot carries it, in the engine's
+/// order.
+List<Map<String, Object?>> encodePinConflicts(
+  List<SyncPinConflict> conflicts,
+) => [for (final conflict in conflicts) encodePinConflict(conflict)];
+
+/// The inverse of [encodePinConflicts]; null for null, and a value it did
+/// not write reads as no conflicts.
+List<SyncPinConflict> decodePinConflicts(Object? value) => [
+  if (value case final List<Object?> conflicts)
+    for (final conflict in conflicts) ?decodePinConflict(conflict),
+];
 
 /// The app lock as the snapshot carries it, its support by name.
 Map<String, Object?> encodeAppLock(AppLockSettings lock) => {

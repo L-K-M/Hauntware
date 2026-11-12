@@ -6,6 +6,9 @@
   latest-release check and its Android in-place update now live in the
   shared `ghost_update` package, which Klabautermann also uses; behavior
   is unchanged.
+- **The account switch words its key choice like Settings.** The held-key
+  dialog's adopt button now reads Trust the new key, matching the enrolled
+  view and Séance.
 - **Host-key conflicts show both keys.** When a synced host key differs
   from the one this device trusts, Settings and the account switch now
   show both fingerprints, so you can check them against the server's own
@@ -25,6 +28,11 @@
   whole mode, so a hostile server could leave a setuid or world-writable
   file on your disk. Downloads now keep only the read, write and execute
   bits your umask allows, as `sftp get` and Séance do.
+- **Downloads are marked as untrusted.** Files Poltergeist writes from a
+  server, including Download To, sync downloads and managed checkouts,
+  now carry a Windows Mark-of-the-Web stream or a macOS quarantine
+  attribute, as Séance's downloads do. Marking is best effort and only
+  logged on failure.
 - **The keyboard follows a sidebar location.** Choosing a location or a
   saved workspace in the sidebar now moves the keyboard to its file list,
   so the arrow keys move through files instead of the sidebar. Page Up

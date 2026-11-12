@@ -1,5 +1,20 @@
 # Séance ports and pin audits
 
+## Download provenance via seance_core (2026-11-10)
+
+Download provenance (Mark-of-the-Web, macOS quarantine) is not a port.
+`DownloadProvenance` lives in `seance_core`
+(`seance/packages/seance_core/lib/src/store/download_provenance.dart`),
+where Séance's own download marking already lived. Poltergeist reaches it
+through the `poltergeist_core` barrel, and `TransferQueue` and
+`SyncExecutor` mark the files they write from a server: Download To,
+remote-to-local moves, managed checkouts, produce and drag-out hops, and
+sync downloads. No Poltergeist source moves, so this is a consumer
+change, not an entry in the port lineage.
+
+- Pin audit: `seance/` changed, so the `SEANCE_PIN_AUDIT_V3` record is
+  re-recorded by the integrator once, not here.
+
 ## Multi-window host shared with Planchette (2026-11-11)
 
 Poltergeist's workspace windows and Planchette's document windows are one

@@ -434,6 +434,42 @@ final class RunSyncRound extends EngineRequest {
   final String? requestId;
 }
 
+/// Asks for the host-key quarantine diff as it stands (03 §10.1, §4.9):
+/// every stored `hostkey:` record whose key differs from the pin this
+/// device trusts for the same `host:port`. The app reads it at startup and
+/// after a sync; answered by [PinConflictsChanged].
+final class ReadPinConflicts extends EngineRequest {
+  const ReadPinConflicts();
+}
+
+/// Resolves one host-key conflict (03 §10.1, §4.9): [keepLocal] keeps this
+/// device's pin and re-pushes it under a fresh tuple, and false trusts the
+/// pulled key. The fingerprints are the ones the user saw: a locator that
+/// names no current conflict, or whose conflict now holds other keys, is a
+/// no-op, so a decision never applies to a key that arrived after it was
+/// made. Answered by [PinConflictsChanged] with the diff afterwards, or
+/// [RequestRejected].
+final class ResolvePinConflict extends EngineRequest {
+  const ResolvePinConflict(
+    this.locator, {
+    required this.keepLocal,
+    required this.localFingerprintSha256,
+    required this.pulledFingerprintSha256,
+  });
+
+  /// `host:port` — the locator spelling a pin's record id carries.
+  final String locator;
+
+  /// Whether to keep this device's pin rather than trust the pulled key.
+  final bool keepLocal;
+
+  /// The fingerprint this device trusted when the conflict was shown.
+  final String localFingerprintSha256;
+
+  /// The fingerprint the pulled key carried when the conflict was shown.
+  final String pulledFingerprintSha256;
+}
+
 /// Imports the hosts of an OpenSSH client config as device-local fleet
 /// entries (FL-02, 03 §4.2). The UI reads the file and sends its [text]:
 /// which file to read, and whether the platform has one at all, stays the
@@ -1431,15 +1467,35 @@ final class SetAdminMode extends EngineRequest {
 }
 
 /// Reads [serverId]'s device audit log (03 §8.10, SAF-11): up to [limit]
-/// records ended before [before] (newest first; all when null), answered
-/// by [AuditRecords].
+/// records, newest end first, from [after] on (from the newest when
+/// null), answered by [AuditRecords].
 final class AuditQuery extends EngineRequest {
-  const AuditQuery(this.serverId, {this.before, this.limit = 100})
+  const AuditQuery(this.serverId, {this.after, this.limit = 100})
     : assert(limit > 0, 'limit must be positive');
 
   final String serverId;
-  final DateTime? before;
+
+  /// The previous page's [AuditRecords.next].
+  final AuditCursor? after;
   final int limit;
+}
+
+/// Where the next page of an audit log starts (SAF-11): past the records
+/// that ended after [endedAt], and past the first [seen] of those that
+/// ended at it. The log is in end order, newest first, and records that
+/// ended together in append order, so one appended between two pages
+/// lands after those [seen] counted. Records are not appended in end
+/// order, since a detached operation's is appended when its result is
+/// acknowledged, so a page boundary is not a time alone. A prune between
+/// two pages can shorten a tie group; the next page then starts at its
+/// remaining records, which may repeat ones already shown.
+@immutable
+final class AuditCursor {
+  const AuditCursor(this.endedAt, {required this.seen})
+    : assert(seen > 0, 'a page ends on a record');
+
+  final DateTime endedAt;
+  final int seen;
 }
 
 /// Says the app has shown the result of [serverId]'s finished detached
@@ -1740,6 +1796,7 @@ final class SyncStatus extends EngineEvent {
     this.passphraseUnverified = false,
     this.detail,
     this.prefixBudget,
+    this.pinConflicts,
   });
 
   final SyncPhase phase;
@@ -1769,6 +1826,12 @@ final class SyncStatus extends EngineEvent {
   /// succeeded operation; null otherwise.
   final SyncPrefixBudget? prefixBudget;
 
+  /// The host-key quarantine diff after a succeeded operation, or null when
+  /// it is unchanged: a failed round keeps the previous list, as Séance's
+  /// settings backend does. A resolution reports through
+  /// [PinConflictsChanged], not here.
+  final List<SyncPinConflict>? pinConflicts;
+
   /// This status as the answer to the request [requestId].
   SyncStatus answering(String? requestId) => SyncStatus(
     phase,
@@ -1779,7 +1842,48 @@ final class SyncStatus extends EngineEvent {
     passphraseUnverified: passphraseUnverified,
     detail: detail,
     prefixBudget: prefixBudget,
+    pinConflicts: pinConflicts,
   );
+}
+
+/// A pulled `hostkey:` record whose key differs from the pin this device
+/// trusts for the same `host:port` (03 §4.9). Re-derived on every round, so
+/// a dismissed warning re-arms until the user resolves it.
+final class SyncPinConflict {
+  const SyncPinConflict({
+    required this.locator,
+    required this.localFingerprintSha256,
+    required this.pulledFingerprintSha256,
+  });
+
+  /// `host:port` — the locator spelling a pin's record id carries.
+  final String locator;
+
+  /// The fingerprint of the pin this device trusts.
+  final String localFingerprintSha256;
+
+  /// The fingerprint the winning `hostkey:` record carries.
+  final String pulledFingerprintSha256;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SyncPinConflict &&
+      other.locator == locator &&
+      other.localFingerprintSha256 == localFingerprintSha256 &&
+      other.pulledFingerprintSha256 == pulledFingerprintSha256;
+
+  @override
+  int get hashCode =>
+      Object.hash(locator, localFingerprintSha256, pulledFingerprintSha256);
+}
+
+/// The host-key quarantine diff changed (03 §10.1): a [ReadPinConflicts] or
+/// a [ResolvePinConflict] answered, carrying the whole list as it stands.
+final class PinConflictsChanged extends EngineEvent {
+  PinConflictsChanged(Iterable<SyncPinConflict> conflicts)
+    : conflicts = List.unmodifiable(conflicts);
+
+  final List<SyncPinConflict> conflicts;
 }
 
 /// The account budget of the `klabautermann:` records (03 §4.8): at most
@@ -3643,18 +3747,28 @@ final class OperationsChanged extends EngineEvent {
   final CollectorUnavailable? unavailable;
 }
 
-/// The answer to an [AuditQuery]: [records] newest first, and whether
-/// older ones remain.
+/// The answer to an [AuditQuery]: [records] newest end first, and where
+/// the next page starts.
 final class AuditRecords extends EngineEvent {
   AuditRecords(
     this.serverId,
     Iterable<AuditRecord> records, {
-    this.more = false,
+    this.next,
+    this.unreadable = false,
   }) : records = List.unmodifiable(records);
 
   final String serverId;
   final List<AuditRecord> records;
-  final bool more;
+
+  /// The next page's [AuditQuery.after], or null when no records remain.
+  final AuditCursor? next;
+
+  /// Whether older records remain.
+  bool get more => next != null;
+
+  /// The server's log file could not be read, so [records] lacks what it
+  /// holds; the file is left as it is for a later read.
+  final bool unreadable;
 }
 
 /// One finished or refused run in the device audit log (03 §8.10): the

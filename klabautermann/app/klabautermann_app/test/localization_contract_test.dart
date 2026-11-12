@@ -494,9 +494,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'/'",
     "'..'",
   },
-  // A sign-in's or round's request id, matched in the engine's answer.
   'lib/controllers/sync_controller.dart': {
     "'the engine stopped'",
+    // Pin conflict refusals: diagnostics, and the request names the
+    // engine's refusals answer by.
+    "'The engine stopped'",
+    "'That conflict is already being resolved'",
+    "'ResolvePinConflict'",
+    "'ReadPinConflicts'",
+    // A sign-in's or round's request id, matched in the engine's answer.
     r"'sync-${_count++}'",
   },
   // TRI-03's acknowledgement keys (kind and subject) and the fields they
@@ -602,6 +608,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/services/settings_window/settings_window_host.dart': {
     r"'No settings window method $name'",
     "'No pin publication settings'",
+    "'No pin conflict settings'",
     "'No app lock settings'",
     "'No admin memory settings'",
     "'levels'",
@@ -1033,6 +1040,16 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
     r"'$text\n'",
     "'text/plain'",
+    // A failed owner-only chmod diagnostic; the export itself saved.
+    r"'Could not restrict a saved export to the owner: $error'",
+    // The share sheet's staged copy: its temporary directory prefix, its
+    // path under that directory, and the quarantine agent field's product
+    // name.
+    "'klabautermann-export-'",
+    r"'${directory.path}${Platform.pathSeparator}$fileName'",
+    "'Klabautermann'",
+    // The URI scheme of a save that has a local path to mark.
+    "'file'",
   },
   'lib/ui/logs/log_text.dart': {
     // A row's unit and PID prefix in classic syslog notation, as
@@ -1169,6 +1186,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/quick_actions.dart': {"'/'", r"'$error'"},
   'lib/ui/fleet_board.dart': {r"'$error'"},
   'lib/ui/settings_page.dart': {r"'$error'"},
+  // The keys tests find a pin conflict card's two resolutions by, and a
+  // resolution failure's diagnostic.
+  'lib/ui/pin_conflict_card.dart': {
+    r"'settings.pin.keep.${conflict.locator}'",
+    r"'settings.pin.accept.${conflict.locator}'",
+    r"'$error'",
+  },
   'lib/ui/thresholds_tab.dart': {r"'$error'"},
   'lib/ui/sortable_table.dart': {
     // FocusNode debug labels.

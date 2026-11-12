@@ -5047,6 +5047,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'The host key setting could not be changed.';
 
   @override
+  String settingsPinConflictWarning(String locator) {
+    return 'A synced host key for $locator conflicts with the key this device trusts. This can mean a man-in-the-middle attack.';
+  }
+
+  @override
+  String get settingsPinLocalKey => 'This device trusts';
+
+  @override
+  String get settingsPinPulledKey => 'The other device synced';
+
+  @override
+  String get settingsPinKeepLocal => 'Keep this device\'s key';
+
+  @override
+  String get settingsPinConflictNotResolved =>
+      'The host key conflict could not be resolved.';
+
+  @override
   String get settingsAboutTitle => 'About';
 
   @override
@@ -6307,6 +6325,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get activityEmpty =>
       'Nothing has run on this server from this device.';
+
+  @override
+  String get activityUnreadable =>
+      'The log file could not be read, so records are missing.';
 
   @override
   String get activityOlder => 'Show older';

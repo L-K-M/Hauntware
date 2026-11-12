@@ -3958,7 +3958,7 @@ abstract class AppLocalizations {
   /// Resolves a held locator by adopting the fleet pin — no re-seal for that host (04 §4.4).
   ///
   /// In en, this message translates to:
-  /// **'Use shared key'**
+  /// **'Trust the new key'**
   String get backupSwitchAdoptFleet;
 
   /// Completion copy of the §4.4 switch — pushes may still hold while passphraseUnverified stands.
