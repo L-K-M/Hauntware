@@ -184,6 +184,9 @@ enum _State {
   /// Holding a master-key entry that is not base64.
   corrupt,
 
+  /// Holding an empty master-key entry, which base64 decodes to no bytes.
+  blank,
+
   /// Reachable and empty, but every write throws.
   refusesWrites,
 }
@@ -197,6 +200,7 @@ _FakeKeystore _keystore(_State state) => switch (state) {
     readThrows: PlatformException(code: 'KeyringLocked'),
   ),
   _State.corrupt => _FakeKeystore(data: {_masterKeyEntry: 'not base64!'}),
+  _State.blank => _FakeKeystore(data: {_masterKeyEntry: ''}),
   _State.refusesWrites => _FakeKeystore(
     writeThrows: PlatformException(code: 'KeyringLocked'),
   ),
@@ -222,6 +226,10 @@ void main() {
       (_State.locked, true, _Outcome.returnsNull, down, 0),
       (_State.corrupt, false, _Outcome.returnsNull, down, 0),
       (_State.corrupt, true, _Outcome.returnsNull, down, 0),
+      // An empty entry holds no key: a first run mints over it, and beside
+      // a vault it refuses rather than settle with a zero-length key.
+      (_State.blank, false, _Outcome.mints, up, 1),
+      (_State.blank, true, _Outcome.refuses, up, 0),
       (_State.refusesWrites, false, _Outcome.returnsNull, down, 1),
       (_State.refusesWrites, true, _Outcome.refuses, up, 0),
     ];
@@ -271,6 +279,46 @@ void main() {
       final message = const MasterKeyUnavailableException().toString();
       expect(message, contains('vault'));
       expect(message, contains('keychain backup'));
+    });
+  });
+
+  group('readKeystoreKey, the read-only witness', () {
+    // (state, what the read returns)
+    final rows = [
+      (_State.empty, null),
+      (_State.holding, _stored),
+      (_State.locked, null),
+      (_State.corrupt, null),
+      (_State.blank, null),
+      (_State.refusesWrites, null),
+    ];
+
+    for (final (state, expected) in rows) {
+      test('${state.name}: returns ${expected == null ? 'null' : 'the key'} '
+          'and never writes or marks', () async {
+        final keystore = _keystore(state);
+        final before = Map.of(keystore.data);
+        final keys = _manager(keystore)
+          ..keystoreStatus = KeystoreStatus.unavailable
+          ..lastKeystoreError = 'KeyringLocked';
+
+        expect(await keys.readKeystoreKey(), expected);
+
+        expect(keystore.log, ['read $_masterKeyEntry']);
+        expect(keystore.data, before);
+        // A witness called after a failed write must not erase the
+        // diagnosis that write recorded, nor invent one of its own.
+        expect(keys.keystoreStatus, KeystoreStatus.unavailable);
+        expect(keys.lastKeystoreError, 'KeyringLocked');
+      });
+    }
+
+    test('an empty entry reads as no key, not a zero-length one', () async {
+      // base64 decodes '' to no bytes; handed to a settle as the installed
+      // key, that would match no sealed generation and discard the journal.
+      final keystore = _FakeKeystore(data: {_masterKeyEntry: ''});
+
+      expect(await _manager(keystore).readKeystoreKey(), isNull);
     });
   });
 
@@ -360,6 +408,7 @@ void main() {
         throwsA(isA<AppLockException>()),
       );
       await expectLater(keys.probeKeystore(), throwsA(isA<AppLockException>()));
+      await expectLater(keys.readKeystoreKey(), throwsA(isA<AppLockException>()));
       expect(gate.reads, 0);
 
       await keys.putApiKey('sync.token', 'token');
@@ -380,7 +429,8 @@ void main() {
 
       await keys.probeKeystore();
       expect(await keys.getApiKey('sync.token'), isNull);
-      expect(gate.reads, 2);
+      expect(await keys.readKeystoreKey(), hasLength(32));
+      expect(gate.reads, 3);
     });
   });
 

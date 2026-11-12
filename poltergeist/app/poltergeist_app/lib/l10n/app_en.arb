@@ -201,6 +201,10 @@
   "@credentialVaultUnavailable": {
     "description": "Banner shown when the vault could not be read before prompting (the localized render of the ported keystore exception, D20)."
   },
+  "credentialVaultKeyMissing": "Saved secrets are locked. Your system credential store no longer holds the key for them, and Poltergeist did not create a new one because that would make them unreadable. Restore the key from a backup of your keychain or credential store, then reconnect, or enter the secret below.",
+  "@credentialVaultKeyMissing": {
+    "description": "Banner shown instead of credentialVaultUnavailable when the keystore answered but holds no vault key while saved secrets exist (MasterKeyUnavailableException, D20)."
+  },
   "credentialKeyFileUnreadable": "The file could not be read as text.",
   "@credentialKeyFileUnreadable": {
     "description": "Sanitized detail for an identity file that cannot be decoded or otherwise read normally."
@@ -3031,6 +3035,10 @@
   "backupKdfRefusal": "The sync server returned weaker password-hashing parameters than Poltergeist accepts — refusing to derive your key (possible downgrade attack).",
   "@backupKdfRefusal": {
     "description": "04 §4.5's verbatim KDF-downgrade refusal (KdfDowngradeException mirrored in ARB)."
+  },
+  "backupVaultKeyMissing": "Your system credential store no longer holds the key for your saved secrets, so they cannot be moved to your sync key. Poltergeist did not create a new key because that would make them unreadable. Restore the key from a backup of your keychain or credential store, then try again.",
+  "@backupVaultKeyMissing": {
+    "description": "Enrollment status when the keystore answered but holds no vault key while saved secrets exist (MasterKeyUnavailableException), so the re-key was refused."
   },
   "backupServerUrlField": "Sync server URL",
   "@backupServerUrlField": {
