@@ -202,6 +202,15 @@ void main() {
     );
   });
 
+  testWidgets('the read-only editor shows its status row', (tester) async {
+    final view = await _pump(tester);
+    await view.answer(tester, _composeFile());
+
+    expect(find.textContaining('Ln 1, Col 1'), findsOneWidget);
+    expect(find.textContaining('UTF-8'), findsOneWidget);
+    expect(find.textContaining('YAML'), findsOneWidget);
+  });
+
   testWidgets('a Find button opens the editor\'s find bar', (tester) async {
     final view = await _pump(tester);
     await view.answer(tester, _composeFile());

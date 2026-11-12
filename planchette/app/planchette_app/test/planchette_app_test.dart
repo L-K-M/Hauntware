@@ -5,6 +5,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show commandPaletteQueryKey;
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/document_workspace.dart';
 
@@ -552,7 +553,7 @@ void main() {
       expect(second.editor.editorFocus.hasFocus, isFalse);
 
       await tester.enterText(
-        find.byKey(const ValueKey('planchette.palette.query')),
+        find.byKey(commandPaletteQueryKey),
         'duplicate line',
       );
       await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -571,15 +572,9 @@ void main() {
       await mount(tester);
 
       await chord(tester, LogicalKeyboardKey.keyP, shift: true);
-      expect(
-        find.byKey(const ValueKey('planchette.palette.query')),
-        findsOneWidget,
-      );
+      expect(find.byKey(commandPaletteQueryKey), findsOneWidget);
       expect(find.text('Command Palette…'), findsNothing);
-      await tester.enterText(
-        find.byKey(const ValueKey('planchette.palette.query')),
-        'save as',
-      );
+      await tester.enterText(find.byKey(commandPaletteQueryKey), 'save as');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 

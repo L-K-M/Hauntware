@@ -23,11 +23,15 @@
 #   8. multi-line run scripts in jobs that can run on Windows name
 #      their shell (Windows otherwise runs them under PowerShell),
 #   9. release.yml grants packages: write to the docker job only
-#      (least-privilege tokens: only that job pushes to GHCR),
+#      (least-privilege tokens: only that job pushes to GHCR), and that
+#      job pushes after the release gates and before the publish,
 #  10. the checksum job drops a stale SHA256SUMS before recomputing,
 #      so re-running it stays idempotent,
 #  11. all Android client legs verify the built APK's version code,
-#  12. PR product-job selection follows every cross-product read.
+#  12. PR product-job selection follows every cross-product read,
+#  14. every Planchette Flutter package is analyzed and tested by CI,
+#      the release gate and scripts/test.sh,
+#  15. no checkout leaves the job token in .git/config.
 
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -227,6 +231,23 @@ docker_package_writes="$(
 )"
 [[ "$package_writes" -eq 1 && "$docker_package_writes" -eq 1 ]] ||
   err "release.yml must grant packages: write to the docker job only (found $package_writes, $docker_package_writes in docker)"
+# A pushed image is public at once, so the push waits for the sums
+# job's floor and checksum gates, and the release goes public only
+# after the push.
+job_needs() {
+  awk -v job="$1" -v dep="$2" '
+    $0 == "  " job ":" { inside = 1; next }
+    inside && /^  [A-Za-z0-9_-]+:/ { inside = 0 }
+    inside && /^    needs:/ { needs = 1; next }
+    inside && needs && /^    [A-Za-z]/ { needs = 0 }
+    inside && needs && $0 ~ "^      - " dep "$" { found = 1 }
+    END { exit !found }
+  ' .github/workflows/release.yml
+}
+job_needs docker sums ||
+  err "release.yml docker job must need sums (no image before the release gates)"
+job_needs publish docker ||
+  err "release.yml publish job must need docker"
 
 # --- 10. Re-runnable checksum job ------------------------------------------
 # The sums job downloads the draft's assets before recomputing
@@ -250,6 +271,59 @@ for leg in client_planchette client_seance client_poltergeist client_klabauterma
     END { exit !found }
   ' .github/workflows/release.yml ||
     err "release.yml $leg must verify the APK version code (verify-android-version.sh)"
+done
+
+# --- 14. Planchette Flutter package lists ------------------------------------
+# ci.yml, release.yml's gate and scripts/test.sh each list the shared
+# Flutter packages by hand; a package missing from one list ships
+# untested from that path. Every package that depends on the Flutter SDK
+# must appear in all three.
+for pubspec in planchette/packages/*/pubspec.yaml; do
+  grep -qE '^[[:space:]]+sdk:[[:space:]]+flutter' "$pubspec" || continue
+  package="$(basename "$(dirname "$pubspec")")"
+  grep -qxF "        working-directory: planchette/packages/$package" \
+    .github/workflows/ci.yml ||
+    err "ci.yml planchette_flutter must analyze and test $package"
+  grep -qF "(cd planchette/packages/$package && flutter analyze --no-pub && flutter test --no-pub)" \
+    .github/workflows/release.yml ||
+    err "release.yml test gate must analyze and test $package"
+  # The analyze loop is the `for dir in ...; do` list whose body runs
+  # flutter analyze.
+  awk -v want="packages/$package" '
+    /for dir in / { list = ""; collecting = 1 }
+    collecting { list = list " " $0 }
+    collecting && /; do$/ { collecting = 0; next }
+    /run flutter analyze/ && list != "" {
+      n = split(list, words, /[[:space:]\\]+/)
+      for (i = 1; i <= n; i++) if (words[i] == want) found = 1
+    }
+    END { exit !found }
+  ' scripts/test.sh ||
+    err "scripts/test.sh must analyze and test planchette/$package"
+done
+
+# --- 15. Checkouts drop the job token ---------------------------------------
+# actions/checkout otherwise writes the job token into .git/config, where
+# every later step (pub build hooks, Gradle, CocoaPods) can read it; in
+# release.yml that token can write releases. No workflow pushes with git,
+# and the repo is public, so origin fetches still work without it. The
+# option must be the first `with:` key right after the uses line.
+for wf in .github/workflows/*.yml; do
+  awk -v file="$wf" '
+    checkout == 1 { checkout = ($0 ~ /^ +with:$/) ? 2 : 3 }
+    checkout == 2 && /^ +with:$/ { next }
+    checkout == 2 {
+      if ($0 !~ /^ +persist-credentials: false$/) checkout = 3
+      else checkout = 0
+    }
+    checkout == 3 {
+      printf "!! %s:%d: actions/checkout must set persist-credentials: false\n", file, line > "/dev/stderr"
+      bad = 1
+      checkout = 0
+    }
+    /- uses: actions\/checkout@/ { checkout = 1; line = NR }
+    END { exit bad }
+  ' "$wf" || fail=1
 done
 
 # --- 12. PR product-job selection -------------------------------------------

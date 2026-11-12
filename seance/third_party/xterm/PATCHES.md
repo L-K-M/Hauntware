@@ -657,6 +657,46 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     their existing behavior. The budget uses `BigInt`, so adversarial viewport
     dimensions cannot wrap its product.
 
+### Input and link trust
+
+50. **A soft-keyboard paste is a paste** (`terminal_view.dart#_onInsert`,
+    `onKeyboardPaste`; regressions: `test/src/terminal_view_test.dart`,
+    group `TerminalView.onKeyboardPaste`): a keyboard commits its own
+    clipboard (Gboard's clipboard chip, an iOS paste suggestion) as one
+    `updateEditingValue` delta, which upstream typed with `textInput`: no
+    bracketed paste, no host cleaning or review, and every line break an
+    Enter. Inserted text of more than one character that holds a C0
+    control or DEL now goes to `onKeyboardPaste`, or to `Terminal.paste`
+    when the host gives none. Typing never sends such a key inside other
+    text (Enter, Tab and Backspace come alone) while a committed word,
+    suggestion or dictated phrase holds none, so both are typed as before;
+    a keyboard that commits a word together with its Enter is read as a
+    paste, which costs a second Enter and never runs the line unseen.
+
+51. **A blank cell is no part of an OSC 8 link**
+    (`core/buffer/buffer.dart#getLinkAt`; regressions:
+    `test/src/core/buffer/link_test.dart`,
+    `test/src/ui/link_gesture_test.dart`): patch 30 dropped the link only
+    from erased cells, so a remote could open a hyperlink and print a screen
+    of spaces that a touch tap anywhere on them followed. A cell showing a
+    space or nothing now resolves no OSC 8 target (the second cell of a wide
+    character still shows its character).
+
+52. **A link whose text hides its target is handed to the host for review**
+    (`core/buffer/buffer.dart#isLinkTargetHiddenAt`,
+    `terminal_view.dart#onHiddenLinkTap`; regressions as patch 51): an
+    OSC 8 label is free to read as another site ("Click here", or
+    `https://github.com/...` over a different target), and patch 30 opened
+    it on one touch tap or Cmd/Ctrl-click without showing where it led. A
+    link is hidden when the text of the cells carrying its id, joined
+    across the adjacent rows that carry it, is not its target once
+    trimmed; a link spelled out in full, even over the program's own hard
+    newlines, and a URL found by the text scan stay with `onLinkTap`. A
+    hidden link takes the same gestures but goes to `onHiddenLinkTap`.
+    Without that callback it goes to `onLinkTap` as before, so a host
+    keeps opening labelled links until it wires a review that shows the
+    target.
+
 ### App-layer notes (outside this package)
 
 - The app passes `shortcuts: {}` and instead routes ⌘C/⌘V/⌘A on
@@ -666,3 +706,6 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
   (`XtermTerminalEngine.detectPlatform`). Leaving the default
   `TerminalTargetPlatform.unknown` re-introduces the Option-dead-key bug of
   patch 22 — `unknown` takes the non-Apple, alt-sends-Meta path.
+- Hosts should pass `onHiddenLinkTap` to show an OSC 8 target and ask before
+  opening it, and `onKeyboardPaste` to send a soft-keyboard paste through
+  their paste policy (patches 50 and 52).

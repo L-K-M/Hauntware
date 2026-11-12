@@ -207,7 +207,8 @@ void main() {
       expect(tester.widget<FilledButton>(connectButton).enabled, isFalse);
     });
 
-    testWidgets('the address field takes no autocorrect or suggestions',
+    testWidgets('the address field takes no autocorrect, suggestions or '
+        'keyboard learning',
         (tester) async {
       final lanes = controller_test.FakePaneLanes();
       await pumpLauncher(tester, lanes);
@@ -215,6 +216,9 @@ void main() {
       final field = tester.widget<TextField>(addressField);
       expect(field.autocorrect, isFalse);
       expect(field.enableSuggestions, isFalse);
+      // user:password@host is accepted and stripped after the fact, so
+      // the keyboard must not learn what was typed before the strip.
+      expect(field.enableIMEPersonalizedLearning, isFalse);
       expect(field.keyboardType, TextInputType.url);
     });
 

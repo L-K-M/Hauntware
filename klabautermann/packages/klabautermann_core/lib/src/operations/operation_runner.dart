@@ -236,7 +236,18 @@ final class OperationRunner {
               skippedSteps: skipped,
             );
           case final ShellStep step:
-            final result = await _runShell(link, step, session);
+            final RemoteCommandResult result;
+            final clock = Stopwatch()..start();
+            try {
+              result = await _runShell(link, step, session);
+            } on RemoteCommandException {
+              // SshLink.run says a timeout only in its message; a run
+              // that failed at the step's limit ran out of time, and one
+              // that failed earlier lost its link.
+              if (clock.elapsed < step.timeout) rethrow;
+              await _cleanUp(link, plan, session);
+              return failed(ActionFailure.timedOut, step: i);
+            }
             if (step.captureOutput) {
               output = capturedOutput(result.stdout, result.stderr);
               exitCode = result.exitCode;
@@ -351,7 +362,11 @@ final class OperationRunner {
   static Future<bool> _tryStep(SshLink link, ShellStep step) async {
     assert(!step.elevated, 'a best-effort step runs with the session');
     try {
-      final result = await link.run(step.commandLine, stdin: const []);
+      final result = await link.run(
+        step.commandLine,
+        stdin: const [],
+        timeout: step.timeout,
+      );
       return result.exitCode == 0;
     } on RemoteCommandException {
       return false;
@@ -361,7 +376,7 @@ final class OperationRunner {
   }
 
   /// Runs [step] over [link], or through [session]'s elevation, with its
-  /// input on stdin.
+  /// input on stdin, for at most its [ShellStep.timeout].
   Future<RemoteCommandResult> _runShell(
     SshLink link,
     ShellStep step,
@@ -371,8 +386,13 @@ final class OperationRunner {
           step.argv,
           password: session.password,
           stdin: step.input,
+          timeout: step.timeout,
         )
-      : link.run(step.commandLine, stdin: step.input ?? const []);
+      : link.run(
+          step.commandLine,
+          stdin: step.input ?? const [],
+          timeout: step.timeout,
+        );
 
   /// Runs [plan]'s cleanup steps after a failure, best effort: a cleanup
   /// that fails, or a link that is gone, leaves what 03 §8.11's rows say

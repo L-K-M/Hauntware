@@ -68,6 +68,36 @@ void main() {
     intake.dispose();
   });
 
+  test(
+    'non-macOS handshake drains queued argv and filters later forwards',
+    () async {
+      final seen = <String>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'ready');
+        // The runner's queue holds a forwarded launch's argv, shaped like
+        // this process's own.
+        return ['/queued/one.txt', '--help'];
+      });
+      final intake = OpenDocuments(
+        open: (paths) async => seen.addAll(paths),
+        pathExists: existing({}),
+      );
+      await intake.start(['/argv/two.txt'], macOS: false);
+      expect(seen, ['/queued/one.txt', '/argv/two.txt']);
+
+      // A second launch forwarded while running arrives as 'open' argv.
+      await messenger.handlePlatformMessage(
+        channel.name,
+        const StandardMethodCodec().encodeMethodCall(
+          const MethodCall('open', ['/later/three.txt', '--help']),
+        ),
+        (_) {},
+      );
+      expect(seen, ['/queued/one.txt', '/argv/two.txt', '/later/three.txt']);
+      intake.dispose();
+    },
+  );
+
   test('options are not opened as documents', () async {
     final seen = <String>[];
     final intake = OpenDocuments(

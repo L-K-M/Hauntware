@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -116,6 +117,35 @@ void main() {
         expect(keystore.written, isEmpty);
       },
     );
+
+    // flutter_secure_storage defaults resetOnError to true, which deletes
+    // the entry on any Android read error, so one transient Keystore
+    // failure would erase the vault master key for good.
+    test('the default store never resets on an Android read error', () async {
+      const channel = MethodChannel(
+        'plugins.it_nomads.com/flutter_secure_storage',
+      );
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            return null;
+          });
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+
+      await MasterKeyManager().probeKeystore(hasExistingVault: false);
+
+      expect(calls, isNotEmpty);
+      for (final call in calls) {
+        final options = (call.arguments as Map)['options'] as Map;
+        expect(options['resetOnError'], 'false', reason: call.method);
+      }
+    });
   });
 
   /// [AppServices.initialize] decides "a vault already exists" by reading

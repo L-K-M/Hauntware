@@ -175,6 +175,18 @@ void main() {
     expect(find.byKey(const ValueKey('quickOpen.field')), findsNothing);
   });
 
+  // Queries name remote paths and files: a search field must not feed
+  // the keyboard's learning.
+  testWidgets('the query field asks the keyboard not to learn', (
+    tester,
+  ) async {
+    await pumpPalette(tester, commands: [_command('app.alpha')]);
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('quickOpen.field')),
+    );
+    expect(field.enableIMEPersonalizedLearning, isFalse);
+  });
+
   testWidgets('Escape closes the palette', (tester) async {
     await pumpPalette(tester, commands: [_command('app.alpha')]);
     expect(find.byKey(const ValueKey('quickOpen.field')), findsOneWidget);

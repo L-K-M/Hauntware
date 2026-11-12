@@ -91,8 +91,8 @@ final class ForwardingLink extends TestLinkBase {
   final ProbeShell probeShell;
 
   /// Socket paths a daemon answers on. Every other path is refused with
-  /// `forwardDisabled`, as OpenSSH answers every failed streamlocal open
-  /// alike (03 §5.3).
+  /// `connectFailed`, as OpenSSH answers every failed streamlocal open
+  /// alike, reason 2 "open failed" (03 §5.3).
   final daemons = <String, FakeDaemon>{};
 
   /// The daemon every relay start reaches.
@@ -143,8 +143,8 @@ final class ForwardingLink extends TestLinkBase {
     final daemon = daemons[socketPath];
     if (daemon == null) {
       throw const ChannelOpenException(
-        ChannelRefusal.forwardDisabled,
-        'The server refused forwarding: open failed',
+        ChannelRefusal.connectFailed,
+        'The server could not reach the forwarding target: open failed',
       );
     }
     return _ChannelEnd(daemon.connect().client);

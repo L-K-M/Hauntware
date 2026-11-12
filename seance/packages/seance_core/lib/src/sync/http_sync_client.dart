@@ -5,6 +5,7 @@ import 'package:seance_protocol/seance_protocol.dart';
 
 import '../inbox/inbox_api.dart';
 import 'legacy_envelope_migration.dart';
+import 'stall_guarded_transfer.dart';
 import 'sync_engine.dart';
 
 /// HTTP client for the Séance sync server. Handles account setup and auth, then
@@ -30,7 +31,17 @@ class HttpSyncClient
   /// Per-request timeout. Without one, a hung connection would leave
   /// `AppState.syncing` stuck true forever (spinner frozen, auto-sync wedged
   /// because it early-returns while a round is "in progress").
+  ///
+  /// Record and inbox pages and pushes can be several MiB, more than a slow
+  /// link moves in this time, so for them it is an idle limit instead: the
+  /// longest wait for the next upload chunk, the response headers or the next
+  /// response chunk. [maxTransferDuration] bounds the whole of such a
+  /// transfer.
   final Duration timeout;
+
+  /// Upper bound on one record or inbox transfer that keeps making progress.
+  /// Ten minutes moves an 8 MiB page at about 115 kbit/s.
+  final Duration maxTransferDuration;
 
   /// The session bearer token, set by [register]/[login]. Public so the app can
   /// persist and restore it across launches.
@@ -40,6 +51,7 @@ class HttpSyncClient
     required String baseUrl,
     http.Client? client,
     this.timeout = const Duration(seconds: 30),
+    this.maxTransferDuration = const Duration(minutes: 10),
     this.deviceId,
     this.deviceName,
   }) : baseUrl = normalizeBaseUrl(baseUrl),
@@ -75,6 +87,22 @@ class HttpSyncClient
     if (deviceId != null) 'x-seance-device-id': deviceId!,
     if (deviceName != null) 'x-seance-device-name': deviceName!,
   };
+
+  /// A record or inbox page or push: see [timeout].
+  Future<http.Response> _transfer(String method, Uri url, {String? body}) =>
+      sendStallGuarded(
+        _client,
+        method: method,
+        url: url,
+        // `package:http` adds the charset when it encodes a string body.
+        headers: {
+          ..._authHeaders,
+          if (body != null) 'content-type': 'application/json; charset=utf-8',
+        },
+        body: body == null ? null : utf8.encode(body),
+        idleTimeout: timeout,
+        totalTimeout: maxTransferDuration,
+      );
 
   Uri _uri(String path, [Map<String, String>? query]) {
     if (_closed) throw StateError('Sync client is closed');
@@ -318,17 +346,15 @@ class HttpSyncClient
 
   @override
   Future<PullResponse> pullPage({required int since, int? throughSeq}) async {
-    final res = await _client
-        .get(
-          _uri('/v1/sync', {
-            'since': '$since',
-            'page': '1',
-            'protocolVersion': '$kProtocolVersion',
-            if (throughSeq != null) 'through': '$throughSeq',
-          }),
-          headers: _authHeaders,
-        )
-        .timeout(timeout);
+    final res = await _transfer(
+      'GET',
+      _uri('/v1/sync', {
+        'since': '$since',
+        'page': '1',
+        'protocolVersion': '$kProtocolVersion',
+        if (throughSeq != null) 'through': '$throughSeq',
+      }),
+    );
     if (res.statusCode >= 400) {
       try {
         _fail(res);
@@ -344,25 +370,23 @@ class HttpSyncClient
 
   @override
   Future<PushResponse> push(List<EncryptedRecord> records) async {
-    final res = await _client
-        .put(_uri('/v1/records'),
-            headers: _authHeaders,
-            body: jsonEncode(PushRequest(records: records).toJson()))
-        .timeout(timeout);
+    final res = await _transfer(
+      'PUT',
+      _uri('/v1/records'),
+      body: jsonEncode(PushRequest(records: records).toJson()),
+    );
     if (res.statusCode >= 400) _fail(res);
     return PushResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
   @override
   Future<LegacyRecordPage> pullLegacyPage({String? afterId}) async {
-    final res = await _client
-        .get(
-          _uri('/v1/records/legacy', {
-            if (afterId != null) 'after': afterId,
-          }),
-          headers: _authHeaders,
-        )
-        .timeout(timeout);
+    final res = await _transfer(
+      'GET',
+      _uri('/v1/records/legacy', {
+        if (afterId != null) 'after': afterId,
+      }),
+    );
     if (res.statusCode >= 400) _fail(res);
     return LegacyRecordPage.fromJson(
       jsonDecode(res.body) as Map<String, dynamic>,
@@ -374,18 +398,16 @@ class HttpSyncClient
     List<LegacyRecordMigration> migrations, {
     bool finalize = false,
   }) async {
-    final res = await _client
-        .put(
-          _uri('/v1/records/legacy'),
-          headers: _authHeaders,
-          body: jsonEncode(
-            LegacyMigrationRequest(
-              migrations: migrations,
-              finalize: finalize,
-            ).toJson(),
-          ),
-        )
-        .timeout(timeout);
+    final res = await _transfer(
+      'PUT',
+      _uri('/v1/records/legacy'),
+      body: jsonEncode(
+        LegacyMigrationRequest(
+          migrations: migrations,
+          finalize: finalize,
+        ).toJson(),
+      ),
+    );
     if (res.statusCode >= 400) _fail(res);
     return LegacyMigrationResponse.fromJson(
       jsonDecode(res.body) as Map<String, dynamic>,
@@ -481,17 +503,15 @@ class HttpSyncClient
     required int since,
     int? through,
   }) async {
-    final res = await _client
-        .get(
-          _uri('/v1/inbox', {
-            'since': '$since',
-            'page': '1',
-            'protocolVersion': '$kProtocolVersion',
-            if (through != null) 'through': '$through',
-          }),
-          headers: _authHeaders,
-        )
-        .timeout(timeout);
+    final res = await _transfer(
+      'GET',
+      _uri('/v1/inbox', {
+        'since': '$since',
+        'page': '1',
+        'protocolVersion': '$kProtocolVersion',
+        if (through != null) 'through': '$through',
+      }),
+    );
     if (res.statusCode >= 400) _fail(res);
     final json = jsonDecode(res.body) as Map<String, dynamic>;
     final items = <InboxItem>[];
