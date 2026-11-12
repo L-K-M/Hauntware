@@ -170,6 +170,37 @@ final class _IoDirectoryReader implements VolumeDirectoryReader {
   Future<bool> isDirectory(String path) => FileSystemEntity.isDirectory(path);
 }
 
+/// The volume an absolute POSIX [path] lives on by the DEVICES rules
+/// below: the mount under `/Volumes/NAME`, `/media/USER/NAME`,
+/// `/run/media/USER/NAME` or `/mnt/NAME`, else the root `/`. Null for a
+/// relative path. The drag verb copies rather than moves between two
+/// such volumes (02 §5.1).
+///
+/// Path shape cannot see every mount point (a second disk mounted at
+/// `/data`, a bind mount): those read as `/`. Where the shape is
+/// ambiguous (`/media/NAME` versus `/media/$USER/NAME`) it names the
+/// narrower volume, so a mistake is a copy where a move was meant, never
+/// the reverse.
+String? posixVolumeOf(String path) {
+  if (!p.posix.isAbsolute(path)) return null;
+  final parts = p.posix.split(p.posix.normalize(path));
+  for (final (:dir, :depth) in _posixMountDirectories) {
+    if (!p.posix.isWithin(dir, path)) continue;
+    final mountEnd = p.posix.split(dir).length + depth;
+    return p.posix.joinAll(parts.take(mountEnd));
+  }
+  return SystemLocalVolumes._posixRoot;
+}
+
+/// Where the OS mounts other volumes, and how many path components below
+/// each name one mount (udisks adds a user level under the media roots).
+const _posixMountDirectories = <({String dir, int depth})>[
+  (dir: SystemLocalVolumes._macVolumes, depth: 1),
+  (dir: SystemLocalVolumes._linuxRunMedia, depth: 2),
+  (dir: SystemLocalVolumes._linuxMedia, depth: 2),
+  (dir: SystemLocalVolumes._linuxMnt, depth: 1),
+];
+
 /// The host's volumes (10 §5's DEVICES rules):
 ///
 /// - **macOS:** `/Volumes/*`. The entry that links back to `/` is the

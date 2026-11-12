@@ -288,8 +288,8 @@ abstract final class DockerLadder {
   /// Finds the first route to an engine: [override] (CN-09, D54), then
   /// the sockets [profile] found, in 03 §5.4's order. A refused
   /// streamlocal open costs one exec probe of that path. A link failure
-  /// other than a forwarding refusal propagates, since it tells nothing
-  /// about the path.
+  /// other than a forwarding or connect refusal propagates, since it
+  /// tells nothing about the path.
   ///
   /// A route in [excluding], one the engine reached but could not talk
   /// to, is passed over: an excluded streamlocal route skips its path,
@@ -372,7 +372,16 @@ abstract final class DockerLadder {
         await duplex.close();
         return candidate.route(DockerRank.streamlocal);
       } on ChannelOpenException catch (e) {
-        if (e.refusal != ChannelRefusal.forwardDisabled) rethrow;
+        // OpenSSH refuses a socket nothing answers on and a streamlocal
+        // open its settings forbid alike, as connect failed; Dropbear and
+        // a policy refusal read as forwarding disabled. The probe tells
+        // a missing or unwritable socket from disabled forwarding.
+        final probeTellsWhy = switch (e.refusal) {
+          ChannelRefusal.forwardDisabled ||
+          ChannelRefusal.connectFailed => true,
+          ChannelRefusal.sessionLimit || ChannelRefusal.other => false,
+        };
+        if (!probeTellsWhy) rethrow;
       }
     }
 

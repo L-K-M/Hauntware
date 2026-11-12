@@ -115,11 +115,10 @@ class Buffer {
     // An OSC 8 hyperlink is attached to the cell, so it beats reading the
     // text: it is the only thing that resolves link text which is not a URL,
     // or a URL the emitting program wrapped across its own hard newlines.
-    final hitLine = lines[cell.y];
-    if (cell.x < hitLine.length) {
-      final target = terminal.hyperlinks[hitLine.getHyperlinkId(cell.x)];
-      if (target != null) return target;
-    }
+    // Only a cell that shows something belongs to it.
+    final id = _visibleHyperlinkIdAt(cell);
+    final target = id == null ? null : terminal.hyperlinks[id];
+    if (target != null) return target;
 
     // Bound hover work even when a remote prints an enormous unbroken line.
     var first = cell.y;
@@ -184,6 +183,82 @@ class Buffer {
       return parseWebUri(candidate.substring(0, end));
     }
     return null;
+  }
+
+  /// [seance fork] Whether the link [getLinkAt] finds at [cell] is an OSC 8
+  /// hyperlink whose text does not spell out its target. The text of such a
+  /// link is free to name another site, so a host shows the target before
+  /// following it. A URL read from the text, and an OSC 8 link whose text is
+  /// its target (even broken over the program's own hard newlines), are not
+  /// hidden.
+  bool isLinkTargetHiddenAt(CellOffset cell) {
+    final id = _visibleHyperlinkIdAt(cell);
+    if (id == null) return false;
+    final target = terminal.hyperlinks[id];
+    if (target == null) return false;
+
+    final text = _hyperlinkText(cell.y, id)?.trim();
+    if (text == null) return true;
+    return text != target.toString() && Uri.tryParse(text) != target;
+  }
+
+  /// [seance fork] The OSC 8 hyperlink id of [cell], or null when it has
+  /// none or shows nothing. A remote can open a hyperlink and print a screen
+  /// of spaces; a blank cell is no part of the link the user can see. The
+  /// second cell of a wide character shows that character.
+  int? _visibleHyperlinkIdAt(CellOffset cell) {
+    if (cell.y < 0 || cell.y >= lines.length || cell.x < 0) return null;
+    final line = lines[cell.y];
+    if (cell.x >= line.length) return null;
+
+    final id = line.getHyperlinkId(cell.x);
+    if (id == noHyperlink) return null;
+    final codePoint = line.getCodePoint(cell.x);
+    final wideTail =
+        codePoint == 0 && cell.x > 0 && line.getWidth(cell.x - 1) == 2;
+    if (codePoint == 0x20 || (codePoint == 0 && !wideTail)) return null;
+    return id;
+  }
+
+  /// [seance fork] The text of the cells carrying hyperlink [id] on [row]
+  /// and on the adjacent rows that also carry it, in reading order: what
+  /// the user sees of the link, joined across the program's own line
+  /// breaks. Null when that run is too long to read, which callers treat
+  /// as not showing the target.
+  String? _hyperlinkText(int row, int id) {
+    var scanned = lines[row].length;
+    bool carries(int y) {
+      final line = lines[y];
+      scanned += line.length;
+      for (var x = 0; x < line.length; x++) {
+        if (line.getHyperlinkId(x) == id) return true;
+      }
+      return false;
+    }
+
+    var first = row;
+    var last = row;
+    while (first > 0 && scanned <= _maxLinkScanCells && carries(first - 1)) {
+      first--;
+    }
+    while (last + 1 < lines.length &&
+        scanned <= _maxLinkScanCells &&
+        carries(last + 1)) {
+      last++;
+    }
+    if (scanned > _maxLinkScanCells) return null;
+
+    final text = StringBuffer();
+    for (var y = first; y <= last; y++) {
+      final line = lines[y];
+      for (var x = 0; x < line.length; x++) {
+        if (line.getHyperlinkId(x) != id) continue;
+        // Zero is the second cell of a wide character, already written.
+        final codePoint = line.getCodePoint(x);
+        if (codePoint != 0) text.writeCharCode(codePoint);
+      }
+    }
+    return text.toString();
   }
 
   /// Writes data to the _terminal. Terminal sequences or special characters are

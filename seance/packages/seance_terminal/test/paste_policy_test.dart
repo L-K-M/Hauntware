@@ -60,12 +60,36 @@ void main() {
     expect(await output(), isEmpty);
   });
 
-  test('multi-line text without findings pastes without asking', () async {
-    final reviews = <TerminalPasteReview>[];
-    await policy(reviews: reviews).paste(engine, 'cd /srv\r\nls -l\rpwd\n');
+  test(
+    'multi-line text without findings asks while bracketed paste is off',
+    () async {
+      // Without bracketed paste every line runs as it arrives, so a clean
+      // paste still asks; the review carries no findings.
+      final reviews = <TerminalPasteReview>[];
+      await policy(reviews: reviews).paste(engine, 'cd /srv\r\nls -l\rpwd\n');
 
-    expect(await output(), 'cd /srv\nls -l\npwd\n');
+      expect(await output(), 'cd /srv\nls -l\npwd\n');
+      expect(reviews.single.findings, isEmpty);
+      expect(reviews.single.lineCount, 3);
+    },
+  );
+
+  test('multi-line text without findings pastes without asking while '
+      'bracketed paste is on', () async {
+    engine.feed(Uint8List.fromList('\x1b[?2004h'.codeUnits));
+    final reviews = <TerminalPasteReview>[];
+    await policy(reviews: reviews).paste(engine, 'cd /srv\nls -l');
+
+    expect(await output(), '\x1b[200~cd /srv\nls -l\x1b[201~');
     expect(reviews, isEmpty);
+  });
+
+  test('cancel on an unbracketed clean paste pastes nothing', () async {
+    await policy(
+      choice: TerminalPasteChoice.cancel,
+    ).paste(engine, 'cd build\nrm -rf *');
+
+    expect(await output(), isEmpty);
   });
 
   test('findings ask once, with the findings and the line count', () async {

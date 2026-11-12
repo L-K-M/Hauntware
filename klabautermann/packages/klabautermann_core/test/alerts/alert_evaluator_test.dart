@@ -71,6 +71,34 @@ void main() {
     expect(cleared.since, isNull);
   });
 
+  test('a gap in a rule\'s stream restarts a pending breach and a clear '
+      'in progress, and leaves a raised alert up', () {
+    alerts.setRules([_cpu()], _t0);
+
+    // One breach, then the link is down for 20 minutes: the first breach
+    // after it is where the duration starts again.
+    expect(alerts.observe('web', _cpuAt(95), _at(0)), isEmpty);
+    alerts.gap('web', {SampleStream.overview});
+    expect(alerts.observe('web', _cpuAt(96), _at(1200)), isEmpty);
+    expect(alerts.observe('web', _cpuAt(96), _at(1210)), isEmpty);
+    final raised = alerts.observe('web', _cpuAt(97), _at(1220)).single;
+    expect(raised.since, _at(1200));
+
+    // A clear under way starts over too; the alert stays raised.
+    expect(alerts.observe('web', _cpuAt(60), _at(1230)), isEmpty);
+    alerts.gap('web', {SampleStream.overview});
+    expect(alerts.observe('web', _cpuAt(60), _at(1300)), isEmpty);
+    expect(alerts.observe('web', _cpuAt(60), _at(1320)), isEmpty);
+    expect(alerts.observe('web', _cpuAt(60), _at(1330)).single.raised, isFalse);
+
+    // Another server's gap, or one in a stream the rule does not read,
+    // leaves the breach pending.
+    expect(alerts.observe('web', _cpuAt(95), _at(1400)), isEmpty);
+    alerts.gap('db', {SampleStream.overview});
+    alerts.gap('web', {SampleStream.fs});
+    expect(alerts.observe('web', _cpuAt(95), _at(1420)).single.raised, isTrue);
+  });
+
   test('the rule model and the protocol name the same severities, which '
       'the evaluator maps by name', () {
     expect(

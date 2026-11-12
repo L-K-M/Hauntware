@@ -13,11 +13,12 @@ EncryptedRecord _record(
   int revision, {
   String deviceId = 'device',
   int blobBytes = 1,
+  bool deleted = false,
 }) => EncryptedRecord(
   id: id,
   updatedAt: revision,
   deviceId: deviceId,
-  deleted: false,
+  deleted: deleted,
   seq: null,
   blob: Uint8List(blobBytes)..[0] = revision,
 );
@@ -122,7 +123,8 @@ void main() {
               // A malformed token is rejected before reaching the disabled
               // backend; use the normal bearer shape to test its failure.
               headers: {
-                'authorization': 'Bearer ${base64Url.encode(List<int>.filled(32, 0))}',
+                'authorization':
+                    'Bearer ${base64Url.encode(List<int>.filled(32, 0))}',
               },
             ),
           );
@@ -348,6 +350,50 @@ void main() {
           _record('b', 2),
         ], quota: const AccountQuota(maxRecords: 2, maxBytes: 4096));
         expect(retry.results.single.seq, 2);
+      });
+
+      test('tombstones do not count toward the record quota', () async {
+        const quota = AccountQuota(maxRecords: 2, maxBytes: 4096);
+        await storage.pushRecords('alice', [
+          _record('a', 1),
+          _record('b', 1),
+        ], quota: quota);
+        await storage.pushRecords('alice', [
+          _record('a', 2, deleted: true),
+        ], quota: quota);
+        final result = await storage.pushRecords('alice', [
+          _record('c', 3),
+        ], quota: quota);
+        expect(result.results.single.accepted, isTrue);
+        await expectLater(
+          storage.pushRecords('alice', [_record('d', 4)], quota: quota),
+          throwsA(isA<AccountQuotaExceededException>()),
+        );
+      });
+
+      test('an account filled by tombstones accepts new records', () async {
+        // Accounts written before tombstones stopped counting can hold more
+        // rows than the quota while few of them are live.
+        await storage.pushRecords('alice', [
+          _record('live', 1),
+          for (var i = 0; i < 5; i++) _record('gone-$i', 1, deleted: true),
+        ]);
+        final result = await storage.pushRecords('alice', [
+          _record('new', 2),
+        ], quota: const AccountQuota(maxRecords: 2, maxBytes: 4096));
+        expect(result.results.single.accepted, isTrue);
+      });
+
+      test('tombstones still count toward the byte quota', () async {
+        final tombstone = _record('a', 1, deleted: true, blobBytes: 256);
+        await storage.pushRecords('alice', [tombstone]);
+        final used = tombstone.withSeq(1).encodedJsonBytes();
+        await expectLater(
+          storage.pushRecords('alice', [
+            _record('b', 2, blobBytes: 8),
+          ], quota: AccountQuota(maxRecords: 10, maxBytes: used + 8)),
+          throwsA(isA<AccountQuotaExceededException>()),
+        );
       });
 
       test('a legacy over-byte account may shrink in place', () async {

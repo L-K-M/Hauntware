@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show commandPaletteQueryKey;
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_core/planchette_core.dart';
 import 'package:planchette_editor/planchette_editor.dart' show EditorController;
@@ -133,14 +134,8 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('planchette.palette.query')),
-        findsOneWidget,
-      );
-      await tester.enterText(
-        find.byKey(const ValueKey('planchette.palette.query')),
-        'sort lines',
-      );
+      expect(find.byKey(commandPaletteQueryKey), findsOneWidget);
+      await tester.enterText(find.byKey(commandPaletteQueryKey), 'sort lines');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       // Sort Lines has options: the palette opens the tool bar, whose
       // Apply is what runs.
@@ -226,10 +221,7 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('planchette.palette.query')),
-      'sort lines',
-    );
+    await tester.enterText(find.byKey(commandPaletteQueryKey), 'sort lines');
     await tester.pump();
 
     // 'Sort Lines' is greyed: no document is open.
@@ -237,10 +229,7 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     // Enter on a disabled row is declined and the palette stays open.
-    expect(
-      find.byKey(const ValueKey('planchette.palette.query')),
-      findsOneWidget,
-    );
+    expect(find.byKey(commandPaletteQueryKey), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.linux}));

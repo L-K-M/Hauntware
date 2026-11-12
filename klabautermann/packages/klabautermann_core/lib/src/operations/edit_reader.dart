@@ -9,6 +9,7 @@ import 'package:crypto/crypto.dart' show sha256;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         EditCommands,
+        EditExit,
         HostCommandError,
         HostCommands,
         HostProfile,
@@ -66,6 +67,9 @@ Future<EditReadResult> _readFile(String path, EditContext c) async {
   if (result == null) {
     return const EditReadFailed(EditReadFailure.adminRequired);
   }
+  if (result.exitCode == EditExit.symlink) {
+    return const EditReadFailed(EditReadFailure.symlink);
+  }
   if (result.exitCode != 0) {
     return EditReadFailed(
       _missing.hasMatch(result.stderr)
@@ -92,6 +96,9 @@ Future<EditReadResult> _readFile(String path, EditContext c) async {
   if (text.contains('\u0000') || _sha256Of(text) != header.sha256) {
     return const EditReadFailed(EditReadFailure.notText);
   }
+  // The real file a link names is held to the rules of any edit target.
+  final resolved = header.path;
+  if (resolved != null && resolved != path) EditCommands.checkTarget(resolved);
   return EditContent(
     text: text,
     sha256: header.sha256,
@@ -99,6 +106,7 @@ Future<EditReadResult> _readFile(String path, EditContext c) async {
     uid: header.uid,
     gid: header.gid,
     mode: header.mode,
+    resolvedPath: resolved == null || resolved == path ? null : resolved,
   );
 }
 
