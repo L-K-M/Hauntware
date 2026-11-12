@@ -386,8 +386,8 @@ esac
 cp -a "$3" "$4"
 ''');
   tool('appimagetool', r'''
-[[ "$1" == --no-appstream ]] || exit 2
-cp -a "$2" "$3.appdir" && touch "$3"
+[[ "$1" == --no-appstream && "$2" == --runtime-file && -f "$3" ]] || exit 2
+cp -a "$4" "$5.appdir" && touch "$5"
 ''');
   final tools = bin.listSync().map((entity) => entity.path);
   await Process.run('chmod', ['+x', ...tools]);
