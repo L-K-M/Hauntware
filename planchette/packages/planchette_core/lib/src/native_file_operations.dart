@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 
@@ -119,6 +120,117 @@ void setFilePermissions(String path, int mode) {
   }
 }
 
+/// Copies each extended attribute of [source] onto [destination], on Linux
+/// and macOS, and returns the names it could not copy.
+///
+/// A save replaces the file, so without this the attributes stay on the
+/// moved-aside original and are deleted with it: Finder tags and comments,
+/// download quarantine, and on Linux the `system.posix_acl_access` ACL and
+/// any `user.*` data. Best effort by design: a namespace the process may not
+/// write (Linux `trusted.*`, a SELinux label it cannot assign) or a
+/// destination file system without attributes must not refuse a save whose
+/// text is otherwise ready, so such names are returned, never thrown.
+/// Symbolic links are not followed on either side. Other platforms copy
+/// nothing.
+List<String> copyExtendedAttributes(String source, String destination) {
+  if (!Platform.isLinux && !Platform.isMacOS) return const [];
+  _checkPath(source);
+  _checkPath(destination);
+  final from = source.toNativeUtf8();
+  final to = destination.toNativeUtf8();
+  final skipped = <String>[];
+  try {
+    final names = _readNative(
+      (buffer, size) => _listAttributes(from, buffer, size),
+    );
+    if (names == null) return const [];
+    // The list is NUL-separated names, each NUL-terminated.
+    var start = 0;
+    for (var i = 0; i < names.length; i++) {
+      if (names[i] != 0) continue;
+      if (i > start) {
+        final name = utf8.decode(names.sublist(start, i), allowMalformed: true);
+        if (!_copyAttribute(from, to, names.sublist(start, i))) {
+          skipped.add(name);
+        }
+      }
+      start = i + 1;
+    }
+    return skipped;
+  } finally {
+    calloc.free(from);
+    calloc.free(to);
+  }
+}
+
+/// Whether one attribute, named by its raw bytes, reached [to].
+bool _copyAttribute(Pointer<Utf8> from, Pointer<Utf8> to, List<int> name) {
+  final nativeName = calloc<Uint8>(name.length + 1);
+  try {
+    nativeName.asTypedList(name.length).setAll(0, name);
+    nativeName[name.length] = 0;
+    final key = nativeName.cast<Utf8>();
+    final value = _readNative(
+      (buffer, size) => _getAttribute(from, key, buffer, size),
+    );
+    if (value == null) return false;
+    final nativeValue = calloc<Uint8>(value.isEmpty ? 1 : value.length);
+    try {
+      nativeValue.asTypedList(value.length).setAll(0, value);
+      return _setAttribute(to, key, nativeValue, value.length) == 0;
+    } finally {
+      calloc.free(nativeValue);
+    }
+  } finally {
+    calloc.free(nativeName);
+  }
+}
+
+/// Runs a size-then-fill native read: [call] with a null buffer answers the
+/// size, then fills a buffer of that size. Retried when the value grew in
+/// between; null when the call fails.
+List<int>? _readNative(int Function(Pointer<Uint8> buffer, int size) call) {
+  for (var attempt = 0; attempt < 3; attempt++) {
+    final size = call(nullptr, 0);
+    if (size < 0) return null;
+    if (size == 0) return const [];
+    final buffer = calloc<Uint8>(size);
+    try {
+      final read = call(buffer, size);
+      if (read >= 0) return List<int>.of(buffer.asTypedList(read));
+    } finally {
+      calloc.free(buffer);
+    }
+  }
+  return null;
+}
+
+/// macOS XATTR_NOFOLLOW: act on a symbolic link itself.
+const int _darwinNoFollow = 0x1;
+
+int _listAttributes(Pointer<Utf8> path, Pointer<Uint8> buffer, int size) =>
+    Platform.isMacOS
+    ? _listXattrDarwin(path, buffer, size, _darwinNoFollow)
+    : _listXattrLinux(path, buffer, size);
+
+int _getAttribute(
+  Pointer<Utf8> path,
+  Pointer<Utf8> name,
+  Pointer<Uint8> buffer,
+  int size,
+) => Platform.isMacOS
+    ? _getXattrDarwin(path, name, buffer, size, 0, _darwinNoFollow)
+    : _getXattrLinux(path, name, buffer, size);
+
+int _setAttribute(
+  Pointer<Utf8> path,
+  Pointer<Utf8> name,
+  Pointer<Uint8> value,
+  int size,
+) => Platform.isMacOS
+    ? _setXattrDarwin(path, name, value, size, 0, _darwinNoFollow)
+    : _setXattrLinux(path, name, value, size, 0);
+
 /// ENOENT on POSIX; ERROR_FILE_NOT_FOUND on Windows. Coincidentally 2 on
 /// both — the destination file itself vanished mid-save, not a permission
 /// or quota failure.
@@ -209,6 +321,58 @@ final _unlink = _posix
     .lookupFunction<Int32 Function(Pointer<Utf8>), int Function(Pointer<Utf8>)>(
       'unlink',
     );
+// Linux <sys/xattr.h>, the l-variants that do not follow links.
+final _listXattrLinux = _posix
+    .lookupFunction<
+      IntPtr Function(Pointer<Utf8>, Pointer<Uint8>, UintPtr),
+      int Function(Pointer<Utf8>, Pointer<Uint8>, int)
+    >('llistxattr');
+final _getXattrLinux = _posix
+    .lookupFunction<
+      IntPtr Function(Pointer<Utf8>, Pointer<Utf8>, Pointer<Uint8>, UintPtr),
+      int Function(Pointer<Utf8>, Pointer<Utf8>, Pointer<Uint8>, int)
+    >('lgetxattr');
+final _setXattrLinux = _posix
+    .lookupFunction<
+      Int32 Function(
+        Pointer<Utf8>,
+        Pointer<Utf8>,
+        Pointer<Uint8>,
+        UintPtr,
+        Int32,
+      ),
+      int Function(Pointer<Utf8>, Pointer<Utf8>, Pointer<Uint8>, int, int)
+    >('lsetxattr');
+// Darwin <sys/xattr.h>, with a resource-fork position and options.
+final _listXattrDarwin = _posix
+    .lookupFunction<
+      IntPtr Function(Pointer<Utf8>, Pointer<Uint8>, UintPtr, Int32),
+      int Function(Pointer<Utf8>, Pointer<Uint8>, int, int)
+    >('listxattr');
+final _getXattrDarwin = _posix
+    .lookupFunction<
+      IntPtr Function(
+        Pointer<Utf8>,
+        Pointer<Utf8>,
+        Pointer<Uint8>,
+        UintPtr,
+        Uint32,
+        Int32,
+      ),
+      int Function(Pointer<Utf8>, Pointer<Utf8>, Pointer<Uint8>, int, int, int)
+    >('getxattr');
+final _setXattrDarwin = _posix
+    .lookupFunction<
+      Int32 Function(
+        Pointer<Utf8>,
+        Pointer<Utf8>,
+        Pointer<Uint8>,
+        UintPtr,
+        Uint32,
+        Int32,
+      ),
+      int Function(Pointer<Utf8>, Pointer<Utf8>, Pointer<Uint8>, int, int, int)
+    >('setxattr');
 final _errno = _posix
     .lookupFunction<Pointer<Int32> Function(), Pointer<Int32> Function()>(
       Platform.isMacOS || Platform.isIOS

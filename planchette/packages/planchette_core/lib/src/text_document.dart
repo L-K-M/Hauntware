@@ -396,6 +396,9 @@ Future<String> _writeTextDocument(
       }
       final stat = await backup.stat();
       setFilePermissions(temporary.path, stat.mode & _posixPermissionMask);
+      // Attributes the process may not set are left behind rather than
+      // failing a save whose text is ready; see copyExtendedAttributes.
+      copyExtendedAttributes(backup.path, temporary.path);
       windowsReadOnly =
           Platform.isWindows && stat.mode & _writePermissionBits == 0;
       renameFileWithoutReplacing(temporary.path, file.path);
