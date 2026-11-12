@@ -1,3 +1,5 @@
+import 'dart:isolate';
+
 import 'editor_syntax.dart';
 
 /// CSS colors for [highlightedHtml], such as `#1f7a54` or `rgb(31 122 84)`.
@@ -83,6 +85,26 @@ String highlightedHtml({
     ..writeln('</html>');
   return out.toString();
 }
+
+/// [highlightedHtml] for [text] in [language] (plain text when null), with
+/// the tokenizing and the page built on a short-lived isolate. Both are
+/// linear in the document but with no highlighting cap, and the page is
+/// several times the text, so on a large file they would hold the calling
+/// isolate, and with it the editor's frames, for the whole export.
+Future<String> highlightedHtmlInBackground({
+  required String text,
+  required SyntaxLanguage? language,
+  required HtmlPalette palette,
+  String title = '',
+}) => Isolate.run(
+  () => highlightedHtml(
+    text: text,
+    tokens: language == null ? const [] : tokenizeSyntax(text, language),
+    palette: palette,
+    title: title,
+  ),
+  debugName: 'highlightedHtml',
+);
 
 /// Hex, named and functional colors; no `;`, braces, quotes or angle
 /// brackets, so a value cannot leave its declaration or the style block.

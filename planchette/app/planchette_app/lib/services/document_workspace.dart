@@ -1072,14 +1072,17 @@ final class DocumentWorkspace extends ChangeNotifier {
         break;
       }
       if (reverting()) return false;
-      final text = tab.editor.text.text;
-      final language = tab.editor.text.language;
-      final page = highlightedHtml(
-        text: text,
-        tokens: language == null ? const [] : tokenizeSyntax(text, language),
+      // Read the buffer now: edits made while the page renders belong to
+      // the next export, not this one.
+      final page = await highlightedHtmlInBackground(
+        text: tab.editor.text.text,
+        language: tab.editor.text.language,
         palette: palette,
         title: tab.name,
       );
+      // A revert confirmed while the page rendered discarded the text it
+      // shows.
+      if (reverting()) return false;
       // The store holds every write to the document limit. Markup and
       // escaping make a page several times its buffer, so name the page
       // rather than let the store speak of an edited file.

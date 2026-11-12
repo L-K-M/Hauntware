@@ -121,4 +121,53 @@ void main() {
     expect(html, contains('background-color:url(//example.com/x)'));
     expect(html, isNot(contains(';background:')));
   });
+
+  group('highlightedHtmlInBackground', () {
+    test('renders the page the editor thread would', () async {
+      const text = 'void main() {\n  print("hi & <bye>");\n}\n';
+
+      final page = await highlightedHtmlInBackground(
+        text: text,
+        language: SyntaxLanguages.dart,
+        palette: palette,
+        title: 'main.dart',
+      );
+
+      expect(
+        page,
+        highlightedHtml(
+          text: text,
+          tokens: tokenizeSyntax(text, SyntaxLanguages.dart),
+          palette: palette,
+          title: 'main.dart',
+        ),
+      );
+      expect(page, contains('<span class="k">void</span>'));
+    });
+
+    test('leaves text without a language unhighlighted', () async {
+      final page = await highlightedHtmlInBackground(
+        text: 'plain',
+        language: null,
+        palette: palette,
+      );
+
+      expect(body(page), 'plain');
+    });
+
+    test('rejects a palette that could leave the style block', () {
+      expect(
+        highlightedHtmlInBackground(
+          text: 'x',
+          language: null,
+          palette: const HtmlPalette(
+            background: 'red}',
+            foreground: '#000',
+            tokens: {},
+          ),
+        ),
+        throwsArgumentError,
+      );
+    });
+  });
 }
