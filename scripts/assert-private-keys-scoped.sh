@@ -24,32 +24,26 @@ readonly openssh_header="BEGIN OPENSSH"' PRIVATE KEY'
 readonly rsa_header="BEGIN RSA"' PRIVATE KEY'
 readonly ec_header="BEGIN EC"' PRIVATE KEY'
 readonly pkcs8_header="BEGIN"' PRIVATE KEY'
+readonly encrypted_pkcs8_header="BEGIN ENCRYPTED"' PRIVATE KEY'
+readonly dsa_header="BEGIN DSA"' PRIVATE KEY'
 
-# Prune generated and non-source trees: VCS, resolved packages, build
-# outputs, the integration runtime, Flutter/CocoaPods caches, JS
-# dependency trees and the local agent scratch directory. Committed
-# fixture trees stay scanned.
+# Scan what git tracks plus untracked files it does not ignore, so a key
+# is caught before its commit wherever it sits (a tracked file under a
+# directory named build/ included), while ignored outputs such as build
+# trees and the integration runtime stay out. A tracked file deleted
+# from the worktree has nothing left to leak, so grep skips it (-s).
 mapfile -t detected < <(
   cd "$repo_root"
-  find . \
-    \( -name .git \
-       -o -name .dart_tool \
-       -o -name .task \
-       -o -name build \
-       -o -name dist \
-       -o -name ephemeral \
-       -o -name .symlinks \
-       -o -name Pods \
-       -o -name node_modules \
-       -o -path './poltergeist/test/integration/runtime' \) \
-    -prune -o -type f -exec grep -Il \
-    -e "$openssh_header" \
-    -e "$rsa_header" \
-    -e "$ec_header" \
-    -e "$pkcs8_header" \
-    -- {} + \
-    | sed 's#^\./##' \
-    | sort
+  git ls-files -z --cached --others --exclude-standard \
+    | xargs -0 grep -Ils \
+      -e "$openssh_header" \
+      -e "$rsa_header" \
+      -e "$ec_header" \
+      -e "$pkcs8_header" \
+      -e "$encrypted_pkcs8_header" \
+      -e "$dsa_header" \
+      -- \
+    | sort -u
 )
 
 mapfile -t expected < <(printf '%s\n' "${allowed[@]}" | sort)

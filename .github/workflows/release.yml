@@ -507,7 +507,7 @@ jobs:
           grep -q '^Dart SDK (runtime and core libraries) ' notices-check/Third-Party-Notices.txt
           grep -q '^BoringSSL ' notices-check/Third-Party-Notices.txt
           grep -q '^shelf ' notices-check/Third-Party-Notices.txt
-      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned: a retargeted tag would be arbitrary code with contents: write)
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3 (SHA-pinned: a retargeted tag would be arbitrary code with contents: write)
         with:
           # On a tag push these two resolve to the pushed tag (and the
           # commitish is ignored); on workflow_dispatch they make the first
@@ -737,7 +737,7 @@ jobs:
       - name: Verify bundled notices
         shell: bash
         run: bash scripts/check-release-notices.sh planchette planchette "${{ matrix.target }}"
-      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned: a retargeted tag would be arbitrary code with contents: write)
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3 (SHA-pinned: a retargeted tag would be arbitrary code with contents: write)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           target_commitish: ${{ github.sha }}
@@ -821,7 +821,7 @@ jobs:
             --output-dir . --skip-appimage
           scripts/build-flatpak.sh "$(find . -maxdepth 1 -type f -name 'planchette_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
           mv dist/planchette-linux-x64.flatpak "$GITHUB_WORKSPACE/"
-      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3 (SHA-pinned)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           draft: true
@@ -903,7 +903,7 @@ jobs:
           [ -n "$deb" ] || { echo "::error::no seance_*.deb found" >&2; exit 1; }
           scripts/build-flatpak.sh "$deb"
           mv dist/seance-linux-x64.flatpak "$GITHUB_WORKSPACE/"
-      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3 (SHA-pinned)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           draft: true
@@ -985,7 +985,7 @@ jobs:
           [ -n "$deb" ] || { echo "::error::no poltergeist_*.deb found" >&2; exit 1; }
           scripts/build-flatpak.sh "$deb"
           mv dist/poltergeist-linux-x64.flatpak "$GITHUB_WORKSPACE/"
-      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3 (SHA-pinned)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           draft: true
@@ -1231,7 +1231,7 @@ jobs:
       - name: Verify bundled notices
         shell: bash
         run: bash scripts/check-release-notices.sh seance seance "${{ matrix.target }}"
-      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3 (SHA-pinned)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           target_commitish: ${{ github.sha }}
@@ -1488,7 +1488,7 @@ jobs:
       - name: Verify bundled notices
         shell: bash
         run: bash scripts/check-release-notices.sh poltergeist poltergeist "${{ matrix.target }}"
-      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3 (SHA-pinned)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           target_commitish: ${{ github.sha }}
@@ -1727,7 +1727,7 @@ jobs:
       - name: Verify bundled notices
         shell: bash
         run: bash scripts/check-release-notices.sh klabautermann klabautermann-preview "${{ matrix.target }}"
-      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3 (SHA-pinned)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           target_commitish: ${{ github.sha }}
@@ -1791,7 +1791,7 @@ jobs:
           persist-credentials: false
           ref: ${{ steps.checkout-ref.outputs.ref }}
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4 (SHA-pinned)
-      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4 (SHA-pinned)
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4 (SHA-pinned)
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart'
+    show TextEditingValue, TextRange, TextSelection;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as paths;
 import 'package:planchette_core/planchette_core.dart';
@@ -219,6 +221,15 @@ class FakeDialogs implements DocumentDialogs {
   Future<bool> confirmRevert(String name) async {
     revertAsked = true;
     return revert;
+  }
+
+  bool discardRecovery = false;
+  final recoveryAsked = <String>[];
+
+  @override
+  Future<bool> confirmDiscardRecovery(String name) async {
+    recoveryAsked.add(name);
+    return discardRecovery;
   }
 }
 
@@ -824,6 +835,21 @@ void main() {
       expect(workspace.error, contains('open in a tab'));
     });
 
+    test('a page over the size limit is refused with its own reason', () async {
+      // Escaping and token markup make the page several times the buffer,
+      // so a buffer well under the limit can produce a page over it. The
+      // store's own refusal spoke of an edited file instead.
+      tab.editor.text.text = '<' * (textDocumentMaximumBytes ~/ 4 + 1);
+      dialogs.savePath = testPath('big.html');
+      expect(await workspace.exportHtml(tab, palette), isFalse);
+      expect(
+        workspace.error,
+        'main.dart is too large to export as HTML: the page would be 4.0 MB, '
+        'over the 4 MB limit.',
+      );
+      expect(store.writes, isEmpty);
+    });
+
     test('review fix: exporting over a read-only file asks first', () async {
       store.files[testPath('locked.html')] = document('locked.html', 'keep');
       store.writeProtected.add(testPath('locked.html'));
@@ -1124,6 +1150,28 @@ void main() {
     // The refusal is about a state that has now passed.
     expect(await workspace.closeTab(tab), isTrue);
     expect(workspace.error, isNull);
+  });
+
+  test('a save refused during IME composition says why', () async {
+    final tab = await openOne();
+    // Cleanup cannot rewrite text an input method still owns.
+    workspace.saveOptions = const TextSaveOptions(
+      trailingWhitespace: TrailingWhitespacePolicy.trim,
+    );
+    tab.editor.text.value = const TextEditingValue(
+      text: 'disk  ',
+      selection: TextSelection.collapsed(offset: 6),
+      composing: TextRange(start: 4, end: 6),
+    );
+    workspace.newDocument()!.editor.text.text = 'other';
+    workspace.select(tab);
+
+    expect(await workspace.save(tab), isFalse);
+    expect(workspace.error, contains('input method'));
+    expect(store.writes, isEmpty);
+
+    expect(await workspace.saveAll(), isFalse);
+    expect(workspace.error, contains('one.txt (the input method'));
   });
 
   test('a locked workspace refuses a close silently', () async {

@@ -243,28 +243,72 @@ write_third_party_notices() {  # $1 = bundle, $2 = destination
 }
 # --- end third-party notices writer -----------------------------------------
 
-# Sets APPIMAGE_TOOL: the env override (path or URL) or the pinned release
-# asset for this build host, downloaded once into ~/.cache/$PACKAGE_NAME.
+# appimagetool's pinned release and the SHA-256 of its asset for each
+# build host, from https://github.com/AppImage/appimagetool/releases/tag/1.9.1.
+# A download or cached copy that does not match is never run.
+readonly APPIMAGETOOL_RELEASE="1.9.1"
+declare -grA APPIMAGETOOL_PINNED_SHA256=(
+  [x86_64]='ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0'
+  [aarch64]='f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158'
+)
+
+sha256_of() {  # $1 = file; prints its lowercase hex SHA-256
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1"
+  else
+    shasum -a 256 "$1"
+  fi | cut -d' ' -f1
+}
+
+# Sets APPIMAGE_TOOL: a local path from APPIMAGETOOL, used as given, or a
+# download verified against its SHA-256 (the pinned release for this
+# build host, or the APPIMAGETOOL URL with APPIMAGETOOL_SHA256) and cached
+# in ~/.cache/$PACKAGE_NAME under that digest, so a copy fetched from
+# another URL or release is never reused. A failed or mismatched download
+# returns non-zero, which --appimage=best-effort tolerates; a malformed
+# override is a configuration error and dies.
 resolve_appimagetool() {
-  local host_arch url
+  local host_arch url expected
   case "$(uname -m)" in
     x86_64) host_arch="x86_64" ;;
     aarch64|arm64) host_arch="aarch64" ;;
     *) die "appimagetool has no build for $(uname -m)" ;;
   esac
-  url="${APPIMAGETOOL:-https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-$host_arch.AppImage}"
-  if [[ "$url" != http* ]]; then   # a path, not a URL
+  url="${APPIMAGETOOL:-}"
+  if [[ -n "$url" && "$url" != http* ]]; then   # a path, not a URL
     [[ -x "$url" ]] || die "APPIMAGETOOL=$url is not executable"
     APPIMAGE_TOOL="$url"; return 0
   fi
-  local cache
-  cache="$HOME/.cache/$PACKAGE_NAME/$(basename "$url")"
-  if [[ ! -x "$cache" ]]; then
-    echo "-- fetching appimagetool ($url)"
-    mkdir -p "$(dirname "$cache")"
-    command -v curl >/dev/null 2>&1 || die "curl not found (set APPIMAGETOOL to a local appimagetool)"
-    curl -fL --retry 3 -o "$cache.part" "$url" && chmod 755 "$cache.part" && mv "$cache.part" "$cache"
+  if [[ -n "$url" ]]; then
+    expected="${APPIMAGETOOL_SHA256:-}"
+    [[ "$expected" =~ ^[0-9a-f]{64}$ ]] \
+      || die "APPIMAGETOOL=$url needs APPIMAGETOOL_SHA256, the download's lowercase hex SHA-256"
+  else
+    url="https://github.com/AppImage/appimagetool/releases/download/$APPIMAGETOOL_RELEASE/appimagetool-$host_arch.AppImage"
+    expected="${APPIMAGETOOL_PINNED_SHA256[$host_arch]}"
   fi
+
+  local cache actual
+  cache="$HOME/.cache/$PACKAGE_NAME/appimagetool-$expected.AppImage"
+  if [[ -x "$cache" && "$(sha256_of "$cache")" == "$expected" ]]; then
+    APPIMAGE_TOOL="$cache"; return 0
+  fi
+  echo "-- fetching appimagetool ($url)"
+  mkdir -p "$(dirname "$cache")"
+  command -v curl >/dev/null 2>&1 || die "curl not found (set APPIMAGETOOL to a local appimagetool)"
+  rm -f "$cache" "$cache.part"
+  if ! curl -fL --retry 3 -o "$cache.part" "$url"; then
+    rm -f "$cache.part"
+    echo "package-linux: cannot download appimagetool from $url" >&2
+    return 1
+  fi
+  actual="$(sha256_of "$cache.part")"
+  if [[ "$actual" != "$expected" ]]; then
+    rm -f "$cache.part"
+    echo "package-linux: appimagetool from $url has SHA-256 $actual, expected $expected" >&2
+    return 1
+  fi
+  chmod 755 "$cache.part" && mv "$cache.part" "$cache" || return 1
   APPIMAGE_TOOL="$cache"
 }
 
@@ -302,10 +346,11 @@ exec "\$HERE/usr/lib/$PACKAGE_NAME/$BUNDLE_EXECUTABLE" "\$@"
 EOF
   chmod 755 "$appdir/AppRun"
 
-  # appimagetool: a pinned release asset, cached across runs. The tool's arch
-  # is the BUILD host's (it embeds the target runtime per ARCH=, so an x86_64
-  # tool packages arm64 images fine). APPIMAGETOOL may be a path or a URL.
-  resolve_appimagetool   # sets APPIMAGE_TOOL
+  # appimagetool: a pinned release asset, verified and cached across runs.
+  # The tool's arch is the BUILD host's (it embeds the target runtime per
+  # ARCH=, so an x86_64 tool packages arm64 images fine). APPIMAGETOOL may
+  # be a path or a URL (with APPIMAGETOOL_SHA256).
+  resolve_appimagetool || return 1   # sets APPIMAGE_TOOL
   appimage_prereqs
   local tool="$APPIMAGE_TOOL"
 

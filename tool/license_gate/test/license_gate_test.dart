@@ -1487,13 +1487,26 @@ void _commitProjectChanges(Directory directory) {
   _git(directory, const ['commit', '--quiet', '-m', 'Change fixture']);
 }
 
+/// Settings that keep a developer's global git configuration out of the
+/// fixture repositories: commit signing and hooks would otherwise run, or
+/// fail, on every fixture commit.
+const _isolatedGitConfig = [
+  '-c',
+  'commit.gpgsign=false',
+  '-c',
+  'core.hooksPath=/dev/null',
+];
+
 String _git(Directory directory, List<String> arguments) {
-  final result = Process.runSync(
-    'git',
-    arguments,
-    workingDirectory: directory.path,
-  );
+  final result = Process.runSync('git', [
+    ..._isolatedGitConfig,
+    ...arguments,
+  ], workingDirectory: directory.path);
   if (result.exitCode == 0) return result.stdout as String;
 
-  throw StateError('git ${arguments.join(' ')}: ${result.stderr}');
+  // git reports some failures, such as "nothing to commit", on stdout.
+  throw StateError(
+    'git ${arguments.join(' ')} exited ${result.exitCode}\n'
+    'stdout: ${result.stdout}\nstderr: ${result.stderr}',
+  );
 }
