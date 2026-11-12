@@ -166,7 +166,7 @@ Future<void> main(List<String> args) async {
   // behind, and whichever sealed generation the installed key still
   // opens wins.
   try {
-    final vaultKey = await masterKeys.probeKeystore();
+    final vaultKey = await probeVaultKey(masterKeys, vaultStore.file);
     if (vaultKey != null) await vaultStore.settleRekey(vaultKey);
   } on Object catch (error, stack) {
     errorReporter.report(error, stack);
@@ -174,7 +174,7 @@ Future<void> main(List<String> args) async {
   final dynamicVault = DynamicSecretVault(
     vaultStore,
     () async {
-      final key = await masterKeys.probeKeystore();
+      final key = await probeVaultKey(masterKeys, vaultStore.file);
       return key == null ? null : SecretVault(vaultStore, key);
     },
     onError: errorReporter.report,
@@ -508,7 +508,15 @@ Future<void> main(List<String> args) async {
         deviceName: deviceName,
       );
     },
-    vaultKey: masterKeys.probeKeystore,
+    // A lost key over a sealed vault leaves backup keyless like a locked
+    // keystore; the credential prompt says which of the two it is.
+    vaultKey: () async {
+      try {
+        return await probeVaultKey(masterKeys, vaultStore.file);
+      } on MasterKeyUnavailableException {
+        return null;
+      }
+    },
     servers: servers,
     vaultStore: vaultStore,
     serverCatalogPublisher: engineSession?.publishServerCatalog,
