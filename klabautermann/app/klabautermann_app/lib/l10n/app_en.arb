@@ -342,6 +342,35 @@
   "@quitWhileRunningQuit": {
     "description": "The quit confirmation's button that closes the window anyway."
   },
+  "quitWithShellsTitle": "{count, plural, =1{Quit and end 1 shell?} other{Quit and end {count} shells?}}",
+  "@quitWithShellsTitle": {
+    "description": "The quit confirmation's title while container shells are open; count is how many.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "quitWithShellsBody": "{count, plural, =1{The shell in {names} is open. Quitting ends it.} other{The shells in {names} are open. Quitting ends them.}}",
+  "@quitWithShellsBody": {
+    "description": "The quit confirmation's body while container shells are open; count is how many and names lists their containers.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "quitWithShellsSeparator": ", ",
+  "@quitWithShellsSeparator": {
+    "description": "Joins the container names in the shell quit confirmation's body."
+  },
+  "quitWithShellsQuit": "Quit",
+  "@quitWithShellsQuit": {
+    "description": "The quit confirmation's button that closes the window and ends the open shells."
+  },
   "menuWindow": "Window",
   "@menuWindow": {
     "description": "Title of the Window menu (macOS, where it holds Minimize, Zoom and Bring All to Front)."
@@ -809,6 +838,28 @@
   "alreadyRunningQuit": "Quit",
   "@alreadyRunningQuit": {
     "description": "Button on the already-running screen that quits the second copy."
+  },
+  "engineFailedTitle": "Klabautermann could not start",
+  "@engineFailedTitle": {
+    "description": "Heading of the only screen the app shows when its background engine fails to start."
+  },
+  "engineFailedBody": "Its background engine did not start, so no servers can be shown. Quit and open Klabautermann again. If this keeps happening, reinstall it and include the details below in a bug report.",
+  "@engineFailedBody": {
+    "description": "Body of the screen shown when the app's background engine fails to start: what it means and what to do."
+  },
+  "engineFailedDetail": "Details: {detail}",
+  "@engineFailedDetail": {
+    "description": "The technical reason the background engine did not start, in English, for a bug report.",
+    "placeholders": {
+      "detail": {
+        "type": "String",
+        "example": "Bad state: engine isolate exited before answering Hello"
+      }
+    }
+  },
+  "engineFailedQuit": "Quit",
+  "@engineFailedQuit": {
+    "description": "Button on the engine-failed screen that quits the app."
   },
   "settingsWindowUnreachable": "Settings cannot reach Klabautermann. Close this window and open Settings again.",
   "@settingsWindowUnreachable": {
@@ -5716,6 +5767,10 @@
   "@endpointsStillPending": {
     "description": "Under the endpoint confirmation list when a confirmed server stays listed because a jump host on its route changed and needs its own confirmation (D64)."
   },
+  "endpointsChangedMeanwhile": "A server's address changed while you confirmed it. Check it again, then confirm.",
+  "@endpointsChangedMeanwhile": {
+    "description": "Under the endpoint confirmation list when a sync changed a server's host, port, user or jump route after the user looked, so that server was not confirmed and its row now shows the new address."
+  },
   "endpointsFailed": "The confirmation could not be saved on this device, so these servers stay unconfirmed. Try again.",
   "@endpointsFailed": {
     "description": "Under the endpoint confirmation list when the engine could not save the confirmation or stopped before answering."
@@ -8323,6 +8378,46 @@
       }
     }
   },
+  "themePresetKlabautermann": "Klabautermann",
+  "@themePresetKlabautermann": {
+    "description": "Shown name of the Klabautermann theme preset (the default: Klabautermann's sea blue, following light or dark). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetGraphite": "Graphite",
+  "@themePresetGraphite": {
+    "description": "Shown name of the Graphite theme preset (a muted blue-grey accent). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetPaper": "Paper",
+  "@themePresetPaper": {
+    "description": "Shown name of the Paper theme preset (warm and light). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetNewsprint": "Newsprint",
+  "@themePresetNewsprint": {
+    "description": "Shown name of the Newsprint theme preset (black, white and red). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetSolarized": "Solarized",
+  "@themePresetSolarized": {
+    "description": "Shown name of the Solarized theme preset (Solarized dark). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetMidnight": "Midnight",
+  "@themePresetMidnight": {
+    "description": "Shown name of the Midnight theme preset (deep blue). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetTerminal": "Terminal",
+  "@themePresetTerminal": {
+    "description": "Shown name of the Terminal theme preset (green on black). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetVapor": "Vapor",
+  "@themePresetVapor": {
+    "description": "Shown name of the Vapor theme preset (magenta and cyan over violet-black). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetBubblegum": "Bubblegum",
+  "@themePresetBubblegum": {
+    "description": "Shown name of the Bubblegum theme preset (pink and purple). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
+  "themePresetHighContrast": "High contrast",
+  "@themePresetHighContrast": {
+    "description": "Shown name of the High contrast theme preset (black and white with yellow). A copied theme stores the English name, the same in Séance, whatever this says."
+  },
   "appearanceModeTitle": "Mode",
   "@appearanceModeTitle": {
     "description": "Appearance tab: heading of the light/dark mode section."
@@ -10338,6 +10433,24 @@
   "dockerShellClearScrollback": "Clear scrollback",
   "@dockerShellClearScrollback": {
     "description": "Context menu item that drops the terminal lines scrolled off the top, keeping the visible screen (CTX-07)."
+  },
+  "shellEndRunningTitle": "End the running shell?",
+  "@shellEndRunningTitle": {
+    "description": "Title of the dialog that asks before closing a container shell that still runs (CTX-07)."
+  },
+  "shellEndRunningBody": "Closing this ends the shell in “{container}”.",
+  "@shellEndRunningBody": {
+    "description": "Body of the dialog that asks before closing a running container shell; container is its name.",
+    "placeholders": {
+      "container": {
+        "type": "String",
+        "example": "web-db"
+      }
+    }
+  },
+  "shellEndRunningConfirm": "End shell",
+  "@shellEndRunningConfirm": {
+    "description": "Button that closes the tab or page and ends the running container shell."
   },
   "dockerShellKeyEscape": "Escape",
   "@dockerShellKeyEscape": {

@@ -832,7 +832,7 @@ class _UnitLogs extends StatefulWidget {
 }
 
 class _UnitLogsState extends State<_UnitLogs> {
-  final _lines = LogViewController();
+  late final _lines = LogViewController(serverId: widget.serverId);
   LogRead? _read;
 
   @override

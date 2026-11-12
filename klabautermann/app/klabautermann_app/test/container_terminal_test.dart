@@ -71,6 +71,7 @@ void main() {
       final first = terminals.open(
         serverId: _serverId,
         containerId: _id,
+        containerName: 'web-db',
         shell: '  ',
         user: '',
         columns: 0,
@@ -79,6 +80,7 @@ void main() {
       final second = terminals.open(
         serverId: _serverId,
         containerId: _id,
+        containerName: 'web-db',
         shell: ' /bin/sh ',
         user: 'postgres',
         columns: 120,
@@ -100,6 +102,7 @@ void main() {
       final shell = terminals.open(
         serverId: _serverId,
         containerId: _id,
+        containerName: 'web-db',
         columns: 80,
         rows: 24,
       );
@@ -151,6 +154,7 @@ void main() {
       final shell = terminals.open(
         serverId: _serverId,
         containerId: _id,
+        containerName: 'web-db',
         columns: 80,
         rows: 24,
       );
@@ -170,6 +174,7 @@ void main() {
       final running = terminals.open(
         serverId: _serverId,
         containerId: _id,
+        containerName: 'web-db',
         columns: 80,
         rows: 24,
       );
@@ -178,6 +183,7 @@ void main() {
       final opening = terminals.open(
         serverId: _serverId,
         containerId: _id,
+        containerName: 'web-db',
         columns: 80,
         rows: 24,
       );
@@ -200,6 +206,7 @@ void main() {
       final shell = terminals.open(
         serverId: _serverId,
         containerId: _id,
+        containerName: 'web-db',
         columns: 80,
         rows: 24,
       );
@@ -210,6 +217,7 @@ void main() {
       final late = terminals.open(
         serverId: _serverId,
         containerId: _id,
+        containerName: 'web-db',
         columns: 80,
         rows: 24,
       );
@@ -284,6 +292,45 @@ void main() {
         TerminalOpened(open.terminalId, ['/bin/bash']),
       );
       return open;
+    }
+
+    /// Pumps the pane as a pushed page, as the phone's full-screen shell
+    /// page does, with [ContainerShellPane.guardPop] on.
+    Future<void> pumpGuardedPane(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(900, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.android),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: FilledButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(),
+                        body: ContainerShellPane(
+                          monitoring: monitoring,
+                          serverId: _serverId,
+                          container: _row,
+                          guardPop: true,
+                        ),
+                      ),
+                    ),
+                  ),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
     }
 
     testWidgets('opens with the shell and user given, and forwards the '
@@ -701,6 +748,152 @@ void main() {
         ),
         [open.terminalId],
       );
+    });
+
+    testWidgets('a guarded pane asks before a back that ends the shell', (
+      tester,
+    ) async {
+      await pumpGuardedPane(tester);
+      final open = await start(tester);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('End the running shell?'), findsOneWidget);
+      expect(
+        find.text('Closing this ends the shell in “web-db”.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ContainerShellPane), findsOneWidget);
+      expect(engine.sentOfType<CloseTerminal>(), isEmpty);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('End shell'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ContainerShellPane), findsNothing);
+      expect(
+        (engine.sentOfType<CloseTerminal>().single as CloseTerminal).terminalId,
+        open.terminalId,
+      );
+    });
+
+    testWidgets('an ended shell closes without asking', (tester) async {
+      await pumpGuardedPane(tester);
+      final open = await start(tester);
+      await _emit(
+        tester,
+        engine,
+        TerminalClosed(open.terminalId, TerminalCloseReason.exited),
+      );
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(ContainerShellPane), findsNothing);
+      expect(engine.sentOfType<CloseTerminal>(), isEmpty);
+    });
+  });
+
+  group('dock tab close guard (OV-10)', () {
+    late FakeEngineClient engine;
+    late MonitoringController monitoring;
+
+    setUp(() {
+      engine = FakeEngineClient();
+      monitoring = MonitoringController(engine);
+    });
+
+    tearDown(() async {
+      monitoring.dispose();
+      await engine.close();
+    });
+
+    Future<void> pumpDock(WidgetTester tester, WorkspaceDock dock) async {
+      tester.view.physicalSize = const Size(800, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: WorkspaceDockPane(
+              dock: dock,
+              monitoring: monitoring,
+              serverId: _serverId,
+              maxHeight: 700,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    Future<OpenTerminal> start(WidgetTester tester) async {
+      await tester.tap(find.text('Open shell'));
+      await tester.pump();
+      final open = engine.sentOfType<OpenTerminal>().last as OpenTerminal;
+      await _emit(
+        tester,
+        engine,
+        TerminalOpened(open.terminalId, ['/bin/bash']),
+      );
+      return open;
+    }
+
+    testWidgets('closing a dock tab with a running shell asks first', (
+      tester,
+    ) async {
+      final dock = WorkspaceDock();
+      addTearDown(dock.dispose);
+      dock.show(DockedShell(_serverId, _row));
+      await pumpDock(tester, dock);
+      final open = await start(tester);
+
+      await tester.tap(find.byTooltip('Close Shell: web-db'));
+      await tester.pumpAndSettle();
+      expect(find.text('End the running shell?'), findsOneWidget);
+      expect(
+        find.text('Closing this ends the shell in “web-db”.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(dock.items, [DockedShell(_serverId, _row)]);
+      expect(engine.sentOfType<CloseTerminal>(), isEmpty);
+
+      await tester.tap(find.byTooltip('Close Shell: web-db'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('End shell'));
+      await tester.pumpAndSettle();
+      expect(dock.items, isEmpty);
+      expect(
+        (engine.sentOfType<CloseTerminal>().single as CloseTerminal).terminalId,
+        open.terminalId,
+      );
+    });
+
+    testWidgets('an ended shell closes without asking', (tester) async {
+      final dock = WorkspaceDock();
+      addTearDown(dock.dispose);
+      dock.show(DockedShell(_serverId, _row));
+      await pumpDock(tester, dock);
+      final open = await start(tester);
+      await _emit(
+        tester,
+        engine,
+        TerminalClosed(open.terminalId, TerminalCloseReason.exited),
+      );
+
+      await tester.tap(find.byTooltip('Close Shell: web-db'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(dock.items, isEmpty);
+      expect(engine.sentOfType<CloseTerminal>(), isEmpty);
     });
   });
 
