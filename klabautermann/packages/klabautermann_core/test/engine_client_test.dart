@@ -24,6 +24,31 @@ void main() {
 
     expect(() => client.send(const RunSyncRound()), throwsStateError);
   });
+
+  test('spawn names the error an engine met while starting', () async {
+    await expectLater(
+      IsolateEngineClient.spawn(
+        supportDirectory: support.path,
+        entryPoint: _failWhileStarting,
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('support directory unreadable'),
+        ),
+      ),
+    );
+  });
+}
+
+/// An engine whose startup work fails unhandled after it hands over its
+/// command port, before it answers [Hello].
+void _failWhileStarting(EngineStart start) {
+  start.uiPort.send(ReceivePort().sendPort);
+  Future<void>(
+    () => throw const FileSystemException('support directory unreadable'),
+  );
 }
 
 /// An engine that completes the handshake and then exits on its own, as

@@ -23,6 +23,10 @@ final class SeriesRing extends ChangeNotifier {
   final Float64List _slots;
   int _added = 0;
 
+  /// [_added] as of the last [clear]: the samples before it are gone.
+  int _cleared = 0;
+  int _clears = 0;
+
   /// The samples, oldest first: a live, read-only view.
   late final List<double?> samples = _RingView(this, capacity);
 
@@ -31,10 +35,10 @@ final class SeriesRing extends ChangeNotifier {
   /// entry has running index [added] minus its length.
   late final List<double?> samplesWithEvicted = _RingView(this, capacity + 1);
 
-  /// Bumped by every sample.
-  int get version => _added;
+  /// Bumped by every sample and [clear].
+  int get version => _added + _clears;
 
-  int get length => math.min(_added, capacity);
+  int get length => math.min(_added - _cleared, capacity);
 
   /// How many samples were ever added: the running index the next one
   /// takes. Charts align their downsampling columns to running indices.
@@ -48,6 +52,16 @@ final class SeriesRing extends ChangeNotifier {
         ? value
         : double.nan;
     _added++;
+    notifyListeners();
+  }
+
+  /// Drops every sample, as when the series now describes another
+  /// machine. Running indices go on from [added], so a chart's columns
+  /// stay aligned.
+  void clear() {
+    if (_added == _cleared) return;
+    _cleared = _added;
+    _clears++;
     notifyListeners();
   }
 
@@ -66,7 +80,7 @@ final class _RingView extends ListBase<double?> {
   final int _window;
 
   @override
-  int get length => math.min(_ring._added, _window);
+  int get length => math.min(_ring._added - _ring._cleared, _window);
 
   @override
   set length(int _) => throw UnsupportedError(_readOnly);

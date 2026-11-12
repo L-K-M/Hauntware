@@ -13,6 +13,7 @@ import 'package:klabautermann_app/ui/processes_view.dart'
     show ProcessColumn, kProcessTextLimit;
 import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_app/ui/sortable_table.dart';
+import 'package:klabautermann_app/ui/timed_reveal.dart' show kRevealDuration;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/charts.dart'

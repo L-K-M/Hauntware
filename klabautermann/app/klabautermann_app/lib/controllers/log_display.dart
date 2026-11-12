@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'persisted_setting.dart';
+
 /// A11Y-12's log text sizes, in logical pixels before the system's text
 /// scale.
 const int kLogTextSizeMin = 10;
@@ -67,37 +69,21 @@ final class LogDisplayNotSavedException implements Exception {
 /// `settings.json` and saves every change there; without a save callback,
 /// as in most tests, it is held in memory only. A change applies before it
 /// is saved, as the appearance does.
-final class LogDisplayController extends ChangeNotifier
+final class LogDisplayController extends PersistedSetting<LogDisplay>
     implements LogDisplaySettings {
   LogDisplayController({LogDisplay? display, this._save})
-    : _value = display ?? LogDisplay(),
-      _saved = display ?? LogDisplay();
+    : super(display ?? LogDisplay());
 
-  LogDisplay _value;
-
-  /// The display last known to be in `settings.json`: after a failed save,
-  /// picking the same display again tries the save again.
-  LogDisplay _saved;
   final Future<void> Function(int textSize, bool wrap)? _save;
 
   @override
-  LogDisplay get value => _value;
+  Future<void> setLogDisplay(LogDisplay display) => change(display);
 
   @override
-  Future<void> setLogDisplay(LogDisplay display) async {
-    if (display == _value && display == _saved) return;
-    if (display != _value) {
-      _value = display;
-      notifyListeners();
-    }
-    try {
-      await _save?.call(display.textSize, display.wrap == LogWrap.on);
-      _saved = display;
-    } on Exception catch (error, stackTrace) {
-      Error.throwWithStackTrace(
-        LogDisplayNotSavedException('The log display was not saved: $error'),
-        stackTrace,
-      );
-    }
-  }
+  Future<void>? save(LogDisplay display) =>
+      _save?.call(display.textSize, display.wrap == LogWrap.on);
+
+  @override
+  Exception notSaved(Object error) =>
+      LogDisplayNotSavedException('The log display was not saved: $error');
 }
