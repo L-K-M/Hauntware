@@ -130,6 +130,23 @@ void main() {
           protocolVersion: 1234, records: [record(blobBytes: 8)]);
       expect(request.encodedSizeBytes(), actualBodyBytes(request));
     });
+
+    test('a per-record refusal scope is counted', () {
+      final request = PushRequest(
+        records: [record(blobBytes: 8), record(id: 'b', blobBytes: 3)],
+        refusalScope: PushRefusalScope.record,
+      );
+      expect(request.encodedSizeBytes(), actualBodyBytes(request));
+      expect(
+        PushRequest.bodyBytesFor(
+          recordCount: 2,
+          recordBytes: request.records
+              .fold(0, (sum, r) => sum + r.encodedJsonBytes()),
+          refusalScope: PushRefusalScope.record,
+        ),
+        actualBodyBytes(request),
+      );
+    });
   });
 
   group('PushLimits', () {

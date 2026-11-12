@@ -798,6 +798,65 @@ void main() {
       expect(pull.latestSeq, 0);
     });
 
+    test('an opted-in HTTP push is answered per record', () async {
+      final server = SyncServer(
+        storage: InMemoryStorage(),
+        settings: const ServerSettings(
+          openRegistration: true,
+          maxRecordsPerAccount: 1,
+        ),
+      );
+      final c = await authed(server, 'per-record-quota');
+      final (firstStatus, _) = await c.send(
+        'PUT',
+        '/v1/records',
+        auth: true,
+        body: PushRequest(records: [rec('a', 10, 'd1')]).toJson(),
+      );
+      expect(firstStatus, 200);
+
+      final request = PushRequest(
+        records: [rec('a', 11, 'd1'), rec('b', 11, 'd1')],
+        refusalScope: PushRefusalScope.record,
+      );
+      final (status, body) = await c.send(
+        'PUT',
+        '/v1/records',
+        auth: true,
+        body: request.toJson(),
+      );
+      expect(status, 200);
+      expect(body['results'], [
+        {'id': 'a', 'seq': 2, 'accepted': true},
+      ]);
+      expect(body['refused'], [
+        {'id': 'b', 'reason': 'account_quota_exceeded'},
+      ]);
+      expect(body['latestSeq'], 2);
+
+      // The same push from a client that did not opt in is refused whole,
+      // exactly as before.
+      final (oldStatus, oldBody) = await c.send(
+        'PUT',
+        '/v1/records',
+        auth: true,
+        body: PushRequest(
+          records: [rec('a', 12, 'd1'), rec('b', 12, 'd1')],
+        ).toJson(),
+      );
+      expect(oldStatus, 413);
+      expect(oldBody['error'], 'account_quota_exceeded');
+      final (_, pullBody) = await c.send(
+        'GET',
+        '/v1/sync',
+        auth: true,
+        query: {'since': '0'},
+      );
+      final pull = PullResponse.fromJson(pullBody);
+      expect(pull.records.single.updatedAt, 11);
+      expect(pull.latestSeq, 2);
+    });
+
     test('a record that cannot fit a pull page is never stored', () async {
       final server = SyncServer(
         storage: InMemoryStorage(),
