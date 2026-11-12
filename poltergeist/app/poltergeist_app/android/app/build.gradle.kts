@@ -117,7 +117,11 @@ kotlin {
 // entirely of debug or profile tasks (assembleDebug, installProfile) warns,
 // and any other, release included, fails.
 val unshippedVariantTask = Regex(".+(Debug|Profile)")
-val requestedTasks = gradle.startParameter.taskNames
+// `clean` (`:app:clean`) builds no variant, so `clean assembleDebug` warns
+// too; a request of `clean` alone stays strict.
+val requestedTasks = gradle.startParameter.taskNames.filterNot {
+    it == "clean" || it.endsWith(":clean")
+}
 val licenseStrictMode =
     if (requestedTasks.isNotEmpty() && requestedTasks.all(unshippedVariantTask::matches)) {
         com.mikepenz.aboutlibraries.plugin.StrictMode.WARN
