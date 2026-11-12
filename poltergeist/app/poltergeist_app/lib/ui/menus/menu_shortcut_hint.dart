@@ -32,6 +32,6 @@ class MenuShortcutHint extends StatelessWidget {
   Widget build(BuildContext context) => GhostShortcutHint(
     activator,
     enabled: enabled,
-    color: PoltergeistChrome.of(context).secondaryText,
+    color: PoltergeistChrome.of(context, poltergeistThemeStyle).secondaryText,
   );
 }

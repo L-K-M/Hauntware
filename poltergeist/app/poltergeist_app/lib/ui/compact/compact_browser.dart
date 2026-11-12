@@ -145,7 +145,7 @@ class CompactBrowser extends StatelessWidget {
 
     return Scaffold(
       key: const ValueKey(CompactKey.browser),
-      backgroundColor: PoltergeistChrome.of(context).paneBackground,
+      backgroundColor: PoltergeistChrome.of(context, poltergeistThemeStyle).paneBackground,
       appBar: _SwitchingAppBar(
         child: showsSelection
             ? _selectionBar(context, l10n, pane)
@@ -206,7 +206,7 @@ class CompactBrowser extends StatelessWidget {
     String title,
     PaneController? pane,
   ) {
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final theme = Theme.of(context);
     final subtitle = pane == null ? null : _subtitle(l10n, pane);
     final canFilter = pane != null && pane.verbsEnabled;
@@ -499,7 +499,7 @@ class _CompactLauncherState extends State<_CompactLauncher> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
       children: [
@@ -554,7 +554,7 @@ class _FilterFieldState extends State<_FilterField> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final pane = widget.controller;
     return ListenableBuilder(
       listenable: pane,

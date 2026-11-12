@@ -110,7 +110,7 @@ class _ShellSplitterState extends State<ShellSplitter> {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final colors = Theme.of(context).colorScheme;
     final rtl = Directionality.of(context) == TextDirection.rtl;
     final active = _hovered || _dragging || _focused;
@@ -187,7 +187,7 @@ class ShellSeam extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
     width: shellSeamWidth,
     height: double.infinity,
-    child: ColoredBox(color: color ?? PoltergeistChrome.of(context).separator),
+    child: ColoredBox(color: color ?? PoltergeistChrome.of(context, poltergeistThemeStyle).separator),
   );
 
   /// Floats [handle], [extent] wide, centred over the seam in [row] that

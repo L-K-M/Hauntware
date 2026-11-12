@@ -200,7 +200,7 @@ class _ConnectDialogState extends State<_ConnectDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final servers = widget.servers;
     return Dialog(
       key: const ValueKey('connect.dialog'),
@@ -271,7 +271,7 @@ class _ServerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final foreground = highlighted ? chrome.onSelection : null;
     return Semantics(
       button: true,

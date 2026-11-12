@@ -21,7 +21,7 @@ import 'settings_models.dart';
 final class AppearanceController extends ChangeNotifier
     implements AppearanceSettingsModel {
   AppearanceController({AppAppearance? initial, this._save})
-    : _value = initial ?? AppAppearance.initial;
+    : _value = initial ?? poltergeistInitialAppearance;
 
   AppAppearance _value;
   final Future<void> Function(AppAppearance appearance)? _save;

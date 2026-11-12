@@ -52,7 +52,7 @@ class AlertsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     return ListenableBuilder(
       listenable: center,
       builder: (context, _) {
@@ -111,7 +111,7 @@ class _AlertRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final labelOf = ServerLabelScope.maybeOf(context);
     String serverName(String id) => labelOf?.call(id) ?? id;
 

@@ -133,6 +133,7 @@ void main() {
         await _pump(tester, ServerStateGlyph(glyph));
         final chrome = PoltergeistChrome.of(
           tester.element(find.byType(ServerStateGlyph)),
+          poltergeistThemeStyle,
         );
         final dot = inGlyph(find.byType(Container));
         expect(tester.getSize(dot), const Size(10, 10), reason: glyph.name);
@@ -150,6 +151,7 @@ void main() {
       await _pump(tester, const ServerStateGlyph(ServerIndicatorGlyph.blocked));
       final chrome = PoltergeistChrome.of(
         tester.element(find.byType(ServerStateGlyph)),
+        poltergeistThemeStyle,
       );
 
       final icon = tester.widget<Icon>(inGlyph(find.byType(Icon)));
@@ -231,7 +233,7 @@ void main() {
           }))!;
           final context = tester.element(find.byType(ServerStateGlyph));
           // The tokens ServerStateGlyph paints, as its decoration tests pin.
-          final chrome = PoltergeistChrome.of(context);
+          final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
           final expected = switch (glyph) {
             ServerIndicatorGlyph.connected => chrome.statusConnected,
             ServerIndicatorGlyph.failed => chrome.statusFailed,

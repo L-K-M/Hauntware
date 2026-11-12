@@ -144,7 +144,7 @@ class _RulesDialogState extends State<_RulesDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     return AlertDialog(
       title: Text(l10n.syncRulesTitle),
       scrollable: true,
