@@ -306,8 +306,23 @@ class _DocumentShellState extends State<_DocumentShell>
   }
 
   void _changed() {
-    _rememberRecentDocuments();
+    _scheduleRecentDocuments();
     if (mounted) setState(() {});
+  }
+
+  bool _recentScheduled = false;
+
+  /// The workspace can notify while a frame builds (an editor settling its
+  /// text), and saving the list notifies the settings' own listeners, so
+  /// the list is updated once that work has finished. Bursts of
+  /// notifications collapse into one update.
+  void _scheduleRecentDocuments() {
+    if (_recentScheduled) return;
+    _recentScheduled = true;
+    scheduleMicrotask(() {
+      _recentScheduled = false;
+      if (mounted) _rememberRecentDocuments();
+    });
   }
 
   /// The path each tab was last added to Open Recent under, so a
