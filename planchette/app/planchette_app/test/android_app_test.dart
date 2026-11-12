@@ -59,7 +59,7 @@ void main() {
 
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Don’t Save'));
+      await tester.tap(find.text('Don’t save'));
       await tester.runAsync(app.settings.flush);
       await tester.pumpAndSettle();
       expect(exits, 1);

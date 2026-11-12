@@ -262,6 +262,10 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // The app resolves `~/.ssh/config` for the FL-02 import with Séance's home
 // rule, which also undoes a macOS sandbox's container `HOME`.
 export 'package:seance_core/seance_core.dart' show expandHomePath;
+// A saved log or diagnostic export is remote-sourced, so the export host
+// stamps it with the suite's download mark and owner-only mode (P1-03a).
+export 'package:seance_core/seance_core.dart'
+    show DownloadProvenance, ProvenancePlatform, restrictFileToOwner;
 // The Access tab and panel gating (CN-24, CN-09, SAF-08; 03 §10.4, D51):
 // the access check's rows and the panels' capability rules over the
 // probe's HostProfile, and the quoting of the fix commands the tab copies

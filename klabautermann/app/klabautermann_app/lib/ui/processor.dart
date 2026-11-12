@@ -5,6 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'read_section.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 
 /// Draws a label over its value as the System tab's other facts do; a
@@ -18,7 +19,7 @@ typedef ProcessorFact =
 /// ([inContainer]) the socket, core and logical CPU counts are the host
 /// machine's, so they show as unknown with D50's reason; threads per core,
 /// a property of each core, and the usable CPUs stay.
-class ProcessorSection extends StatefulWidget {
+class ProcessorSection extends StatefulWidget implements HostReadSection {
   const ProcessorSection({
     super.key,
     required this.monitoring,
@@ -27,7 +28,10 @@ class ProcessorSection extends StatefulWidget {
     required this.fact,
   });
 
+  @override
   final MonitoringController monitoring;
+
+  @override
   final String serverId;
   final bool inContainer;
   final ProcessorFact fact;
@@ -36,43 +40,10 @@ class ProcessorSection extends StatefulWidget {
   State<ProcessorSection> createState() => _ProcessorSectionState();
 }
 
-class _ProcessorSectionState extends State<ProcessorSection> {
-  HostPayload? _read;
-  bool _reading = false;
-
-  /// Bumped per read, so only the newest answer lands.
-  int _ticket = 0;
-
+class _ProcessorSectionState extends State<ProcessorSection>
+    with HostReadSectionState<ProcessorSection> {
   @override
-  void initState() {
-    super.initState();
-    unawaited(_load());
-  }
-
-  @override
-  void didUpdateWidget(ProcessorSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.serverId == widget.serverId &&
-        oldWidget.monitoring == widget.monitoring) {
-      return;
-    }
-    _read = null;
-    unawaited(_load());
-  }
-
-  Future<void> _load() async {
-    final ticket = ++_ticket;
-    if (mounted) setState(() => _reading = true);
-    final result = await widget.monitoring.queryHost(
-      widget.serverId,
-      const CpuTopologyQuery(),
-    );
-    if (!mounted || ticket != _ticket) return;
-    setState(() {
-      _read = result.payload;
-      _reading = false;
-    });
-  }
+  HostQuerySpec get hostQuery => const CpuTopologyQuery();
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +55,7 @@ class _ProcessorSectionState extends State<ProcessorSection> {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: OutlinedButton(
-            onPressed: _reading ? null : () => unawaited(_load()),
+            onPressed: hostReading ? null : () => unawaited(readHost()),
             child: Text(l10n.systemProcessorReadAgain),
           ),
         ),
@@ -92,7 +63,7 @@ class _ProcessorSectionState extends State<ProcessorSection> {
     );
   }
 
-  List<Widget> _lines(AppLocalizations l10n) => switch (_read) {
+  List<Widget> _lines(AppLocalizations l10n) => switch (hostRead) {
     null => [
       PanelNotice(
         icon: Icons.hourglass_empty,

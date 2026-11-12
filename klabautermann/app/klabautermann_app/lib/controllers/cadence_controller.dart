@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart' show CadenceProfile;
 
+import 'persisted_setting.dart';
+
 /// The polling budget's presets (SAF-19): [automatic] samples at the
 /// Desktop column's cadence on a computer and the Phone column's on a
 /// phone or tablet (03 §6.4); the others pick a column on any device.
@@ -62,41 +64,24 @@ final class CadenceNotSavedException implements Exception {
 /// engine its 6.4 column whenever the preset changes; without a save
 /// callback, as in most tests, it is held in memory only. A change
 /// applies before it is saved, as the appearance does.
-final class CadenceController extends ChangeNotifier
+final class CadenceController extends PersistedSetting<CadencePreset>
     implements CadenceSettings {
   CadenceController({
     CadencePreset preset = CadencePreset.automatic,
     this._save,
-  }) : _value = preset,
-       _saved = preset;
+  }) : super(preset);
 
-  CadencePreset _value;
-
-  /// The preset last known to be in `settings.json`: after a failed save,
-  /// picking the same preset again tries the save again.
-  CadencePreset _saved;
   final Future<void> Function(String name)? _save;
 
   @override
-  CadencePreset get value => _value;
+  Future<void> setCadence(CadencePreset preset) => change(preset);
 
   @override
-  Future<void> setCadence(CadencePreset preset) async {
-    if (preset == _value && preset == _saved) return;
-    if (preset != _value) {
-      _value = preset;
-      notifyListeners();
-    }
-    try {
-      await _save?.call(preset.name);
-      _saved = preset;
-    } on Exception catch (error, stackTrace) {
-      Error.throwWithStackTrace(
-        CadenceNotSavedException('The polling budget was not saved: $error'),
-        stackTrace,
-      );
-    }
-  }
+  Future<void>? save(CadencePreset preset) => _save?.call(preset.name);
+
+  @override
+  Exception notSaved(Object error) =>
+      CadenceNotSavedException('The polling budget was not saved: $error');
 }
 
 /// The columns a server can be capped at (SAF-19): Desktop would cap

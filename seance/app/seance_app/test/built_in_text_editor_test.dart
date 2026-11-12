@@ -996,6 +996,54 @@ void main() {
     });
   });
 
+  testWidgets('closing during a reload does not offer Save', (tester) async {
+    await tester.runAsync(() async {
+      final remote = _FakeRemoteFileSystem({'/etc/config.txt': 'one\n'});
+      final controller = await _driftController(remote);
+      addTearDown(controller.dispose);
+      final copy = await controller.checkoutRemoteFile(remote.entry('/etc/config.txt'));
+      remote.files['/etc/config.txt'] = 'server side\n';
+      final key = GlobalKey<BuiltInTextEditorScreenState>();
+      await tester.pumpWidget(MaterialApp(home: BuiltInTextEditorScreen(
+        key: key,
+        file: controller.localFile(copy),
+        remotePath: copy.remotePath,
+        remoteFiles: controller,
+      )));
+      await tester.pump();
+      await _pollUntil(tester, () => find.byType(TextField).evaluate().isNotEmpty);
+      await _pollUntil(tester, () =>
+          find.text('This file changed on the server.').evaluate().isNotEmpty);
+      await tester.enterText(find.byType(TextField).first, 'local edit\n');
+      await tester.pump();
+      final started = Completer<void>();
+      final finish = Completer<void>();
+      remote.beforeDownload = () {
+        started.complete();
+        return finish.future;
+      };
+      try {
+        await tester.tap(find.text('Reload'));
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(find.text('Discard and reload'));
+        await _pollUntil(tester, () => started.isCompleted);
+
+        final close = key.currentState!.confirmDiscard();
+        await tester.pump(const Duration(milliseconds: 300));
+        final dialog = find.byType(AlertDialog);
+        expect(dialog, findsOneWidget);
+        expect(find.descendant(of: dialog,
+            matching: find.widgetWithText(FilledButton, 'Save')), findsNothing);
+        await tester.tap(find.descendant(of: dialog, matching: find.text('Cancel')));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(await close, isFalse);
+      } finally {
+        finish.complete();
+      }
+      await _pollUntil(tester, () => _editorText(tester) == 'server side\n');
+    });
+  });
+
   testWidgets('a server-deleted file offers keep-local, not reload', (
     tester,
   ) async {
@@ -1317,6 +1365,7 @@ Future<RemoteFilesController> _driftController(
 /// Minimal in-memory remote: one directory's worth of regular text files.
 class _FakeRemoteFileSystem implements RemoteFileSystem {
   final Map<String, String> files;
+  Future<void> Function()? beforeDownload;
 
   _FakeRemoteFileSystem(this.files);
 
@@ -1357,6 +1406,7 @@ class _FakeRemoteFileSystem implements RemoteFileSystem {
     RemoteTransferCancellation? cancellation,
     bool computeHash = true,
   }) async {
+    await beforeDownload?.call();
     final content = files[path];
     if (content == null) {
       throw RemoteFileException(

@@ -50,8 +50,11 @@ void main() {
     return created;
   }
 
-  TransferQueue newQueue() {
-    final created = TransferQueue(connections: connections);
+  TransferQueue newQueue({DownloadProvenance? provenance}) {
+    final created = TransferQueue(
+      connections: connections,
+      provenance: provenance,
+    );
     createdQueues.add(created);
     return created;
   }
@@ -186,6 +189,27 @@ void main() {
       );
       expect(task.state, TransferTaskState.completed);
       expect(queueEvents.whereType<TransferQueueItemEvent>(), isNotEmpty);
+    });
+
+    test('a managed download marks the checkout file', () async {
+      final marked = <String>[];
+      queue = newQueue(
+        provenance: DownloadProvenance.forHost(
+          ProvenancePlatform.macos,
+          agent: 'Poltergeist',
+          runProcess: (_, arguments) async {
+            marked.add(arguments.last);
+            return ProcessResult(0, 0, '', '');
+          },
+        ),
+      );
+      manager = newManager();
+      await manager.start();
+
+      final entry = await remoteStat('/home/test/file.txt');
+      final record = await manager.checkout(serverId: 's1', entry: entry);
+
+      expect(marked, [manager.localFile(record).path]);
     });
 
     test('an executable remote mode never reaches the checkout', () async {

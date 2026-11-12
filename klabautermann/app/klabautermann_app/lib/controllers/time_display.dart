@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'persisted_setting.dart';
+
 /// Which zone the app shows a server's times in (A11Y-07).
 enum TimeDisplay {
   /// This device's zone, as the system clock shows it.
@@ -40,17 +42,11 @@ final class TimeDisplayNotSavedException implements Exception {
 /// from `settings.json` and saves every change there; without a save
 /// callback, as in most tests, it is held in memory only. A change applies
 /// before it is saved, as the log display does.
-final class TimeDisplayController extends ChangeNotifier
+final class TimeDisplayController extends PersistedSetting<TimeDisplay>
     implements TimeDisplaySettings {
   TimeDisplayController({TimeDisplay display = TimeDisplay.device, this._save})
-    : _value = display,
-      _saved = display;
+    : super(display);
 
-  TimeDisplay _value;
-
-  /// The display last known to be in `settings.json`: after a failed save,
-  /// picking the same display again tries the save again.
-  TimeDisplay _saved;
   final Future<void> Function(bool serverTimes)? _save;
 
   /// The last change's apply and save: a change waits for the one before
@@ -59,30 +55,18 @@ final class TimeDisplayController extends ChangeNotifier
   Future<void> _changes = Future<void>.value();
 
   @override
-  TimeDisplay get value => _value;
+  Future<void> setTimeDisplay(TimeDisplay display) {
+    final queued = _changes.then((_) => change(display));
+    // A failed save leaves the queue running; its caller sees the error.
+    _changes = queued.then<void>((_) {}, onError: (Object _) {});
+    return queued;
+  }
 
   @override
-  Future<void> setTimeDisplay(TimeDisplay display) {
-    final change = _changes.then((_) => _apply(display));
-    // A failed save leaves the queue running; its caller sees the error.
-    _changes = change.then<void>((_) {}, onError: (Object _) {});
-    return change;
-  }
+  Future<void>? save(TimeDisplay display) =>
+      _save?.call(display == TimeDisplay.server);
 
-  Future<void> _apply(TimeDisplay display) async {
-    if (display == _value && display == _saved) return;
-    if (display != _value) {
-      _value = display;
-      notifyListeners();
-    }
-    try {
-      await _save?.call(display == TimeDisplay.server);
-      _saved = display;
-    } on Exception catch (error, stackTrace) {
-      Error.throwWithStackTrace(
-        TimeDisplayNotSavedException('The time display was not saved: $error'),
-        stackTrace,
-      );
-    }
-  }
+  @override
+  Exception notSaved(Object error) =>
+      TimeDisplayNotSavedException('The time display was not saved: $error');
 }

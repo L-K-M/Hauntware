@@ -2014,6 +2014,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearanceSlotAccent => 'Accent';
 
   @override
+  String get appearanceAccentAdjusted =>
+      'Low contrast: links and indicators use an adjusted colour.';
+
+  @override
+  String get appearanceChosenAccentPreview => 'Chosen accent';
+
+  @override
+  String get appearanceAdjustedAccentPreview => 'Adjusted interface colour';
+
+  @override
+  String get appearanceUseAdjustedAccent => 'Use adjusted colour';
+
+  @override
   String get appearanceSlotSurface => 'Surface';
 
   @override
@@ -2519,7 +2532,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get backupSwitchAdoptFleet => 'Use shared key';
+  String get backupSwitchAdoptFleet => 'Trust the new key';
 
   @override
   String get backupSwitchDone =>

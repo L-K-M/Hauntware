@@ -10,11 +10,11 @@
 // question; what is here is Poltergeist's own.
 import 'package:flutter/services.dart';
 import 'package:ghost_keystore/app_lock.dart' show AppLockSettings;
+import '../../theme/theme_presets.dart';
 import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../theme/app_appearance.dart';
-import '../../theme/theme_palette.dart';
 import '../bookmark_backup_service.dart'
     show BackupSwitchOutcome, RetainedBackupAccount;
 import '../editor_font.dart';
@@ -236,7 +236,7 @@ Map<String, Object?> encodeAppearance(AppAppearance appearance) => {
 };
 
 AppAppearance decodeAppearance(Map<String, Object?> json) => AppAppearance(
-  palette: ThemePalette.decodeStored(json[SettingsLinkKey.palette.name]),
+  palette: poltergeistThemeCodec.decodeStored(json[SettingsLinkKey.palette.name]),
   mode: ThemeModePreference.values.byName(
     json[SettingsLinkKey.mode.name]! as String,
   ),

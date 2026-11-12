@@ -81,6 +81,13 @@ void main() {
           encryptionPassphrase: 'pp',
         ),
         const RunSyncRound(),
+        const ReadPinConflicts(),
+        const ResolvePinConflict(
+          'alpha.example.com:22',
+          keepLocal: true,
+          localFingerprintSha256: 'SHA256:local',
+          pulledFingerprintSha256: 'SHA256:pulled',
+        ),
         AnswerKeystore(3, KeystoreMasterKey(Uint8List.fromList([1, 2]))),
         const NewRecoveryCode(requestId: 'new-1'),
         const SetRecoveryCode(requestId: 'set-1', code: 'AAAA-AAAA'),
@@ -375,6 +382,13 @@ void main() {
           ),
           failure: SyncFailure.credentialsRejected,
         ),
+        PinConflictsChanged([
+          SyncPinConflict(
+            locator: 'alpha.example.com:22',
+            localFingerprintSha256: 'SHA256:local',
+            pulledFingerprintSha256: 'SHA256:pulled',
+          ),
+        ]),
         const KeystoreRequest(4, KeystorePutApiKey('sync.token', 't')),
         const RecoveryCodeGenerated(requestId: 'new-1', code: 'AAAA-AAAA'),
         const RecoveryStatus(requestId: 'status-1', configured: true),

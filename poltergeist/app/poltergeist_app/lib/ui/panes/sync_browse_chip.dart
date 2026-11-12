@@ -67,7 +67,7 @@ class SyncBrowseChip extends StatelessWidget {
 
   Widget _build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final l10n = AppLocalizations.of(context);
     final cause = link.cause;
     final suspended = cause != null;

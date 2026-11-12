@@ -54,6 +54,26 @@ void main() {
       expect(() => ring.valueAt(-1, 1), throwsRangeError);
     });
 
+    test('a clear drops every sample and gap', () {
+      final ring = _ring(capacity: 3);
+      for (var i = 0; i < 4; i++) {
+        ring.add(_at(i), [i.toDouble()]);
+      }
+      ring.openGap(_at(4), ChartGapReason.disconnected);
+      final version = ring.version;
+
+      ring.clear();
+      expect(ring.length, 0);
+      expect(ring.gaps, isEmpty);
+      expect(ring.version, greaterThan(version));
+
+      ring.add(_at(5), [5]);
+      ring.add(_at(6), [6]);
+      expect(ring.length, 2);
+      expect([ring.microsAt(0), ring.microsAt(1)], [_micros(5), _micros(6)]);
+      expect([ring.joinsPrevious(0), ring.joinsPrevious(1)], [false, true]);
+    });
+
     test('closes an open gap with the next sample, which does not join', () {
       final ring = _ring();
       ring.add(_at(0), [1]);

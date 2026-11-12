@@ -134,6 +134,49 @@ void main() {
       expect(await probeVaultKey(keys, vaultFile), hasLength(32));
     });
 
+    test('a recovery-only vault can heal a lost keystore key', () async {
+      final recovery = VaultRecovery(FileVaultStore(vaultFile));
+      await recovery.saveCode(
+        recovery.newCode(),
+        vaultKey: secureRandomBytes(32),
+      );
+      final before = await vaultFile.readAsBytes();
+      final storage = _ToggleableKeystore();
+
+      final healed = await probeVaultKey(
+        poltergeistMasterKeyManager(storage),
+        vaultFile,
+      );
+
+      expect(healed, hasLength(32));
+      expect(storage.writes, 1);
+      expect(await vaultFile.readAsBytes(), before);
+      expect(await recovery.configured(healed), isFalse);
+      await recovery.saveCode(recovery.newCode(), vaultKey: healed!);
+      expect(await recovery.configured(healed), isTrue);
+    });
+
+    test('a recovery entry does not hide sealed credentials', () async {
+      final oldKey = secureRandomBytes(32);
+      final store = FileVaultStore(vaultFile);
+      final recovery = VaultRecovery(store);
+      await recovery.saveCode(recovery.newCode(), vaultKey: oldKey);
+      await SecretVault(store, oldKey).putSecret(
+        const Secret(id: 'a', kind: SecretKind.password, value: 'pw'),
+      );
+      final before = await vaultFile.readAsBytes();
+      final storage = _ToggleableKeystore();
+
+      await expectLater(
+        probeVaultKey(poltergeistMasterKeyManager(storage), vaultFile),
+        throwsA(isA<MasterKeyUnavailableException>()),
+      );
+
+      expect(storage.writes, 0);
+      expect(await vaultFile.readAsBytes(), before);
+      expect((await SecretVault(store, oldKey).getSecret('a'))!.value, 'pw');
+    });
+
     test('a stored key is returned beside a sealed vault', () async {
       await vaultFile.writeAsString('{"a": "sealed"}');
       final keys = poltergeistMasterKeyManager(_ToggleableKeystore());

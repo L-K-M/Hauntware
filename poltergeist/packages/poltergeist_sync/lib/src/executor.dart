@@ -475,7 +475,9 @@ final class SyncExecutor {
     this.mtimeUnreliableRight = false,
     Future<void> Function(String destinationPath)? flushLocalDestination,
     RemoteTrash? trash,
+    DownloadProvenance? provenance,
   }) : _trash = trash ?? RemoteTrash(),
+       _provenance = provenance ?? DownloadProvenance(agent: productName),
        _flushLocalDestination =
            flushLocalDestination ?? const TransferJournalIo().flushLocalFile;
 
@@ -513,6 +515,11 @@ final class SyncExecutor {
   bool mtimeUnreliableRight;
 
   final RemoteTrash _trash;
+
+  /// P1-03a's download mark on files a remote source lands on local
+  /// storage — awaited per file like Séance's marking; failures are
+  /// logged inside it, never thrown.
+  final DownloadProvenance _provenance;
 
   /// The local copy-to-trash barrier shared with queue moves. A failed
   /// flush must leave the source intact. Remote VFS handles have no
@@ -1213,6 +1220,9 @@ final class _RunSession {
           destAbs,
           liveSource,
         );
+        if (destFs is LocalFileSystem && srcFs is! LocalFileSystem) {
+          await executor._provenance.markDownloaded(destAbs);
+        }
         return _ItemOutcome(
           observedMtimeSecs: stamp.observed,
           setstatIgnored: stamp.ignored,

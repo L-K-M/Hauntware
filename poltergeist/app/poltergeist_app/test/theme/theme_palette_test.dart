@@ -14,7 +14,7 @@ import 'package:poltergeist_app/theme/theme_presets.dart';
 /// decode a hand-edited settings file gets, and the preset identity that
 /// names a palette.
 void main() {
-  ThemePalette roundTrip(ThemePalette palette) => ThemePalette.fromJson(
+  ThemePalette roundTrip(ThemePalette palette) => poltergeistThemeCodec.fromJson(
     (jsonDecode(jsonEncode(palette.toJson())) as Map).cast<String, Object?>(),
   );
 
@@ -65,7 +65,7 @@ void main() {
 
   group('lenient decode', () {
     test('an empty object is Poltergeist, the all-Automatic preset', () {
-      final palette = ThemePalette.fromJson(const {});
+      final palette = poltergeistThemeCodec.fromJson(const {});
       expect(palette.name, ThemePresets.poltergeist.name);
       expect(palette.accent, ThemePresets.poltergeist.accent);
       for (final slot in ThemeSlot.values) {
@@ -78,7 +78,7 @@ void main() {
     });
 
     test('a bad value costs only itself', () {
-      final palette = ThemePalette.fromJson(const {
+      final palette = poltergeistThemeCodec.fromJson(const {
         'name': 'Mine',
         'accent': 'crimson',
         'surface': '#102030',
@@ -145,13 +145,13 @@ void main() {
   "cornerScale": 1.0
 }
 ''';
-      final pasted = ThemePalette.tryParse(seance);
+      final pasted = poltergeistThemeCodec.tryParse(seance);
       expect(pasted, ThemePresets.solarized);
       expect(pasted?.matchingPreset, same(ThemePresets.solarized));
       expect(pasted?.toJson().containsKey('terminal'), isFalse);
       // Séance's own default is a theme like any other here: its violet,
       // under its own name.
-      final violet = ThemePalette.tryParse(
+      final violet = poltergeistThemeCodec.tryParse(
         '{"name": "Séance", "accent": "#6B5BD2", "cornerScale": 1}',
       );
       expect(violet?.name, 'Séance');
@@ -161,19 +161,19 @@ void main() {
 
     test('a terminal block alone is not a theme', () {
       expect(
-        ThemePalette.tryParse('{"terminal": {"background": "#000000"}}'),
+        poltergeistThemeCodec.tryParse('{"terminal": {"background": "#000000"}}'),
         isNull,
       );
     });
 
     test('names are trimmed and a blank one names what it matches', () {
-      expect(ThemePalette.fromJson(const {'name': '  Ocean  '}).name, 'Ocean');
+      expect(poltergeistThemeCodec.fromJson(const {'name': '  Ocean  '}).name, 'Ocean');
       expect(
-        ThemePalette.fromJson(const {'name': '   ', 'accent': '#123456'}).name,
+        poltergeistThemeCodec.fromJson(const {'name': '   ', 'accent': '#123456'}).name,
         ThemePalette.customName,
       );
       expect(
-        ThemePalette.fromJson({
+        poltergeistThemeCodec.fromJson({
           ...ThemePresets.paper.toJson(),
           'name': '',
         }).name,
@@ -187,7 +187,7 @@ void main() {
 
     test('the corner scale is clamped, and NaN is the designed corner', () {
       double corners(Object value) =>
-          ThemePalette.fromJson({'cornerScale': value}).cornerScale;
+          poltergeistThemeCodec.fromJson({'cornerScale': value}).cornerScale;
       expect(corners(-3), ThemePalette.minCornerScale);
       expect(corners(9), ThemePalette.maxCornerScale);
       expect(corners(double.infinity), ThemePalette.maxCornerScale);
@@ -212,7 +212,7 @@ void main() {
         const {'name': 'Mine'},
       ]) {
         expect(
-          ThemePalette.decodeStored(stored),
+          poltergeistThemeCodec.decodeStored(stored),
           ThemePresets.initial,
           reason: '$stored',
         );
@@ -225,13 +225,13 @@ void main() {
       // replaces, so a key the gate forgets fails here.
       final full = ThemePresets.paper.withFontFamily('Inter').toJson();
       for (final key in full.keys.where((key) => key != 'name')) {
-        final decoded = ThemePalette.decodeStored({key: full[key]});
+        final decoded = poltergeistThemeCodec.decodeStored({key: full[key]});
         expect(decoded.toJson()[key], full[key], reason: key);
       }
     });
 
     test('only colours drawn over something keep their alpha', () {
-      final palette = ThemePalette.fromJson(const {
+      final palette = poltergeistThemeCodec.fromJson(const {
         'accent': '#FF000080',
         'surface': '#10203080',
         'hairline': '#FFFFFF33',
@@ -312,7 +312,7 @@ void main() {
       final text = const JsonEncoder.withIndent(
         '  ',
       ).convert(ThemePresets.vapor.toJson());
-      expect(ThemePalette.tryParse(text), ThemePresets.vapor);
+      expect(poltergeistThemeCodec.tryParse(text), ThemePresets.vapor);
     });
 
     test('text that is not a theme is refused', () {
@@ -325,12 +325,12 @@ void main() {
         '{"foo": 1}',
         '{unquoted: 1}',
       ]) {
-        expect(ThemePalette.tryParse(text), isNull, reason: text);
+        expect(poltergeistThemeCodec.tryParse(text), isNull, reason: text);
       }
     });
 
     test('a partial theme pastes leniently', () {
-      final pasted = ThemePalette.tryParse('{"accent": "#0af"}');
+      final pasted = poltergeistThemeCodec.tryParse('{"accent": "#0af"}');
       expect(pasted?.accent, const Color(0xFF00AAFF));
       expect(pasted?.surface, isNull);
     });

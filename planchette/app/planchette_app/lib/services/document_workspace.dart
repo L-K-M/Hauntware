@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as paths;
 import 'package:planchette_editor/planchette_editor.dart';
+import 'package:seance_core/seance_core.dart' show DownloadProvenance;
 
 import 'document_store.dart';
 import 'document_publication.dart';
@@ -189,9 +190,11 @@ final class DocumentWorkspace extends ChangeNotifier {
     paths.Context? pathContext,
     TextToolHistory? toolHistory,
     FolderWorkspace? folders,
+    DownloadProvenance? provenance,
   }) : _paths = pathContext ?? paths.context,
        toolHistory = toolHistory ?? TextToolHistory(),
-       folders = folders ?? FolderWorkspace() {
+       folders = folders ?? FolderWorkspace(),
+       _provenance = provenance ?? DownloadProvenance(agent: 'Planchette') {
     this.folders.addListener(_notify);
   }
 
@@ -201,6 +204,12 @@ final class DocumentWorkspace extends ChangeNotifier {
   static const Object _quitRefusal = Object();
 
   final paths.Context _paths;
+
+  /// P1-03a's download mark for files whose content came from a server:
+  /// a remote document's local copy and its HTML export. Awaited per file;
+  /// failures are logged inside it, never thrown.
+  final DownloadProvenance _provenance;
+
   final DocumentStore store;
   final DocumentDialogs dialogs;
   final FolderWorkspace folders;
@@ -739,6 +748,9 @@ final class DocumentWorkspace extends ChangeNotifier {
           expectedSha256: target.digest,
           metadata: tab.editor.metadata,
         );
+        // Only reached when tab._publication != null: the saved copy is
+        // remote-sourced, so it carries the download mark.
+        await _provenance.markDownloaded(target.path);
         _clearScope(tab);
         return true;
       }
@@ -1019,6 +1031,11 @@ final class DocumentWorkspace extends ChangeNotifier {
         source: null,
         expectedSha256: digest,
       );
+      // A remote document's export is remote-sourced; a local document's
+      // page is locally authored and stays unmarked.
+      if (tab._publication != null) {
+        await _provenance.markDownloaded(target);
+      }
       _clearScope(scope);
       return true;
     } catch (error) {

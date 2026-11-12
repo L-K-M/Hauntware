@@ -7,6 +7,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/admin_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'admin_mode_chip.dart' show AdminScope;
+import 'read_section.dart';
 import 'sortable_table.dart';
 import 'system_panel.dart' show PanelSection;
 
@@ -123,13 +124,14 @@ List<SortableTableColumn<SmartDisk>> driveColumns(
 /// on request in admin mode, since smartctl needs the drives' device
 /// nodes. The last read stays until the next one, and a server switch
 /// forgets it.
-class DriveHealthSection extends StatefulWidget {
+class DriveHealthSection extends StatefulWidget implements AdminReadSection {
   const DriveHealthSection({
     super.key,
     required this.serverId,
     required this.tableId,
   });
 
+  @override
   final String serverId;
 
   /// The table's identity for its keys and remembered widths.
@@ -139,35 +141,13 @@ class DriveHealthSection extends StatefulWidget {
   State<DriveHealthSection> createState() => _DriveHealthSectionState();
 }
 
-class _DriveHealthSectionState extends State<DriveHealthSection> {
-  SmartReport? _report;
-
-  /// The servers with a read out. A read outlives a switch away from its
-  /// server, so a switch back must still see it and offer no second one.
-  final _readingServers = <String>{};
-
-  bool get _reading => _readingServers.contains(widget.serverId);
+class _DriveHealthSectionState extends State<DriveHealthSection>
+    with AdminReadSectionState<DriveHealthSection, SmartReport> {
   TableSort? _sort;
 
   @override
-  void didUpdateWidget(DriveHealthSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.serverId == widget.serverId) return;
-    _report = null;
-  }
-
-  Future<void> _read(AdminController admin) async {
-    // A second tap before the button gives way would run smartctl twice.
-    if (_reading) return;
-    final serverId = widget.serverId;
-    setState(() => _readingServers.add(serverId));
-    final report = await admin.readSmart(serverId);
-    if (!mounted) return;
-    setState(() {
-      _readingServers.remove(serverId);
-      if (serverId == widget.serverId) _report = report;
-    });
-  }
+  Future<SmartReport> readReport(AdminController admin, String serverId) =>
+      admin.readSmart(serverId);
 
   @override
   Widget build(BuildContext context) {
@@ -175,7 +155,7 @@ class _DriveHealthSectionState extends State<DriveHealthSection> {
     final admin = AdminScope.maybeOf(context);
     final adminOn =
         admin?.stateFor(widget.serverId)?.phase == AdminModePhase.on;
-    final report = _report;
+    final report = adminReport;
     final failure = report?.failure;
     final disks = report?.disks ?? const <SmartDisk>[];
 
@@ -207,7 +187,7 @@ class _DriveHealthSectionState extends State<DriveHealthSection> {
           ),
         if ((report?.notRead ?? 0) > 0)
           Text(l10n.systemDriveHealthNotRead(report!.notRead)),
-        if (_reading)
+        if (adminReading)
           Text(l10n.systemDriveHealthReading)
         else if (!adminOn || admin == null)
           Text(l10n.systemDriveHealthAdminNeeded)
@@ -215,7 +195,7 @@ class _DriveHealthSectionState extends State<DriveHealthSection> {
           Align(
             alignment: AlignmentDirectional.centerStart,
             child: OutlinedButton(
-              onPressed: () => unawaited(_read(admin)),
+              onPressed: () => unawaited(readAdmin(admin)),
               child: Text(
                 report == null
                     ? l10n.systemDriveHealthRead

@@ -13,6 +13,8 @@ dependencies:
   # All hosts consume the same local shared widgets.
   ghost_ui:
     path: ../../../planchette/packages/ghost_ui
+  ghost_theme:
+    path: ../../../planchette/packages/ghost_theme
   # SHA-256 scope and run keys for the sync trash (sync_trash_activity.dart).
   crypto: 3.0.8
   # OS file drop-in for the panes (02 §5.1, D14); desktop platforms only.

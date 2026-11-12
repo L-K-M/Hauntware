@@ -20,7 +20,7 @@ Future<void> confirmAndCloseTab(
   final tab = state.tabById(tabId);
   if (tab == null) return;
   if (tab is EditorTab) {
-    if (await _editorMayClose(context, tab)) await state.closeTab(tabId);
+    if (await confirmEditorClose(context, tab)) await state.closeTab(tabId);
     return;
   }
   if (tab is! TerminalSession) return;
@@ -29,7 +29,7 @@ Future<void> confirmAndCloseTab(
   final session = tab;
   for (final editor in state.editorTabsOwnedBy(session)) {
     if (!context.mounted) return;
-    if (!await _editorMayClose(context, editor)) return;
+    if (!await confirmEditorClose(context, editor)) return;
   }
   if (!context.mounted) return;
   if (!await _runningCommandMayEnd(context, session)) return;
@@ -72,7 +72,10 @@ Future<void> confirmAndCloseTab(
 /// its state is mounted, or — when the widget is somehow unreachable —
 /// through a plain dialog on the caller's context, so a close never
 /// silently does nothing while unsaved text is at stake.
-Future<bool> _editorMayClose(BuildContext context, EditorTab tab) async {
+///
+/// Public because deleting a server drops its editor tabs without the tab
+/// strip's own close path; the delete asks through the same guard.
+Future<bool> confirmEditorClose(BuildContext context, EditorTab tab) async {
   if (!tab.dirty.value) return true;
   final confirmed = await tab.editorKey.currentState?.confirmDiscard();
   if (confirmed != null) return confirmed;

@@ -2,18 +2,9 @@
 
 ## Unreleased
 
-- **Optional device-authentication lock.** Settings → General can require
-  your device's unlock before future saved-credential reads. It is off
-  by default, locks again after five minutes away, and leaves existing
-  connections running. Authentication refusal stays distinct from an
-  unavailable credential store.
-- **Recovery codes for saved passwords and keys.** Settings → Backup →
-  Recovery shows a code once and keeps the setup in the device's vault.
-  Export your credentials, encrypted, to restore here or on another
-  device, keeping existing entries unless you choose to replace them.
-  Saving a first
-  credential offers the code once; "Not now" is remembered. The export
-  uses Séance's `seance-secrets` format, so it opens in either app.
+- **The account switch words its key choice like Settings.** The held-key
+  dialog's adopt button now reads Trust the new key, matching the enrolled
+  view and Séance.
 - **Host-key conflicts show both keys.** When a synced host key differs
   from the one this device trusts, Settings and the account switch now
   show both fingerprints, so you can check them against the server's own
@@ -33,6 +24,23 @@
   whole mode, so a hostile server could leave a setuid or world-writable
   file on your disk. Downloads now keep only the read, write and execute
   bits your umask allows, as `sftp get` and Séance do.
+- **Downloads are marked as untrusted.** Files Poltergeist writes from a
+  server, including Download To, sync downloads and managed checkouts,
+  now carry a Windows Mark-of-the-Web stream or a macOS quarantine
+  attribute, as Séance's downloads do. Marking is best effort and only
+  logged on failure.
+- **Optional device-authentication lock.** Settings → General can require
+  your device's unlock before future saved-credential reads. It is off
+  by default, locks again after five minutes away, and leaves existing
+  connections running. Authentication refusal stays distinct from an
+  unavailable credential store.
+- **Recovery codes for saved passwords and keys.** Settings → Backup →
+  Recovery shows a code once and keeps the setup in the device's vault.
+  Export your credentials, encrypted, to restore here or on another
+  device, keeping existing entries unless you choose to replace them.
+  Saving a first
+  credential offers the code once; "Not now" is remembered. The export
+  uses Séance's `seance-secrets` format, so it opens in either app.
 - **The keyboard follows a sidebar location.** Choosing a location or a
   saved workspace in the sidebar now moves the keyboard to its file list,
   so the arrow keys move through files instead of the sidebar. Page Up
@@ -51,6 +59,8 @@
   Text fields keep their own editing history.
 - Closing edited text offers Save, Don't save or Cancel. A failed save
   or upload keeps the editor open, including when you choose Save during Quit.
+- The editor's close dialog comes from the shared Ghost UI package, as in
+  Planchette and Séance; its labels are unchanged.
 - Leading controls stay clear of the full-screen traffic lights. AltGr
   types characters without triggering the Ctrl+Alt pane shortcuts.
 - **The header band lines up.** The inspector's tabs are as tall as the
@@ -229,6 +239,12 @@
 - **Sidebar failures notify at the top.** When a sidebar change such as
   a rename or a saved location can't be saved, its notice appears at the
   top of the window like the app's other notices, not at the bottom.
+- **The theme stack is shared.** The theme model, presets, builder and
+  Appearance editor now come from the shared `ghost_theme` package, as
+  Séance's and Klabautermann's do. Stored themes, preset names and the
+  JSON a copied theme carries are unchanged. A chosen accent with low
+  contrast now explains that links and indicators use an adjusted
+  colour, with a button to take the suggested accessible colour.
 
 ## 1.9.0 — first suite release (2026-10-04)
 

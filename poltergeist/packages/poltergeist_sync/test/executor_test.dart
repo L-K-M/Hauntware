@@ -134,6 +134,105 @@ final class _SetstatDenyingFs extends LocalFileSystem {
   );
 }
 
+/// A [LocalFileSystem] behind a non-local adapter type: the executor's
+/// provenance rule reads the endpoint's type, so a "remote" side must
+/// not itself be a LocalFileSystem even though its bytes live on this
+/// disk. Forwards the whole VFS contract unchanged.
+final class _PretendRemoteFs implements RemoteFileSystem {
+  _PretendRemoteFs(this._inner);
+
+  final LocalFileSystem _inner;
+
+  @override
+  Future<String> canonicalize(String path) => _inner.canonicalize(path);
+
+  @override
+  Future<List<RemoteFileEntry>> listDirectory(String path) =>
+      _inner.listDirectory(path);
+
+  @override
+  Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) =>
+      _inner.stat(path, followLinks: followLinks);
+
+  @override
+  Future<void> setMode(String path, int permissions) =>
+      _inner.setMode(path, permissions);
+
+  @override
+  Future<void> setTimes(
+    String path, {
+    DateTime? accessedAt,
+    DateTime? modifiedAt,
+  }) => _inner.setTimes(
+    path,
+    accessedAt: accessedAt,
+    modifiedAt: modifiedAt,
+  );
+
+  @override
+  Future<void> setOwner(String path, {int? uid, int? gid}) =>
+      _inner.setOwner(path, uid: uid, gid: gid);
+
+  @override
+  Future<String> readSymbolicLink(String path) =>
+      _inner.readSymbolicLink(path);
+
+  @override
+  Future<void> createSymbolicLink(String linkPath, String targetPath) =>
+      _inner.createSymbolicLink(linkPath, targetPath);
+
+  @override
+  Future<void> createDirectory(String path) => _inner.createDirectory(path);
+
+  @override
+  Future<void> rename(
+    String oldPath,
+    String newPath, {
+    bool overwrite = false,
+  }) => _inner.rename(oldPath, newPath, overwrite: overwrite);
+
+  @override
+  Future<void> delete(RemoteFileEntry entry) => _inner.delete(entry);
+
+  @override
+  Future<RemoteFileEntry> download(
+    String path,
+    StreamSink<List<int>> destination, {
+    RemoteTransferProgress? onProgress,
+    RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
+  }) => _inner.download(
+    path,
+    destination,
+    onProgress: onProgress,
+    cancellation: cancellation,
+    computeHash: computeHash,
+  );
+
+  @override
+  Future<RemoteFileEntry> upload(
+    String path,
+    Stream<List<int>> content, {
+    int? length,
+    bool overwrite = false,
+    int? preserveMode,
+    RemoteFileEntry? expectedTarget,
+    RemoteTransferProgress? onProgress,
+    RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
+  }) => _inner.upload(
+    path,
+    content,
+    length: length,
+    overwrite: overwrite,
+    preserveMode: preserveMode,
+    expectedTarget: expectedTarget,
+    onProgress: onProgress,
+    cancellation: cancellation,
+    computeHash: computeHash,
+  );
+}
+
 /// A LocalFileSystem whose renames into the trash root throw
 /// EXDEV — the cross-filesystem trash move shape (05 §8 rail 5's
 /// local fallback trigger).
@@ -3582,5 +3681,86 @@ void main() {
         );
       },
     );
+  });
+
+  group('download provenance', () {
+    SyncExecutor remoteLeftExecutor(List<String> marked) => SyncExecutor(
+      leftFileSystem: _PretendRemoteFs(LocalFileSystem()),
+      rightFileSystem: rightFs,
+      leftRoot: leftRoot.path,
+      rightRoot: rightRoot.path,
+      syncRunsDirectory: runsDir.path,
+      deviceId: deviceId,
+      trashPathStyleLeft: _nativeTrashPathStyle,
+      trashPathStyleRight: _nativeTrashPathStyle,
+      provenance: DownloadProvenance.forHost(
+        ProvenancePlatform.macos,
+        agent: 'Poltergeist',
+        runProcess: (_, arguments) async {
+          marked.add(arguments.last);
+          return ProcessResult(0, 0, '', '');
+        },
+      ),
+    );
+
+    test('a remote→local copy marks the landed file', () async {
+      final marked = <String>[];
+      executor = remoteLeftExecutor(marked);
+      await writeFile(
+        leftRoot,
+        'new.txt',
+        'new-content',
+        mtimeSecs: 1600000000,
+      );
+      final plan = makePlan([
+        item(
+          'new.txt',
+          left: await snapOf(leftRoot, 'new.txt'),
+          suggested: SyncActionType.copyLeftToRight,
+        ),
+      ], updateRules);
+
+      final run = await executor.run(plan, pairId: pairId);
+
+      expect(find(plan, 'new.txt')!.status, SyncItemStatus.done);
+      expect(
+        await File('${rightRoot.path}/new.txt').readAsString(),
+        'new-content',
+      );
+      expect(marked, [remoteJoin(rightRoot.path, 'new.txt')]);
+      expect(run.journal.items, isNotEmpty);
+    });
+
+    test('a local→remote copy marks nothing', () async {
+      final marked = <String>[];
+      executor = remoteLeftExecutor(marked);
+      await writeFile(
+        rightRoot,
+        'out.txt',
+        'outbound',
+        mtimeSecs: 1600000000,
+      );
+      final plan = makePlan([
+        item(
+          'out.txt',
+          right: await snapOf(rightRoot, 'out.txt'),
+          suggested: SyncActionType.copyRightToLeft,
+          reason: SyncReason.onlyOnRight,
+        ),
+      ], const SyncRuleSet(
+        direction: SyncDirection.rightToLeft,
+        deletions: DeletionPolicy.none,
+        backups: BackupPolicy.trash,
+      ));
+
+      await executor.run(plan, pairId: pairId);
+
+      expect(find(plan, 'out.txt')!.status, SyncItemStatus.done);
+      expect(
+        await File('${leftRoot.path}/out.txt').readAsString(),
+        'outbound',
+      );
+      expect(marked, isEmpty);
+    });
   });
 }

@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show SecretsRestoreSummary, VaultRestorePolicy;
+    show SecretsRestoreSummary, SyncPinConflict, VaultRestorePolicy;
 
 import '../../controllers/account_size.dart';
 import '../../controllers/admin_memory.dart';
@@ -24,6 +24,7 @@ import '../../controllers/pin_publication_controller.dart';
 import '../../controllers/recovery_controller.dart';
 import '../../controllers/safety_controller.dart';
 import '../../controllers/sync_secrets_controller.dart';
+import '../../controllers/sync_controller.dart' show PinConflictsSettings;
 import '../../controllers/threshold_controller.dart';
 import '../../ui/charts/charts.dart' show ChartThresholds;
 import '../../ui/threshold_scope.dart';
@@ -172,6 +173,21 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     (method, argument) => invoke(method.name, argument),
   );
 
+  /// The Sync tab's host-key conflicts, from the latest snapshot.
+  late final RemotePinConflicts pinConflicts = RemotePinConflicts._(
+    (locator, localFingerprintSha256, pulledFingerprintSha256, keepLocal) =>
+        invoke(
+          SettingsLinkMethod.resolvePinConflict.name,
+          {
+            SettingsLinkKey.locator.name: locator,
+            SettingsLinkKey.localFingerprintSha256.name: localFingerprintSha256,
+            SettingsLinkKey.pulledFingerprintSha256.name:
+                pulledFingerprintSha256,
+            SettingsLinkKey.keepLocal.name: keepLocal,
+          },
+        ),
+  );
+
   /// The Sync tab's account size (SYN-09), from the latest snapshot.
   final ValueNotifier<AccountSize?> accountSize = ValueNotifier(null);
 
@@ -227,6 +243,9 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
         snapshot[SettingsLinkKey.pinPublication.name] as Map<Object?, Object?>?,
       ),
     );
+    pinConflicts._apply(
+      decodePinConflicts(snapshot[SettingsLinkKey.pinConflicts.name]),
+    );
     accountSize.value = decodeAccountSize(
       snapshot[SettingsLinkKey.accountSize.name],
     );
@@ -258,6 +277,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     _thresholds.dispose();
     syncSecrets.dispose();
     pinPublication.dispose();
+    pinConflicts.dispose();
     accountSize.dispose();
     _recovery.dispose();
     monitorSet.dispose();
@@ -585,6 +605,64 @@ final class RemoteSyncSecrets extends ChangeNotifier
   @override
   Future<void> setSyncSecrets(bool enabled) async {
     await _call(enabled);
+  }
+}
+
+/// [PinConflictsSettings] over the link: the app's quarantine diff as the
+/// latest snapshot carries it, and resolutions that run in the app's
+/// isolate. [resolving] tracks this window's own request, since the app
+/// answers it only when the engine has applied it.
+final class RemotePinConflicts extends ChangeNotifier
+    implements PinConflictsSettings {
+  RemotePinConflicts._(this._call);
+
+  final Future<Object?> Function(
+    String locator,
+    String localFingerprintSha256,
+    String pulledFingerprintSha256,
+    bool keepLocal,
+  ) _call;
+
+  List<SyncPinConflict> _value = const [];
+  bool _resolving = false;
+  bool _disposed = false;
+
+  void _apply(List<SyncPinConflict> conflicts) {
+    if (listEquals(conflicts, _value)) return;
+    _value = List.unmodifiable(conflicts);
+    notifyListeners();
+  }
+
+  @override
+  List<SyncPinConflict> get conflicts => _value;
+
+  @override
+  bool get resolving => _resolving;
+
+  @override
+  Future<void> resolvePinConflict(
+    SyncPinConflict conflict, {
+    required bool keepLocal,
+  }) async {
+    _resolving = true;
+    notifyListeners();
+    try {
+      await _call(
+        conflict.locator,
+        conflict.localFingerprintSha256,
+        conflict.pulledFingerprintSha256,
+        keepLocal,
+      );
+    } finally {
+      _resolving = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }
 

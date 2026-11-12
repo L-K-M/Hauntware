@@ -14,7 +14,6 @@ import 'package:poltergeist_app/services/sidebar_controller.dart';
 import 'package:poltergeist_app/services/skip_rule_sets.dart';
 import 'package:poltergeist_app/services/skip_rule_sets_controller.dart';
 import 'package:poltergeist_app/theme/app_appearance.dart';
-import 'package:poltergeist_app/theme/theme_palette.dart';
 import 'package:poltergeist_app/theme/theme_presets.dart';
 import 'package:poltergeist_core/poltergeist_core.dart'
     show TransferConcurrency;
@@ -168,10 +167,10 @@ void main() {
         AppPreferences(store: SettingsStore(path: settingsFile.path));
 
     test('defaults to the first preset, following the system', () async {
-      expect(await fresh().loadAppearance(), AppAppearance.initial);
+      expect(await fresh().loadAppearance(), poltergeistInitialAppearance);
       // A settings file from before themes existed reads the same.
       await settingsFile.writeAsString('{"sidebar.density":"compact"}');
-      expect(await fresh().loadAppearance(), AppAppearance.initial);
+      expect(await fresh().loadAppearance(), poltergeistInitialAppearance);
     });
 
     test(
@@ -190,7 +189,7 @@ void main() {
         // One JSON object in Séance's format, so it reads as a pasted theme
         // would, and the mode beside it.
         expect(
-          ThemePalette.decodeStored(stored['theme.palette']),
+          poltergeistThemeCodec.decodeStored(stored['theme.palette']),
           appearance.palette,
         );
         expect((stored['theme.palette']! as Map)['surface'], '#002B36');
@@ -209,7 +208,7 @@ void main() {
           final preferences = fresh();
           expect(
             await preferences.loadAppearance(),
-            AppAppearance.initial,
+            poltergeistInitialAppearance,
             reason: bad,
           );
           expect(
@@ -239,7 +238,7 @@ void main() {
       final preferences = AppPreferences(
         store: SettingsStore(path: settingsFile.path, onError: (_, _) {}),
       );
-      expect(await preferences.loadAppearance(), AppAppearance.initial);
+      expect(await preferences.loadAppearance(), poltergeistInitialAppearance);
     });
 
     test('saving it touches only its own keys', () async {

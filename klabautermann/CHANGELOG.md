@@ -2,9 +2,10 @@
 
 ## Unreleased
 
-- Android's device-authentication host uses AppCompat launch and normal
-  themes in light and dark modes, matching Séance's required setup for
-  the biometric fallback on supported older Android versions.
+- Settings > Sync shows a synced host key that conflicts with the one
+  this device trusts, with both fingerprints, and resolves it by keeping
+  this device's key or trusting the new one, in the settings route and
+  the desktop settings window.
 - On Android 13 and later, the system back gesture runs the app's own back
   steps, as in Séance and Poltergeist: the disk explorer steps up a folder
   and an editor with unsaved changes asks first.
@@ -21,6 +22,10 @@
   container, as quitting with unsaved edits or running operations does.
 - Activity shows the commands an action ran in the code font, as the
   preview before it runs does.
+- Saved log and diagnostic exports, and the staged copy a share hands on,
+  now carry a Windows Mark-of-the-Web stream or a macOS quarantine
+  attribute, and are owner-only (0600) on macOS and Linux, as Séance's
+  downloads are. Marking is best effort and only logged on failure.
 - On the desktop, drag the edge of the fleet rail or the inspector, or
   focus it and use the arrow keys, to make the pane wider, as in Séance
   and Poltergeist. Each width is kept on this device across restarts,
@@ -54,6 +59,9 @@
   platform, as in the other apps. Before, they used JetBrains Mono only
   where it was installed and fell back to SF Mono, Menlo, Consolas or
   DejaVu Sans Mono.
+- Android's device-authentication host uses AppCompat launch and normal
+  themes in light and dark modes, matching Séance's required setup for
+  the biometric fallback on supported older Android versions.
 - Password, passphrase and private-key fields in the sync sign-in, the
   sudo prompt, the server editor and the connection prompts turn off
   autocorrect, suggestions and keyboard learning, so your keyboard does
