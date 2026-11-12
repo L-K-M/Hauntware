@@ -107,6 +107,9 @@ void main() {
       'ghost_theme',
     });
     expect(planchette.forbiddenDependenciesFor('ghost_marks'), {'seance_core'});
+    // Keep this explicit when the update-check lane replaces the wildcard
+    // with per-package rules for shared libraries.
+    expect(planchette.forbiddenDependencies['ghost_keepalive'], ['seance_core']);
   });
 
   test('matches pure packages through a directory wildcard', () {
