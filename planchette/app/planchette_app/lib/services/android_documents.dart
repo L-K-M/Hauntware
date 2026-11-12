@@ -13,6 +13,11 @@ final class AndroidDocuments implements DocumentStore {
 
   final MethodChannel _channel;
 
+  /// Identities of the recovery copies the runner listed at launch. Each
+  /// holds the only copy of a document's earlier contents until the user
+  /// saves it elsewhere.
+  final _recoveries = <String>{};
+
   Future<T?> _invoke<T>(
     String method, [
     Map<String, Object?>? arguments,
@@ -34,8 +39,11 @@ final class AndroidDocuments implements DocumentStore {
   Future<String> settingsPath() async =>
       (await _invoke<String>('settingsPath'))!;
 
-  Future<List<String>> recoveries() async =>
-      (await _invoke<List<Object?>>('recoveries'))!.cast<String>();
+  Future<List<String>> recoveries() async {
+    final paths = (await _invoke<List<Object?>>('recoveries'))!.cast<String>();
+    _recoveries.addAll(paths);
+    return paths;
+  }
 
   Future<List<String>> pickOpenFiles() async =>
       (await _invoke<List<Object?>>('open'))!.cast<String>();
@@ -113,6 +121,12 @@ final class AndroidDocuments implements DocumentStore {
         'bytes': await file.readAsBytes(),
         'expectedSha256': expectedSha256,
       });
+      final recovery = source?.file.path;
+      if (recovery != null &&
+          recovery != path &&
+          _recoveries.remove(recovery)) {
+        await _discardRecovery(recovery);
+      }
       return TextDocument(
         file: File(path),
         text: text,
@@ -121,6 +135,17 @@ final class AndroidDocuments implements DocumentStore {
         sha256: digest,
       );
     });
+  }
+
+  /// Its text now lives in a document the user chose, so the copy would
+  /// otherwise reopen on every launch. A failed delete only means it reopens
+  /// once more; it cannot turn the committed save into a failure.
+  Future<void> _discardRecovery(String path) async {
+    try {
+      await _invoke<void>('discardRecovery', {'path': path});
+    } on TextDocumentException {
+      // Kept on disk; the next launch lists it again.
+    }
   }
 
   Future<T> _staged<T>(Future<T> Function(File file) operation) async {

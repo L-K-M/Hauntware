@@ -1368,6 +1368,16 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                             ): const _NewlineIntent(),
                             const SingleActivator(LogicalKeyboardKey.backspace):
                                 const _DeleteIndentIntent(),
+                            // Windows' own redo key; Flutter binds only
+                            // Control+Shift+Z there.
+                            if (Theme.of(context).platform ==
+                                TargetPlatform.windows)
+                              const SingleActivator(
+                                LogicalKeyboardKey.keyY,
+                                control: true,
+                              ): const RedoTextIntent(
+                                SelectionChangedCause.keyboard,
+                              ),
                           },
                           child: TextField(
                             key: const ValueKey('planchette.document'),
